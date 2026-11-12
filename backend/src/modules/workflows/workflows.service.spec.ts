@@ -14,16 +14,13 @@ jest.mock('../sessions/sessions.service', () => ({
   RUN_HOST_ID_PREFIX: 'run-',
 }));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
-import { oneStepWorkflowInput } from '../../mastra/workflows/workflow-catalog';
-import { DEEP_ANALYSIS_STEPS } from '../../mastra/workflows/deep-analysis.steps';
-import { SEQ_TEXT_DEMO_STEPS } from '../../mastra/workflows/seq-text-demo.steps';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
@@ -56,8 +53,6 @@ function fakeAgent(
   };
 }
 
-const READINESS_REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
-
 /** The saved LLM settings, as `LlmService.getView` answers them. */
 const ANTHROPIC_VIEW = {
   provider: 'anthropic',
@@ -66,11 +61,14 @@ const ANTHROPIC_VIEW = {
   reasoningEffort: null,
 };
 
+const V2_DESCRIPTION =
+  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
+
 function build(
   datasets: { name: string; datasourceKind?: string }[] = [
     { name: 'World Cup Core', datasourceKind: 'postgres' },
   ],
-  options: { llmView?: typeof ANTHROPIC_VIEW; readinessPrompt?: string } = {},
+  options: { llmView?: typeof ANTHROPIC_VIEW; v2Prompt?: string } = {},
 ) {
   const db = new BetterSqlite3(':memory:');
   const userAgents = new UserAgentsService(
@@ -87,23 +85,20 @@ function build(
       'run_readonly_sql',
       'ask_clarification',
     ]),
-    'assistant-v2': fakeAgent('Questions to Insights v2', [
-      'list_entities',
-      'describe_entity',
-      'run_readonly_sql',
-    ]),
+    'assistant-v2': fakeAgent(
+      'Questions to Insights v2',
+      ['list_entities', 'describe_entity', 'run_readonly_sql'],
+      '',
+      options.v2Prompt ?? 'You answer with the core data tools.',
+    ),
     'data-readiness': fakeAgent(
       'Data Readiness Agent',
       ['assess_readiness', 'get_readiness_report'],
       '',
-      options.readinessPrompt ?? 'You assess readiness.',
+      'You assess readiness.',
     ),
   };
-  const runWorkflow = jest.fn();
-  const mastra = {
-    listAgents: () => registry,
-    runWorkflow,
-  } as unknown as MastraService;
+  const mastra = { listAgents: () => registry } as unknown as MastraService;
   const llm = options.llmView
     ? ({
         getView: () => Promise.resolve(options.llmView),
@@ -114,7 +109,6 @@ function build(
     db,
     userAgents,
     agents,
-    runWorkflow,
     service: new WorkflowsService(agents),
   };
 }
@@ -127,181 +121,58 @@ const agentConfig = (name: string, datasets: string[]) => ({
   starterQuestions: [`Ask ${name}`],
 });
 
+/** The one catalogue workflow, as `GET /workflows` lists it. */
+const QTI_V2_SUMMARY = {
+  id: 'qti-v2-turn',
+  name: 'Questions to Insights v2',
+  description: V2_DESCRIPTION,
+  kind: 'code',
+  owner: 'Official',
+  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  stepCount: 4,
+  bar: 'steps',
+  trigger: 'run',
+  input: [
+    {
+      name: 'question',
+      label: 'Question',
+      type: 'textarea',
+      required: true,
+      placeholder: 'Ask a question about your data',
+    },
+    {
+      name: 'datasets',
+      label: 'Datasets',
+      type: 'datasets',
+      required: true,
+    },
+  ],
+  datasets: [],
+  missingDatasets: [],
+  starterQuestions: [],
+};
+
 describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
 
-  it('lists the assistant, the code workflows, the other Official agents and the Live user agents, in that order', async () => {
+  it('lists only Questions to Insights v2: agents, Live user agents included, get no workflow (1.23.35)', async () => {
     ctx = build();
     const zeta = await ctx.userAgents.create(
       agentConfig('Zeta', ['World Cup Core']),
     );
     await ctx.userAgents.publish(zeta.id);
-    const alpha = await ctx.userAgents.create(agentConfig('Alpha', ['Gone']));
-    await ctx.userAgents.publish(alpha.id);
     await ctx.userAgents.create(agentConfig('Sketch', ['World Cup Core']));
 
-    const workflows = await ctx.service.list();
-    expect(workflows.map((w) => w.id)).toEqual([
-      'agent:assistant',
-      'qti-v2-turn',
-      'seq-text-demo',
-      'deep-analysis',
-      'agent:data-readiness',
-      `agent:${alpha.id}`,
-      `agent:${zeta.id}`,
-    ]);
-    expect(workflows[0]).toEqual({
-      id: 'agent:assistant',
-      name: 'Assistant',
-      description: 'Answers questions over the datasets you pick.',
-      kind: 'agent',
-      owner: 'Official',
-      agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
-      stepCount: 1,
-      bar: 'agent',
-      trigger: 'run',
-      input: oneStepWorkflowInput('assistant'),
-      datasets: [],
-      missingDatasets: [],
-      starterQuestions: [],
-    });
-    expect(workflows[1]).toEqual({
-      id: 'qti-v2-turn',
-      name: 'Questions to Insights v2',
-      description:
-        'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.',
-      kind: 'code',
-      owner: 'Official',
-      agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
-      stepCount: 4,
-      bar: 'steps',
-      trigger: 'run',
-      input: [
-        {
-          name: 'question',
-          label: 'Question',
-          type: 'textarea',
-          required: true,
-          placeholder: 'Ask a question about your data',
-        },
-        {
-          name: 'datasets',
-          label: 'Datasets',
-          type: 'datasets',
-          required: true,
-        },
-      ],
-      datasets: [],
-      missingDatasets: [],
-      starterQuestions: [],
-    });
-    expect(workflows[2]).toEqual({
-      id: 'seq-text-demo',
-      name: 'Sequential test workflow',
-      description:
-        'A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.',
-      kind: 'code',
-      owner: 'Official',
-      agents: [],
-      stepCount: 3,
-      bar: 'steps',
-      trigger: 'run',
-      input: [
-        {
-          name: 'text',
-          label: 'Text',
-          type: 'textarea',
-          required: true,
-          placeholder: 'Paste or type any text',
-        },
-      ],
-      datasets: [],
-      missingDatasets: [],
-      starterQuestions: [],
-    });
-    // Deep analysis (plan 1.25.3): a run workflow whose steps call the
-    // assistant, over the datasets the run picks.
-    expect(workflows[3]).toEqual({
-      id: 'deep-analysis',
-      name: 'Deep analysis',
-      description:
-        'Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.',
-      kind: 'code',
-      owner: 'Official',
-      agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
-      stepCount: 4,
-      bar: 'steps',
-      trigger: 'run',
-      input: workflows[1].input,
-      datasets: [],
-      missingDatasets: [],
-      starterQuestions: [],
-    });
-    expect(workflows[4]).toEqual({
-      id: 'agent:data-readiness',
-      name: 'Data Readiness Agent',
-      description: 'Data Readiness Agent description',
-      kind: 'agent',
-      owner: 'Official',
-      agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
-      stepCount: 1,
-      bar: 'agent',
-      trigger: 'run',
-      input: oneStepWorkflowInput('data-readiness'),
-      datasets: ['World Cup Core'],
-      missingDatasets: [],
-      starterQuestions: [
-        'Assess the readiness of this dataset',
-        'What are the worst data-quality problems?',
-        'Show my past assessments',
-      ],
-    });
-    expect(workflows[5]).toEqual({
-      id: `agent:${alpha.id}`,
-      name: 'Alpha',
-      description: 'Alpha description',
-      kind: 'agent',
-      owner: 'You',
-      agents: [{ key: alpha.id, name: 'Alpha' }],
-      stepCount: 1,
-      bar: 'agent',
-      trigger: 'run',
-      input: oneStepWorkflowInput(alpha.id),
-      datasets: [],
-      missingDatasets: ['Gone'],
-      starterQuestions: ['Ask Alpha'],
-      runRequirement: "None of this agent's datasets exist",
-    });
-    expect(workflows[6]).toMatchObject({
-      id: `agent:${zeta.id}`,
-      owner: 'You',
-      trigger: 'run',
-      input: oneStepWorkflowInput(zeta.id),
-      datasets: ['World Cup Core'],
-      missingDatasets: [],
-    });
-    expect(workflows[6]).not.toHaveProperty('runRequirement');
-    // Every workflow says how it is started and what it takes.
-    for (const workflow of workflows) {
-      expect(workflow.trigger).toBe('run');
-      expect(workflow).not.toHaveProperty('picksDatasets');
-      expect(workflow).not.toHaveProperty('chatRequirement');
-      expect(Array.isArray(workflow.input)).toBe(true);
-    }
+    expect(await ctx.service.list()).toEqual([QTI_V2_SUMMARY]);
   });
 
-  it('gives the Data Readiness workflow its requirement while no dataset qualifies, and never lists System agents', async () => {
+  it('lists the same one workflow while no dataset qualifies for the Data Readiness Agent', async () => {
     ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     const workflows = await ctx.service.list();
-    expect(workflows.map((w) => w.id)).not.toContain('agent:sql-fixer');
-    const readiness = workflows.find((w) => w.id === 'agent:data-readiness');
-    expect(readiness).toMatchObject({
-      datasets: [],
-      runRequirement: READINESS_REQUIREMENT,
-    });
-    // The removed RFP Builder has no workflow any more.
-    expect(workflows.map((w) => w.id)).not.toContain('agent:rfp');
+    expect(workflows).toEqual([QTI_V2_SUMMARY]);
+    expect(workflows[0]).not.toHaveProperty('runRequirement');
+    expect(workflows[0]).not.toHaveProperty('chatRequirement');
   });
 
   describe('get', () => {
@@ -320,167 +191,50 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail).toMatchObject({ id: 'qti-v2-turn', stepCount: 4 });
     });
 
-    it("a one-step workflow's step runs its agent with its tools and budget", async () => {
+    it('details the agent its steps call: its key, name, model and system prompt; no model without an LLM', async () => {
       ctx = build();
-      const readiness = await ctx.service.get('agent:data-readiness');
-      expect(readiness.steps).toHaveLength(1);
-      expect(readiness.steps[0]).toMatchObject({
-        id: 'answer',
-        title: 'Answer',
-        agent: {
-          name: 'Data Readiness Agent',
-          tools: ['assess_readiness', 'get_readiness_report'],
-          maxSteps: 10,
-        },
-      });
-      expect(readiness.steps[0].exits).toHaveLength(2);
-      const assistant = await ctx.service.get('agent:assistant');
-      expect(assistant.steps[0].agent).toEqual({
-        key: 'assistant',
-        name: 'Questions to Insights Assistant',
-        tools: ['ask_clarification', 'run_readonly_sql'],
-        maxSteps: 15,
-      });
-      expect(assistant.steps[0].exits.at(-1)).toEqual({
-        label: 'Clarifying question',
-        outcome: 'stops',
-      });
-    });
-
-    it("a Live user agent's step runs the assistant's tools under its Live name", async () => {
-      ctx = build();
-      const doc = await ctx.userAgents.create(
-        agentConfig('Historian', ['World Cup Core']),
-      );
-      await ctx.userAgents.publish(doc.id);
-      const detail = await ctx.service.get(`agent:${doc.id}`);
-      expect(detail).toMatchObject({
-        id: `agent:${doc.id}`,
-        name: 'Historian',
-      });
-      expect(detail.steps[0].agent).toMatchObject({
-        key: doc.id,
-        name: 'Historian',
-        maxSteps: 15,
-      });
+      const detail = await ctx.service.get('qti-v2-turn');
       expect(detail.agents).toEqual([
         {
-          key: doc.id,
-          name: 'Historian',
+          key: 'assistant-v2',
+          name: 'Questions to Insights v2',
           model: null,
-          systemPrompt: expect.any(String) as string,
+          systemPrompt: 'You answer with the core data tools.',
         },
       ]);
-    });
-
-    it("seq-text-demo's steps are its catalogue's, with no agent", async () => {
-      ctx = build();
-      const detail = await ctx.service.get('seq-text-demo');
-      expect(detail).toMatchObject({
-        id: 'seq-text-demo',
-        trigger: 'run',
-        stepCount: 3,
-      });
-      expect(detail.steps).toEqual(
-        SEQ_TEXT_DEMO_STEPS.map((step) => ({
-          id: step.id,
-          title: step.title,
-          kind: step.kind,
-          summary: step.summary,
-          input: [...step.input],
-          output: [...step.output],
-          exits: [...step.exits],
-        })),
-      );
-      expect(detail.steps.some((step) => step.agent)).toBe(false);
-      expect(detail.agents).toEqual([]);
-    });
-
-    it("deep-analysis's steps are its catalogue's, its agent steps running the assistant", async () => {
-      ctx = build();
-      const detail = await ctx.service.get('deep-analysis');
-      expect(detail).toMatchObject({ trigger: 'run', stepCount: 4 });
-      const assistant = 'Questions to Insights Assistant';
-      expect(
-        detail.steps.map((step) => [step.id, step.kind, step.agent]),
-      ).toEqual([
-        [
-          'plan',
-          'agent',
-          { key: 'assistant', name: assistant, tools: [], maxSteps: 1 },
-        ],
-        [
-          'investigate',
-          'agent',
-          {
-            key: 'assistant',
-            name: assistant,
-            tools: ['ask_clarification', 'run_readonly_sql'],
-            maxSteps: 15,
-          },
-        ],
-        [
-          'write',
-          'agent',
-          { key: 'assistant', name: assistant, tools: [], maxSteps: 1 },
-        ],
-        ['assemble', 'code', undefined],
-      ]);
-      expect(detail.steps.map((step) => step.summary)).toEqual(
-        DEEP_ANALYSIS_STEPS.map((step) => step.summary),
-      );
-    });
-
-    it('details each agent its steps call: its key, name, model and system prompt; no model without an LLM', async () => {
-      ctx = build();
-      const readiness = await ctx.service.get('agent:data-readiness');
-      expect(readiness.agents).toEqual([
-        {
-          key: 'data-readiness',
-          name: 'Data Readiness Agent',
-          model: null,
-          systemPrompt: 'You assess readiness.',
-        },
-      ]);
-      expect(readiness.steps[0].agent?.key).toBe('data-readiness');
       ctx.db.close();
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
-      const withLlm = await ctx.service.get('agent:data-readiness');
+      const withLlm = await ctx.service.get('qti-v2-turn');
       expect(withLlm.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
-      const deep = await ctx.service.get('deep-analysis');
-      expect(deep.agents).toEqual([
-        {
-          key: 'assistant',
-          name: 'Questions to Insights Assistant',
-          model: 'anthropic/claude-sonnet-4-6',
-          systemPrompt: '',
-        },
-      ]);
     });
 
     it('shortens a system prompt longer than 20 000 characters, and says so', async () => {
-      ctx = build(undefined, { readinessPrompt: 'p'.repeat(20_001) });
-      const [agent] = (await ctx.service.get('agent:data-readiness')).agents;
+      ctx = build(undefined, { v2Prompt: 'p'.repeat(20_001) });
+      const [agent] = (await ctx.service.get('qti-v2-turn')).agents;
       expect(agent.systemPrompt).toHaveLength(20_000);
       expect(agent.systemPromptTruncated).toBe(true);
       ctx.db.close();
-      ctx = build(undefined, { readinessPrompt: 'p'.repeat(20_000) });
-      const [exact] = (await ctx.service.get('agent:data-readiness')).agents;
+      ctx = build(undefined, { v2Prompt: 'p'.repeat(20_000) });
+      const [exact] = (await ctx.service.get('qti-v2-turn')).agents;
       expect(exact.systemPrompt).toHaveLength(20_000);
       expect(exact).not.toHaveProperty('systemPromptTruncated');
     });
 
     it('lists the summary agents only, without model or prompt (api.md 116 unchanged)', async () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
-      const readiness = (await ctx.service.list()).find(
-        (w) => w.id === 'agent:data-readiness',
-      );
-      expect(readiness?.agents).toEqual([
-        { key: 'data-readiness', name: 'Data Readiness Agent' },
+      const [v2] = await ctx.service.list();
+      expect(v2.agents).toEqual([
+        { key: 'assistant-v2', name: 'Questions to Insights v2' },
       ]);
     });
 
     it.each([
+      // The removed one-step agent workflows (1.23.35).
+      'agent:assistant',
+      'agent:data-readiness',
+      // The removed code workflows (1.23.35).
+      'seq-text-demo',
+      'deep-analysis',
       'agent:sql-fixer',
       'agent:assistant-v2',
       'agent:rfp',
@@ -491,16 +245,25 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       await expect(ctx.service.get(id)).rejects.toThrow(
         new NotFoundException(`Workflow "${id}" not found`),
       );
+      await expect(ctx.service.definition(id)).rejects.toThrow(
+        `Workflow "${id}" not found`,
+      );
     });
 
-    it('answers 404 for a draft-only user agent', async () => {
+    it('answers 404 for a Live and a draft-only user agent', async () => {
       ctx = build();
-      const doc = await ctx.userAgents.create(
+      const live = await ctx.userAgents.create(
+        agentConfig('Historian', ['World Cup Core']),
+      );
+      await ctx.userAgents.publish(live.id);
+      const draft = await ctx.userAgents.create(
         agentConfig('Sketch', ['World Cup Core']),
       );
-      await expect(ctx.service.get(`agent:${doc.id}`)).rejects.toThrow(
-        `Workflow "agent:${doc.id}" not found`,
-      );
+      for (const id of [live.id, draft.id]) {
+        await expect(ctx.service.get(`agent:${id}`)).rejects.toThrow(
+          `Workflow "agent:${id}" not found`,
+        );
+      }
     });
   });
 });
@@ -510,44 +273,43 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
   afterEach(() => ctx.db.close());
 
   it.each([
-    [
-      'assistant',
-      [
-        { id: 'agent:assistant', name: 'Assistant' },
-        { id: 'deep-analysis', name: 'Deep analysis' },
-      ],
-    ],
     ['assistant-v2', [{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]],
-    [
-      'data-readiness',
-      [{ id: 'agent:data-readiness', name: 'Data Readiness Agent' }],
-    ],
+    ['assistant', []],
+    ['data-readiness', []],
     ['sql-fixer', []],
   ])('%s is used in %p', async (key, expected) => {
     ctx = build();
     expect((await ctx.agents.get(key))?.usedInWorkflows).toEqual(expected);
   });
 
-  it('a Live user agent is used in its one-step workflow; a draft-only one in none', async () => {
+  it('a user agent is used in none, draft-only or Live', async () => {
     ctx = build();
     const doc = await ctx.userAgents.create(
       agentConfig('Historian', ['World Cup Core']),
     );
     expect((await ctx.agents.get(doc.id))?.usedInWorkflows).toEqual([]);
     await ctx.userAgents.publish(doc.id);
-    expect((await ctx.agents.get(doc.id))?.usedInWorkflows).toEqual([
-      { id: `agent:${doc.id}`, name: 'Historian' },
-    ]);
+    expect((await ctx.agents.get(doc.id))?.usedInWorkflows).toEqual([]);
+  });
+
+  it('no agent carries a chat or run requirement on the wire any more', async () => {
+    ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
+    for (const agent of await ctx.agents.list()) {
+      expect(agent).not.toHaveProperty('chatRequirement');
+    }
+    expect(await ctx.agents.get('data-readiness')).not.toHaveProperty(
+      'chatRequirement',
+    );
   });
 });
 
 describe('WorkflowsController (ids contain ":")', () => {
-  it('GET /workflows/agent%3Adata-readiness resolves the decoded id, and an unknown one answers 404', async () => {
+  it('GET /workflows/:id resolves the decoded id, and an unknown one answers 404', async () => {
     const service = {
       list: jest.fn().mockResolvedValue([]),
       get: jest.fn((id: string) =>
-        id === 'agent:data-readiness'
-          ? Promise.resolve({ id, name: 'Data Readiness Agent', steps: [] })
+        id === 'qti-v2-turn'
+          ? Promise.resolve({ id, name: 'Questions to Insights v2', steps: [] })
           : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
       ),
     };
@@ -563,24 +325,23 @@ describe('WorkflowsController (ids contain ":")', () => {
     try {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       await request(server)
-        .get('/workflows/agent%3Adata-readiness')
+        .get('/workflows/qti-v2-turn')
         .expect(200)
         .expect(({ body }) =>
           expect(body).toMatchObject({
-            id: 'agent:data-readiness',
-            name: 'Data Readiness Agent',
+            id: 'qti-v2-turn',
+            name: 'Questions to Insights v2',
           }),
         );
-      await request(server).get('/workflows/agent:data-readiness').expect(200);
-      expect(service.get).toHaveBeenCalledWith('agent:data-readiness');
       await request(server)
-        .get('/workflows/agent%3Anope')
+        .get('/workflows/agent%3Aassistant')
         .expect(404)
         .expect(({ body }) =>
           expect(body).toMatchObject({
-            message: 'Workflow "agent:nope" not found',
+            message: 'Workflow "agent:assistant" not found',
           }),
         );
+      expect(service.get).toHaveBeenLastCalledWith('agent:assistant');
       await request(server)
         .get('/workflows')
         .expect(200)
@@ -592,15 +353,13 @@ describe('WorkflowsController (ids contain ":")', () => {
 });
 
 describe('WorkflowsController POST /workflows/:id/runs (api.md 118)', () => {
-  it('answers 200 with the run result, and a refusal with its status', async () => {
-    const result = { workflowId: 'seq-text-demo', status: 'failed', steps: [] };
+  it('answers 200 with the stored run, and a refusal with its status', async () => {
+    const run = { id: 'r-1', workflowId: 'qti-v2-turn', status: 'failed' };
     const service = {
       run: jest.fn((id: string, body: unknown) =>
-        id === 'seq-text-demo'
-          ? Promise.resolve({ ...result, body })
-          : Promise.reject(
-              new BadRequestException(`Workflow "${id}" can't run on an input`),
-            ),
+        id === 'qti-v2-turn'
+          ? Promise.resolve({ ...run, body })
+          : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
       ),
     };
     const moduleRef = await Test.createTestingModule({
@@ -614,27 +373,25 @@ describe('WorkflowsController POST /workflows/:id/runs (api.md 118)', () => {
     await app.init();
     try {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
+      const input = { question: 'Hi', datasets: ['World Cup Core'] };
       await request(server)
-        .post('/workflows/seq-text-demo/runs')
-        .send({ input: { text: '   ' } })
+        .post('/workflows/qti-v2-turn/runs')
+        .send({ input })
         .expect(200)
         .expect(({ body }) =>
-          expect(body).toEqual({
-            ...result,
-            body: { input: { text: '   ' } },
-          }),
+          expect(body).toEqual({ ...run, body: { input } }),
         );
       await request(server)
-        .post('/workflows/agent%3Aassistant/runs')
-        .send({ input: {} })
-        .expect(400)
+        .post('/workflows/seq-text-demo/runs')
+        .send({ input: { text: 'Hi' } })
+        .expect(404)
         .expect(({ body }) =>
           expect(body).toMatchObject({
-            message: 'Workflow "agent:assistant" can\'t run on an input',
+            message: 'Workflow "seq-text-demo" not found',
           }),
         );
-      expect(service.run).toHaveBeenLastCalledWith('agent:assistant', {
-        input: {},
+      expect(service.run).toHaveBeenLastCalledWith('seq-text-demo', {
+        input: { text: 'Hi' },
       });
     } finally {
       await app.close();

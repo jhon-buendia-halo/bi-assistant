@@ -1,17 +1,18 @@
 /**
- * API-level proof of streamed runs of agent workflows (ADR-0041; api.md 119;
- * agents.md 5.14; workflows R14-R16): `POST /workflows/:id/runs/stream`
- * runs one agent turn on a run host through the turn engine, so a run asks
- * the model for its input with the agent's tools (the Assistant, Questions
- * to Insights v2 and the Data Readiness Agent, recorded by
- * the stub model), streams `run`, `step`, the turn's events and
- * `done { run }`, refuses a bad request with its real status before any
- * stream, and stops when the connection closes. The sequential test workflow
- * still runs through `POST /workflows/:id/runs` (118).
+ * API-level proof of streamed runs (ADR-0041; api.md 118, 119; agents.md
+ * 5.14; workflows R14-R16) of Questions to Insights v2 (`qti-v2-turn`), the
+ * one catalogue workflow since 1.23.35: `POST /workflows/:id/runs/stream`
+ * runs its four steps, the agent step's turn on a run host through the turn
+ * engine, so a run asks the stub model for its input with the agent's
+ * tools, streams `run`, each `step` with what it received, its output and
+ * its times, the turn's events and `done { run }`, refuses a bad request
+ * (and every removed workflow) with its real status before any stream, and
+ * stops when the connection closes. `POST /workflows/:id/runs` (118)
+ * answers the stored run.
  *
  * Needs no Postgres: the datasources point at closed ports, and the stub
  * model never calls a tool. Set `WORKFLOW_RUNS_TRANSCRIPT=<file>` to write
- * the SSE transcript of one Assistant run and one v2 run there.
+ * the SSE transcript of one v2 run there.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -204,50 +205,17 @@ describe('Streamed runs of agent workflows (API)', () => {
     if (file && transcript.length) writeFileSync(file, transcript.join('\n'));
   });
 
-  it('streams an Assistant run: run, the Answer step, the answer, then done with the run', async () => {
-    const question = 'Who won the 2002 World Cup?';
-    const res = await runStream('agent:assistant', {
-      input: { question, datasets: ['World Cup Core'] },
-    });
-    expect(res.status).toBe(200);
-    transcript.push(
-      `# POST /workflows/agent%3Aassistant/runs/stream  {"input":{"question":"${question}","datasets":["World Cup Core"]}}`,
-      res.text,
-    );
-    const types = res.frames.map((frame) => frame.type);
-    expect(types[0]).toBe('run');
-    expect(types.at(-1)).toBe('done');
-    expect(res.frames[0]).toMatchObject({ workflowId: 'agent:assistant' });
-    const steps = res.frames.filter((frame) => frame.type === 'step');
-    expect(steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'answer:running',
-      'answer:success',
-    ]);
-    expect(types).toContain('text');
-    const run = res.frames.at(-1)!.run!;
-    expect(run).toMatchObject({
-      id: res.frames[0].runId,
-      workflowId: 'agent:assistant',
-      status: 'success',
-      question,
-      datasets: ['World Cup Core'],
-      answer: { role: 'assistant', content: STUB_ANSWER },
-      steps: [{ id: 'answer', status: 'success' }],
-    });
-    // The run is never listed with the sessions.
-    const sessions = (
-      (await http().get('/sessions').expect(200)).body as {
-        sessions: { id: string }[];
-      }
-    ).sessions;
-    expect(sessions.some((session) => session.id.includes(run.id))).toBe(false);
-  });
-
-  it('streams a v2 run: four steps, each running then done', async () => {
+  it('streams a v2 run: run, four steps each running then done, the answer, then done with the run', async () => {
     const question = 'How many matches were played?';
     const res = await runStream('qti-v2-turn', {
       input: { question, datasets: ['World Cup Core'] },
     });
+    expect(res.status).toBe(200);
+    const types = res.frames.map((frame) => frame.type);
+    expect(types[0]).toBe('run');
+    expect(types.at(-1)).toBe('done');
+    expect(types).toContain('text');
+    expect(res.frames[0]).toMatchObject({ workflowId: 'qti-v2-turn' });
     transcript.push(
       `# POST /workflows/qti-v2-turn/runs/stream  {"input":{"question":"${question}","datasets":["World Cup Core"]}}`,
       res.text,
@@ -276,67 +244,118 @@ describe('Streamed runs of agent workflows (API)', () => {
     }
     const run = res.frames.at(-1)!.run!;
     expect(run).toMatchObject({
+      id: res.frames[0].runId,
       workflowId: 'qti-v2-turn',
       status: 'success',
-      answer: { content: STUB_ANSWER },
+      question,
+      datasets: ['World Cup Core'],
+      answer: { role: 'assistant', content: STUB_ANSWER },
       output: { sqlQueries: 0, failedQueries: 0, rows: 0 },
+    });
+    // The run is never listed with the sessions.
+    const sessions = (
+      (await http().get('/sessions').expect(200)).body as {
+        sessions: { id: string }[];
+      }
+    ).sessions;
+    expect(sessions.some((session) => session.id.includes(run.id))).toBe(false);
+  });
+
+  it('each step frame and the stored run carry what the step received, its output and its times', async () => {
+    const question = 'Who won the 2002 World Cup?';
+    const res = await runStream('qti-v2-turn', {
+      input: { question, datasets: ['World Cup Core'] },
+    });
+    const steps = res.frames.filter((frame) => frame.type === 'step');
+    // A running frame carries the input and the start; its ended frame the
+    // same input and start, its output and its end.
+    for (let i = 0; i < steps.length; i += 2) {
+      const [started, ended] = [steps[i], steps[i + 1]];
+      expect(started).toMatchObject({
+        status: 'running',
+        startedAt: expect.any(String) as string,
+      });
+      expect(started.input).toBeDefined();
+      expect(started).not.toHaveProperty('endedAt');
+      expect(ended).toMatchObject({
+        id: started.id,
+        status: 'success',
+        input: started.input,
+        startedAt: started.startedAt,
+        endedAt: expect.any(String) as string,
+      });
+      expect(ended.output).toBeDefined();
+    }
+    // The first step received the run's input.
+    expect(steps[0]).toMatchObject({
+      id: 'receive-question',
+      input: { question, datasets: ['World Cup Core'] },
+    });
+    const done = res.frames.at(-1)!;
+    expect(done.type).toBe('done');
+    const stored = (
+      await http().get(`/workflow-runs/${done.run!.id}`).expect(200)
+    ).body as NonNullable<Frame['run']>;
+    expect(stored.steps).toEqual(done.run!.steps);
+    expect(stored.steps.map((step) => step.id)).toEqual([
+      'receive-question',
+      'load-catalog',
+      'analyse',
+      'wrap-up',
+    ]);
+    stored.steps.forEach((step, i) => {
+      expect(step).toMatchObject({
+        input: steps[2 * i].input,
+        startedAt: steps[2 * i].startedAt,
+        endedAt: steps[2 * i + 1].endedAt,
+      });
+      expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
+        Date.parse(step.startedAt!),
+      );
     });
   });
 
-  describe("a run's model request, per agent (the turn path a chat once shared)", () => {
+  it('POST /workflows/qti-v2-turn/runs (118) answers the stored run', async () => {
+    const res = await http()
+      .post('/workflows/qti-v2-turn/runs')
+      .send({
+        input: { question: 'Who won in 1998?', datasets: ['World Cup Core'] },
+      })
+      .expect(200);
+    const run = res.body as NonNullable<Frame['run']>;
+    expect(run).toMatchObject({
+      workflowId: 'qti-v2-turn',
+      status: 'success',
+      question: 'Who won in 1998?',
+      answer: { content: STUB_ANSWER },
+    });
+    const stored = (await http().get(`/workflow-runs/${run.id}`).expect(200))
+      .body as unknown;
+    expect(stored).toEqual(run);
+  });
+
+  it('asks the model with the input last and the agent tools, the same each time', async () => {
     /** The last user message of a request, as the provider read it. */
     const lastUser = (req: ReturnType<typeof asSent>) =>
       messageText([...req.messages].reverse().find((m) => m.role === 'user')!);
-
-    it.each([
-      [
-        'the Assistant',
-        'agent:assistant',
-        'Which team scored most in 2014?',
-        {
-          question: 'Which team scored most in 2014?',
-          datasets: ['World Cup Core'],
-        },
-      ],
-      [
-        'Questions to Insights v2',
-        'qti-v2-turn',
-        'Which stadium hosted the final?',
-        {
-          question: 'Which stadium hosted the final?',
-          datasets: ['World Cup Core'],
-        },
-      ],
-      [
-        'the Data Readiness Agent',
-        'agent:data-readiness',
-        'What are the worst data-quality problems?',
-        {
-          dataset: 'World Cup Core',
-          question: 'What are the worst data-quality problems?',
-        },
-      ],
-    ])(
-      '%s asks the model once with the input last and its tools',
-      async (_name, id, question, input) => {
-        const run = await recorded(() => runStream(id, { input }));
-        expect(run.length).toBeGreaterThan(0);
-        expect(lastUser(run[0])).toContain(question);
-        expect(run[0].tools?.length ?? 0).toBeGreaterThan(0);
-        // Two runs of the same input send the model the same request.
-        const again = await recorded(() => runStream(id, { input }));
-        expect(again).toEqual(run);
-      },
-    );
+    const question = 'Which stadium hosted the final?';
+    const input = { question, datasets: ['World Cup Core'] };
+    const run = await recorded(() => runStream('qti-v2-turn', { input }));
+    expect(run.length).toBeGreaterThan(0);
+    expect(lastUser(run[0])).toContain(question);
+    expect(run[0].tools?.length ?? 0).toBeGreaterThan(0);
+    // Two runs of the same input send the model the same request.
+    const again = await recorded(() => runStream('qti-v2-turn', { input }));
+    expect(again).toEqual(run);
   });
 
   it("a follow-up run sends the earlier run's question and answer first", async () => {
-    const first = await runStream('agent:assistant', {
+    const first = await runStream('qti-v2-turn', {
       input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
     });
     const runId = first.frames[0].runId!;
     const sent = await recorded(() =>
-      runStream('agent:assistant', {
+      runStream('qti-v2-turn', {
         input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
         context: { fromRunId: runId },
       }),
@@ -361,7 +380,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         : undefined;
     const controller = new AbortController();
     const res = await fetch(
-      `${backend!.url}/workflows/agent%3Aassistant/runs/stream`,
+      `${backend!.url}/workflows/qti-v2-turn/runs/stream`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -396,7 +415,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     let refusal: { status: number; message?: string } = { status: 0 };
     for (let i = 0; i < 40; i++) {
       const answer = await http()
-        .post('/workflows/agent%3Aassistant/runs/stream')
+        .post('/workflows/qti-v2-turn/runs/stream')
         .send({
           input: { question: 'Next', datasets: ['World Cup Core'] },
           context: { fromRunId: runId },
@@ -415,15 +434,16 @@ describe('Streamed runs of agent workflows (API)', () => {
   });
 
   describe('refusals before any stream (Style B)', () => {
+    const ASK = { question: 'Hi', datasets: ['World Cup Core'] };
     it.each([
       [
-        'agent:assistant',
+        'qti-v2-turn',
         { input: { datasets: ['World Cup Core'] } },
         400,
         'Question is required',
       ],
       [
-        'agent:assistant',
+        'qti-v2-turn',
         { input: { question: 'Hi' } },
         400,
         'Select at least one dataset',
@@ -435,21 +455,37 @@ describe('Streamed runs of agent workflows (API)', () => {
         'Dataset "Nope" not found',
       ],
       [
-        'agent:data-readiness',
-        { input: { dataset: 'Orders API' } },
-        400,
-        'Dataset "Orders API" is not a PostgreSQL or Databricks dataset',
-      ],
-      [
-        'agent:assistant',
-        {
-          input: { question: 'Hi', datasets: ['World Cup Core'] },
-          context: { fromRunId: 'nope' },
-        },
+        'qti-v2-turn',
+        { input: ASK, context: { fromRunId: 'nope' } },
         400,
         'Run "nope" not found',
       ],
       ['nope', { input: {} }, 404, 'Workflow "nope" not found'],
+      // The workflows removed in 1.23.35 are unknown.
+      [
+        'agent:assistant',
+        { input: ASK },
+        404,
+        'Workflow "agent:assistant" not found',
+      ],
+      [
+        'agent:data-readiness',
+        { input: { dataset: 'World Cup Core' } },
+        404,
+        'Workflow "agent:data-readiness" not found',
+      ],
+      [
+        'seq-text-demo',
+        { input: { text: 'Hello' } },
+        404,
+        'Workflow "seq-text-demo" not found',
+      ],
+      [
+        'deep-analysis',
+        { input: ASK },
+        404,
+        'Workflow "deep-analysis" not found',
+      ],
       // The RFP Builder was removed: its workflow is unknown.
       [
         'agent:rfp',
@@ -465,65 +501,6 @@ describe('Streamed runs of agent workflows (API)', () => {
         message,
       );
       expect(stub.requests.length).toBe(before);
-    });
-  });
-
-  it('streams the sequential test workflow with what each step received and its times, as the stored run keeps them', async () => {
-    const text = '  Hello   workflow   world  ';
-    const res = await runStream('seq-text-demo', { input: { text } });
-    expect(res.status).toBe(200);
-    const steps = res.frames.filter((frame) => frame.type === 'step');
-    expect(steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'clean-text:running',
-      'clean-text:success',
-      'count-words:running',
-      'count-words:success',
-      'format-result:running',
-      'format-result:success',
-    ]);
-    expect(steps[0]).toMatchObject({
-      id: 'clean-text',
-      input: { text },
-      startedAt: expect.any(String) as string,
-    });
-    expect(steps[1]).toMatchObject({
-      id: 'clean-text',
-      input: { text },
-      output: { text: 'Hello workflow world' },
-      startedAt: steps[0].startedAt,
-      endedAt: expect.any(String) as string,
-    });
-    // A later step received the one before it's output.
-    expect(steps[2].input).toEqual({ text: 'Hello workflow world' });
-    const done = res.frames.at(-1)!;
-    expect(done.type).toBe('done');
-    const stored = (
-      await http().get(`/workflow-runs/${done.run!.id}`).expect(200)
-    ).body as NonNullable<Frame['run']>;
-    expect(stored.steps).toEqual(done.run!.steps);
-    expect(stored.steps[0]).toMatchObject({
-      id: 'clean-text',
-      input: { text },
-      startedAt: steps[0].startedAt,
-      endedAt: steps[1].endedAt,
-    });
-    for (const step of stored.steps) {
-      expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
-        Date.parse(step.startedAt!),
-      );
-    }
-  });
-
-  it('the sequential test workflow still runs through POST /runs (118)', async () => {
-    const res = await http()
-      .post('/workflows/seq-text-demo/runs')
-      .send({ input: { text: '  Hello   workflow   world  ' } })
-      .expect(200);
-    expect(res.body).toMatchObject({
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      output: { summary: '3 words, 20 characters: "Hello workflow world"' },
-      runId: expect.any(String) as string,
     });
   });
 });

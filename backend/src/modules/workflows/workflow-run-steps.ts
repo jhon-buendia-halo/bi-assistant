@@ -6,10 +6,7 @@
  * functions, no framework import, so Jest can read them without loading
  * Mastra.
  */
-import {
-  runErrorMessage,
-  type WorkflowRunResult,
-} from '../../mastra/workflows/workflow-run';
+import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import type { WorkflowInputValues } from '../../mastra/workflows/workflow-catalog';
 import type {
   ChatMessage,
@@ -217,23 +214,6 @@ export function runHostDoc(run: WorkflowRunDoc): SessionDoc {
     ...(run.workflowState ? { workflowState: run.workflowState } : {}),
     createdAt: run.startedAt,
     updatedAt: run.finishedAt ?? run.startedAt,
-  };
-}
-
-/** What a code-only run's synchronous result stores (api.md 118). */
-export function runOfResult(
-  result: WorkflowRunResult,
-  finishedAt: string,
-): Partial<WorkflowRunDoc> {
-  return {
-    status: result.status,
-    steps: result.steps.map((step) => {
-      const { output, ...rest } = step;
-      return output === undefined ? rest : { ...rest, ...outputFields(output) };
-    }),
-    ...(result.output ? { output: result.output } : {}),
-    ...(result.error ? { error: result.error } : {}),
-    finishedAt,
   };
 }
 

@@ -181,7 +181,7 @@ describe('createEvalHost (agents.md 8.3)', () => {
     expect(host).toEqual({ id: 'run-eval-1' });
     expect(sessions.createRunHost).toHaveBeenCalledWith(
       expect.objectContaining({
-        workflowId: 'agent:assistant',
+        agentKey: 'assistant',
         datasets: ['World Cup'] as unknown,
         context: {
           question: expect.any(String) as unknown,
@@ -202,7 +202,9 @@ describe('createEvalHost (agents.md 8.3)', () => {
     const [spec] = sessions.createRunHost.mock.calls[0] as [
       Record<string, unknown>,
     ];
-    expect(spec['workflowId']).toBe('agent:data-readiness');
+    // A direct agent host: no catalogue workflow behind it (1.23.35).
+    expect(spec['agentKey']).toBe('data-readiness');
+    expect(spec).not.toHaveProperty('workflowId');
     expect(spec).not.toHaveProperty('datasets');
     expect(sessions.narrowRunHost).toHaveBeenCalledWith('run-eval-1', [
       'World Cup',

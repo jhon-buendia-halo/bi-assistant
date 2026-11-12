@@ -1,11 +1,9 @@
-import type { WorkflowRunResult } from '../../mastra/workflows/workflow-run';
 import {
   RUN_INTERRUPTED_ERROR,
   RunStepTracker,
   interruptedRunPatch,
   noteToolFrame,
   runHostDoc,
-  runOfResult,
   runSummaryOf,
   runTitle,
   type WorkflowRunDoc,
@@ -152,48 +150,6 @@ describe('runHostDoc (plan 5.2: a run-backed host)', () => {
   });
 });
 
-describe('runOfResult (api.md 118 stores a code-only run)', () => {
-  it('projects a WorkflowRunResult into the stored run', () => {
-    const result: WorkflowRunResult = {
-      workflowId: 'seq-text-demo',
-      status: 'failed',
-      steps: [
-        {
-          id: 'clean-text',
-          title: 'Clean text',
-          status: 'failed',
-          error: 'The text is empty',
-        },
-        { id: 'count-words', title: 'Count words', status: 'skipped' },
-      ],
-      error: 'The text is empty',
-    };
-    expect(runOfResult(result, '2026-11-11T10:00:01.000Z')).toEqual({
-      status: 'failed',
-      steps: result.steps,
-      error: 'The text is empty',
-      finishedAt: '2026-11-11T10:00:01.000Z',
-    });
-  });
-
-  it('caps a step output larger than 20 000 JSON characters', () => {
-    const big = { text: 'x'.repeat(20_001) };
-    const patch = runOfResult(
-      {
-        workflowId: 'seq-text-demo',
-        status: 'success',
-        steps: [{ id: 'a', title: 'A', status: 'success', output: big }],
-        output: { summary: 'ok' },
-      },
-      't',
-    );
-    expect(patch.steps).toEqual([
-      { id: 'a', title: 'A', status: 'success', outputTruncated: true },
-    ]);
-    expect(patch.output).toEqual({ summary: 'ok' });
-  });
-});
-
 describe('interruptedRunPatch (plan 5.1 step 5)', () => {
   it('fails a run the app stopped in, and any step still running', () => {
     expect(
@@ -282,6 +238,14 @@ describe('RunStepTracker: input and times (api.md 3.6 `step`)', () => {
     const odd = tracker.apply(start('answer', 'not an object'));
     expect(odd).not.toHaveProperty('input');
     expect(odd).not.toHaveProperty('inputTruncated');
+  });
+
+  it('marks an output larger than 20 000 JSON characters instead of carrying it', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('load', { text: 'Hi' }));
+    const big = tracker.apply(result('load', { text: 'x'.repeat(20_001) }));
+    expect(big).toMatchObject({ status: 'success', outputTruncated: true });
+    expect(big).not.toHaveProperty('output');
   });
 
   it('a failed result keeps the input and start, and adds its error and end', () => {

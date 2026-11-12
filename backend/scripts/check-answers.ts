@@ -348,7 +348,7 @@ async function ask(
   const sessions = app.get(SessionsService);
   const session = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
-    workflowId: 'agent:assistant',
+    agentKey: 'assistant',
     name: 'check-answers',
     datasets: [DATASET_NAME],
   });

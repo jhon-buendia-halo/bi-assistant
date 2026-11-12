@@ -403,7 +403,8 @@ describe('AgentsService (built-in and user agents)', () => {
       const names = (view: { skills: { name: string }[] }) =>
         view.skills.map((skill) => skill.name);
       const assistant = await ctx.service.skills('assistant');
-      expect(names(assistant)).toEqual(['curated-knowledge', 'deep-analysis']);
+      // Deep analysis and its harness skill were removed in 1.23.35.
+      expect(names(assistant)).toEqual(['curated-knowledge']);
       expect(assistant.skills[0]).toEqual({
         name: 'curated-knowledge',
         description: expect.stringMatching(/^Use when /) as string,
@@ -412,7 +413,16 @@ describe('AgentsService (built-in and user agents)', () => {
         files: [expect.objectContaining({ path: 'SKILL.md' })],
       });
       expect(Object.keys(assistant)).toEqual(['skills']);
-      expect(assistant.skills[1]).toMatchObject({ loading: 'harness' });
+      // The one agent with a harness skill since deep analysis went.
+      ctx.db.close();
+      ctx = build({ visualization: fakeAgent('visualization', []) });
+      const visualization = await ctx.service.skills('visualization');
+      expect(visualization.skills).toEqual([
+        expect.objectContaining({
+          name: 'interactive-visuals',
+          loading: 'harness',
+        }),
+      ]);
 
       const created = await ctx.service.create({ name: 'Analyst' });
       expect(names(await ctx.service.skills(created.id))).toEqual(
@@ -428,27 +438,38 @@ describe('AgentsService (built-in and user agents)', () => {
   it(
     "serves a skill file and refuses what is not one of the agent's files",
     asDemoUser(async () => {
+      ctx.db.close();
+      ctx = build({ visualization: fakeAgent('visualization', []) });
       const file = await ctx.service.skillFile(
-        'assistant',
-        'deep-analysis',
-        'phases/1-plan.md',
+        'visualization',
+        'interactive-visuals',
+        'reference/freeform.md',
       );
-      expect(file.path).toBe('phases/1-plan.md');
-      expect(file.content).toContain('{{');
+      expect(file.path).toBe('reference/freeform.md');
+      expect(file.content?.length).toBeGreaterThan(0);
 
       await expect(
-        ctx.service.skillFile('sql-fixer', 'deep-analysis', 'SKILL.md'),
-      ).rejects.toThrow('Agent "sql-fixer" has no skill "deep-analysis"');
+        ctx.service.skillFile('sql-fixer', 'interactive-visuals', 'SKILL.md'),
+      ).rejects.toThrow('Agent "sql-fixer" has no skill "interactive-visuals"');
+      await expect(
+        ctx.service.skillFile('assistant', 'deep-analysis', 'SKILL.md'),
+      ).rejects.toThrow('Agent "assistant" has no skill "deep-analysis"');
       await expect(
         ctx.service.skillFile(
-          'assistant',
-          'deep-analysis',
+          'visualization',
+          'interactive-visuals',
           '../../app-skills.ts',
         ),
       ).rejects.toThrow('Invalid skill file path "../../app-skills.ts"');
       await expect(
-        ctx.service.skillFile('assistant', 'deep-analysis', 'phases/9.md'),
-      ).rejects.toThrow('Skill "deep-analysis" has no file "phases/9.md"');
+        ctx.service.skillFile(
+          'visualization',
+          'interactive-visuals',
+          'phases/9.md',
+        ),
+      ).rejects.toThrow(
+        'Skill "interactive-visuals" has no file "phases/9.md"',
+      );
     }),
   );
   describe("a user agent's in-app skills (ADR-0022; api.md 34a, 34b)", () => {

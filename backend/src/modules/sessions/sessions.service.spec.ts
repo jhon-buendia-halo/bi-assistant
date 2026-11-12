@@ -520,27 +520,6 @@ describe('SessionsService streaming', () => {
       ];
       expectBlockWithoutRules(corrective.context);
     });
-
-    it('gives a deep-analysis call the same block, without the skill', async () => {
-      const { service, session } = buildStreaming(answerStream([]), {
-        knowledgeBlock: BLOCK,
-      });
-
-      const options = await service.backgroundAgentOptions(session, 'Why?');
-
-      expectBlockWithoutRules(options.context);
-      expect(options).not.toHaveProperty('memory');
-    });
-
-    it('gives a deep-analysis call no rules when no knowledge applies', async () => {
-      const { service, session } = buildStreaming(answerStream([]));
-
-      const options = await service.backgroundAgentOptions(session, 'Why?');
-
-      expect(options.context.map((m) => m.content).join('\n')).not.toContain(
-        'Curated knowledge:',
-      );
-    });
   });
 
   it('omits the knowledge record when no snippet applied', async () => {

@@ -8,7 +8,6 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import type { WorkflowRunResult } from '../../mastra/workflows/workflow-run';
 import type { WorkflowRun } from './workflow-run-steps';
 import { WorkflowRunsService, type PreparedRun } from './workflow-runs.service';
 import {
@@ -50,9 +49,10 @@ export async function streamPrepared(
 /**
  * The workflow catalogue (api.md 2.6.2; capability workflows). Workflows
  * are defined in code, so there is no write route (workflows R3); a
- * workflow with input fields can be run (118) and run streamed (119).
- * Ids contain `:` (`agent:assistant`); clients send them URL-encoded and NestJS
- * decodes `:id`.
+ * workflow with input fields can be run (118) and run streamed (119). The
+ * catalogue holds only `qti-v2-turn` (1.23.35); any other id, such as a
+ * former `agent:assistant`, answers 404. Clients send ids URL-encoded and
+ * NestJS decodes `:id`.
  */
 @Controller('workflows')
 export class WorkflowsController {
@@ -78,10 +78,7 @@ export class WorkflowsController {
    */
   @Post(':id/runs')
   @HttpCode(200)
-  run(
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ): Promise<(WorkflowRunResult & { runId: string }) | WorkflowRun> {
+  run(@Param('id') id: string, @Body() body: unknown): Promise<WorkflowRun> {
     return this.runs.run(id, body);
   }
 

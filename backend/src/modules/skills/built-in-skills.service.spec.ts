@@ -11,7 +11,7 @@ import {
 } from '../../mastra/app-skills';
 import { setSkillOverrides } from '../../mastra/skill-overrides';
 import { assistantSkillSources } from '../../mastra/assistant-skills';
-import { phasePrompt } from '../deep-analysis/deep-analysis.phases';
+import { validateOverride } from './built-in-skill-rules';
 import { BuiltInSkillsService } from './built-in-skills.service';
 import type { SkillOverrideDoc } from './entities/skill-override.entity';
 import { SkillOverridesRepository } from './repositories/skill-overrides.repository';
@@ -50,7 +50,6 @@ describe('BuiltInSkillsService', () => {
     expect(list.map((skill) => skill.name)).toEqual([
       'curated-knowledge',
       'data-readiness',
-      'deep-analysis',
       'interactive-visuals',
       'readiness-drilldown',
     ]);
@@ -65,7 +64,21 @@ describe('BuiltInSkillsService', () => {
       loading: 'on-demand',
       agents: ['data-readiness'],
     });
-    expect(list[2]).toMatchObject({ loading: 'harness' });
+    expect(list[2]).toMatchObject({
+      loading: 'harness',
+      agents: ['visualization'],
+    });
+  });
+
+  it('no longer ships the deep-analysis skill (removed in 1.23.35)', async () => {
+    const { service } = build();
+    expect(shippedBuiltIn('deep-analysis')).toBeUndefined();
+    await expect(service.get('deep-analysis')).rejects.toThrow(
+      'Unknown built-in skill "deep-analysis"',
+    );
+    expect(
+      agentSkillsView('assistant').skills.map((skill) => skill.name),
+    ).not.toContain('deep-analysis');
   });
 
   it('names the tools a built-in body links, and nothing for one that links none', async () => {
@@ -80,11 +93,7 @@ describe('BuiltInSkillsService', () => {
         'list_readiness_reports',
       ],
     });
-    for (const name of [
-      'curated-knowledge',
-      'deep-analysis',
-      'interactive-visuals',
-    ]) {
+    for (const name of ['curated-knowledge', 'interactive-visuals']) {
       expect(byName.get(name)).not.toHaveProperty('tools');
     }
   });
@@ -94,9 +103,9 @@ describe('BuiltInSkillsService', () => {
     await expect(service.get('nope')).rejects.toThrow(
       'Unknown built-in skill "nope"',
     );
-    await expect(service.save('nope', edited('deep-analysis'))).rejects.toThrow(
-      'Unknown built-in skill "nope"',
-    );
+    await expect(
+      service.save('nope', edited('interactive-visuals')),
+    ).rejects.toThrow('Unknown built-in skill "nope"');
     await expect(service.reset('nope')).rejects.toThrow(
       'Unknown built-in skill "nope"',
     );
@@ -104,9 +113,9 @@ describe('BuiltInSkillsService', () => {
 
   it('refuses a save with the first failing check, in the documented order', async () => {
     const { service } = build();
-    const ok = edited('deep-analysis');
+    const ok = edited('interactive-visuals');
     const refusal = (patch: object) =>
-      service.save('deep-analysis', { ...ok, ...patch }).then(
+      service.save('interactive-visuals', { ...ok, ...patch }).then(
         () => 'saved',
         (err: Error) => err.message,
       );
@@ -141,11 +150,36 @@ describe('BuiltInSkillsService', () => {
     expect(
       await refusal({
         files: ok.files.map((file, i) =>
-          i === 0 ? { ...file, content: 'no placeholders' } : file,
+          i === 0 ? { ...file, content: 'a {{placeholder}}' } : file,
         ),
       }),
-    ).toMatch(/^phases\/1-plan\.md must use the placeholders \{\{question\}\}/);
+    ).toBe(`${ok.files[0].path} must use no placeholders`);
     expect(await refusal({ files: 'nope' })).toMatch(/is missing/);
+  });
+
+  it('refuses a file that drops the placeholders its built-in uses', () => {
+    const shipped = {
+      description: DESCRIPTION,
+      body: 'Body.',
+      files: [{ path: 'phases/1-plan.md', content: 'Plan {{question}}.' }],
+    };
+    const input = {
+      description: DESCRIPTION,
+      body: 'Body.',
+      files: [{ path: 'phases/1-plan.md', content: 'no placeholders' }],
+    };
+    expect(() => validateOverride(input, shipped)).toThrow(
+      'phases/1-plan.md must use the placeholders {{question}}',
+    );
+    expect(
+      validateOverride(
+        {
+          ...input,
+          files: [{ ...input.files[0], content: 'Ask {{question}}' }],
+        },
+        shipped,
+      ).files,
+    ).toEqual([{ path: 'phases/1-plan.md', content: 'Ask {{question}}' }]);
   });
 
   it('refuses extra files for a skill without any, and files with placeholders added', async () => {
@@ -175,73 +209,73 @@ describe('BuiltInSkillsService', () => {
 
   it('leaves everything unchanged when a save is refused', async () => {
     const { service, store } = build();
-    const ok = edited('deep-analysis');
+    const ok = edited('interactive-visuals');
     await expect(
-      service.save('deep-analysis', {
+      service.save('interactive-visuals', {
         ...ok,
         files: ok.files.map((file) => ({
           ...file,
-          content: 'no placeholders',
+          content: 'a {{placeholder}}',
         })),
       }),
-    ).rejects.toThrow('must use the placeholders');
+    ).rejects.toThrow('must use no placeholders');
     expect(await store.find()).toEqual([]);
-    expect(appSkillBody('deep-analysis')).toBe(
-      shippedBuiltIn('deep-analysis')!.body,
+    expect(appSkillBody('interactive-visuals')).toBe(
+      shippedBuiltIn('interactive-visuals')!.body,
     );
     expect((await service.list()).every((skill) => !skill.modified)).toBe(true);
   });
 
   it('serves a saved override on the next call, and keeps the built-in layout', async () => {
     const { service, store } = build();
-    const input = edited('deep-analysis');
-    const before = catalogSkills('assistant').map((skill) => skill.description);
+    const input = edited('interactive-visuals');
+    const before = catalogSkills('visualization').map(
+      (skill) => skill.description,
+    );
+    const first = input.files[0];
 
-    const saved = await service.save('deep-analysis', input);
+    const saved = await service.save('interactive-visuals', input);
     expect(saved).toMatchObject({
-      name: 'deep-analysis',
+      name: 'interactive-visuals',
       modified: true,
       builtInChanged: false,
       description: DESCRIPTION,
       body: input.body,
       loading: 'harness',
-      agents: ['assistant'],
+      agents: ['visualization'],
     });
-    expect(saved.builtIn.body).toBe(shippedBuiltIn('deep-analysis')!.body);
-    expect(await store.findOne({ name: 'deep-analysis' })).toMatchObject({
+    expect(saved.builtIn.body).toBe(
+      shippedBuiltIn('interactive-visuals')!.body,
+    );
+    expect(await store.findOne({ name: 'interactive-visuals' })).toMatchObject({
       updatedBy: 'local',
       baseHash: expect.stringMatching(/^[0-9a-f]{64}$/) as string,
     });
 
-    // Harness reads: the body, the document and a phase file are the override's.
-    expect(appSkillBody('deep-analysis')).toBe(input.body.trim());
-    expect(appSkillDocument('deep-analysis')).toContain(
+    // Harness reads: the body, the document and a file are the override's.
+    expect(appSkillBody('interactive-visuals')).toBe(input.body.trim());
+    expect(appSkillDocument('interactive-visuals')).toContain(
       `description: ${DESCRIPTION}`,
     );
-    expect(appSkillFile('deep-analysis', 'phases/1-plan.md')).toBe(
-      input.files[0].content,
-    );
-    expect(phasePrompt('plan', { question: 'Q?' })).toContain(
-      'Edited phases/1-plan.md.',
-    );
+    expect(appSkillFile('interactive-visuals', first.path)).toBe(first.content);
 
-    // Not an on-demand skill: the assistant catalog is untouched.
+    // Not an on-demand skill: the agent's catalog is untouched.
     expect(
-      catalogSkills('assistant').map((skill) => skill.description),
+      catalogSkills('visualization').map((skill) => skill.description),
     ).toEqual(before);
-    const view = agentSkillsView('assistant').skills.find(
-      (skill) => skill.name === 'deep-analysis',
+    const view = agentSkillsView('visualization').skills.find(
+      (skill) => skill.name === 'interactive-visuals',
     );
     expect(view).toMatchObject({
       modified: true,
       level: 'built-in',
       description: DESCRIPTION,
     });
-    const plan = view!.files.find((file) => file.path === 'phases/1-plan.md');
-    expect(plan!.size).toBe(Buffer.byteLength(input.files[0].content));
+    const file = view!.files.find((entry) => entry.path === first.path);
+    expect(file!.size).toBe(Buffer.byteLength(first.content));
     expect(
-      agentSkillFile('assistant', 'deep-analysis', 'phases/1-plan.md'),
-    ).toMatchObject({ content: input.files[0].content });
+      agentSkillFile('visualization', 'interactive-visuals', first.path),
+    ).toMatchObject({ content: first.content });
     expect(
       agentSkillsView('assistant').skills.find(
         (s) => s.name === 'curated-knowledge',
@@ -345,7 +379,7 @@ describe('SkillsController built-in routes', () => {
   it('answers Style A: a refusal comes back as ok:false', async () => {
     const { service } = build();
     const controller = new SkillsController({} as never, service);
-    const refused = await controller.saveBuiltIn('deep-analysis', {});
+    const refused = await controller.saveBuiltIn('interactive-visuals', {});
     expect(refused).toEqual({
       ok: false,
       message: 'The description must start with "Use when"',

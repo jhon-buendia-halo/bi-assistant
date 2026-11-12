@@ -61,6 +61,7 @@ import {
   ASSISTANT_WORKFLOW_NAME,
   parseWorkflowId,
   sessionWorkflowId,
+  WRAPPED_AGENT_KEYS,
 } from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
@@ -125,11 +126,20 @@ export interface RunVisualOutcome {
 
 export interface RunHostSpec {
   runId: string;
-  /** `agent:assistant`, `qti-v2-turn`, `deep-analysis`, `agent:<key>` or `agent:<user-agent id>`. */
-  workflowId: string;
-  /** The workflow's name: the host's name. */
+  /**
+   * The catalogue workflow the run runs (`qti-v2-turn`). Unused for an agent
+   * host (`agentKey`) and a draft run (`draftAgentId`).
+   */
+  workflowId?: string;
+  /**
+   * An agent host (the eval runner): the built-in agent (`assistant` or
+   * `data-readiness`) whose turn the host runs on the agent-turn engine,
+   * with no catalogue workflow behind it.
+   */
+  agentKey?: string;
+  /** The workflow's or the agent's name: the host's name. */
   name: string;
-  /** The input's datasets; absent for an agent with its own datasets and user agents. */
+  /** The input's datasets; absent for an agent with its own datasets. */
   datasets?: string[];
   /** The earlier run's question and answer, put before this run's question. */
   context?: { question: string; answer: string };
@@ -315,20 +325,6 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Same grounding for a background job (deep analysis) — tools scoped to the
-   * session, the same system blocks — but **without** the conversation memory
-   * thread. A job fires many internal sub-calls; writing them into the thread
-   * would pollute the history the user's next chat question is answered from.
-   */
-  async backgroundAgentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-  ) {
-    return this.turnOptions.agentContext(session, question, abortSignal);
-  }
-
-  /**
    * Careful mode's cross-check (agents.md 5.4), the seam the turn engine
    * reaches it through.
    */
@@ -371,40 +367,30 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * A run host (ADR-0041; agents.md 5.14): the in-memory session one run of
-   * an agent workflow executes its agent turn on, shaped as `POST /sessions`
-   * would shape a session of that workflow: bound to the workflow's agent,
-   * over the input's datasets (a built-in agent's declared datasets; a user
-   * agent's Live datasets that exist), with, as its transcript, the earlier run's question and answer (plan 5.4). Its
-   * workspace is `session-run-<run id>`, created as a session's. Never
-   * stored or listed.
+   * A run host (ADR-0041; agents.md 5.14): the in-memory session one run
+   * executes its agent turn on, shaped as `POST /sessions` would shape a
+   * session of it: bound to the catalogue workflow's agent (`workflowId`)
+   * or, for the eval runner, to a built-in agent directly (`agentKey`: the
+   * assistant over the given datasets, the Data Readiness Agent over its
+   * declared ones when none are given), with, as its transcript, the earlier
+   * run's question and answer (plan 5.4). 404 for a workflow the catalogue
+   * does not hold (an `agent:` id, `seq-text-demo`, `deep-analysis`) or an
+   * agent that has no agent-turn binding. Its workspace is
+   * `session-run-<run id>`, created as a session's. Never stored or listed.
    */
   async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     if (spec.draftAgentId) return this.createDraftRunHost(spec);
-    const notFound = () =>
-      new NotFoundException(`Workflow "${spec.workflowId}" not found`);
-    const parsed = parseWorkflowId(spec.workflowId);
-    if (!parsed) throw notFound();
     let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
     let datasets = spec.datasets ?? [];
-    if (parsed.kind === 'code' && !parsed.source.primaryFor) {
-      // A run workflow whose steps call the assistant (deep analysis,
-      // agents.md 5.15) runs on a host shaped as an assistant chat.
-      if (parsed.source.calls !== ASSISTANT_AGENT_KEY) throw notFound();
-    } else if (parsed.kind === 'code') {
-      const primary = parsed.source.primaryFor;
-      const agent = primary ? this.mastra.listAgents()[primary] : undefined;
-      if (!primary || !agent) throw notFound();
-      binding = { agentKey: primary, agentName: agent.name ?? primary };
-    } else if (parsed.kind === 'builtin-agent') {
-      if (parsed.agentKey !== ASSISTANT_AGENT_KEY) {
-        const agent = this.mastra.listAgents()[parsed.agentKey];
-        if (!agent) throw notFound();
-        binding = {
-          agentKey: parsed.agentKey,
-          agentName: agent.name ?? parsed.agentKey,
-        };
-        const builtin = this.builtinSessionAgent(parsed.agentKey);
+    if (spec.agentKey !== undefined) {
+      const key = spec.agentKey;
+      const agent = WRAPPED_AGENT_KEYS.includes(key)
+        ? this.mastra.listAgents()[key]
+        : undefined;
+      if (!agent) throw new NotFoundException(`Agent "${key}" not found`);
+      if (key !== ASSISTANT_AGENT_KEY) {
+        binding = { agentKey: key, agentName: agent.name ?? key };
+        const builtin = this.builtinSessionAgent(key);
         if (!spec.datasets && builtin) {
           const declared = builtinSessionDatasets(
             builtin.session,
@@ -417,13 +403,16 @@ export class SessionsService implements OnModuleInit {
         }
       }
     } else {
-      const agent = await this.userAgents.get(parsed.agentId);
-      if (!agent?.live) throw notFound();
-      datasets = await this.existingDatasets(agent.live.datasets);
-      if (!datasets.length) {
-        throw new BadRequestException("None of this agent's datasets exist");
+      const parsed = spec.workflowId
+        ? parseWorkflowId(spec.workflowId)
+        : undefined;
+      const primary =
+        parsed?.kind === 'code' ? parsed.source.primaryFor : undefined;
+      const agent = primary ? this.mastra.listAgents()[primary] : undefined;
+      if (!primary || !agent) {
+        throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
       }
-      binding = { agentId: parsed.agentId, agentName: agent.live.name };
+      binding = { agentKey: primary, agentName: agent.name ?? primary };
     }
     const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
     const name = spec.name.slice(0, 64);

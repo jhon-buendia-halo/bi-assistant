@@ -34,7 +34,6 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
 
 /** Built-in skills code sends to each agent itself (agents.md 7.4). */
 export const HARNESS_SKILLS: Readonly<Record<string, readonly string[]>> = {
-  assistant: ['deep-analysis'],
   visualization: ['interactive-visuals'],
 };
 

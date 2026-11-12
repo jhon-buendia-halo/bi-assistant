@@ -97,13 +97,9 @@ jest.mock('../workflows/workflows.service', () => ({
 }));
 
 import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
-import { AGENT_TURN_STEPS } from '../../mastra/workflows/agent-turn.steps';
 import { QTI_V2_TURN_STEPS } from '../../mastra/workflows/qti-v2-turn.steps';
 import { qtiV2TurnWorkflow } from '../../mastra/workflows/qti-v2-turn.workflow';
-import {
-  CODE_WORKFLOWS,
-  oneStepWorkflowInput,
-} from '../../mastra/workflows/workflow-catalog';
+import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
@@ -140,34 +136,30 @@ const DATASETS = [
   },
 ];
 
+/**
+ * What a turn runs on: the one catalogue workflow (`v2`, a run), or a
+ * built-in agent's direct host (`assistant`, `readiness`: the eval runner's,
+ * 1.23.35).
+ */
 type Workflow = 'assistant' | 'v2' | 'readiness';
 
-/** The workflow detail the fake catalogue answers for each workflow. */
-const WORKFLOWS: Record<Workflow, Record<string, unknown>> = {
-  assistant: {
-    id: 'agent:assistant',
-    name: 'Assistant',
-    input: oneStepWorkflowInput('assistant'),
-    agents: [{ key: 'assistant', name: 'Assistant' }],
-    steps: AGENT_TURN_STEPS,
-  },
-  v2: {
-    id: 'qti-v2-turn',
-    name: 'Questions to Insights v2',
-    input: CODE_WORKFLOWS[0].input,
-    agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
-    steps: QTI_V2_TURN_STEPS,
-  },
-  readiness: {
-    id: 'agent:data-readiness',
-    name: 'Data Readiness Agent',
-    input: oneStepWorkflowInput('data-readiness'),
-    agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
-    steps: AGENT_TURN_STEPS,
-  },
+/** The workflow detail the fake catalogue answers for `qti-v2-turn`. */
+const V2_WORKFLOW = {
+  id: 'qti-v2-turn',
+  name: 'Questions to Insights v2',
+  input: CODE_WORKFLOWS[0].input,
+  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  steps: QTI_V2_TURN_STEPS,
 };
 
-/** The chat session that takes the same input as each workflow's run. */
+/** The registry key of the agent each turn calls. */
+const AGENT_KEYS: Record<Workflow, string> = {
+  assistant: 'assistant',
+  v2: 'assistant-v2',
+  readiness: 'data-readiness',
+};
+
+/** The chat session that takes the same input as each turn. */
 const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
   assistant: { datasets: ['World Cup'] },
   v2: {
@@ -182,12 +174,8 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
   },
 };
 
-/** The run input that asks what the chat message asks. */
-const INPUTS: Record<Workflow, Record<string, unknown>> = {
-  assistant: { question: 'Who won?', datasets: ['World Cup'] },
-  v2: { question: 'Who won?', datasets: ['World Cup'] },
-  readiness: { dataset: 'World Cup', question: 'Who won?' },
-};
+/** The v2 run input that asks what the chat message asks. */
+const V2_INPUT = { question: 'Who won?', datasets: ['World Cup'] };
 
 interface StreamCall {
   input: unknown;
@@ -339,12 +327,11 @@ function build(options: BuildOptions = {}) {
     userAgents as never,
   );
   const workflows = {
-    definition: jest.fn((id: string) => {
-      const found = Object.values(WORKFLOWS).find((w) => w.id === id);
-      return found
-        ? Promise.resolve(found)
-        : Promise.reject(new Error(`Workflow "${id}" not found`));
-    }),
+    definition: jest.fn((id: string) =>
+      id === V2_WORKFLOW.id
+        ? Promise.resolve(V2_WORKFLOW)
+        : Promise.reject(new Error(`Workflow "${id}" not found`)),
+    ),
   };
   const runs = new WorkflowRunsService(
     workflows as unknown as WorkflowsService,
@@ -369,7 +356,7 @@ function build(options: BuildOptions = {}) {
     sessionStore.set(doc.id, doc);
     return doc;
   };
-  return { sessions, runs, mastra, registry, calls, chat };
+  return { sessions, runs, mastra, registry, calls, chat, userAgents };
 }
 
 type Ctx = ReturnType<typeof build>;
@@ -393,20 +380,49 @@ async function chatTurn(
   return events;
 }
 
+/** A run of `qti-v2-turn` on `input`. */
 async function runOf(
   ctx: Ctx,
-  workflow: Workflow,
   input: Record<string, unknown>,
   extra: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
   const events: RunStreamEvent[] = [];
-  const prepared = await ctx.runs.prepare(WORKFLOWS[workflow].id as string, {
+  const prepared = await ctx.runs.prepare(V2_WORKFLOW.id, {
     input,
     ...extra,
   });
   const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
   return { events, run };
+}
+
+/**
+ * One turn on a built-in agent's direct host, as the eval runner makes it
+ * (`createEvalHost`): the host, the turn, then the host's view.
+ */
+async function agentHostTurn(
+  ctx: Ctx,
+  agentKey: string,
+  question: string,
+  options: { datasets?: string[]; careful?: boolean } = {},
+) {
+  const events: StreamEvent[] = [];
+  const host = await ctx.sessions.createRunHost({
+    runId: `eval-${agentKey}`,
+    agentKey,
+    name: `${agentKey} eval`,
+    ...(options.datasets ? { datasets: options.datasets } : {}),
+  });
+  await ctx.sessions.streamRunTurn(
+    host.id,
+    question,
+    (e) => events.push(e),
+    undefined,
+    options.careful ?? false,
+    () => undefined,
+  );
+  const view = await ctx.sessions.finishRunHost(host.id);
+  return { host, events, view };
 }
 
 const HOST_ONLY_KEYS = ['session-id', 'session-workspace-id'];
@@ -441,87 +457,104 @@ function withoutTime<T extends { at?: string }>(message: T | undefined) {
 }
 
 describe('a run sends the same model request as a chat turn (plan 1.24.2; agents.md 5.14)', () => {
-  it.each(['assistant', 'v2', 'readiness'] as const)(
-    '%s: the same input, options, system blocks and tools context, and the same answer',
+  it('v2: the same input, options, system blocks and tools context, and the same answer', async () => {
+    const ctx = build();
+    const session = ctx.chat('v2');
+    await chatTurn(ctx, session.id, 'Who won?');
+    const { run } = await runOf(ctx, V2_INPUT);
+
+    const [chatCall, runCall] = ctx.calls['assistant-v2'];
+    expect(ctx.calls['assistant-v2']).toHaveLength(2);
+    expect(request(runCall)).toEqual(request(chatCall));
+    // The host names itself where the session did.
+    expect(runCall.options.requestContext.values.get('session-id')).toBe(
+      `run-${run.id}`,
+    );
+    expect(runCall.options.memory?.thread ?? `run-${run.id}`).toBe(
+      `run-${run.id}`,
+    );
+    expect(run.status).toBe('success');
+    expect(withoutTime(run.answer)).toEqual(
+      withoutTime(session.messages.at(-1)),
+    );
+    expect(run.answer?.content).toBe('Brazil won.');
+  });
+
+  // The eval runner's direct host (1.23.35): the assistant and the Data
+  // Readiness Agent have no catalogue workflow, and still run their turn.
+  it.each(['assistant', 'readiness'] as const)(
+    "%s's agent host: the same request as its chat turn, and the same answer",
     async (workflow) => {
       const ctx = build();
-      const agentKey = (WORKFLOWS[workflow].agents as { key: string }[])[0].key;
+      const agentKey = AGENT_KEYS[workflow];
       const session = ctx.chat(workflow);
       await chatTurn(ctx, session.id, 'Who won?');
-      const { run } = await runOf(ctx, workflow, INPUTS[workflow]);
+      const { host, view } = await agentHostTurn(ctx, agentKey, 'Who won?', {
+        ...(workflow === 'assistant' ? { datasets: ['World Cup'] } : {}),
+      });
 
-      const [chatCall, runCall] = ctx.calls[agentKey];
+      const [chatCall, hostCall] = ctx.calls[agentKey];
       expect(ctx.calls[agentKey]).toHaveLength(2);
-      expect(request(runCall)).toEqual(request(chatCall));
-      // The host names itself where the session did.
-      expect(runCall.options.requestContext.values.get('session-id')).toBe(
-        `run-${run.id}`,
+      expect(request(hostCall)).toEqual(request(chatCall));
+      expect(hostCall.options.requestContext.values.get('session-id')).toBe(
+        host.id,
       );
-      expect(runCall.options.memory?.thread ?? `run-${run.id}`).toBe(
-        `run-${run.id}`,
-      );
-      expect(run.status).toBe('success');
-      expect(withoutTime(run.answer)).toEqual(
+      // Bound as its chat is, on the agent-turn engine, over the same data.
+      expect(host).toMatchObject({
+        datasets: ['World Cup'],
+        workflowId: `agent:${agentKey}`,
+        run: true,
+      });
+      expect(withoutTime(view.messages.at(-1))).toEqual(
         withoutTime(session.messages.at(-1)),
       );
-      expect(run.answer?.content).toBe('Brazil won.');
     },
   );
-
-  it('a user agent run is shaped as its chat: its Live datasets and instructions', async () => {
-    const ctx = build();
-    const historian = {
-      name: 'Cup historian',
-      description: 'd',
-      instructions: 'Always name the tournament year.',
-      datasets: ['World Cup', 'Gone'],
-      starterQuestions: [],
-    };
-    (
-      ctx.sessions as unknown as { userAgents: { get: jest.Mock } }
-    ).userAgents.get.mockResolvedValue({
-      id: 'agent-1',
-      draft: historian,
-      live: historian,
-    });
-    const workflows = (
-      ctx.runs as unknown as { workflows: { definition: jest.Mock } }
-    ).workflows;
-    workflows.definition.mockResolvedValueOnce({
-      id: 'agent:agent-1',
-      name: 'Cup historian',
-      input: oneStepWorkflowInput('agent-1'),
-      agents: [{ key: 'agent-1', name: 'Cup historian' }],
-      steps: AGENT_TURN_STEPS,
-    });
-    const session = ctx.chat('assistant');
-    Object.assign(session, { agentId: 'agent-1', agentName: 'Cup historian' });
-    await chatTurn(ctx, session.id, 'Who won?');
-    const prepared = await ctx.runs.prepare('agent:agent-1', {
-      input: { question: 'Who won?' },
-    });
-    const run = await ctx.runs.stream(prepared, () => undefined);
-    const [chatCall, runCall] = ctx.calls['assistant'];
-    expect(request(runCall)).toEqual(request(chatCall));
-    expect(runCall.options.context.at(-1)?.content).toContain(
-      'Always name the tournament year.',
-    );
-    expect(run).toMatchObject({
-      datasets: ['World Cup'],
-      agentId: 'agent-1',
-      agentName: 'Cup historian',
-    });
-  });
 });
 
 describe('the run host (agents.md 5.14)', () => {
+  it('refuses a workflow the catalogue does not hold, and an agent with no agent-turn binding', async () => {
+    const ctx = build();
+    for (const workflowId of [
+      'agent:assistant',
+      'agent:data-readiness',
+      'agent:agent-1',
+      'seq-text-demo',
+      'deep-analysis',
+    ]) {
+      await expect(
+        ctx.sessions.createRunHost({ runId: 'r', workflowId, name: 'x' }),
+      ).rejects.toThrow(`Workflow "${workflowId}" not found`);
+    }
+    for (const agentKey of ['sql-fixer', 'assistant-v2', 'rfp', 'agent-1']) {
+      await expect(
+        ctx.sessions.createRunHost({ runId: 'r', agentKey, name: 'x' }),
+      ).rejects.toThrow(`Agent "${agentKey}" not found`);
+    }
+    expect(ctx.mastra.ensureSessionWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("refuses a Data Readiness host while no dataset qualifies, with the agent's requirement", async () => {
+    const ctx = build();
+    ctx.userAgents.datasetKinds.mockResolvedValue([
+      { name: 'Orders API', datasourceKind: 'rest' },
+    ]);
+    await expect(
+      ctx.sessions.createRunHost({
+        runId: 'r',
+        agentKey: 'data-readiness',
+        name: 'x',
+      }),
+    ).rejects.toThrow('Add a PostgreSQL or Databricks dataset first');
+  });
+
   it('is created per run and discarded after it: never listed, its memory thread deleted, its workspace kept', async () => {
     const ctx = build();
-    const { run } = await runOf(ctx, 'assistant', INPUTS.assistant);
+    const { run } = await runOf(ctx, V2_INPUT);
     const hostId = `run-${run.id}`;
     expect(ctx.mastra.ensureSessionWorkspace).toHaveBeenCalledWith(
       hostId,
-      'Assistant',
+      'Questions to Insights v2',
     );
     expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(hostId);
     expect(ctx.mastra.deleteSessionResources).not.toHaveBeenCalled();
@@ -529,7 +562,7 @@ describe('the run host (agents.md 5.14)', () => {
       `Session ${hostId} not found`,
     );
     // Each run gets its own host.
-    const second = await runOf(ctx, 'assistant', INPUTS.assistant);
+    const second = await runOf(ctx, V2_INPUT);
     expect(second.run.id).not.toBe(run.id);
     expect(ctx.mastra.deleteMemoryThread).toHaveBeenLastCalledWith(
       `run-${second.run.id}`,
@@ -540,7 +573,7 @@ describe('the run host (agents.md 5.14)', () => {
     const ctx = build();
     const host = await ctx.sessions.createRunHost({
       runId: 'eval-1',
-      workflowId: 'agent:assistant',
+      agentKey: 'assistant',
       name: 'assistant eval',
       datasets: ['World Cup', 'Formula 1'],
     });
@@ -556,14 +589,13 @@ describe('the run host (agents.md 5.14)', () => {
 
   it('sends the earlier run as two messages before this question (plan 5.4)', async () => {
     const ctx = build();
-    const first = await runOf(ctx, 'assistant', INPUTS.assistant);
+    const first = await runOf(ctx, V2_INPUT);
     await runOf(
       ctx,
-      'assistant',
       { question: 'And in 2014?', datasets: ['World Cup'] },
       { context: { fromRunId: first.run.id } },
     );
-    expect(ctx.calls['assistant'][1].input).toEqual([
+    expect(ctx.calls['assistant-v2'][1].input).toEqual([
       { role: 'user', content: 'Who won?' },
       { role: 'assistant', content: 'Brazil won.' },
       { role: 'user', content: 'And in 2014?' },
@@ -573,9 +605,9 @@ describe('the run host (agents.md 5.14)', () => {
   it('a stopped run aborts the agent stream and is stopped', async () => {
     const ctx = build({ holdUntilAbort: true });
     const abort = new AbortController();
-    const pending = runOf(ctx, 'assistant', INPUTS.assistant, {}, abort.signal);
+    const pending = runOf(ctx, V2_INPUT, {}, abort.signal);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    const call = ctx.calls['assistant'][0];
+    const call = ctx.calls['assistant-v2'][0];
     expect(call.options.abortSignal?.aborted).toBe(false);
     abort.abort();
     const { run, events } = await pending;
@@ -587,7 +619,7 @@ describe('the run host (agents.md 5.14)', () => {
     expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(`run-${run.id}`);
   });
 
-  it('careful: true runs the cross-check, as a careful chat turn does', async () => {
+  it("careful: true on an agent host's turn runs the cross-check, as a careful chat turn does", async () => {
     const ctx = build();
     const crossCheck = jest
       .spyOn(
@@ -595,20 +627,24 @@ describe('the run host (agents.md 5.14)', () => {
         'crossCheckAnswer',
       )
       .mockResolvedValue({ status: 'agree', note: 'same' });
-    const { run } = await runOf(ctx, 'assistant', {
-      ...INPUTS.assistant,
+    const { view } = await agentHostTurn(ctx, 'assistant', 'Who won?', {
+      datasets: ['World Cup'],
       careful: true,
     });
     expect(crossCheck).toHaveBeenCalledTimes(1);
-    expect(run.answer?.crossCheck).toEqual({ status: 'agree', note: 'same' });
+    expect(view.messages.at(-1)?.crossCheck).toEqual({
+      status: 'agree',
+      note: 'same',
+    });
     crossCheck.mockClear();
-    await runOf(ctx, 'assistant', INPUTS.assistant);
+    // A v2 run takes no careful field: its input has none.
+    await runOf(ctx, { ...V2_INPUT, careful: true });
     expect(crossCheck).not.toHaveBeenCalled();
   });
 
   it('a v2 run emits a running and an ended step event for each of its four steps', async () => {
     const ctx = build();
-    const { events, run } = await runOf(ctx, 'v2', INPUTS.v2);
+    const { events, run } = await runOf(ctx, V2_INPUT);
     const steps = events.filter(
       (e): e is Extract<RunStreamEvent, { type: 'step' }> => e.type === 'step',
     );
@@ -633,7 +669,7 @@ describe('the run host (agents.md 5.14)', () => {
     expect(events.some((e) => e.type === 'workflow')).toBe(true);
   });
 
-  it('a Data Readiness run forwards tool-progress and runs over its one dataset', async () => {
+  it("a Data Readiness agent host forwards tool-progress and runs over its kind's datasets", async () => {
     const ctx = build({
       chunks: [
         {
@@ -656,11 +692,12 @@ describe('the run host (agents.md 5.14)', () => {
         { type: 'text-delta', payload: { text: 'Assessed.' } },
       ],
     });
-    const { events, run } = await runOf(ctx, 'readiness', {
-      dataset: 'World Cup',
-    });
-    const progress = events.find((e) => e.type === 'tool-progress') as
-      StreamEvent | undefined;
+    const { events, view } = await agentHostTurn(
+      ctx,
+      'data-readiness',
+      'Assess the readiness of this dataset',
+    );
+    const progress = events.find((e) => e.type === 'tool-progress');
     expect(JSON.parse(progress?.content ?? '{}')).toEqual({
       tool: 'assess_data_readiness',
       phase: 'profiling',
@@ -668,8 +705,8 @@ describe('the run host (agents.md 5.14)', () => {
       done: 1,
       total: 2,
     });
-    expect(run.datasets).toEqual(['World Cup']);
-    expect(run.question).toBe('Assess the readiness of this dataset');
+    // Its PostgreSQL and Databricks datasets; never the REST one.
+    expect(view.datasets).toEqual(['World Cup']);
     expect(ctx.calls['data-readiness'][0].input).toEqual([
       { role: 'user', content: 'Assess the readiness of this dataset' },
     ]);

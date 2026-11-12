@@ -5,31 +5,25 @@ import {
   NotFoundException,
   type OnModuleInit,
 } from '@nestjs/common';
-import type { RequestContext } from '@mastra/core/request-context';
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
-import { DEEP_ANALYSIS_WORKFLOW_ID } from '../../mastra/workflows/deep-analysis.steps';
 import {
   agentRunTurn,
   agentWorkflowId,
-  oneStepWorkflowInput,
+  draftRunInput,
   oneStepWorkflowSteps,
   parseWorkflowInput,
   wrappedAgentMaxSteps,
   type AgentRunTurn,
   type WorkflowInputValues,
 } from '../../mastra/workflows/workflow-catalog';
-import {
-  runErrorMessage,
-  type WorkflowRunResult,
-} from '../../mastra/workflows/workflow-run';
+import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type {
   ChatMessage,
   FilePanelItem,
   InteractiveVisualization,
   VisualEvent,
-  SessionDoc,
 } from '../sessions/entities/session.entity';
 import {
   RUN_HOST_ID_PREFIX,
@@ -39,22 +33,14 @@ import {
 } from '../sessions/sessions.service';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import {
-  assembledReportOf,
-  deepAnalysisContext,
-  deepAnalysisRunAnswer,
-  deepAnalysisRuntime,
-} from './deep-analysis-run';
-import {
   RunStepTracker,
   interruptedRunPatch,
   noteToolFrame,
   runAnswerOf,
   runHostDoc,
-  runOfResult,
   runSummaryOf,
   type WorkflowRun,
   type WorkflowRunDoc,
-  type WorkflowRunStep,
   type WorkflowRunSummary,
 } from './workflow-run-steps';
 import { WorkflowsService, type WorkflowDefinition } from './workflows.service';
@@ -93,8 +79,8 @@ export type RunStreamEvent =
 export interface PreparedRun {
   workflow: WorkflowDefinition;
   values: WorkflowInputValues;
-  /** Agent workflows: the agent turn the input asks for. */
-  turn?: AgentRunTurn;
+  /** The agent turn the input asks for. */
+  turn: AgentRunTurn;
   /** The earlier run given as context (plan 5.4). */
   context?: {
     fromRunId: string;
@@ -118,14 +104,17 @@ export interface RunAttachment {
 
 /**
  * Runs a workflow once on its typed input and keeps the run (ADR-0041;
- * api.md 118-127; agents.md 5.14; data-model 3.16). A code-only workflow
- * runs its registered engine workflow. An agent workflow runs one agent turn
- * on a run host, an in-memory session `SessionsService` holds, through
- * today's turn path unchanged, and the host is projected into the run.
- * Every run is stored in `workflow_runs` when it starts and updated when it
- * ends; its files stay in its workspace `session-run-<id>` until it is
- * deleted. `SessionsService` never depends on this service (that would be a
- * module cycle).
+ * api.md 118-127; agents.md 5.14; data-model 3.16). A run (of
+ * `qti-v2-turn`, the one catalogue workflow, or a user agent's draft) runs
+ * one agent turn on a run host, an in-memory session `SessionsService`
+ * holds, through today's turn path unchanged, and the host is projected
+ * into the run. Every run but a draft's is stored in `workflow_runs` when it
+ * starts and updated when it ends; its files stay in its workspace
+ * `session-run-<id>` until it is deleted. A stored run of a removed workflow
+ * (`agent:*`, `seq-text-demo`, `deep-analysis`) still lists and reads as a
+ * plain run; a run request naming its workflow is refused as not found.
+ * `SessionsService` never depends on this service (that would be a module
+ * cycle).
  */
 @Injectable()
 export class WorkflowRunsService implements OnModuleInit {
@@ -171,17 +160,14 @@ export class WorkflowRunsService implements OnModuleInit {
   /**
    * Check a run request before anything runs (api.md 119 refusals, Style B):
    * 404 for a workflow `GET /workflows` does not list; 400 for a workflow
-   * without input fields, for its run requirement, for an input its fields
-   * refuse (plan 4.1), for an agent run whose question is blank, and for a
-   * `context.fromRunId` naming no stored run with an answer.
+   * without input fields, for an input its fields refuse (plan 4.1), for a
+   * blank question, and for a `context.fromRunId` naming no stored run with
+   * an answer.
    */
   async prepare(id: string, body: unknown): Promise<PreparedRun> {
     const workflow = await this.workflows.definition(id);
     if (!workflow.input.length) {
       throw new BadRequestException(`Workflow "${id}" can't run on an input`);
-    }
-    if (workflow.runRequirement) {
-      throw new BadRequestException(workflow.runRequirement);
     }
     const request =
       body && typeof body === 'object'
@@ -196,19 +182,6 @@ export class WorkflowRunsService implements OnModuleInit {
       needsDatasets ? await this.datasets.list() : [],
     );
     if (!parsed.ok) throw new BadRequestException(parsed.error);
-    if (!workflow.agents.length) {
-      return { workflow, values: parsed.values };
-    }
-    // A code workflow that runs on its input runs its engine workflow even
-    // when its steps call an agent (deep analysis, agents.md 5.15); its
-    // question is refused when blank, as an agent run's is.
-    if (workflow.id === DEEP_ANALYSIS_WORKFLOW_ID) {
-      const question = parsed.values['question'];
-      if (typeof question === 'string' && !question.trim()) {
-        throw new BadRequestException('Question is required');
-      }
-      return { workflow, values: parsed.values };
-    }
     const turn = agentRunTurn(parsed.values);
     if (!turn.question) {
       const field = workflow.input.find(
@@ -232,8 +205,8 @@ export class WorkflowRunsService implements OnModuleInit {
    * Check a draft run request before anything runs (api.md R12): 404 for an
    * unknown agent, 400 `Select at least one dataset to preview` when none of
    * the draft's datasets exists, and `Question is required` for a blank
-   * question. The workflow it runs is the agent's one-step workflow, with the
-   * draft's name.
+   * question. It runs the agent's draft on the agent-turn engine
+   * (`agent:<id>`, never a catalogue workflow), with the draft's name.
    */
   async prepareDraft(agentId: string, body: unknown): Promise<PreparedRun> {
     const target = await this.sessions.draftRunTarget(agentId);
@@ -247,7 +220,7 @@ export class WorkflowRunsService implements OnModuleInit {
         : undefined;
     const question = typeof raw === 'string' ? raw.trim() : '';
     if (!question) throw new BadRequestException('Question is required');
-    const fields = oneStepWorkflowInput(agentId);
+    const fields = draftRunInput();
     return {
       workflow: {
         id: agentWorkflowId(agentId),
@@ -277,9 +250,9 @@ export class WorkflowRunsService implements OnModuleInit {
 
   /**
    * Run a prepared run and report it on `emit` (api.md 119): `run`, then
-   * the `step` events and, for an agent workflow, its turn's events as the
-   * chat stream sends them, then `done { run }`, or `error { content }` when
-   * the agent turn failed. A stopped run (`abortSignal`) sends nothing more.
+   * the `step` events and the agent turn's events as the chat stream sends
+   * them, then `done { run }`, or `error { content }` when the agent turn
+   * failed. A stopped run (`abortSignal`) sends nothing more.
    * The run is stored before `run` is sent and updated when it ends; a run
    * that throws while ending is stored `failed` and the error rethrown.
    * Answers the run as `GET /workflow-runs/:id` shows it.
@@ -308,26 +281,15 @@ export class WorkflowRunsService implements OnModuleInit {
     live({ type: 'run', runId: base.id, workflowId: workflow.id });
     let ended: WorkflowRunDoc;
     try {
-      ended = prepared.turn
-        ? await this.runAgent(
-            prepared,
-            prepared.turn,
-            base,
-            tracker,
-            live,
-            onStep,
-            abortSignal,
-          )
-        : workflow.id === DEEP_ANALYSIS_WORKFLOW_ID
-          ? await this.runDeepAnalysis(
-              prepared,
-              base,
-              tracker,
-              live,
-              onStep,
-              abortSignal,
-            )
-          : await this.runCode(prepared, base, tracker, live, onStep);
+      ended = await this.runAgent(
+        prepared,
+        prepared.turn,
+        base,
+        tracker,
+        live,
+        onStep,
+        abortSignal,
+      );
     } catch (failure) {
       if (!prepared.draft) {
         await this.end(base.id, {
@@ -343,7 +305,7 @@ export class WorkflowRunsService implements OnModuleInit {
     const run: WorkflowRun = prepared.draft
       ? ended
       : await this.wire((await this.end(id, patch)) ?? ended);
-    if (run.status === 'failed' && prepared.turn) {
+    if (run.status === 'failed') {
       live({ type: 'error', content: run.error ?? 'The run failed' });
     } else {
       live({ type: 'done', run });
@@ -352,34 +314,11 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
-   * Run a workflow once and answer when it ends (api.md 118): a code-only
-   * workflow's `WorkflowRunResult`, as before, with the stored run's
-   * `runId`; an agent workflow's run, as `done.run` of the stream carries it.
-   * Either way the run is stored.
+   * Run a workflow once and answer when it ends (api.md 118): the stored
+   * run, as `done.run` of the stream carries it.
    */
-  async run(
-    id: string,
-    body: unknown,
-  ): Promise<(WorkflowRunResult & { runId: string }) | WorkflowRun> {
-    const prepared = await this.prepare(id, body);
-    // A deep analysis needs its run host, which only the streamed path makes.
-    if (prepared.turn || prepared.workflow.id === DEEP_ANALYSIS_WORKFLOW_ID) {
-      return this.stream(prepared, () => undefined);
-    }
-    const base = await this.start(prepared);
-    let result: WorkflowRunResult;
-    try {
-      result = await this.mastra.runWorkflow(id, prepared.values);
-    } catch (failure) {
-      await this.end(base.id, {
-        status: 'failed',
-        error: runErrorMessage(failure),
-        finishedAt: new Date().toISOString(),
-      });
-      throw failure;
-    }
-    await this.end(base.id, runOfResult(result, new Date().toISOString()));
-    return { ...result, runId: base.id };
+  async run(id: string, body: unknown): Promise<WorkflowRun> {
+    return this.stream(await this.prepare(id, body), () => undefined);
   }
 
   /**
@@ -404,8 +343,16 @@ export class WorkflowRunsService implements OnModuleInit {
           .map((field) => field.name),
       ]),
     );
+    // A run of a workflow the catalogue no longer holds (`seq-text-demo`,
+    // `deep-analysis`, `agent:*`) is titled from its stored text inputs.
     return runs.map((run) =>
-      runSummaryOf(run, textFields.get(run.workflowId) ?? []),
+      runSummaryOf(
+        run,
+        textFields.get(run.workflowId) ??
+          Object.keys(run.input).filter(
+            (name) => typeof run.input[name] === 'string',
+          ),
+      ),
     );
   }
 
@@ -791,156 +738,6 @@ export class WorkflowRunsService implements OnModuleInit {
       visualizations: view.visualizations ?? [],
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
       finishedAt,
-    };
-  }
-
-  /**
-   * A deep analysis's run (agents.md 5.15): a run host over the input's
-   * datasets, the engine run with the assistant's calls and the run
-   * workspace on its RequestContext, then the host discarded (its workspace
-   * kept for the run). A run that stored its report answers with the
-   * executive summary and keeps the report as its file.
-   */
-  private async runDeepAnalysis(
-    prepared: PreparedRun,
-    base: WorkflowRunDoc,
-    tracker: RunStepTracker,
-    live: (event: RunStreamEvent) => void,
-    onStep: (event: Parameters<RunStepTracker['apply']>[0]) => void,
-    abortSignal?: AbortSignal,
-  ): Promise<WorkflowRunDoc> {
-    const question = String(prepared.values['question'] ?? '');
-    const raw = prepared.values['datasets'];
-    const datasets = Array.isArray(raw) ? raw : [];
-    let host: SessionDoc | undefined;
-    let stored: () => number | undefined = () => undefined;
-    let ended: WorkflowRunDoc;
-    try {
-      host = await this.sessions.createRunHost({
-        runId: base.id,
-        workflowId: prepared.workflow.id,
-        name: prepared.workflow.name,
-        datasets,
-      });
-      const made = deepAnalysisRuntime(
-        {
-          sessions: this.sessions,
-          mastra: this.mastra,
-          warn: (message) => this.logger.warn(message),
-        },
-        host,
-        base.id,
-        abortSignal,
-      );
-      stored = made.stored;
-      ended = await this.runCode(prepared, base, tracker, live, onStep, {
-        requestContext: deepAnalysisContext(made.runtime),
-        abortSignal,
-      });
-    } catch (failure) {
-      // The run host could not be made: nothing ran.
-      const error = runErrorMessage(failure);
-      const finished = tracker.finish('failed', error);
-      for (const step of finished.changed) live({ type: 'step', ...step });
-      ended = {
-        ...base,
-        status: 'failed',
-        steps: finished.steps,
-        error,
-        finishedAt: new Date().toISOString(),
-      };
-    }
-    if (host) {
-      const hostId = host.id;
-      await this.quietly(`end the run host of run ${base.id}`, async () => {
-        await this.sessions.finishRunHost(hostId);
-      });
-    }
-    const report =
-      ended.status === 'success' ? assembledReportOf(ended.output) : undefined;
-    const bytes = stored();
-    const kept =
-      report && bytes !== undefined
-        ? deepAnalysisRunAnswer(base.id, report, bytes, ended.finishedAt!)
-        : undefined;
-    return {
-      ...ended,
-      question,
-      datasets: host?.datasets ?? datasets,
-      ...(kept ? kept : {}),
-    };
-  }
-
-  /**
-   * A code workflow's run: its engine run, streamed step by step, with the
-   * run's RequestContext when it has one. A run whose `abortSignal` fired is
-   * `stopped`.
-   */
-  private async runCode(
-    prepared: PreparedRun,
-    base: WorkflowRunDoc,
-    tracker: RunStepTracker,
-    live: (event: RunStreamEvent) => void,
-    onStep: (event: Parameters<RunStepTracker['apply']>[0]) => void,
-    engineRun: {
-      requestContext?: RequestContext;
-      abortSignal?: AbortSignal;
-    } = {},
-  ): Promise<WorkflowRunDoc> {
-    let status: 'success' | 'failed' | 'stopped' = 'success';
-    let error: string | undefined;
-    let output: Record<string, unknown> | undefined;
-    try {
-      const engine = await this.mastra.streamWorkflow(
-        prepared.workflow.id,
-        prepared.values,
-        engineRun.requestContext,
-      );
-      for await (const event of engine.fullStream) onStep(event);
-      const result = await engine.result;
-      if (result.status === 'success') {
-        const value = result.result;
-        output =
-          value && typeof value === 'object' && !Array.isArray(value)
-            ? (value as Record<string, unknown>)
-            : undefined;
-      } else {
-        status = 'failed';
-        error =
-          result.error === undefined
-            ? `The run ended as ${result.status}`
-            : runErrorMessage(result.error);
-      }
-    } catch (failure) {
-      status = 'failed';
-      error = runErrorMessage(failure);
-    }
-    if (engineRun.abortSignal?.aborted) {
-      status = 'stopped';
-      error = undefined;
-      output = undefined;
-    }
-    const ended = tracker.finish(status, error);
-    for (const step of ended.changed) live({ type: 'step', ...step });
-    const failedStep = ended.steps.find((step) => step.status === 'failed');
-    // A stopped run's step was cut off, not failed: it keeps what it
-    // received, its times and calls, but no error.
-    const steps =
-      status === 'stopped'
-        ? ended.steps.map((step) => {
-            if (step.status !== 'failed') return step;
-            const cutOff: WorkflowRunStep = { ...step, status: 'stopped' };
-            delete cutOff.error;
-            return cutOff;
-          })
-        : ended.steps;
-    return {
-      ...base,
-      status,
-      steps,
-      ...(output ? { output } : {}),
-      ...(status === 'failed' ? { error: failedStep?.error ?? error } : {}),
-      finishedAt: new Date().toISOString(),
     };
   }
 

@@ -84,7 +84,7 @@ export class TurnOptions {
    * requestContext scoping the tools to this session.
    *
    * Memory-free on purpose — `agentOptions` adds the session's conversation
-   * thread, `backgroundAgentOptions` deliberately does not.
+   * thread.
    */
   async agentContext(
     session: SessionDoc,

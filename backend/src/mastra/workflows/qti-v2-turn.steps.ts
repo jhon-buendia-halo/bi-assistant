@@ -33,12 +33,6 @@ export interface WorkflowStepEntry {
   input: readonly string[];
   output: readonly string[];
   exits: readonly WorkflowStepExit[];
-  /**
-   * An agent step of a run workflow that calls an agent it is not the
-   * workflow of (deep analysis, agents.md 5.15): whether the call is offered
-   * the agent's tools, and its tool-loop budget.
-   */
-  agentCall?: { tools: boolean; maxSteps: number };
 }
 
 /** The steps, in the order they run: the session's workflow bar shows them. */
