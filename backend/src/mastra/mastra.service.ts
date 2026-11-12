@@ -18,7 +18,7 @@ import {
 /** A workflow run event, as the session code reads it (agents.md 5.11). */
 export interface WorkflowRunEvent {
   type: string;
-  payload?: { id?: string; status?: string };
+  payload?: { id?: string; status?: string; output?: unknown; error?: unknown };
 }
 
 /** A streamed workflow run's outcome: `failed` carries the step's error. */
@@ -53,13 +53,14 @@ export class MastraService {
   }
 
   /**
-   * Start a run of a registered workflow and stream it (agents.md 5.11): its
-   * step events on `fullStream`, its outcome on `result`.
+   * Start a run of a registered workflow and stream it (agents.md 5.11,
+   * 5.14): its step events on `fullStream`, its outcome on `result`. A
+   * code-only run workflow needs no `requestContext`.
    */
   async streamWorkflow(
     key: string,
     inputData: unknown,
-    requestContext: RequestContext,
+    requestContext?: RequestContext,
   ): Promise<WorkflowRunStream> {
     const workflow = this.mastra.getWorkflow(
       key as Parameters<typeof mastra.getWorkflow>[0],
@@ -118,6 +119,16 @@ export class MastraService {
     const workspace = createSessionWorkspace(sessionId, sessionName);
     this.mastra.addWorkspace(workspace);
     return initializeSessionWorkspace(workspace);
+  }
+
+  /**
+   * Delete one agent memory thread (a run host's, agents.md 5.14). Every
+   * agent shares the app's one memory store, so the assistant's handle
+   * reaches any agent's thread.
+   */
+  async deleteMemoryThread(threadId: string): Promise<void> {
+    const memory = await this.getAgent('assistant').getMemory();
+    await memory?.deleteThread(threadId);
   }
 
   /** Remove the session's agent memory, registry entry, and workspace files. */

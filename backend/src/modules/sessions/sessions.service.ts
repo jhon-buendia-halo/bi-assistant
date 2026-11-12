@@ -311,16 +311,43 @@ function readinessProgressEvent(chunk: unknown): StreamEvent | undefined {
 
 /** Id prefix of an agent editor's preview session (agents-evals R60). */
 const PREVIEW_ID_PREFIX = 'preview-';
+/** Id prefix of a run host: `run-<run id>` (ADR-0041; agents.md 5.14). */
+export const RUN_HOST_ID_PREFIX = 'run-';
+
+/**
+ * What a run host is created from (agents.md 5.14): the run, the workflow it
+ * runs, the input's datasets and RFP, and the one earlier run given as
+ * context (plan 5.4).
+ */
+export interface RunHostSpec {
+  runId: string;
+  /** `agent:assistant`, `qti-v2-turn`, `agent:<key>` or `agent:<user-agent id>`. */
+  workflowId: string;
+  /** The workflow's name: the host's name. */
+  name: string;
+  /** The input's datasets; absent for the RFP Builder and user agents. */
+  datasets?: string[];
+  rfpId?: string;
+  /** The earlier run's question and answer, put before this run's question. */
+  context?: { question: string; answer: string };
+}
+
+/** A run step event as the run's turn streams it (agents.md 5.14). */
+export type RunStepEvent = {
+  type: string;
+  payload?: { id?: string; status?: string; output?: unknown; error?: unknown };
+};
 
 @Injectable()
 export class SessionsService implements OnModuleInit {
   private readonly logger = new Logger(SessionsService.name);
 
   /**
-   * Preview sessions of the agent editor, held in memory only and never in
-   * the sessions collection (agents-evals R61, data-model 3.12).
+   * The sessions held in memory only and never in the sessions collection:
+   * the agent editor's previews (agents-evals R61, data-model 3.12) and run
+   * hosts (agents.md 5.14).
    */
-  private readonly previews = new Map<string, SessionDoc>();
+  private readonly memoryHosts = new Map<string, SessionDoc>();
 
   /**
    * Provider options filed under the bucket the configured model actually
@@ -440,9 +467,9 @@ export class SessionsService implements OnModuleInit {
       );
     }
 
-    // A preview left open when the app stopped has no session left to own
-    // its memory and workspace (agents-evals R61).
-    await this.sweepPreviews();
+    // A preview or a run host left when the app stopped has no session left
+    // to own its memory and workspace (agents-evals R61; agents.md 5.14).
+    await this.sweepMemoryHosts();
 
     // Backfill workspaces for sessions created before workspace support and
     // restore their registrations after every process restart.
@@ -1254,8 +1281,8 @@ export class SessionsService implements OnModuleInit {
    * session's memory thread or workspace goes through here first.
    */
   async get(id: string): Promise<SessionDoc> {
-    const preview = this.previews.get(id);
-    if (preview) return { ...preview };
+    const held = this.memoryHosts.get(id);
+    if (held) return { ...held };
     const session = await this.repository.get(id);
     if (!session) throw new NotFoundException(`Session ${id} not found`);
     return session;
@@ -1265,8 +1292,8 @@ export class SessionsService implements OnModuleInit {
   async delete(id: string): Promise<SessionDoc> {
     const session = await this.get(id);
     await this.mastra.deleteSessionResources(id);
-    if (session.preview) {
-      this.previews.delete(id);
+    if (this.memoryHosts.has(id)) {
+      this.memoryHosts.delete(id);
       return session;
     }
     const removed = await this.repository.delete(id);
@@ -1444,16 +1471,157 @@ export class SessionsService implements OnModuleInit {
       createdAt: now,
       updatedAt: now,
     };
-    this.previews.set(id, preview);
+    this.memoryHosts.set(id, preview);
     return { ...preview };
   }
 
-  /** Discard what previews left behind when the app last stopped (R61). */
-  private async sweepPreviews(): Promise<void> {
+  /**
+   * A run host (ADR-0041; agents.md 5.14): the in-memory session one run of
+   * an agent workflow executes its agent turn on, shaped as `POST /sessions`
+   * would shape a session of that workflow: bound to the workflow's agent,
+   * over the input's datasets (the RFP Builder's declared dataset; a user
+   * agent's Live datasets that exist), with the input's RFP and, as its
+   * transcript, the earlier run's question and answer (plan 5.4). Its
+   * workspace is `session-run-<run id>`, created as a session's. Never
+   * stored or listed.
+   */
+  async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
+    const notFound = () =>
+      new NotFoundException(`Workflow "${spec.workflowId}" not found`);
+    const parsed = parseWorkflowId(spec.workflowId);
+    if (!parsed) throw notFound();
+    let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
+    let datasets = spec.datasets ?? [];
+    if (parsed.kind === 'code') {
+      const primary = parsed.source.primaryFor;
+      const agent = primary ? this.mastra.listAgents()[primary] : undefined;
+      if (!primary || !agent) throw notFound();
+      binding = { agentKey: primary, agentName: agent.name ?? primary };
+    } else if (parsed.kind === 'builtin-agent') {
+      if (parsed.agentKey !== ASSISTANT_AGENT_KEY) {
+        const agent = this.mastra.listAgents()[parsed.agentKey];
+        if (!agent) throw notFound();
+        binding = {
+          agentKey: parsed.agentKey,
+          agentName: agent.name ?? parsed.agentKey,
+        };
+        const builtin = this.builtinSessionAgent(parsed.agentKey);
+        if (!spec.datasets && builtin) {
+          const declared = builtinSessionDatasets(
+            builtin.session,
+            await existingDatasetsFor(builtin.session, this.userAgents),
+          );
+          if (!canStartBuiltinSession(declared)) {
+            throw new BadRequestException(builtin.session.requirement);
+          }
+          datasets = declared.datasets;
+        }
+      }
+    } else {
+      const agent = await this.userAgents.get(parsed.agentId);
+      if (!agent?.live) throw notFound();
+      datasets = await this.existingDatasets(agent.live.datasets);
+      if (!datasets.length) {
+        throw new BadRequestException("None of this agent's datasets exist");
+      }
+      binding = { agentId: parsed.agentId, agentName: agent.live.name };
+    }
+    const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
+    const name = spec.name.slice(0, 64);
+    const workspace = await this.mastra.ensureSessionWorkspace(id, name);
+    const now = new Date().toISOString();
+    const host: SessionDoc = {
+      id,
+      name,
+      workspaceId: workspace.id,
+      datasets,
+      ...binding,
+      workflowId: sessionWorkflowId(binding),
+      ...(spec.rfpId ? { rfpId: spec.rfpId } : {}),
+      run: true,
+      messages: spec.context
+        ? [
+            { role: 'user', content: spec.context.question, at: now },
+            { role: 'assistant', content: spec.context.answer, at: now },
+          ]
+        : [],
+      visualizations: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.memoryHosts.set(id, host);
+    return { ...host };
+  }
+
+  /**
+   * The run host's agent turn (agents.md 5.14): today's streamed turn,
+   * unchanged (5.1), on the host. Every step event of the turn's workflow
+   * run goes to `onStepEvent`, whatever the workflow's bar.
+   */
+  async streamRunTurn(
+    hostId: string,
+    question: string,
+    emit: (event: StreamEvent) => void,
+    abortSignal: AbortSignal | undefined,
+    careful: boolean,
+    onStepEvent: (event: RunStepEvent) => void,
+  ): Promise<void> {
+    const host = this.memoryHosts.get(hostId);
+    if (!host?.run) throw new NotFoundException(`Session ${hostId} not found`);
+    const trimmed = (question ?? '').trim();
+    if (!trimmed) throw new BadRequestException('message is required');
+    await this.streamTurn(
+      { ...host },
+      trimmed,
+      emit,
+      abortSignal,
+      undefined,
+      careful,
+      onStepEvent,
+    );
+  }
+
+  /**
+   * End a run host (agents.md 5.14): answer it as the API shows a session
+   * (its messages, derived panel items and workflow view), then delete its
+   * memory thread and let it leave memory. Its workspace stays, owned by the
+   * run.
+   */
+  async finishRunHost(hostId: string): Promise<SessionView> {
+    const host = this.memoryHosts.get(hostId);
+    if (!host?.run) throw new NotFoundException(`Session ${hostId} not found`);
+    try {
+      return await this.toView({ ...host });
+    } finally {
+      this.memoryHosts.delete(hostId);
+      try {
+        await this.mastra.deleteMemoryThread(hostId);
+      } catch (error) {
+        this.logger.warn(
+          `Could not delete the memory thread of ${hostId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }
+
+  /** Delete a run host's workspace and memory thread (agents.md 5.14). */
+  async deleteRunHostResources(hostId: string): Promise<void> {
+    if (!hostId.startsWith(RUN_HOST_ID_PREFIX)) return;
+    this.memoryHosts.delete(hostId);
+    await this.mastra.deleteSessionResources(hostId);
+  }
+
+  /**
+   * Discard what previews (R61) and run hosts (agents.md 5.14) left behind
+   * when the app last stopped: their memory threads and workspaces. Runs are
+   * held in memory in this version, so no run outlives the process.
+   */
+  private async sweepMemoryHosts(): Promise<void> {
     let ids: string[] = [];
     try {
-      ids = listSessionWorkspaceIds().filter((id) =>
-        id.startsWith(PREVIEW_ID_PREFIX),
+      ids = listSessionWorkspaceIds().filter(
+        (id) =>
+          id.startsWith(PREVIEW_ID_PREFIX) || id.startsWith(RUN_HOST_ID_PREFIX),
       );
     } catch {
       return;
@@ -1463,7 +1631,7 @@ export class SessionsService implements OnModuleInit {
         await this.mastra.deleteSessionResources(id);
       } catch (error) {
         this.logger.warn(
-          `Could not discard the preview ${id}: ${error instanceof Error ? error.message : String(error)}`,
+          `Could not discard the in-memory session ${id}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
@@ -1475,19 +1643,19 @@ export class SessionsService implements OnModuleInit {
     return names.filter((name) => existing.has(name));
   }
 
-  /** Persist a patch: in memory for a preview, else in the sessions store. */
+  /** Persist a patch: in memory for a preview or a run host, else in the sessions store. */
   private async updateDoc(
     id: string,
     patch: Partial<SessionDoc>,
   ): Promise<SessionDoc | null> {
-    const preview = this.previews.get(id);
-    if (!preview) return this.repository.update(id, patch);
+    const held = this.memoryHosts.get(id);
+    if (!held) return this.repository.update(id, patch);
     const updated = {
-      ...preview,
+      ...held,
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    this.previews.set(id, updated);
+    this.memoryHosts.set(id, updated);
     return { ...updated };
   }
 
@@ -2196,6 +2364,7 @@ export class SessionsService implements OnModuleInit {
     abortSignal: AbortSignal | undefined,
     activeVisualId: string | undefined,
     careful: boolean,
+    onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<void> {
     const id = session.id;
     this.appendUserMessage(session, trimmed);
@@ -2535,6 +2704,7 @@ export class SessionsService implements OnModuleInit {
             return analyseOutcomeOf(data, turn.signal.aborted);
           },
         },
+        onStepEvent,
       );
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
@@ -2666,7 +2836,9 @@ export class SessionsService implements OnModuleInit {
    * session's workflow state from the run's step events and emits each
    * change as `workflow`; a one-step workflow never does (agent-panel R15).
    * A failed step throws its own error, so the `error` event reads as the
-   * agent's; a stopped turn ends at its agent step.
+   * agent's; a stopped turn ends at its agent step. A run host's turn also
+   * hands every step event to `onStepEvent`, whatever the bar (agents.md
+   * 5.14).
    */
   private async runTurnWorkflow(
     session: SessionDoc,
@@ -2674,6 +2846,7 @@ export class SessionsService implements OnModuleInit {
     question: string,
     emit: (event: StreamEvent) => void,
     runtime: QtiV2TurnRuntime & AgentTurnRuntime,
+    onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<void> {
     // The agent step's own failure, kept so the turn reports it as is.
     let stepError: unknown;
@@ -2706,6 +2879,7 @@ export class SessionsService implements OnModuleInit {
     );
     let state = session.workflowState;
     for await (const event of run.fullStream) {
+      if (onStepEvent && stepEventOf(event)) onStepEvent(event);
       if (workflow.bar !== 'steps') continue;
       const stepEvent = stepEventOf(event);
       if (!stepEvent) continue;

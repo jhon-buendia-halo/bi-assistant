@@ -336,6 +336,11 @@ export interface SessionDoc {
   rfpId?: string;
   /** An agent editor's preview, held in memory only (agents-evals R60). */
   preview?: boolean;
+  /**
+   * A run host: the in-memory session one run of an agent workflow executes
+   * its agent turn on (ADR-0041; agents.md 5.14). Never stored or listed.
+   */
+  run?: boolean;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */
