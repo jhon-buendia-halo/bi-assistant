@@ -211,11 +211,11 @@ roadmap.md:32-32  ### Milestone 0.3 — Local Development Observability ([BA-111
 roadmap.md:34-34  ### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119)) — archived, see roadmap-archive.md
 roadmap.md:36-36  ### Milestone 0.5 — Faster workflow, repo-only planning (M0-5) — archived, see roadmap-archive.md
 roadmap.md:38-74  ### Milestone 0.6 — Workflow modes: Strict and Free style (M0-6)
-roadmap.md:42-47  #### 0.6.1 — Workflow choice at session start  `🚧 In progress`
-roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `🚧 In progress`
-roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `🚧 In progress`
-roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `🚧 In progress`
-roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `🚧 In progress`
+roadmap.md:42-47  #### 0.6.1 — Workflow choice at session start  `✅ Done`
+roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
+roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
+roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
+roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
 roadmap.md:76-469  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md

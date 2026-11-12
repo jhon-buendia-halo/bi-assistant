@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-11-12 — M0-6 Workflow modes: Strict and Free style (0.6.1–0.6.5)
+
+### What went well
+- **The sketch before building settled the shape in one round.** The user changed the free-style steps once, in the confirmation reply, and nothing was re-planned afterwards.
+- **One Sonnet builder for the only code-heavy story (`qa.mjs --free`) ran while the lead moved the docs.** Its diff was small and right on first review: 17/17 `qa-lib` tests and a dry run.
+- **The real `qa.mjs --free` run was green on the first try** (3078 backend and 736 frontend unit tests, lint, check-specs).
+
+### What went wrong
+- **The free-style steps the user wrote named `qa.mjs --gate`, which needs a roadmap id and writes evidence.** This was found only while planning, after the confirmation, so a fifth story (0.6.4) was added without asking again.
+- **Moving the `## Workflow` section out of `CLAUDE.md` would have silently switched the workflow pane to its 2026-10-10 built-in copy.** It was caught only by grepping for `CLAUDE.md` readers before the move.
+
+### What to do differently
+- Before moving or renaming a section of `CLAUDE.md` or a skill, grep `.claude/mods`, `scripts/` and `.claude/agents` for code that parses it.
+- When a user's step list names a command, check that command's required arguments against the new workflow before confirming the plan.
+
+---
+
 ## 2026-11-12 — M1-23 Workflow-first, chats retired, faster workflow (1.23.1–1.23.33, 1.23.26b)
 
 ### What went well

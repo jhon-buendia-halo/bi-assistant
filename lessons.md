@@ -24,6 +24,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - At the gate, run `git merge-base --is-ancestor <branch> HEAD` for every `unit/<EPIC-ID>-*` branch and merge anything missing before E2E or evals.
 
 ## Shell and tooling
+- Before moving or renaming a section of `CLAUDE.md` or a skill, grep `.claude/mods`, `scripts/` and `.claude/agents` for code that parses it (the `workflow-steps` pane reads `## Workflow`).
 - Write multi-line scripts and every regex edit with the Write/Edit tools, never `sed`, a heredoc or a scripted replace; pipe-test regexes with real Windows (`\`) and POSIX paths; if a multi-file edit must be scripted, assert every anchor's count before writing any file.
 - Use absolute worktree paths in every command and scripted edit; the shell's cwd resets between calls.
 - Stop processes only by the PID you captured (`$!`, `ps -eo pid,args`); never `pkill -f` or `pgrep -f` with a pattern that matches your own command line; after `TaskStop` on a looping script (e.g. `run-assistant-evals`), kill its leftover node children by PID.

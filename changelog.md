@@ -4,6 +4,15 @@ Running log of every meaningful change, newest first. One entry per epic, writte
 
 ## 2026-11-12
 
+### Added
+- **Two development workflows, Strict and Free style** (epic M0-6, repo only, roadmap 0.6.1–0.6.5, [specs/epics/M0-6/spec.md](specs/epics/M0-6/spec.md)). No app behaviour changes.
+  - 0.6.1: in a new session Claude asks which workflow to follow and saves the answer in `.context/workflow-mode`; "switch to strict/free style" changes it. `CLAUDE.md` went from 88 to 56 lines: a router with only the rules both workflows share. Evidence: [0.6.1](evidence/0.6.1/).
+  - 0.6.2: the eleven-step workflow moved, unchanged, into the `workflow-strict` skill. Evidence: [0.6.2](evidence/0.6.2/).
+  - 0.6.3: the `workflow-free-style` skill (understand, clarify, implement, checks; the other steps optional). Evidence: [0.6.3](evidence/0.6.3/).
+  - 0.6.4: `node scripts/qa.mjs --free` runs the gate's checks with no roadmap id and no evidence. Evidence: [0.6.4](evidence/0.6.4/).
+  - 0.6.5: the `workflow-steps` pane reads its steps from `workflow-strict`, then `CLAUDE.md`. Evidence: [0.6.5](evidence/0.6.5/).
+  - No UI and no Playwright specs touched; no demo (`--no-demo`).
+
 ### Changed
 - **Workflow-first: every workflow runs on an input, chats are retired, and a faster development workflow** (epic M1-23, repo only, roadmap 1.23.1–1.23.33 and 1.23.26b, ADR-0040 and ADR-0041, [specs/epics/M1-23/spec.md](specs/epics/M1-23/spec.md); plans [m1-23-workflow-first.md](docs/plans/m1-23-workflow-first.md), [m1-23-retire-chats.md](docs/plans/m1-23-retire-chats.md), [m1-23-dev-speedup.md](docs/plans/m1-23-dev-speedup.md); new capabilities [workflows](specs/capabilities/workflows/spec.md), [agent-answers](specs/capabilities/agent-answers/spec.md), [past-chats](specs/capabilities/past-chats/spec.md)). Each story's evidence is in `evidence/<id>/`; demos were not published as Claude artifacts (no Artifact tool in the lead session) and play from each `demo-page.html`.
   - **Workflows.**
