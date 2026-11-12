@@ -1,5 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WorkflowRun, WorkflowRunStep } from '../models/workflow.model';
 import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
@@ -156,5 +159,49 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     const onError = jasmine.createSpy('onError');
     await service.streamRun('seq-text-demo', { input: {} }, { onError }, controller.signal);
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("WorkflowRunsApiService, a run's RFP files (api.md 125, 127)", () => {
+  let service: WorkflowRunsApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(WorkflowRunsApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it("downloads the package zip, a draft's file and one file from the run's route", () => {
+    service.downloadRfpPackage('run-1', 'rfp-1').subscribe();
+    const zip = http.expectOne((r) =>
+      r.url.endsWith('/workflow-runs/run-1/rfp-packages/rfp-1/download'),
+    );
+    expect(zip.request.responseType).toBe('blob');
+    expect(zip.request.params.keys()).toEqual([]);
+    zip.flush(new Blob(['zip']));
+
+    service
+      .downloadRfpPackage('run-1', 'rfp-1', 'exhibits/exhibit-a-census.csv', true)
+      .subscribe();
+    const file = http.expectOne((r) =>
+      r.url.endsWith('/workflow-runs/run-1/rfp-packages/rfp-1/download'),
+    );
+    expect(file.request.params.get('file')).toBe('exhibits/exhibit-a-census.csv');
+    expect(file.request.params.get('draft')).toBe('true');
+    file.flush(new Blob(['a,b']));
+  });
+
+  it("reads the text of a run's file panel item", () => {
+    let text = '';
+    service.panelItemFile('run-1', 'p 1').subscribe((r) => (text = r.text));
+    http
+      .expectOne((r) => r.url.endsWith('/workflow-runs/run-1/panel-items/p%201/file'))
+      .flush({ item: { id: 'p 1' }, contentType: 'text/markdown', text: '# RFP' });
+    expect(text).toBe('# RFP');
   });
 });

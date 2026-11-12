@@ -21,6 +21,7 @@ import { DatasetsRepository } from '../datasets/repositories/datasets.repository
 import type {
   FilePanelItem,
   InteractiveVisualization,
+  WorkflowState,
 } from '../sessions/entities/session.entity';
 import {
   RUN_HOST_ID_PREFIX,
@@ -56,7 +57,14 @@ export interface PreparedRun {
   /** Agent workflows: the agent turn the input asks for. */
   turn?: AgentRunTurn;
   /** The earlier run given as context (plan 5.4). */
-  context?: { fromRunId: string; question: string; answer: string };
+  context?: {
+    fromRunId: string;
+    question: string;
+    answer: string;
+    /** Its RFP and stage tracker: an RFP Continue starts from them (plan 4.3). */
+    rfpId?: string;
+    workflowState?: WorkflowState;
+  };
 }
 
 /** A file a run's route sends as an attachment (api.md 124, 126, 127). */
@@ -445,6 +453,10 @@ export class WorkflowRunsService implements OnModuleInit {
       fromRunId: earlier.id,
       question: earlier.question,
       answer: earlier.answer.content,
+      ...(earlier.rfpId ? { rfpId: earlier.rfpId } : {}),
+      ...(earlier.workflowState
+        ? { workflowState: earlier.workflowState }
+        : {}),
     };
   }
 
@@ -466,6 +478,14 @@ export class WorkflowRunsService implements OnModuleInit {
     let status: 'success' | 'failed' | 'stopped' = 'success';
     let error: string | undefined;
     let hostId: string | undefined;
+    // An RFP Continue (plan 4.3): the run on the same RFP starts from the
+    // stages the earlier run left, so its tracker shows them from the start.
+    const stages =
+      turn.rfpId &&
+      prepared.context?.rfpId === turn.rfpId &&
+      prepared.context.workflowState
+        ? prepared.context.workflowState
+        : undefined;
     try {
       const host = await this.sessions.createRunHost({
         runId: base.id,
@@ -473,6 +493,7 @@ export class WorkflowRunsService implements OnModuleInit {
         name: prepared.workflow.name,
         ...(turn.datasets ? { datasets: turn.datasets } : {}),
         ...(turn.rfpId ? { rfpId: turn.rfpId } : {}),
+        ...(stages ? { workflowState: stages } : {}),
         ...(prepared.context
           ? {
               context: {

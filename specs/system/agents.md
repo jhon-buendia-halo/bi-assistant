@@ -1534,6 +1534,7 @@ A run of an agent workflow (the Assistant, Questions to Insights v2, the Data Re
 - bound as `POST /sessions` would bind a session of the workflow: `agentKey` for v2, the Data Readiness Agent and the RFP Builder, `agentId` for a user agent, none for the Assistant; `workflowId` derived as a session's (5.12);
 - datasets: the input's (`datasets`, or `[dataset]`), the RFP Builder's declared dataset, or a user agent's Live datasets that exist;
 - `rfpId` from the input;
+- workflow state: none, except on an RFP Continue (the input's `rfpId` equals the earlier run's), where it starts as the earlier run's, so the stage tracker shows the stages already saved before this run saves another (1.23.17);
 - messages: empty, or the context of one earlier run (below).
 
 **One run.**

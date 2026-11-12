@@ -594,6 +594,64 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     expect(second.run.question).toBe('And in 2014?');
   });
 
+  it("an RFP Continue gives the run the RFP, the last proposal and the earlier run's stages (plan 4.3)", async () => {
+    ctx = build(
+      [...DATASETS, { name: 'Intellify RFP API', datasourceKind: 'rest' }],
+      { answer: 'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?' },
+    );
+    const stages = {
+      current: 1,
+      done: [],
+      updatedAt: '2026-11-11T10:00:00.000Z',
+    };
+    const finishView = ctx.sessions.finishRunHost.getMockImplementation()!;
+    ctx.sessions.finishRunHost.mockImplementationOnce(async () => ({
+      ...(await finishView()),
+      rfpId: 'rfp-1',
+      workflowState: stages,
+    }));
+    const first = await streamed(ctx, 'agent:rfp', {
+      input: { message: 'Start an RFP for Orchard Manufacturing, plan year 2027' },
+    });
+    expect(first.run.rfpId).toBe('rfp-1');
+    const second = await streamed(ctx, 'agent:rfp', {
+      input: { message: 'yes', rfpId: 'rfp-1' },
+      context: { fromRunId: first.run.id },
+    });
+    expect(ctx.sessions.createRunHost).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        runId: second.run.id,
+        workflowId: 'agent:rfp',
+        rfpId: 'rfp-1',
+        workflowState: stages,
+        context: {
+          question: 'Start an RFP for Orchard Manufacturing, plan year 2027',
+          answer:
+            'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?',
+        },
+      }),
+    );
+    expect(second.run.question).toBe('yes');
+    expect(second.run.input).toEqual({ message: 'yes', rfpId: 'rfp-1' });
+  });
+
+  it("a context run of another RFP, or none, does not carry the earlier run's stages", async () => {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
+    const finishView = ctx.sessions.finishRunHost.getMockImplementation()!;
+    ctx.sessions.finishRunHost.mockImplementationOnce(async () => ({
+      ...(await finishView()),
+      workflowState: { current: 2, done: [1], updatedAt: 't' },
+    }));
+    const first = await streamed(ctx, 'agent:assistant', { input: ASK });
+    await streamed(ctx, 'agent:assistant', {
+      input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.run.id },
+    });
+    expect(ctx.sessions.createRunHost.mock.lastCall?.[0]).not.toHaveProperty(
+      'workflowState',
+    );
+  });
+
   it('refuses a context run that has no answer', async () => {
     const abort = new AbortController();
     ctx = build(DATASETS, { abort });

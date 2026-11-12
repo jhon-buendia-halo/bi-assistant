@@ -411,6 +411,24 @@
                 }
               }
             }
+            @if (designer.pendingContinue(); as pending) {
+              <!-- RFP Continue (plan 4.3): the next Execute continues this run's RFP -->
+              <div
+                data-testid="workflow-run-continue-from"
+                class="flex min-w-0 items-center gap-2 rounded-md bg-surface-muted px-3 py-2 text-[12px] text-fg"
+              >
+                <lucide-angular [img]="CornerDownRight" [size]="14" class="shrink-0 text-fg-muted" />
+                <span class="min-w-0 flex-1 truncate">Continues “{{ pending.question }}”</span>
+                <button
+                  type="button"
+                  data-testid="workflow-run-continue-cancel"
+                  (click)="designer.cancelContinue()"
+                  class="btn btn-ghost shrink-0 px-2 py-0.5 text-[12px]"
+                >
+                  Start fresh
+                </button>
+              </div>
+            }
             @if (w.runRequirement) {
               <p
                 data-testid="workflow-run-requirement"
@@ -569,6 +587,46 @@
                       }
                     </div>
                   }
+                  @if (step.kind === "agent" && designer.runPhases(); as phases) {
+                    <!-- The RFP Builder's stages inside its agent step (rfp R4) -->
+                    <ol
+                      class="m-0 flex list-none flex-col gap-1 p-0"
+                      data-testid="workflow-run-phases"
+                      aria-label="RFP stages"
+                    >
+                      @for (phase of phases.phases; track phase.number) {
+                        <li
+                          [attr.data-testid]="'workflow-run-phase-' + phase.number"
+                          [attr.aria-current]="phase.number === phases.current ? 'step' : null"
+                          class="flex min-w-0 items-center gap-2 text-[12px]"
+                        >
+                          <span
+                            class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px]"
+                            [class.bg-success-soft]="phases.done.includes(phase.number)"
+                            [class.text-on-success-soft]="phases.done.includes(phase.number)"
+                            [class.bg-surface-muted]="!phases.done.includes(phase.number)"
+                            [class.text-fg-muted]="!phases.done.includes(phase.number)"
+                            aria-hidden="true"
+                            >{{ phase.number }}</span
+                          >
+                          <span
+                            class="min-w-0 flex-1 truncate"
+                            [class.font-medium]="phase.number === phases.current"
+                            [class.text-fg-strong]="phase.number === phases.current"
+                            [class.text-fg]="phase.number !== phases.current"
+                            >{{ phase.title }}</span
+                          >
+                          @if (phases.done.includes(phase.number)) {
+                            <span class="chip chip-success">Done</span>
+                          } @else if (phases.skipped.includes(phase.number)) {
+                            <span class="chip chip-neutral">Skipped</span>
+                          } @else if (phase.number === phases.current) {
+                            <span class="chip chip-info">Current</span>
+                          }
+                        </li>
+                      }
+                    </ol>
+                  }
                   @if (step.output; as out) {
                     <details
                       class="text-[12px]"
@@ -608,9 +666,35 @@
                   [message]="answer"
                   [latest]="true"
                   [busy]="designer.running()"
+                  [rfpDownloading]="designer.rfpDownloading()"
                   (optionPicked)="designer.followUp($event)"
+                  (downloadRfp)="designer.downloadRfpPackage($event.pkg, $event.file)"
                 />
               </div>
+              @if (designer.rfpDocument(); as doc) {
+                <!-- The RFP document the agent showed in the panel (rfp R9, R16) -->
+                <details class="card mt-4 p-3" data-testid="run-rfp-document" open>
+                  <summary class="cursor-pointer text-[13px] font-medium text-fg-strong">
+                    RFP document
+                    <span class="font-mono text-[12px] font-normal text-fg-muted">{{ doc.title }}</span>
+                  </summary>
+                  <div
+                    class="prose-dark mt-2 max-h-96 overflow-auto text-[13px]"
+                    [innerHTML]="doc.text | markdown"
+                  ></div>
+                </details>
+              }
+              @if (designer.canContinue() && !designer.pendingContinue()) {
+                <button
+                  type="button"
+                  data-testid="workflow-run-continue"
+                  (click)="continueRun()"
+                  class="btn btn-primary mt-4 w-fit"
+                >
+                  <lucide-angular [img]="CornerDownRight" [size]="14" />
+                  <span>Continue</span>
+                </button>
+              }
               @if (designer.canFollowUp() && !answer.clarification) {
                 <form
                   class="mt-4 flex items-center gap-2"
