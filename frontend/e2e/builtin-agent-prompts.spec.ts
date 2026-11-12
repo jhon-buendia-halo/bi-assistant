@@ -24,7 +24,6 @@ import {
  */
 
 const ASSISTANT = 'Questions to Insights Assistant';
-const RFP_BUILDER = 'RFP Builder';
 const V2_KEY = 'assistant-v2';
 const V2 = 'Questions to Insights v2';
 const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
@@ -56,7 +55,7 @@ async function openAgent(page: Page, key: string, name: string) {
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
-  if (!['assistant', 'rfp', V2_KEY].includes(key)) {
+  if (!['assistant', V2_KEY].includes(key)) {
     await page.getByTestId('agent-show-more-system').click();
   }
   await page.getByTestId(`agent-${key}`).click();
@@ -285,110 +284,6 @@ test("a built-in skill link in the assistant's prompt is accepted", async ({
     page.getByText(`System prompt of "${ASSISTANT}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
-});
-
-test('the shipped RFP Builder prompt shows its tools and skill as chips and in the Graph tab', async ({
-  page,
-}) => {
-  await openAgent(page, 'rfp', RFP_BUILDER);
-  await openPromptTab(page);
-
-  const view = page.getByTestId('agent-prompt-view');
-  for (const tool of ['get_rfp', 'update_rfp']) {
-    await expect(
-      view.locator(`[data-link="tool:${tool}"]`).first(),
-    ).toHaveClass(/chip-neutral/);
-  }
-  await expect(
-    view.locator('[data-link="skill:rfp-client-renewal"]').first(),
-  ).toHaveClass(/chip-info/);
-  await expect(page.getByTestId('agent-prompt-tools-note')).toHaveText(
-    '## Tools — generated from the tools the RFP Builder gets',
-  );
-  await expect(view).not.toContainText('[[');
-
-  await page.getByTestId('agent-tab-graph').click();
-  const graph = page.getByTestId('agent-graph');
-  await expect(graph).toBeVisible();
-  const edges = graph.locator('desc');
-  await expect(edges).toContainText(
-    'The instructions link the rfp-client-renewal skill.',
-  );
-  await expect(edges).toContainText('The instructions link the get_rfp tool.');
-  await expect(edges).toContainText(
-    'The rfp-client-renewal skill links the list_clients tool.',
-  );
-  const detail = await apiJson<{ toolDetails: { name: string }[] }>(
-    page,
-    'GET',
-    '/agents/rfp',
-  );
-  const tools = detail.toolDetails.map((tool) => tool.name);
-  expect(tools.length).toBeGreaterThan(0);
-  for (const tool of tools) {
-    await expect(page.getByTestId(`graph-node-tool:${tool}`)).toHaveAttribute(
-      'aria-label',
-      `${tool}, Tool · always on`,
-    );
-  }
-  await expect(
-    page.getByText('This agent has no links: it gets all of its tools.'),
-  ).toHaveCount(0);
-});
-
-test("the RFP Builder's prompt links only its own tools and skill", async ({
-  page,
-}) => {
-  await openAgent(page, 'rfp', RFP_BUILDER);
-  await openPromptTab(page);
-  await startEditing(page);
-
-  await caretAtEnd(page);
-  await page.keyboard.type(' /');
-  const menu = page.getByRole('listbox');
-  await expect(menu).toBeVisible();
-  // The menu lists up to 6 entries of each kind and narrows as you type
-  // (ui.md 4.5.5), so each name is looked up by what follows the "/".
-  await expect(
-    menu.getByRole('option', { name: /^rfp-carriers/ }),
-  ).toBeVisible();
-  await expect(
-    menu.getByRole('option', { name: /run_readonly_sql/ }),
-  ).toHaveCount(0);
-  await page.keyboard.type('list_cl');
-  await expect(
-    menu.getByRole('option', { name: /^list_clients/ }),
-  ).toBeVisible();
-  for (let i = 0; i < 'list_cl'.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-  await page.keyboard.type('run_readonly');
-  await expect(
-    page.getByRole('option', { name: /run_readonly_sql/ }),
-  ).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  for (let i = 0; i < ' /run_readonly'.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-
-  const toolLink = '[[tool:run_readonly_sql]]';
-  await page.keyboard.type(toolLink);
-  await saveButton(page).click();
-  await expect(page.getByText('Unknown tool "run_readonly_sql"')).toBeVisible();
-
-  await caretAtEnd(page);
-  for (let i = 0; i < toolLink.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-  await page.keyboard.type('[[skill:curated-knowledge]]');
-  await saveButton(page).click();
-  await expect(
-    page.getByText(
-      "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
-    ),
-  ).toBeVisible();
-  await expect(modifiedChip(page)).toHaveCount(0);
-  expect((await promptView(page, 'rfp')).modified).toBe(false);
 });
 
 const workflowStep = (page: Page, id: string) =>

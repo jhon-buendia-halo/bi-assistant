@@ -470,12 +470,12 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   });
 });
 
-const RFP: WorkflowDetail = {
+const PHASED: WorkflowDetail = {
   ...ASSISTANT,
-  id: 'agent:rfp',
-  name: 'RFP Builder',
-  description: 'Walks a consultant through a carrier RFP.',
-  agents: [{ key: 'rfp', name: 'RFP Builder' }],
+  id: 'agent:phased',
+  name: 'Phased agent',
+  description: 'Walks a consultant through a review.',
+  agents: [{ key: 'phased', name: 'Phased agent' }],
   input: [
     {
       name: 'message',
@@ -484,136 +484,69 @@ const RFP: WorkflowDetail = {
       required: true,
       placeholder: 'Name the client and plan year, or state your decision',
     },
-    { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
   ],
-  datasets: ['Intellify RFP API'],
-  starterQuestions: ['Start an RFP for a client'],
+  datasets: ['Sample data'],
+  starterQuestions: ['Start a review for a client'],
 };
 
-const START = 'Start an RFP for Orchard Manufacturing, plan year 2027';
+const START = 'Start a review for Orchard Manufacturing, plan year 2027';
 const PROPOSAL = 'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?';
 
-function rfpRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+function phasedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return storedRun({
-    workflowId: 'agent:rfp',
-    workflowName: 'RFP Builder',
+    workflowId: 'agent:phased',
+    workflowName: 'Phased agent',
     input: { message: START },
     question: START,
     answer: { role: 'assistant', content: PROPOSAL, at: '2026-11-11T10:00:01.000Z' },
-    datasets: ['Intellify RFP API'],
-    rfpId: 'rfp-1',
+    datasets: ['Sample data'],
     ...overrides,
   });
 }
 
-describe('WorkflowDesigner, the RFP Builder one exchange per run (plan 4.3; rfp R7, R9)', () => {
+describe('WorkflowDesigner, an agent workflow with phases', () => {
   let designer: WorkflowDesigner;
-  let runs: FakeRunsApi & {
-    downloadRfpPackage: jasmine.Spy;
-    panelItemFile: jasmine.Spy;
-  };
+  let runs: FakeRunsApi;
   let http: HttpTestingController;
-  let toast: jasmine.SpyObj<ToastService>;
 
   beforeEach(() => {
-    runs = Object.assign(new FakeRunsApi(), {
-      downloadRfpPackage: jasmine
-        .createSpy('downloadRfpPackage')
-        .and.returnValue(of(new Blob(['zip']))),
-      panelItemFile: jasmine.createSpy('panelItemFile').and.returnValue(
-        of({ item: { id: 'p1' }, contentType: 'text/markdown', text: '# DRAFT — Orchard' }),
-      ),
-    });
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    runs = new FakeRunsApi();
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: WorkflowRunsApiService, useValue: runs },
-        { provide: ToastService, useValue: toast },
       ],
     });
     designer = TestBed.inject(WorkflowDesigner);
     http = TestBed.inject(HttpTestingController);
-    designer.load(RFP.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Arfp')).flush(RFP);
+    designer.load(PHASED.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aphased')).flush(PHASED);
   });
 
   afterEach(() => http.verify());
 
-  function firstExchange(run: WorkflowRun = rfpRun()): void {
+  function firstExchange(run: WorkflowRun = phasedRun()): void {
     designer.setInput('message', START);
     designer.execute();
-    runs.last.handlers.onRun!({ runId: run.id, workflowId: 'agent:rfp' });
+    runs.last.handlers.onRun!({ runId: run.id, workflowId: 'agent:phased' });
     runs.last.handlers.onDone!(run);
   }
 
-  it('runs from its page, with the message only (rfpId is hidden)', () => {
+  it('runs from its page, with the message only', () => {
     designer.setInput('message', START);
     designer.execute();
     expect(runs.last.body).toEqual({ input: { message: START } });
   });
 
-  it('offers Continue, not Follow up, under a run that worked on an RFP', () => {
+  it('offers Follow up under a stored answer', () => {
     firstExchange();
-    expect(designer.canContinue()).toBe(true);
-    expect(designer.canFollowUp()).toBe(false);
+    expect(designer.canFollowUp()).toBe(true);
   });
 
-  it('a run that only proposed (no RFP yet) is continued by its context alone; a failed run not at all', () => {
-    firstExchange(rfpRun({ rfpId: undefined }));
-    expect(designer.canContinue()).toBe(true);
-    designer.continueRun();
-    designer.setInput('message', 'yes');
-    designer.execute();
-    expect(runs.last.body).toEqual({
-      input: { message: 'yes' },
-      context: { fromRunId: 'run-1' },
-    });
-    firstExchange(rfpRun({ id: 'run-2', status: 'failed', error: 'boom' }));
-    expect(designer.canContinue()).toBe(false);
-  });
-
-  it('Continue clears the message; Execute then sends the RFP and this run as the context', () => {
-    firstExchange();
-    designer.continueRun();
-    expect(designer.inputValue('message')).toBe('');
-    expect(designer.pendingContinue()).toEqual({
-      id: 'run-1',
-      question: START,
-      rfpId: 'rfp-1',
-    });
-    expect(runs.calls.length).toBe(1);
-
-    designer.setInput('message', 'yes');
-    designer.execute();
-    expect(runs.last.body).toEqual({
-      input: { message: 'yes', rfpId: 'rfp-1' },
-      context: { fromRunId: 'run-1' },
-    });
-    expect(designer.contextRun()).toEqual({ id: 'run-1', question: START });
-    runs.last.handlers.onRun!({ runId: 'run-2', workflowId: 'agent:rfp' });
-    expect(designer.pendingContinue()).toBeNull();
-  });
-
-  it('a refused Continue keeps the pending Continue; cancelling it starts fresh', () => {
-    firstExchange();
-    designer.continueRun();
-    designer.execute();
-    runs.last.handlers.onError!('Message is required');
-    expect(designer.runError()).toBe('Message is required');
-    expect(designer.pendingContinue()?.id).toBe('run-1');
-    designer.cancelContinue();
-    designer.setInput('message', 'Start an RFP for another client');
-    designer.execute();
-    expect(runs.last.body).toEqual({
-      input: { message: 'Start an RFP for another client' },
-    });
-  });
-
-  it('a clarification pick keeps working on the same RFP', () => {
+  it('a clarification pick follows up with the earlier run as its context', () => {
     firstExchange(
-      rfpRun({
+      phasedRun({
         answer: {
           role: 'assistant',
           content: 'Which client do you mean?',
@@ -627,12 +560,20 @@ describe('WorkflowDesigner, the RFP Builder one exchange per run (plan 4.3; rfp 
     );
     designer.followUp('Orchard Manufacturing');
     expect(runs.last.body).toEqual({
-      input: { message: 'Orchard Manufacturing', rfpId: 'rfp-1' },
+      input: { message: 'Orchard Manufacturing' },
       context: { fromRunId: 'run-1' },
     });
   });
 
-  it("shows the stages live from the agent's workflow events, then as stored", () => {
+  it('an old stored run that still carries an rfpId is shown as a plain run', () => {
+    firstExchange({ ...phasedRun(), rfpId: 'rfp-1' } as WorkflowRun);
+    expect(designer.run()?.answer?.content).toBe(PROPOSAL);
+    expect(designer.canFollowUp()).toBe(true);
+    designer.followUp('Orchard Foods');
+    expect(runs.last.body.input).toEqual({ message: 'Orchard Foods' });
+  });
+
+  it("shows the phases live from the agent's workflow events, then as stored", () => {
     designer.setInput('message', START);
     designer.execute();
     expect(designer.phases()).toBeNull();
@@ -648,7 +589,7 @@ describe('WorkflowDesigner, the RFP Builder one exchange per run (plan 4.3; rfp 
     });
     expect(designer.phases()?.current).toBe(1);
     runs.last.handlers.onDone!(
-      rfpRun({
+      phasedRun({
         workflow: {
           phases: [
             { number: 1, title: 'Client and renewal' },
@@ -663,47 +604,6 @@ describe('WorkflowDesigner, the RFP Builder one exchange per run (plan 4.3; rfp 
     );
     expect(designer.phases()?.done).toEqual([1]);
     expect(designer.phases()?.current).toBe(2);
-  });
-
-  it('reads the RFP document the run showed in the panel', () => {
-    firstExchange(
-      rfpRun({
-        panelItems: [
-          {
-            id: 'p1',
-            kind: 'file',
-            title: 'rfp.md',
-            path: 'rfp/rfp-1/draft/rfp.md',
-            bytes: 10,
-            shownAt: '2026-11-11T10:00:02.000Z',
-          },
-        ],
-      }),
-    );
-    expect(runs.panelItemFile).toHaveBeenCalledWith('run-1', 'p1');
-    expect(designer.rfpDocument()).toEqual({
-      title: 'rfp.md',
-      text: '# DRAFT — Orchard',
-    });
-  });
-
-  it("downloads the package from the run's route, named as the server names it, with a toast", () => {
-    firstExchange();
-    const click = spyOn(HTMLAnchorElement.prototype, 'click');
-    const pkg = {
-      rfpId: 'rfp-1',
-      title: 'Orchard Manufacturing — 2027 benefits RFP',
-      files: [],
-      exportedAt: 'x',
-      draft: true as const,
-    };
-    designer.downloadRfpPackage(pkg);
-    expect(runs.downloadRfpPackage).toHaveBeenCalledWith('run-1', 'rfp-1', undefined, true);
-    expect(click).toHaveBeenCalledTimes(1);
-    const link = click.calls.mostRecent().object as HTMLAnchorElement;
-    expect(link.download).toBe('rfp-orchard-manufacturing-2027-benefits-rfp-draft.zip');
-    expect(toast.success).toHaveBeenCalledWith('RFP package downloaded');
-    expect(designer.rfpDownloading()).toBeNull();
   });
 });
 

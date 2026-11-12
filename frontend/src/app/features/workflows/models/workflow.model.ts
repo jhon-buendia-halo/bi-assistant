@@ -32,7 +32,7 @@ export interface WorkflowInputField {
   default?: string | number | boolean;
   /** 'dataset' / 'datasets': only datasets bound to these kinds. */
   datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
-  /** Set by the app (the RFP Builder's Continue), never rendered as a control. */
+  /** Set by the app, never rendered as a control. */
   hidden?: boolean;
 }
 
@@ -177,7 +177,6 @@ export interface WorkflowRun {
   agentId?: string;
   agentName?: string;
   agent?: SessionAgent;
-  rfpId?: string;
   panelItems?: PanelItem[];
   visualizations?: SessionVisualization[];
   /** The cards of the visual actions taken after the run (api.md 130-134). */

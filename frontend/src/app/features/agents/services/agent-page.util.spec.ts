@@ -109,7 +109,7 @@ describe('agent page util', () => {
       { name: 'curated-knowledge', agents: ['assistant'] },
       { name: 'deep-analysis', agents: ['assistant'] },
       { name: 'interactive-visuals', agents: ['visualization'] },
-      { name: 'rfp-carriers', agents: ['rfp'] },
+      { name: 'report-carriers', agents: ['report'] },
     ];
     expect(includedInEveryAgent(builtIn).map((skill) => skill.name)).toEqual([
       'curated-knowledge',

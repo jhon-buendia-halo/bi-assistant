@@ -193,12 +193,12 @@ describe('SessionPanel', () => {
       panelDownloadName({
         id: 'f',
         kind: 'file',
-        title: 'rfp.md',
+        title: 'report.md',
         shownAt: '',
-        path: 'rfp/1/rfp.md',
+        path: 'report/1/report.md',
         bytes: 1,
       }),
-    ).toBe('rfp.pdf');
+    ).toBe('report.pdf');
     expect(panelDownloadName(visual)).toBeNull();
     expect(panelDownloadTitle(visual)).toBeNull();
   });

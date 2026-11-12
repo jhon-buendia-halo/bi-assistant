@@ -20,7 +20,7 @@ export class WorkflowsApiService {
     );
   }
 
-  /** Ids contain `:` (`agent:rfp`), so they are always URL-encoded. */
+  /** Ids contain `:` (`agent:assistant`), so they are always URL-encoded. */
   getWorkflow(id: string): Observable<WorkflowDetail> {
     return this.http.get<WorkflowDetail>(
       `${API_BASE_URL}/workflows/${encodeURIComponent(id)}`,

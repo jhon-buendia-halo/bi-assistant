@@ -6,12 +6,6 @@ import {
   WorkflowRunStepStatus,
   WorkflowSummary,
 } from '../models/workflow.model';
-import {
-  FilePanelItem,
-  PanelItem,
-  RfpPackage,
-} from '../../sessions/models/session.model';
-import { slug } from '../../sessions/services/slug';
 
 export type WorkflowSectionId = 'official' | 'mine';
 
@@ -261,58 +255,4 @@ export function runRowStatus(status: WorkflowRun['status']): string {
   return { success: 'Done', failed: 'Failed', stopped: 'Stopped', running: 'Running' }[
     status
   ];
-}
-
-/** The hidden field Continue sets: the RFP the run works on (plan 4.3). */
-export const RFP_ID_FIELD = 'rfpId';
-
-/**
- * The RFP Builder's Continue (plan 4.3, 5.4; rfp R7): the typed message, the
- * earlier run's RFP (when it created or opened one) in the hidden `rfpId`,
- * and the earlier run as context, so a bare "yes" confirms the proposal that
- * run ended on.
- */
-export function continueRequest(
-  fields: WorkflowInputField[],
-  values: RunFormValues,
-  earlier: { id: string; rfpId?: string },
-): WorkflowRunRequest {
-  return {
-    input: {
-      ...runInput(fields, values),
-      ...(earlier.rfpId ? { [RFP_ID_FIELD]: earlier.rfpId } : {}),
-    },
-    context: { fromRunId: earlier.id },
-  };
-}
-
-/**
- * The name a downloaded package file is saved under (rfp R9, R16; api.md
- * 105, 127): the file's own name, or the zip's `rfp-<title>[-draft].zip`,
- * as the server names it.
- */
-export function rfpPackageFilename(
-  pkg: Pick<RfpPackage, 'rfpId' | 'title' | 'draft'>,
-  file?: string,
-): string {
-  if (file) return file.split('/').pop() ?? file;
-  const stem = slug(pkg.title) || pkg.rfpId.slice(0, 8);
-  return `rfp-${stem}${pkg.draft ? '-draft' : ''}.zip`;
-}
-
-const RFP_DOCUMENT_PATH = /^rfp\/[^/]+\/(draft\/)?rfp\.md$/;
-
-/**
- * The RFP document a run showed in the panel (rfp R9, R16): its latest file
- * item `rfp/<rfpId>/rfp.md` (or the draft's), or null.
- */
-export function rfpDocumentItem(
-  items: PanelItem[] | undefined,
-): FilePanelItem | null {
-  let latest: FilePanelItem | null = null;
-  for (const item of items ?? []) {
-    if (item.kind !== 'file' || !RFP_DOCUMENT_PATH.test(item.path)) continue;
-    if (latest === null || item.shownAt > latest.shownAt) latest = item;
-  }
-  return latest;
 }

@@ -134,14 +134,14 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     );
   });
 
-  it("shows the RFP Builder's links as chips, known against its own tools and skills", () => {
-    const rfp = {
-      ...builtIn('rfp', {
+  it("shows the Report Builder's links as chips, known against its own tools and skills", () => {
+    const report = {
+      ...builtIn('report', {
         editable:
-          'You are the RFP Builder. Load [[skill:rfp-client-renewal]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
+          'You are the Report Builder. Load [[skill:report-outline]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
         linksAllowed: true,
       }),
-      name: 'RFP Builder',
+      name: 'Report Builder',
       kind: 'official',
       toolDetails: [
         {
@@ -153,13 +153,13 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     } as AgentDetail;
     fixture = TestBed.createComponent(AgentSystemPrompt);
     component = fixture.componentInstance;
-    fixture.componentRef.setInput('agent', rfp);
+    fixture.componentRef.setInput('agent', report);
     fixture.componentRef.setInput('builtInSkills', [
       {
-        name: 'rfp-client-renewal',
+        name: 'report-outline',
         description: 'Stage 1.',
         loading: 'on-demand',
-        agents: ['rfp'],
+        agents: ['report'],
         modified: false,
         builtInChanged: false,
         updatedAt: null,
@@ -181,18 +181,18 @@ describe('AgentSystemPrompt (built-in agents)', () => {
       [...view.querySelectorAll('span')].find(
         (span) => span.textContent?.trim() === name,
       );
-    expect(chip('rfp-client-renewal')?.className).toContain('chip-info');
+    expect(chip('report-outline')?.className).toContain('chip-info');
     expect(chip('list_clients')?.className).toContain('chip-neutral');
-    // An assistant-only tool is not one of the RFP Builder's.
+    // An assistant-only tool is not one of the Report Builder's.
     expect(chip('run_readonly_sql')?.className).toContain('chip-danger');
     expect(byId('agent-prompt-tools-note')?.textContent).toContain(
-      '## Tools — generated from the tools the RFP Builder gets',
+      '## Tools — generated from the tools the Report Builder gets',
     );
     expect(component.officialTools().map((tool) => tool.name)).toEqual([
       'list_clients',
     ]);
     expect(component.officialSkills().map((skill) => skill.name)).toEqual([
-      'rfp-client-renewal',
+      'report-outline',
     ]);
   });
 

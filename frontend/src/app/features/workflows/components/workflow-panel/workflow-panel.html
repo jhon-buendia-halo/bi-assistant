@@ -170,24 +170,6 @@
               }
             }
           }
-          @if (designer.pendingContinue(); as pending) {
-            <!-- RFP Continue (plan 4.3): the next Execute continues this run's RFP -->
-            <div
-              data-testid="workflow-run-continue-from"
-              class="flex min-w-0 items-center gap-2 rounded-md bg-surface-muted px-3 py-2 text-[12px] text-fg"
-            >
-              <lucide-angular [img]="CornerDownRight" [size]="14" class="shrink-0 text-fg-muted" />
-              <span class="min-w-0 flex-1 truncate">Continues “{{ pending.question }}”</span>
-              <button
-                type="button"
-                data-testid="workflow-run-continue-cancel"
-                (click)="designer.cancelContinue()"
-                class="btn btn-ghost shrink-0 px-2 py-0.5 text-[12px]"
-              >
-                Start fresh
-              </button>
-            </div>
-          }
           @if (w.runRequirement) {
             <p
               data-testid="workflow-run-requirement"
@@ -348,7 +330,7 @@
                 }
                 @if (step.kind === "agent" && designer.phases(); as phases) {
                   @if (phases.phases.length > 0) {
-                  <!-- The agent's phases inside its step, live and as stored (agent-panel R16; the RFP Builder's stages, rfp R4) -->
+                  <!-- The agent's phases inside its step, live and as stored (agent-panel R16) -->
                   <ol
                     class="m-0 flex list-none flex-col gap-1 p-0"
                     data-testid="workflow-run-phases"
@@ -429,8 +411,7 @@
                 [busy]="designer.running()"
                 [showRating]="true"
                 [ratingPending]="designer.ratingPending()"
-                [rfpDownloading]="designer.rfpDownloading()"
-                [showGenerateVisual]="!designer.running() && designer.run() !== null && offersVisuals()"
+                [showGenerateVisual]="!designer.running() && designer.run() !== null"
                 [visualGenerating]="visualGenerating()"
                 [reportDownloading]="designer.reportDownloading()"
                 (rate)="designer.rateAnswer($event)"
@@ -438,7 +419,6 @@
                 (generateVisual)="generateVisual()"
                 (viewVisual)="viewVisual($event)"
                 (openScorecard)="openScorecard($event)"
-                (downloadRfp)="designer.downloadRfpPackage($event.pkg, $event.file)"
                 (downloadReport)="designer.downloadReport($event)"
               />
               @if (designer.run(); as stored) {
@@ -456,19 +436,6 @@
                 }
               }
             </div>
-            @if (designer.rfpDocument(); as doc) {
-              <!-- The RFP document the agent showed in the panel (rfp R9, R16) -->
-              <details class="card mt-4 p-3" data-testid="run-rfp-document" open>
-                <summary class="cursor-pointer text-[13px] font-medium text-fg-strong">
-                  RFP document
-                  <span class="font-mono text-[12px] font-normal text-fg-muted">{{ doc.title }}</span>
-                </summary>
-                <div
-                  class="prose-dark mt-2 max-h-96 overflow-auto text-[13px]"
-                  [innerHTML]="doc.text | markdown"
-                ></div>
-              </details>
-            }
             @if (shownScorecard(); as readiness) {
               <!-- Data Readiness: the report's scorecard, with Past assessments -->
               <section
@@ -503,17 +470,6 @@
             }
             @if (runFiles().length > 0 && designer.run(); as stored) {
               <app-workflow-run-files class="mt-4" [runId]="stored.id" [items]="runFiles()" />
-            }
-            @if (designer.canContinue() && !designer.pendingContinue()) {
-              <button
-                type="button"
-                data-testid="workflow-run-continue"
-                (click)="continueRun()"
-                class="btn btn-primary mt-4 w-fit"
-              >
-                <lucide-angular [img]="CornerDownRight" [size]="14" />
-                <span>Continue</span>
-              </button>
             }
             @if (designer.canFollowUp() && !answer.clarification) {
               <form

@@ -150,18 +150,6 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(text('workflow-execute')).toBe('Execute workflow');
   });
 
-  it('the RFP Builder has Execute: one exchange per run (plan 4.3)', () => {
-    open({
-      ...V2,
-      id: 'agent:rfp',
-      input: [
-        { name: 'message', label: 'Message', type: 'textarea', required: true },
-        { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
-      ],
-    });
-    expect(text('workflow-execute')).toBe('Execute workflow');
-  });
-
   it('a node selects it on the canvas and in the Workflow state panel; the background clears it', () => {
     open(SEQ);
     q('workflow-node-count-words')!.click();

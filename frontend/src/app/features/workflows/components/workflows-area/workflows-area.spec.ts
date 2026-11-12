@@ -37,10 +37,10 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
     fixture.detectChanges();
     expect(shellState().mainView()).toBe('workflows');
     expect(el.querySelector('[data-testid="workflows-page"]')).toBeTruthy();
-    workflowsNav().openWorkflow('agent:rfp');
+    workflowsNav().openWorkflow('agent:report');
     fixture.detectChanges();
     expect(shellState().mainView()).toBe('workflow-detail');
-    expect(workflowsNav().activeWorkflowId()).toBe('agent:rfp');
+    expect(workflowsNav().activeWorkflowId()).toBe('agent:report');
     expect(shellState().currentArea()).toBe('workflows');
     expect(
       el

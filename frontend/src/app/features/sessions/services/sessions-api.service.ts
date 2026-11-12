@@ -9,7 +9,6 @@ import {
   PanelItemEvent,
   WorkflowView,
   MessageFeedback,
-  RfpPackage,
   Session,
   SessionActionResult,
   ToolDataRecord,
@@ -114,12 +113,10 @@ export interface AgentStreamHandlers {
   /** A long-running tool reports where it is, between its call and result. */
   onToolProgress?: (p: ToolProgressEvent) => void;
   onVisualUpdated?: (event: VisualEvent) => void;
-  /** `show_in_panel` (or an RFP stage change) put an item in the panel. */
+  /** `show_in_panel` put an item in the panel. */
   onPanelItem?: (event: PanelItemEvent) => void;
-  /** The workflow status bar changed (`update_workflow`, phases, RFP stage). */
+  /** The workflow status bar changed (`update_workflow`, phases). */
   onWorkflow?: (workflow: WorkflowView) => void;
-  /** `export_rfp_package` stored a package this turn. */
-  onRfpPackage?: (rfpPackage: RfpPackage) => void;
   /** `assess_data_readiness` or `get_readiness_report` returned a report. */
   onReadinessReport?: (event: ReadinessReportEvent) => void;
 }
@@ -189,11 +186,6 @@ export function dispatchAgentEvent(
     case 'workflow':
       parseContent<WorkflowView>(event.content, (v) =>
         handlers.onWorkflow?.(v),
-      );
-      return true;
-    case 'rfp-package':
-      parseContent<RfpPackage>(event.content, (v) =>
-        handlers.onRfpPackage?.(v),
       );
       return true;
     case 'readiness-report': {
@@ -328,29 +320,6 @@ export class SessionsApiService {
     return this.http.get(
       `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/deep-analysis/${encodeURIComponent(jobId)}/download`,
       { responseType: 'blob' },
-    );
-  }
-
-  /** The package as a zip, or one of its files when `file` is given; `draft` serves the draft package (#105). */
-  downloadRfpPackage(
-    sessionId: string,
-    rfpId: string,
-    file?: string,
-    draft?: boolean,
-  ): Observable<Blob> {
-    return this.http.get(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/rfp-packages/${encodeURIComponent(rfpId)}/download`,
-      {
-        responseType: 'blob',
-        ...(file || draft
-          ? {
-              params: {
-                ...(file ? { file } : {}),
-                ...(draft ? { draft: 'true' } : {}),
-              },
-            }
-          : {}),
-      },
     );
   }
 }

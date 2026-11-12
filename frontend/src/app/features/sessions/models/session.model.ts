@@ -90,8 +90,6 @@ export interface ChatMessage {
    * report's executive summary; the full markdown is downloadable.
    */
   report?: AnalysisReport;
-  /** Present when the RFP Builder exported an RFP package this turn. */
-  rfpPackage?: RfpPackage;
   /**
    * The last readiness report this turn produced (Data Readiness Agent
    * sessions; data-model 3.4.1). Drives the readiness card.
@@ -105,16 +103,6 @@ export interface ChatMessage {
    * instead of duplicating it (see `SessionsService.appendUserMessage`).
    */
   error?: boolean;
-}
-
-/** A stored RFP package (data-model 3.4.1); `rfp-package` stream payload. */
-export interface RfpPackage {
-  rfpId: string;
-  title: string;
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** True for a draft exported by `export_rfp_draft` (stored under `rfp/<rfpId>/draft/`). */
-  draft?: true;
 }
 
 /** `ChatMessage.readinessReport` (data-model 3.4.1): a reference, not the report. */
@@ -324,7 +312,7 @@ export interface Session {
   agentId?: string;
   /** The agent's name as last seen for this session. */
   agentName?: string;
-  /** Set when the session is bound to a built-in agent (e.g. `rfp`). */
+  /** Set when the session is bound to a built-in agent (e.g. `assistant`). */
   agentKey?: string;
   /** Present when `agentId` or `agentKey` is. */
   agent?: SessionAgent;
