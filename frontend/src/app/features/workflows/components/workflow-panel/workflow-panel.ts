@@ -1,12 +1,15 @@
-import { Component, computed, inject, output, signal } from '@angular/core';
 import {
-  Bot,
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
+import {
   Brain,
-  Check,
-  ChevronRight,
   CircleCheck,
-  CircleX,
-  Copy,
   CornerDownRight,
   Database,
   Loader2,
@@ -34,37 +37,26 @@ import {
   ReadinessReportRef,
 } from '../../../sessions/models/session.model';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
-import {
-  TRIGGER_LABELS,
-  WorkflowInputField,
-  WorkflowRun,
-  WorkflowSummary,
-} from '../../models/workflow.model';
+import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
 import { WorkflowRunFiles } from '../workflow-run-files/workflow-run-files';
-import {
-  WorkflowDesigner,
-  WorkflowPanelTab,
-} from '../../services/workflow-designer.service';
+import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import {
   RunOutputEntry,
+  canRunFromPage,
   runOutputEntries,
   runStatusLine,
   runStepStatusLabel,
 } from '../../services/workflows.util';
 
-export { TRIGGER_LABELS };
-
-export const NO_STEP_SELECTED =
-  'Select a step in the graph to see its configuration.';
-
-/** How long the Code tab's Copy says `Copied`. */
-const COPIED_MS = 2000;
+/** The run form's controls Execute workflow may focus, in order. */
+const FORM_CONTROLS =
+  'form input:not([disabled]):not([type="hidden"]), form textarea:not([disabled]), form select:not([disabled]), form button:not([disabled])';
 
 /**
- * The right panel of a workflow's page (workflows R7, R8, R10, R12, R13;
- * ui.md 4.4b): tabs for the workflow's configuration, the selected step,
- * the run form and result (run workflows only) and the definition as JSON.
- * Read-only (R3); it shares its state with the page through the designer.
+ * The right panel of a workflow's page, headed Run (workflows R13, R21;
+ * ui.md 4.4b): the run form and the run shown, for a workflow that runs from
+ * its page. The workflow's configuration is in the node dialogs on the page.
+ * It shares its state with the page through the designer.
  */
 @Component({
   selector: 'app-workflow-panel',
@@ -81,13 +73,8 @@ const COPIED_MS = 2000;
   host: { class: 'flex min-h-0 flex-col', 'data-testid': 'workflow-panel' },
 })
 export class WorkflowPanel {
-  protected readonly Bot = Bot;
   protected readonly Brain = Brain;
-  protected readonly Check = Check;
-  protected readonly ChevronRight = ChevronRight;
   protected readonly CircleCheck = CircleCheck;
-  protected readonly CircleX = CircleX;
-  protected readonly Copy = Copy;
   protected readonly CornerDownRight = CornerDownRight;
   protected readonly Database = Database;
   protected readonly Loader2 = Loader2;
@@ -99,6 +86,35 @@ export class WorkflowPanel {
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  constructor() {
+    // Execute workflow on the canvas: focus the run form, once per request.
+    effect(() => {
+      const request = this.designer.runFormRequest();
+      if (request === 0) return;
+      untracked(() => {
+        this.designer.runFormRequest.set(0);
+        setTimeout(() => this.focusRunForm());
+      });
+    });
+  }
+
+  /** The first visible, enabled control of the run form, else its Execute. */
+  private focusRunForm(): void {
+    const root = this.host.nativeElement;
+    const controls = Array.from(
+      root.querySelectorAll<HTMLElement>(FORM_CONTROLS),
+    );
+    const first = controls.find((el) => el.getClientRects().length > 0);
+    (first ?? root.querySelector<HTMLElement>('[data-testid="workflow-run"]'))?.focus();
+  }
+
+  /** Only a workflow with an input runs from its page (R21). */
+  protected readonly canRun = computed(() => {
+    const workflow = this.designer.workflow();
+    return workflow !== null && canRunFromPage(workflow);
+  });
 
   /** A visual action stored the run: show it as it is now. */
   protected readonly applyRun = (run: WorkflowRun): void =>
@@ -120,28 +136,12 @@ export class WorkflowPanel {
     if (run !== null) this.visuals.view(run, event);
   }
 
-  /** An agent row; the shell opens the agent's detail (R8). */
-  readonly openAgent = output<string>();
-
-  protected readonly noStep = NO_STEP_SELECTED;
-  protected readonly triggerLabels = TRIGGER_LABELS;
   protected readonly stepStatusLabel = runStepStatusLabel;
-
-  /** The last step's output fields: what the workflow returns. */
-  protected readonly outputFields = computed(() => {
-    const steps = this.designer.workflow()?.steps ?? [];
-    return steps.length === 0 ? [] : steps[steps.length - 1].output;
-  });
 
   /** The RFP Builder draws no visuals (rfp R15), in a run as in a chat. */
   protected readonly offersVisuals = computed(() => {
     const workflow = this.designer.workflow();
     return workflow === null || workflow.id !== 'agent:rfp';
-  });
-
-  protected readonly code = computed(() => {
-    const workflow = this.designer.workflow();
-    return workflow === null ? '' : JSON.stringify(workflow, null, 2);
   });
 
   protected readonly runStatus = computed(() => {
@@ -198,32 +198,6 @@ export class WorkflowPanel {
       (item): item is FilePanelItem => item.kind === 'file',
     ),
   );
-
-  protected readonly copied = signal(false);
-  private copiedTimer: ReturnType<typeof setTimeout> | null = null;
-
-  protected tabId(tab: WorkflowPanelTab): string {
-    return `workflow-panel-tab-${tab}`;
-  }
-
-  protected panelId(tab: WorkflowPanelTab): string {
-    return `workflow-panel-${tab}`;
-  }
-
-  /** Left and Right move between the tabs and focus the new one. */
-  protected onTabKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
-    event.preventDefault();
-    const tabs = this.designer.tabs();
-    const index = tabs.findIndex((tab) => tab.id === this.designer.tab());
-    const step = event.key === 'ArrowRight' ? 1 : -1;
-    const next = tabs[(index + step + tabs.length) % tabs.length];
-    this.designer.setTab(next.id);
-    const button = (event.currentTarget as HTMLElement).querySelector<HTMLElement>(
-      `#${this.tabId(next.id)}`,
-    );
-    button?.focus();
-  }
 
   protected inputId(name: string): string {
     return `workflow-input-${name}`;
@@ -305,19 +279,6 @@ export class WorkflowPanel {
     if (field === null) return;
     setTimeout(() =>
       document.getElementById(this.inputId(field))?.focus(),
-    );
-  }
-
-  protected copyCode(): void {
-    const clipboard = window.navigator.clipboard;
-    if (!clipboard) return;
-    clipboard.writeText(this.code()).then(
-      () => {
-        this.copied.set(true);
-        if (this.copiedTimer !== null) clearTimeout(this.copiedTimer);
-        this.copiedTimer = setTimeout(() => this.copied.set(false), COPIED_MS);
-      },
-      () => this.copied.set(false),
     );
   }
 }

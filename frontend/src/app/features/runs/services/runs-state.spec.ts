@@ -93,7 +93,8 @@ describe('RunsState (plan 1.24.11)', () => {
       missingDatasets: [],
     });
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(designer.tab()).toBe('run');
+    // The right panel (Run) focuses its form.
+    expect(designer.runFormRequest()).toBe(1);
     expect(designer.inputValue('question')).toBe('Most goals?');
   });
 });

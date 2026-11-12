@@ -3,7 +3,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { of } from 'rxjs';
 import {
   WorkflowDetail,
@@ -19,7 +19,7 @@ import {
   sampleReadinessPanelItem,
   sampleReadinessReport,
 } from '../../../sessions/models/readiness.testing';
-import { NO_STEP_SELECTED, WorkflowPanel } from './workflow-panel';
+import { WorkflowPanel } from './workflow-panel';
 
 const STEP = (id: string, title: string, input: string[], output: string[]) => ({
   id,
@@ -187,7 +187,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
   let designer: WorkflowDesigner;
   let http: HttpTestingController;
   let el: HTMLElement;
-  let openedAgents: string[];
   let runs: FakeRunsApi;
 
   beforeEach(async () => {
@@ -202,7 +201,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
     http = TestBed.inject(HttpTestingController);
     designer = TestBed.inject(WorkflowDesigner);
     runs = TestBed.inject(WorkflowRunsApiService) as unknown as FakeRunsApi;
-    openedAgents = [];
   });
 
   afterEach(() => http.verify());
@@ -214,7 +212,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       .flush(workflow);
     afterLoad?.();
     fixture = TestBed.createComponent(WorkflowPanel);
-    fixture.componentInstance.openAgent.subscribe((key) => openedAgents.push(key));
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
   }
@@ -222,145 +219,48 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
   const q = (testId: string) =>
     el.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
   const text = (testId: string) => q(testId)?.textContent?.trim() ?? '';
-  const tabs = () =>
-    Array.from(el.querySelectorAll<HTMLElement>('[role="tab"]')).map((tab) =>
-      tab.textContent?.trim(),
-    );
 
   function click(testId: string): void {
     q(testId)!.click();
     fixture.detectChanges();
   }
 
-  describe('tabs', () => {
-    it('a workflow with an input has Workflow, Step, Run and Code; one without no Run', () => {
+  describe('Run only (ui.md 4.4b)', () => {
+    it('has no tabs and none of the configuration: only the run form', () => {
       open(SEQ);
-      expect(tabs()).toEqual(['Workflow', 'Step', 'Run', 'Code']);
-      fixture.destroy();
+      expect(el.querySelector('[role="tablist"]')).toBeNull();
+      expect(el.querySelector('[role="tab"]')).toBeNull();
+      expect(q('workflow-panel-trigger')).toBeNull();
+      expect(q('workflow-code')).toBeNull();
+      expect(q('workflow-input-text')).not.toBeNull();
+      expect(text('workflow-run')).toBe('Execute');
+    });
+
+    it('a workflow without an input shows no run form', () => {
       open(V2);
-      expect(tabs()).toEqual(['Workflow', 'Step', 'Code']);
+      expect(q('workflow-run')).toBeNull();
     });
 
-    it('opens on Workflow; a tab is selected with aria-selected and labels its panel', () => {
+    it('Execute workflow on the canvas focuses the first field of the form, once', fakeAsync(() => {
       open(SEQ);
-      const workflowTab = q('workflow-panel-tab-workflow')!;
-      expect(workflowTab.getAttribute('aria-selected')).toBe('true');
-      expect(q('workflow-panel-tab-code')?.getAttribute('aria-selected')).toBe('false');
-      click('workflow-panel-tab-code');
-      expect(q('workflow-panel-tab-code')?.getAttribute('aria-selected')).toBe('true');
-      const panel = el.querySelector('[role="tabpanel"]')!;
-      expect(panel.getAttribute('aria-labelledby')).toBe('workflow-panel-tab-code');
-      expect(q('workflow-panel-tab-code')?.getAttribute('aria-controls')).toBe(panel.id);
-    });
-
-    it('Left and Right move between the tabs, wrapping', () => {
-      open(V2);
-      const list = el.querySelector('[role="tablist"]')!;
-      q('workflow-panel-tab-workflow')!.focus();
-      list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      (document.activeElement as HTMLElement | null)?.blur();
+      designer.requestRunForm();
       fixture.detectChanges();
-      expect(designer.tab()).toBe('code');
-      expect(document.activeElement).toBe(q('workflow-panel-tab-code'));
-      list.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-      fixture.detectChanges();
-      expect(designer.tab()).toBe('workflow');
-    });
-  });
+      tick();
+      expect(document.activeElement).toBe(q('workflow-input-text'));
+      expect(designer.runFormRequest()).toBe(0);
+    }));
 
-  describe('Workflow tab', () => {
-    it("shows a run workflow's name, id, description, trigger, input parameters and output", () => {
-      open(SEQ);
-      expect(text('workflow-panel-name')).toBe('Sequential test workflow');
-      expect(text('workflow-panel-description')).toBe('A three-step example.');
-      expect(text('workflow-panel-trigger')).toBe('Runs on an input');
-      const param = q('workflow-param-text')!;
-      expect(param.textContent).toContain('text');
-      expect(param.textContent).toContain('Text');
-      expect(param.textContent).toContain('textarea');
-      expect(param.textContent).toContain('required');
-      expect(text('workflow-panel-output')).toBe('summary');
-      expect(el.querySelector('#workflow-agents-heading')).toBeNull();
-    });
-
-    it('a workflow with a typed input lists that input once, and its agents', () => {
+    it('with no field to focus, Execute workflow focuses Execute', fakeAsync(() => {
       open({
-        ...V2,
-        input: [
-          { name: 'question', label: 'Question', type: 'textarea', required: true },
-          { name: 'datasets', label: 'Datasets', type: 'text', required: true },
-        ],
+        ...SEQ,
+        input: [{ name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true }],
       });
-      expect(el.querySelectorAll('[data-testid="workflow-param-question"]').length).toBe(1);
-      expect(el.querySelectorAll('[data-testid="workflow-param-datasets"]').length).toBe(1);
-      expect(text('workflow-panel-trigger')).toBe('Runs on an input');
-      expect(q('workflow-bar-note')).toBeNull();
-      expect(
-        Array.from(q('workflow-panel-output')!.querySelectorAll('li')).map((li) =>
-          li.textContent?.trim(),
-        ),
-      ).toEqual(['sqlQueries', 'failedQueries', 'rows']);
-      const agent = q('workflow-agent-assistant-v2')!;
-      expect(agent.getAttribute('aria-label')).toBe('Open agent Questions to Insights v2');
-      expect(agent.textContent).toContain('Official');
-      agent.click();
-      expect(openedAgents).toEqual(['assistant-v2']);
-    });
-  });
-
-  describe('Step tab', () => {
-    it('asks for a selection when no step is selected', () => {
-      open(V2);
-      click('workflow-panel-tab-step');
-      expect(text('workflow-step-empty')).toBe(NO_STEP_SELECTED);
-      expect(NO_STEP_SELECTED).toBe('Select a step in the graph to see its configuration.');
-    });
-
-    it("shows the selected agent step's configuration: tools and Max steps", () => {
-      open(V2);
-      designer.select('analyse');
+      designer.requestRunForm();
       fixture.detectChanges();
-      expect(q('workflow-panel-tab-step')?.getAttribute('aria-selected')).toBe('true');
-      expect(text('workflow-step-heading')).toBe('2. Analyse');
-      expect(text('workflow-step-field-id')).toBe('analyse');
-      expect(text('workflow-step-field-kind')).toBe('LLM');
-      expect(text('workflow-step-field-summary')).toBe('Analyse summary');
-      expect(text('workflow-step-field-input')).toBe('question, catalog');
-      expect(text('workflow-step-field-output')).toBe('calls, stopped');
-      expect(q('workflow-step-field-exits')?.textContent).toContain('Model error');
-      expect(q('workflow-step-field-exits')?.textContent).toContain('Stop');
-      expect(text('workflow-step-field-agent')).toBe('Questions to Insights v2');
-      expect(
-        Array.from(q('workflow-step-field-tools')!.querySelectorAll('li')).map((li) =>
-          li.textContent?.trim(),
-        ),
-      ).toEqual(['list_entities', 'describe_entity', 'run_readonly_sql']);
-      expect(text('workflow-step-field-max-steps')).toBe('15');
-    });
-
-    it('a code step has no agent rows and says None for no exits', () => {
-      open(V2);
-      designer.select('wrap-up');
-      fixture.detectChanges();
-      expect(text('workflow-step-field-kind')).toBe('Code');
-      expect(text('workflow-step-field-exits')).toBe('None');
-      expect(q('workflow-step-field-tools')).toBeNull();
-      expect(q('workflow-step-field-max-steps')).toBeNull();
-    });
-  });
-
-  describe('Code tab', () => {
-    it('shows the definition as the API returns it, as pretty JSON, and copies it', async () => {
-      open(SEQ);
-      click('workflow-panel-tab-code');
-      expect(q('workflow-code')?.tagName).toBe('PRE');
-      expect(q('workflow-code')?.textContent).toBe(JSON.stringify(SEQ, null, 2));
-      const write = spyOn(window.navigator.clipboard, 'writeText').and.resolveTo();
-      click('workflow-code-copy');
-      expect(write).toHaveBeenCalledWith(JSON.stringify(SEQ, null, 2));
-      await write.calls.mostRecent().returnValue;
-      fixture.detectChanges();
-      expect(text('workflow-code-copy')).toBe('Copied');
-    });
+      tick();
+      expect(document.activeElement).toBe(q('workflow-run'));
+    }));
   });
 
   describe('Run tab (workflows R12, R13)', () => {
@@ -383,7 +283,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
     function openRun(): void {
       open(SEQ);
-      click('workflow-panel-tab-run');
     }
 
     it('shows the input form and Execute', () => {
@@ -436,7 +335,9 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(output.querySelector('dd')?.textContent?.trim()).toBe('"Hello"');
       expect(output.textContent).not.toContain('\\"');
       expect(q('workflow-run-output')?.textContent).toContain('1 word, 5 characters: "Hello"');
-      expect(designer.stepStatuses()).toEqual({
+      expect(designer.nodeStatuses()).toEqual({
+        start: 'success',
+        end: 'success',
         'clean-text': 'success',
         'count-words': 'success',
         'format-result': 'success',
@@ -481,14 +382,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(q('workflow-run-output')?.textContent).toContain('second');
       expect(q('workflow-run-output')?.textContent).not.toContain('first');
     });
-
-    it('keeps the typed input and the result when switching tabs', () => {
-      openRun();
-      type('kept');
-      click('workflow-panel-tab-workflow');
-      click('workflow-panel-tab-run');
-      expect((q('workflow-input-text') as HTMLTextAreaElement).value).toBe('kept');
-    });
   });
 
   describe('Run tab of an agent workflow (workflows R21)', () => {
@@ -503,7 +396,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
           http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
         }
       });
-      click('workflow-panel-tab-run');
     }
 
     function typeQuestion(value: string): void {
@@ -859,7 +751,6 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
     function openRfp(workflow: WorkflowDetail = RFP): void {
       open(workflow);
-      click('workflow-panel-tab-run');
     }
 
     function typeMessage(value: string): void {
