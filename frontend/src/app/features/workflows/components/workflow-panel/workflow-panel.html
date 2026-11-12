@@ -673,12 +673,14 @@
                   [rfpDownloading]="designer.rfpDownloading()"
                   [showGenerateVisual]="!designer.running() && designer.run() !== null"
                   [visualGenerating]="visualGenerating()"
+                  [reportDownloading]="designer.reportDownloading()"
                   (rate)="designer.rateAnswer($event)"
                   (optionPicked)="designer.followUp($event)"
                   (generateVisual)="generateVisual()"
                   (viewVisual)="viewVisual($event)"
                   (openScorecard)="openScorecard($event)"
                   (downloadRfp)="designer.downloadRfpPackage($event.pkg, $event.file)"
+                  (downloadReport)="designer.downloadReport($event)"
                 />
                 @if (designer.run(); as stored) {
                   @for (event of stored.events ?? []; track event.at) {

@@ -135,7 +135,7 @@ export interface RunVisualOutcome {
 
 export interface RunHostSpec {
   runId: string;
-  /** `agent:assistant`, `qti-v2-turn`, `agent:<key>` or `agent:<user-agent id>`. */
+  /** `agent:assistant`, `qti-v2-turn`, `deep-analysis`, `agent:<key>` or `agent:<user-agent id>`. */
   workflowId: string;
   /** The workflow's name: the host's name. */
   name: string;
@@ -612,7 +612,11 @@ export class SessionsService implements OnModuleInit {
     if (!parsed) throw notFound();
     let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
     let datasets = spec.datasets ?? [];
-    if (parsed.kind === 'code') {
+    if (parsed.kind === 'code' && !parsed.source.primaryFor) {
+      // A run workflow whose steps call the assistant (deep analysis,
+      // agents.md 5.15) runs on a host shaped as an assistant chat.
+      if (parsed.source.calls !== ASSISTANT_AGENT_KEY) throw notFound();
+    } else if (parsed.kind === 'code') {
       const primary = parsed.source.primaryFor;
       const agent = primary ? this.mastra.listAgents()[primary] : undefined;
       if (!primary || !agent) throw notFound();

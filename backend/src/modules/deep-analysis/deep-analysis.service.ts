@@ -10,12 +10,20 @@ import { MastraService } from '../../mastra/mastra.service';
 import { SessionsService } from '../sessions/sessions.service';
 import type { SessionDoc } from '../sessions/entities/session.entity';
 import {
-  analysisPlanSchema,
-  analysisReportSchema,
-  type AnalysisPlan,
-  type AnalysisReportOutput,
+  extractSqlBlocks,
+  reportMarkdown,
+  reportSlug,
+} from '../../mastra/workflows/deep-analysis.steps';
+import {
+  investigateAngle,
+  planAnalysis,
+  writeAnalysis,
+  type DeepAnalysisCallDeps,
+} from './deep-analysis.calls';
+import type {
+  AnalysisPlan,
+  AnalysisReportOutput,
 } from './deep-analysis.schemas';
-import { phasePrompt } from './deep-analysis.phases';
 import {
   AnalysisAngle,
   AngleFinding,
@@ -31,8 +39,6 @@ type WorkspaceFilesystem = NonNullable<
 const REPORTS_DIR = 'reports';
 /** Hard ceiling on the plan, whatever the model proposes. */
 const MAX_ANGLES = 5;
-/** Findings are prose; this keeps one runaway angle from eating the synthesis. */
-const FINDINGS_CHARS_CAP = 12_000;
 /** Finished jobs kept for polling/late status reads before pruning. */
 const RETAINED_JOBS = 50;
 
@@ -138,7 +144,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
     const job = this.jobs.get(jobId);
     const title = job?.title;
     return {
-      filename: `${slug(title) || `deep-analysis-${jobId.slice(0, 8)}`}.md`,
+      filename: `${reportSlug(title) || `deep-analysis-${jobId.slice(0, 8)}`}.md`,
       markdown,
     };
   }
@@ -234,38 +240,26 @@ export class DeepAnalysisService implements OnModuleDestroy {
     }
   }
 
+  /** The shared assistant calls (deep-analysis.calls.ts), on this service's seams. */
+  private get calls(): DeepAnalysisCallDeps {
+    return {
+      sessions: this.sessions,
+      mastra: this.mastra,
+      warn: (message) => this.logger.warn(message),
+    };
+  }
+
   /** Step 1: 3-5 distinct angles, one structured call, no tools. */
-  private async plan(
+  private plan(
     session: SessionDoc,
     question: string,
     abortSignal: AbortSignal,
   ): Promise<AnalysisPlan> {
-    const prompt = phasePrompt('plan', { question });
-    const options = await this.sessions.backgroundAgentOptions(
-      session,
-      question,
-      abortSignal,
-    );
-    const generated = await this.mastra.getAgent('assistant').generate(prompt, {
-      ...options,
-      maxSteps: 1,
-      toolChoice: 'none',
-      structuredOutput: {
-        schema: analysisPlanSchema,
-        jsonPromptInjection: 'inline' as const,
-      },
-    });
-    const parsed = analysisPlanSchema.safeParse(
-      generated.object ?? parseJsonObject(generated.text),
-    );
-    if (!parsed.success) {
-      throw new Error('the planner returned no usable investigation plan');
-    }
-    return parsed.data;
+    return planAnalysis(this.calls, session, question, abortSignal);
   }
 
   /** Step 2: one tool-enabled turn per angle, sequential. */
-  private async investigate(
+  private investigate(
     session: SessionDoc,
     question: string,
     angle: AnalysisAngle,
@@ -273,85 +267,25 @@ export class DeepAnalysisService implements OnModuleDestroy {
     total: number,
     abortSignal: AbortSignal,
   ): Promise<AngleFinding> {
-    // Built outside the try: a broken phase file fails the job, not one angle.
-    const prompt = phasePrompt('investigate', {
-      angleIndex: String(index + 1),
-      angleTotal: String(total),
-      angleTitle: angle.title,
-      question,
-      angleQuestion: angle.question,
-    });
-    const options = await this.sessions.backgroundAgentOptions(
+    return investigateAngle(
+      this.calls,
       session,
-      angle.question,
+      question,
+      angle,
+      index,
+      total,
       abortSignal,
     );
-    try {
-      const result = await this.mastra
-        .getAgent('assistant')
-        .generate(prompt, { ...options, maxSteps: 15 });
-      const text = (result.text ?? '').trim();
-      return {
-        ...angle,
-        findings: text.slice(0, FINDINGS_CHARS_CAP) || 'No findings returned.',
-        sql: extractSqlBlocks(text),
-      };
-    } catch (error) {
-      if (abortSignal.aborted) throw error;
-      const detail = error instanceof Error ? error.message : String(error);
-      this.logger.warn(
-        `Deep analysis angle "${angle.title}" failed: ${detail}`,
-      );
-      // One failed angle must not lose the rest of the report.
-      return {
-        ...angle,
-        findings: `This angle could not be investigated — ${detail}`,
-        sql: [],
-      };
-    }
   }
 
   /** Step 3: one structured, tool-free call that writes the report. */
-  private async synthesize(
+  private synthesize(
     session: SessionDoc,
     question: string,
     findings: AngleFinding[],
     abortSignal: AbortSignal,
   ): Promise<AnalysisReportOutput> {
-    const prompt = phasePrompt('report', {
-      question,
-      findings: findings
-        .map((finding, index) =>
-          [
-            `### Angle ${index + 1}: ${finding.title}`,
-            finding.question,
-            '',
-            finding.findings,
-          ].join('\n'),
-        )
-        .join('\n\n'),
-    });
-    const options = await this.sessions.backgroundAgentOptions(
-      session,
-      question,
-      abortSignal,
-    );
-    const result = await this.mastra.getAgent('assistant').generate(prompt, {
-      ...options,
-      maxSteps: 1,
-      toolChoice: 'none',
-      structuredOutput: {
-        schema: analysisReportSchema,
-        jsonPromptInjection: 'inline' as const,
-      },
-    });
-    const parsed = analysisReportSchema.safeParse(
-      result.object ?? parseJsonObject(result.text),
-    );
-    if (!parsed.success) {
-      throw new Error('the report writer returned no usable report');
-    }
-    return parsed.data;
+    return writeAnalysis(this.calls, session, question, findings, abortSignal);
   }
 
   private async filesystemFor(
@@ -382,82 +316,5 @@ export function reportPath(jobId: string): string {
   return `${REPORTS_DIR}/${jobId}.md`;
 }
 
-/** Every ```sql fenced statement in the agent's findings, de-duplicated. */
-export function extractSqlBlocks(text: string): string[] {
-  const blocks = [...text.matchAll(/```sql\s*([\s\S]*?)```/gi)]
-    .map((match) => match[1].trim())
-    .filter(Boolean);
-  return [...new Set(blocks)];
-}
-
-/**
- * The stored report. Title, question, executive summary, the written body and
- * the data appendix are assembled here rather than by the model, so the
- * document's structure — and the SQL it claims to be based on — cannot drift.
- */
-export function reportMarkdown(input: {
-  title: string;
-  question: string;
-  executiveSummary: string;
-  body: string;
-  findings: AngleFinding[];
-  sessionName?: string;
-  generatedAt: string;
-  jobId: string;
-}): string {
-  const lines = [
-    `# ${input.title}`,
-    '',
-    `**Question:** ${input.question}`,
-    '',
-    [
-      'Deep analysis',
-      input.sessionName ? `session: ${input.sessionName}` : '',
-      `${input.findings.length} angle${input.findings.length === 1 ? '' : 's'}`,
-      `generated ${input.generatedAt}`,
-    ]
-      .filter(Boolean)
-      .join(' · '),
-    '',
-    '## Executive summary',
-    '',
-    input.executiveSummary,
-    '',
-    input.body,
-    '',
-    '## Data appendix',
-    '',
-  ];
-  input.findings.forEach((finding, index) => {
-    lines.push(`### ${index + 1}. ${finding.title}`, '', finding.question, '');
-    if (finding.sql.length) {
-      for (const sql of finding.sql) lines.push('```sql', sql, '```', '');
-    } else {
-      lines.push('_No SQL was recorded for this angle._', '');
-    }
-  });
-  lines.push('---', '', `Report ${input.jobId}`, '');
-  return lines.join('\n');
-}
-
-function slug(title: string | undefined): string {
-  return (title ?? '')
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase()
-    .slice(0, 64);
-}
-
-/** Parse a model's JSON reply, tolerating a markdown fence around it. */
-function parseJsonObject(text: string | undefined): unknown {
-  const trimmed = (text ?? '').trim();
-  if (!trimmed) return undefined;
-  try {
-    return JSON.parse(
-      trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''),
-    );
-  } catch {
-    return undefined;
-  }
-}
+// The report's pure code is the run workflow's (deep-analysis.steps.ts).
+export { extractSqlBlocks, reportMarkdown };

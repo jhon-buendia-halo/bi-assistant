@@ -25,6 +25,7 @@ const OFFICIAL = [
   ['agent:assistant', 'Assistant'],
   [V2_ID, V2],
   [SEQ_ID, SEQ],
+  ['deep-analysis', 'Deep analysis'],
   ['agent:data-readiness', 'Data Readiness Agent'],
   ['agent:rfp', 'RFP Builder'],
 ] as const;

@@ -15,6 +15,7 @@ import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
+import { deepAnalysisWorkflow } from './workflows/deep-analysis.workflow';
 import { qtiV2TurnWorkflow } from './workflows/qti-v2-turn.workflow';
 import { seqTextDemoWorkflow } from './workflows/seq-text-demo.workflow';
 
@@ -45,6 +46,7 @@ export const mastra = new Mastra({
     'agent-turn': agentTurnWorkflow,
     'qti-v2-turn': qtiV2TurnWorkflow,
     'seq-text-demo': seqTextDemoWorkflow,
+    'deep-analysis': deepAnalysisWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

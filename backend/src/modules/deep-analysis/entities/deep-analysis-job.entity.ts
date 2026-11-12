@@ -5,19 +5,11 @@
 export type DeepAnalysisStatus =
   'planning' | 'investigating' | 'writing' | 'done' | 'error';
 
-/** One planned investigation angle. */
-export interface AnalysisAngle {
-  title: string;
-  question: string;
-}
-
-/** What one angle's investigation produced. */
-export interface AngleFinding extends AnalysisAngle {
-  /** The agent's prose findings for this angle. */
-  findings: string;
-  /** Statements the agent reported running, for the data appendix. */
-  sql: string[];
-}
+/** A planned angle and what its investigation produced (the run workflow's types). */
+export type {
+  AnalysisAngle,
+  AngleFinding,
+} from '../../../mastra/workflows/deep-analysis.steps';
 
 /** In-process job record — the slow path lives in memory, not in SQLite. */
 export interface DeepAnalysisJob {
