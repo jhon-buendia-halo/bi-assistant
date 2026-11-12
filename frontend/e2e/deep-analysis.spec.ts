@@ -105,10 +105,7 @@ test.describe('Feature: Deep analysis', () => {
           await expect(page.getByTestId(`workflow-node-${id}`)).toBeVisible();
         }
         await page.getByTestId('workflow-execute').click();
-        await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
+        await expect(page.getByTestId('workflow-run')).toBeVisible();
       });
       await scenarioStep(
         page,

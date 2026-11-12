@@ -423,10 +423,7 @@ test.describe('Runs and Past chats', () => {
       });
       await scenarioStep(page, 'Then the Assistant opens on Run with the same input', async () => {
         await expect(page.getByTestId('workflow-detail-name')).toHaveText('Assistant');
-        await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
+        await expect(page.getByTestId('workflow-run')).toBeVisible();
         await expect(page.getByTestId('workflow-input-question')).toHaveValue(QUESTION);
         await expect(
           page.getByTestId('workflow-input-datasets').getByRole('button', { name: WORLD_CUP_DATASET }),

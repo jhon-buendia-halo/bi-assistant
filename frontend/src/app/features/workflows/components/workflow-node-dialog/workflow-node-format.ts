@@ -1,13 +1,10 @@
 import { WorkflowRunStepStatus } from '../../models/workflow.model';
 import { WorkflowNodeKind } from '../../models/workflow-node.model';
+import { formatDuration } from '../../services/workflow-node-inspection';
 
 /** A duration as the node views show it: `—`, `2 ms`, `13.9 s`, `1 min 4 s`. */
 export function formatNodeDuration(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined) return '—';
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
-  const minutes = Math.floor(ms / 60_000);
-  return `${minutes} min ${Math.round((ms % 60_000) / 1000)} s`;
+  return formatDuration(ms ?? null);
 }
 
 /** The chip classes (components.css) for a node's status. */

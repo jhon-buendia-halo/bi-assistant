@@ -307,10 +307,7 @@ async function openReadinessRunTab(page: Page): Promise<void> {
   await page.getByTestId(`workflow-agent:${AGENT_KEY}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(AGENT);
   await page.getByTestId('workflow-execute').click();
-  await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(page.getByTestId('workflow-run')).toBeVisible();
 }
 
 /**
@@ -494,10 +491,7 @@ test(
         await page.getByTestId(`workflow-agent:${AGENT_KEY}`).click();
         await expect(page.getByTestId('workflow-detail-name')).toHaveText(AGENT);
         await page.getByTestId('workflow-execute').click();
-        await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
+        await expect(page.getByTestId('workflow-run')).toBeVisible();
       },
     );
     await scenarioStep(

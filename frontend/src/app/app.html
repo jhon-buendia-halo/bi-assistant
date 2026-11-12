@@ -267,7 +267,7 @@
               (dblclick)="resetRightPanelWidth()"
             ></div>
 
-            <!-- Panel header: collapse; the agent editor's Try it adds its title -->
+            <!-- Panel header: collapse; the agent editor's Try it and a workflow's Run add their title -->
             <div
               class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3"
             >
@@ -277,6 +277,13 @@
                 >
                   Try it
                 </h3>
+              } @else if (shell.mainView() === "workflow-detail") {
+                <h2
+                  class="pl-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+                  data-testid="workflow-panel-title"
+                >
+                  Run
+                </h2>
               }
               <button
                 type="button"
@@ -305,10 +312,7 @@
                 <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
               } @else if (shell.mainView() === "workflow-detail") {
                 @defer (on immediate) {
-                  <app-workflow-panel
-                    class="min-h-0 flex-1"
-                    (openAgent)="agents.openAgentByKey($event)"
-                  />
+                  <app-workflow-panel class="min-h-0 flex-1" />
                 }
               } @else {
                 <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />

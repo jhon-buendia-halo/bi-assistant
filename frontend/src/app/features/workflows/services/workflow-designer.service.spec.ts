@@ -126,7 +126,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.execute();
   }
 
-  it('opens the Run tab with an earlier run\'s input after Run again (plan 1.24.11)', () => {
+  it('asks for the run form with an earlier run\'s input after Run again (plan 1.24.11)', () => {
     designer.prefillRunAgain({
       question: 'Which team scored the most goals?',
       datasets: ['World Cup Core'],
@@ -135,7 +135,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.load(ASSISTANT.id);
     http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(designer.tab()).toBe('run');
+    expect(designer.runFormRequest()).toBe(1);
     expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
     expect(designer.picked('datasets')).toEqual(['World Cup Core']);
     expect(designer.checked('careful')).toBeTrue();
@@ -143,13 +143,133 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.load(ASSISTANT.id);
     http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(designer.tab()).toBe('workflow');
+    expect(designer.runFormRequest()).toBe(0);
   });
 
   it('starts the form from the defaults and loads the datasets to pick from', () => {
     expect(designer.inputValues()).toEqual({ careful: false });
     expect(designer.datasets().map((d) => d.name)).toEqual(['World Cup Core']);
-    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
+  });
+
+  it('selects any node, opens and closes its dialog, and keeps Start, steps and End as nodes', () => {
+    expect(designer.nodes().map((n) => n.nodeId)).toEqual(['start', 'answer', 'end']);
+    expect(designer.openInspection()).toBeNull();
+    designer.select('start');
+    expect(designer.selectedStepId()).toBe('start');
+    expect(designer.openNodeId()).toBeNull();
+    designer.openNode('answer');
+    expect(designer.selectedStepId()).toBe('answer');
+    expect(designer.openInspection()?.title).toBe('Answer');
+    designer.closeNode();
+    expect(designer.openInspection()).toBeNull();
+    expect(designer.selectedStepId()).toBe('answer');
+    designer.openNode('end');
+    designer.clear();
+    expect(designer.openNodeId()).toBeNull();
+    expect(designer.selectedStepId()).toBeNull();
+  });
+
+  it('Execute workflow only asks for the run form: nothing runs', () => {
+    designer.requestRunForm();
+    designer.requestRunForm();
+    expect(designer.runFormRequest()).toBe(2);
+    expect(runs.calls.length).toBe(0);
+    expect(designer.running()).toBe(false);
+  });
+
+  it('the state panel starts expanded and has no run before the first Execute', () => {
+    expect(designer.stateOpen()).toBe(true);
+    expect(designer.stateSummary()).toEqual({
+      status: null,
+      ran: 0,
+      total: 3,
+      durationMs: null,
+      runId: null,
+    });
+    expect(designer.nodeStatuses()).toEqual({});
+  });
+
+  it("fills each step's input, times and tool calls live, with the run's id, input and start", () => {
+    executeQuestion();
+    const h = runs.last.handlers;
+    expect(designer.liveInput()).toEqual({
+      question: 'Which team scored the most goals?',
+      datasets: ['World Cup Core'],
+      careful: false,
+    });
+    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onStep!({
+      id: 'answer',
+      title: 'Answer',
+      status: 'success',
+      input: { question: 'Which team scored the most goals?' },
+      inputTruncated: true,
+      output: { stopped: false },
+      startedAt: '2026-11-11T10:00:00.000Z',
+      endedAt: '2026-11-11T10:00:02.500Z',
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 1, durationMs: 40 }],
+    });
+    const result = designer.runResult()!;
+    expect(result.runId).toBe('run-1');
+    expect(result.input).toEqual(designer.liveInput());
+    expect(result.startedAt).toEqual(jasmine.any(String));
+    expect(result.finishedAt).toBeUndefined();
+    expect(result.steps[0]).toEqual(
+      jasmine.objectContaining({
+        input: { question: 'Which team scored the most goals?' },
+        inputTruncated: true,
+        startedAt: '2026-11-11T10:00:00.000Z',
+        endedAt: '2026-11-11T10:00:02.500Z',
+        toolCalls: [{ tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 1, durationMs: 40 }],
+      }),
+    );
+    const answer = designer.nodes()[1];
+    expect(answer.run?.durationMs).toBe(2500);
+    expect(answer.run?.toolCalls.map((c) => c.tool)).toEqual(['run_readonly_sql']);
+    expect(designer.nodes()[0].run?.input).toEqual(designer.liveInput()!);
+    expect(designer.stateSummary()).toEqual(
+      jasmine.objectContaining({ status: 'running', ran: 2, total: 3, runId: 'run-1' }),
+    );
+  });
+
+  it("shows a stored run's id, input and times, and its steps' recorded data", () => {
+    executeQuestion();
+    runs.last.handlers.onDone!(
+      storedRun({
+        finishedAt: '2026-11-11T10:00:13.900Z',
+        steps: [
+          {
+            id: 'answer',
+            title: 'Answer',
+            status: 'success',
+            input: { question: 'Which team scored the most goals?' },
+            output: { stopped: false },
+            startedAt: '2026-11-11T10:00:00.000Z',
+            endedAt: '2026-11-11T10:00:13.900Z',
+          },
+        ],
+      }),
+    );
+    const result = designer.runResult()!;
+    expect(result.runId).toBe('run-1');
+    expect(result.input).toEqual(storedRun().input);
+    expect(result.startedAt).toBe('2026-11-11T10:00:00.000Z');
+    expect(result.finishedAt).toBe('2026-11-11T10:00:13.900Z');
+    expect(result.steps[0].input).toEqual({ question: 'Which team scored the most goals?' });
+    expect(designer.stateSummary()).toEqual({
+      status: 'success',
+      ran: 3,
+      total: 3,
+      durationMs: 13900,
+      runId: 'run-1',
+    });
+    expect(designer.nodeStatuses()).toEqual({
+      start: 'success',
+      answer: 'success',
+      end: 'success',
+    });
+    designer.openNode('end');
+    expect(designer.openInspection()?.run?.input).toEqual({ stopped: false });
   });
 
   it("sends the form's typed input to the workflow's stream", () => {
@@ -189,7 +309,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
 
     h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
-    expect(designer.stepStatuses()).toEqual({ answer: 'running' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'running' });
     h.onReasoning!('Looking at goals');
     h.onTool!({ name: 'run_readonly_sql', input: 'SELECT team FROM goals' });
     expect(designer.toolCalls()).toEqual([
@@ -212,7 +332,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(result.steps).toEqual([
       { id: 'answer', title: 'Answer', kind: 'agent', status: 'success', output: { stopped: false } },
     ]);
-    expect(designer.stepStatuses()).toEqual({ answer: 'success' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'success', end: 'success' });
     expect(designer.canFollowUp()).toBe(true);
   });
 
@@ -260,7 +380,8 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     const result = designer.runResult()!;
     expect(result.status).toBe('failed');
     expect(result.error).toBe('The endpoint rejected the API key (401)');
-    expect(designer.stepStatuses()).toEqual({ answer: 'failed' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'failed', end: 'skipped' });
+    expect(designer.runResult()?.finishedAt).toEqual(jasmine.any(String));
   });
 
   it('Stop aborts the stream, shows the run stopped, then reads back the stored run with its partial answer', fakeAsync(() => {
@@ -283,7 +404,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(runs.last.signal?.aborted).toBe(true);
     expect(designer.running()).toBe(false);
     expect(designer.runResult()?.status).toBe('stopped');
-    expect(designer.stepStatuses()).toEqual({ answer: 'stopped' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'stopped', end: 'stopped' });
     // Events of the stopped stream are ignored.
     h.onText!('late');
     expect(designer.streamingText()).toBe('');
@@ -428,7 +549,6 @@ describe('WorkflowDesigner, the RFP Builder one exchange per run (plan 4.3; rfp 
   }
 
   it('runs from its page, with the message only (rfpId is hidden)', () => {
-    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
     designer.setInput('message', START);
     designer.execute();
     expect(runs.last.body).toEqual({ input: { message: START } });

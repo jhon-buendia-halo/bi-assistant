@@ -27,10 +27,7 @@ export async function openWorkflowPage(
 
 export async function openRunTab(page: Page): Promise<void> {
   await page.getByTestId('workflow-execute').click();
-  await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(page.getByTestId('workflow-run')).toBeVisible();
 }
 
 export function datasetCard(page: Page, name: string): Locator {

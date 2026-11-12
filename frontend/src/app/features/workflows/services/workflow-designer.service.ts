@@ -24,12 +24,21 @@ import {
   WorkflowRunStep,
   WorkflowRunStepStatus,
 } from '../models/workflow.model';
+import {
+  NodeInspection,
+  WorkflowStateSummary,
+} from '../models/workflow-node.model';
+import {
+  NodeInspectionSource,
+  buildNodeInspections,
+  nodeStatuses,
+  workflowStateSummary,
+} from './workflow-node-inspection';
 import { WorkflowRunsApiService } from './workflow-runs-api.service';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
   RFP_ID_FIELD,
   RunFormValues,
-  canRunFromPage,
   continueRequest,
   followUpRequest,
   initialInputValues,
@@ -40,31 +49,27 @@ import {
   runInput,
 } from './workflows.util';
 
-/** The right panel's tabs on a workflow's page (ui.md 4.4b). */
-export type WorkflowPanelTab = 'workflow' | 'step' | 'run' | 'code';
-
-export const WORKFLOW_PANEL_TABS: readonly {
-  id: WorkflowPanelTab;
-  label: string;
-}[] = [
-  { id: 'workflow', label: 'Workflow' },
-  { id: 'step', label: 'Step' },
-  { id: 'run', label: 'Run' },
-  { id: 'code', label: 'Code' },
-];
-
 export type { LiveToolCall, RunStepView, RunView };
 
 /** How often, and how many times, a stopped run is read back until it is stored. */
 const STOPPED_POLL_MS = 300;
 const STOPPED_POLL_TRIES = 10;
 
+const NO_RUN_SUMMARY: WorkflowStateSummary = {
+  status: null,
+  ran: 0,
+  total: 0,
+  durationMs: null,
+  runId: null,
+};
+
 /**
  * The state of the workflow designer, shared by the page in the content area
- * (header and canvas) and its right panel (workflows R7, R12, R13, R21): the
- * open workflow, the selected step, the panel's tab, the run form, and the
- * run shown, streamed live (api.md 119, 3.6) and then as stored. Leaving the
- * page discards the form and the run shown (the run itself stays stored).
+ * (header, canvas, Workflow state panel, node dialog) and its right panel,
+ * the Run form (workflows R7, R12, R13, R21): the open workflow, the selected
+ * and the open node, the run form, and the run shown, streamed live (api.md
+ * 119, 3.6) and then as stored. Leaving the page discards the form and the
+ * run shown (the run itself stays stored).
  */
 @Injectable({ providedIn: 'root' })
 export class WorkflowDesigner {
@@ -77,8 +82,17 @@ export class WorkflowDesigner {
   readonly error = signal<string | null>(null);
   readonly workflow = signal<WorkflowDetail | null>(null);
 
+  /** The selected node: a step id, `start` or `end`; null for none. */
   readonly selectedStepId = signal<string | null>(null);
-  readonly tab = signal<WorkflowPanelTab>('workflow');
+  /** The node whose dialog is open; null when none is. */
+  readonly openNodeId = signal<string | null>(null);
+  /** Whether the Workflow state panel under the canvas is expanded. */
+  readonly stateOpen = signal(true);
+  /**
+   * Bumped by Execute workflow on the canvas: the right panel focuses the run
+   * form. Execute workflow itself never runs.
+   */
+  readonly runFormRequest = signal(0);
 
   /** The datasets a `datasets` or `dataset` field picks from. */
   readonly datasets = signal<Dataset[]>([]);
@@ -116,6 +130,11 @@ export class WorkflowDesigner {
   /** The deep-analysis report of the run shown is being downloaded (plan 1.25.3). */
   readonly reportDownloading = signal(false);
 
+  /** The input of the run started here (Execute, Follow up, Continue); null before one. */
+  readonly liveInput = signal<Record<string, WorkflowInputValue> | null>(null);
+  /** Live: when the run started and ended, stamped here. */
+  private readonly liveStartedAt = signal<string | null>(null);
+  private readonly liveFinishedAt = signal<string | null>(null);
   /** Live: the step events so far, by step id. */
   readonly liveSteps = signal<Record<string, WorkflowRunStep>>({});
   /** Live: the agent's reasoning so far. */
@@ -150,23 +169,6 @@ export class WorkflowDesigner {
   /** Each run started bumps it; events of an older run are ignored. */
   private generation = 0;
 
-  /** The tabs this workflow has: Run only when it runs from its page (R21). */
-  readonly tabs = computed(() => {
-    const workflow = this.workflow();
-    return WORKFLOW_PANEL_TABS.filter(
-      (tab) =>
-        tab.id !== 'run' || (workflow !== null && canRunFromPage(workflow)),
-    );
-  });
-
-  readonly selectedStep = computed(() => {
-    const workflow = this.workflow();
-    const id = this.selectedStepId();
-    if (workflow === null || id === null) return null;
-    const index = workflow.steps.findIndex((step) => step.id === id);
-    return index < 0 ? null : { step: workflow.steps[index], number: index + 1 };
-  });
-
   /** The field a follow-up's question goes into; null when it has none. */
   readonly questionField = computed(() => {
     const workflow = this.workflow();
@@ -180,6 +182,7 @@ export class WorkflowDesigner {
     const kinds = new Map(workflow.steps.map((step) => [step.id, step.kind]));
     const stored = this.run();
     if (stored !== null) {
+      const finishedAt = stored.finishedAt ?? this.liveFinishedAt();
       return {
         status: stored.status,
         ...(stored.error !== undefined ? { error: stored.error } : {}),
@@ -189,6 +192,10 @@ export class WorkflowDesigner {
         })),
         ...(stored.output !== undefined ? { output: stored.output } : {}),
         ...(stored.answer !== undefined ? { answer: stored.answer } : {}),
+        runId: stored.id,
+        input: stored.input ?? null,
+        startedAt: stored.startedAt,
+        ...(finishedAt !== null && finishedAt !== undefined ? { finishedAt } : {}),
       };
     }
     if (this.runId() === null && !this.running() && !this.stopped()) {
@@ -201,6 +208,8 @@ export class WorkflowDesigner {
       : failure !== null
         ? 'failed'
         : 'running';
+    const startedAt = this.liveStartedAt();
+    const finishedAt = this.liveFinishedAt();
     return {
       status,
       ...(failure !== null ? { error: failure } : {}),
@@ -215,21 +224,58 @@ export class WorkflowDesigner {
           title: event?.title ?? step.title,
           kind: step.kind,
           status: stepStatus,
+          ...(event?.input !== undefined ? { input: event.input } : {}),
+          ...(event?.inputTruncated ? { inputTruncated: true as const } : {}),
           ...(event?.output !== undefined ? { output: event.output } : {}),
           ...(event?.outputTruncated ? { outputTruncated: true as const } : {}),
           ...(event?.error !== undefined ? { error: event.error } : {}),
+          ...(event?.startedAt !== undefined ? { startedAt: event.startedAt } : {}),
+          ...(event?.endedAt !== undefined ? { endedAt: event.endedAt } : {}),
+          ...(event?.toolCalls !== undefined ? { toolCalls: event.toolCalls } : {}),
         };
       }),
+      runId: this.runId(),
+      input: this.liveInput(),
+      ...(startedAt !== null ? { startedAt } : {}),
+      ...(finishedAt !== null ? { finishedAt } : {}),
     };
   });
 
-  /** Each step's status in the run shown, by step id; empty with no run. */
-  readonly stepStatuses = computed<Record<string, WorkflowRunStepStatus>>(() => {
-    const statuses: Record<string, WorkflowRunStepStatus> = {};
-    for (const step of this.runResult()?.steps ?? []) {
-      if (step.status !== null) statuses[step.id] = step.status;
-    }
-    return statuses;
+  private readonly inspectionSource = computed<NodeInspectionSource | null>(() => {
+    const workflow = this.workflow();
+    if (workflow === null) return null;
+    return {
+      workflow,
+      run: this.runResult(),
+      liveToolCalls: this.toolCalls(),
+      running: this.running(),
+    };
+  });
+
+  /** Start, every step and End, with what each received and produced in the run shown. */
+  readonly nodes = computed<NodeInspection[]>(() => {
+    const source = this.inspectionSource();
+    return source === null ? [] : buildNodeInspections(source);
+  });
+
+  /** The Workflow state panel's summary row. */
+  readonly stateSummary = computed<WorkflowStateSummary>(() => {
+    const source = this.inspectionSource();
+    return source === null
+      ? NO_RUN_SUMMARY
+      : workflowStateSummary(source, this.nodes());
+  });
+
+  /** Each node's status in the run shown (Start and End included); empty with no run. */
+  readonly nodeStatuses = computed<Record<string, WorkflowRunStepStatus>>(() =>
+    nodeStatuses(this.nodes()),
+  );
+
+  /** The node whose dialog is open, with its data; null when none is. */
+  readonly openInspection = computed<NodeInspection | null>(() => {
+    const id = this.openNodeId();
+    if (id === null) return null;
+    return this.nodes().find((node) => node.nodeId === id) ?? null;
   });
 
   /**
@@ -260,7 +306,7 @@ export class WorkflowDesigner {
   });
 
   /**
-   * Run again (plan 1.24.11): the next workflow opened shows its Run tab with
+   * Run again (plan 1.24.11): the next workflow opened shows its run form with
    * this earlier run's input filled in.
    */
   prefillRunAgain(input: WorkflowRun['input']): void {
@@ -296,7 +342,7 @@ export class WorkflowDesigner {
           const input = this.prefill;
           this.prefill = null;
           this.inputValues.set(runAgainValues(workflow.input, input));
-          this.setTab('run');
+          this.requestRunForm();
         }
         if (
           workflow.input.some(
@@ -337,7 +383,8 @@ export class WorkflowDesigner {
     this.error.set(null);
     this.workflow.set(null);
     this.selectedStepId.set(null);
-    this.tab.set('workflow');
+    this.openNodeId.set(null);
+    this.runFormRequest.set(0);
     this.datasets.set([]);
     this.inputValues.set({});
     this.followUpText.set('');
@@ -346,14 +393,24 @@ export class WorkflowDesigner {
     this.resetRun();
   }
 
-  /** Select a step (the panel shows it on Step), or clear the selection. */
+  /** Select a node (a step, `start` or `end`), or clear the selection. */
   select(id: string | null): void {
     this.selectedStepId.set(id);
-    if (id !== null) this.tab.set('step');
   }
 
-  setTab(tab: WorkflowPanelTab): void {
-    if (this.tabs().some((t) => t.id === tab)) this.tab.set(tab);
+  /** Open a node's dialog; the node is selected too. */
+  openNode(id: string): void {
+    this.selectedStepId.set(id);
+    this.openNodeId.set(id);
+  }
+
+  closeNode(): void {
+    this.openNodeId.set(null);
+  }
+
+  /** Execute workflow on the canvas: ask the right panel to focus its run form. */
+  requestRunForm(): void {
+    this.runFormRequest.update((n) => n + 1);
   }
 
   setInput(name: string, value: WorkflowInputValue): void {
@@ -552,6 +609,7 @@ export class WorkflowDesigner {
     if (!this.running()) return;
     this.cancelStream();
     this.stopped.set(true);
+    this.liveFinishedAt.set(new Date().toISOString());
     const id = this.runId();
     if (id !== null) this.readBackStopped(id, this.generation, 0);
   }
@@ -609,6 +667,9 @@ export class WorkflowDesigner {
     this.runId.set(null);
     this.run.set(null);
     this.contextRun.set(null);
+    this.liveInput.set(null);
+    this.liveStartedAt.set(null);
+    this.liveFinishedAt.set(null);
     this.liveSteps.set({});
     this.reasoning.set('');
     this.toolCalls.set([]);
@@ -627,6 +688,8 @@ export class WorkflowDesigner {
     const generation = this.generation;
     this.resetRun();
     this.contextRun.set(context);
+    this.liveInput.set(request.input);
+    this.liveStartedAt.set(new Date().toISOString());
     this.runError.set(null);
     this.running.set(true);
     const controller = new AbortController();
@@ -684,6 +747,7 @@ export class WorkflowDesigner {
           onDone: (run) => {
             if (!live()) return;
             this.runId.set(run.id);
+            this.liveFinishedAt.set(new Date().toISOString());
             this.running.set(false);
             this.showStored(run);
           },
@@ -695,6 +759,7 @@ export class WorkflowDesigner {
               this.resetRun();
             } else {
               this.streamError.set(message);
+              this.liveFinishedAt.set(new Date().toISOString());
             }
             this.running.set(false);
           },

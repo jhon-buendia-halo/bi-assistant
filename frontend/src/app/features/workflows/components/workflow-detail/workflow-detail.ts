@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -12,17 +13,25 @@ import { Loader2, LucideAngularModule, TriangleAlert } from 'lucide-angular';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { workflowKindLabel } from '../../services/workflows.util';
 import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
+import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog';
+import { WorkflowStatePanel } from '../workflow-state-panel/workflow-state-panel';
 
 /**
- * A workflow's page, laid out as a designer (workflows R6, R7, R12; ui.md
- * 4.4b): a header with the breadcrumb, the name, id and kind, and the graph
- * on a canvas filling the rest, with Execute workflow at its top-right. Its configuration, run and code are
- * in the right panel (`WorkflowPanel`), which shares this page's state
- * through the designer. Read-only (R3).
+ * A workflow's page, laid out as an n8n-style designer (workflows R6, R7,
+ * R12; ui.md 4.4b): a header with the breadcrumb, the name, id and kind; the
+ * canvas, left to right, with Execute workflow at its top-right; the
+ * Workflow state panel under it; and a node's dialog over the page. The run
+ * form is in the right panel (`WorkflowPanel`), which shares this page's
+ * state through the designer. Read-only (R3).
  */
 @Component({
   selector: 'app-workflow-detail',
-  imports: [LucideAngularModule, WorkflowCanvas],
+  imports: [
+    LucideAngularModule,
+    WorkflowCanvas,
+    WorkflowNodeDialog,
+    WorkflowStatePanel,
+  ],
   templateUrl: './workflow-detail.html',
   host: { class: 'flex min-h-0 flex-col' },
 })
@@ -31,14 +40,17 @@ export class WorkflowDetailPage {
   readonly TriangleAlert = TriangleAlert;
 
   protected readonly designer = inject(WorkflowDesigner);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly workflowId = input.required<string>();
   /** Whether the right panel is open; closed, the header leaves room for its Expand button. */
   readonly panelOpen = input(true);
   /** All workflows. */
   readonly back = output<void>();
-  /** A node or Execute asks for the right panel. */
+  /** Execute workflow asks for the right panel (the run form). */
   readonly openPanel = output<void>();
+  /** The node dialog's agent link; the shell opens the agent's detail (R8). */
+  readonly openAgent = output<string>();
 
   /** The breadcrumb's last part: the name, or the id until it loads. */
   readonly crumb = computed(() => {
@@ -63,15 +75,32 @@ export class WorkflowDetailPage {
     inject(DestroyRef).onDestroy(() => this.designer.clear());
   }
 
-  /** A node selects its step and shows it in the panel; the background clears it. */
-  onSelectStep(id: string | null): void {
-    this.designer.select(id);
-    if (id !== null) this.openPanel.emit();
+  /**
+   * Execute workflow: the right panel opens and focuses its run form. It
+   * never runs; the form's own Execute does.
+   */
+  execute(): void {
+    this.openPanel.emit();
+    this.designer.requestRunForm();
   }
 
-  /** Execute: the panel opens on Run. */
-  execute(): void {
-    this.designer.setTab('run');
-    this.openPanel.emit();
+  /** The dialog closes; the focus goes back to the node it was opened from. */
+  closeNode(): void {
+    const id = this.designer.openNodeId();
+    this.designer.closeNode();
+    if (id === null) return;
+    setTimeout(() =>
+      this.host.nativeElement
+        .querySelector<HTMLElement>(
+          `[data-testid="workflow-node-${CSS.escape(id)}"]`,
+        )
+        ?.focus(),
+    );
+  }
+
+  /** The dialog's agent link: the dialog closes and the agent's page opens. */
+  onOpenAgent(key: string): void {
+    this.designer.closeNode();
+    this.openAgent.emit(key);
   }
 }

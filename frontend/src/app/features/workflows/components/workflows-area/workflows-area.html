@@ -9,8 +9,8 @@
   shell.mainView() === "workflow-detail" &&
   workflows.activeWorkflowId() !== null
 ) {
-  <!-- The designer: header and canvas fill the content area;
-       its configuration is in the right panel (ui.md 4.4b).
+  <!-- The designer: header, canvas and Workflow state panel fill the
+       content area; the run form is in the right panel (ui.md 4.4b).
        Deferred: it stays out of the initial bundle. -->
   @defer (on immediate) {
     <app-workflow-detail
@@ -19,6 +19,7 @@
       [panelOpen]="shell.rightPanelOpen()"
       (back)="workflows.closeWorkflowDetail()"
       (openPanel)="shell.rightPanelOpen.set(true)"
+      (openAgent)="agents.openAgentByKey($event)"
     />
   }
 }

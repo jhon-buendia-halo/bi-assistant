@@ -4,16 +4,18 @@
   class="flex min-h-0 flex-col border-t border-border bg-surface"
 >
   <div class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-    <button
-      type="button"
-      data-testid="workflow-state-toggle"
-      [attr.aria-expanded]="open()"
-      class="inline-flex items-center gap-1.5 text-[14px] font-medium text-fg-strong"
-      (click)="openChange.emit(!open())"
-    >
-      <lucide-angular [img]="open() ? ChevronDown : ChevronRight" [size]="14" />
-      Workflow state
-    </button>
+    <h2 class="m-0 text-[14px] font-medium">
+      <button
+        type="button"
+        data-testid="workflow-state-toggle"
+        [attr.aria-expanded]="open()"
+        class="inline-flex items-center gap-1.5 text-[14px] font-medium text-fg-strong"
+        (click)="openChange.emit(!open())"
+      >
+        <lucide-angular [img]="open() ? ChevronDown : ChevronRight" [size]="14" />
+        Workflow state
+      </button>
+    </h2>
     @if (pill(); as pill) {
       <span [class]="pill.chip" data-testid="workflow-state-status">{{
         pill.label
@@ -91,7 +93,13 @@
         }
       </ul>
 
-      <div class="min-h-0 overflow-auto p-4">
+      <!-- Focusable: it scrolls, and may hold nothing else to focus (axe scrollable-region-focusable). -->
+      <div
+        class="min-h-0 overflow-auto p-4 focus-visible:outline-2 focus-visible:outline-focus"
+        tabindex="0"
+        aria-label="Node data"
+        role="group"
+      >
         @if (selected(); as node) {
           <div data-testid="workflow-state-detail">
             <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -115,6 +123,7 @@
             >
               <section
                 data-testid="workflow-state-input"
+                role="group"
                 aria-label="Input"
                 class="min-w-0"
               >
@@ -132,6 +141,7 @@
               </section>
               <section
                 data-testid="workflow-state-output"
+                role="group"
                 aria-label="Output"
                 class="min-w-0"
               >
@@ -157,6 +167,7 @@
               @if (node.context; as context) {
                 <section
                   data-testid="workflow-state-context"
+                  role="group"
                   aria-label="Context"
                   class="min-w-0 text-[13px]"
                 >
