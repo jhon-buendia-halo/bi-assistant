@@ -72,13 +72,13 @@
         @for (item of railItems; track item.area) {
           <button
             type="button"
-            (click)="selectArea(item.area)"
+            (click)="shell.selectArea(item.area)"
             [title]="item.label"
             [attr.aria-label]="item.label"
-            [attr.aria-current]="currentArea() === item.area ? 'page' : null"
+            [attr.aria-current]="shell.currentArea() === item.area ? 'page' : null"
             class="flex h-9 items-center gap-3 rounded-lg px-2.5 text-icon transition-colors hover:bg-surface-muted"
-            [class.bg-surface-selected]="currentArea() === item.area"
-            [class.text-accent]="currentArea() === item.area"
+            [class.bg-surface-selected]="shell.currentArea() === item.area"
+            [class.text-accent]="shell.currentArea() === item.area"
           >
             <lucide-angular class="shrink-0" [img]="item.icon" [size]="18" />
             @if (navExpanded()) {
@@ -119,12 +119,12 @@
         </button>
         <button
           type="button"
-          (click)="selectArea('settings')"
+          (click)="shell.selectArea('settings')"
           title="Settings"
           aria-label="Settings"
-          [attr.aria-current]="currentArea() === 'settings' ? 'page' : null"
+          [attr.aria-current]="shell.currentArea() === 'settings' ? 'page' : null"
           class="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-icon transition-colors hover:bg-surface-muted"
-          [class.bg-surface-selected]="currentArea() === 'settings'"
+          [class.bg-surface-selected]="shell.currentArea() === 'settings'"
         >
           <lucide-angular class="shrink-0" [img]="Settings" [size]="18" />
           @if (navExpanded()) {
@@ -186,178 +186,17 @@
 
       <div class="flex min-h-0 flex-1 gap-2">
         <main class="card relative flex min-w-0 flex-1 overflow-hidden">
-          @if (currentArea() === "settings") {
-            <!-- Settings list pane -->
-            <div
-              class="flex w-[260px] shrink-0 flex-col border-r border-border"
-            >
-              <div class="p-3">
-                <div class="field flex items-center gap-2">
-                  <lucide-angular
-                    [img]="Search"
-                    [size]="14"
-                    class="shrink-0 text-fg-muted"
-                  />
-                  <input
-                    placeholder="Search settings"
-                    aria-label="Search settings"
-                    class="w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-muted"
-                  />
-                  <kbd class="shrink-0 font-sans text-[11px] text-fg-muted"
-                    >⌘ F</kbd
-                  >
-                </div>
-              </div>
-              <nav
-                aria-label="Settings navigation"
-                class="flex flex-col gap-1.5 px-3"
-              >
-                @for (section of visibleSettingsSections(); track section.key) {
-                  <button
-                    type="button"
-                    (click)="selectSection(section.key)"
-                    [attr.aria-current]="
-                      settingsSection() === section.key ? 'page' : null
-                    "
-                    class="list-row flex items-center gap-2.5 py-1.5 text-[13px]"
-                    [class.list-row-selected]="settingsSection() === section.key"
-                  >
-                    <lucide-angular
-                      [img]="section.icon"
-                      [size]="15"
-                      class="text-accent"
-                    />
-                    <span>{{ section.label }}</span>
-                  </button>
-                }
-              </nav>
-              <div class="flex-1"></div>
-              <!-- prettier-ignore -->
-              <p class="px-4 pt-2 pb-3 text-[12px] text-fg-muted" data-testid="app-version">Agentic Hub v{{ appVersion }}</p>
-            </div>
+          @if (shell.currentArea() === "settings") {
+            <app-settings-nav />
           }
 
           <div class="flex min-w-0 flex-1 flex-col">
-            @if (currentArea() === "sessions") {
-              <!-- Page header (Figma AgentHeader; app-shell R49) -->
-              <header
-                class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-6 py-2.5"
-              >
-                <div class="flex min-w-0 flex-1 items-center gap-3">
-                  <img
-                    src="brand/agentic-hub/page-header-icon.svg"
-                    alt=""
-                    width="28"
-                    height="28"
-                  />
-                  <div class="min-w-0 flex-1">
-                    <h2
-                      class="truncate text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
-                    >
-                      {{ pageTitle() }}
-                    </h2>
-                    @if (showSessionContext()) {
-                      <div class="mt-0.5 flex min-w-0 items-center gap-2">
-                        @if (activeSession()?.workflowRef; as workflowRef) {
-                          <!-- Workflow first, then 12 px before the datasources (R57). -->
-                          <lucide-angular
-                            [img]="Workflow"
-                            [size]="14"
-                            class="shrink-0 text-fg-muted"
-                          />
-                          <span
-                            class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
-                            >Workflow</span
-                          >
-                          <span
-                            data-testid="session-workflow"
-                            class="chip chip-neutral mr-1 min-w-20"
-                            [attr.title]="'Workflow: ' + workflowLabel(workflowRef)"
-                            ><span class="max-w-48 truncate">{{
-                              workflowLabel(workflowRef)
-                            }}</span></span
-                          >
-                        }
-                        <lucide-angular
-                          [img]="Database"
-                          [size]="14"
-                          class="shrink-0 text-fg-muted"
-                        />
-                        <span
-                          class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
-                          >Datasource</span
-                        >
-                        @if (loadingSessionDatasources()) {
-                          <span
-                            class="h-4 w-24 animate-pulse rounded bg-surface-muted"
-                          ></span>
-                        } @else if (activeSessionDatasources().length > 0) {
-                          <div class="flex min-w-0 items-center gap-1.5">
-                            @for (
-                              datasource of activeSessionDatasources();
-                              track datasource.id
-                            ) {
-                              <span
-                                class="chip chip-neutral min-w-0"
-                                [title]="datasource.summary"
-                              >
-                                <span class="max-w-40 truncate">{{
-                                  datasource.name
-                                }}</span>
-                                <span class="shrink-0 text-[10px] font-normal">{{
-                                  datasourceKindLabel(datasource.kind)
-                                }}</span>
-                              </span>
-                            }
-                          </div>
-                        } @else {
-                          <span class="truncate text-[12px] text-fg-muted"
-                            >Unavailable</span
-                          >
-                        }
-                        @if (activeSession(); as session) {
-                          <!-- The session's id, to share when something looks wrong. -->
-                          <button
-                            type="button"
-                            data-testid="session-id"
-                            class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] text-fg-muted hover:bg-surface-selected hover:text-fg"
-                            [title]="'Session ID ' + session.id + ' (click to copy)'"
-                            [attr.aria-label]="'Copy session ID ' + session.id"
-                            (click)="copySessionId(session.id)"
-                          >
-                            <span>ID {{ session.id.slice(0, 8) }}</span>
-                            <lucide-angular [img]="Copy" [size]="12" />
-                          </button>
-                        }
-                      </div>
-                    }
-                  </div>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    (click)="openComposer()"
-                    class="btn btn-secondary"
-                  >
-                    <lucide-angular [img]="SquarePen" [size]="18" />
-                    <span>Start New Conversation</span>
-                  </button>
-                  @if (!rightPanelOpen()) {
-                    <button
-                      type="button"
-                      (click)="rightPanelOpen.set(true)"
-                      title="Expand right panel"
-                      class="btn-icon"
-                    >
-                      <lucide-angular [img]="PanelRight" [size]="16" />
-                    </button>
-                  }
-                </div>
-              </header>
-            } @else if (!rightPanelOpen()) {
+            @if (shell.currentArea() === "sessions") {
+              <app-sessions-header />
+            } @else if (!shell.rightPanelOpen()) {
               <button
                 type="button"
-                (click)="rightPanelOpen.set(true)"
+                (click)="shell.rightPanelOpen.set(true)"
                 title="Expand right panel"
                 class="btn-icon absolute top-2 right-2 z-10"
               >
@@ -365,616 +204,41 @@
               </button>
             }
 
-            <!-- Content area -->
+            <!-- Content area: one container per area (frontend/src/app/features/<area>) -->
             <div class="flex min-h-0 flex-1 flex-col">
-              @if (settingsOpen()) {
-                @switch (shownSettingsSection()) {
-                  @case ("datasources") {
-                    <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
-                    >
-                      <app-datasource-config class="w-full max-w-[560px]" />
-                    </div>
+              @if (shell.settingsOpen()) {
+                <app-settings-content />
+              } @else {
+                @switch (shell.currentArea()) {
+                  @case ("datasets") {
+                    <app-datasets-area />
                   }
-                  @case ("llm") {
-                    <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
-                    >
-                      <app-llm-config class="w-full max-w-[480px]" />
-                    </div>
+                  @case ("workflows") {
+                    <app-workflows-area />
                   }
-                  @case ("testing-data") {
-                    <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
-                    >
-                      <app-testing-data-config class="w-full max-w-[560px]" />
-                    </div>
+                  @case ("agents") {
+                    <app-agents-area />
                   }
-                  @case ("developer") {
-                    <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
-                    >
-                      <app-developer-settings class="w-full max-w-[560px]" />
-                    </div>
+                  @case ("context") {
+                    <app-context-area />
                   }
-                  @case ("appearance") {
-                    <div
-                      class="flex flex-1 justify-center overflow-y-auto px-6 py-6"
-                    >
-                      <app-appearance-settings class="w-full max-w-[560px]" />
-                    </div>
+                  @case ("sessions") {
+                    <app-sessions-area />
+                  }
+                  @case ("monitoring") {
+                    <app-monitoring-area />
                   }
                   @default {
-                    <div
-                      class="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-fg-muted"
-                    >
-                      Choose a settings section.
-                    </div>
-                  }
-                }
-              } @else if (mainView() === "dataset") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-dataset-list
-                    class="w-full max-w-[960px]"
-                    (newDataset)="openDatasetEditor(null)"
-                    (openDataset)="openDatasetEditor($event)"
-                  />
-                </div>
-              } @else if (mainView() === "dataset-new") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-catalog-browser
-                    class="w-full max-w-[960px]"
-                    [initial]="editingDataset()"
-                    (saved)="mainView.set('dataset')"
-                  />
-                </div>
-              } @else if (mainView() === "workflows") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-workflows-page
-                    class="w-full max-w-[960px]"
-                    (openWorkflow)="openWorkflow($event)"
-                    [startingWorkflowId]="startingWorkflowId()"
-                    (startChat)="startChatWithWorkflow($event)"
-                  />
-                </div>
-              } @else if (
-                mainView() === "workflow-detail" && activeWorkflowId() !== null
-              ) {
-                <!-- The designer: header and canvas fill the content area;
-                     its configuration is in the right panel (ui.md 4.4b).
-                     Deferred: it stays out of the initial bundle. -->
-                @defer (on immediate) {
-                  <app-workflow-detail
-                    class="min-w-0 flex-1"
-                    [workflowId]="activeWorkflowId()!"
-                    [starting]="startingWorkflowId() === activeWorkflowId()"
-                    [panelOpen]="rightPanelOpen()"
-                    (back)="closeWorkflowDetail()"
-                    (startChat)="startChatWithWorkflow($event)"
-                    (openPanel)="rightPanelOpen.set(true)"
-                  />
-                }
-              } @else if (mainView() === "agents") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-agent-hub
-                    class="w-full max-w-[960px]"
-                    (openAgent)="openAgent($event)"
-                    (newAgent)="openAgentEditor(null)"
-                    (openSkills)="openSkillsLibrary()"
-                  />
-                </div>
-              } @else if (mainView() === "agent-detail" && activeAgentKey()) {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-agent-detail
-                    class="w-full max-w-[960px]"
-                    [agentKey]="activeAgentKey()!"
-                    (back)="closeAgentDetail()"
-                    (deleted)="onAgentDeleted()"
-                    (edit)="openAgentEditor($event.key)"
-                    (openBuiltInSkill)="openBuiltInSkillEditor($event, true)"
-                    (openWorkflow)="openWorkflow($event)"
-                  />
-                </div>
-              } @else if (mainView() === "agent-editor") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-agent-editor
-                    class="w-full max-w-[960px]"
-                    [agentId]="editingAgentId()"
-                    (back)="closeAgentEditor()"
-                    (preview)="rightPanelOpen.set(true)"
-                  />
-                </div>
-              } @else if (mainView() === "skills") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-skills-library
-                    class="w-full max-w-[960px]"
-                    (back)="mainView.set('agents')"
-                    (openSkill)="openSkillEditor($event?.id ?? null)"
-                    (openBuiltIn)="openBuiltInSkillEditor($event)"
-                  />
-                </div>
-              } @else if (mainView() === "skill-editor") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-skill-editor
-                    class="w-full max-w-[960px]"
-                    [skillId]="editingSkillId()"
-                    (back)="openSkillsLibrary()"
-                    (deleted)="mainView.set('skills')"
-                  />
-                </div>
-              } @else if (
-                mainView() === "builtin-skill-editor" && editingBuiltInName();
-                as builtInName
-              ) {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <app-builtin-skill-editor
-                    class="w-full max-w-[960px]"
-                    [skillName]="builtInName"
-                    (back)="closeBuiltInSkillEditor()"
-                  />
-                </div>
-              } @else if (mainView() === "personas") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <div class="flex w-full max-w-[960px] flex-col gap-3">
-                    <!-- Back to the Context cards (app-shell R3a) -->
-                    <button
-                      type="button"
-                      data-testid="context-back"
-                      (click)="selectArea('context')"
-                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
-                    >
-                      <lucide-angular [img]="ArrowLeft" [size]="14" />
-                      <span>Context</span>
-                    </button>
-                    <app-persona-list class="w-full" />
-                  </div>
-                </div>
-              } @else if (mainView() === "visuals") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <div class="flex w-full max-w-[960px] flex-col gap-3">
-                    <!-- Back to the Context cards (app-shell R3a) -->
-                    <button
-                      type="button"
-                      data-testid="context-back"
-                      (click)="selectArea('context')"
-                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
-                    >
-                      <lucide-angular [img]="ArrowLeft" [size]="14" />
-                      <span>Context</span>
-                    </button>
+                    <!-- Start page: what the product does and where to begin. -->
                     @defer (on immediate) {
-                      <app-visual-library class="w-full" />
-                    }
-                  </div>
-                </div>
-              } @else if (mainView() === "ontologies") {
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <div class="flex w-full max-w-[960px] flex-col gap-3">
-                    <!-- Back to the Context cards (app-shell R3a) -->
-                    <button
-                      type="button"
-                      data-testid="context-back"
-                      (click)="selectArea('context')"
-                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
-                    >
-                      <lucide-angular [img]="ArrowLeft" [size]="14" />
-                      <span>Context</span>
-                    </button>
-                    <app-ontology-overview class="w-full" />
-                  </div>
-                </div>
-              } @else if (mainView() === "context") {
-                <!-- Context home: one card per section, like the Agent Hub (app-shell R3a) -->
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <div class="flex w-full max-w-[960px] flex-col">
-                    <h2
-                      class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
-                    >
-                      Context
-                    </h2>
-                    <p class="mt-1 text-[13px] text-fg-muted">
-                      What agents are given besides your data.
-                    </p>
-                    <div class="mt-6 grid grid-cols-3 gap-3" data-testid="context-sections">
-                      @for (section of contextSections; track section.view) {
-                        <button
-                          type="button"
-                          [attr.data-testid]="'context-section-' + section.view"
-                          (click)="openContextSection(section.view)"
-                          class="card flex h-full flex-col gap-2.5 p-4 text-left hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                        >
-                          <span
-                            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
-                          >
-                            <lucide-angular [img]="section.icon" [size]="15" />
-                          </span>
-                          <span class="truncate text-[14px] font-medium text-fg-strong">{{
-                            section.label
-                          }}</span>
-                          <span class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted">{{
-                            section.description
-                          }}</span>
-                        </button>
-                      }
-                    </div>
-                  </div>
-                </div>
-              } @else if (mainView() === "session-chat" && activeSession()) {
-                <app-workflow-bar
-                  class="block shrink-0"
-                  [workflow]="activeSession()!.workflow"
-                />
-                <app-session-chat
-                  class="min-h-0 flex-1"
-                  [session]="activeSession()!"
-                  [visualGenerating]="
-                    generatingVisualSession() === activeSession()!.id
-                  "
-                  [activeVisualizationId]="activeVisualization()?.id ?? null"
-                  [dataPointSelection]="selectedDataPoint()"
-                  (generateVisual)="generateInteractiveVisual($event)"
-                  (visualUpdated)="onVisualUpdated($event)"
-                  (panelItem)="onPanelItem($event)"
-                  (workflowChanged)="onWorkflowChanged($event)"
-                  (viewVisual)="showVisualization($event, $event.version)"
-                  (sessionUpdated)="onSessionUpdated($event)"
-                />
-              } @else if (mainView() === "conversation-new") {
-                <!-- New conversation composer -->
-                <div
-                  class="flex flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-8"
-                >
-                  <div
-                    class="card w-full max-w-[920px] p-4"
-                  >
-                    <div class="relative mb-3 flex flex-col gap-1.5">
-                      <span class="field-label" id="new-session-workflow-label"
-                        >Workflow</span
-                      >
-                      <button
-                        type="button"
-                        id="new-session-workflow"
-                        data-testid="new-session-workflow"
-                        class="field flex items-center gap-2 text-left text-[14px]"
-                        role="combobox"
-                        aria-haspopup="listbox"
-                        aria-labelledby="new-session-workflow-label"
-                        [attr.aria-expanded]="composerWorkflowMenuOpen()"
-                        [attr.aria-controls]="
-                          composerWorkflowMenuOpen()
-                            ? 'new-session-workflow-list'
-                            : null
-                        "
-                        [attr.aria-activedescendant]="
-                          composerWorkflowMenuOpen()
-                            ? 'new-session-workflow-option-' +
-                              composerWorkflowActive()
-                            : null
-                        "
-                        (click)="
-                          composerWorkflowMenuOpen()
-                            ? closeComposerWorkflowMenu()
-                            : openComposerWorkflowMenu()
-                        "
-                        (keydown)="onComposerWorkflowKeydown($event)"
-                      >
-                        <lucide-angular
-                          [img]="Workflow"
-                          [size]="14"
-                          class="shrink-0 text-fg-muted"
-                        />
-                        <span class="min-w-0 flex-1 truncate">{{
-                          composerWorkflowName()
-                        }}</span>
-                        <lucide-angular
-                          [img]="ChevronDown"
-                          [size]="14"
-                          class="shrink-0 text-fg-muted"
-                        />
-                      </button>
-                      @if (composerWorkflowMenuOpen()) {
-                        <button
-                          type="button"
-                          tabindex="-1"
-                          aria-label="Close workflow menu"
-                          class="fixed inset-0 z-20 cursor-default"
-                          (click)="closeComposerWorkflowMenu()"
-                        ></button>
-                        <div
-                          id="new-session-workflow-list"
-                          role="listbox"
-                          aria-label="Workflow"
-                          class="menu absolute top-full right-0 left-0 z-30 mt-1 max-h-80 overflow-y-auto"
-                        >
-                          @for (
-                            row of composerWorkflowRows();
-                            track row.id;
-                            let i = $index
-                          ) {
-                            <div
-                              role="option"
-                              [id]="'new-session-workflow-option-' + i"
-                              [attr.data-workflow-id]="row.id"
-                              [attr.aria-selected]="row.id === composerWorkflowId()"
-                              [attr.aria-disabled]="row.disabledReason ? true : null"
-                              class="flex flex-col rounded-lg px-2.5 py-2"
-                              [class.cursor-pointer]="!row.disabledReason"
-                              [class.cursor-not-allowed]="!!row.disabledReason"
-                              [class.bg-surface-selected]="
-                                row.id === composerWorkflowId() ||
-                                (i === composerWorkflowActive() &&
-                                  !row.disabledReason)
-                              "
-                              [class.opacity-70]="!!row.disabledReason"
-                              (mousedown)="$event.preventDefault()"
-                              (mouseenter)="
-                                row.disabledReason
-                                  ? null
-                                  : composerWorkflowActive.set(i)
-                              "
-                              (click)="chooseComposerWorkflow(row.id)"
-                            >
-                              <span class="truncate text-[13px] text-fg">{{
-                                row.name
-                              }}</span>
-                              @if (row.disabledReason) {
-                                <span
-                                  class="truncate text-[12px] text-on-warning-soft"
-                                  [title]="row.disabledReason"
-                                  >{{ row.disabledReason }}</span
-                                >
-                              } @else if (row.description) {
-                                <span
-                                  class="truncate text-[12px] text-fg-muted"
-                                  [title]="row.description"
-                                  >{{ row.description }}</span
-                                >
-                              }
-                            </div>
-                          }
-                        </div>
-                      }
-                      <span
-                        class="text-[12px] text-fg-muted"
-                        data-testid="new-session-workflow-description"
-                        >{{ composerWorkflowDescription() }}</span
-                      >
-                    </div>
-                    <label class="flex flex-col gap-1.5">
-                      <span class="field-label">Session name</span>
-                      <input
-                        type="text"
-                        placeholder="My new session"
-                        [value]="composerName()"
-                        (input)="composerName.set($any($event.target).value)"
-                        class="field text-[14px]"
+                      <app-welcome
+                        class="block min-h-0 flex-1"
+                        (openDatasets)="shell.selectArea('datasets')"
+                        (startConversation)="composer.openComposer()"
+                        (openAgents)="shell.selectArea('agents')"
                       />
-                    </label>
-                    <div class="mt-4 flex items-center justify-between">
-                      <div class="flex items-center gap-3">
-                        <button
-                          class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-surface-muted"
-                          [class.text-fg]="llmModel()"
-                          [class.text-fg-muted]="!llmModel()"
-                          [attr.title]="llmModelTitle()"
-                        >
-                          <lucide-angular [img]="Sparkle" [size]="13" />
-                          <span>{{ llmModel() ?? "No model configured" }}</span>
-                        </button>
-                                                  <div class="relative">
-                            <button
-                              (click)="effortMenuOpen.set(!effortMenuOpen())"
-                              title="Reasoning effort"
-                              class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted capitalize hover:bg-surface-muted"
-                            >
-                              <lucide-angular [img]="Signal" [size]="13" />
-                              <span>{{ llmEffort() }}</span>
-                            </button>
-                            @if (effortMenuOpen()) {
-                              <div
-                                class="fixed inset-0 z-10"
-                                (click)="effortMenuOpen.set(false)"
-                              ></div>
-                              <div
-                                class="menu absolute bottom-full left-0 z-20 mb-1 w-36"
-                              >
-                                @for (effort of reasoningEfforts; track effort) {
-                                  <button
-                                    (click)="setEffort(effort)"
-                                    class="menu-item capitalize"
-                                    [class.font-semibold]="llmEffort() === effort"
-                                    [class.text-fg-strong]="llmEffort() === effort"
-                                    [class.text-fg-muted]="llmEffort() !== effort"
-                                  >
-                                    {{ effort }}
-                                  </button>
-                                }
-                              </div>
-                            }
-                          </div>
-                        
-                      </div>
-                      <div class="flex items-center gap-3">
-                        <button
-                          (click)="createSession()"
-                          [disabled]="
-                            creatingSession() ||
-                            (composerPicksDatasets() &&
-                              (selectedDatasets().size === 0 ||
-                                composerName().trim() === ''))
-                          "
-                          [title]="
-                            composerPicksDatasets()
-                              ? 'Name the session and select at least one dataset'
-                              : 'Start a session with this workflow'
-                          "
-                          class="btn btn-primary"
-                        >
-                          @if (creatingSession()) {
-                            <span>Creating…</span>
-                          } @else {
-                            <span>Create</span>
-                            <lucide-angular [img]="CornerDownLeft" [size]="14" />
-                          }
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  @if (!composerPicksDatasets()) {
-                    <!-- The workflow's own datasets, read-only -->
-                    <div
-                      class="mt-8 w-full max-w-[920px]"
-                      data-testid="new-session-workflow-datasets"
-                    >
-                      <p class="field-label">Datasets</p>
-                      <div class="mt-2 flex flex-wrap gap-2">
-                        @for (name of composerWorkflowDatasets(); track name) {
-                          <span class="chip chip-neutral">{{ name }}</span>
-                        }
-                      </div>
-                    </div>
-                  } @else {
-                  <!-- Dataset selection: the session needs at least one -->
-                  <div class="mt-8 w-full max-w-[920px]">
-                    <p class="field-label">
-                      Select at least one dataset for this session
-                    </p>
-                    @if (composerDatasets().length === 0) {
-                      <p class="mt-3 text-[13px] text-fg-muted">
-                        No datasets yet — create one in Datasets first.
-                      </p>
-                    } @else {
-                      <div class="mt-2 flex flex-col gap-2">
-                        @for (dataset of composerDatasets(); track dataset.name) {
-                          <button
-                            (click)="toggleDatasetSelection(dataset.name)"
-                            class="list-row flex items-center gap-3 px-3 py-2.5"
-                            [class.list-row-selected]="
-                              selectedDatasets().has(dataset.name)
-                            "
-                          >
-                            <span
-                              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-accent"
-                            >
-                              <lucide-angular [img]="Workflow" [size]="15" />
-                            </span>
-                            <span class="truncate text-[13px] font-medium text-fg">{{
-                              dataset.name
-                            }}</span>
-                            <span class="text-[12px] text-fg-muted"
-                              >{{ dataset.tables.length }} entities</span
-                            >
-                            @if (selectedDatasets().has(dataset.name)) {
-                              <lucide-angular
-                                [img]="CircleCheck"
-                                [size]="16"
-                                class="ml-auto shrink-0 text-primary"
-                              />
-                            }
-                          </button>
-                        }
-                      </div>
                     }
-                  </div>
                   }
-                </div>
-              } @else if (mainView() === "monitoring") {
-                <!-- Monitoring: the LLM calls table (app-shell R3b, roadmap 1.21.14) -->
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <div class="flex w-full max-w-[1120px] flex-col" data-testid="monitoring-page">
-                    <h2
-                      class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
-                    >
-                      Monitoring
-                    </h2>
-                    <!-- The tab's note, LLM calls | Sessions tabs and their tables (roadmap 1.21.16) -->
-                    <div>
-                      @defer (on immediate) {
-                        <app-monitoring-tabs
-                          (openCall)="openLlmCall($event)"
-                          (openSession)="openMonitoringSession($event)"
-                        />
-                      }
-                    </div>
-                  </div>
-                </div>
-              } @else if (mainView() === "monitoring-session") {
-                <!-- One session's execution flow (roadmap 1.21.16) -->
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <div class="flex w-full max-w-[1120px] min-w-0 flex-col gap-3">
-                    <!-- Back to the Monitoring page's Sessions tab -->
-                    <button
-                      type="button"
-                      data-testid="monitoring-session-back"
-                      (click)="backFromMonitoringSession()"
-                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
-                    >
-                      <lucide-angular [img]="ArrowLeft" [size]="14" />
-                      <span>Monitoring</span>
-                    </button>
-                    @if (activeMonitoringSessionId(); as sessionId) {
-                      @defer (on immediate) {
-                        <app-session-flow
-                          class="w-full min-w-0"
-                          [sessionId]="sessionId"
-                          (openCall)="openLlmCallFromSession($event)"
-                          (openChat)="openSessionById($event)"
-                        />
-                      }
-                    }
-                  </div>
-                </div>
-              } @else if (mainView() === "llm-call") {
-                <!-- One LLM call and its context window (roadmap 1.21.15) -->
-                <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-                  <div class="flex w-full max-w-[1120px] flex-col gap-3">
-                    <!-- Back to where the call was opened: its session page, else the table -->
-                    <button
-                      type="button"
-                      data-testid="llm-call-back"
-                      (click)="backFromLlmCall()"
-                      class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
-                    >
-                      <lucide-angular [img]="ArrowLeft" [size]="14" />
-                      <span>{{ llmCallFromSession() !== null ? "Session" : "Monitoring" }}</span>
-                    </button>
-                    @if (activeLlmCallId(); as callId) {
-                      @defer (on immediate) {
-                        <app-llm-call-detail
-                          class="w-full"
-                          [callId]="callId"
-                          (openSession)="openSessionById($event)"
-                          (openRun)="openMonitoringSession($event)"
-                        />
-                      }
-                    }
-                  </div>
-                </div>
-              } @else if (mainView() === "sessions") {
-                <!-- The Sessions page's list (app-shell R3) -->
-                <div class="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-                  @defer (on immediate) {
-                    <app-sessions-list
-                      [sessions]="sessions()"
-                      [loading]="!sessionsLoaded()"
-                      [activeId]="activeSession()?.id ?? null"
-                      [deletingId]="deletingSession()"
-                      (openSession)="openSession($event)"
-                      (deleteSession)="deleteSession($event)"
-                      (newConversation)="openComposer()"
-                    />
-                  }
-                </div>
-              } @else {
-                <!-- Start page: what the product does and where to begin. -->
-                @defer (on immediate) {
-                  <app-welcome
-                    class="block min-h-0 flex-1"
-                    (openDatasets)="selectArea('datasets')"
-                    (startConversation)="openComposer()"
-                    (openAgents)="selectArea('agents')"
-                  />
                 }
               }
             </div>
@@ -982,7 +246,7 @@
         </main>
 
         <!-- Right panel -->
-        @if (rightPanelOpen()) {
+        @if (shell.rightPanelOpen()) {
           <aside
             aria-label="Details panel"
             class="card relative flex shrink-0 flex-col"
@@ -1007,7 +271,7 @@
             <div
               class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3"
             >
-              @if (mainView() === "agent-editor") {
+              @if (shell.mainView() === "agent-editor") {
                 <h3
                   class="pl-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
                 >
@@ -1029,7 +293,7 @@
               }
               <button
                 type="button"
-                (click)="rightPanelOpen.set(false)"
+                (click)="shell.rightPanelOpen.set(false)"
                 title="Collapse right panel"
                 class="btn-icon ml-auto"
               >
@@ -1041,36 +305,17 @@
             <div
               class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-card"
             >
-              @if (mainView() === "session-chat" && activeSession()) {
-                <!-- Deferred: the panel views stay out of the initial bundle. -->
-                @defer (on immediate) {
-                  <app-session-panel
-                    class="min-h-0 flex-1"
-                    [session]="activeSession()!"
-                    [item]="activePanelItem()"
-                    (selectItem)="onSelectPanelItem($event)"
-                    [visualization]="activeVisualization()"
-                    [loading]="generatingVisualSession() === activeSession()!.id"
-                    [error]="visualizationError()"
-                    [downloading]="
-                      downloadingVisualization() === activeVisualization()?.id
-                    "
-                    (downloadVisual)="downloadVisualization($event)"
-                    (selectVersion)="selectVisualVersion($event)"
-                    (revertVersion)="revertVisualVersion($event)"
-                    (visualRefreshed)="onVisualRefreshed($event)"
-                    (dataPointSelected)="onDataPointSelected($event)"
-                  />
-                }
-              } @else if (mainView() === "agent-editor") {
+              @if (shell.mainView() === "session-chat" && sessions.activeSession()) {
+                <app-sessions-panel />
+              } @else if (shell.mainView() === "agent-editor") {
                 <app-agent-preview class="min-h-0 flex-1" />
-              } @else if (mainView() === "agent-detail") {
+              } @else if (shell.mainView() === "agent-detail") {
                 <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
-              } @else if (mainView() === "workflow-detail") {
+              } @else if (shell.mainView() === "workflow-detail") {
                 @defer (on immediate) {
                   <app-workflow-panel
                     class="min-h-0 flex-1"
-                    (openAgent)="openAgentByKey($event)"
+                    (openAgent)="agents.openAgentByKey($event)"
                   />
                 }
               } @else {

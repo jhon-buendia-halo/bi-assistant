@@ -1,0 +1,17 @@
+@if (shell.mainView() === "dataset") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-dataset-list
+      class="w-full max-w-[960px]"
+      (newDataset)="openDatasetEditor(null)"
+      (openDataset)="openDatasetEditor($event)"
+    />
+  </div>
+} @else if (shell.mainView() === "dataset-new") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-catalog-browser
+      class="w-full max-w-[960px]"
+      [initial]="editingDataset()"
+      (saved)="shell.mainView.set('dataset')"
+    />
+  </div>
+}

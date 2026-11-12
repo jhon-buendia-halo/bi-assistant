@@ -1,0 +1,115 @@
+              <!-- Page header (Figma AgentHeader; app-shell R49) -->
+              <header
+                class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-6 py-2.5"
+              >
+                <div class="flex min-w-0 flex-1 items-center gap-3">
+                  <img
+                    src="brand/agentic-hub/page-header-icon.svg"
+                    alt=""
+                    width="28"
+                    height="28"
+                  />
+                  <div class="min-w-0 flex-1">
+                    <h2
+                      class="truncate text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+                    >
+                      {{ state.pageTitle() }}
+                    </h2>
+                    @if (state.showSessionContext()) {
+                      <div class="mt-0.5 flex min-w-0 items-center gap-2">
+                        @if (state.activeSession()?.workflowRef; as workflowRef) {
+                          <!-- Workflow first, then 12 px before the datasources (R57). -->
+                          <lucide-angular
+                            [img]="Workflow"
+                            [size]="14"
+                            class="shrink-0 text-fg-muted"
+                          />
+                          <span
+                            class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
+                            >Workflow</span
+                          >
+                          <span
+                            data-testid="session-workflow"
+                            class="chip chip-neutral mr-1 min-w-20"
+                            [attr.title]="'Workflow: ' + workflowLabel(workflowRef)"
+                            ><span class="max-w-48 truncate">{{
+                              workflowLabel(workflowRef)
+                            }}</span></span
+                          >
+                        }
+                        <lucide-angular
+                          [img]="Database"
+                          [size]="14"
+                          class="shrink-0 text-fg-muted"
+                        />
+                        <span
+                          class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
+                          >Datasource</span
+                        >
+                        @if (state.loadingSessionDatasources()) {
+                          <span
+                            class="h-4 w-24 animate-pulse rounded bg-surface-muted"
+                          ></span>
+                        } @else if (state.activeSessionDatasources().length > 0) {
+                          <div class="flex min-w-0 items-center gap-1.5">
+                            @for (
+                              datasource of state.activeSessionDatasources();
+                              track datasource.id
+                            ) {
+                              <span
+                                class="chip chip-neutral min-w-0"
+                                [title]="datasource.summary"
+                              >
+                                <span class="max-w-40 truncate">{{
+                                  datasource.name
+                                }}</span>
+                                <span class="shrink-0 text-[10px] font-normal">{{
+                                  datasourceKindLabel(datasource.kind)
+                                }}</span>
+                              </span>
+                            }
+                          </div>
+                        } @else {
+                          <span class="truncate text-[12px] text-fg-muted"
+                            >Unavailable</span
+                          >
+                        }
+                        @if (state.activeSession(); as session) {
+                          <!-- The session's id, to share when something looks wrong. -->
+                          <button
+                            type="button"
+                            data-testid="session-id"
+                            class="ml-1 inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] text-fg-muted hover:bg-surface-selected hover:text-fg"
+                            [title]="'Session ID ' + session.id + ' (click to copy)'"
+                            [attr.aria-label]="'Copy session ID ' + session.id"
+                            (click)="state.copySessionId(session.id)"
+                          >
+                            <span>ID {{ session.id.slice(0, 8) }}</span>
+                            <lucide-angular [img]="Copy" [size]="12" />
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    (click)="composer.openComposer()"
+                    class="btn btn-secondary"
+                  >
+                    <lucide-angular [img]="SquarePen" [size]="18" />
+                    <span>Start New Conversation</span>
+                  </button>
+                  @if (!shell.rightPanelOpen()) {
+                    <button
+                      type="button"
+                      (click)="shell.rightPanelOpen.set(true)"
+                      title="Expand right panel"
+                      class="btn-icon"
+                    >
+                      <lucide-angular [img]="PanelRight" [size]="16" />
+                    </button>
+                  }
+                </div>
+              </header>

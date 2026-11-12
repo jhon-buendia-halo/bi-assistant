@@ -2048,12 +2048,12 @@ specs/system/delivery.md:506-560  ## 13. Deterministic QA (`scripts/qa.mjs`)
 specs/system/tech-stack.md:7-15  ## Languages and runtime
 specs/system/tech-stack.md:17-39  ## Frontend (`frontend/`)
 specs/system/tech-stack.md:41-82  ## Backend (`backend/`)
-specs/system/tech-stack.md:84-192  ## Code layout
+specs/system/tech-stack.md:84-193  ## Code layout
 specs/system/tech-stack.md:86-95  ### Repository
-specs/system/tech-stack.md:97-135  ### Frontend: feature-based
-specs/system/tech-stack.md:137-192  ### Backend: feature-based modules
-specs/system/tech-stack.md:194-217  ## Test layout
-specs/system/tech-stack.md:219-233  ## To rebuild on another stack
+specs/system/tech-stack.md:97-136  ### Frontend: feature-based
+specs/system/tech-stack.md:138-193  ### Backend: feature-based modules
+specs/system/tech-stack.md:195-218  ## Test layout
+specs/system/tech-stack.md:220-234  ## To rebuild on another stack
 
 specs/system/ui.md:9-139  ## 1. App shell
 specs/system/ui.md:11-17  ### 1.1 Window

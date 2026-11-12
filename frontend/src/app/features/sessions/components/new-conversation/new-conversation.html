@@ -1,0 +1,259 @@
+                <!-- New conversation composer -->
+                <div
+                  class="flex flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-8"
+                >
+                  <div
+                    class="card w-full max-w-[920px] p-4"
+                  >
+                    <div class="relative mb-3 flex flex-col gap-1.5">
+                      <span class="field-label" id="new-session-workflow-label"
+                        >Workflow</span
+                      >
+                      <button
+                        type="button"
+                        id="new-session-workflow"
+                        data-testid="new-session-workflow"
+                        class="field flex items-center gap-2 text-left text-[14px]"
+                        role="combobox"
+                        aria-haspopup="listbox"
+                        aria-labelledby="new-session-workflow-label"
+                        [attr.aria-expanded]="composer.composerWorkflowMenuOpen()"
+                        [attr.aria-controls]="
+                          composer.composerWorkflowMenuOpen()
+                            ? 'new-session-workflow-list'
+                            : null
+                        "
+                        [attr.aria-activedescendant]="
+                          composer.composerWorkflowMenuOpen()
+                            ? 'new-session-workflow-option-' +
+                              composer.composerWorkflowActive()
+                            : null
+                        "
+                        (click)="
+                          composer.composerWorkflowMenuOpen()
+                            ? composer.closeComposerWorkflowMenu()
+                            : composer.openComposerWorkflowMenu()
+                        "
+                        (keydown)="composer.onComposerWorkflowKeydown($event)"
+                      >
+                        <lucide-angular
+                          [img]="Workflow"
+                          [size]="14"
+                          class="shrink-0 text-fg-muted"
+                        />
+                        <span class="min-w-0 flex-1 truncate">{{
+                          composer.composerWorkflowName()
+                        }}</span>
+                        <lucide-angular
+                          [img]="ChevronDown"
+                          [size]="14"
+                          class="shrink-0 text-fg-muted"
+                        />
+                      </button>
+                      @if (composer.composerWorkflowMenuOpen()) {
+                        <button
+                          type="button"
+                          tabindex="-1"
+                          aria-label="Close workflow menu"
+                          class="fixed inset-0 z-20 cursor-default"
+                          (click)="composer.closeComposerWorkflowMenu()"
+                        ></button>
+                        <div
+                          id="new-session-workflow-list"
+                          role="listbox"
+                          aria-label="Workflow"
+                          class="menu absolute top-full right-0 left-0 z-30 mt-1 max-h-80 overflow-y-auto"
+                        >
+                          @for (
+                            row of composer.composerWorkflowRows();
+                            track row.id;
+                            let i = $index
+                          ) {
+                            <div
+                              role="option"
+                              [id]="'new-session-workflow-option-' + i"
+                              [attr.data-workflow-id]="row.id"
+                              [attr.aria-selected]="row.id === composer.composerWorkflowId()"
+                              [attr.aria-disabled]="row.disabledReason ? true : null"
+                              class="flex flex-col rounded-lg px-2.5 py-2"
+                              [class.cursor-pointer]="!row.disabledReason"
+                              [class.cursor-not-allowed]="!!row.disabledReason"
+                              [class.bg-surface-selected]="
+                                row.id === composer.composerWorkflowId() ||
+                                (i === composer.composerWorkflowActive() &&
+                                  !row.disabledReason)
+                              "
+                              [class.opacity-70]="!!row.disabledReason"
+                              (mousedown)="$event.preventDefault()"
+                              (mouseenter)="
+                                row.disabledReason
+                                  ? null
+                                  : composer.composerWorkflowActive.set(i)
+                              "
+                              (click)="composer.chooseComposerWorkflow(row.id)"
+                            >
+                              <span class="truncate text-[13px] text-fg">{{
+                                row.name
+                              }}</span>
+                              @if (row.disabledReason) {
+                                <span
+                                  class="truncate text-[12px] text-on-warning-soft"
+                                  [title]="row.disabledReason"
+                                  >{{ row.disabledReason }}</span
+                                >
+                              } @else if (row.description) {
+                                <span
+                                  class="truncate text-[12px] text-fg-muted"
+                                  [title]="row.description"
+                                  >{{ row.description }}</span
+                                >
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                      <span
+                        class="text-[12px] text-fg-muted"
+                        data-testid="new-session-workflow-description"
+                        >{{ composer.composerWorkflowDescription() }}</span
+                      >
+                    </div>
+                    <label class="flex flex-col gap-1.5">
+                      <span class="field-label">Session name</span>
+                      <input
+                        type="text"
+                        placeholder="My new session"
+                        [value]="composer.composerName()"
+                        (input)="composer.composerName.set($any($event.target).value)"
+                        class="field text-[14px]"
+                      />
+                    </label>
+                    <div class="mt-4 flex items-center justify-between">
+                      <div class="flex items-center gap-3">
+                        <button
+                          class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-surface-muted"
+                          [class.text-fg]="composer.llmModel()"
+                          [class.text-fg-muted]="!composer.llmModel()"
+                          [attr.title]="composer.llmModelTitle()"
+                        >
+                          <lucide-angular [img]="Sparkle" [size]="13" />
+                          <span>{{ composer.llmModel() ?? "No model configured" }}</span>
+                        </button>
+                                                  <div class="relative">
+                            <button
+                              (click)="composer.effortMenuOpen.set(!composer.effortMenuOpen())"
+                              title="Reasoning effort"
+                              class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted capitalize hover:bg-surface-muted"
+                            >
+                              <lucide-angular [img]="Signal" [size]="13" />
+                              <span>{{ composer.llmEffort() }}</span>
+                            </button>
+                            @if (composer.effortMenuOpen()) {
+                              <div
+                                class="fixed inset-0 z-10"
+                                (click)="composer.effortMenuOpen.set(false)"
+                              ></div>
+                              <div
+                                class="menu absolute bottom-full left-0 z-20 mb-1 w-36"
+                              >
+                                @for (effort of composer.reasoningEfforts; track effort) {
+                                  <button
+                                    (click)="composer.setEffort(effort)"
+                                    class="menu-item capitalize"
+                                    [class.font-semibold]="composer.llmEffort() === effort"
+                                    [class.text-fg-strong]="composer.llmEffort() === effort"
+                                    [class.text-fg-muted]="composer.llmEffort() !== effort"
+                                  >
+                                    {{ effort }}
+                                  </button>
+                                }
+                              </div>
+                            }
+                          </div>
+                        
+                      </div>
+                      <div class="flex items-center gap-3">
+                        <button
+                          (click)="composer.createSession()"
+                          [disabled]="
+                            composer.creatingSession() ||
+                            (composer.composerPicksDatasets() &&
+                              (composer.selectedDatasets().size === 0 ||
+                                composer.composerName().trim() === ''))
+                          "
+                          [title]="
+                            composer.composerPicksDatasets()
+                              ? 'Name the session and select at least one dataset'
+                              : 'Start a session with this workflow'
+                          "
+                          class="btn btn-primary"
+                        >
+                          @if (composer.creatingSession()) {
+                            <span>Creating…</span>
+                          } @else {
+                            <span>Create</span>
+                            <lucide-angular [img]="CornerDownLeft" [size]="14" />
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  @if (!composer.composerPicksDatasets()) {
+                    <!-- The workflow's own datasets, read-only -->
+                    <div
+                      class="mt-8 w-full max-w-[920px]"
+                      data-testid="new-session-workflow-datasets"
+                    >
+                      <p class="field-label">Datasets</p>
+                      <div class="mt-2 flex flex-wrap gap-2">
+                        @for (name of composer.composerWorkflowDatasets(); track name) {
+                          <span class="chip chip-neutral">{{ name }}</span>
+                        }
+                      </div>
+                    </div>
+                  } @else {
+                  <!-- Dataset selection: the session needs at least one -->
+                  <div class="mt-8 w-full max-w-[920px]">
+                    <p class="field-label">
+                      Select at least one dataset for this session
+                    </p>
+                    @if (composer.composerDatasets().length === 0) {
+                      <p class="mt-3 text-[13px] text-fg-muted">
+                        No datasets yet — create one in Datasets first.
+                      </p>
+                    } @else {
+                      <div class="mt-2 flex flex-col gap-2">
+                        @for (dataset of composer.composerDatasets(); track dataset.name) {
+                          <button
+                            (click)="composer.toggleDatasetSelection(dataset.name)"
+                            class="list-row flex items-center gap-3 px-3 py-2.5"
+                            [class.list-row-selected]="
+                              composer.selectedDatasets().has(dataset.name)
+                            "
+                          >
+                            <span
+                              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-accent"
+                            >
+                              <lucide-angular [img]="Workflow" [size]="15" />
+                            </span>
+                            <span class="truncate text-[13px] font-medium text-fg">{{
+                              dataset.name
+                            }}</span>
+                            <span class="text-[12px] text-fg-muted"
+                              >{{ dataset.tables.length }} entities</span
+                            >
+                            @if (composer.selectedDatasets().has(dataset.name)) {
+                              <lucide-angular
+                                [img]="CircleCheck"
+                                [size]="16"
+                                class="ml-auto shrink-0 text-primary"
+                              />
+                            }
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                  }
+                </div>
