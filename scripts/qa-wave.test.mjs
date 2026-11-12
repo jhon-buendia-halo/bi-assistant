@@ -37,6 +37,11 @@ test('--wave rejects bad input', () => {
   assert.throws(() => parseArgs(['1.1.1', '--wave', '1.1.2']), UsageError);
 });
 
+test('a roadmap id may end with one letter (a split story such as 1.23.26b)', () => {
+  assert.deepEqual(parseWaveIds('1.23.26b,1.23.27'), ['1.23.26b', '1.23.27']);
+  assert.throws(() => parseWaveIds('1.23.26bb'));
+});
+
 test('wave ids are unique and keep their order', () => {
   assert.deepEqual(parseWaveIds('1.1.2,1.1.1,1.1.2'), ['1.1.2', '1.1.1']);
   assert.equal(waveName(['1.23.29', '1.23.30', '1.23.31']), '1.23.29…1.23.31');

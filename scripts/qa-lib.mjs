@@ -52,7 +52,7 @@ export function parseArgs(argv) {
       wave = parseWaveIds(argv[++i]);
     } else if (arg === '--demo') {
       demo = argv[++i];
-      if (!demo || !/^\d+(\.\d+)+$/.test(demo)) throw new UsageError('--demo needs a roadmap id like 1.23.29');
+      if (!demo || !/^\d+(\.\d+)+[a-z]?$/.test(demo)) throw new UsageError('--demo needs a roadmap id like 1.23.29');
     } else if (arg === '--base') {
       base = argv[++i];
       if (!base) throw new UsageError('--base needs a git ref');
@@ -78,7 +78,7 @@ export function parseArgs(argv) {
   }
   if (demo) throw new UsageError('--demo goes with --wave');
   if (!id) throw new UsageError('Missing the roadmap id');
-  if (!/^\d+(\.\d+)+$/.test(id)) {
+  if (!/^\d+(\.\d+)+[a-z]?$/.test(id)) {
     throw new UsageError(`"${id}" is not a roadmap id like 1.21.6`);
   }
   if (!mode) throw new UsageError('Choose --fast, --gate, --draft-impact or --wave');
@@ -92,7 +92,7 @@ export function parseArgs(argv) {
 export function parseWaveIds(value) {
   if (!value || value.startsWith('--')) throw new UsageError('--wave needs ids like 1.23.29,1.23.30');
   const ids = value.split(',').map((x) => x.trim()).filter(Boolean);
-  const bad = ids.find((x) => !/^\d+(\.\d+)+$/.test(x));
+  const bad = ids.find((x) => !/^\d+(\.\d+)+[a-z]?$/.test(x));
   if (!ids.length || bad) throw new UsageError(`"${bad ?? value}" is not a roadmap id like 1.21.6`);
   return [...new Set(ids)];
 }

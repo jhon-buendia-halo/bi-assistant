@@ -10,7 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const outIdx = args.indexOf('--out');
 const id = args.find((a, i) => !a.startsWith('--') && (outIdx < 0 || i !== outIdx + 1));
-if (!id || !/^\d+(\.\d+)+$/.test(id) || (outIdx >= 0 && !args[outIdx + 1])) {
+if (!id || !/^\d+(\.\d+)+[a-z]?$/.test(id) || (outIdx >= 0 && !args[outIdx + 1])) {
   console.error('Usage: node scripts/story-pack.mjs <roadmap-id> [--out <file>]');
   process.exit(2);
 }
