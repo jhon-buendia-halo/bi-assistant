@@ -1898,7 +1898,7 @@ Stories 1.23.10–1.23.27 retire chats: every workflow runs once on a typed inpu
 - **Acceptance:** per plan 1.24.10.
 
 #### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `📋 Planned`
-- **Acceptance:** per plan 1.24.11; no stored session is lost or migrated.
+- **Acceptance:** per plan 1.24.11; no stored session is lost or migrated. Also carries what 1.23.15 left out of plan 1.24.5: reopening a stored run read-only (`run-detail`), Run again, the agent-phases bar inside the agent step, and the Careful mode "Cross-checked" run scenario; and Monitoring's "Sessions" tab, column and filter renamed for runs (left out of 1.23.20).
 
 #### 1.23.22 — Chats can no longer start  `📋 Planned`
 - **Acceptance:** per plan 1.24.12, including the desktop readiness probe on `GET /health`. Last story of Phase A.
@@ -1910,7 +1910,7 @@ Stories 1.23.10–1.23.27 retire chats: every workflow runs once on a typed inpu
 - **Acceptance:** per plan 1.25.3.
 
 #### 1.23.25 — Visual actions on a run's result  `📋 Planned`
-- **Acceptance:** per plan 1.25.4.
+- **Acceptance:** per plan 1.25.4, including the visual card's View in a run's answer (not wired in 1.23.15: the right panel holds the designer).
 
 #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `📋 Planned`
 - **Acceptance:** per plan 1.25.5.
