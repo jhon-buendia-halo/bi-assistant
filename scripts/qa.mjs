@@ -10,6 +10,11 @@
 //         evidence/<id>/tests.md (--no-demo skips the demo evidence check).
 // --draft-impact: writes a draft evidence/<id>/e2e-impact.md from the diff,
 //         with the --fast spec selection; never overwrites.
+//   node scripts/qa.mjs --free [--base <ref>] [--rebuild] [--dry-run]
+// --free: Free style checks with no story: build, full unit suites, backend
+//         lint and check-specs in parallel, then the Playwright specs the
+//         --fast selection picks; reports in .qa-reports/free/, nothing under
+//         evidence/, no demo.
 // The build is skipped when backend/dist and backend/public are newer than
 // every input and the last qa.mjs build succeeded (--rebuild forces it).
 // --dry-run prints the plan and the build decision and runs nothing.
@@ -149,7 +154,9 @@ async function main() {
   const wave = mode === 'wave';
   const ids = opts.ids ?? [id];
   // A wave runs the fast loop's steps once for several stories; its one demo is `--demo <id>`.
-  const demoId = wave ? opts.demo : id;
+  // --free has no story: no demo and no @story- grep.
+  const free = mode === 'free';
+  const demoId = wave ? opts.demo : free ? null : id;
   const fastLike = mode === 'fast' || wave;
   const root = git(['rev-parse', '--show-toplevel']);
   const commonDir = path.resolve(root, git(['rev-parse', '--git-common-dir'], root));
@@ -304,14 +311,16 @@ async function main() {
       console.log(lines.join('\n'));
       process.exit(0);
     }
-    console.log(`qa ${mode} ${id} (dry run): base ${git(['rev-parse', '--short=7', base], root)}, ${changed.length} changed file(s)`);
+    console.log(`qa ${free ? 'free' : `${mode} ${id}`} (dry run): base ${git(['rev-parse', '--short=7', base], root)}, ${changed.length} changed file(s)`);
     console.log(buildLine(decision));
     if (decision.build) console.log('  npm --prefix backend run build:all');
     console.log('parallel:');
     for (const s of parallelPlan()) console.log(`  ${s.name}${s.solo ? ' (alone, after the others)' : ''}: ${s.command}`);
-    const specs = fastLike ? fastSelection() : listed;
+    const specs = fastLike || free ? fastSelection() : listed;
     console.log(`playwright (Postgres lane ${path.join(commonDir, 'qa.lock')}): ${specs.length ? specs.join(' ') : '(none)'}`);
-    if (fastLike) {
+    if (free) {
+      console.log(`reports: ${rel(reportDir)}/ (no evidence, no demo)`);
+    } else if (fastLike) {
       console.log(`demo: ${noDemo ? `demo.txt (--no-demo)` : demoSpecs.length ? `demo.webm from ${demoSpecs.join(' ')}` : 'demo.txt (no UI scenario tagged)'}`);
     } else {
       if (!impactRows) console.log(`step-6 list missing: ${rel(impactPath)}`);
@@ -341,7 +350,7 @@ async function main() {
   process.on('SIGTERM', onSignal);
   process.on('exit', releaseAll);
   // Only once the checkout is ours: a waiting run must not touch its folders.
-  fs.mkdirSync(evidenceDir, { recursive: true });
+  if (!free) fs.mkdirSync(evidenceDir, { recursive: true });
   fs.rmSync(reportDir, { recursive: true, force: true });
   fs.mkdirSync(reportDir, { recursive: true });
 
@@ -431,7 +440,23 @@ async function main() {
     });
   }
 
-  if (fastLike) {
+  if (free) {
+    // The gate's full plan, then the --fast spec selection; no evidence, no demo.
+    await runParallel(parallelPlan());
+    const selected = fastSelection();
+    if (selected.length) {
+      await takeLane();
+      await run({
+        name: 'playwright (selected)',
+        command: `${pw} ${selected.map(relPw).join(' ')} ${PW_REPORTERS}`,
+        cwd: frontend,
+        extraEnv: playwrightReportEnv(reportDir),
+        counts: () => readPlaywright(reportDir)?.counts,
+      });
+      leaveLane();
+    }
+    console.log(`\nreports: ${rel(reportDir)}/`);
+  } else if (fastLike) {
     await runParallel(parallelPlan());
     const selected = fastSelection();
     if (selected.length || (!noDemo && demoSpecs.length)) await takeLane();
@@ -582,7 +607,7 @@ async function main() {
   }
 
   const failed = steps.filter((s) => s.status === 'failed');
-  console.log(`\n${failed.length ? '✖' : '✔'} qa ${mode} ${id}: ${steps.length - failed.length}/${steps.length} steps passed`);
+  console.log(`\n${failed.length ? '✖' : '✔'} qa ${free ? 'free' : `${mode} ${id}`}: ${steps.length - failed.length}/${steps.length} steps passed`);
   releaseAll();
   process.exit(failed.length ? 1 : 0);
 }
