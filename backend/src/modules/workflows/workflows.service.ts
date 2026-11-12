@@ -8,9 +8,12 @@ import {
   CODE_WORKFLOWS,
   type CodeWorkflowSource,
   type WorkflowBar,
-  type WorkflowInputField,
   type WorkflowTrigger,
 } from '../../mastra/workflows/workflow-catalog';
+import {
+  inputFieldsWithUsage,
+  type WorkflowInputFieldDetail,
+} from '../../mastra/workflows/workflow-input';
 import {
   AgentsService,
   type AgentSummary,
@@ -37,8 +40,11 @@ export interface WorkflowSummary {
   bar: WorkflowBar;
   /** Every workflow runs once on a typed input (`POST /workflows/:id/runs`). */
   trigger: WorkflowTrigger;
-  /** The typed input a run takes, in form order (api.md 118, 119). */
-  input: WorkflowInputField[];
+  /**
+   * The typed input a run takes, in form order (api.md 118, 119): the Start
+   * node, each field with its rules and the steps that read it (`usedBy`).
+   */
+  input: WorkflowInputFieldDetail[];
   /** The datasets the workflow's agent declares; empty when the run picks them. */
   datasets: string[];
   missingDatasets: string[];
@@ -204,7 +210,7 @@ function codeEntry(
       stepCount: source.steps.length,
       bar: source.bar,
       trigger: source.trigger,
-      input: source.input.map((field) => ({ ...field })),
+      input: inputFieldsWithUsage(source),
       datasets: picksDatasets ? [] : [...agent.datasets],
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],

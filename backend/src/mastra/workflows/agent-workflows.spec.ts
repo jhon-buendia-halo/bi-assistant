@@ -31,9 +31,8 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       output: ['question', 'catalog'],
       exits: [],
     });
-    expect(steps[0].exits).toEqual([
-      { label: 'Empty question', outcome: 'fails' },
-    ]);
+    // Receive question has no exit: the input node checks the question first.
+    expect(steps[0].exits).toEqual([]);
     expect(steps[2].exits).toEqual([
       { label: 'Model error', outcome: 'fails' },
       { label: 'Stop', outcome: 'stops' },

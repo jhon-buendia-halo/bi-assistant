@@ -12,11 +12,15 @@ import {
   agentWorkflowId,
   draftRunInput,
   oneStepWorkflowSteps,
-  parseWorkflowInput,
   wrappedAgentMaxSteps,
   type AgentRunTurn,
   type WorkflowInputValues,
 } from '../../mastra/workflows/workflow-catalog';
+import {
+  inputFieldsWithUsage,
+  validateWorkflowInput,
+  type WorkflowInputError,
+} from '../../mastra/workflows/workflow-input';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type {
@@ -95,6 +99,21 @@ export interface PreparedRun {
   draft?: { agentId: string };
 }
 
+/**
+ * The 400 a refused run request answers (api.md 118, 119; Style B): Nest's
+ * error body, `message` the first error's text, and `errors` every one.
+ */
+export function inputRefusal(
+  errors: readonly WorkflowInputError[],
+): BadRequestException {
+  return new BadRequestException({
+    statusCode: 400,
+    message: errors[0]?.message ?? 'Bad Request',
+    error: 'Bad Request',
+    errors: errors.map((entry) => ({ ...entry })),
+  });
+}
+
 /** A file a run's route sends as an attachment (api.md 124, 126, 127). */
 export interface RunAttachment {
   filename: string;
@@ -158,16 +177,20 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
-   * Check a run request before anything runs (api.md 119 refusals, Style B):
-   * 404 for a workflow `GET /workflows` does not list; 400 for a workflow
-   * without input fields, for an input its fields refuse (plan 4.1), for a
-   * blank question, and for a `context.fromRunId` naming no stored run with
-   * an answer.
+   * Check a run request as a whole before anything runs (api.md 118, 119
+   * refusals, Style B): 404 for a workflow `GET /workflows` does not list;
+   * 400 for a workflow without input fields, and for a request its input
+   * node refuses: every field error in field order (`validateWorkflowInput`,
+   * a whitespace-only text missing), then a `context.fromRunId` naming no
+   * stored run with an answer. The 400 carries them all as `errors` and the
+   * first one's text as `message`. Nothing is stored before it passes.
    */
   async prepare(id: string, body: unknown): Promise<PreparedRun> {
     const workflow = await this.workflows.definition(id);
     if (!workflow.input.length) {
-      throw new BadRequestException(`Workflow "${id}" can't run on an input`);
+      throw inputRefusal([
+        { field: null, message: `Workflow "${id}" can't run on an input` },
+      ]);
     }
     const request =
       body && typeof body === 'object'
@@ -176,26 +199,26 @@ export class WorkflowRunsService implements OnModuleInit {
     const needsDatasets = workflow.input.some(
       (field) => field.type === 'dataset' || field.type === 'datasets',
     );
-    const parsed = parseWorkflowInput(
-      workflow.input,
-      request.input,
-      needsDatasets ? await this.datasets.list() : [],
-    );
-    if (!parsed.ok) throw new BadRequestException(parsed.error);
-    const turn = agentRunTurn(parsed.values);
-    if (!turn.question) {
-      const field = workflow.input.find(
-        (candidate) =>
-          candidate.name === 'question' || candidate.name === 'message',
-      );
-      throw new BadRequestException(
-        `${field?.label ?? 'Question'} is required`,
-      );
+    const checked = validateWorkflowInput(workflow, request.input, {
+      datasets: needsDatasets ? await this.datasets.list() : [],
+    });
+    const errors: WorkflowInputError[] = checked.ok ? [] : checked.errors;
+    let context: PreparedRun['context'];
+    try {
+      context = await this.contextOf(request.context);
+    } catch (refusal) {
+      if (!(refusal instanceof BadRequestException)) throw refusal;
+      errors.push({ field: null, message: refusal.message });
     }
-    const context = await this.contextOf(request.context);
+    if (!checked.ok || errors.length) throw inputRefusal(errors);
+    const turn = agentRunTurn(checked.input);
+    if (!turn.question) {
+      // A workflow whose input gives no question can't run an agent turn.
+      throw inputRefusal([{ field: null, message: 'Question is required' }]);
+    }
     return {
       workflow,
-      values: parsed.values,
+      values: checked.input,
       turn,
       ...(context ? { context } : {}),
     };
@@ -220,7 +243,11 @@ export class WorkflowRunsService implements OnModuleInit {
         : undefined;
     const question = typeof raw === 'string' ? raw.trim() : '';
     if (!question) throw new BadRequestException('Question is required');
-    const fields = draftRunInput();
+    const steps = oneStepWorkflowSteps({
+      name: target.name,
+      tools: [],
+      maxSteps: wrappedAgentMaxSteps(agentId),
+    });
     return {
       workflow: {
         id: agentWorkflowId(agentId),
@@ -232,15 +259,11 @@ export class WorkflowRunsService implements OnModuleInit {
         stepCount: 1,
         bar: 'agent',
         trigger: 'run',
-        input: fields,
+        input: inputFieldsWithUsage({ input: draftRunInput(), steps }),
         datasets: target.datasets,
         missingDatasets: [],
         starterQuestions: [],
-        steps: oneStepWorkflowSteps({
-          name: target.name,
-          tools: [],
-          maxSteps: wrappedAgentMaxSteps(agentId),
-        }),
+        steps,
       },
       values: { question },
       turn: { question, careful: false },

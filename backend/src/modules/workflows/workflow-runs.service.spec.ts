@@ -415,6 +415,38 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
     await refuse('qti-v2-turn', body, message);
   });
 
+  it('refuses the whole input at once: every error in field order, then the context, nothing stored', async () => {
+    ctx = build();
+    const refusal = await ctx.service
+      .prepare('qti-v2-turn', {
+        input: { question: ' \n ', datasets: [] },
+        context: { fromRunId: 'nope' },
+      })
+      .catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(BadRequestException);
+    expect((refusal as BadRequestException).getResponse()).toEqual({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: 'Question is required',
+      errors: [
+        { field: 'question', message: 'Question is required' },
+        { field: 'datasets', message: 'Select at least one dataset' },
+        { field: null, message: 'Run "nope" not found' },
+      ],
+    });
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+    expect(await ctx.repository.list()).toEqual([]);
+  });
+
+  it('refuses a question over 4000 characters', async () => {
+    ctx = build();
+    await refuse(
+      'qti-v2-turn',
+      { input: { question: 'x'.repeat(4001), datasets: ['Claims'] } },
+      'Question must be at most 4000 characters',
+    );
+  });
+
   it('answers 404 for a workflow the catalogue does not list, the removed ones included (1.23.35)', async () => {
     ctx = build();
     const live = await ctx.userAgents.create({
