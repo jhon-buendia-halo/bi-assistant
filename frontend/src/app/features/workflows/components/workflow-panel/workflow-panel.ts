@@ -4,7 +4,6 @@ import {
   computed,
   effect,
   inject,
-  signal,
   untracked,
 } from '@angular/core';
 import {
@@ -17,27 +16,14 @@ import {
   Rocket,
   Square,
   Wrench,
-  X,
 } from 'lucide-angular';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
-import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import { VisualEvent } from '../../../sessions/models/session.model';
 import { RunVisual } from '../../../runs/components/run-visual/run-visual';
 import { RunVisualsState } from '../../../runs/services/run-visuals-state';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
-import { PanelReadinessView } from '../../../sessions/components/panel-readiness-view/panel-readiness-view';
-import {
-  readinessPanelItemId,
-  readinessPanelTitle,
-} from '../../../sessions/models/readiness.model';
-import {
-  FilePanelItem,
-  ReadinessPanelItem,
-  ReadinessReportRef,
-} from '../../../sessions/models/session.model';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
-import { WorkflowRunFiles } from '../workflow-run-files/workflow-run-files';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import {
   RunOutputEntry,
@@ -59,15 +45,7 @@ const FORM_CONTROLS =
  */
 @Component({
   selector: 'app-workflow-panel',
-  imports: [
-    AnswerView,
-    LucideAngularModule,
-    MarkdownPipe,
-    PanelReadinessView,
-    ReadinessHistory,
-    RunVisual,
-    WorkflowRunFiles,
-  ],
+  imports: [AnswerView, LucideAngularModule, MarkdownPipe, RunVisual],
   templateUrl: './workflow-panel.html',
   host: { class: 'flex min-h-0 flex-col', 'data-testid': 'workflow-panel' },
 })
@@ -80,7 +58,6 @@ export class WorkflowPanel {
   protected readonly Rocket = Rocket;
   protected readonly Square = Square;
   protected readonly Wrench = Wrench;
-  protected readonly X = X;
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
@@ -152,44 +129,11 @@ export class WorkflowPanel {
     () => this.designer.workflow()?.input.filter((field) => !field.hidden) ?? [],
   );
 
-  /**
-   * A workflow over its own datasets (a user agent's): they are shown
-   * read-only above the form, not picked (plan 4.2).
-   */
-  protected readonly fixedDatasets = computed(() => {
-    const workflow = this.designer.workflow();
-    if (workflow === null) return [];
-    if (workflow.input.some((f) => f.type === 'datasets' || f.type === 'dataset')) {
-      return [];
-    }
-    return workflow.datasets;
-  });
-
   /** The latest line of the agent's reasoning, for the Thinking block. */
   protected readonly reasoningSnippet = computed(() => {
     const text = this.designer.reasoning().replace(/\s+/g, ' ').trim();
     return text.length > 120 ? `…${text.slice(-120)}` : text;
   });
-
-  /**
-   * The scorecard opened from the run's readiness card (data-readiness R5),
-   * kept with the run it belongs to: a new run shows none.
-   */
-  private readonly scorecard = signal<{
-    runId: string | null;
-    item: ReadinessPanelItem;
-  } | null>(null);
-  protected readonly shownScorecard = computed(() => {
-    const open = this.scorecard();
-    return open !== null && open.runId === this.designer.runId() ? open.item : null;
-  });
-
-  /** The files the stored run saved (synthetic SQL scripts), to download. */
-  protected readonly runFiles = computed(() =>
-    (this.designer.run()?.panelItems ?? []).filter(
-      (item): item is FilePanelItem => item.kind === 'file',
-    ),
-  );
 
   protected inputId(name: string): string {
     return `workflow-input-${name}`;
@@ -210,7 +154,7 @@ export class WorkflowPanel {
     return runOutputEntries(value);
   }
 
-  /** The datasets a `dataset` or `datasets` field offers: its kinds only, when it names some. */
+  /** The datasets a `datasets` field offers: its kinds only, when it names some. */
   protected datasetChoices(field: WorkflowInputField): Dataset[] {
     const kinds = field.datasourceKinds;
     const all = this.designer.datasets();
@@ -224,36 +168,6 @@ export class WorkflowPanel {
   protected pickExample(text: string): void {
     const field = this.designer.questionField();
     if (field !== null) this.designer.setInput(field, text);
-  }
-
-  /**
-   * Open scorecard: the run's saved panel item for the report, else the same
-   * item the orchestrator writes; always a fresh object, so a scorecard
-   * showing a past assessment comes back to this one.
-   */
-  protected openScorecard(ref: ReadinessReportRef): void {
-    const id = readinessPanelItemId(ref.reportId);
-    const saved = this.designer
-      .run()
-      ?.panelItems?.find(
-        (item): item is ReadinessPanelItem => item.kind === 'readiness' && item.id === id,
-      );
-    this.scorecard.set({
-      runId: this.designer.runId(),
-      item: saved
-        ? { ...saved }
-        : {
-            id,
-            kind: 'readiness',
-            title: readinessPanelTitle(ref.datasourceName),
-            shownAt: ref.generatedAt,
-            reportId: ref.reportId,
-          },
-    });
-  }
-
-  protected closeScorecard(): void {
-    this.scorecard.set(null);
   }
 
   protected onFollowUpInput(event: Event): void {

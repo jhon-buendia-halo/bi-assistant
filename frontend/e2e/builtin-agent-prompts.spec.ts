@@ -4,7 +4,7 @@ import axe from 'axe-core';
 import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
 import { followOsTheme } from './helpers/app-actions';
-import { runAssistantOk } from './helpers/runs-api';
+import { runQuestionOk } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
 import {
@@ -123,10 +123,13 @@ async function promptView(page: Page, key: string) {
   return agent.prompt!;
 }
 
-/** Runs the Assistant on `question`; returns the turn's first model request. */
+/**
+ * Runs Questions to Insights v2 on `question`; returns the turn's first model
+ * request.
+ */
 async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const from = stub.requests.length;
-  const result = await runAssistantOk(page, question);
+  const result = await runQuestionOk(page, question);
   expect(result.text).toContain(STUB_ANSWER);
   const request = stub.requests.slice(from).find((r) => r.stream);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
@@ -141,7 +144,6 @@ async function seedChat(page: Page): Promise<void> {
 test("I edit the assistant's prompt, and Reset restores it", async ({
   page,
 }) => {
-  await seedChat(page);
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
   await expect(
@@ -171,14 +173,10 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
     path: path.join(EVIDENCE, 'assistant-system-prompt-modified.png'),
   });
 
-  const edited = systemTexts(
-    await askInRun(page, QUESTION),
-  )[0];
-  expect(edited).toContain(DONE_LINE);
+  // The assistant can no longer be run: the saved override is read back.
   expect(
     (await promptView(page, 'assistant')).editable.endsWith(`\n${DONE_LINE}`),
   ).toBe(true);
-  expect(edited).toContain('\n## Tools\n');
 
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
@@ -188,11 +186,53 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
     page.getByText(`System prompt of "${ASSISTANT}" reset`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
+  expect((await promptView(page, 'assistant')).modified).toBe(false);
+});
 
-  const reset = systemTexts(
-    await askInRun(page, QUESTION),
-  )[0];
-  expect(reset).not.toContain(DONE_LINE);
+test("I edit Questions to Insights v2's prompt, its runs read it, and Reset restores it", async ({
+  page,
+}) => {
+  // Given the World Cup dataset and the stub model.
+  await seedChat(page);
+  // When I add a line to v2's prompt on its page and save.
+  await openAgent(page, V2_KEY, V2);
+  await openPromptTab(page);
+  await expect(modifiedChip(page)).toHaveCount(0);
+  await startEditing(page);
+  await expect(page.getByTestId('agent-prompt-banner')).toHaveText(BANNER);
+  await expect(
+    page
+      .getByTestId('agent-prompt-editing')
+      .getByTestId('agent-prompt-tools-note'),
+  ).toHaveText(
+    `The ## Tools list is generated from the tools ${V2} gets and is inserted before ## Working rules.`,
+  );
+  await appendToEditor(page, DONE_LINE, true);
+  await saveButton(page).click();
+  await expect(page.getByText(`System prompt of "${V2}" saved`)).toBeVisible();
+  await expect(modifiedChip(page)).toBeVisible();
+
+  // Then a run of Questions to Insights v2 sends the edited prompt.
+  const edited = systemTexts(await askInRun(page, QUESTION))[0];
+  expect(edited.startsWith('You are Questions to Insights v2')).toBe(true);
+  expect(edited).toContain(DONE_LINE);
+  expect(edited).toContain('\n## Tools\n');
+  expect(
+    (await promptView(page, V2_KEY)).editable.endsWith(`\n${DONE_LINE}`),
+  ).toBe(true);
+
+  // When I reset it, Then the next run sends the shipped prompt again.
+  await openAgent(page, V2_KEY, V2);
+  await openPromptTab(page);
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByTestId('agent-prompt-reset').click();
+  await expect(page.getByText(`System prompt of "${V2}" reset`)).toBeVisible();
+  await expect(modifiedChip(page)).toHaveCount(0);
+
+  const reset = systemTexts(await askInRun(page, QUESTION));
+  expect(reset[0]).not.toContain(DONE_LINE);
+  // The model reads plain text: no link syntax reaches it.
+  for (const text of reset) expect(text).not.toContain('[[');
 });
 
 test("a System agent's prompt is edited in a text area, with no link menu", async ({
@@ -236,10 +276,9 @@ test("a skill link in the assistant's prompt is refused", async ({ page }) => {
   expect((await promptView(page, 'assistant')).modified).toBe(false);
 });
 
-test('the shipped assistant prompt shows its tools and skill as chips and the model reads plain mentions', async ({
+test('the shipped assistant prompt shows its tools and skill as chips', async ({
   page,
 }) => {
-  await seedChat(page);
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
 
@@ -264,11 +303,6 @@ test('the shipped assistant prompt shows its tools and skill as chips and the mo
   await page.screenshot({
     path: path.join(EVIDENCE, 'assistant-system-prompt-chips.png'),
   });
-
-  const request = await askInRun(page, QUESTION);
-  const prompt = systemTexts(request)[0];
-  expect(prompt).toContain('Call the "ask_clarification" tool only when');
-  for (const text of systemTexts(request)) expect(text).not.toContain('[[');
 });
 
 test("a built-in skill link in the assistant's prompt is accepted", async ({

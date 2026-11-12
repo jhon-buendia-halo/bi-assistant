@@ -26,11 +26,10 @@ function workflow(
     id,
     name,
     description: `${name} description`,
-    kind: 'agent',
+    kind: 'code',
     owner: 'Official',
-    agents: [{ key: id.replace(/^agent:/, ''), name }],
-    stepCount: 1,
-    bar: 'agent',
+    agents: [],
+    stepCount: 4,
     trigger: 'run',
     input: [],
     datasets: [],
@@ -40,13 +39,9 @@ function workflow(
   };
 }
 
-/** The sequential test workflow: a run workflow (plan 9.1). */
-const SEQ: WorkflowSummary = workflow('seq-text-demo', 'Sequential test workflow', {
-  kind: 'code',
+/** A code workflow that calls no agent. */
+const THREE_STEPS: WorkflowSummary = workflow('three-steps', 'Three steps', {
   stepCount: 3,
-  bar: 'steps',
-  trigger: 'run',
-  agents: [],
   input: [
     {
       name: 'text',
@@ -58,71 +53,39 @@ const SEQ: WorkflowSummary = workflow('seq-text-demo', 'Sequential test workflow
   ],
 });
 
-/** The catalogue as `GET /workflows` orders it (workflows R1). */
+/** The catalogue as `GET /workflows` orders it (workflows R1), plus a second code workflow. */
 const CATALOGUE: WorkflowSummary[] = [
-  workflow('agent:assistant', 'Assistant', {
-    agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
-  }),
   workflow('qti-v2-turn', 'Questions to Insights v2', {
-    kind: 'code',
-    stepCount: 4,
-    bar: 'steps',
     agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+    runRequirement: 'Set up an LLM first',
   }),
-  workflow('agent:data-readiness', 'Data Readiness Agent'),
-  workflow('agent:report', 'Report Builder', {
-    runRequirement: 'Load the sample in Settings → Testing Data first',
-  }),
-  workflow('agent:u2', 'Zeta analyst', { owner: 'You' }),
-  workflow('agent:u1', 'Alpha analyst', {
-    owner: 'You',
+  workflow('report-steps', 'Report steps', {
     description: 'Answers about the health plan',
   }),
 ];
 
 describe('workflows.util', () => {
   describe('buildWorkflowSections', () => {
-    it('groups Official then Mine and keeps the catalogue order in each (R5)', () => {
+    it('lists every workflow under Official in the catalogue order, with no Mine section (R5)', () => {
       const sections = buildWorkflowSections(CATALOGUE, '');
-      expect(sections.map((section) => section.id)).toEqual([
-        'official',
-        'mine',
-      ]);
-      expect(sections.map((section) => section.label)).toEqual([
-        'Official',
-        'Mine',
-      ]);
-      expect(sections[0].workflows.map((w) => w.id)).toEqual([
-        'agent:assistant',
-        'qti-v2-turn',
-        'agent:data-readiness',
-        'agent:report',
-      ]);
-      // The server orders user workflows by name; the list never re-sorts.
-      expect(sections[1].workflows.map((w) => w.id)).toEqual([
-        'agent:u2',
-        'agent:u1',
-      ]);
-    });
-
-    it('omits Mine when there are no user workflows', () => {
-      const sections = buildWorkflowSections(
-        CATALOGUE.filter((w) => w.owner === 'Official'),
-        '',
-      );
       expect(sections.map((section) => section.id)).toEqual(['official']);
+      expect(sections.map((section) => section.label)).toEqual(['Official']);
+      expect(sections[0].workflows.map((w) => w.id)).toEqual([
+        'qti-v2-turn',
+        'report-steps',
+      ]);
     });
 
     it('filters by name or description, ignoring case and spaces around', () => {
       expect(
-        buildWorkflowSections(CATALOGUE, '  report ').flatMap((section) =>
+        buildWorkflowSections(CATALOGUE, '  insights ').flatMap((section) =>
           section.workflows.map((w) => w.id),
         ),
-      ).toEqual(['agent:report']);
+      ).toEqual(['qti-v2-turn']);
       const byDescription = buildWorkflowSections(CATALOGUE, 'HEALTH PLAN');
-      expect(byDescription.map((section) => section.id)).toEqual(['mine']);
+      expect(byDescription.map((section) => section.id)).toEqual(['official']);
       expect(byDescription[0].workflows.map((w) => w.id)).toEqual([
-        'agent:u1',
+        'report-steps',
       ]);
     });
 
@@ -146,22 +109,18 @@ describe('workflows.util', () => {
   });
 
   describe('labels', () => {
-    it('reads "<n> steps" for a code-defined workflow and "One step" otherwise', () => {
-      expect(workflowKindLabel(CATALOGUE[1])).toBe('4 steps');
-      expect(workflowKindLabel(CATALOGUE[0])).toBe('One step');
-    });
-
-    it('reads "<n> steps" for a code workflow that calls no agent (workflows R5)', () => {
-      expect(workflowKindLabel(SEQ)).toBe('3 steps');
+    it('reads "<n> steps" for every workflow (workflows R5)', () => {
+      expect(workflowKindLabel(CATALOGUE[0])).toBe('4 steps');
+      expect(workflowKindLabel(THREE_STEPS)).toBe('3 steps');
     });
 
     it('says nothing about agents for a workflow that calls none', () => {
-      expect(workflowUsesLabel(SEQ)).toBe('');
+      expect(workflowUsesLabel(THREE_STEPS)).toBe('');
     });
 
     it('lists the agents the steps call', () => {
       expect(workflowUsesLabel(CATALOGUE[0])).toBe(
-        'Uses Questions to Insights Assistant',
+        'Uses Questions to Insights v2',
       );
       expect(
         workflowUsesLabel(
@@ -232,21 +191,13 @@ describe('workflows.util', () => {
       },
     ];
 
-    it('the run workflows and every agent workflow (the Assistant, v2, Data Readiness, the Report Builder and user agents) run from their page', () => {
-      const runnable = [SEQ, ...CATALOGUE]
+    it('a workflow with an input runs from its page; one without has no run form', () => {
+      const runnable = [THREE_STEPS, ...CATALOGUE]
         .map((w) => ({ ...w, input: w.input.length ? w.input : ASSISTANT_INPUT }))
         .filter(canRunFromPage)
         .map((w) => w.id);
-      expect(runnable).toEqual([
-        'seq-text-demo',
-        'agent:assistant',
-        'qti-v2-turn',
-        'agent:data-readiness',
-        'agent:report',
-        'agent:u2',
-        'agent:u1',
-      ]);
-      expect(canRunFromPage(workflow('agent:assistant', 'Assistant'))).toBe(false);
+      expect(runnable).toEqual(['three-steps', 'qti-v2-turn', 'report-steps']);
+      expect(canRunFromPage(workflow('no-input', 'No input'))).toBe(false);
     });
 
     it('the form starts from the defaults: a boolean unchecked unless its default is true', () => {
@@ -276,12 +227,12 @@ describe('workflows.util', () => {
       expect(
         runInput(
           [
-            { name: 'dataset', label: 'Dataset', type: 'dataset', required: true },
+            { name: 'title', label: 'Title', type: 'text', required: true },
             { name: 'secret', label: 'Secret', type: 'text', required: false, hidden: true },
           ],
-          { dataset: 'World Cup Core', secret: 'r-1' },
+          { title: 'World Cup Core', secret: 'r-1' },
         ),
-      ).toEqual({ dataset: 'World Cup Core' });
+      ).toEqual({ title: 'World Cup Core' });
     });
 
     it("the question field is the first visible text area: the follow-up's", () => {

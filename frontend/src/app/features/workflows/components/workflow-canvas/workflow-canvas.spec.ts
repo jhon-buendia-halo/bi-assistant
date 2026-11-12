@@ -16,7 +16,6 @@ const V2: WorkflowDetail = {
     },
   ],
   stepCount: 4,
-  bar: 'steps',
   trigger: 'run',
   input: [
     { name: 'question', label: 'Question', type: 'textarea', required: true },

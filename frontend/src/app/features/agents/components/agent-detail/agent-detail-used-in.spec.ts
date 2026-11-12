@@ -84,12 +84,15 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
     expect(opened).toHaveBeenCalledOnceWith('qti-v2-turn');
   });
 
-  it('says a draft-only user agent is not used yet', () => {
-    const el = open(agent('u-1', 'user', []));
-    expect(byId(el, 'agent-used-in')!.textContent).toContain(
-      'Not used in any workflow yet. Publish it to get its one-step workflow.',
-    );
-    expect(el.querySelector('[data-testid^="agent-used-in-"]')).toBeNull();
+  it('says a user agent is not used in any workflow, live or not (agents are a library)', () => {
+    for (const status of ['draft', 'live'] as const) {
+      const el = open(agent(`u-${status}`, 'user', [], { status }));
+      expect(byId(el, 'agent-used-in')!.textContent).toContain(
+        'Not used in any workflow.',
+      );
+      expect(byId(el, 'agent-used-in')!.textContent).not.toContain('one-step');
+      expect(el.querySelector('[data-testid^="agent-used-in-"]')).toBeNull();
+    }
   });
 
   it('says the app calls a System agent itself', () => {
@@ -100,21 +103,17 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
   });
 
   it('opens an Official agent on System Prompt, with no Chat Box tab and no Start chat', () => {
-    const el = open(
-      agent('report', 'official', [{ id: 'agent:report', name: 'Report Builder' }]),
-    );
+    const el = open(agent('report', 'official', []));
     expect(fixture.componentInstance.activeTab()).toBe('prompt');
     expect(byId(el, 'agent-tab-chat')).toBeNull();
     expect(byId(el, 'agent-tab-prompt')).not.toBeNull();
     expect(byId(el, 'agent-start-chat')).toBeNull();
-    expect(byId(el, 'agent-used-in-agent:report')?.textContent?.trim()).toBe(
-      'Report Builder',
-    );
+    expect(byId(el, 'agent-used-in')!.textContent).toContain('Not used in any workflow.');
   });
 
-  it('opens a Live user agent on the Chat Box, with no Start chat', () => {
+  it('opens a Live user agent on Try it, with no Start chat', () => {
     const el = open(
-      agent('u-2', 'user', [{ id: 'agent:u-2', name: 'Health plan' }], {
+      agent('u-2', 'user', [], {
         status: 'live',
         datasets: ['World Cup Core'],
       }),
@@ -122,6 +121,6 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
     expect(fixture.componentInstance.activeTab()).toBe('chat');
     expect(byId(el, 'agent-tab-chat')).not.toBeNull();
     expect(byId(el, 'agent-start-chat')).toBeNull();
-    expect(byId(el, 'agent-used-in-agent:u-2')).not.toBeNull();
+    expect(el.querySelector('[data-testid^="agent-used-in-"]')).toBeNull();
   });
 });

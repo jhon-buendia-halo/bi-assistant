@@ -37,17 +37,6 @@ describe('SessionsApiService past chat reads', () => {
     expect(req.request.method).toBe('GET');
     req.flush(sampleReadinessReport());
   });
-
-  it('downloads the report as a blob', () => {
-    service.downloadDeepAnalysis('session 1', 'job 1').subscribe();
-    const req = http.expectOne(
-      `${API_BASE_URL}/sessions/session%201/deep-analysis/job%201/download`,
-    );
-    expect(req.request.method).toBe('GET');
-    expect(req.request.responseType).toBe('blob');
-    req.flush(new Blob(['# report']));
-  });
-
 });
 
 describe('stream frame parsers (a run host streams them too)', () => {

@@ -3,7 +3,6 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
-  DeepAnalysisResult,
   InteractiveVisualization,
   PanelFileContent,
   PanelItemEvent,
@@ -310,16 +309,6 @@ export class SessionsApiService {
   getReadinessReport(reportId: string): Observable<ReadinessReport> {
     return this.http.get<ReadinessReport>(
       `${API_BASE_URL}/data-readiness/assessments/${encodeURIComponent(reportId)}`,
-    );
-  }
-
-  // ------------------------------------------------------- deep analysis report
-
-  /** The finished report as markdown. */
-  downloadDeepAnalysis(sessionId: string, jobId: string): Observable<Blob> {
-    return this.http.get(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/deep-analysis/${encodeURIComponent(jobId)}/download`,
-      { responseType: 'blob' },
     );
   }
 }

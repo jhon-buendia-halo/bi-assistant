@@ -13,7 +13,6 @@ import {
   BadgeCheck,
   BarChart3,
   Copy,
-  Download,
   FileArchive,
   Info,
   Loader2,
@@ -21,14 +20,12 @@ import {
   ShieldCheck,
   ShieldOff,
   Sparkles,
-  Telescope,
   ThumbsDown,
   ThumbsUp,
   TriangleAlert,
   Wrench,
 } from 'lucide-angular';
 import {
-  AnalysisReport,
   ChatMessage,
   CrossCheck,
   MessageFeedback,
@@ -53,8 +50,8 @@ export const SKIP_CLARIFICATION_ANSWER =
 /**
  * One assistant answer and its provenance (ui.md 4.12; 1.23.13): the
  * Markdown body, the reasoning, ontology and data blocks, the badges and
- * rating, the clarification card and the report, readiness and
- * visual event cards. It holds no session: everything that reaches the
+ * rating, the clarification card and the readiness and visual event
+ * cards. It holds no session: everything that reaches the
  * backend is an output, so the chat, a run result and a past chat can host
  * it alike.
  */
@@ -76,7 +73,6 @@ export class AnswerView {
   readonly BadgeCheck = BadgeCheck;
   readonly BarChart3 = BarChart3;
   readonly Copy = Copy;
-  readonly Download = Download;
   readonly FileArchive = FileArchive;
   readonly Info = Info;
   readonly Loader2 = Loader2;
@@ -84,7 +80,6 @@ export class AnswerView {
   readonly ShieldCheck = ShieldCheck;
   readonly ShieldOff = ShieldOff;
   readonly Sparkles = Sparkles;
-  readonly Telescope = Telescope;
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
   readonly TriangleAlert = TriangleAlert;
@@ -95,8 +90,6 @@ export class AnswerView {
 
   /** The assistant message to render (not a user message, not an error). */
   readonly message = input.required<ChatMessage>();
-  /** Element id of the report card (the chat's `msg-<i>`). */
-  readonly anchorId = input<string | null>(null);
   /** Only the latest clarification card can be answered. */
   readonly latest = input(false);
   /** The host is sending a turn: clarification answers and visuals wait. */
@@ -108,8 +101,6 @@ export class AnswerView {
   /** Shows **Generate interactive visuals** under an answer with text. */
   readonly showGenerateVisual = input(false);
   readonly visualGenerating = input(false);
-  /** This message's report is being downloaded. */
-  readonly reportDownloading = input(false);
 
   /** A clarification answer: an option label, a custom answer or Skip. */
   readonly optionPicked = output<string>();
@@ -117,7 +108,6 @@ export class AnswerView {
   readonly generateVisual = output<void>();
   readonly viewVisual = output<VisualEvent>();
   readonly openScorecard = output<ReadinessReportRef>();
-  readonly downloadReport = output<AnalysisReport>();
 
   /** Inline custom answer inside the clarification card. */
   readonly customAnswerOpen = signal(false);

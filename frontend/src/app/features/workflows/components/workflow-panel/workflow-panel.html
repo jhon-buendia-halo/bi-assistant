@@ -3,17 +3,6 @@
        configuration is in the node dialogs on the page (ui.md 4.4b). -->
   <section aria-label="Run" class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
     @if (canRun()) {
-      @if (fixedDatasets().length > 0) {
-        <!-- A user agent's own datasets, read-only (plan 4.2) -->
-        <div class="mb-4" data-testid="workflow-run-datasets">
-          <p class="field-label">Datasets</p>
-          <ul class="m-0 mt-1.5 flex list-none flex-wrap gap-1.5 p-0">
-            @for (name of fixedDatasets(); track name) {
-              <li class="chip chip-neutral">{{ name }}</li>
-            }
-          </ul>
-        </div>
-      }
       <section aria-labelledby="workflow-input-heading">
         <h2
           id="workflow-input-heading"
@@ -93,26 +82,6 @@
                       }
                     </ul>
                   }
-                </div>
-              }
-              @case ("dataset") {
-                <div class="flex flex-col gap-1.5">
-                  <label [for]="inputId(field.name)" class="field-label">{{
-                    field.label
-                  }}</label>
-                  <select
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [value]="designer.inputValue(field.name)"
-                    (change)="onInput(field.name, $event)"
-                    class="field"
-                  >
-                    <option value="">Select a dataset</option>
-                    @for (dataset of datasetChoices(field); track dataset.name) {
-                      <option [value]="dataset.name">{{ dataset.name }}</option>
-                    }
-                  </select>
                 </div>
               }
               @case ("textarea") {
@@ -328,48 +297,6 @@
                     }
                   </div>
                 }
-                @if (step.kind === "agent" && designer.phases(); as phases) {
-                  @if (phases.phases.length > 0) {
-                  <!-- The agent's phases inside its step, live and as stored (agent-panel R16) -->
-                  <ol
-                    class="m-0 flex list-none flex-col gap-1 p-0"
-                    data-testid="workflow-run-phases"
-                    aria-label="Workflow phases"
-                  >
-                    @for (phase of phases.phases; track phase.number) {
-                      <li
-                        [attr.data-testid]="'workflow-run-phase-' + phase.number"
-                        [attr.aria-current]="phase.number === phases.current ? 'step' : null"
-                        class="flex min-w-0 items-center gap-2 text-[12px]"
-                      >
-                        <span
-                          class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px]"
-                          [class.bg-success-soft]="phases.done.includes(phase.number)"
-                          [class.text-on-success-soft]="phases.done.includes(phase.number)"
-                          [class.bg-surface-muted]="!phases.done.includes(phase.number)"
-                          [class.text-fg-muted]="!phases.done.includes(phase.number)"
-                          aria-hidden="true"
-                          >{{ phase.number }}</span
-                        >
-                        <span
-                          class="min-w-0 flex-1 truncate"
-                          [class.font-medium]="phase.number === phases.current"
-                          [class.text-fg-strong]="phase.number === phases.current"
-                          [class.text-fg]="phase.number !== phases.current"
-                          >{{ phase.title }}</span
-                        >
-                        @if (phases.done.includes(phase.number)) {
-                          <span class="chip chip-success">Done</span>
-                        } @else if (phases.skipped.includes(phase.number)) {
-                          <span class="chip chip-neutral">Skipped</span>
-                        } @else if (phase.number === phases.current) {
-                          <span class="chip chip-info">Current</span>
-                        }
-                      </li>
-                    }
-                  </ol>
-                  }
-                }
                 @if (step.output; as out) {
                   <details
                     class="text-[12px]"
@@ -413,13 +340,10 @@
                 [ratingPending]="designer.ratingPending()"
                 [showGenerateVisual]="!designer.running() && designer.run() !== null"
                 [visualGenerating]="visualGenerating()"
-                [reportDownloading]="designer.reportDownloading()"
                 (rate)="designer.rateAnswer($event)"
                 (optionPicked)="designer.followUp($event)"
                 (generateVisual)="generateVisual()"
                 (viewVisual)="viewVisual($event)"
-                (openScorecard)="openScorecard($event)"
-                (downloadReport)="designer.downloadReport($event)"
               />
               @if (designer.run(); as stored) {
                 @for (event of stored.events ?? []; track event.at) {
@@ -436,41 +360,6 @@
                 }
               }
             </div>
-            @if (shownScorecard(); as readiness) {
-              <!-- Data Readiness: the report's scorecard, with Past assessments -->
-              <section
-                class="mt-4 rounded-lg border border-border"
-                data-testid="workflow-run-scorecard"
-                aria-label="Readiness scorecard"
-              >
-                <div class="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
-                  <h3 class="m-0 text-[12px] font-medium text-fg-muted">Scorecard</h3>
-                  <button
-                    type="button"
-                    data-testid="workflow-run-scorecard-close"
-                    class="btn btn-ghost btn-icon"
-                    aria-label="Close scorecard"
-                    title="Close scorecard"
-                    (click)="closeScorecard()"
-                  >
-                    <lucide-angular [img]="X" [size]="14" />
-                  </button>
-                </div>
-                <app-panel-readiness-view #scorecard [item]="readiness">
-                  @if (scorecard.report(); as shown) {
-                    <app-readiness-history
-                      readinessHistory
-                      [datasourceId]="shown.datasourceId"
-                      [currentReportId]="scorecard.shownReportId()"
-                      (openReport)="scorecard.showReport($event.id)"
-                    />
-                  }
-                </app-panel-readiness-view>
-              </section>
-            }
-            @if (runFiles().length > 0 && designer.run(); as stored) {
-              <app-workflow-run-files class="mt-4" [runId]="stored.id" [items]="runFiles()" />
-            }
             @if (designer.canFollowUp() && !answer.clarification) {
               <form
                 class="mt-4 flex items-center gap-2"

@@ -12,7 +12,7 @@ const SKILLS = [
     loading: 'on-demand' as const,
     agents: ['assistant'],
   },
-  { name: 'deep-analysis', loading: 'harness' as const, agents: ['assistant'] },
+  { name: 'harness-only', loading: 'harness' as const, agents: ['assistant'] },
   {
     name: 'report-outline',
     loading: 'on-demand' as const,

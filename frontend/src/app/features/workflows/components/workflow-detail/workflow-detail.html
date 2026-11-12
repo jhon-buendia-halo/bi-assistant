@@ -41,9 +41,7 @@
             >
             <span
               data-testid="workflow-detail-kind"
-              class="chip"
-              [class.chip-info]="w.kind === 'code'"
-              [class.chip-neutral]="w.kind !== 'code'"
+              class="chip chip-info"
               >{{ kindLabel() }}</span
             >
             @if (missing()) {

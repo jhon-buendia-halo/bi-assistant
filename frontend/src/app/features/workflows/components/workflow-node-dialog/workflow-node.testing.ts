@@ -13,7 +13,6 @@ export const FIXTURE_WORKFLOW: WorkflowDetail = {
   owner: 'Official',
   agents: [{ key: 'qti', name: 'Questions to Insights v2' }],
   stepCount: 2,
-  bar: 'steps',
   trigger: 'run',
   input: [
     { name: 'question', label: 'Question', type: 'text', required: true },

@@ -4,7 +4,7 @@ import { Page } from '@playwright/test';
 import { test, expect, Env } from './fixtures/app.fixture';
 import { apiBase, seedWorldCupDataset } from './helpers/agents-api';
 import { startLlmStub } from './helpers/llm-stub';
-import { runAssistantOk } from './helpers/runs-api';
+import { runQuestionOk } from './helpers/runs-api';
 import { scenarioStep } from './support/demo-captions';
 import {
   COPILOT_NOT_SIGNED_IN,
@@ -225,7 +225,7 @@ test('a Copilot Free seat lists no models', async ({
   await expect(modelOptions(page)).toHaveCount(0);
 });
 
-test('a run of the Assistant runs on GitHub Copilot', async ({
+test('a run of Questions to Insights v2 runs on GitHub Copilot', async ({
   appDataDir,
   launchApp,
 }) => {
@@ -243,7 +243,7 @@ test('a run of the Assistant runs on GitHub Copilot', async ({
   await page.reload();
 
   const question = 'Who won the 2018 World Cup final and what was the score?';
-  const result = await runAssistantOk(page, question);
+  const result = await runQuestionOk(page, question);
 
   // The answer streams (R62): it arrives in several pieces, not one.
   expect(result.events.filter((e) => e.type === 'text').length).toBeGreaterThan(1);
@@ -289,7 +289,7 @@ test('a tool call written as text is never shown in a run', async ({
   await putSettings(page, { provider: 'copilot', model: 'auto' });
   await page.reload();
 
-  const result = await runAssistantOk(page, 'How many matches are in the data?');
+  const result = await runQuestionOk(page, 'How many matches are in the data?');
 
   // The model first wrote the tool's arguments as its message; the app asked
   // once for the real call (R66), so the answer follows a real tool run.

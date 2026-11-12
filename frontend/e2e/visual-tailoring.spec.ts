@@ -11,6 +11,7 @@ import {
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { seedPastChat } from './helpers/past-chats';
+import { V2_WORKFLOW_ID, V2_WORKFLOW_NAME } from './helpers/runs-api';
 import {
   LlmStub,
   StubReply,
@@ -298,11 +299,11 @@ test(
     const runVisual = page.getByTestId('run-visual');
     const versionButton = runVisual.getByTitle('Version history');
     let runId = '';
-    await scenarioStep(page, 'Given a run of the Assistant with an answer', async () => {
+    await scenarioStep(page, `Given a run of ${V2_WORKFLOW_NAME} with an answer`, async () => {
       const run = await apiJson<{ id: string }>(
         page,
         'POST',
-        '/workflows/agent%3Aassistant/runs',
+        `/workflows/${V2_WORKFLOW_ID}/runs`,
         { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
       );
       runId = run.id;

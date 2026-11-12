@@ -16,8 +16,9 @@ import {
 import { WorkflowCard } from '../workflow-card/workflow-card';
 
 /**
- * The Workflows page (workflows R5, R6; ui.md 4.4a): every workflow a chat
- * can run, in the Official and Mine sections, with search. Read-only (R3).
+ * The Workflows page (workflows R5, R6; ui.md 4.4a): the workflows defined in
+ * code, under Official, with search. Agents are a library, not workflows.
+ * Read-only (R3).
  * The search resets each time the page opens.
  */
 @Component({

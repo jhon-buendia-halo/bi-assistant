@@ -20,7 +20,10 @@ export class WorkflowsApiService {
     );
   }
 
-  /** Ids contain `:` (`agent:assistant`), so they are always URL-encoded. */
+  /**
+   * Always URL-encoded. A removed workflow's id (a stored run's) answers
+   * not found (api.md 117).
+   */
   getWorkflow(id: string): Observable<WorkflowDetail> {
     return this.http.get<WorkflowDetail>(
       `${API_BASE_URL}/workflows/${encodeURIComponent(id)}`,

@@ -17,12 +17,10 @@ import {
   seedWorldCupDataset,
 } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
-import { runWorkflow } from './helpers/runs-api';
 import {
   LlmStub,
   STUB_ANSWER,
   StubRequest,
-  messageText,
   startLlmStub,
   systemTexts,
   turnRequests,
@@ -61,17 +59,6 @@ async function openHub(page: Page): Promise<void> {
     .click();
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
-  ).toBeVisible();
-}
-
-/** The Workflows page, where a chat starts (workflows R6). */
-async function openWorkflows(page: Page): Promise<void> {
-  await page
-    .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Workflows', exact: true })
-    .click();
-  await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
 }
 
@@ -189,7 +176,7 @@ test('creates an agent, tries it, publishes it and deletes it', async ({
   await expect(page.getByText(HISTORIAN, { exact: true })).toHaveCount(0);
 });
 
-test('editing a Live agent keeps its runs on the Live version until republished', async ({
+test('editing a Live agent shows unpublished changes until republished', async ({
   page,
 }) => {
   const id = await createUserAgent(page, {
@@ -206,25 +193,11 @@ test('editing a Live agent keeps its runs on the Live version until republished'
   await expect(editorStatus(page)).toContainText('Live');
   await expect(editorStatus(page)).toContainText('Unpublished changes');
 
-  // A run of the agent's workflow uses its Live version, not the draft.
-  const first = await runWorkflow(page, `agent:${id}`, {
-    question: 'Who won in 2014?',
-  });
-  expect(first.status).toBe(200);
-  expect(systemsFor('Who won in 2014?')).toContain('Answer in one sentence.');
-  expect(systemsFor('Who won in 2014?')).not.toContain('Talk like a pirate.');
-
   await openEditor(page, id, HISTORIAN);
   await page.getByTestId('agent-editor-publish').click();
   await expect(page.getByText(`Agent "${HISTORIAN}" is Live`)).toBeVisible();
   await expect(editorStatus(page)).toContainText('Live');
   await expect(editorStatus(page)).not.toContainText('Unpublished changes');
-
-  const second = await runWorkflow(page, `agent:${id}`, {
-    question: 'And in 2010?',
-  });
-  expect(second.status).toBe(200);
-  expect(systemsFor('And in 2010?')).toContain('Talk like a pirate.');
 });
 
 test('Try it saves the form first', async ({ page }) => {
@@ -429,18 +402,6 @@ function firstRequest(question: string): StubRequest {
   return requests[0];
 }
 
-/** Whether a request is a chat turn whose latest user message is `question`. */
-function isTurnFor(request: StubRequest, question: string): boolean {
-  const lastUser = request.messages
-    .filter((message) => message.role === 'user')
-    .at(-1);
-  return (
-    request.stream &&
-    lastUser !== undefined &&
-    messageText(lastUser).includes(question)
-  );
-}
-
 /** Opens a user or built-in agent's page from its hub card. */
 async function openAgentPage(page: Page, id: string, name: string) {
   await openHub(page);
@@ -527,7 +488,7 @@ test('only linked tools are offered to the model', async ({ page }) => {
   await evidence(page, '1.14.2', 'agent-tools-tab-linked.png');
 });
 
-test('a linked skill reaches Try it, and the Live agent keeps its copy in a run', async ({
+test('a linked skill reaches Try it, and editing the skill leaves the Live agent with unpublished changes', async ({
   page,
 }) => {
   await createSkill(page, {
@@ -574,32 +535,6 @@ test('a linked skill reaches Try it, and the Live agent keeps its copy in a run'
     hasText: 'Finance helper',
   });
   await expect(card).toContainText('Unpublished changes');
-
-  // The Live agent runs on the copy taken at publish.
-  const question = 'When does our fiscal year start?';
-  let turn = 0;
-  stub.reply = (request) => {
-    if (!isTurnFor(request, question)) return { text: STUB_ANSWER };
-    turn += 1;
-    return turn === 1
-      ? { toolCall: { name: 'skill', arguments: { name: FISCAL } } }
-      : { text: STUB_ANSWER };
-  };
-  const { workflows } = await apiJson<{
-    workflows: { id: string; name: string }[];
-  }>(page, 'GET', '/workflows');
-  const financeId = workflows.find((w) => w.name === 'Finance helper')!.id;
-  const result = await runWorkflow(page, financeId, { question });
-  expect(result.status, result.body).toBe(200);
-  expect(result.error, result.body).toBeUndefined();
-  expect(result.text).toContain(STUB_ANSWER);
-  const last = turnRequests(stub, question).at(-1)!;
-  const results = last.messages
-    .filter((message) => message.role === 'tool')
-    .map(messageText);
-  expect(results).toHaveLength(1);
-  expect(results[0]).toContain('Our fiscal year starts on 1 July.');
-  expect(results[0]).not.toContain('1 April');
 });
 
 test("a linked skill's tools come with it", async ({ page }) => {
