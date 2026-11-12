@@ -1,0 +1,96 @@
+@if (hasValue() && available().length > 1) {
+  <div
+    class="mb-2 inline-flex overflow-hidden rounded-md border border-border"
+    role="group"
+    aria-label="Data view"
+  >
+    @for (mode of available(); track mode) {
+      <button
+        type="button"
+        [attr.data-testid]="'workflow-data-mode-' + mode"
+        [attr.aria-pressed]="active() === mode"
+        (click)="choose(mode)"
+        class="px-2.5 py-0.5 text-[11px] font-medium tracking-wide uppercase"
+        [class.bg-primary-soft]="active() === mode"
+        [class.text-on-primary-soft]="active() === mode"
+        [class.text-fg-muted]="active() !== mode"
+      >
+        {{ labels[mode] }}
+      </button>
+    }
+  </div>
+}
+
+@if (hasValue()) {
+  @switch (active()) {
+    @case ("table") {
+      @if (table(); as t) {
+        <div
+          class="overflow-auto rounded-lg border border-border bg-surface-muted"
+          data-testid="workflow-data-table"
+        >
+          <table class="w-full border-collapse text-[12px]">
+            <thead>
+              <tr>
+                @for (column of t.columns; track column) {
+                  <th
+                    scope="col"
+                    class="border-b border-border px-2.5 py-1.5 text-left font-medium text-fg-strong"
+                  >
+                    {{ column }}
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of t.rows; track $index) {
+                <tr>
+                  @for (column of t.columns; track column) {
+                    <td class="border-b border-border px-2.5 py-1.5 text-fg">
+                      {{ cell(row[column]) }}
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+    @case ("schema") {
+      <ul
+        class="m-0 list-none overflow-auto rounded-lg border border-border bg-surface-muted p-2 font-mono text-[12px]"
+        data-testid="workflow-data-schema"
+      >
+        @for (row of schema(); track $index) {
+          <li
+            class="flex items-baseline gap-2 py-0.5"
+            [style.padding-left.rem]="row.depth * 1"
+          >
+            <span class="text-(--qti-context-skills)">{{ row.name }}</span>
+            <span class="text-fg-muted">{{ row.type }}</span>
+          </li>
+        }
+      </ul>
+    }
+    @default {
+      <pre
+        class="m-0 overflow-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-words text-fg"
+        data-testid="workflow-data-json"
+      >@for (token of tokens(); track $index) {<span [class]="tokenClass[token.kind]">{{ token.text }}</span>}</pre>
+    }
+  }
+}
+
+@if (truncated()) {
+  <p
+    class="m-0 mt-2 text-[12px] text-fg-muted"
+    data-testid="workflow-data-truncated"
+  >
+    Larger than 20 000 characters, not kept.
+  </p>
+} @else if (!hasValue()) {
+  <p class="m-0 text-[13px] text-fg-muted" data-testid="workflow-data-empty">
+    {{ emptyText() }}
+  </p>
+}
