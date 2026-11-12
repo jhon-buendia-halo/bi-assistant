@@ -54,7 +54,7 @@ jest.mock('../../mastra/tools/visual.tools', () => ({
 }));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace-id',
-  listSessionWorkspaceIds: () => [],
+  listSessionWorkspaceIds: jest.fn(() => []),
 }));
 jest.mock('../datasets/repositories/datasets.repository', () => ({
   DatasetsRepository: class {},
@@ -106,6 +106,10 @@ import {
   CODE_WORKFLOWS,
   oneStepWorkflowInput,
 } from '../../mastra/workflows/workflow-catalog';
+import BetterSqlite3 from 'better-sqlite3';
+import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
+import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
+import { WorkflowRunsRepository } from '../workflows/repositories/workflow-runs.repository';
 import type { WorkflowRun } from '../workflows/workflow-run-steps';
 import {
   WorkflowRunsService,
@@ -374,6 +378,9 @@ function build(options: BuildOptions = {}) {
     sessions,
     datasetsRepository as never,
     mastra as never,
+    new WorkflowRunsRepository(
+      new SqliteDocStore(new BetterSqlite3(':memory:'), 'workflow_runs'),
+    ),
   );
   /** A chat session over the same input as `workflow`'s run. */
   const chat = (workflow: Workflow): SessionDoc => {
@@ -693,5 +700,24 @@ describe('the run host (agents.md 5.14)', () => {
     ctx.rfpPackages.getJson.mockClear();
     await runOf(ctx, 'rfp', { message: 'Start an RFP' });
     expect(ctx.rfpPackages.getJson).not.toHaveBeenCalled();
+  });
+});
+
+describe('run host workspaces at start-up (data-model 3.16; agents.md 5.14)', () => {
+  const workspaceIds = listSessionWorkspaceIds as jest.Mock;
+  afterEach(() => workspaceIds.mockReset().mockReturnValue([]));
+
+  it('the sessions sweep discards previews only: a run host workspace belongs to its stored run', async () => {
+    const ctx = build();
+    workspaceIds.mockReturnValue(['preview-a', 'run-b', 'abc']);
+    await ctx.sessions.onModuleInit();
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.deleteSessionResources).toHaveBeenCalledWith('preview-a');
+  });
+
+  it('lists the run host ids that have a workspace, for the runs’ recovery', () => {
+    const ctx = build();
+    workspaceIds.mockReturnValue(['preview-a', 'run-b', 'abc', 'run-c']);
+    expect(ctx.sessions.runHostWorkspaceIds()).toEqual(['run-b', 'run-c']);
   });
 });

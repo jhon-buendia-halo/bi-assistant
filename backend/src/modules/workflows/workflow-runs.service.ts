@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
 import {
@@ -12,15 +18,26 @@ import {
   type WorkflowRunResult,
 } from '../../mastra/workflows/workflow-run';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import type {
+  FilePanelItem,
+  InteractiveVisualization,
+} from '../sessions/entities/session.entity';
 import {
   RUN_HOST_ID_PREFIX,
   SessionsService,
   type StreamEvent,
 } from '../sessions/sessions.service';
+import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import {
   RunStepTracker,
+  interruptedRunPatch,
   runAnswerOf,
+  runHostDoc,
+  runOfResult,
+  runSummaryOf,
   type WorkflowRun,
+  type WorkflowRunDoc,
+  type WorkflowRunSummary,
 } from './workflow-run-steps';
 import { WorkflowsService, type WorkflowDetail } from './workflows.service';
 
@@ -42,40 +59,71 @@ export interface PreparedRun {
   context?: { fromRunId: string; question: string; answer: string };
 }
 
-/**
- * How many runs are held in memory until stored runs arrive (1.23.14): the
- * oldest beyond it is forgotten, and its run workspace deleted.
- */
-export const HELD_RUNS = 50;
+/** A file a run's route sends as an attachment (api.md 124, 126, 127). */
+export interface RunAttachment {
+  filename: string;
+  contentType: string;
+  body: Buffer;
+}
 
 /**
- * Runs a workflow once on its typed input (ADR-0041; api.md 118, 119;
- * agents.md 5.14). A code-only workflow runs its registered engine
- * workflow. An agent workflow runs one agent turn on a run host, an
- * in-memory session `SessionsService` holds, through today's turn path
- * unchanged, and the host is projected into the run. Runs are held in memory
- * in this version (the last `HELD_RUNS`), so a later run can take one as
- * context; they are stored from 1.23.14. `SessionsService` never depends on
- * this service (that would be a module cycle).
+ * Runs a workflow once on its typed input and keeps the run (ADR-0041;
+ * api.md 118-127; agents.md 5.14; data-model 3.16). A code-only workflow
+ * runs its registered engine workflow. An agent workflow runs one agent turn
+ * on a run host, an in-memory session `SessionsService` holds, through
+ * today's turn path unchanged, and the host is projected into the run.
+ * Every run is stored in `workflow_runs` when it starts and updated when it
+ * ends; its files stay in its workspace `session-run-<id>` until it is
+ * deleted. `SessionsService` never depends on this service (that would be a
+ * module cycle).
  */
 @Injectable()
-export class WorkflowRunsService {
+export class WorkflowRunsService implements OnModuleInit {
   private readonly logger = new Logger(WorkflowRunsService.name);
-  private readonly runs = new Map<string, WorkflowRun>();
 
   constructor(
     private readonly workflows: WorkflowsService,
     private readonly sessions: SessionsService,
     private readonly datasets: DatasetsRepository,
     private readonly mastra: MastraService,
+    private readonly repository: WorkflowRunsRepository,
   ) {}
+
+  /**
+   * Start-up recovery (plan 5.1 step 5): a run still `running` was cut off
+   * when the app stopped, so it becomes `failed` (its memory thread deleted,
+   * its workspace kept); a run workspace no stored run owns is deleted with
+   * its memory thread.
+   */
+  async onModuleInit(): Promise<void> {
+    const now = new Date().toISOString();
+    for (const run of await this.repository.listRunning()) {
+      await this.repository.update(run.id, interruptedRunPatch(run, now));
+      await this.quietly(`delete the memory thread of run ${run.id}`, () =>
+        this.mastra.deleteMemoryThread(`${RUN_HOST_ID_PREFIX}${run.id}`),
+      );
+    }
+    let hostIds: string[];
+    try {
+      hostIds = this.sessions.runHostWorkspaceIds();
+    } catch {
+      return;
+    }
+    for (const hostId of hostIds) {
+      const runId = hostId.slice(RUN_HOST_ID_PREFIX.length);
+      if (await this.repository.get(runId)) continue;
+      await this.quietly(`delete the orphan workspace ${hostId}`, () =>
+        this.sessions.deleteRunHostResources(hostId),
+      );
+    }
+  }
 
   /**
    * Check a run request before anything runs (api.md 119 refusals, Style B):
    * 404 for a workflow `GET /workflows` does not list; 400 for a workflow
    * without input fields, for its run requirement, for an input its fields
    * refuse (plan 4.1), for an agent run whose question is blank, and for a
-   * `context.fromRunId` naming no held run with an answer.
+   * `context.fromRunId` naming no stored run with an answer.
    */
   async prepare(id: string, body: unknown): Promise<PreparedRun> {
     const workflow = await this.workflows.get(id);
@@ -111,7 +159,7 @@ export class WorkflowRunsService {
         `${field?.label ?? 'Question'} is required`,
       );
     }
-    const context = this.contextOf(request.context);
+    const context = await this.contextOf(request.context);
     return {
       workflow,
       values: parsed.values,
@@ -125,7 +173,9 @@ export class WorkflowRunsService {
    * the `step` events and, for an agent workflow, its turn's events as the
    * chat stream sends them, then `done { run }`, or `error { content }` when
    * the agent turn failed. A stopped run (`abortSignal`) sends nothing more.
-   * Answers the run, which is held in memory.
+   * The run is stored before `run` is sent and updated when it ends; a run
+   * that throws while ending is stored `failed` and the error rethrown.
+   * Answers the run as `GET /workflow-runs/:id` shows it.
    */
   async stream(
     prepared: PreparedRun,
@@ -133,7 +183,6 @@ export class WorkflowRunsService {
     abortSignal?: AbortSignal,
   ): Promise<WorkflowRun> {
     const { workflow } = prepared;
-    const runId = randomUUID();
     const tracker = new RunStepTracker(
       workflow.steps.map((step) => ({ id: step.id, title: step.title })),
     );
@@ -144,32 +193,31 @@ export class WorkflowRunsService {
       const step = tracker.apply(event);
       if (step) live({ type: 'step', ...step });
     };
-    const base: WorkflowRun = {
-      id: runId,
-      workflowId: workflow.id,
-      workflowName: workflow.name,
-      input: prepared.values,
-      ...(prepared.context
-        ? { context: { fromRunId: prepared.context.fromRunId } }
-        : {}),
-      status: 'running',
-      steps: [],
-      datasets: [],
-      startedAt: new Date().toISOString(),
-    };
-    live({ type: 'run', runId, workflowId: workflow.id });
-    const run = prepared.turn
-      ? await this.runAgent(
-          prepared,
-          prepared.turn,
-          base,
-          tracker,
-          live,
-          onStep,
-          abortSignal,
-        )
-      : await this.runCode(prepared, base, tracker, live, onStep);
-    this.hold(run);
+    const base = await this.start(prepared);
+    live({ type: 'run', runId: base.id, workflowId: workflow.id });
+    let ended: WorkflowRunDoc;
+    try {
+      ended = prepared.turn
+        ? await this.runAgent(
+            prepared,
+            prepared.turn,
+            base,
+            tracker,
+            live,
+            onStep,
+            abortSignal,
+          )
+        : await this.runCode(prepared, base, tracker, live, onStep);
+    } catch (failure) {
+      await this.end(base.id, {
+        status: 'failed',
+        error: runErrorMessage(failure),
+        finishedAt: new Date().toISOString(),
+      });
+      throw failure;
+    }
+    const { id, ...patch } = ended;
+    const run = await this.wire((await this.end(id, patch)) ?? ended);
     if (run.status === 'failed' && prepared.turn) {
       live({ type: 'error', content: run.error ?? 'The run failed' });
     } else {
@@ -180,28 +228,198 @@ export class WorkflowRunsService {
 
   /**
    * Run a workflow once and answer when it ends (api.md 118): a code-only
-   * workflow's `WorkflowRunResult`, as before; an agent workflow's run, as
-   * `done.run` of the stream carries it.
+   * workflow's `WorkflowRunResult`, as before, with the stored run's
+   * `runId`; an agent workflow's run, as `done.run` of the stream carries it.
+   * Either way the run is stored.
    */
   async run(
     id: string,
     body: unknown,
-  ): Promise<WorkflowRunResult | WorkflowRun> {
+  ): Promise<(WorkflowRunResult & { runId: string }) | WorkflowRun> {
     const prepared = await this.prepare(id, body);
-    if (!prepared.turn) {
-      return this.mastra.runWorkflow(id, prepared.values);
+    if (prepared.turn) return this.stream(prepared, () => undefined);
+    const base = await this.start(prepared);
+    let result: WorkflowRunResult;
+    try {
+      result = await this.mastra.runWorkflow(id, prepared.values);
+    } catch (failure) {
+      await this.end(base.id, {
+        status: 'failed',
+        error: runErrorMessage(failure),
+        finishedAt: new Date().toISOString(),
+      });
+      throw failure;
     }
-    return this.stream(prepared, () => undefined);
+    await this.end(base.id, runOfResult(result, new Date().toISOString()));
+    return { ...result, runId: base.id };
   }
 
-  /** A held run, or undefined (the context of a later run). */
-  held(runId: string): WorkflowRun | undefined {
-    const run = this.runs.get(runId);
-    return run ? { ...run } : undefined;
+  /**
+   * The run history (api.md 120): every stored run, or one workflow's,
+   * newest first, as summaries titled from the question or the workflow's
+   * first text input (plan 5.3).
+   */
+  async list(workflowId?: string): Promise<WorkflowRunSummary[]> {
+    const [runs, catalogue] = await Promise.all([
+      this.repository.list(workflowId),
+      this.workflows.list(),
+    ]);
+    const textFields = new Map(
+      catalogue.map((workflow) => [
+        workflow.id,
+        workflow.input
+          .filter(
+            (field) =>
+              (field.type === 'text' || field.type === 'textarea') &&
+              !field.hidden,
+          )
+          .map((field) => field.name),
+      ]),
+    );
+    return runs.map((run) =>
+      runSummaryOf(run, textFields.get(run.workflowId) ?? []),
+    );
+  }
+
+  /** One stored run with its derived views (api.md 121), or 404. */
+  async get(id: string): Promise<WorkflowRun> {
+    return this.wire(await this.stored(id));
+  }
+
+  /**
+   * Delete a run (api.md 122): its document and, for an agent run, its
+   * workspace and memory thread. A running run is refused.
+   */
+  async delete(id: string): Promise<void> {
+    const run = await this.stored(id);
+    if (run.status === 'running') {
+      throw new BadRequestException('Stop the run before deleting it');
+    }
+    if (run.question !== undefined) {
+      await this.sessions.deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${id}`);
+    }
+    await this.repository.delete(id);
+  }
+
+  /** A run's visual (api.md 123), as a session's (9). */
+  async getVisualization(
+    id: string,
+    visualizationId: string,
+    version?: number,
+  ): Promise<InteractiveVisualization> {
+    return this.sessions.getVisualizationOf(
+      await this.host(id),
+      visualizationId,
+      version,
+    );
+  }
+
+  /** A run's visual as a zip (api.md 124), as a session's (14). */
+  async downloadVisualization(
+    id: string,
+    visualizationId: string,
+    version?: number,
+  ): Promise<{ filename: string; archive: Buffer }> {
+    return this.sessions.downloadVisualizationOf(
+      await this.host(id),
+      visualizationId,
+      version,
+    );
+  }
+
+  /** A run's file item's text (api.md 125), as a session's (106). */
+  async panelItemFile(
+    id: string,
+    itemId: string,
+  ): Promise<{ item: FilePanelItem; contentType: string; text: string }> {
+    return this.sessions.panelItemFileOf(await this.host(id), itemId);
+  }
+
+  /** A run's panel item as an attachment (api.md 126), as a session's (107). */
+  async downloadPanelItem(
+    id: string,
+    itemId: string,
+    format?: 'pdf' | 'md' | 'csv',
+  ): Promise<RunAttachment> {
+    return this.sessions.downloadPanelItemOf(
+      await this.host(id),
+      itemId,
+      format,
+    );
+  }
+
+  /** A run's RFP package or one of its files (api.md 127), as a session's (105). */
+  async downloadRfpPackage(
+    id: string,
+    rfpId: string,
+    file?: string,
+    draft = false,
+  ): Promise<RunAttachment> {
+    return this.sessions.downloadRfpPackageOf(
+      await this.host(id),
+      rfpId,
+      file,
+      draft,
+    );
+  }
+
+  /** A stored run, or 404 `Run "<id>" not found` (Style B). */
+  private async stored(id: string): Promise<WorkflowRunDoc> {
+    const run = await this.repository.get(id);
+    if (!run) throw new NotFoundException(`Run "${id}" not found`);
+    return run;
+  }
+
+  /** A stored run's run-backed host (plan 5.2), or 404. */
+  private async host(id: string) {
+    return runHostDoc(await this.stored(id));
+  }
+
+  /**
+   * A stored run as the API shows it (api.md 121): the document plus, for
+   * an agent run, the derived `panelItems`, `workflow` view and `agent`,
+   * computed on its run-backed host as a session's are (2.1).
+   */
+  private async wire(run: WorkflowRunDoc): Promise<WorkflowRun> {
+    if (run.question === undefined) return run;
+    const view = await this.sessions.toView(runHostDoc(run));
+    return {
+      ...run,
+      panelItems: view.panelItems,
+      ...(view.workflow ? { workflow: view.workflow } : {}),
+      ...(view.agent ? { agent: view.agent } : {}),
+    };
+  }
+
+  /** Store a run as it starts: `running`, with its input (data-model 3.16). */
+  private async start(prepared: PreparedRun): Promise<WorkflowRunDoc> {
+    const base: WorkflowRunDoc = {
+      id: randomUUID(),
+      workflowId: prepared.workflow.id,
+      workflowName: prepared.workflow.name,
+      input: prepared.values,
+      ...(prepared.context
+        ? { context: { fromRunId: prepared.context.fromRunId } }
+        : {}),
+      status: 'running',
+      steps: [],
+      datasets: [],
+      startedAt: new Date().toISOString(),
+    };
+    await this.repository.insert(base);
+    return base;
+  }
+
+  /** Store how a run ended. */
+  private end(
+    id: string,
+    patch: Partial<WorkflowRunDoc>,
+  ): Promise<WorkflowRunDoc | null> {
+    return this.repository.update(id, patch);
   }
 
   /** The earlier run a request names as context (plan 5.4). */
-  private contextOf(raw: unknown): PreparedRun['context'] {
+  private async contextOf(raw: unknown): Promise<PreparedRun['context']> {
     const fromRunId =
       raw && typeof raw === 'object'
         ? (raw as { fromRunId?: unknown }).fromRunId
@@ -210,7 +428,9 @@ export class WorkflowRunsService {
       return undefined;
     }
     const earlier =
-      typeof fromRunId === 'string' ? this.runs.get(fromRunId) : undefined;
+      typeof fromRunId === 'string'
+        ? await this.repository.get(fromRunId)
+        : null;
     if (!earlier) {
       const named =
         typeof fromRunId === 'string' ? fromRunId : JSON.stringify(fromRunId);
@@ -237,12 +457,12 @@ export class WorkflowRunsService {
   private async runAgent(
     prepared: PreparedRun,
     turn: AgentRunTurn,
-    base: WorkflowRun,
+    base: WorkflowRunDoc,
     tracker: RunStepTracker,
     live: (event: RunStreamEvent) => void,
     onStep: (event: Parameters<RunStepTracker['apply']>[0]) => void,
     abortSignal?: AbortSignal,
-  ): Promise<WorkflowRun> {
+  ): Promise<WorkflowRunDoc> {
     let status: 'success' | 'failed' | 'stopped' = 'success';
     let error: string | undefined;
     let hostId: string | undefined;
@@ -309,12 +529,10 @@ export class WorkflowRunsService {
       ...(view.agentKey ? { agentKey: view.agentKey } : {}),
       ...(view.agentId ? { agentId: view.agentId } : {}),
       ...(view.agentName ? { agentName: view.agentName } : {}),
-      ...(view.agent ? { agent: view.agent } : {}),
       ...(view.rfpId ? { rfpId: view.rfpId } : {}),
       panelItems: view.panelItems,
       visualizations: view.visualizations ?? [],
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
-      ...(view.workflow ? { workflow: view.workflow } : {}),
       finishedAt,
     };
   }
@@ -322,11 +540,11 @@ export class WorkflowRunsService {
   /** A code-only workflow's run: its engine run, streamed step by step. */
   private async runCode(
     prepared: PreparedRun,
-    base: WorkflowRun,
+    base: WorkflowRunDoc,
     tracker: RunStepTracker,
     live: (event: RunStreamEvent) => void,
     onStep: (event: Parameters<RunStepTracker['apply']>[0]) => void,
-  ): Promise<WorkflowRun> {
+  ): Promise<WorkflowRunDoc> {
     let status: 'success' | 'failed' = 'success';
     let error: string | undefined;
     let output: Record<string, unknown> | undefined;
@@ -367,21 +585,12 @@ export class WorkflowRunsService {
     };
   }
 
-  /** Hold a run; forget the oldest beyond `HELD_RUNS`, with its workspace. */
-  private hold(run: WorkflowRun): void {
-    this.runs.set(run.id, run);
-    while (this.runs.size > HELD_RUNS) {
-      const [oldest] = this.runs.keys();
-      const forgotten = this.runs.get(oldest);
-      this.runs.delete(oldest);
-      if (forgotten?.question === undefined) continue;
-      this.sessions
-        .deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${oldest}`)
-        .catch((failure: unknown) =>
-          this.logger.warn(
-            `Could not delete the workspace of run ${oldest}: ${runErrorMessage(failure)}`,
-          ),
-        );
+  /** Run a clean-up step, logging rather than throwing when it fails. */
+  private async quietly(what: string, work: () => Promise<void>) {
+    try {
+      await work();
+    } catch (failure) {
+      this.logger.warn(`Could not ${what}: ${runErrorMessage(failure)}`);
     }
   }
 }

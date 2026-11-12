@@ -42,15 +42,16 @@ export class WorkflowsController {
   }
 
   /**
-   * Run a workflow once (api.md 118). Style B: a refusal answers its real
-   * status (400, 404); a run whose step failed still answers 200.
+   * Run a workflow once (api.md 118); the run is stored. Style B: a refusal
+   * answers its real status (400, 404); a run whose step failed still
+   * answers 200.
    */
   @Post(':id/runs')
   @HttpCode(200)
   run(
     @Param('id') id: string,
     @Body() body: unknown,
-  ): Promise<WorkflowRunResult | WorkflowRun> {
+  ): Promise<(WorkflowRunResult & { runId: string }) | WorkflowRun> {
     return this.runs.run(id, body);
   }
 

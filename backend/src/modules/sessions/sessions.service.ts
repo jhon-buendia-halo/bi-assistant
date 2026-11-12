@@ -1604,7 +1604,10 @@ export class SessionsService implements OnModuleInit {
     }
   }
 
-  /** Delete a run host's workspace and memory thread (agents.md 5.14). */
+  /**
+   * Delete a run host's workspace and memory thread (agents.md 5.14): when
+   * its run is deleted, or at start-up for a workspace no stored run owns.
+   */
   async deleteRunHostResources(hostId: string): Promise<void> {
     if (!hostId.startsWith(RUN_HOST_ID_PREFIX)) return;
     this.memoryHosts.delete(hostId);
@@ -1612,16 +1615,27 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Discard what previews (R61) and run hosts (agents.md 5.14) left behind
-   * when the app last stopped: their memory threads and workspaces. Runs are
-   * held in memory in this version, so no run outlives the process.
+   * The run host ids (`run-<run id>`) that have a workspace on disk, for
+   * the runs' start-up recovery (agents.md 5.14). Throws when the
+   * workspaces directory can't be read.
+   */
+  runHostWorkspaceIds(): string[] {
+    return listSessionWorkspaceIds().filter((id) =>
+      id.startsWith(RUN_HOST_ID_PREFIX),
+    );
+  }
+
+  /**
+   * Discard what previews (R61) left behind when the app last stopped: their
+   * memory threads and workspaces. A run host's workspace belongs to its
+   * stored run (data-model 3.16), so it is never swept here; the runs'
+   * start-up recovery deletes the ones no run owns.
    */
   private async sweepMemoryHosts(): Promise<void> {
     let ids: string[] = [];
     try {
-      ids = listSessionWorkspaceIds().filter(
-        (id) =>
-          id.startsWith(PREVIEW_ID_PREFIX) || id.startsWith(RUN_HOST_ID_PREFIX),
+      ids = listSessionWorkspaceIds().filter((id) =>
+        id.startsWith(PREVIEW_ID_PREFIX),
       );
     } catch {
       return;
@@ -1997,7 +2011,17 @@ export class SessionsService implements OnModuleInit {
     id: string,
     itemId: string,
   ): Promise<{ item: FilePanelItem; contentType: string; text: string }> {
-    const session = await this.get(id);
+    return this.panelItemFileOf(await this.get(id), itemId);
+  }
+
+  /**
+   * `panelItemFile` over a given session: a stored run's run-backed host
+   * (api.md 125) as well as a session.
+   */
+  async panelItemFileOf(
+    session: SessionDoc,
+    itemId: string,
+  ): Promise<{ item: FilePanelItem; contentType: string; text: string }> {
     const item = this.requirePanelItem(session, itemId);
     if (item.kind !== 'file') {
       throw new BadRequestException(`Panel item "${itemId}" is not a file`);
@@ -2016,7 +2040,15 @@ export class SessionsService implements OnModuleInit {
     itemId: string,
     format?: 'pdf' | 'md' | 'csv',
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
-    const session = await this.get(id);
+    return this.downloadPanelItemOf(await this.get(id), itemId, format);
+  }
+
+  /** `downloadPanelItem` over a given session or run-backed host (api.md 126). */
+  async downloadPanelItemOf(
+    session: SessionDoc,
+    itemId: string,
+    format?: 'pdf' | 'md' | 'csv',
+  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
     const item = this.requirePanelItem(session, itemId);
     if (format === 'pdf') {
       const cantPdf = () =>
@@ -2109,7 +2141,20 @@ export class SessionsService implements OnModuleInit {
     visualizationId: string,
     version?: number,
   ): Promise<InteractiveVisualization> {
-    return this.visuals.load(await this.get(id), visualizationId, version);
+    return this.getVisualizationOf(
+      await this.get(id),
+      visualizationId,
+      version,
+    );
+  }
+
+  /** `getVisualization` over a given session or run-backed host (api.md 123). */
+  getVisualizationOf(
+    session: SessionDoc,
+    visualizationId: string,
+    version?: number,
+  ): Promise<InteractiveVisualization> {
+    return this.visuals.load(session, visualizationId, version);
   }
 
   async downloadVisualization(
@@ -2117,7 +2162,20 @@ export class SessionsService implements OnModuleInit {
     visualizationId: string,
     version?: number,
   ): Promise<{ filename: string; archive: Buffer }> {
-    return this.visuals.download(await this.get(id), visualizationId, version);
+    return this.downloadVisualizationOf(
+      await this.get(id),
+      visualizationId,
+      version,
+    );
+  }
+
+  /** `downloadVisualization` over a given session or run-backed host (api.md 124). */
+  downloadVisualizationOf(
+    session: SessionDoc,
+    visualizationId: string,
+    version?: number,
+  ): Promise<{ filename: string; archive: Buffer }> {
+    return this.visuals.download(session, visualizationId, version);
   }
 
   /**
@@ -2130,7 +2188,16 @@ export class SessionsService implements OnModuleInit {
     file?: string,
     draft = false,
   ): Promise<{ filename: string; contentType: string; body: Buffer }> {
-    const session = await this.get(id);
+    return this.downloadRfpPackageOf(await this.get(id), rfpId, file, draft);
+  }
+
+  /** `downloadRfpPackage` over a given session or run-backed host (api.md 127). */
+  downloadRfpPackageOf(
+    session: SessionDoc,
+    rfpId: string,
+    file?: string,
+    draft = false,
+  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
     return this.requireRfpPackages().download(session.id, rfpId, file, draft);
   }
 

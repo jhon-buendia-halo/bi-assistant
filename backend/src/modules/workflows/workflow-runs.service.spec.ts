@@ -35,11 +35,12 @@ import { UserAgentsService } from '../user-agents/user-agents.service';
 import { AgentsService } from '../agents/agents.service';
 import type { SessionsService } from '../sessions/sessions.service';
 import type { WorkflowRun } from './workflow-run-steps';
+import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import {
-  HELD_RUNS,
   WorkflowRunsService,
   type RunStreamEvent,
 } from './workflow-runs.service';
+import { WorkflowRunsController } from './workflow-runs.controller';
 import { WorkflowsController } from './workflows.controller';
 import { WorkflowsService } from './workflows.service';
 
@@ -114,10 +115,12 @@ function build(
     const workflow = seqTextDemoWorkflow as unknown as StubWorkflow;
     return (await workflow.createRun()).stream({ inputData });
   });
+  const deleteMemoryThread = jest.fn().mockResolvedValue(undefined);
   const mastra = {
     listAgents: () => registry,
     runWorkflow,
     streamWorkflow,
+    deleteMemoryThread,
   } as unknown as MastraService;
   const agents = new AgentsService(mastra, userAgents);
   const workflows = new WorkflowsService(agents);
@@ -192,19 +195,74 @@ function build(
       }),
     ),
     deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
+    runHostWorkspaceIds: jest.fn((): string[] => []),
+    // A run-backed host as the API shows it (api.md 2.1): derived fields.
+    toView: jest.fn((host: { id: string; panelItems?: unknown[] }) =>
+      Promise.resolve({
+        ...host,
+        panelItems: host.panelItems ?? [],
+        workflow: { phases: [], source: 'agent' },
+        agent: { id: 'assistant', name: 'Assistant', deleted: false },
+      }),
+    ),
+    panelItemFileOf: jest.fn(() =>
+      Promise.resolve({
+        item: { id: 'p1' },
+        contentType: 'text/plain',
+        text: 'hi',
+      }),
+    ),
+    downloadPanelItemOf: jest.fn(() =>
+      Promise.resolve({
+        filename: 'notes.md',
+        contentType: 'text/markdown',
+        body: Buffer.from('# Notes'),
+      }),
+    ),
+    getVisualizationOf: jest.fn(() =>
+      Promise.resolve({ id: 'v1', document: '<html>', version: 1 }),
+    ),
+    downloadVisualizationOf: jest.fn(() =>
+      Promise.resolve({
+        filename: 'goals-v1.zip',
+        archive: Buffer.from('zip'),
+      }),
+    ),
+    downloadRfpPackageOf: jest.fn(() =>
+      Promise.resolve({
+        filename: 'rfp-acme.zip',
+        contentType: 'application/zip',
+        body: Buffer.from('zip'),
+      }),
+    ),
   };
   const datasetsRepository = {
     list: jest.fn().mockResolvedValue(datasets),
   } as unknown as DatasetsRepository;
+  const repository = new WorkflowRunsRepository(
+    new SqliteDocStore(db, 'workflow_runs'),
+  );
   const service = new WorkflowRunsService(
     workflows,
     sessions as unknown as SessionsService,
     datasetsRepository,
     mastra,
+    repository,
   );
   return {
     db,
     service,
+    repository,
+    deleteMemoryThread,
+    /** The same store and collaborators after a backend restart. */
+    restarted: () =>
+      new WorkflowRunsService(
+        workflows,
+        sessions as unknown as SessionsService,
+        datasetsRepository,
+        mastra,
+        new WorkflowRunsRepository(new SqliteDocStore(db, 'workflow_runs')),
+      ),
     sessions,
     userAgents,
     runWorkflow,
@@ -461,7 +519,7 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
       visualizations: [],
     });
     expect(run.finishedAt).toBeDefined();
-    expect(ctx.service.held(run.id)).toEqual(run);
+    await expect(ctx.service.get(run.id)).resolves.toEqual(run);
   });
 
   it('ends with error, as the chat stream does, when the turn fails; the host is still discarded', async () => {
@@ -553,20 +611,6 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     ).rejects.toThrow(`Run "${stopped.run.id}" has no answer to continue from`);
   });
 
-  it('forgets the oldest run beyond the held ones, with its workspace', async () => {
-    ctx = build();
-    const ids: string[] = [];
-    for (let i = 0; i <= HELD_RUNS; i++) {
-      ids.push((await streamed(ctx, 'agent:assistant', { input: ASK })).run.id);
-    }
-    expect(ctx.service.held(ids[0])).toBeUndefined();
-    expect(ctx.service.held(ids[1])).toBeDefined();
-    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledTimes(1);
-    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
-      `run-${ids[0]}`,
-    );
-  });
-
   it('POST /runs (118) answers an agent run as the stream ends it', async () => {
     ctx = build();
     const run = (await ctx.service.run('agent:assistant', {
@@ -593,15 +637,61 @@ describe('WorkflowRunsService: a code-only workflow run (api.md 118, 119)', () =
       steps: [],
     };
     ctx.runWorkflow.mockResolvedValue(outcome);
-    await expect(
-      ctx.service.run('seq-text-demo', { input: { text: ' a ', extra: 1 } }),
-    ).resolves.toBe(outcome);
+    const answer = (await ctx.service.run('seq-text-demo', {
+      input: { text: ' a ', extra: 1 },
+    })) as typeof outcome & { runId: string };
+    expect(answer).toEqual({
+      ...outcome,
+      runId: expect.any(String) as string,
+    });
     expect(ctx.runWorkflow).toHaveBeenCalledWith('seq-text-demo', {
       text: ' a ',
     });
     await expect(ctx.service.run('seq-text-demo', {})).rejects.toThrow(
       'Text is required',
     );
+    // 118 stores the run too (plan 5.1), and a refusal stores nothing.
+    const stored = await ctx.repository.list();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      id: answer.runId,
+      workflowId: 'seq-text-demo',
+      workflowName: 'Sequential test workflow',
+      input: { text: ' a ' },
+      status: 'success',
+      steps: [],
+      datasets: [],
+    });
+    expect(stored[0].finishedAt).toBeDefined();
+  });
+
+  it('118 stores a code-only run as failed when its engine throws, and rethrows', async () => {
+    ctx = build();
+    ctx.runWorkflow.mockRejectedValue(new Error('engine down'));
+    await expect(
+      ctx.service.run('seq-text-demo', { input: { text: 'a' } }),
+    ).rejects.toThrow('engine down');
+    const [stored] = await ctx.repository.list();
+    expect(stored).toMatchObject({ status: 'failed', error: 'engine down' });
+  });
+
+  it('119 stores a code-only run when it starts and when it ends', async () => {
+    ctx = build();
+    const atStart: unknown[] = [];
+    const prepared = await ctx.service.prepare('seq-text-demo', {
+      input: { text: 'Hello world' },
+    });
+    const run = await ctx.service.stream(prepared, (event) => {
+      if (event.type === 'run') {
+        void ctx.repository.get(event.runId).then((doc) => atStart.push(doc));
+      }
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(atStart[0]).toMatchObject({ id: run.id, status: 'running' });
+    await expect(ctx.repository.get(run.id)).resolves.toMatchObject({
+      status: 'success',
+      output: { summary: '2 words, 11 characters: "Hello world"' },
+    });
   });
 
   it('119 streams each step and ends with done', async () => {
@@ -704,6 +794,499 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
       expect(runs.prepare).toHaveBeenLastCalledWith('agent:assistant', {
         input: { question: 'Hi' },
       });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+
+  it('stores an agent run when it starts, as running with its input and workflow', async () => {
+    ctx = build();
+    let atTurn: unknown;
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (hostId: string) => {
+        atTurn = await ctx.repository.get(hostId.slice('run-'.length));
+      },
+    );
+    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    expect(atTurn).toMatchObject({
+      id: run.id,
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: { ...ASK, careful: false },
+      status: 'running',
+      steps: [],
+      datasets: [],
+      ownerId: 'local',
+    });
+    expect((atTurn as { startedAt?: string }).startedAt).toBe(run.startedAt);
+  });
+
+  it('updates it when it ends with the projection of the host; the derived views are not stored', async () => {
+    ctx = build();
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.resolve({
+        id: 'host',
+        name: 'RFP Builder',
+        datasets: ['Intellify RFP API'],
+        messages: [
+          { role: 'user', content: 'Start an RFP', at: 't1' },
+          { role: 'assistant', content: 'Which client?', at: 't2' },
+        ],
+        agentKey: 'rfp',
+        agentName: 'RFP Builder',
+        rfpId: 'rfp-1',
+        visualizations: [{ id: 'v1', title: 'Goals' }],
+        panelItems: [
+          {
+            id: 'p1',
+            kind: 'document',
+            title: 'Notes',
+            markdown: '#',
+            shownAt: 't',
+          },
+        ],
+        workflowState: { phases: [], updatedAt: 't' },
+        workflow: { phases: [], source: 'agent' },
+        agent: { id: 'rfp', name: 'RFP Builder', deleted: false },
+        workflowRef: {
+          id: 'agent:rfp',
+          name: 'RFP Builder',
+          kind: 'agent',
+          deleted: false,
+        },
+      } as never),
+    );
+    const { run, events } = await streamed(ctx, 'agent:assistant', {
+      input: ASK,
+    });
+    const stored = await ctx.repository.get(run.id);
+    expect(stored).toMatchObject({
+      status: 'success',
+      steps: [{ id: 'answer', status: 'success' }],
+      output: { calls: [], stopped: false },
+      question: 'Who won in 2002?',
+      answer: { role: 'assistant', content: 'Which client?', at: 't2' },
+      datasets: ['Intellify RFP API'],
+      agentKey: 'rfp',
+      agentName: 'RFP Builder',
+      rfpId: 'rfp-1',
+      visualizations: [{ id: 'v1', title: 'Goals' }],
+      panelItems: [{ id: 'p1', kind: 'document' }],
+      workflowState: { phases: [], updatedAt: 't' },
+    });
+    expect(stored?.finishedAt).toBeDefined();
+    expect(stored).not.toHaveProperty('agent');
+    expect(stored).not.toHaveProperty('workflow');
+    expect(stored).not.toHaveProperty('workflowRef');
+    // done.run is the stored run plus the derived views, read as GET reads it.
+    expect(events.at(-1)).toEqual({ type: 'done', run });
+    expect(run).toMatchObject({
+      id: stored?.id,
+      agent: { id: 'assistant' },
+      workflow: { source: 'agent' },
+      panelItems: [{ id: 'p1' }],
+    });
+    expect(ctx.sessions.toView).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: `run-${run.id}`, run: true }),
+    );
+  });
+
+  it('stores a failed run with its error, and a stopped one as stopped', async () => {
+    ctx = build(DATASETS, { throws: new Error('Model error') });
+    const failed = await streamed(ctx, 'agent:assistant', { input: ASK });
+    await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
+      status: 'failed',
+      error: 'Model error',
+      steps: [{ id: 'answer', status: 'failed', error: 'Model error' }],
+    });
+    ctx.db.close();
+    const abort = new AbortController();
+    ctx = build(DATASETS, { abort });
+    const stopped = await streamed(
+      ctx,
+      'agent:assistant',
+      { input: ASK },
+      abort.signal,
+    );
+    await expect(ctx.repository.get(stopped.run.id)).resolves.toMatchObject({
+      status: 'stopped',
+      steps: [{ id: 'answer', status: 'stopped' }],
+    });
+  });
+
+  it('stores the run as failed when ending the host throws, and rethrows', async () => {
+    ctx = build();
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.reject(new Error('disk full')),
+    );
+    const prepared = await ctx.service.prepare('agent:assistant', {
+      input: ASK,
+    });
+    let runId = '';
+    await expect(
+      ctx.service.stream(prepared, (event) => {
+        if (event.type === 'run') runId = event.runId;
+      }),
+    ).rejects.toThrow('disk full');
+    await expect(ctx.repository.get(runId)).resolves.toMatchObject({
+      status: 'failed',
+      error: 'disk full',
+    });
+  });
+
+  it('takes a stored run as context after a restart (plan 5.4)', async () => {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
+    const first = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const after = ctx.restarted();
+    const prepared = await after.prepare('agent:assistant', {
+      input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.run.id },
+    });
+    expect(prepared.context).toEqual({
+      fromRunId: first.run.id,
+      question: 'Who won in 2002?',
+      answer: 'Brazil won in 2002.',
+    });
+  });
+
+  it('at start-up fails a run left running, deletes its memory thread and keeps its workspace; deletes orphan run workspaces', async () => {
+    ctx = build();
+    await ctx.repository.insert({
+      id: 'left',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: ASK,
+      status: 'running',
+      steps: [{ id: 'answer', title: 'Answer', status: 'running' }],
+      datasets: [],
+      startedAt: '2026-11-11T10:00:00.000Z',
+    });
+    await ctx.repository.insert({
+      id: 'done',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: ASK,
+      status: 'success',
+      steps: [],
+      datasets: [],
+      startedAt: '2026-11-11T09:00:00.000Z',
+    });
+    ctx.sessions.runHostWorkspaceIds.mockReturnValue([
+      'run-left',
+      'run-done',
+      'run-orphan',
+    ]);
+    await ctx.service.onModuleInit();
+    await expect(ctx.repository.get('left')).resolves.toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+      steps: [
+        {
+          id: 'answer',
+          status: 'failed',
+          error: 'The app stopped before the run finished',
+        },
+      ],
+    });
+    await expect(ctx.repository.get('done')).resolves.toMatchObject({
+      status: 'success',
+    });
+    expect(ctx.deleteMemoryThread).toHaveBeenCalledWith('run-left');
+    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledTimes(1);
+    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
+      'run-orphan',
+    );
+  });
+
+  it('a start-up recovery that cannot list workspaces still fails the runs left running', async () => {
+    ctx = build();
+    await ctx.repository.insert({
+      id: 'left',
+      workflowId: 'seq-text-demo',
+      workflowName: 'Sequential test workflow',
+      input: { text: 'a' },
+      status: 'running',
+      steps: [],
+      datasets: [],
+      startedAt: 't',
+    });
+    ctx.sessions.runHostWorkspaceIds.mockImplementation(() => {
+      throw new Error('no workspaces dir');
+    });
+    await ctx.service.onModuleInit();
+    await expect(ctx.repository.get('left')).resolves.toMatchObject({
+      status: 'failed',
+    });
+  });
+});
+
+describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+
+  it('lists summaries newest first, filtered by workflow, titled from the question or the first text input', async () => {
+    ctx = build();
+    const agent = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const code = await streamed(ctx, 'seq-text-demo', {
+      input: { text: '  Hello world  ' },
+    });
+    // Same-millisecond starts would tie: order by the stored startedAt.
+    await ctx.repository.update(agent.run.id, {
+      startedAt: '2026-11-11T10:00:00.000Z',
+    });
+    await ctx.repository.update(code.run.id, {
+      startedAt: '2026-11-11T11:00:00.000Z',
+    });
+    const all = await ctx.service.list();
+    expect(all).toEqual([
+      {
+        id: code.run.id,
+        workflowId: 'seq-text-demo',
+        workflowName: 'Sequential test workflow',
+        status: 'success',
+        title: 'Hello world',
+        startedAt: '2026-11-11T11:00:00.000Z',
+        finishedAt: code.run.finishedAt,
+      },
+      {
+        id: agent.run.id,
+        workflowId: 'agent:assistant',
+        workflowName: 'Assistant',
+        status: 'success',
+        title: 'Who won in 2002?',
+        startedAt: '2026-11-11T10:00:00.000Z',
+        finishedAt: agent.run.finishedAt,
+      },
+    ]);
+    expect(
+      (await ctx.service.list('agent:assistant')).map((run) => run.id),
+    ).toEqual([agent.run.id]);
+  });
+
+  it('gets one run with its derived views, or 404 Run "<id>" not found', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    await expect(ctx.service.get(run.id)).resolves.toEqual(run);
+    await expect(ctx.service.get('nope')).rejects.toThrow(
+      new NotFoundException('Run "nope" not found'),
+    );
+    const code = await streamed(ctx, 'seq-text-demo', { input: { text: 'a' } });
+    const fetched = await ctx.service.get(code.run.id);
+    expect(fetched).toEqual(code.run);
+    expect(fetched).not.toHaveProperty('agent');
+  });
+
+  it('deletes a run with its workspace and memory thread; refuses a running one and an unknown one', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    await ctx.service.delete(run.id);
+    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
+      `run-${run.id}`,
+    );
+    await expect(ctx.repository.get(run.id)).resolves.toBeNull();
+    await expect(ctx.service.delete(run.id)).rejects.toThrow(
+      new NotFoundException(`Run "${run.id}" not found`),
+    );
+    await ctx.repository.insert({
+      id: 'busy',
+      workflowId: 'agent:assistant',
+      workflowName: 'Assistant',
+      input: ASK,
+      status: 'running',
+      steps: [],
+      datasets: [],
+      startedAt: 't',
+    });
+    const refusal = ctx.service.delete('busy');
+    await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+    await expect(refusal).rejects.toThrow('Stop the run before deleting it');
+    await expect(ctx.repository.get('busy')).resolves.not.toBeNull();
+  });
+
+  it('deletes a code-only run without touching any workspace', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, 'seq-text-demo', {
+      input: { text: 'a' },
+    });
+    await ctx.service.delete(run.id);
+    expect(ctx.sessions.deleteRunHostResources).not.toHaveBeenCalled();
+    await expect(ctx.repository.get(run.id)).resolves.toBeNull();
+  });
+
+  it("serves a run's files through the session file services, given its run-backed host", async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const host = expect.objectContaining({
+      id: `run-${run.id}`,
+      run: true,
+      workspaceId: `session-run-${run.id}`,
+    }) as unknown;
+    await ctx.service.panelItemFile(run.id, 'p1');
+    expect(ctx.sessions.panelItemFileOf).toHaveBeenCalledWith(host, 'p1');
+    await ctx.service.downloadPanelItem(run.id, 'p1', 'pdf');
+    expect(ctx.sessions.downloadPanelItemOf).toHaveBeenCalledWith(
+      host,
+      'p1',
+      'pdf',
+    );
+    await ctx.service.getVisualization(run.id, 'v1', 2);
+    expect(ctx.sessions.getVisualizationOf).toHaveBeenCalledWith(host, 'v1', 2);
+    await ctx.service.downloadVisualization(run.id, 'v1');
+    expect(ctx.sessions.downloadVisualizationOf).toHaveBeenCalledWith(
+      host,
+      'v1',
+      undefined,
+    );
+    await ctx.service.downloadRfpPackage(run.id, 'rfp-1', 'rfp.md', true);
+    expect(ctx.sessions.downloadRfpPackageOf).toHaveBeenCalledWith(
+      host,
+      'rfp-1',
+      'rfp.md',
+      true,
+    );
+    await expect(ctx.service.panelItemFile('nope', 'p1')).rejects.toThrow(
+      new NotFoundException('Run "nope" not found'),
+    );
+  });
+});
+
+describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
+  it('lists, gets, deletes and serves the files of runs', async () => {
+    const runs = {
+      list: jest.fn().mockResolvedValue([{ id: 'r1' }]),
+      get: jest.fn((id: string) =>
+        id === 'r1'
+          ? Promise.resolve({ id: 'r1', status: 'success' })
+          : Promise.reject(new NotFoundException(`Run "${id}" not found`)),
+      ),
+      delete: jest.fn((id: string) =>
+        id === 'busy'
+          ? Promise.reject(
+              new BadRequestException('Stop the run before deleting it'),
+            )
+          : Promise.resolve(),
+      ),
+      getVisualization: jest
+        .fn()
+        .mockResolvedValue({ id: 'v1', document: '<html>', version: 2 }),
+      downloadVisualization: jest.fn().mockResolvedValue({
+        filename: 'goals-v2.zip',
+        archive: Buffer.from('zip'),
+      }),
+      panelItemFile: jest.fn().mockResolvedValue({
+        item: { id: 'p1' },
+        contentType: 'text/markdown',
+        text: '# Notes',
+      }),
+      downloadPanelItem: jest.fn().mockResolvedValue({
+        filename: 'notes.md',
+        contentType: 'text/markdown',
+        body: Buffer.from('# Notes'),
+      }),
+      downloadRfpPackage: jest.fn().mockResolvedValue({
+        filename: 'rfp-acme.zip',
+        contentType: 'application/zip',
+        body: Buffer.from('zip'),
+      }),
+    };
+    const moduleRef = await Test.createTestingModule({
+      controllers: [WorkflowRunsController],
+      providers: [{ provide: WorkflowRunsService, useValue: runs }],
+    }).compile();
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    try {
+      const server = app.getHttpServer() as Parameters<typeof request>[0];
+      await request(server)
+        .get('/workflow-runs')
+        .expect(200, { runs: [{ id: 'r1' }] });
+      expect(runs.list).toHaveBeenLastCalledWith(undefined);
+      await request(server)
+        .get('/workflow-runs?workflowId=agent%3Aassistant')
+        .expect(200);
+      expect(runs.list).toHaveBeenLastCalledWith('agent:assistant');
+      await request(server)
+        .get('/workflow-runs/r1')
+        .expect(200, { id: 'r1', status: 'success' });
+      await request(server)
+        .get('/workflow-runs/nope')
+        .expect(404)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({ message: 'Run "nope" not found' }),
+        );
+      await request(server)
+        .delete('/workflow-runs/r1')
+        .expect(200, { ok: true, message: 'Run deleted' });
+      await request(server)
+        .delete('/workflow-runs/busy')
+        .expect(400)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            message: 'Stop the run before deleting it',
+          }),
+        );
+      await request(server)
+        .get('/workflow-runs/r1/visualizations/v1?version=2')
+        .expect(200, { id: 'v1', document: '<html>', version: 2 });
+      expect(runs.getVisualization).toHaveBeenCalledWith('r1', 'v1', 2);
+      const zip = await request(server)
+        .get('/workflow-runs/r1/visualizations/v1/download?version=x')
+        .expect(200);
+      expect(runs.downloadVisualization).toHaveBeenCalledWith(
+        'r1',
+        'v1',
+        undefined,
+      );
+      expect(zip.headers['content-type']).toBe('application/zip');
+      expect(zip.headers['content-disposition']).toBe(
+        'attachment; filename="goals-v2.zip"',
+      );
+      await request(server)
+        .get('/workflow-runs/r1/panel-items/p1/file')
+        .expect(200, {
+          item: { id: 'p1' },
+          contentType: 'text/markdown',
+          text: '# Notes',
+        });
+      const md = await request(server)
+        .get('/workflow-runs/r1/panel-items/p1/download?format=md')
+        .expect(200);
+      expect(runs.downloadPanelItem).toHaveBeenCalledWith('r1', 'p1', 'md');
+      expect(md.headers['content-disposition']).toBe(
+        'attachment; filename="notes.md"',
+      );
+      expect(md.text).toBe('# Notes');
+      await request(server)
+        .get('/workflow-runs/r1/panel-items/p1/download?format=docx')
+        .expect(400)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            message: 'Unknown download format "docx": use pdf, md or csv',
+          }),
+        );
+      const pkg = await request(server)
+        .get(
+          '/workflow-runs/r1/rfp-packages/rfp-1/download?file=rfp.md&draft=true',
+        )
+        .expect(200);
+      expect(runs.downloadRfpPackage).toHaveBeenCalledWith(
+        'r1',
+        'rfp-1',
+        'rfp.md',
+        true,
+      );
+      expect(pkg.headers['content-disposition']).toBe(
+        'attachment; filename="rfp-acme.zip"',
+      );
     } finally {
       await app.close();
     }

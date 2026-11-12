@@ -370,6 +370,8 @@ describe('The workflow catalogue (API)', () => {
           },
         ],
         output: { summary: '3 words, 20 characters: "Hello workflow world"' },
+        // The stored run (1.23.14; api.md 121).
+        runId: expect.any(String) as string,
       });
     });
 
@@ -393,6 +395,7 @@ describe('The workflow catalogue (API)', () => {
           { id: 'format-result', title: 'Format result', status: 'skipped' },
         ],
         error: 'The text is empty',
+        runId: expect.any(String) as string,
       });
     });
 

@@ -1,15 +1,21 @@
 /**
- * A workflow run as the run stream reports it (api.md 119; agents.md 5.14):
- * its shape, its steps from the engine's step events, and its answer from
- * the run host. Plain data and pure functions, no framework import, so Jest
- * can read them without loading Mastra.
+ * A workflow run as the run stream reports it and the store keeps it
+ * (api.md 119-121; data-model 3.16; agents.md 5.14): its shape, its steps
+ * from the engine's step events, its answer from the run host, its summary
+ * and the run-backed host its files are served from. Plain data and pure
+ * functions, no framework import, so Jest can read them without loading
+ * Mastra.
  */
-import { runErrorMessage } from '../../mastra/workflows/workflow-run';
+import {
+  runErrorMessage,
+  type WorkflowRunResult,
+} from '../../mastra/workflows/workflow-run';
 import type { WorkflowInputValues } from '../../mastra/workflows/workflow-catalog';
 import type {
   ChatMessage,
   PanelItem,
   SessionAgentRef,
+  SessionDoc,
   SessionVisualization,
   WorkflowState,
   WorkflowView,
@@ -36,9 +42,10 @@ export interface WorkflowRunStep {
 }
 
 /**
- * One run of a workflow on an input (api.md 119 `done.run`; plan 5.3 without
- * the store fields): its input, its steps and outcome and, for an agent
- * workflow, what its agent turn left on the run host.
+ * One run of a workflow on an input, as the API shows it (api.md 119
+ * `done.run`, 121): the stored run (`WorkflowRunDoc`) plus, for an agent
+ * workflow, the derived `panelItems`, `workflow` view and `agent`, computed
+ * as a session's are (api.md 2.1) on every read.
  */
 export interface WorkflowRun {
   id: string;
@@ -71,8 +78,146 @@ export interface WorkflowRun {
   workflowState?: WorkflowState;
   /** The agent's phases (the derived view, api.md 2.1). */
   workflow?: WorkflowView;
+  /** Legacy and inert (data-model 3.14): `local`. */
+  ownerId?: string;
   startedAt: string;
   finishedAt?: string;
+  /** Store-maintained. */
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * A run as the `workflow_runs` collection stores it (data-model 3.16; plan
+ * 5.3): the wire run without the derived `agent` and `workflow` view.
+ * `panelItems` are the host's items as they were when the run ended.
+ */
+export type WorkflowRunDoc = Omit<WorkflowRun, 'agent' | 'workflow'>;
+
+/** A run in the history list (api.md 120). */
+export interface WorkflowRunSummary {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  status: WorkflowRunStatus;
+  title: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+
+/** The longest run title, in characters (plan 5.3). */
+export const RUN_TITLE_MAX = 120;
+
+/** A run the app stopped in, as start-up recovery fails it (plan 5.1 step 5). */
+export const RUN_INTERRUPTED_ERROR = 'The app stopped before the run finished';
+
+/**
+ * A run's title (plan 5.3): its question, else the first of `textFields`
+ * (the workflow's `text` and `textarea` inputs, in form order) with a value,
+ * else the workflow's name; trimmed, at most `RUN_TITLE_MAX` characters.
+ */
+export function runTitle(
+  run: Pick<WorkflowRunDoc, 'question' | 'input' | 'workflowName'>,
+  textFields: readonly string[],
+): string {
+  const candidates = [
+    run.question,
+    ...textFields.map((name) => run.input[name]),
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const trimmed = candidate.trim();
+    if (trimmed) return trimmed.slice(0, RUN_TITLE_MAX);
+  }
+  return run.workflowName.slice(0, RUN_TITLE_MAX);
+}
+
+/** A stored run as the history lists it (api.md 120). */
+export function runSummaryOf(
+  run: WorkflowRunDoc,
+  textFields: readonly string[],
+): WorkflowRunSummary {
+  return {
+    id: run.id,
+    workflowId: run.workflowId,
+    workflowName: run.workflowName,
+    status: run.status,
+    title: runTitle(run, textFields),
+    startedAt: run.startedAt,
+    ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
+  };
+}
+
+/**
+ * The run-backed host of a stored run (plan 5.2): a `SessionDoc` shaped as
+ * the run's host was, so the services that serve a session's visuals, panel
+ * files and RFP packages (api.md 9, 14, 105-107) and derive its views (2.1)
+ * serve the run's from its workspace `session-run-<id>`. Its transcript is
+ * the run's question and answer, so a visual finds its source answer.
+ * Never held, stored or listed.
+ */
+export function runHostDoc(run: WorkflowRunDoc): SessionDoc {
+  const id = `run-${run.id}`;
+  return {
+    id,
+    name: run.workflowName.slice(0, 64),
+    workspaceId: `session-${id}`,
+    run: true,
+    datasets: run.datasets,
+    ...(run.agentKey ? { agentKey: run.agentKey } : {}),
+    ...(run.agentId ? { agentId: run.agentId } : {}),
+    ...(run.agentName ? { agentName: run.agentName } : {}),
+    workflowId: run.workflowId,
+    ...(run.rfpId ? { rfpId: run.rfpId } : {}),
+    messages: [
+      ...(run.question !== undefined
+        ? [{ role: 'user' as const, content: run.question, at: run.startedAt }]
+        : []),
+      ...(run.answer ? [run.answer] : []),
+    ],
+    ...(run.panelItems ? { panelItems: run.panelItems } : {}),
+    visualizations: run.visualizations ?? [],
+    ...(run.workflowState ? { workflowState: run.workflowState } : {}),
+    createdAt: run.startedAt,
+    updatedAt: run.finishedAt ?? run.startedAt,
+  };
+}
+
+/** What a code-only run's synchronous result stores (api.md 118). */
+export function runOfResult(
+  result: WorkflowRunResult,
+  finishedAt: string,
+): Partial<WorkflowRunDoc> {
+  return {
+    status: result.status,
+    steps: result.steps.map((step) => {
+      const { output, ...rest } = step;
+      return output === undefined ? rest : { ...rest, ...outputFields(output) };
+    }),
+    ...(result.output ? { output: result.output } : {}),
+    ...(result.error ? { error: result.error } : {}),
+    finishedAt,
+  };
+}
+
+/**
+ * What start-up recovery writes on a run the app stopped in (plan 5.1 step
+ * 5): `failed` with `RUN_INTERRUPTED_ERROR`, and so is any step still running.
+ */
+export function interruptedRunPatch(
+  run: WorkflowRunDoc,
+  finishedAt: string,
+): Partial<WorkflowRunDoc> {
+  return {
+    status: 'failed',
+    error: RUN_INTERRUPTED_ERROR,
+    steps: run.steps.map((step) =>
+      step.status === 'running'
+        ? { ...step, status: 'failed', error: RUN_INTERRUPTED_ERROR }
+        : step,
+    ),
+    finishedAt,
+  };
 }
 
 /** The largest step output carried, as JSON characters (plan 5.3). */

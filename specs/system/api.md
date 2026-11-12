@@ -651,7 +651,7 @@ The `built-in` routes are declared before `/skills/:id`.
 
 ### 2.6.2 Workflows
 
-Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11, R14-R17). Workflows are defined in code (ADR-0040), and there is no write route. A workflow with input fields can be run once (118) or run streamed (119) (ADR-0041); runs are held in memory and not stored yet (1.23.14 stores them). `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Arfp`) and the server decodes them.
+Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11, R14-R18). Workflows are defined in code (ADR-0040), and there is no write route. A workflow with input fields can be run once (118) or run streamed (119) (ADR-0041); every run is stored (since 1.23.14, [data-model.md](data-model.md) 3.16) and read back through section 2.6.3. `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Arfp`) and the server decodes them.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -728,7 +728,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 
 #### 118. `POST /workflows/:id/runs`
 - Body: `{ input: Record<string, string | number | boolean | string[]>, context?: { fromRunId: string } }`. Runs the workflow once on `input` and answers when the run ends (no streaming). Capability: [workflows](../capabilities/workflows/spec.md) R11, R14; engine: [agents.md](agents.md) 5.13, 5.14. The UI uses 119.
-- Response `200` for a code-only workflow (`seq-text-demo`): `WorkflowRunResult`, whether the run succeeded or a step failed (the run happened). For a workflow whose steps call an agent: the `WorkflowRun` 119 ends with (`done.run`), whatever its status.
+- Response `200` for a code-only workflow (`seq-text-demo`): `WorkflowRunResult & { runId: string }`, whether the run succeeded or a step failed (the run happened); `runId` is the stored run's id (121). For a workflow whose steps call an agent: the `WorkflowRun` 119 ends with (`done.run`), whatever its status.
   ```ts
   type WorkflowRunResult = {
     workflowId: string;
@@ -746,14 +746,75 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   ```
 - A failing step makes the run `failed`, with its error as the run's `error`; the steps after it are `skipped`. For `seq-text-demo` with `{ text: '  Hello   workflow   world  ' }`: `success`, three `success` steps and `output: { summary: '3 words, 20 characters: "Hello workflow world"' }`; with `{ text: '   ' }`: `failed`, `clean-text` failed with `The text is empty`, the other two `skipped`, `error: 'The text is empty'`.
 - Input: only the workflow's declared fields are read, in field order; a number field's value is converted to a number; a `datasets` value is a list of names, trimmed, without repeats; any other key is ignored. A whitespace-only text is accepted (the run decides what it means; an agent run refuses a blank question). A field that is missing or empty takes its `default` (a boolean `false`); an optional one without a default is left out.
-- Errors (Style B, 400), checked before anything runs, the first one winning: `"Workflow \"<id>\" can't run on an input"` for a workflow with no input fields; the workflow's `runRequirement`; `"<label> is required"` for a required field that is missing or `""` (`"Text is required"`, `"Question is required"`, `"Dataset is required"`), and for an agent run whose question or message is blank; `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`); `"Run \"<id>\" not found"` for a `context.fromRunId` the server does not hold, and `"Run \"<id>\" has no answer to continue from"` for a held run without a question and answer. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
-- Side effects: a code-only run stores nothing, writes no workflow bar and persists no engine snapshot. An agent run is 119's, without the stream.
+- Errors (Style B, 400), checked before anything runs, the first one winning: `"Workflow \"<id>\" can't run on an input"` for a workflow with no input fields; the workflow's `runRequirement`; `"<label> is required"` for a required field that is missing or `""` (`"Text is required"`, `"Question is required"`, `"Dataset is required"`), and for an agent run whose question or message is blank; `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`); `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
+- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A code-only run writes no workflow bar, persists no engine snapshot and has no workspace. An agent run is 119's, without the stream.
 
 #### 119. `POST /workflows/:id/runs/stream`
 - Body: as 118. Runs the workflow once on `input`, streamed. Any workflow with input fields: a code-only one streams its step events; an agent workflow runs one agent turn on a run host through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's for the same input. Capability: [workflows](../capabilities/workflows/spec.md) R14-R17.
 - Refusals: 118's, answered with their real status (Style B) **before** the stream starts; nothing runs.
 - Response `200`, SSE (section 3.6).
-- Side effects: an agent run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory. The run (`WorkflowRun`) is held in memory, the last 50 runs, so a later run can take it as context; forgetting a run deletes its workspace, and the app deletes every `session-run-*` workspace at start-up. Runs are stored from 1.23.14.
+- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before the `run` event is sent, and updated when it ends (`success`, `failed` or `stopped`, a stop included); a run that throws while it ends is stored `failed` with that error. An agent run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory. The workspace stays with the stored run, so its files download through 123-127, until the run is deleted (122).
+
+### 2.6.3 Workflow runs
+
+Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/workflows/spec.md) (R18-R20). The stored runs of 118 and 119 ([data-model.md](data-model.md) 3.16): the history, one run, its deletion, and the files of its workspace. The file routes are served by the same services as a session's (9, 14, 105-107), given the run's **run-backed host**: a `SessionDoc` shaped from the stored run (id `run-<id>`, workspace `session-run-<id>`, its agent binding, `rfpId`, panel items, visuals, and its question and answer as the transcript), never held or listed. `:id` is a run id (a uuid). Style B throughout.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 120 | `GET /workflow-runs` | The run history, newest first | no |
+| 121 | `GET /workflow-runs/:id` | One stored run | no |
+| 122 | `DELETE /workflow-runs/:id` | Delete a run with its workspace | no |
+| 123 | `GET /workflow-runs/:id/visualizations/:vid` | Load a run's visual (document + metadata) | no |
+| 124 | `GET /workflow-runs/:id/visualizations/:vid/download` | A run's visual as a zip | no |
+| 125 | `GET /workflow-runs/:id/panel-items/:itemId/file` | Read the text of a run's file panel item | no |
+| 126 | `GET /workflow-runs/:id/panel-items/:itemId/download` | Download a run's file, document or table panel item | no |
+| 127 | `GET /workflow-runs/:id/rfp-packages/:rfpId/download` | Download a run's RFP package (zip) or one of its files | no |
+
+#### 120. `GET /workflow-runs`
+- Query: `workflowId` (optional): only that workflow's runs.
+- Response `200`: `{ runs: WorkflowRunSummary[] }`, newest `startedAt` first, running runs included. No paging (as 1); the client pages.
+  ```ts
+  type WorkflowRunSummary = {
+    id: string;
+    workflowId: string;
+    workflowName: string;            // the name when the run started (a deleted user agent's run still names it)
+    status: 'running' | 'success' | 'failed' | 'stopped';
+    title: string;                   // see below
+    startedAt: string;
+    finishedAt?: string;
+  };
+  ```
+- `title` is the run's `question`, else the first `text` or `textarea` input of the workflow (not `hidden`, in form order, per 116) that has a value, else the workflow's name; trimmed, at most 120 characters. A workflow no longer in the catalogue has no text inputs to read, so its runs fall back to the question or the name.
+- Errors: none expected.
+
+#### 121. `GET /workflow-runs/:id`
+- Response `200`: `WorkflowRun` (3.6): the stored document ([data-model.md](data-model.md) 3.16, with `ownerId`, `createdAt` and `updatedAt`) plus, for an agent run, the derived `panelItems` (the stored items and a `visual:<id>` item for each visual without one), `workflow` view and `agent`, computed on its run-backed host as a session's are (2.1) on every read. A code-only run is the document as stored. `done.run` of 119 is this same shape.
+- Errors (Style B): `404 "Run \"<id>\" not found"`.
+
+#### 122. `DELETE /workflow-runs/:id`
+- Response `200`: `{ ok: true, message: "Run deleted" }`.
+- Side effects: for an agent run, deletes its workspace `workspaces/session-run-<id>/` (its visuals, panel files, RFP packages, synthetic scripts) and its memory thread `run-<id>`, then the document. A code-only run has neither, so only the document goes. A run given as another run's `context` may be deleted; the later run keeps `context.fromRunId` as a dangling reference.
+- Errors (Style B): `404 "Run \"<id>\" not found"`; `400 "Stop the run before deleting it"` for a run still `running`.
+
+#### 123. `GET /workflow-runs/:id/visualizations/:vid`
+- As 9, over the run's workspace and `visualizations`: query `version`, response `InteractiveVisualization`.
+- Errors (Style B): `404 "Run \"<id>\" not found"`; then 9's (`404 "Visualization <vid> not found in session run-<id>"`, `400 "Version <n> does not exist"`).
+
+#### 124. `GET /workflow-runs/:id/visualizations/:vid/download`
+- As 14: query `version`, `application/zip` with the same file name and contents.
+- Errors (Style B): `404 "Run \"<id>\" not found"`; then 14's.
+
+#### 125. `GET /workflow-runs/:id/panel-items/:itemId/file`
+- As 106, over the run's panel items and its workspace: `{ item: FilePanelItem, contentType, text }`, with the same safe-path checks and 256 KB limit.
+- Errors (Style B): `404 "Run \"<id>\" not found"`; then 106's (`404 "Panel item \"<itemId>\" not found"`, `400 "Panel item \"<itemId>\" is not a file"`, `404 "File \"<path>\" not found in the session workspace"`, `400 "File \"<path>\" is larger than 256 KB"`).
+
+#### 126. `GET /workflow-runs/:id/panel-items/:itemId/download`
+- As 107: query `format` (`pdf`, `md`, `csv`), the same attachments and file names.
+- Errors (Style B): `404 "Run \"<id>\" not found"`; `400 "Unknown download format \"<format>\": use pdf, md or csv"` (checked first); then 107's.
+
+#### 127. `GET /workflow-runs/:id/rfp-packages/:rfpId/download`
+- As 105: query `file` and `draft`, over the run's workspace folder `rfp/<rfpId>/`.
+- Errors (Style B): `404 "Run \"<id>\" not found"`; then 105's.
 
 ### 2.7 Deep analysis
 
@@ -1414,7 +1475,7 @@ type WorkflowRun = {
   workflowName: string;            // the workflow's name when the run started
   input: Record<string, string | number | boolean | string[]>;   // the checked input (defaults filled)
   context?: { fromRunId: string };
-  status: 'success' | 'failed' | 'stopped';
+  status: 'running' | 'success' | 'failed' | 'stopped';   // 'running' only while it runs (121); done.run is never 'running'
   steps: { id: string; title: string; status: 'success' | 'failed' | 'skipped' | 'stopped'; output?: Record<string, unknown>; outputTruncated?: true; error?: string }[];
   output?: Record<string, unknown>;   // success: the last step's output (Wrap up's for v2; `{ calls, stopped }` for a one-step workflow; the engine's result for a code-only run)
   error?: string;                  // failed
@@ -1429,14 +1490,19 @@ type WorkflowRun = {
   visualizations?: SessionVisualization[];
   workflowState?: WorkflowState;
   workflow?: WorkflowView;         // as a session's derived view (2.1)
+  ownerId?: 'local';               // legacy and inert (data-model 3.14)
   startedAt: string;
   finishedAt?: string;
+  createdAt: string;               // store-maintained (data-model 3.16)
+  updatedAt: string;
 };
 ```
 
-**Stop.** The client aborts the fetch; the server aborts the agent turn (a readiness assessment is cancelled, ADR-0033) and sends nothing more, as 3.1. The run is held as `stopped`, with the partial answer the host persisted, if any.
+`panelItems`, `workflow` and `agent` are derived on every read (121) and never stored; the stored run is [data-model.md](data-model.md) 3.16.
 
-**Context.** `context.fromRunId` names a held run; its `question` and `answer.content` go before this run's question as a `user` and an `assistant` message ([agents.md](agents.md) 5.14).
+**Stop.** The client aborts the fetch; the server aborts the agent turn (a readiness assessment is cancelled, ADR-0033) and sends nothing more, as 3.1. The run is stored as `stopped`, with the partial answer the host persisted, if any.
+
+**Context.** `context.fromRunId` names a stored run, so it survives a restart; its `question` and `answer.content` go before this run's question as a `user` and an `assistant` message ([agents.md](agents.md) 5.14).
 
 ---
 

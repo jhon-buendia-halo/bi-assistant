@@ -409,7 +409,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     controller.abort();
     release();
     stub.hold = undefined;
-    // The stopped run is held without an answer.
+    // The stopped run is stored without an answer.
     let refusal: { status: number; message?: string } = { status: 0 };
     for (let i = 0; i < 40; i++) {
       const answer = await http()
@@ -501,6 +501,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       workflowId: 'seq-text-demo',
       status: 'success',
       output: { summary: '3 words, 20 characters: "Hello workflow world"' },
+      runId: expect.any(String) as string,
     });
   });
 });
