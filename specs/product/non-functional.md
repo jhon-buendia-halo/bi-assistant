@@ -29,7 +29,7 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 - N9. Default data directory: on desktop, the operating system's per-user application data folder. On Windows it SHALL be the local, non-roaming profile folder, because roaming profiles are often synced or locked. Existing data SHALL be moved there once; if the move fails, the app SHALL keep using the roaming folder and log a diagnostic, and SHALL NOT lose data. In web mode, `~/.questions-to-insights`, overridable with `--data-dir` or the `QTI_DATA_DIR` or `APP_DATA_DIR` environment variables.
 - N10. A rename of a stored collection or field SHALL come with a migration that keeps old data readable. Existing migrations: `projects` to `sessions`, `sandbox_selections` to `datasets`, session field `sandboxes` to `datasets`, source field `sourceProjectId` to `sourceSessionId`, workspace folders `project-<id>` to `session-<id>`, a single anonymous Databricks connection to a named datasource, and the desktop user-data folder rename from "Questions to Insights" to "Halo BI Assistant". The session list order (by last update) SHALL NOT change because of a migration.
 - N11. UI layout preferences (right-panel width) SHALL be kept in browser local storage, not on the backend.
-- N12. Deep analysis jobs and in-flight eval runs are held in memory; a restart forgets running jobs. Completed eval runs are persisted. Reports are stored in the session workspace.
+- N12. In-flight eval runs are held in memory; a restart forgets running jobs. Completed eval runs are persisted.
 - N13. The app SHALL work offline except for LLM calls and datasource queries.
 
 ## 3. Security
@@ -176,17 +176,13 @@ All values are the ones in the code today.
 
 | Item | Value |
 |---|---|
-| Deep analysis angles | 5 at most |
-| Deep analysis findings per angle | 12,000 characters |
-| Deep analysis jobs per session at once | 1 |
-| Deep analysis jobs retained for polling | 50 |
 | Eval runs per agent at once | 1 |
 | Eval result-set comparison rows | 500 |
 | Ontology bootstrap drafts | 15 at most |
 | Metric name length | 64 characters |
 | Metric candidates offered | 12 |
 
-- N40. The UI SHALL stay responsive during long jobs. Chat turns stream; deep analysis and eval runs are started, then polled.
+- N40. The UI SHALL stay responsive during long jobs. Run turns stream; eval runs are started, then polled.
 - N41. Closing the connection during a streamed turn SHALL abort that turn.
 
 ## 6. Reliability
@@ -218,10 +214,10 @@ Open question (gap): in web mode there is no desktop bridge. Diagnostics hold on
 
 - N58. The application shell SHALL have no automatically detectable accessibility violations (checked with axe in the end-to-end suite).
 - N59. Landmark regions SHALL have labels ("Navigation rail", "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation", "Details panel"). The page SHALL have one level-one heading (the "Agentic Hub" banner).
-- N60. Icon-only buttons SHALL have an accessible name or title (the rail buttons, collapse and expand right panel, open system logs, session options, careful mode, deep analysis).
+- N60. Icon-only buttons SHALL have an accessible name or title (the rail buttons, collapse and expand right panel, open system logs, session options, careful mode).
 - N61. The right-panel divider SHALL be a keyboard-operable separator named "Resize right panel", with its current width exposed. Arrow keys SHALL change it by 24 px, Home SHALL set the minimum (360 px), End SHALL set the maximum (960 px, less room kept for the main content, at least 240 px), and a double-click SHALL reset it to 572 px. The width SHALL be remembered.
 - N62. Toggle controls SHALL expose their state (careful mode uses `aria-pressed`).
-- N63. Status that appears without a user action (deep analysis progress) SHALL have a labelled region.
+- N63. Status that appears without a user action (a run's progress) SHALL have a labelled region.
 
 - N64. The app SHALL offer a light and a dark theme, following the operating system by default (decided 2026-10-09 for epic BA-141). Text colours SHALL meet WCAG AA contrast (4.5:1) against their surfaces in both themes, and the axe check SHALL pass in both.
 

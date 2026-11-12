@@ -43,7 +43,7 @@ The directory is created (recursively) at backend start if it does not exist.
 | **Renderer preference cache** (client) | Browser/Electron `localStorage` key `questions-to-insights:nav-expanded` | String: `true` or `false` | A copy of the navigation drawer state held in `ui-preferences`. Missing or any other value = `true` (expanded). See app-shell R50. | Frontend |
 | **Renderer preference** (client) | Browser/Electron `localStorage` key `questions-to-insights:workflow-bar-collapsed` | String: `true` or `false` | Whether the workflow bar above the chat is folded to one line ([agent-panel](../capabilities/agent-panel/spec.md) R18). Per browser, not per session, and never synced to the backend; missing, unreadable or any other value = unfolded. Reads and writes are guarded, so the bar works without storage. | Frontend |
 
-Nothing else is persisted in the app data dir. Deep-analysis jobs and REST-datasource row materialisation are in-memory only (sections 3.11, 3.12), and so are the **sampled profiles** of the synthetic-data capability (ADR-0039): at most 20 profiles, each kept 60 minutes, forgotten on restart, in no collection and no file. The synthetic data exports (`.sql`, CSV, Excel), the profile export and the raw sample export are streamed to the HTTP response and store nothing; raw sample rows are re-read on request and never kept.
+Nothing else is persisted in the app data dir. REST-datasource row materialisation is in-memory only (section 3.12), and so are the **sampled profiles** of the synthetic-data capability (ADR-0039): at most 20 profiles, each kept 60 minutes, forgotten on restart, in no collection and no file. The synthetic data exports (`.sql`, CSV, Excel), the profile export and the raw sample export are streamed to the HTTP response and store nothing; raw sample rows are re-read on request and never kept.
 
 **Implementation note.** The current implementation uses `better-sqlite3` for `app.sqlite`, `@mastra/libsql` for `mastra.sqlite` and `@mastra/duckdb` for `observability.duckdb` (see [tech-stack.md](tech-stack.md)). Only the *document shapes* and the *file layout under `workspaces/`* are contracts that matter across stacks; the agent memory store is opaque framework state, and so is the observability store apart from the `span_events` columns Monitoring reads (a unit test pins them to a fixture of the real shape, ADR-0038).
 
@@ -249,7 +249,7 @@ A conversation. The largest document; the whole transcript is embedded.
 | `agentId` | uuid | no | The user agent the session was started from (section 3.10). Absent for a plain-assistant session. Set at creation, never changed. No migration: absent means the plain assistant (ADR-0008). |
 | `agentName` | string | no | Present with `agentId`. The agent's Live name, stamped at creation and re-stamped by every turn that applies the agent, so a deleted agent's sessions can still name it. Also present with `agentKey`: the built-in agent's name at creation (`Data Readiness Agent`, `Questions to Insights v2`). |
 | `agentKey` | string | no | The registry key of the built-in agent the session is bound to (today `data-readiness`, the Data Readiness Agent, and `assistant-v2`, Questions to Insights v2, which takes the user's own datasets; ADR-0028 as amended by BA-320, ADR-0031, [agents.md](agents.md) 2.10, 2.11). Every turn runs that agent. A stored `rfp` (the removed RFP Builder) is ignored, so the session runs as a plain assistant session. Absent means the assistant (with or without `agentId`); never set together with `agentId`. Set at creation, never changed. No migration (new optional field). |
-| `workflowId` | string | no | The workflow the session runs ([api.md](api.md) 116; ADR-0040): `qti-v2-turn`, `agent:<registry key>` or `agent:<user-agent id>`. Set at creation on every session created from this version on (by any body form of [api.md](api.md) 3, previews included), never changed. When it is absent (sessions saved before) or no longer resolves (a code workflow removed in a later version), the workflow is **derived at read time** from the agent fields ([agents.md](agents.md) 5.12): `agentKey: "assistant-v2"` → `qti-v2-turn`; `agentKey: "data-readiness"` → `agent:data-readiness` (a stored `agentKey: "rfp"` no longer resolves and is ignored); `agentId: <id>` → `agent:<id>` (whether the agent still exists or not); neither → `agent:assistant`. Today the stored value always equals the derived one. No migration (new optional field). |
+| `workflowId` | string | no | The workflow the session runs ([api.md](api.md) 116; ADR-0040): `qti-v2-turn` (the only workflow since 2026-11-12) or, on a stored session of a removed workflow, `agent:<registry key>` or `agent:<user-agent id>`. Set at creation on every session created from this version on (by any body form of [api.md](api.md) 3, previews included), never changed. A stored id that is not `qti-v2-turn` no longer resolves (the one-step `agent:*` workflows, `seq-text-demo` and `deep-analysis` were removed 2026-11-12, ADR-0042): the session is legacy and read-only, and its `workflowRef` reads `deleted: true` with the stored id and the name it last had ([api.md](api.md) 2.1; [agents.md](agents.md) 5.12). When it is absent, the workflow is derived from the agent fields: `agentKey: "assistant-v2"` → `qti-v2-turn`, anything else → none. Nothing is migrated or deleted. |
 | `rfpId` | uuid | no | Legacy (the RFP Builder was removed 2026-11-12): older sessions may still carry it; nothing writes it, it is not in the wire types and readers ignore it. |
 | `messages` | `ChatMessage[]` | yes | Transcript in order. Empty at creation. |
 | `visualizations` | `SessionVisualization[]` | no | Visual metadata (section 3.4.3); `[]` at creation. |
@@ -265,7 +265,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `role` | enum | yes | `user` \| `assistant`. |
-| `content` | string | yes | Message text. For an assistant message it is the answer markdown; for a clarification, the question; for a deep-analysis report, the report's executive summary; for a visual-only turn a generated line like `Created interactive visual "<title>" (v<N>).` (verbs Created / Updated / Reverted). |
+| `content` | string | yes | Message text. For an assistant message it is the answer markdown; for a clarification, the question; for a legacy deep-analysis report (removed 2026-11-12), the report's executive summary; for a visual-only turn a generated line like `Created interactive visual "<title>" (v<N>).` (verbs Created / Updated / Reverted). |
 | `at` | ISO | yes | Creation time; the message's identity (see 1.3). |
 | `data` | `ToolDataRecord[]` | no | Data the assistant retrieved this turn (3.4.2). Omitted when empty. |
 | `entities` | string[] | no | Distinct fully-qualified `catalog.schema.table` entities the answer's SQL touched, derived from `data`; drives provenance chips and the visual frame's source list. |
@@ -277,7 +277,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `crossCheck` | object | no | Careful mode only: `{status: "agree" \| "disagree" \| "error", note?: string}`; `note` is a one-line tooltip text (clipped). `agree` = an independent re-derived query returned the same result set, `disagree` = it differed, `error` = the check could not complete. |
 | `reasoning` | `ReasoningStep[]` | no | The assistant's plain-language route to the answer (3.4.2); omitted when no call carried a rationale. Older transcripts lack it; readers derive it from `data[].rationale`. |
 | `knowledge` | `KnowledgeUse[]` | no | The enabled ontology items that fit the turn's context budget (3.9). Records what the model was *given*. |
-| `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends, and on a successful `deep-analysis` run's `answer` (3.16; `jobId` the run id). `path` is workspace-relative (`reports/<jobId>.md` for a job, `reports/<slug of title>.md` for a run), `angles` the number of investigation angles covered. |
+| `report` | `AnalysisReport` | no | Legacy (Deep analysis removed 2026-11-12): `{jobId: string, title: string, path: string, angles: number}`, set on the message a finished deep-analysis job appended and on a `deep-analysis` run's `answer`. Stored data stays and is read as before; nothing writes it any more, and the report file (`reports/…`) is no longer reachable from the app. |
 | `rfpPackage` | object | no | Legacy (the RFP Builder was removed 2026-11-12): older assistant messages may still carry an RFP package reference; nothing writes it and it is ignored, so such a message reads as a plain answer. |
 | `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
 
@@ -569,9 +569,9 @@ One document per built-in agent whose system prompt was edited, (ADR-0026). Rule
 | `updatedBy` | string | yes | Always `local` (the built-in super admin; kept for documents stored earlier). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
-### 3.11 Deep-analysis jobs (not persisted)
+### 3.11 Deep-analysis jobs (removed 2026-11-12)
 
-Deep-analysis jobs exist only in process memory (bounded history; a backend restart forgets them). Persisted outputs are the report file (`workspaces/session-<id>/reports/<jobId>.md`, section 4.5) and the assistant message carrying `report` (3.4.1). For completeness the in-memory job shape is: `id`, `sessionId`, `question`, `status` (`planning` \| `investigating` \| `writing` \| `done` \| `error`), `progress?`, `step?`, `steps?`, `title?`, `path?`, `error?`, `startedAt`, `finishedAt?`. The planner output schema is `{title: string, angles: [{title, question}] (3..5 intended, min 1)}` and the writer output `{title, executiveSummary, report}`; see [../capabilities/deep-analysis/spec.md](../capabilities/deep-analysis/spec.md) and [agents.md](agents.md).
+Removed with ADR-0042: no deep-analysis job exists. The report files and the assistant messages carrying `report` that old sessions and runs hold stay in place (3.4.1, 4.5).
 
 ### 3.12 Other non-persisted data
 
@@ -596,11 +596,11 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `eval_runs` | `datasourceId`, `datasets[]` | `connections.id`, `datasets.name` | Scope snapshot, may dangle. |
 | `agents` | `draft.datasets[]`, `live.datasets[]` | `datasets.name` | By name, no cascade. May dangle; the hub flags the agent as having a missing dataset. |
 | `sessions` | `agentId` | `agents.id` | By value, no cascade. Deleting the agent leaves the session pointing at a missing id; it then runs as the plain assistant and is shown with `agentName` (past-chats R59). |
-| `sessions` | `workflowId` (or derived from `agentKey` / `agentId`) | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, derived, never a collection: workflows are defined in code or computed from the agent registry and `agents`. A stored id that no longer resolves is ignored and the id is derived again. A deleted user agent's workflow leaves the catalogue; its sessions keep `agent:<id>` and are shown with `agentName` (past-chats R59, R65). |
+| `sessions` | `workflowId` (or derived from `agentKey`) | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, derived, never a collection: workflows are defined in code. A stored id that no longer resolves (every one but `qti-v2-turn`) makes the session a legacy past chat with `workflowRef.deleted: true` (past-chats R59, R65). |
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |
-| `workflow_runs` | `workflowId` | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, may dangle: a deleted user agent's workflow leaves the catalogue and its runs keep `workflowId` and `workflowName`. |
+| `workflow_runs` | `workflowId` | a workflow of the catalogue ([agents.md](agents.md) 5.12) | By id, may dangle: a run of a removed workflow (`agent:*`, `seq-text-demo`, `deep-analysis`) keeps `workflowId` and `workflowName` and is a legacy run: listed, readable and deletable, with no Run again or follow-up (workflows R23). |
 | `workflow_runs` | `datasets[]`, `agentId` | `datasets.name`, `agents.id` | By value, no cascade, may dangle. |
 | `workflow_runs` | `context.fromRunId` | `workflow_runs.id` | By value. Deleting the earlier run leaves it dangling; it is read only when the later run starts. |
 | `workflow_runs` | `id` | workspace `session-run-<id>`; memory thread `run-<id>` while it runs | The workspace is deleted with the run (api.md 122); the thread is deleted when its turn ends. |
@@ -646,7 +646,7 @@ One document per run of a workflow on an input ([workflows](../capabilities/work
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | The run id. The run host is `run-<id>` and the workspace `workspaces/session-run-<id>/` (4.1). |
-| `workflowId` | string | yes | The workflow (`seq-text-demo`, `deep-analysis`, `qti-v2-turn`, `agent:<key or id>`; [agents.md](agents.md) 5.12). |
+| `workflowId` | string | yes | The workflow: `qti-v2-turn`, or on a legacy run the id of a removed workflow (`seq-text-demo`, `deep-analysis`, `agent:<key or id>`; [agents.md](agents.md) 5.12). |
 | `workflowName` | string | yes | Its name when the run started, so a deleted user agent's run still names it. |
 | `input` | object | yes | The checked input (api.md 118: declared fields only, defaults filled), as `Record<string, string \| number \| boolean \| string[]>`. |
 | `context` | `{ fromRunId: string }` | no | The earlier run whose question and answer the agent was given (api.md 3.6). |
@@ -654,12 +654,12 @@ One document per run of a workflow on an input ([workflows](../capabilities/work
 | `steps` | `{ id, title, status, input?, inputTruncated?, output?, outputTruncated?, error?, startedAt?, endedAt?, toolCalls? }[]` (api.md 3.6 `WorkflowRunStep`) | yes | `[]` while running; at the end every step in workflow order with `success`, `failed`, `skipped` or `stopped`. `input` is what the step received and `output` its output, each when its JSON is at most 20 000 characters, else `inputTruncated: true` / `outputTruncated: true`. `startedAt` and `endedAt` are ISO times (none on a skipped step). `toolCalls` (`{ tool, input?, rowCount?, error?, durationMs? }[]`, at most 50, `input` at most 2 000 characters) are an agent step's calls from its agent turn. Runs stored before these fields existed (the n8n-style workflow page) lack `input`, the times and `toolCalls`; readers treat them as absent, no migration. |
 | `output` | object | no | The workflow's final output (success only). |
 | `error` | string | no | Why it failed (`failed` only), e.g. the model's error or `The app stopped before the run finished`. |
-| `question` | string | no | Agent workflows: the user message the agent received, trimmed. A `deep-analysis` run: its `question` input. Its presence marks a run with a run host (and a workspace). |
-| `answer` | `ChatMessage` (3.4.1) | no | Agent workflows: the assistant message the turn persisted on the host, with the same shape as a session's, so one renderer serves runs and past chats. Absent when the turn stopped or failed before answering. A successful `deep-analysis` run: the executive summary, with `report` (`jobId` the run id, `path` `reports/<slug of the title>.md`; [agents.md](agents.md) 5.15). |
+| `question` | string | no | The user message the agent received, trimmed (a legacy `deep-analysis` run: its `question` input). Its presence marks a run with a run host (and a workspace). |
+| `answer` | `ChatMessage` (3.4.1) | no | The assistant message the turn persisted on the host, with the same shape as a session's, so one renderer serves runs and past chats. Absent when the turn stopped or failed before answering. A legacy `deep-analysis` run: the executive summary, with `report` (3.4.1). |
 | `datasets` | string[] | yes | The datasets the run worked over (`[]` for a code-only run, and while running). |
 | `agentKey` / `agentId`, `agentName` | string | no | The agent its agent step ran, as on a session (3.4). |
 | `rfpId` | uuid | no | Legacy (removed 2026-11-12): older runs may still carry it; nothing writes it and it is ignored. |
-| `panelItems` | `PanelItem[]` (3.4.4) | no | Agent runs: the host's panel items when the run ended. A successful `deep-analysis` run: one file item, id `deep-analysis-report`, its report. |
+| `panelItems` | `PanelItem[]` (3.4.4) | no | The host's panel items when the run ended (a legacy `deep-analysis` run: one file item, id `deep-analysis-report`, its report). |
 | `visualizations` | `SessionVisualization[]` (3.4.3) | no | Agent runs: the visuals the turn made, under the run's workspace. |
 | `events` | `ChatMessage[]` (3.4.1) | no | Agent runs: the cards of the visual actions taken after the run (created, updated, reverted), each an assistant message carrying `visual`, oldest first (api.md 130-132). The run-backed host places them after `answer`. |
 | `workflowState` | `WorkflowState` (3.4.4) | no | Agent runs: the agent's saved phases. |
@@ -689,7 +689,7 @@ workspaces/
         v2/
         ...
     reports/
-      <job-id>.md                  deep-analysis reports (4.5)
+      <job-id>.md                  legacy deep-analysis reports (4.5)
     synthetic-data/
       <dataset-slug>-synthetic-<dialect>-seed<seed>.sql   a synthetic data script (Data Readiness Agent sessions only)
 ```
@@ -789,9 +789,9 @@ A spec visual's synthetic bundle is: body `<div id="qti-chart-root"></div>`, emp
 
 ### 4.5 Reports
 
-`reports/<job-id>.md` — one Markdown file per finished deep-analysis job (`job-id` matches `^[a-zA-Z0-9-]+$`). Structure assembled by the app, not the model: `# <title>`; `**Question:** <question>`; a line `Deep analysis · session: <name> · <n> angle(s) · generated <ISO>`; `## Executive summary` + summary; the model-written body (starting `## Findings by angle`); `## Data appendix` with, per angle, `### <i>. <angle title>`, the angle question, and each SQL statement in a ```sql fence (or `_No SQL was recorded for this angle._`); then `---` and `Report <job-id>`. Downloaded as `<slug of title, ≤64>.md` (or `deep-analysis-<first 8 of id>.md`).
+Legacy (Deep analysis removed 2026-11-12): `reports/<job-id>.md` — one Markdown file per finished deep-analysis job (`job-id` matches `^[a-zA-Z0-9-]+$`), left in the session workspace. Nothing writes or serves it any more.
 
-A `deep-analysis` run (since 1.23.24; [agents.md](agents.md) 5.15) stores its report in its own workspace as `workspaces/session-run-<run id>/reports/<slug of title, ≤64>.md` (or `deep-analysis-<first 8 of the run id>.md`), the same structure without the `session: <name>` part of the line under the question, and closing `Report <run id>`; it downloads under that name as the run's file item `deep-analysis-report` (api.md 126).
+A legacy `deep-analysis` run (1.23.24 to 2026-11-12) stored its report in its own run workspace under `reports/`; the file stays with the run and is no longer downloadable.
 
 ### 4.6 No skills in workspaces
 
@@ -814,7 +814,7 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 ## 5. Agent memory
 
 - Only the `assistant` agent has conversation memory. Each session is one isolated memory thread: **thread id = session id** and **resource id = session id**. Configuration: the last 40 messages are replayed; semantic recall off; automatic thread-title generation off. The store is `mastra.sqlite` (section 1.2); its internal tables are owned by the framework and are not part of this contract.
-- What is stored: the user/assistant turns of chat as the framework records them (the framework writes new turns itself once the thread exists). Background jobs that fire many internal sub-calls (deep analysis) and the other agents (SQL repair, verifier, designer, knowledge bootstrap, eval judge) run **without** the memory thread so they never pollute the history a later chat question is answered from.
+- What is stored: the user/assistant turns of chat as the framework records them (the framework writes new turns itself once the thread exists). The other agents (SQL repair, verifier, designer, knowledge bootstrap, eval judge) run **without** the memory thread so they never pollute the history a later chat question is answered from.
 - **Bootstrap of legacy transcripts.** When a turn is about to run and the thread does not yet exist (sessions created before memory was enabled, or a brand-new session), the agent input is the entire persisted transcript mapped to plain `{role, content}` text messages (structured fields such as `data` are not replayed); the framework then creates the thread from it. When the thread exists, the input is only the latest user message — except when the previous assistant message was a clarification (it ended its turn before memory saw the question), in which case the clarification text (as an assistant message) and the user's answer are both sent.
 - On session deletion the thread is deleted (`deleteThread(session id)`), the workspace is unregistered and destroyed, and the workspace directory is removed.
 - **Ownership.** Memory threads and workspaces carry no owner of their own. They are reached only through a session: every route and tool that touches a thread or workspace first loads the session by id, and an unknown id answers as not found. Session ids are random UUIDs but are not treated as secrets.

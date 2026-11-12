@@ -283,7 +283,7 @@ flowchart LR
 
   subgraph mastra["mastra/"]
     mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
-    turnwf["workflows/<br/>(agent-turn, qti-v2-turn, seq-text-demo; ADR-0034, ADR-0040)"]
+    turnwf["workflows/<br/>(qti-v2-turn; ADR-0034, ADR-0040, ADR-0042)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
@@ -412,7 +412,7 @@ flowchart LR
 - **Consequences:** Renaming collections or persisted fields needs explicit migrations (`LEGACY_TABLE_NAMES`, `LEGACY_DOC_FIELDS`).
 
 #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
-- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too, and since its 1.23.9 amendment the `seq-text-demo` run workflow); amended by ADR-0041 (one workspace per run; runs keep no lasting memory)
+- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too, and since its 1.23.9 amendment the `seq-text-demo` run workflow); amended by ADR-0042 (only `qti-v2-turn` remains a workflow; `seq-text-demo` is removed); amended by ADR-0041 (one workspace per run; runs keep no lasting memory)
 - **Date:** 2026-10-01
 - **Context:** Agents need tools, memory, and a provider-agnostic model layer.
 - **Decision:** Standalone Mastra instance wrapped by `MastraService`; models resolved at call time from persisted LLM settings; LibSQL memory; one filesystem workspace per session.
@@ -444,7 +444,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run)
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow, removed by ADR-0042); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run)
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -991,7 +991,7 @@ flowchart LR
   - Consequences: the privacy rules of the capability gain the raw-export rule; the new endpoints are 112 (with `format`), 113 and 114 ([api.md](api.md) 2.18); the stack gains the two packages ([tech-stack.md](tech-stack.md)).
 
 #### ADR-0040 — Workflow-first: a session runs a workflow defined in code; agents are the steps' building blocks; an agent without a workflow gets a one-step workflow, never registered per agent
-- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md)
+- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input) and by ADR-0042 (2026-11-12: agents are no longer workflows; the one-step workflow is gone and the catalogue is `qti-v2-turn` only). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md)
 - **Date:** 2026-11-11
 - **Context:**
   - A session is bound to an agent. A user agent is bound by `agentId` and runs the `assistant` with its configuration (ADR-0008). A built-in agent is bound by `agentKey` and runs that agent (ADR-0028).
@@ -1082,6 +1082,28 @@ flowchart LR
   - Evals keep calling agents directly with a throwaway run host (1.23.26b); the dev scripts (`run-eval`, `check-answers`, `custom-endpoint-smoke`) run on run hosts too.
   - **Chat write paths removed (1.23.27):** `POST /sessions`, the chat message routes, the session visual actions, preview sessions, the non-streamed turn and the deep-analysis start and poll routes are gone; a stored session is only read, downloaded from and deleted. The `sessions` collection and every stored shape are unchanged, and the turn engine still reads a stored session in the sessions unit suites (a test seam), never at runtime.
   - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
+
+#### ADR-0042 — Workflows and agents are separate; only Questions to Insights v2 is a workflow
+- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041.
+- **Date:** 2026-11-12
+- **Context:**
+  - ADR-0040 gave every agent without a workflow of its own an automatic one-step workflow (`agent:<key or id>`), so the Workflows area listed the assistant, the Data Readiness Agent and every Live user agent next to Questions to Insights v2. The agent page also ran that workflow (**Run**).
+  - Only Questions to Insights v2 has real steps. The other entries were an agent in a workflow's clothes, and the Sequential test workflow (`seq-text-demo`) and Deep analysis were a test fixture and an early code workflow.
+  - On 2026-11-12 the user asked to separate agents from workflows, keep only the Questions to Insights v2 workflow for now, and delete the others.
+- **Decision:**
+  - **The workflow catalogue is `[qti-v2-turn]`.** An agent is not a workflow. The one-step workflow, its `agent:<key or id>` ids, the Sequential test workflow and Deep analysis are removed from the code, the API and the UI.
+  - **Agents are a library.** The Agents area configures them (prompt, tools, skills, evals, versions). A user agent keeps **Try it** (a draft run, not a workflow run); no agent has a **Run** on its page. The `assistant-v2` agent keeps being called by the `analyse` step of `qti-v2-turn`; `GET /agents/:key` `usedInWorkflows` lists `qti-v2-turn` for it and is empty for every other agent.
+  - **The agent turn engine stays.** `qti-v2-turn`'s analyse step, Try it and the eval runner (`assistant`, `data-readiness`) call it directly, with no workflow host.
+  - **Stored data stays.** Runs of removed workflows list and open read-only as legacy runs (no Run again, no follow-up). Sessions bound to a removed workflow id read as plain past chats (`workflowRef.deleted: true`). Stored readiness reports stay viewable; the Data Readiness Agent stays in the library but the UI generates no new report.
+- **Rejected:**
+  - **Keeping the one-step workflows hidden:** dead code with a public API for nothing.
+  - **Migrating or deleting stored runs:** silent data loss, and the runs are still readable.
+  - **Removing the agents themselves:** the user asked to separate them from workflows, not to remove them.
+- **Consequences:**
+  - **Partly supersedes ADR-0040:** "an agent without a workflow gets a one-step workflow" no longer holds; its catalogue, ids and code-defined workflow remain only as `qti-v2-turn`; the agent turn engine stays as that workflow's analyse step, Try it and the eval runner. Marked in ADR-0040's status.
+  - **Amends ADR-0041:** a run of an agent workflow is no longer a thing; a run is a run of `qti-v2-turn` (or a legacy run). Deep analysis, deferred by ADR-0041 to a code-defined run workflow, is dropped.
+  - **Amends ADR-0008:** a user agent no longer runs as a one-step workflow; Try it is its only run.
+  - **Stack-neutral:** a rebuild needs one stored, streamed run workflow, an agent library with a draft preview, and read-only legacy runs.
 
 ## Level 4 — Code
 

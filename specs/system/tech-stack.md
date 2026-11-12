@@ -162,7 +162,7 @@ Rules:
 - `infrastructure/` is technical concerns. Feature modules depend on infrastructure, never the reverse.
 - `config/` is typed configuration files.
 
-Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `deep-analysis`, `developer-settings`, `ontology`, `llm`, `metrics`, `sessions`, `synthetic-data`, `testing-data`, `verified-queries`.
+Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `developer-settings`, `ontology`, `llm`, `metrics`, `sessions`, `synthetic-data`, `testing-data`, `verified-queries`.
 
 The `synthetic-data` module (ADR-0039) holds `synthetic-data.module.ts`, `.controller.ts`, `.service.ts`, `profile-cache.ts`, `types.ts` and `limits.ts`, a `profile/` folder (the pure sampled-profile builder: classification, shapes, statistics) a `generator/` folder (pure, seeded: `prng`, `plan`, `order`, `generate`, `words`, `values/*`), `script.ts` (the script header, order and batching), a `dialects/` folder (the `DialectWriter` interface, `postgres.writer.ts`, `databricks.writer.ts`) and an `exports/` folder (`csv.ts`, `zip.ts`, `xlsx.ts`, writers that consume the same generator stream, so all formats carry the same values). The row sampler is an additive `sampleTable` method on the PostgreSQL and Databricks profilers, with its interface in `datasources/connectors/sampling.ts`.
 

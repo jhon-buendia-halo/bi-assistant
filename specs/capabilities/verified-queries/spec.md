@@ -18,7 +18,7 @@ Creation and removal
 - R7. Deleting a session SHALL NOT delete the verified queries that came from it (see Open questions).
 
 Retrieval
-- R8. For every chat turn, deep-analysis call and SQL-verifier pass the system SHALL look up stored pairs similar to the user's question. Similarity SHALL be lexical: lowercase the text, split on non-alphanumeric characters, drop one-character tokens and common stopwords, and score the overlap of the two token sets (shared tokens divided by distinct tokens in either). Pairs with a zero score SHALL be ignored.
+- R8. For every chat turn and SQL-verifier pass the system SHALL look up stored pairs similar to the user's question. Similarity SHALL be lexical: lowercase the text, split on non-alphanumeric characters, drop one-character tokens and common stopwords, and score the overlap of the two token sets (shared tokens divided by distinct tokens in either). Pairs with a zero score SHALL be ignored.
 - R9. The system SHALL return the top three pairs by score and render them as one block "Verified reference queries (user-approved earlier — reuse their tables, joins and filters when the question is similar)", each as `Q: <question>` and `SQL: <sql>`. The block SHALL be limited to 3,000 characters, stopping at the first pair that does not fit. When nothing matches, no block SHALL be added.
 - R10. The block SHALL be sent as a system message after the metric definitions and the knowledge block. Retrieval is across all sessions and datasources; it SHALL NOT be restricted to the current session's datasets.
 - R11. A failure to read the library while preparing the SQL verifier SHALL be treated as "no references", not as an error.
@@ -54,7 +54,7 @@ Ownership
 - Rating endpoint on a session's messages (feedback) and on a run's answer (api.md 128): see [../../system/api.md](../../system/api.md). There is no list/delete endpoint for verified queries; they are internal to the backend. The metrics candidates endpoint exposes them indirectly.
 - Collection `verified_queries` and the answer's `verified` / `feedback` fields: see [../../system/data-model.md](../../system/data-model.md).
 - Agents using the reference block: the assistant (chat and deep analysis) and the SQL verifier: see [../../system/agents.md](../../system/agents.md).
-- Related capabilities: [../agent-answers/spec.md](../agent-answers/spec.md) (rating UI and verification), [../metrics/spec.md](../metrics/spec.md), [../dataset-ontology/spec.md](../dataset-ontology/spec.md), [../deep-analysis/spec.md](../deep-analysis/spec.md).
+- Related capabilities: [../agent-answers/spec.md](../agent-answers/spec.md) (rating UI and verification), [../metrics/spec.md](../metrics/spec.md), [../dataset-ontology/spec.md](../dataset-ontology/spec.md).
 
 ## UI
 
