@@ -35,6 +35,7 @@ import {
 } from '../../../sessions/models/session.model';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import {
+  TRIGGER_LABELS,
   WorkflowInputField,
   WorkflowRun,
   WorkflowSummary,
@@ -51,9 +52,7 @@ import {
   runStepStatusLabel,
 } from '../../services/workflows.util';
 
-export const TRIGGER_LABELS: Record<WorkflowSummary['trigger'], string> = {
-  run: 'Runs on an input',
-};
+export { TRIGGER_LABELS };
 
 export const NO_STEP_SELECTED =
   'Select a step in the graph to see its configuration.';

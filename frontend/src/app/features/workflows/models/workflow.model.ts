@@ -71,12 +71,39 @@ export interface WorkflowSummary {
   runRequirement?: string;
 }
 
+/** How a workflow starts, as its Start node says it (workflows R7). */
+export const TRIGGER_LABELS: Record<WorkflowSummary['trigger'], string> = {
+  run: 'Runs on an input',
+};
+
+/**
+ * An agent a workflow's steps call, as `GET /workflows/:id` details it
+ * (api.md 117). `model` and `systemPrompt` are optional here so a fixture
+ * built from the list shape still type-checks; the backend always sends them.
+ */
+export interface WorkflowAgentDetail {
+  key: string;
+  name: string;
+  /** `<provider>/<model>` of the agent's LLM; null when no LLM is set. */
+  model?: string | null;
+  /** The agent's base prompt (api.md 34 `instructions`); each run adds its own context. */
+  systemPrompt?: string;
+  /** The prompt was longer than 20 000 characters and was shortened. */
+  systemPromptTruncated?: true;
+}
+
+/** One step of a workflow detail: an agent step also names its agent's key (api.md 117). */
+export type WorkflowDetailStep = Omit<AgentWorkflow['steps'][number], 'agent'> & {
+  agent?: NonNullable<AgentWorkflow['steps'][number]['agent']> & { key?: string };
+};
+
 /**
  * One workflow with its steps (api.md 117). Structurally an `AgentWorkflow`,
  * so the 1.23.1 drawing takes it unchanged.
  */
-export interface WorkflowDetail extends WorkflowSummary {
-  steps: AgentWorkflow['steps'];
+export interface WorkflowDetail extends Omit<WorkflowSummary, 'agents'> {
+  agents: WorkflowAgentDetail[];
+  steps: WorkflowDetailStep[];
 }
 
 /** A step's status in a streamed run (api.md 3.6 `step`). */
@@ -87,14 +114,38 @@ export type WorkflowRunStepStatus =
   | 'skipped'
   | 'stopped';
 
-/** One `step` event of the run stream, or a step of a stored run (api.md 3.6). */
+/** One tool call of an agent step, from the turn's `tool` / `tool-result` events (api.md 3.6). */
+export interface WorkflowRunToolCall {
+  tool: string;
+  /** What the tool ran (the SQL), at most 2 000 characters. */
+  input?: string;
+  rowCount?: number;
+  error?: string;
+  /** From the `tool` event to its `tool-result`; absent when no result came. */
+  durationMs?: number;
+}
+
+/**
+ * One `step` event of the run stream, or a step of a stored run (api.md 3.6).
+ * Runs stored before the n8n-style page lack `input`, the timestamps and
+ * `toolCalls`.
+ */
 export interface WorkflowRunStep {
   id: string;
   title: string;
   status: WorkflowRunStepStatus;
+  /** What the step received, capped like `output`. */
+  input?: Record<string, unknown>;
+  inputTruncated?: true;
   output?: Record<string, unknown>;
   outputTruncated?: true;
   error?: string;
+  /** ISO time the step started. */
+  startedAt?: string;
+  /** ISO time the step ended. */
+  endedAt?: string;
+  /** Agent steps fed by an agent turn: its tool calls in order, at most 50. */
+  toolCalls?: WorkflowRunToolCall[];
 }
 
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
@@ -136,6 +187,52 @@ export interface WorkflowRun {
   finishedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** A tool call of the run's agent turn, as it streams (api.md 3.1). */
+export interface LiveToolCall {
+  name: string;
+  rationale?: string;
+  input?: string;
+  rowCount?: number;
+  error?: string;
+  /** The latest `tool-progress` message of a long-running tool. */
+  progress?: string;
+  /** Its `tool-result` arrived. */
+  finished: boolean;
+}
+
+/** One step of the run shown, in the workflow's order. */
+export interface RunStepView {
+  id: string;
+  title: string;
+  kind: 'code' | 'agent';
+  /** Null for a step that has not started yet. */
+  status: WorkflowRunStepStatus | null;
+  input?: Record<string, unknown>;
+  inputTruncated?: true;
+  output?: Record<string, unknown>;
+  outputTruncated?: true;
+  error?: string;
+  startedAt?: string;
+  endedAt?: string;
+  toolCalls?: WorkflowRunToolCall[];
+}
+
+/** The run shown on the workflow page: live while it streams, then as stored. */
+export interface RunView {
+  status: WorkflowRun['status'];
+  error?: string;
+  steps: RunStepView[];
+  output?: Record<string, unknown>;
+  /** Agent workflows: the answer (absent while streaming, or when none came). */
+  answer?: ChatMessage;
+  /** Null until the stream's `run` event arrives. */
+  runId?: string | null;
+  /** The input the run was started with; null when unknown. */
+  input?: Record<string, WorkflowInputValue> | null;
+  startedAt?: string;
+  finishedAt?: string;
 }
 
 /** One row of the run history (api.md 120 `WorkflowRunSummary`). */

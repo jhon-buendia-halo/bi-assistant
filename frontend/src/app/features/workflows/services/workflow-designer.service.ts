@@ -14,6 +14,9 @@ import {
 } from '../../sessions/models/session.model';
 import { saveFile } from '../../synthetic-data/services/synthetic-data-api.service';
 import {
+  LiveToolCall,
+  RunStepView,
+  RunView,
   WorkflowDetail,
   WorkflowInputValue,
   WorkflowRun,
@@ -50,40 +53,7 @@ export const WORKFLOW_PANEL_TABS: readonly {
   { id: 'code', label: 'Code' },
 ];
 
-/** A tool call of the run's agent turn, as it streams (api.md 3.1). */
-export interface LiveToolCall {
-  name: string;
-  rationale?: string;
-  input?: string;
-  rowCount?: number;
-  error?: string;
-  /** The latest `tool-progress` message of a long-running tool. */
-  progress?: string;
-  /** Its `tool-result` arrived. */
-  finished: boolean;
-}
-
-/** One step of the run shown, in the workflow's order. */
-export interface RunStepView {
-  id: string;
-  title: string;
-  kind: 'code' | 'agent';
-  /** Null for a step that has not started yet. */
-  status: WorkflowRunStepStatus | null;
-  output?: Record<string, unknown>;
-  outputTruncated?: true;
-  error?: string;
-}
-
-/** The run shown in the Run tab: live while it streams, then as stored. */
-export interface RunView {
-  status: WorkflowRun['status'];
-  error?: string;
-  steps: RunStepView[];
-  output?: Record<string, unknown>;
-  /** Agent workflows: the answer (absent while streaming, or when none came). */
-  answer?: ChatMessage;
-}
+export type { LiveToolCall, RunStepView, RunView };
 
 /** How often, and how many times, a stopped run is read back until it is stored. */
 const STOPPED_POLL_MS = 300;
