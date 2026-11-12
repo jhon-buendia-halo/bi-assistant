@@ -121,6 +121,10 @@ export class WorkflowsService {
     return [
       ...(assistant ? [assistantEntry(assistant)] : []),
       ...CODE_WORKFLOWS.flatMap((source) => {
+        if (source.calls) {
+          const agent = builtins.get(source.calls);
+          return agent ? [callingRunEntry(source, agent)] : [];
+        }
         if (!source.primaryFor) return [runEntry(source)];
         const agent = builtins.get(source.primaryFor);
         return agent ? [codeEntry(source, source.primaryFor, agent)] : [];
@@ -246,6 +250,42 @@ function runEntry(source: CodeWorkflowSource): CatalogueEntry {
         output: [...step.output],
         exits: step.exits.map((exit) => ({ ...exit })),
       })),
+  };
+}
+
+/**
+ * A run workflow whose agent steps call a built-in agent that keeps its own
+ * workflow (deep analysis calls the assistant, plan 1.25.3): over the
+ * datasets the run picks, with the agent's requirement; each agent step runs
+ * the agent with its tools, or none for a tool-free call, and its budget.
+ */
+function callingRunEntry(
+  source: CodeWorkflowSource,
+  agent: AgentSummary,
+): CatalogueEntry {
+  const base = runEntry(source);
+  return {
+    summary: {
+      ...base.summary,
+      agents: [{ key: agent.key, name: agent.name }],
+      picksDatasets: true,
+      missingDatasets: [...agent.missingDatasets],
+      ...requirements(agent.chatRequirement),
+    },
+    steps: () =>
+      base.steps().map((step, index) => {
+        const call = source.steps[index]?.agentCall;
+        return step.kind === 'agent' && call
+          ? {
+              ...step,
+              agent: {
+                name: agent.name,
+                tools: call.tools ? [...agent.tools] : [],
+                maxSteps: call.maxSteps,
+              },
+            }
+          : step;
+      }),
   };
 }
 

@@ -22,6 +22,7 @@ import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
 import { oneStepWorkflowInput } from '../../mastra/workflows/workflow-catalog';
+import { DEEP_ANALYSIS_STEPS } from '../../mastra/workflows/deep-analysis.steps';
 import { SEQ_TEXT_DEMO_STEPS } from '../../mastra/workflows/seq-text-demo.steps';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
@@ -123,6 +124,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       'agent:assistant',
       'qti-v2-turn',
       'seq-text-demo',
+      'deep-analysis',
       'agent:data-readiness',
       'agent:rfp',
       `agent:${alpha.id}`,
@@ -200,7 +202,26 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       missingDatasets: [],
       starterQuestions: [],
     });
+    // Deep analysis (plan 1.25.3): a run workflow whose steps call the
+    // assistant, over the datasets the run picks.
     expect(workflows[3]).toEqual({
+      id: 'deep-analysis',
+      name: 'Deep analysis',
+      description:
+        'Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.',
+      kind: 'code',
+      owner: 'Official',
+      agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
+      stepCount: 4,
+      bar: 'steps',
+      trigger: 'run',
+      input: workflows[1].input,
+      picksDatasets: true,
+      datasets: [],
+      missingDatasets: [],
+      starterQuestions: [],
+    });
+    expect(workflows[4]).toEqual({
       id: 'agent:data-readiness',
       name: 'Data Readiness Agent',
       description: 'Data Readiness Agent description',
@@ -220,7 +241,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         'Show my past assessments',
       ],
     });
-    expect(workflows[4]).toEqual({
+    expect(workflows[5]).toEqual({
       id: 'agent:rfp',
       name: 'RFP Builder',
       description: 'RFP Builder description',
@@ -238,7 +259,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       chatRequirement: RFP_REQUIREMENT,
       runRequirement: RFP_REQUIREMENT,
     });
-    expect(workflows[5]).toEqual({
+    expect(workflows[6]).toEqual({
       id: `agent:${alpha.id}`,
       name: 'Alpha',
       description: 'Alpha description',
@@ -256,7 +277,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       chatRequirement: "None of this agent's datasets exist",
       runRequirement: "None of this agent's datasets exist",
     });
-    expect(workflows[6]).toMatchObject({
+    expect(workflows[7]).toMatchObject({
       id: `agent:${zeta.id}`,
       owner: 'You',
       trigger: 'chat',
@@ -264,8 +285,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       datasets: ['World Cup Core'],
       missingDatasets: [],
     });
-    expect(workflows[6]).not.toHaveProperty('chatRequirement');
-    expect(workflows[6]).not.toHaveProperty('runRequirement');
+    expect(workflows[7]).not.toHaveProperty('chatRequirement');
+    expect(workflows[7]).not.toHaveProperty('runRequirement');
     // Every workflow says how it is started and what it takes.
     for (const workflow of workflows) {
       expect(['chat', 'run']).toContain(workflow.trigger);
@@ -362,6 +383,32 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(false);
     });
 
+    it("deep-analysis's steps are its catalogue's, its agent steps running the assistant", async () => {
+      ctx = build();
+      const detail = await ctx.service.get('deep-analysis');
+      expect(detail).toMatchObject({ trigger: 'run', stepCount: 4 });
+      const assistant = 'Questions to Insights Assistant';
+      expect(
+        detail.steps.map((step) => [step.id, step.kind, step.agent]),
+      ).toEqual([
+        ['plan', 'agent', { name: assistant, tools: [], maxSteps: 1 }],
+        [
+          'investigate',
+          'agent',
+          {
+            name: assistant,
+            tools: ['ask_clarification', 'run_readonly_sql'],
+            maxSteps: 15,
+          },
+        ],
+        ['write', 'agent', { name: assistant, tools: [], maxSteps: 1 }],
+        ['assemble', 'code', undefined],
+      ]);
+      expect(detail.steps.map((step) => step.summary)).toEqual(
+        DEEP_ANALYSIS_STEPS.map((step) => step.summary),
+      );
+    });
+
     it.each(['agent:sql-fixer', 'agent:assistant-v2', 'nope', 'agent-turn'])(
       'answers 404 for %p',
       async (id) => {
@@ -389,7 +436,13 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
   afterEach(() => ctx.db.close());
 
   it.each([
-    ['assistant', [{ id: 'agent:assistant', name: 'Assistant' }]],
+    [
+      'assistant',
+      [
+        { id: 'agent:assistant', name: 'Assistant' },
+        { id: 'deep-analysis', name: 'Deep analysis' },
+      ],
+    ],
     ['assistant-v2', [{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]],
     ['rfp', [{ id: 'agent:rfp', name: 'RFP Builder' }]],
     [

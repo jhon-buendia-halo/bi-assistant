@@ -588,3 +588,103 @@ describe('WorkflowDesigner, the RFP Builder one exchange per run (plan 4.3; rfp 
     expect(designer.rfpDownloading()).toBeNull();
   });
 });
+
+describe('WorkflowDesigner, a deep-analysis run (plan 1.25.3)', () => {
+  const REPORT_PATH = 'reports/denial-drivers.md';
+  const DEEP: WorkflowDetail = {
+    ...ASSISTANT,
+    id: 'deep-analysis',
+    name: 'Deep analysis',
+    kind: 'code',
+    stepCount: 4,
+    bar: 'steps',
+    trigger: 'run',
+    input: ASSISTANT.input.slice(0, 2),
+    steps: ['plan', 'investigate', 'write', 'assemble'].map((id) => ({
+      id,
+      title: id,
+      kind: id === 'assemble' ? ('code' as const) : ('agent' as const),
+      summary: id,
+      input: [],
+      output: [],
+      exits: [],
+    })),
+  };
+  const report = { jobId: 'run-1', title: 'Denial drivers', path: REPORT_PATH, angles: 3 };
+  let designer: WorkflowDesigner;
+  let runs: FakeRunsApi & { downloadPanelItem: jasmine.Spy };
+  let http: HttpTestingController;
+  let toast: jasmine.SpyObj<ToastService>;
+
+  beforeEach(() => {
+    runs = Object.assign(new FakeRunsApi(), {
+      downloadPanelItem: jasmine
+        .createSpy('downloadPanelItem')
+        .and.returnValue(of(new Blob(['# Denial drivers']))),
+    });
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: WorkflowRunsApiService, useValue: runs },
+        { provide: ToastService, useValue: toast },
+      ],
+    });
+    designer = TestBed.inject(WorkflowDesigner);
+    http = TestBed.inject(HttpTestingController);
+    designer.load(DEEP.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/deep-analysis')).flush(DEEP);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+  });
+
+  afterEach(() => http.verify());
+
+  function finish(): void {
+    designer.setInput('question', 'Why are denials rising?');
+    designer.toggleDataset('datasets', 'World Cup Core');
+    designer.execute();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'deep-analysis' });
+    runs.last.handlers.onDone!(
+      storedRun({
+        workflowId: 'deep-analysis',
+        workflowName: 'Deep analysis',
+        steps: DEEP.steps.map((step) => ({ id: step.id, title: step.title, status: 'success' })),
+        answer: {
+          role: 'assistant',
+          content: 'Denials rose to 12.4%.',
+          at: '2026-11-11T10:00:01.000Z',
+          report,
+        },
+        panelItems: [
+          {
+            id: 'deep-analysis-report',
+            kind: 'file',
+            title: 'Denial drivers',
+            shownAt: 'x',
+            path: REPORT_PATH,
+            bytes: 2048,
+          },
+        ],
+      }),
+    );
+  }
+
+  it("downloads the report from the run's file route, named as the file, with a toast", () => {
+    finish();
+    const click = spyOn(HTMLAnchorElement.prototype, 'click');
+    designer.downloadReport(report);
+    expect(runs.downloadPanelItem).toHaveBeenCalledWith('run-1', 'deep-analysis-report');
+    const link = click.calls.mostRecent().object as HTMLAnchorElement;
+    expect(link.download).toBe('denial-drivers.md');
+    expect(toast.success).toHaveBeenCalledWith('Report downloaded');
+    expect(designer.reportDownloading()).toBeFalse();
+  });
+
+  it('says the download failed when the run has no file at the report path', () => {
+    finish();
+    designer.downloadReport({ ...report, path: 'reports/other.md' });
+    expect(runs.downloadPanelItem).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Report download failed');
+  });
+});

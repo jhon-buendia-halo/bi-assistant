@@ -6,11 +6,13 @@ import {
 } from '../../datasets/services/datasets-api.service';
 import { ToastService } from '../../../core/toast/toast.service';
 import {
+  AnalysisReport,
   ChatMessage,
   MessageFeedback,
   RfpPackage,
   WorkflowView,
 } from '../../sessions/models/session.model';
+import { saveFile } from '../../synthetic-data/services/synthetic-data-api.service';
 import {
   WorkflowDetail,
   WorkflowInputValue,
@@ -141,6 +143,8 @@ export class WorkflowDesigner {
   readonly rfpDocument = signal<{ title: string; text: string } | null>(null);
   /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
   readonly rfpDownloading = signal<string | null>(null);
+  /** The deep-analysis report of the run shown is being downloaded (plan 1.25.3). */
+  readonly reportDownloading = signal(false);
 
   /** Live: the step events so far, by step id. */
   readonly liveSteps = signal<Record<string, WorkflowRunStep>>({});
@@ -357,6 +361,7 @@ export class WorkflowDesigner {
     this.downloadSubscription?.unsubscribe();
     this.downloadSubscription = null;
     this.rfpDownloading.set(null);
+    this.reportDownloading.set(false);
     this.cancelStream();
     this.loading.set(false);
     this.error.set(null);
@@ -486,6 +491,36 @@ export class WorkflowDesigner {
           this.toast.error(err?.error?.message ?? 'RFP package download failed');
         },
       });
+  }
+
+  /**
+   * Save the shown run's deep-analysis report (plan 1.25.3): the run's file
+   * item at the report's path, from the run's route (api.md 126), named as
+   * the file is.
+   */
+  downloadReport(report: AnalysisReport): void {
+    const run = this.run();
+    if (run === null || this.reportDownloading()) return;
+    const item = (run.panelItems ?? []).find(
+      (candidate) => candidate.kind === 'file' && candidate.path === report.path,
+    );
+    if (item === undefined) {
+      this.toast.error('Report download failed');
+      return;
+    }
+    const fileName = report.path.split('/').pop() || 'report.md';
+    this.reportDownloading.set(true);
+    this.downloadSubscription = this.runsApi.downloadPanelItem(run.id, item.id).subscribe({
+      next: (blob) => {
+        this.reportDownloading.set(false);
+        saveFile({ blob, fileName });
+        this.toast.success('Report downloaded');
+      },
+      error: (err) => {
+        this.reportDownloading.set(false);
+        this.toast.error(err?.error?.message ?? 'Report download failed');
+      },
+    });
   }
 
   /**

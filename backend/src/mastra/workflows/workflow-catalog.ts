@@ -19,6 +19,11 @@ import {
   ASSISTANT_V2_NAME,
 } from '../agents/assistant-v2-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
+import {
+  DEEP_ANALYSIS_AGENT_KEY,
+  DEEP_ANALYSIS_STEPS,
+  DEEP_ANALYSIS_WORKFLOW_ID,
+} from './deep-analysis.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
   QTI_V2_TURN_STEPS,
@@ -182,6 +187,12 @@ export interface CodeWorkflowSource {
    * one-step workflow. A run workflow may call no agent.
    */
   primaryFor?: string;
+  /**
+   * Registry key of the agent a run workflow's agent steps call without
+   * being that agent's workflow (deep analysis calls the assistant, which
+   * keeps its own one-step workflow).
+   */
+  calls?: string;
   trigger: WorkflowTrigger;
   /** The typed input of a run workflow, in form order. */
   input?: readonly WorkflowInputField[];
@@ -218,6 +229,17 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
       },
     ],
     steps: SEQ_TEXT_DEMO_STEPS,
+    bar: 'steps',
+  },
+  {
+    id: DEEP_ANALYSIS_WORKFLOW_ID,
+    name: 'Deep analysis',
+    description:
+      'Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.',
+    calls: DEEP_ANALYSIS_AGENT_KEY,
+    trigger: 'run',
+    input: [QUESTION_FIELD, DATASETS_FIELD],
+    steps: DEEP_ANALYSIS_STEPS,
     bar: 'steps',
   },
 ];
@@ -505,7 +527,8 @@ export function workflowsUsingAgent(
     ? agentWorkflowId(agentKey)
     : undefined;
   const code = CODE_WORKFLOWS.filter(
-    (workflow) => workflow.primaryFor === agentKey,
+    (workflow) =>
+      workflow.primaryFor === agentKey || workflow.calls === agentKey,
   ).map((workflow) => workflow.id);
   // The assistant's workflow leads the catalogue; the other one-step
   // workflows follow the code-defined ones.

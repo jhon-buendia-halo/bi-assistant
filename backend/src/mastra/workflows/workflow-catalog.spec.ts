@@ -37,12 +37,13 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds two code workflows: Questions to Insights v2 for assistant-v2 (chat), then the sequential test workflow (run)', () => {
+  it('holds three code workflows: Questions to Insights v2 for assistant-v2 (chat), the sequential test workflow and Deep analysis (run)', () => {
     expect(
-      CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
+      CODE_WORKFLOWS.map(({ id, name, primaryFor, calls, bar, trigger }) => ({
         id,
         name,
         primaryFor,
+        calls,
         bar,
         trigger,
       })),
@@ -61,7 +62,24 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         bar: 'steps',
         trigger: 'run',
       },
+      {
+        id: 'deep-analysis',
+        name: 'Deep analysis',
+        calls: 'assistant',
+        bar: 'steps',
+        trigger: 'run',
+      },
     ]);
+    // Deep analysis (plan 1.25.3): the question and the datasets, its four
+    // steps, and it never starts a chat.
+    expect(CODE_WORKFLOWS[2].input).toEqual(CODE_WORKFLOWS[0].input);
+    expect(CODE_WORKFLOWS[2].steps.map((step) => step.id)).toEqual([
+      'plan',
+      'investigate',
+      'write',
+      'assemble',
+    ]);
+    expect(workflowStartsChat(CODE_WORKFLOWS[2])).toBe(false);
     expect(CODE_WORKFLOWS[0].steps.map((step) => step.id)).toEqual([
       'receive-question',
       'load-catalog',
@@ -610,7 +628,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
   describe('workflowsUsingAgent (api.md 34 usedInWorkflows)', () => {
     it.each([
-      ['assistant', ['agent:assistant']],
+      ['assistant', ['agent:assistant', 'deep-analysis']],
       ['assistant-v2', ['qti-v2-turn']],
       ['rfp', ['agent:rfp']],
       ['data-readiness', ['agent:data-readiness']],

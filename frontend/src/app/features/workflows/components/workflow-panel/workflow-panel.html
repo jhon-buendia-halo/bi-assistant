@@ -671,10 +671,12 @@
                   [showRating]="true"
                   [ratingPending]="designer.ratingPending()"
                   [rfpDownloading]="designer.rfpDownloading()"
+                  [reportDownloading]="designer.reportDownloading()"
                   (rate)="designer.rateAnswer($event)"
                   (optionPicked)="designer.followUp($event)"
                   (openScorecard)="openScorecard($event)"
                   (downloadRfp)="designer.downloadRfpPackage($event.pkg, $event.file)"
+                  (downloadReport)="designer.downloadReport($event)"
                 />
               </div>
               @if (designer.rfpDocument(); as doc) {

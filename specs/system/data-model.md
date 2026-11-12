@@ -277,7 +277,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `crossCheck` | object | no | Careful mode only: `{status: "agree" \| "disagree" \| "error", note?: string}`; `note` is a one-line tooltip text (clipped). `agree` = an independent re-derived query returned the same result set, `disagree` = it differed, `error` = the check could not complete. |
 | `reasoning` | `ReasoningStep[]` | no | The assistant's plain-language route to the answer (3.4.2); omitted when no call carried a rationale. Older transcripts lack it; readers derive it from `data[].rationale`. |
 | `knowledge` | `KnowledgeUse[]` | no | The enabled ontology items that fit the turn's context budget (3.9). Records what the model was *given*. |
-| `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends. `path` is workspace-relative (`reports/<jobId>.md`), `angles` the number of investigation angles covered. |
+| `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends, and on a successful `deep-analysis` run's `answer` (3.16; `jobId` the run id). `path` is workspace-relative (`reports/<jobId>.md` for a job, `reports/<slug of title>.md` for a run), `angles` the number of investigation angles covered. |
 | `rfpPackage` | `RfpPackageRef` | no | `{rfpId: string, title: string, files: {name: string, bytes: number}[], exportedAt: ISO, draft?: boolean}` — `draft: true` when the package is a draft stored under `rfp/<rfpId>/draft/` by `export_rfp_draft`, absent for the final package. Set on the answer of a turn whose `export_rfp_package` or `export_rfp_draft` call stored an RFP package in the session workspace (`rfp/<rfpId>/`, section 4.1). `files[].name` is relative to that folder (`rfp.md`, `rfp.pdf`, `exhibits/<name>.csv`, `manifest.json`). Rendered as the package card; downloaded through [api.md](api.md) #105. RFP Builder sessions only. |
 | `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
 
@@ -646,7 +646,7 @@ One document per run of a workflow on an input ([workflows](../capabilities/work
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | The run id. The run host is `run-<id>` and the workspace `workspaces/session-run-<id>/` (4.1). |
-| `workflowId` | string | yes | The workflow (`seq-text-demo`, `qti-v2-turn`, `agent:<key or id>`; [agents.md](agents.md) 5.12). |
+| `workflowId` | string | yes | The workflow (`seq-text-demo`, `deep-analysis`, `qti-v2-turn`, `agent:<key or id>`; [agents.md](agents.md) 5.12). |
 | `workflowName` | string | yes | Its name when the run started, so a deleted user agent's run still names it. |
 | `input` | object | yes | The checked input (api.md 118: declared fields only, defaults filled), as `Record<string, string \| number \| boolean \| string[]>`. |
 | `context` | `{ fromRunId: string }` | no | The earlier run whose question and answer the agent was given (api.md 3.6). |
@@ -654,12 +654,12 @@ One document per run of a workflow on an input ([workflows](../capabilities/work
 | `steps` | `{ id, title, status, output?, outputTruncated?, error? }[]` | yes | `[]` while running; at the end every step in workflow order with `success`, `failed`, `skipped` or `stopped`. `output` is the step's output when its JSON is at most 20 000 characters, else `outputTruncated: true`. |
 | `output` | object | no | The workflow's final output (success only). |
 | `error` | string | no | Why it failed (`failed` only), e.g. the model's error or `The app stopped before the run finished`. |
-| `question` | string | no | Agent workflows: the user message the agent received, trimmed. Its presence marks an agent run. |
-| `answer` | `ChatMessage` (3.4.1) | no | Agent workflows: the assistant message the turn persisted on the host, with the same shape as a session's, so one renderer serves runs and past chats. Absent when the turn stopped or failed before answering. |
+| `question` | string | no | Agent workflows: the user message the agent received, trimmed. A `deep-analysis` run: its `question` input. Its presence marks a run with a run host (and a workspace). |
+| `answer` | `ChatMessage` (3.4.1) | no | Agent workflows: the assistant message the turn persisted on the host, with the same shape as a session's, so one renderer serves runs and past chats. Absent when the turn stopped or failed before answering. A successful `deep-analysis` run: the executive summary, with `report` (`jobId` the run id, `path` `reports/<slug of the title>.md`; [agents.md](agents.md) 5.15). |
 | `datasets` | string[] | yes | The datasets the run worked over (`[]` for a code-only run, and while running). |
 | `agentKey` / `agentId`, `agentName` | string | no | The agent its agent step ran, as on a session (3.4). |
 | `rfpId` | uuid | no | RFP Builder runs: the RFP the run worked on. |
-| `panelItems` | `PanelItem[]` (3.4.4) | no | Agent runs: the host's panel items when the run ended. |
+| `panelItems` | `PanelItem[]` (3.4.4) | no | Agent runs: the host's panel items when the run ended. A successful `deep-analysis` run: one file item, id `deep-analysis-report`, its report. |
 | `visualizations` | `SessionVisualization[]` (3.4.3) | no | Agent runs: the visuals the turn made, under the run's workspace. |
 | `workflowState` | `WorkflowState` (3.4.4) | no | Agent runs: the agent's saved phases. |
 | `ownerId` | `local` | no | Legacy and inert (3.14), stamped on insert. |
@@ -802,6 +802,8 @@ A spec visual's synthetic bundle is: body `<div id="qti-chart-root"></div>`, emp
 ### 4.5 Reports
 
 `reports/<job-id>.md` — one Markdown file per finished deep-analysis job (`job-id` matches `^[a-zA-Z0-9-]+$`). Structure assembled by the app, not the model: `# <title>`; `**Question:** <question>`; a line `Deep analysis · session: <name> · <n> angle(s) · generated <ISO>`; `## Executive summary` + summary; the model-written body (starting `## Findings by angle`); `## Data appendix` with, per angle, `### <i>. <angle title>`, the angle question, and each SQL statement in a ```sql fence (or `_No SQL was recorded for this angle._`); then `---` and `Report <job-id>`. Downloaded as `<slug of title, ≤64>.md` (or `deep-analysis-<first 8 of id>.md`).
+
+A `deep-analysis` run (since 1.23.24; [agents.md](agents.md) 5.15) stores its report in its own workspace as `workspaces/session-run-<run id>/reports/<slug of title, ≤64>.md` (or `deep-analysis-<first 8 of the run id>.md`), the same structure without the `session: <name>` part of the line under the question, and closing `Report <run id>`; it downloads under that name as the run's file item `deep-analysis-report` (api.md 126).
 
 ### 4.6 No skills in workspaces
 

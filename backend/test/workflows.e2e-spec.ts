@@ -86,18 +86,20 @@ describe('The workflow catalogue (API)', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('lists the five Official workflows on a fresh data dir, in catalogue order', async () => {
+  it('lists the six Official workflows on a fresh data dir, in catalogue order', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'agent:assistant',
       'qti-v2-turn',
       'seq-text-demo',
+      'deep-analysis',
       'agent:data-readiness',
       'agent:rfp',
     ]);
     expect(listed.map((w) => w.trigger)).toEqual([
       'chat',
       'chat',
+      'run',
       'run',
       'chat',
       'chat',
@@ -136,11 +138,19 @@ describe('The workflow catalogue (API)', () => {
         },
       ],
     });
+    // Deep analysis (plan 1.25.3): a run workflow whose steps call the assistant.
     expect(listed[3]).toMatchObject({
+      name: 'Deep analysis',
+      kind: 'code',
+      stepCount: 4,
+      picksDatasets: true,
+      agents: [{ key: 'assistant' }],
+    });
+    expect(listed[4]).toMatchObject({
       name: 'Data Readiness Agent',
       chatRequirement: 'Add a PostgreSQL or Databricks dataset first',
     });
-    expect(listed[4]).toMatchObject({
+    expect(listed[5]).toMatchObject({
       name: 'RFP Builder',
       chatRequirement:
         'Load the "Intellify RFP API" sample in Settings → Testing Data first',
@@ -204,18 +214,19 @@ describe('The workflow catalogue (API)', () => {
         'agent:assistant',
         'qti-v2-turn',
         'seq-text-demo',
+        'deep-analysis',
         'agent:data-readiness',
         'agent:rfp',
         `agent:${liveId}`,
       ]);
-      expect(listed[5]).toMatchObject({
+      expect(listed[6]).toMatchObject({
         name: 'Cup historian',
         kind: 'agent',
         owner: 'You',
         agents: [{ key: liveId, name: 'Cup historian' }],
         datasets: ['World Cup Core'],
       });
-      expect(listed[5]).not.toHaveProperty('chatRequirement');
+      expect(listed[6]).not.toHaveProperty('chatRequirement');
     });
 
     it('GET /workflows/:id answers 404 for a System agent and a draft-only agent', async () => {
