@@ -56,7 +56,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Run the axe scan on every new screen, and on a shared class's first use of a state, in both themes; the lead does it at the wave check, not each builder.
 
 ## Evals and agents
-- Run evals only on a fresh copy of the data dir per run, never on `~/.questions-to-insights` or the user's live data; run RFP eval runs one after another (shared `intellify_mercer_demo`).
+- Run evals only on a fresh copy of the data dir per run, never on `~/.questions-to-insights` or the user's live data.
 - Before an eval run, print the copy's saved provider and model, agree the model with the user, check its key and credit (about 3 × cases × 2 turns), and use `EVAL_LLM_*` for any other target; never baseline on the env fallback model.
 - For a failed case, read `toolCalls[].input/output` and decide model fault vs check or rubric fault before touching code; stop a 3-run round at the first failed run.
 - Decide whether an agent's evals must run by hashing `getInstructions()` and its tool list on base and branch; when they run, compare with at least 3 runs per case per build; for a judge failure, compare with base's answer and make the rubric state one pass condition.

@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **93 HTTP route handlers** across 15 app controllers (sessions 17, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, monitoring 5, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2), plus the 33 routes of the embedded Intellify RFP API (2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **92 HTTP route handlers** across 15 app controllers (sessions 16, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, monitoring 5, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -97,7 +97,7 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 
 There is **no authentication**. The app has one built-in user, the super admin (id `local`, [ADR-0030](architecture.md)), who is always the caller: no route needs a credential, no route answers 401 or 403, and there is no sign-in, session cookie, bearer token, Origin check or per-route permission. Every route is open to whoever reaches the port. What decides who can reach it is the bind address (5, 4.3, G10, G14): the web CLI binds `127.0.0.1`, while the desktop backend and a CLI started with `--host 0.0.0.0` accept connections from every interface, and then anyone who can reach the port has full access, including the stored LLM key's use and the developer settings.
 
-The one exception is the Intellify RFP API (2.16), a separate NestJS application that keeps its own `X-API-Key` guard (ADR-0027).
+
 
 ---
 
@@ -107,7 +107,7 @@ Legend for **FE**: whether the shipped frontend calls it. Document types referen
 
 ### 2.1 Sessions
 
-Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, rfp, workflows.
+Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, workflows.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -125,13 +125,13 @@ Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, rfp
 | 12 | `POST /sessions/:id/visualizations/:vid/refresh` | Re-run SQL, refresh data in place (Removed in 1.23.27) | — |
 | 13 | `POST /sessions/:id/visualizations/:vid/repair` | One-shot silent auto-repair (Removed in 1.23.27) | — |
 | 14 | `GET /sessions/:id/visualizations/:vid/download` | Zip bundle | yes |
-| 105 | `GET /sessions/:id/rfp-packages/:rfpId/download` | Download an RFP package (zip) or one of its files | yes |
+| 105 | `GET /sessions/:id/rfp-packages/:rfpId/download` | Download an RFP package (Removed 2026-11-12) | — |
 | 106 | `GET /sessions/:id/panel-items/:itemId/file` | Read the text of a file panel item | yes |
 | 107 | `GET /sessions/:id/panel-items/:itemId/download` | Download a file, document or table panel item | yes |
 
-The session on the wire (endpoints 1 and 2) is the stored `SessionDoc` (data-model 3.4) plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`assistant-v2`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (past-chats R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`; for `rfp` the starters are `Start an RFP for a client`, `Which of my clients renew on 1 January 2027?` and `Resume my draft RFPs` ([rfp](../capabilities/rfp/spec.md)). It is computed on every read, never stored.
+The session on the wire (endpoints 1 and 2) is the stored `SessionDoc` (data-model 3.4) plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`assistant-v2`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (past-chats R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`. A stored `agentKey: "rfp"` (the removed RFP Builder) does not resolve: such a session reads as a plain one. It is computed on every read, never stored.
 
-Every session on the wire also carries an always-present, derived `workflowRef: { id: string; name: string; kind: 'code' | 'agent'; deleted: boolean }`: the workflow the session runs ([workflows](../capabilities/workflows/spec.md) R4; [agents.md](agents.md) 5.12). `id` is the stored `workflowId` while it resolves, else the id derived from `agentKey` / `agentId` (data-model 3.4). `name` is the workflow's catalogue name (116): `Assistant` for `agent:assistant`, `Questions to Insights v2` for `qti-v2-turn`, the registered agent's name for `agent:rfp` and `agent:data-readiness`; for a user agent's workflow the agent's Live name, for a preview the draft's name, and once the agent is deleted the stored `agentName` with `deleted: true` (`deleted` is `false` otherwise). `kind` is `code` for a code-defined workflow, else `agent`. It is computed on every read, never stored. The `agent` and `workflow` fields above are unchanged: `workflow` is the workflow bar's view, not this reference.
+Every session on the wire also carries an always-present, derived `workflowRef: { id: string; name: string; kind: 'code' | 'agent'; deleted: boolean }`: the workflow the session runs ([workflows](../capabilities/workflows/spec.md) R4; [agents.md](agents.md) 5.12). `id` is the stored `workflowId` while it resolves, else the id derived from `agentKey` / `agentId` (data-model 3.4). `name` is the workflow's catalogue name (116): `Assistant` for `agent:assistant`, `Questions to Insights v2` for `qti-v2-turn`, the registered agent's name for `agent:data-readiness`; for a user agent's workflow the agent's Live name, for a preview the draft's name, and once the agent is deleted the stored `agentName` with `deleted: true` (`deleted` is `false` otherwise). `kind` is `code` for a code-defined workflow, else `agent`. It is computed on every read, never stored. The `agent` and `workflow` fields above are unchanged: `workflow` is the workflow bar's view, not this reference.
 
 Since 1.23.27 the routes that wrote to a session are removed (3, 5, 6, 7, 8, 10-13 here and 46, 47 in 2.7): a stored session is listed, read, downloaded from and deleted, nothing more ([past-chats](../capabilities/past-chats/spec.md)). A preview session never exists any more; the agent editor's preview is a draft run (api.md 129).
 
@@ -188,10 +188,7 @@ Removed in 1.23.27: a run's visual is repaired by 134. Nothing in the app or its
 - Errors (Style B): 404 not found, 400 `"Version <n> does not exist"`.
 
 #### 105. `GET /sessions/:id/rfp-packages/:rfpId/download`
-- Query: `draft` (optional, `true`): serve the draft package stored by `export_rfp_draft` under `rfp/<rfpId>/draft/` instead of the final one (the zip is then named `rfp-<slug>-draft.zip`, and `file` names are relative to the draft folder). `file` (optional), the name of one file of the package as listed in the answer's `rfpPackage.files` (e.g. `rfp.md`, `rfp.pdf`, `exhibits/exhibit-a-census.csv`, `manifest.json`). Without it the whole package downloads.
-- Response `200`: without `file`, `application/zip` of the session workspace folder `rfp/<rfpId>/` (`rfp/<rfpId>/draft/` with `draft=true`; [data-model.md](data-model.md) 4.1), `Content-Disposition: attachment; filename="rfp-<slug>.zip"` (slug of the package title, as in #14, fallback `rfp-<first 8 of rfpId>`); with `file`, that file with its content type (`text/markdown`, `application/pdf`, `text/csv`, `application/json`) and `Content-Disposition: attachment; filename="<base name>"`.
-- The files are the ones `export_rfp_package` (or, with `draft=true`, `export_rfp_draft`) stored in the workspace ([agents.md](agents.md) 3.10); the route never calls the Intellify RFP API.
-- Errors (Style B): `404 "Session <id> not found"`; `404 "RFP package \"<rfpId>\" not found"` (nothing exported for that RFP in this session; with `draft=true`, no draft); `404 "RFP package \"<rfpId>\" has no file \"<file>\""`; `400 "Invalid file name \"<file>\""` for an absolute or `..` path. Capability: [rfp](../capabilities/rfp/spec.md).
+Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number is not reused). Package files an old session left in its workspace stay on disk, unused.
 
 #### 106. `GET /sessions/:id/panel-items/:itemId/file`
 - Response `200`: `{ item: FilePanelItem, contentType: string, text: string }`: the stored item ([data-model.md](data-model.md) 3.4.4) and the file's text as it is now in the session workspace (at most 256 KB), with the content type of its extension (`.md` `text/markdown`, `.csv` `text/csv`, `.json` `application/json`, others `text/plain`). The panel's file view reads it when the item is opened.
@@ -199,7 +196,7 @@ Removed in 1.23.27: a run's visual is repaired by 134. Nothing in the app or its
 - Errors (Style B): `404 "Session <id> not found"`; `404 "Panel item \"<itemId>\" not found"`; `400 "Panel item \"<itemId>\" is not a file"`; `404 "File \"<path>\" not found in the session workspace"`; `400 "File \"<path>\" is larger than 256 KB"`. Capability: [agent-panel](../capabilities/agent-panel/spec.md).
 
 #### 107. `GET /sessions/:id/panel-items/:itemId/download`
-- Query: `format` (optional): `pdf` or `md` for a `document` item or a `file` item whose path ends in `.md`, `csv` for a `table` item; absent means the defaults below. `format=pdf` renders the Markdown as PDF (`application/pdf`; filename `<slug>.pdf` for a document, the file's base name with `.pdf` in place of `.md` for a file), with the same renderer as the RFP package document (2.16.5, I31), the item's title as the PDF title.
+- Query: `format` (optional): `pdf` or `md` for a `document` item or a `file` item whose path ends in `.md`, `csv` for a `table` item; absent means the defaults below. `format=pdf` renders the Markdown as PDF (`application/pdf`; filename `<slug>.pdf` for a document, the file's base name with `.pdf` in place of `.md` for a file), with the markdown PDF renderer (`common/markdown-pdf.ts`), the item's title as the PDF title.
 - Response `200`, as an attachment (`Content-Disposition: attachment; filename="<name>"`):
   - a `file` item: the file's bytes with the content type of #106 and its base name as the filename;
   - a `document` item: the Markdown as `text/markdown`, filename `<slug>.md`;
@@ -425,7 +422,7 @@ With no key the request carries no credential header. Any `http`/`https` host is
 
 ### 2.6 Agents, hub and evals
 
-Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `rfp`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`, `assistant-v2`, `data-readiness`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52, R97-R104 and R106 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
+Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`, `assistant-v2`, `data-readiness`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52, R97-R104 and R106 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -450,11 +447,11 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
 - `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows those its effective configuration selects (agents.md 2.1) */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[], chatRequirement?: string }`.
-- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty, except for a built-in agent that declares a dataset for its sessions (today `rfp`; ADR-0028): its `datasets` is `["Intellify RFP API"]`, `missingDatasets` lists it while no dataset of that name exists, and `chatRequirement` is then `Load the "Intellify RFP API" sample in Settings → Testing Data first` (the UI shows it as the reason Start chat is blocked). The four former showcase agents (`benchmarking`, `survey`, `lad-coe`, `strategy`) were removed in 1.23.8: they are not in the registry, so `GET /agents` does not list them and `GET /agents/benchmarking` answers `Agent "benchmarking" not found`; a pin or prompt override saved for one of those keys is ignored. `chatRequirement` is absent otherwise. The **Data Readiness Agent** (`data-readiness`; [agents.md](agents.md) 2.10) declares a dataset *kind* instead of a name: its `datasets` lists the names of every dataset bound to a `postgres` or `databricks` datasource, its `missingDatasets` is empty, its `starterQuestions` are its three starters (data-readiness R2), and while no such dataset exists `chatRequirement` is `Add a PostgreSQL or Databricks dataset first`. The **Questions to Insights v2** agent (`assistant-v2`; [agents.md](agents.md) 2.11) has no dataset of its own, like the `assistant`: no `chatRequirement`, empty `datasets`, `missingDatasets` and `starterQuestions`. `kind` is `official` for `assistant`, `assistant-v2`, `rfp` and `data-readiness`, and `system` for the other built-in agents.
+- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty, except for a built-in agent that declares a dataset for its sessions (none today; the `rfp` agent that did was removed on 2026-11-12, and `GET /agents/rfp` answers `Agent "rfp" not found`, as for the showcase agents below). The four former showcase agents (`benchmarking`, `survey`, `lad-coe`, `strategy`) were removed in 1.23.8: they are not in the registry, so `GET /agents` does not list them and `GET /agents/benchmarking` answers `Agent "benchmarking" not found`; a pin or prompt override saved for one of those keys is ignored. `chatRequirement` is absent otherwise. The **Data Readiness Agent** (`data-readiness`; [agents.md](agents.md) 2.10) declares a dataset *kind* instead of a name: its `datasets` lists the names of every dataset bound to a `postgres` or `databricks` datasource, its `missingDatasets` is empty, its `starterQuestions` are its three starters (data-readiness R2), and while no such dataset exists `chatRequirement` is `Add a PostgreSQL or Databricks dataset first`. The **Questions to Insights v2** agent (`assistant-v2`; [agents.md](agents.md) 2.11) has no dataset of its own, like the `assistant`: no `chatRequirement`, empty `datasets`, `missingDatasets` and `starterQuestions`. `kind` is `official` for `assistant`, `assistant-v2` and `data-readiness`, and `system` for the other built-in agents.
 
 #### 34. `GET /agents/:key`
-- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant, assistant-v2, rfp and data-readiness only; false for the System agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */; workflow?: AgentWorkflow /* workflow-backed built-in agents only (today assistant-v2) */; usedInWorkflows: { id: string; name: string }[] /* always present */ }`.
-- `usedInWorkflows` lists the workflows whose steps call the agent, in catalogue order (116; [agents.md](agents.md) 5.12): `assistant` → `[{ id: 'agent:assistant', name: 'Assistant' }]`, `assistant-v2` → `[{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]`, `rfp` → `[{ id: 'agent:rfp', name: 'RFP Builder' }]`, `data-readiness` → `[{ id: 'agent:data-readiness', name: 'Data Readiness Agent' }]`, a Live user agent → `[{ id: 'agent:<id>', name: <its Live name> }]`; a draft-only user agent and the System agents → `[]`.
+- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant, assistant-v2 and data-readiness only; false for the System agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */; workflow?: AgentWorkflow /* workflow-backed built-in agents only (today assistant-v2) */; usedInWorkflows: { id: string; name: string }[] /* always present */ }`.
+- `usedInWorkflows` lists the workflows whose steps call the agent, in catalogue order (116; [agents.md](agents.md) 5.12): `assistant` → `[{ id: 'agent:assistant', name: 'Assistant' }]`, `assistant-v2` → `[{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]`, `data-readiness` → `[{ id: 'agent:data-readiness', name: 'Data Readiness Agent' }]`, a Live user agent → `[{ id: 'agent:<id>', name: <its Live name> }]`; a draft-only user agent and the System agents → `[]`.
 - `AgentWorkflow = { id: string; steps: { id: string; title: string; kind: 'code' | 'agent'; summary: string; input: string[]; output: string[]; agent?: { name: string; tools: string[]; maxSteps: number } /* the agent step only */; exits: { label: string; outcome: 'fails' | 'stops' }[] }[] }`. The steps are in run order, and it is built from the workflow's step catalogue ([agents.md](agents.md) 5.11): for v2, `id` is `qti-v2-turn`, the agent is `Questions to Insights v2` with its three tools and `maxSteps` 15. It is read-only and never stored ([agents-evals](../capabilities/agents-evals/spec.md) R108).
 - For a built-in agent, `instructions` is the prompt as served, so it reflects an override (ADR-0026), and `prompt` carries the editable text, the shipped text and the override state ([data-model.md](data-model.md) 3.10.3). For the `assistant`, `editable` and `shipped` exclude the generated `## Tools` section ([agents.md](agents.md) 2.1).
 - A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
@@ -482,12 +479,12 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`; `404 "Agent \"<key>\" has no skill \"<name>\""`; `400 "Invalid skill file path \"<path>\""` for an empty, absolute or `..` path; `404 "Skill \"<name>\" has no file \"<path>\""`.
 
 #### 35. `GET /agents/:key/evals`
-- Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `rfp` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
+- Response `200`: `{ sets: AgentEvalSet[] }`: the sets whose agent is `:key` (a set's `agentKey`, default `assistant`; [agents.md](agents.md) 8.1). Only `assistant` and `data-readiness` have sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
 
 #### 36. `POST /agents/:key/evals/run`
 - Body: `{ datasourceId: string; caseIds?: string[] }`. `caseIds` omitted = all questions.
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
-- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `rfp`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
+- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `data-readiness`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
 - Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
 
 #### 37. `GET /agents/:key/evals/runs`
@@ -591,7 +588,7 @@ The `built-in` routes are declared before `/skills/:id`.
 - Failures (Style A): `"Skill \"<id>\" not found"`; `"\"<name>\" is linked by <agent names, comma-separated>. Unlink it first."` while the draft of any of the caller's agents links the skill (names sorted); Live agents don't block it.
 
 #### 99. `GET /skills/built-in`
-- Response `200`: `{ skills: BuiltInSkillSummary[] }` sorted by name. `BuiltInSkillSummary = { name, description /* as served */, loading: 'on-demand' | 'harness', agents: string[] /* registry keys, agents.md 7.4 */, tools?: string[] /* the tools the served body links as [[tool:<name>]], in order of first appearance; left out when it links none (the RFP Builder's stage skills link theirs) */, modified: boolean, builtInChanged: boolean /* modified and the shipped built-in's hash differs from baseHash */, updatedAt: string | null /* the override's */ }`.
+- Response `200`: `{ skills: BuiltInSkillSummary[] }` sorted by name. `BuiltInSkillSummary = { name, description /* as served */, loading: 'on-demand' | 'harness', agents: string[] /* registry keys, agents.md 7.4 */, tools?: string[] /* the tools the served body links as [[tool:<name>]], in order of first appearance; left out when it links none */, modified: boolean, builtInChanged: boolean /* modified and the shipped built-in's hash differs from baseHash */, updatedAt: string | null /* the override's */ }`.
 
 #### 100. `GET /skills/built-in/:name`
 - Response `200`: `BuiltInSkill = BuiltInSkillSummary & { body: string; files: { path, content }[] /* as served */; builtIn: { description, body, files } /* as shipped */ }`.
@@ -609,7 +606,7 @@ The `built-in` routes are declared before `/skills/:id`.
 #### 103. `PUT /agents/:key/prompt`
 - Body: `{ prompt: string }`, trimmed; the checks below run on the trimmed text. Saves the override (ADR-0026); it applies to the next call of every session, user agent, deep analysis, visual and eval run.
 - Success: `{ ok:true, message:"System prompt of \"<name>\" saved", agent: AgentDetail }`.
-- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `rfp` (RFP Builder) only (agents.md 2.8): `"The RFP Builder's prompt must start with \"You are the RFP Builder\""`, `"Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` that is not one of its own on-demand skills, its seven stage skills of agents.md 7.4), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its own tools: its RFP tools and `ask_clarification`); for the `data-readiness` agent only (agents.md 2.10): `"The Data Readiness Agent's prompt must start with \"You are the Data Readiness Agent\""`, `"Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user"` (any `[[skill:…]]` other than `data-readiness`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`, `show_in_panel`, `ask_clarification`); for the `assistant-v2` agent only (agents.md 2.11): `"The Questions to Insights v2 prompt must start with \"You are Questions to Insights v2\""`, `"Skills can't be linked here: Questions to Insights v2 has no skills"` (any `[[skill:…]]`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `list_entities`, `describe_entity`, `run_readonly_sql`); for a System agent only: `"This agent's prompt can't contain links"` (any `[[…]]`).
+- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `data-readiness` agent only (agents.md 2.10): `"The Data Readiness Agent's prompt must start with \"You are the Data Readiness Agent\""`, `"Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user"` (any `[[skill:…]]` other than `data-readiness`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`, `show_in_panel`, `ask_clarification`); for the `assistant-v2` agent only (agents.md 2.11): `"The Questions to Insights v2 prompt must start with \"You are Questions to Insights v2\""`, `"Skills can't be linked here: Questions to Insights v2 has no skills"` (any `[[skill:…]]`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `list_entities`, `describe_entity`, `run_readonly_sql`); for a System agent only: `"This agent's prompt can't contain links"` (any `[[…]]`).
 - Declared before the `GET /agents/:key` catch-alls.
 
 #### 104. `DELETE /agents/:key/prompt`
@@ -618,7 +615,7 @@ The `built-in` routes are declared before `/skills/:id`.
 
 ### 2.6.2 Workflows
 
-Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11, R14-R18). Workflows are defined in code (ADR-0040), and there is no write route. A workflow with input fields can be run once (118) or run streamed (119) (ADR-0041); every run is stored (since 1.23.14, [data-model.md](data-model.md) 3.16) and read back through section 2.6.3. `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `deep-analysis`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Arfp`) and the server decodes them.
+Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11, R14-R18). Workflows are defined in code (ADR-0040), and there is no write route. A workflow with input fields can be run once (118) or run streamed (119) (ADR-0041); every run is stored (since 1.23.14, [data-model.md](data-model.md) 3.16) and read back through section 2.6.3. `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `deep-analysis`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Adata-readiness`) and the server decodes them.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -658,7 +655,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     help?: string;                    // one line under the control
     default?: string | number | boolean;  // the value of a field that is missing or empty
     datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];  // 'dataset' / 'datasets': only datasets bound to these kinds
-    hidden?: boolean;                 // set by the app (the RFP Builder's Continue), never rendered as a control
+    hidden?: boolean;                 // set by the app, never rendered as a control
   };
   ```
 - Values:
@@ -670,7 +667,6 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   | `seq-text-demo` | `Sequential test workflow` | code | none (`[]`) | 3 | steps | none |
   | `deep-analysis` | `Deep analysis` | code | `assistant` (Questions to Insights Assistant) | 4 | steps | the assistant's (none today) |
   | `agent:data-readiness` | `Data Readiness Agent` | agent | `data-readiness` | 1 | agent | as its AgentSummary (`Add a PostgreSQL or Databricks dataset first`) |
-  | `agent:rfp` | `RFP Builder` | agent | `rfp` | 1 | agent | as its AgentSummary (`Load the "Intellify RFP API" sample in Settings → Testing Data first`) |
   | `agent:<id>` (each Live user agent) | its Live name | agent | the user agent (`key` = id, `name` = Live name) | 1 | agent | its Live datasets that exist; `runRequirement` `None of this agent's datasets exist` when none do |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33). The two exceptions are the Assistant's description, `Answers questions over the datasets you pick.`, and v2's starter questions, which are empty, as in its AgentSummary.
@@ -681,10 +677,9 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   | `agent:assistant` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`); `datasets` (`Datasets`, datasets, required); `careful` (`Careful: cross-check the result with an independent query`, boolean, `default: false`) |
   | `qti-v2-turn` | `question` (as the Assistant's); `datasets` (as the Assistant's) |
   | `agent:data-readiness` | `dataset` (`Dataset`, dataset, required, `datasourceKinds: ['postgres', 'databricks']`); `question` (`Question`, textarea, optional, placeholder and `default` `Assess the readiness of this dataset`) |
-  | `agent:rfp` | `message` (`Message`, textarea, required, placeholder `Name the client and plan year, or state your decision`); `rfpId` (`RFP`, text, optional, `hidden: true`) |
   | `agent:<id>` (user agent) | `question` (as the Assistant's); `careful` (as the Assistant's). Its datasets are the agent's Live datasets that exist (`datasets`), not an input. |
 
-- **Run requirement:** `runRequirement` is set with the agent's requirement text (the RFP Builder's, the Data Readiness Agent's, a user agent's `None of this agent's datasets exist`). While it is set, 118 and 119 refuse the run with it.
+- **Run requirement:** `runRequirement` is set with the agent's requirement text (the Data Readiness Agent's, a user agent's `None of this agent's datasets exist`). While it is set, 118 and 119 refuse the run with it.
 - **Order:** `agent:assistant`, `qti-v2-turn`, `seq-text-demo`, `deep-analysis`, then the other Official workflows by name, then the user agents' workflows by name. System agents and draft-only user agents are never listed.
 
 #### 117. `GET /workflows/:id`
@@ -701,7 +696,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   };
   ```
 - Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`), the agent it calls (`assistant` for `deep-analysis`), or the one-step workflow's own agent. `agents` is 116's list with each agent's `model` and `systemPrompt` read from 34; 116 itself is unchanged.
-- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`. For `seq-text-demo`, `steps` are its three code steps (`clean-text`, `count-words`, `format-result`; [agents.md](agents.md) 5.13), none with an `agent`. For `deep-analysis`, `steps` are `plan`, `investigate`, `write` (kind `agent`) and `assemble` (kind `code`; [agents.md](agents.md) 5.15); the agent steps' `agent` is `{ name: <the assistant's name>, tools: [], maxSteps: 1 }` for `plan` and `write`, and `{ name, tools: <the assistant's AgentSummary.tools>, maxSteps: 15 }` for `investigate`. A one-step workflow has one step, `answer` (`Answer`, kind `agent`, summary `The agent answers with its tools, streamed to the chat.`, input `question`, `datasets`, output `calls`, `stopped`, exits `Model error` fails and `Stop` stops, plus `Clarifying question` stops when the agent's tools include `ask_clarification`), whose `agent` is `{ name: <the agent's name>, tools: <its AgentSummary.tools>, maxSteps }`: `maxSteps` is 15 for `assistant`, `rfp` and user agents, 10 for `data-readiness`.
+- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`. For `seq-text-demo`, `steps` are its three code steps (`clean-text`, `count-words`, `format-result`; [agents.md](agents.md) 5.13), none with an `agent`. For `deep-analysis`, `steps` are `plan`, `investigate`, `write` (kind `agent`) and `assemble` (kind `code`; [agents.md](agents.md) 5.15); the agent steps' `agent` is `{ name: <the assistant's name>, tools: [], maxSteps: 1 }` for `plan` and `write`, and `{ name, tools: <the assistant's AgentSummary.tools>, maxSteps: 15 }` for `investigate`. A one-step workflow has one step, `answer` (`Answer`, kind `agent`, summary `The agent answers with its tools, streamed to the chat.`, input `question`, `datasets`, output `calls`, `stopped`, exits `Model error` fails and `Stop` stops, plus `Clarifying question` stops when the agent's tools include `ask_clarification`), whose `agent` is `{ name: <the agent's name>, tools: <its AgentSummary.tools>, maxSteps }`: `maxSteps` is 15 for `assistant` and user agents, 10 for `data-readiness`.
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a draft-only user agent, a System agent (`agent:sql-fixer`), or a code workflow's own agent (`agent:assistant-v2`).
 
 #### 118. `POST /workflows/:id/runs`
@@ -735,7 +730,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 
 ### 2.6.3 Workflow runs
 
-Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/workflows/spec.md) (R18-R20) and [visuals](../capabilities/visuals/spec.md) (130-134). The stored runs of 118 and 119 ([data-model.md](data-model.md) 3.16): the history, one run, its deletion, and the files of its workspace. The file routes are served by the same services as a session's (9, 14, 105-107), given the run's **run-backed host**: a `SessionDoc` shaped from the stored run (id `run-<id>`, workspace `session-run-<id>`, its agent binding, `rfpId`, panel items, visuals, and its question and answer as the transcript), never held or listed. `:id` is a run id (a uuid). Style B throughout.
+Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/workflows/spec.md) (R18-R20) and [visuals](../capabilities/visuals/spec.md) (130-134). The stored runs of 118 and 119 ([data-model.md](data-model.md) 3.16): the history, one run, its deletion, and the files of its workspace. The file routes are served by the same services as a session's (9, 14, 105-107), given the run's **run-backed host**: a `SessionDoc` shaped from the stored run (id `run-<id>`, workspace `session-run-<id>`, its agent binding, panel items, visuals, and its question and answer as the transcript), never held or listed. `:id` is a run id (a uuid). Style B throughout.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -746,7 +741,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 124 | `GET /workflow-runs/:id/visualizations/:vid/download` | A run's visual as a zip | no |
 | 125 | `GET /workflow-runs/:id/panel-items/:itemId/file` | Read the text of a run's file panel item | yes |
 | 126 | `GET /workflow-runs/:id/panel-items/:itemId/download` | Download a run's file, document or table panel item | yes |
-| 127 | `GET /workflow-runs/:id/rfp-packages/:rfpId/download` | Download a run's RFP package (zip) or one of its files | yes |
+| 127 | `GET /workflow-runs/:id/rfp-packages/:rfpId/download` | Download a run's RFP package (Removed 2026-11-12) | — |
 | 128 | `POST /workflow-runs/:id/answer/feedback` | Thumbs up/down on a run's answer | yes |
 | 129 | `POST /agents/:id/draft-runs/stream` | Try it: run a user agent's saved draft once, streamed (SSE), not stored (plan R12) | yes |
 | 130 | `POST /workflow-runs/:id/visualizations` | Generate a visual from the run's answer | yes |
@@ -778,7 +773,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 
 #### 122. `DELETE /workflow-runs/:id`
 - Response `200`: `{ ok: true, message: "Run deleted" }`.
-- Side effects: for an agent run, deletes its workspace `workspaces/session-run-<id>/` (its visuals, panel files, RFP packages, synthetic scripts) and its memory thread `run-<id>`, then the document. A code-only run has neither, so only the document goes. A run given as another run's `context` may be deleted; the later run keeps `context.fromRunId` as a dangling reference.
+- Side effects: for an agent run, deletes its workspace `workspaces/session-run-<id>/` (its visuals, panel files, synthetic scripts) and its memory thread `run-<id>`, then the document. A code-only run has neither, so only the document goes. A run given as another run's `context` may be deleted; the later run keeps `context.fromRunId` as a dangling reference.
 - Errors (Style B): `404 "Run \"<id>\" not found"`; `400 "Stop the run before deleting it"` for a run still `running`.
 
 #### 123. `GET /workflow-runs/:id/visualizations/:vid`
@@ -798,8 +793,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 - Errors (Style B): `404 "Run \"<id>\" not found"`; `400 "Unknown download format \"<format>\": use pdf, md or csv"` (checked first); then 107's.
 
 #### 127. `GET /workflow-runs/:id/rfp-packages/:rfpId/download`
-- As 105: query `file` and `draft`, over the run's workspace folder `rfp/<rfpId>/`.
-- Errors (Style B): `404 "Run \"<id>\" not found"`; then 105's.
+Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number is not reused).
 
 #### 128. `POST /workflow-runs/:id/answer/feedback`
 - Body: `{ rating: "up" | "down" }`. As 7 on the run's answer: sets `feedback` and `verified` on the stored answer; `up` saves a verified query keyed by `sourceRunId` (question = the run's question; same SQL, datasource and entity rules as 7), `down` deletes it.
@@ -1039,8 +1033,8 @@ interface PostgresConnection { host: string; port: number; database: string; use
 - Body: `{ host, port, database, user, password?, ssl? }` (all coerced from untyped JSON). Required: non-empty `host`, `database`, `user`; `port` an integer 1..65535; `database` must not contain `"`. `password` defaults to `''`; `ssl` true only for `true` or `"true"`.
 - Response `200` (Style A): `{ ok, message, datasourceId?, datasetName?, entityCount?, createdDatabase?, seeded? }`.
   - Success messages: seedable `"Seeded <schema> on <host:port> and loaded <n> entities into dataset \"<name>\"[ — created the database]"`; register-only `"Registered <host:port>/<db> and loaded <n> entities into dataset \"<name>\" — the <name> sample ships no seed SQL, so nothing was written to the database"`.
-  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST-kind fixtures other than the self-registering `intellify-api` (registered by a script, not here), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
-- **Self-registering REST fixture `intellify-api`** ([testing-data](../capabilities/testing-data/spec.md), [rfp](../capabilities/rfp/spec.md)): the body is ignored and the field validation is skipped. The backend reads the embedded Intellify RFP API's URL and key (`IntellifyApiInfo`; 2.16), checks `GET /health`, discovers the endpoints from `GET /openapi.json` (as `POST /datasources/rest/discover`, #17), keeps the proposed collection endpoints with `group: "intellify"`, saves the datasource `Intellify RFP API` (`kind: "rest"`, `auth: { type: "api-key-header", headerName: "X-API-Key", token: <the API key> }`, reusing an existing record of that name), refreshes the inventory and saves the dataset `Intellify RFP API` with the 10 required entities (`clients`, `products`, `funding_types`, `plan_types`, `carriers`, `plan_designs`, `policies`, `financials`, `census`, `rfps`). No database is written. Success message `"Registered the Intellify RFP API at <url> and loaded 10 entities into dataset \"Intellify RFP API\""`. Failures: `"The Intellify API is not running in this app (INTELLIFY_API=off or it failed to start) — see the system logs."`; `"The Intellify API cannot reach its database at <host:port/db>. Load the \"Intellify\" sample into that database first."`; the missing-entities message. `GET /testing-data` lists it with `seedable: false`. Other REST-kind fixtures (`world-cup-rest`) stay register-only by script.
+  - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST-kind fixtures (registered by a script, not here), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
+- **Removed fixture `intellify-api`** (2026-11-12): it is no longer in the catalogue, so `GET /testing-data` does not list it and loading it answers the unknown-fixture error `Unknown sample fixture "intellify-api"`. Other REST-kind fixtures (`world-cup-rest`) stay register-only by script.
 - Side effects (seedable): connects (8 s timeout); if the database is absent, creates it from the `postgres` maintenance database; **drops and recreates the sample's schema** (`DROP SCHEMA IF EXISTS "<schema>" CASCADE`) and runs the bundled SQL in batches (120 s statement timeout); upserts a datasource named after the fixture (reusing the existing id when present); forces an inventory refresh; saves the fixture's dataset (with sampled values and join graph, same as `POST /datasets`). Register-only fixtures skip the seed and require the data to exist already.
 
 #### 57. `DELETE /testing-data/:fixtureId`
@@ -1136,125 +1130,9 @@ interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | 
 - Validation (Style A): `"theme must be one of: system, light, dark"`, `"navExpanded must be true or false"`.
 - Success: `{ ok:true, message:"Preferences saved", preferences: UiPreferences }`.
 
-### 2.16 Intellify RFP API
+### 2.16 Intellify RFP API (removed)
 
-A **separate NestJS application** in the backend package (`backend/src/intellify-api/`; ADR-0027 in [architecture.md](architecture.md)): the only way the RFP Builder agent reaches the Intellify data and saves an RFP ([rfp](../capabilities/rfp/spec.md); tools in [agents.md](agents.md) 3.10). It has its own port, authentication, error shape, OpenAPI document and PostgreSQL pool; none of the conventions in section 1 (Style A/B) apply to it. The app calls it only over HTTP, through the REST datasource `Intellify RFP API` that the `intellify-api` Testing Data fixture registers (2.9 #56).
-
-**Running.** Embedded by default: `createApp()` starts it in the backend process after the app listens, on `INTELLIFY_API_HOST` (default `127.0.0.1`) and `INTELLIFY_API_PORT` (default `3100`; `0` = a free port), unless `INTELLIFY_API=off` or the CLI flag `--no-intellify-api` (5). Standalone: `npm run intellify-api` (6.4) runs `node dist/intellify-api/main.js`, configured from the environment only. If the embedded API fails to start (port busy, bad configuration), the app still starts and logs `Intellify API not started: <reason>`. Variables: 6.1. Database and `rfp` schema: [data-model.md](data-model.md) section 7.
-
-**Wire format.** Base path `/v1` for the data routes. `Content-Type: application/json; charset=utf-8` unless a route says otherwise. Intellify ids are the 24-hex `char(24)` strings; RFP ids are UUIDs. Dates are ISO `YYYY-MM-DD`; money is a number in USD.
-
-**Auth.** Every route except `GET /health` and `GET /openapi.json` needs `X-API-Key: <key>`, compared in constant time with the configured keys (`INTELLIFY_API_KEY` may hold several, comma-separated; embedded without it, the key in `<APP_DATA_DIR>/.intellify-api-key`, [data-model.md](data-model.md) 1.2). Missing or wrong: `401 { statusCode:401, error:"Unauthorized", message:"API key required" }`. The key is the whole access boundary: RFP records carry `createdBy` as an attribute, not an access control. `createdBy` comes from the body of `POST /v1/rfps`, else the `X-Qti-User` header (the app sends it in the body: the super admin's id, `local`, or `eval:<jobId>` for an eval run).
-
-**Error shape** (every non-2xx): `{ statusCode: number; error: string; message: string; code?: string; details?: string[] }`. Codes: `validation` (400; `details` lists the field problems), `not_found` (404; also an unknown route), `conflict` (409, e.g. a backwards status move), `database_unavailable` (503, message `database unavailable`, when PostgreSQL can't be reached; the API itself keeps running).
-
-**Pagination** (the collection routes, 2.16.2, only): query `page` (1-based, default 1) and `per_page` (default 100, capped at 500); response `{ data: T[], page: number, per_page: number, total: number }`. A `page` or `per_page` that is not a positive integer is a 400 `validation`. The OpenAPI document declares both parameters and the `data` array, so REST discovery ([datasources](../capabilities/datasources/spec.md)) proposes these routes as tables with rows pointer `/data` and page-style pagination. Routes with a path parameter are deliberately not tables.
-
-**Soft deletes.** Every read over Intellify data leaves out rows with `deleted = true` unless the query has `includeDeleted=true`.
-
-**Read and write safety.** Every read over schema `intellify` runs in a `READ ONLY` transaction that is rolled back. Writes go only to schema `rfp`, through parameterised statements; no request value is ever interpolated into SQL.
-
-#### 2.16.1 Service
-
-| # | Method + path | Response |
-|---|---|---|
-| I1 | `GET /health` | Public. `{ ok: boolean, version: string, database: 'up'\|'down', schema: 'intellify', rfpSchemaVersion: number\|null }`; `ok` is `false` when the database is down. |
-| I2 | `GET /openapi.json` | Public. The OpenAPI 3.0 document, title `Intellify RFP API`, generated at start from the controllers and DTOs. Each collection operation (2.16.2) is a `GET` without path parameters that declares `page` and `per_page` as optional integers and a `data` array schema. |
-
-#### 2.16.2 Collections
-
-Paged (`{ data, page, per_page, total }`); the REST datasource's tables, group `intellify`. Each row below is one item of `data`.
-
-| # | Method + path | Query | Row shape |
-|---|---|---|---|
-| I3 | `GET /v1/clients` | `q` (name or `oneCode`, case-insensitive substring) | `{ id, oneCode, name, tenantKey, headcount: number\|null /* latest census totalEmployees */, latestCensusYear: string\|null, linesOffered: number, nextRenewalEffectiveDate: string\|null }` |
-| I4 | `GET /v1/products` | | `{ id, name, locType, displayOrder }` (the 12 lines of coverage) |
-| I5 | `GET /v1/funding-types` | | `{ id, name, displayOrder, theme }` |
-| I6 | `GET /v1/plan-types` | `line` (product name) | `{ id, line, name }` |
-| I7 | `GET /v1/carriers` | `line`, `clientOneCode` | `{ id, name, code, lines: string[] /* product names, from insurer_categories */, incumbentFor: string[] /* lines where it carries a live policy for clientOneCode; [] without it */, finalCredits: number /* carrier credits isFinal and not expired for that client */ }` |
-| I8 | `GET /v1/plan-designs` | `clientOneCode`, `line` | `{ id, clientOneCode, clientName, line, planType /* from plan_financial.planType */, carrier, fundingType, state, creationFlag, policyNumber, enrolledEmployees, annualPremium, planYear }`, one row per plan design joined to its coverage and financials |
-| I9 | `GET /v1/policies` | `clientOneCode` | `{ id, clientOneCode, carrier, number, kickOffTiming, kickOffDays, coverages: number }` |
-| I10 | `GET /v1/financials` | `clientOneCode`, `line`, `planYear` | `Financial = { coverageId, clientOneCode, line, planDesignId, carrier, fundingType, planType, ratingBasis, planYear, enrolledEmployees, coveredLives, monthlyPremium, annualPremium, priorYearAnnualPremium, renewalIncreasePct, employerPct, employeeMonthlyEmployeeOnly, adminFeePepm, stopLossPepm, ratePer1000, pepm, rateEmployeeOnly, rateEmployeeSpouse, rateEmployeeChildren, rateFamily, enrollEmployeeOnly, enrollEmployeeSpouse, enrollEmployeeChildren, enrollFamily }`, the flattened `plan_financial`; `null` where a key doesn't apply to the line |
-| I11 | `GET /v1/census` | `clientOneCode`, `year` | `CensusRow = { documentId, clientOneCode, effectiveYear, totalEmployees, eligibleEmployees, enrolledEmployees, averageAge, averageSalary, femalePct, malePct, fullTime, partTime, tierEmployeeOnly, tierEmployeeSpouse, tierEmployeeChildren, tierFamily, statesCount, participationRate, source, uploadedAt }` |
-| I12 | `GET /v1/rfps` | `clientOneCode`, `status`, `createdBy` | `RfpSummary` (2.16.4), newest (`createdAt`) first |
-
-#### 2.16.3 Per-client reads
-
-Not paged. `:oneCode` is the client's `one_code`. Every route answers `404 { code:"not_found", message:"Client \"<oneCode>\" not found" }` for an unknown or deleted client.
-
-| # | Method + path | Response |
-|---|---|---|
-| I13 | `GET /v1/clients/:oneCode` | `{ client: { id, oneCode, name, tenantKey, deleted }, contacts: [{ email, contactType, country }], headcount, latestCensusYear, lines: [{ line, locType, status /* latest loc_statuses by start_date */, statusSince, planDesigns: number }] }` |
-| I14 | `GET /v1/clients/:oneCode/renewals` | `{ planYear: number, renewals: [{ line, carrier, policyNumber, effectiveDate, kickOffTiming: { name, days }, kickOffDate, locStatus, annualPremium, renewalIncreasePct, reminders: [{ emailId, reminderDate }] }], upcomingWizards: [{ type, status }] }`. Plans are calendar-year: `effectiveDate` is 1 January after `plan_financial.planYear` (2026 → `2027-01-01`), and `kickOffDate` is `effectiveDate` minus the policy's kick-off days (`policies.kick_off_timing` → `renewal_kick_off_timings.days`). The response and the [rfp](../capabilities/rfp/spec.md) spec both state this assumption. |
-| I15 | `GET /v1/clients/:oneCode/program` | Query `line`. `{ lines: [{ line, locType, status, plans: [{ planDesignId, planType, carrier, carrierId, fundingType, state, creationFlag, policyNumber, eligibility: { workflowStatus, versions }, censusMapping: { mapped: number, unmapped: string[] }, financials: { planYear, enrolledEmployees, coveredLives, annualPremium, priorYearAnnualPremium, renewalIncreasePct, employerPct } }] }], carriers: [{ carrier, lines: string[] }] }` |
-| I16 | `GET /v1/clients/:oneCode/plans/:planDesignId` | The plan as in I15 with the full `planFinancial` object, every eligibility version, the census plans mapped to it, the alternate plans from wizards and its reminders. `404 "Plan design \"<planDesignId>\" not found for client \"<oneCode>\""`. |
-| I17 | `GET /v1/clients/:oneCode/financials` | Query `line`, `planYear`. `{ planYear, rows: Financial[] /* I10 */, totals: { annualPremium, priorYearAnnualPremium, renewalIncreasePct, enrolledEmployees } }` |
-| I18 | `GET /v1/clients/:oneCode/census` | Query `year` (default the latest). `{ years: string[], selected: CensusRow & { gender: { female, male }, byState: [{ state, employees }], tiers: [{ tier, employees, share }], employeeClass: { fullTime, partTime } }, plans: [{ line, censusPlanName, mappedTo: { planDesignId, planType, carrier } \| null }], aggregated: { headcount, enrolled, participationRate, averageAge, femalePct, tierMix, statesCount } \| null }` |
-| I19 | `GET /v1/clients/:oneCode/commercials` | `{ contributions: [{ line, periodStart, periodEnd }], carrierCredits: [{ carrier, expirationDate, isFinal, notifications: number }], fees: [{ carrier, effectiveDate, expirationDate }], survey: { periodStart, periodEnd, answers: object } \| null, pointSolutions: [{ vendor, product }] }` |
-| I20 | `GET /v1/clients/:oneCode/wizards` | `{ wizards: [{ id, line, type, status }], alternatePlans: [{ planDesignId, planType, name, fundingType, line }] }` |
-
-#### 2.16.4 RFP records
-
-Stored in schema `rfp` ([data-model.md](data-model.md) section 7). `:id` is the RFP's UUID; an unknown one answers `404 { code:"not_found", message:"RFP \"<id>\" not found" }`.
-
-```ts
-type RfpStatus = 'draft' | 'ready' | 'issued' | 'closed';     // moves forward only
-RfpSummary = { id, clientOneCode, clientName, title, planYear: number, effectiveDate, status: RfpStatus,
-  stage: number /* 0..7, the last completed stage */, lines: number, carriers: number, requirements: number,
-  milestones: number, createdBy: string | null, createdAt, updatedAt,
-  clientMissing?: true /* the client is no longer in intellify.clients (e.g. after a reseed) */ };
-Rfp = Omit<RfpSummary, 'lines'|'carriers'|'requirements'|'milestones'> & {
-  sections: { executiveSummary?, clientBackground?, scopeStatement?, instructionsToBidders?, evaluationCriteria?, notes? },
-  lines: RfpLine[], carriers: RfpCarrier[], requirements: RfpRequirement[], timeline: RfpMilestone[] };
-RfpLine = { id, position, line /* product name */, productId, planDesignIds: string[], marketBasis: 'as-is'|'alternate',
-  alternateFunding?: string, alternatePlanType?: string, notes? };
-RfpCarrier = { id, position, insurerId, insurerName, lines: string[], incumbent: boolean, contactEmail?, notes? };
-RfpRequirement = { id, position, section, question, required: boolean,
-  answerType: 'text'|'yes_no'|'number'|'table'|'attachment' };
-RfpMilestone = { id, position, milestone, dueDate, owner?, notes? };
-```
-
-The `PUT` list routes replace the whole list; `position` is the item's 1-based place in the body array, and the items come back in that order.
-
-| # | Method + path | Body | Response and rules |
-|---|---|---|---|
-| I21 | `POST /v1/rfps` | `{ clientOneCode, planYear, title?, createdBy? }` | `201 Rfp` with `status: 'draft'`, `stage: 1`. `title` defaults to `<client name> — <planYear> benefits RFP`; `effectiveDate` defaults to `<planYear>-01-01`. `400 validation` when the client doesn't exist in `intellify.clients` or `planYear` is not an integer in 2024..2035. |
-| I12 | `GET /v1/rfps` | (query `clientOneCode`, `status`, `createdBy`) | Paged `RfpSummary`, newest first (2.16.2). |
-| I22 | `GET /v1/rfps/:id` | | `Rfp`. |
-| I23 | `PATCH /v1/rfps/:id` | `{ title?, planYear?, effectiveDate?, status?, stage?, sections?: Partial<sections> }` | `Rfp`. `sections` merge key by key. `409 conflict` when `status` would move backwards (order `draft → ready → issued → closed`); `400 validation` for a `stage` outside 0..7, an unknown status or section key, or an unparseable date. Stamps `updatedAt`. |
-| I24 | `PUT /v1/rfps/:id/lines` | `Omit<RfpLine, 'id'\|'position'\|'productId'>[]` | `Rfp`. The API resolves `productId` from the line name. `400 validation` whose `details` list unknown lines and plan design ids that don't belong to the RFP's client. |
-| I25 | `PUT /v1/rfps/:id/carriers` | `{ insurer: string /* id or exact name, case-insensitive */, lines: string[], incumbent?: boolean, contactEmail?, notes? }[]` | `Rfp`. `400 validation` `Unknown carrier "<x>". Known: <names>`. |
-| I26 | `PUT /v1/rfps/:id/requirements` | `Omit<RfpRequirement, 'id'\|'position'>[]` | `Rfp`. `400 validation` for an unknown `answerType`. |
-| I27 | `PUT /v1/rfps/:id/timeline` | `Omit<RfpMilestone, 'id'\|'position'>[]` | `Rfp`. `400 validation` for an unparseable `dueDate`. |
-| I28 | `DELETE /v1/rfps/:id` | | `204`. `409 conflict` unless `status` is `draft`. |
-| I29 | `DELETE /v1/rfps` | (query `createdBy`, required) | `{ deleted: number }`: deletes the **drafts** created by `createdBy`, or, for an eval run's tag (`createdBy` starting `eval:`), **every** record it created whatever its status, since a run that reaches stage 7 leaves a `ready` record (eval clean-up, [rfp](../capabilities/rfp/spec.md) R14). `400 validation` without `createdBy`. |
-
-#### 2.16.5 RFP package
-
-A deterministic projection of the stored record and the live Intellify data for the RFP's client and lines in scope; nothing is snapshotted. Each route answers 404 for an unknown RFP.
-
-| # | Method + path | Response |
-|---|---|---|
-| I30 | `GET /v1/rfps/:id/document.md` | `text/markdown; charset=utf-8`: the RFP document (outline below). |
-| I31 | `GET /v1/rfps/:id/document.pdf` | `application/pdf`: the same Markdown rendered with pdfkit (headings, paragraphs, bullet lists, tables with a shaded header row, built-in Helvetica, a page break between sections). A plain rendering, not a design artefact. |
-| I32 | `GET /v1/rfps/:id/exhibits` | `{ exhibits: [{ name, title, rows: object[] }] }`, names in order `exhibit-a-census`, `exhibit-b-plan-designs`, `exhibit-c-financials`, `exhibit-d-carriers`. |
-| I33 | `GET /v1/rfps/:id/exhibits/:name.csv` | `text/csv; charset=utf-8`, RFC 4180 with a header row; `:name` is one of the four exhibit names (the path ends in `.csv`, e.g. `/v1/rfps/<id>/exhibits/exhibit-a-census.csv`). `404 "Exhibit \"<name>\" not found"` for another name. |
-| I34 | `GET /v1/rfps/:id/package.zip` | `application/zip` holding `rfp.md`, `rfp.pdf`, `exhibits/<name>.csv` (the four exhibits) and `manifest.json` (`{ rfpId, title, generatedAt, files: string[] }`): 7 files. Optional query `draft=true` (RFP R16): the document (Markdown and PDF) is titled `DRAFT — <RFP title>` and, right under the title, carries the line `Draft exported <YYYY-MM-DD> at stage <stage> of 7 — not for release to carriers.`; the PDF prints `DRAFT` in each page's header; `manifest.json` gains `"draft": true` and `"stage": <stage>` (`stage` is the RFP's completed stage, 0-7). The exhibits are unchanged. Without the query nothing changes. |
-
-Exhibits: **A census**, the client's latest census (`CensusRow`, I11) with its state and tier breakdown; **B plan designs**, the client's plan designs on the lines in scope (I8 rows); **C financials**, their financials (I10 rows); **D carriers**, the RFP's invited carriers (`RfpCarrier` without ids).
-
-Document outline (Markdown, deterministic):
-
-1. `# <title>`, then a facts line: client, plan year, effective date, status, generated at.
-2. `## 1. Executive summary`: the section text, or `_To be written._` when empty (the same for every narrative section below).
-3. `## 2. Client background`: the section text, the client facts and the latest census as a table.
-4. `## 3. Scope of this RFP`: the scope statement and a table of the lines (line, market basis, plans in scope, alternate funding and plan type).
-5. `## 4. Current program`: one table per line in scope (plan, carrier, funding, enrolled, annual premium, renewal increase).
-6. `## 5. Carriers invited`: a table.
-7. `## 6. Requirements and questionnaire`: one subsection per requirement `section`, questions numbered, each with required or optional and its answer type.
-8. `## 7. Timeline`: a table.
-9. `## 8. Instructions to bidders` and `## 9. Evaluation criteria`: the section texts.
-10. `## Exhibits`: the list of the four exhibits.
+Removed 2026-11-12 with the RFP Builder (ADR-0027, superseded): the embedded second Nest application, its 33 routes (`/health`, `/openapi.json`, `/v1/...`), its `X-API-Key` guard, the `INTELLIFY_API*` and `INTELLIFY_DB_*` environment variables, the `<APP_DATA_DIR>/.intellify-api-key` file, the CLI flags `--intellify-api-port` and `--no-intellify-api` and the `intellify-api` npm script no longer exist. A stored datasource or dataset named `Intellify RFP API` is ordinary stored data and is not touched. The section number is not reused.
 
 ### 2.17 Data readiness
 
@@ -1368,7 +1246,7 @@ Controller prefix `/health`. Capability: [app-shell](../capabilities/app-shell/s
 
 #### 135. `GET /health`
 - Response `200`: `{ ok: true }`. It reads no store and takes no query, so it answers as soon as the backend listens. When the desktop shell set `BACKEND_INSTANCE_ID`, the response carries `X-Backend-Instance` like every other response (set by a global middleware), and the probe accepts it only when the value matches the spawned child. It is the desktop readiness probe (4.3) since 1.23.22; before, the probe was `GET /sessions` (1), which returns every session with its transcript.
-- Errors: none. The embedded Intellify RFP API has its own `GET /health` (I1, 2.16.1) on its own port; the two are unrelated.
+- Errors: none.
 
 ## 3. Streaming and long-running work
 
@@ -1392,19 +1270,18 @@ interface StreamMessageRequest {
 
 **Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`, no heartbeat/comment frames. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; malformed frames are skipped.
 
-**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `rfp-package`, `readiness-report` and `tool-progress` it is itself **a JSON-encoded string** (double encoding) that the client parses.
+**Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `readiness-report` and `tool-progress` it is itself **a JSON-encoded string** (double encoding) that the client parses.
 
 | `type` | Payload | Meaning |
 |---|---|---|
 | `reasoning` | `content: string` (delta) | Model reasoning text delta, for a live "thinking" display. Not persisted. Empty deltas are not emitted. |
 | `text` | `content: string` (delta) | Answer text delta. Concatenation of all `text` deltas is the streamed answer. One extra full-text `text` event may follow if a tool-only turn needed a synthesis pass. |
 | `tool` | `content: JSON string` `{ name: string; rationale?: string; input?: string }` | A tool call started. `rationale` is the assistant's plain-language reason (flattened, max 400 chars) and is sent **with the call**, before the result. `input` says what the call is about, flattened and clipped to 200 characters: for the framework's skill tools the skill it loads (`skill`: its `name`; `skill_read`: `<skillName>/<path>`; `skill_search`: the query), else the call's first text argument; omitted when there is none. Legacy clients may receive a bare tool name instead of JSON; readers must fall back to treating non-JSON content as the name. Not emitted for `ask_clarification`. |
-| `tool-result` | `content: JSON string` | A tool call finished. For data tools (`run_readonly_sql`, `sample_rows`): `{ tool, input?, rowCount?, error?, rationale? }`. For visual tools (`create_visual`, `update_visual`): `{ tool, input? /* the instruction */, error? }`. In a session bound to the RFP Builder (`agentKey: "rfp"`), every RFP tool ([agents.md](agents.md) 3.10) emits `{ tool, input? /* its first string argument */, rowCount?, error? }` (`rowCount` for a result that carries `columns` and `rows`, such as `get_client_financials`). **No `tool-result` is emitted for other tools** (`list_entities`, `describe_entity`). Row data is not streamed, only persisted in the final message. |
+| `tool-result` | `content: JSON string` | A tool call finished. For data tools (`run_readonly_sql`, `sample_rows`): `{ tool, input?, rowCount?, error?, rationale? }`. For visual tools (`create_visual`, `update_visual`): `{ tool, input? /* the instruction */, error? }`. **No `tool-result` is emitted for other tools** (`list_entities`, `describe_entity`). Row data is not streamed, only persisted in the final message. |
 | `tool-progress` | `content: JSON string` `{ tool: string, phase: "inventory"\|"profiling"\|"relationships"\|"scoring"\|"storing", message: string, done?: number, total?: number, entity?: string }` | Live progress of a running tool (ADR-0033). Zero or more between a tool's `tool` event and its `tool-result`. Only `assess_data_readiness` emits it today. Not persisted. It doubles as a keepalive while the tool runs. The client shows the latest `message` on the tool's row ([ui.md](ui.md) 4.12). |
 | `visual-updated` | `content: JSON string` `VisualEvent` `{ visualId, version, title, action: "created"\|"updated" }` | A visual tool produced a visual this turn; sent just before that tool's `tool-result`. The panel refreshes live. |
-| `panel-item` | `content: JSON string` `PanelItemEvent` `{ item: PanelItem }` ([data-model.md](data-model.md) 3.4.4) | An agent showed something in the right panel this turn (`show_in_panel` returned without an error); never sent for a workflow change (`update_workflow`, the RFP Builder's stage auto-drive); sent just before that tool's `tool-result` `{ tool: "show_in_panel", input? /* the item's title */, error? }`. The client refreshes the session without disturbing the turn, makes the item the active one and opens the panel; for a `visual` item it also loads the visual. Every agent ([agent-panel](../capabilities/agent-panel/spec.md) R12). `visual-updated` stays for visual tools. |
-| `workflow` | `content: JSON string` `WorkflowView` `{ phases: { number, title, skill? }[], source: "prompt"\|"agent"\|"workflow", current: number\|null, done: number[], skipped: number[], waiting?: boolean, note?: string, failed?: number }` ([data-model.md](data-model.md) 3.4.4) | The session's workflow changed this turn: after an `update_workflow` result without an error, after an RFP Builder stage was saved, and on a Questions to Insights v2 turn after each step of its workflow starts, ends or fails ([agents.md](agents.md) 5.11; these stand alone, between the turn's other events). `show_in_panel` never sends it. It carries the whole view, not a delta. It never creates a panel item and does not open the right panel. The client patches the session's `workflow` live, so the workflow bar moves while the turn streams; the persisted view arrives with `done` ([agent-panel](../capabilities/agent-panel/spec.md) R19). Every agent. |
-| `rfp-package` | `content: JSON string` `RfpPackageEvent` `{ rfpId, title, files: { name, bytes }[], exportedAt, draft?: boolean }` | `export_rfp_package` or `export_rfp_draft` stored an RFP package in the session workspace (`rfp/<rfpId>/`, or `rfp/<rfpId>/draft/` when `draft` is `true`, [data-model.md](data-model.md) 4.1) this turn; sent just before that tool's `tool-result`. The answer persisted at the end of the turn carries the same value as `rfpPackage` (data-model 3.4.1), and the chat shows the package card with its downloads (#105). RFP Builder sessions only ([rfp](../capabilities/rfp/spec.md)). |
+| `panel-item` | `content: JSON string` `PanelItemEvent` `{ item: PanelItem }` ([data-model.md](data-model.md) 3.4.4) | An agent showed something in the right panel this turn (`show_in_panel` returned without an error); never sent for a workflow change (`update_workflow`); sent just before that tool's `tool-result` `{ tool: "show_in_panel", input? /* the item's title */, error? }`. The client refreshes the session without disturbing the turn, makes the item the active one and opens the panel; for a `visual` item it also loads the visual. Every agent ([agent-panel](../capabilities/agent-panel/spec.md) R12). `visual-updated` stays for visual tools. |
+| `workflow` | `content: JSON string` `WorkflowView` `{ phases: { number, title, skill? }[], source: "prompt"\|"agent"\|"workflow", current: number\|null, done: number[], skipped: number[], waiting?: boolean, note?: string, failed?: number }` ([data-model.md](data-model.md) 3.4.4) | The session's workflow changed this turn: after an `update_workflow` result without an error, and on a Questions to Insights v2 turn after each step of its workflow starts, ends or fails ([agents.md](agents.md) 5.11; these stand alone, between the turn's other events). `show_in_panel` never sends it. It carries the whole view, not a delta. It never creates a panel item and does not open the right panel. The client patches the session's `workflow` live, so the workflow bar moves while the turn streams; the persisted view arrives with `done` ([agent-panel](../capabilities/agent-panel/spec.md) R19). Every agent. |
 | `readiness-report` | `content: JSON string` `ReadinessReportEvent` `{ report: ReadinessReport, panelItem: PanelItem }` ([data-model.md](data-model.md)) | `assess_data_readiness` or `get_readiness_report` returned a report this turn; sent just before that tool's `tool-result`. The client shows the scorecard in the right panel (the `panelItem`, kind `readiness`, is also persisted on the session as `show_in_panel` items are). The answer persisted at the end of the turn carries `readinessReport` (data-model 3.4.1), and the chat shows the readiness card. Data Readiness Agent sessions only ([data-readiness](../capabilities/data-readiness/spec.md) R5). |
 | `done` | `session: SessionDoc` | **Terminal, success.** The persisted session with this turn's messages. |
 | `error` | `content: string` | **Terminal, failure.** Human-readable message (`"message is required"`, `"Session <id> not found"`, provider/model errors). |
@@ -1417,7 +1294,7 @@ interface StreamMessageRequest {
  → done            or            error
 ```
 
-- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `tool-progress` events fall between a tool's `tool` and its `tool-result`. `visual-updated`, `panel-item` and `workflow` precede the matching `tool-result` (for an RFP stage auto-drive, which has no tool call of its own, they stand alone).
+- `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `tool-progress` events fall between a tool's `tool` and its `tool-result`. `visual-updated`, `panel-item` and `workflow` precede the matching `tool-result`.
 - After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, and the **careful-mode cross-check** (`crossCheck` verdict). No keepalive is sent during them. (While a tool runs, `tool-progress` events, where the tool emits them, act as a keepalive.)
 - **The streamed deltas are not authoritative.** The grounding guard may replace the answer text after it was already streamed. The client must replace its whole message list with `done.session` rather than keep the deltas.
 
@@ -1497,7 +1374,7 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 |---|---|---|
 | `run` | `runId: string`, `workflowId: string` | First frame: the run started. |
 | `step` | `WorkflowRunStep`: `id`, `title`, `status: 'running' \| 'success' \| 'failed' \| 'skipped' \| 'stopped'`, `input?`, `inputTruncated?: true`, `output?`, `outputTruncated?: true`, `error?`, `startedAt?`, `endedAt?`, `toolCalls?` (below) | A step of the workflow started (`running`) or ended. A started step carries what it received (`input`, the engine's step-start `payload.payload`; `inputTruncated` instead when it is larger than 20 000 JSON characters) and `startedAt`; an ended one keeps them and adds `endedAt`. `success` carries the step's output (`outputTruncated` instead when it is larger than 20 000 JSON characters); `failed` its error; an agent step fed by an agent turn carries its `toolCalls` so far; `stopped` a step that ended the run early (an agent step stopped by the user or ended on a clarifying question; v2's Analyse after a stop). When the run ends, a step that never started is sent as `skipped`, and one still running as `stopped` (the run stopped) or `failed` (the run failed). Every step event of the run is sent, whatever the workflow's `bar`. |
-| `reasoning`, `text`, `tool`, `tool-result`, `tool-progress`, `visual-updated`, `panel-item`, `workflow`, `rfp-package`, `readiness-report` | as 3.1 (`content`) | Agent workflows: the agent turn's events, unchanged, interleaved with the `step` events. 3.1's `done { session }` is never sent. |
+| `reasoning`, `text`, `tool`, `tool-result`, `tool-progress`, `visual-updated`, `panel-item`, `workflow`, `readiness-report` | as 3.1 (`content`) | Agent workflows: the agent turn's events, unchanged, interleaved with the `step` events. 3.1's `done { session }` is never sent. |
 | `done` | `run: WorkflowRun` | **Terminal, success** (also for a code-only run whose step failed, and for a turn that ended on a clarifying question). |
 | `error` | `content: string` | **Terminal, failure** of an agent turn: the chat stream's message for the same failure (a custom endpoint's R50 text, a provider error, `No API key configured…`). |
 
@@ -1513,12 +1390,11 @@ type WorkflowRun = {
   output?: Record<string, unknown>;   // success: the last step's output (Wrap up's for v2; `{ calls, stopped }` for a one-step workflow; the engine's result for a code-only run)
   error?: string;                  // failed
   // Agent workflows only:
-  question?: string;               // the user message the agent received (`question`, or the RFP Builder's `message`), trimmed
+  question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1); absent when it stopped or failed before answering
   datasets: string[];              // the host's datasets ([] for a code-only run)
   agentKey?: string; agentId?: string; agentName?: string;
   agent?: SessionAgentRef;         // as a session's (2.1)
-  rfpId?: string;                  // RFP Builder: the RFP the run worked on (`turn-rfp`, or the input's)
   panelItems?: PanelItem[];        // as a session's derived list (2.1)
   visualizations?: SessionVisualization[];
   workflowState?: WorkflowState;
@@ -1638,8 +1514,6 @@ Binary `questions-to-insights` (`backend/src/cli.ts` compiled to `dist/cli.js`),
 | `--host` | string | `127.0.0.1` | Interface to bind. `--host 0.0.0.0` opens the app to every machine that can reach the port, with full access and no sign-in (1.9, G14). |
 | `--data-dir` | path | `$QTI_DATA_DIR`, else `$APP_DATA_DIR`, else `~/.questions-to-insights` | Resolved to an absolute path; created (`mkdir -p`). Deliberately separate from the Electron `userData` dir so both can run at once. |
 | `--no-open` | none | opens the browser | Parsed as the negation of a boolean `open` option. |
-| `--intellify-api-port` | integer 0..65535 | `$INTELLIFY_API_PORT`, else `3100` | Port of the embedded Intellify RFP API (2.16); `0` = a free port. Sets `INTELLIFY_API_PORT` before the app is imported. Invalid value → exit 1 `invalid --intellify-api-port "<v>" (expected 0-65535)`. |
-| `--no-intellify-api` | none | starts the embedded API | Does not start the embedded Intellify RFP API (sets `INTELLIFY_API=off`). |
 | `-h`, `--help` | none | | Prints usage to stdout, exit 0. |
 | `-v`, `--version` | none | | Prints the package version (`unknown` if unreadable), exit 0. |
 
@@ -1661,12 +1535,11 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
   Questions to Insights <version>
   URL:      http://<host>:<port>          # host shown as `localhost` when bound to 0.0.0.0/::, IPv6 in brackets
   Data dir: <absolute path>
-  Intellify API: http://<INTELLIFY_API_HOST>:<port>   # e.g. http://127.0.0.1:3100; only when the embedded Intellify RFP API started (2.16)
   Press Ctrl+C to stop.
 (blank)
 ```
 
-The `Intellify API:` line carries the actual bound port of the embedded API (useful with `--intellify-api-port 0`); the E2E fixture reads it the way it reads `URL:`. When the API did not start, the line is left out and the backend log holds `Intellify API not started: <reason>`.
+The CLI banner no longer prints an `Intellify API:` line, and the flags `--intellify-api-port` and `--no-intellify-api` (removed 2026-11-12) are unknown flags like any other.
 
 **Browser opening.** Best effort, detached, errors ignored: `open <url>` (macOS), `cmd /c start "" <url>` (Windows), `xdg-open <url>` (other).
 
@@ -1692,19 +1565,8 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
-| `INTELLIFY_API` | `app-bootstrap.ts` | `off` disables the embedded Intellify RFP API (2.16); any other value or unset starts it. The CLI's `--no-intellify-api` sets it. | unset (started) |
-| `INTELLIFY_API_HOST` | Intellify API config (`intellify-api/config.ts`) | Interface the Intellify RFP API binds. | `127.0.0.1` |
-| `INTELLIFY_API_PORT` | Intellify API config | Its port; `0` = a free port. The CLI's `--intellify-api-port` sets it. | `3100` |
-| `INTELLIFY_API_KEY` | Intellify API config | The accepted API keys, comma-separated. Standalone (`npm run intellify-api`): required, startup fails without it. Embedded: optional; unset, the backend reads `<APP_DATA_DIR>/.intellify-api-key`, or creates it (32 random bytes hex, mode `0600`, as `.app-secret`). Never logged. | `<APP_DATA_DIR>/.intellify-api-key` (embedded) |
-| `INTELLIFY_DB_HOST` | Intellify API config | PostgreSQL host of the Intellify database ([data-model.md](data-model.md) section 7). | `127.0.0.1` |
-| `INTELLIFY_DB_PORT` | Intellify API config | Its port. | `WORLD_CUP_DB_PORT`, else `55432` |
-| `INTELLIFY_DB_NAME` | Intellify API config | Its database name. The `/health` and Testing Data messages name the database looked for. | `intellify_mercer_demo` |
-| `INTELLIFY_DB_USER` | Intellify API config | Its user. | `world_cup` |
-| `INTELLIFY_DB_PASSWORD` | Intellify API config | Its password. Never logged. | `world_cup_dev` |
-| `INTELLIFY_DB_SSL` | Intellify API config | `true` connects over TLS. | `false` |
-| `INTELLIFY_DB_SCHEMA` | Intellify API config | Schema holding the Intellify data (the `intellify` fixture's). The `rfp` schema's name is fixed. | `intellify` |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
-| `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
+| `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
 | `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
 | `EVAL_LLM_PROVIDER`, `EVAL_LLM_API_STYLE`, `EVAL_LLM_BASE_URL`, `EVAL_LLM_API_KEY`, `EVAL_LLM_MODEL` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | `EVAL_LLM_PROVIDER=custom` runs the evals on a custom endpoint instead of the saved LLM settings: API style (`openai` \| `anthropic`), base URL and model required, key optional ([agents.md](agents.md) 8.5). | unset (saved settings) |
 
@@ -1727,7 +1589,7 @@ The `Intellify API:` line carries the actual bound port of the embedded API (use
 
 ### 6.4 Developer scripts (not part of the shipped app)
 
-`BACKEND_URL` (default `http://127.0.0.1:3000`) and `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) for `setup-worldcup-rest.ts`; `WORLD_CUP_API_PORT` (`55080`) for the sample REST server; `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `EVAL_ROW_LIMIT` (`500`), `EVAL_TIMEOUT_MS` (`300000`) for `run-eval.ts`; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`. `npm run intellify-api` in `backend/` runs the Intellify RFP API standalone (`node dist/intellify-api/main.js`, after a build), configured only by the `INTELLIFY_*` variables of 6.1, with `INTELLIFY_API_KEY` required (2.16).
+`BACKEND_URL` (default `http://127.0.0.1:3000`) and `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) for `setup-worldcup-rest.ts`; `WORLD_CUP_API_PORT` (`55080`) for the sample REST server; `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `EVAL_ROW_LIMIT` (`500`), `EVAL_TIMEOUT_MS` (`300000`) for `run-eval.ts`; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`.
 
 ### 6.5 Frontend build/runtime
 

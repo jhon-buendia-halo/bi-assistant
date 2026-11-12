@@ -80,7 +80,6 @@ flowchart TB
   end
 
   backend["NestJS backend<br/>(backend/src, createApp)<br/>API + Mastra agents"]
-  intellifyapi["Intellify RFP API<br/>(backend/src/intellify-api, second Nest app, :3100)"]
 
   subgraph data["APP_DATA_DIR (userData, or ~/.questions-to-insights for the CLI)"]
     appdb[("app.sqlite<br/>(better-sqlite3 DocStore)")]
@@ -109,8 +108,6 @@ flowchart TB
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
   backend -->|"fs read/write (Mastra workspace)"| ws
   backend -->|"pg / @databricks/sql / HTTPS"| ext
-  backend -->|"HTTP + X-API-Key (RFP tools, REST datasource)"| intellifyapi
-  intellifyapi -->|"pg: READ ONLY over intellify.*, writes to rfp.*"| intellifydb[("intellify_mercer_demo<br/>(PostgreSQL)")]
   backend -.->|"OTLP traces, metrics + logs,<br/>only when developer observability is on"| devtools
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
@@ -122,7 +119,6 @@ flowchart TB
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
 - **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. It binds `127.0.0.1` by default (ADR-0030). How to run it: [delivery.md](delivery.md) section 4.1.
-- **Intellify RFP API** (`backend/src/intellify-api/`) — a second NestJS application in the backend package, started in-process by `createApp()` on its own port (default 3100) or alone; the app reaches it only over HTTP with an API key (ADR-0027).
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
 - **Status:** Accepted
@@ -242,7 +238,7 @@ flowchart TB
   - A data folder used in local mode and then opened by an org server shows none of its private items there: they belong to `local`, which is no org user.
 
 #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-- **Status:** Accepted
+- **Status:** Superseded (2026-11-12): the RFP Builder and the Intellify RFP API were removed from the product (roadmap "Remove the RFP Builder and the Intellify RFP API"). The text below is kept as history; the `rfp` schema in an existing Intellify database and any stored RFP data are left in place and unused.
 - **Date:** 2026-10-14
 - **Context:**
   - The RFP Builder agent (ADR-0028) must reach the Intellify data model (the `intellify` fixture, BA-212) only through a REST API that we build, and must save the state of an RFP so a consultant can resume it.
@@ -294,9 +290,7 @@ flowchart LR
     designer["visualization agent"]
     sqlagents["sql-fixer, sql-verifier agents"]
     bootstrap["knowledge-bootstrap agent<br/>(Ontology Bootstrap)"]
-    rfpagent["rfp agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
-    rfptools["tools/rfp.tools.ts (HTTP)"]
     skills["skills/<br/>(built-in only; declared per agent; ADR-0018, ADR-0021)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
   end
@@ -337,12 +331,8 @@ flowchart LR
   mastrasvc --> designer
   mastrasvc --> sqlagents
   mastrasvc --> bootstrap
-  mastrasvc --> rfpagent
   mastrasvc --> turnwf
   turnwf -.->|"agent step calls back into the session turn"| sessions
-  rfpagent --> rfptools
-  rfpagent -.->|"its seven stage skills (catalog + skill tool)"| skills
-  rfptools -->|"restTarget(), exportRfpPackage()"| toolsvc
   assistant --> tools
   assistant -.->|"its skills (catalog + skill tools)"| skills
   designer -.->|"interactive-visuals (pipeline-loaded)"| skills
@@ -676,7 +666,7 @@ flowchart LR
   - A System agent's prompt edit can degrade a structured-output pipeline (designer, fixer, verifier, bootstrap, judge); their callers' existing fallbacks for unusable output still apply.
 
 #### ADR-0028 — A built-in RFP Builder agent with dedicated HTTP tools, resolved through a REST datasource; sessions can bind to a built-in agent
-- **Status:** Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
+- **Status:** Superseded (2026-11-12): the RFP Builder agent was removed from the product together with the Intellify RFP API (ADR-0027); the sessions-bind-to-a-built-in-agent mechanism it introduced stays for the Data Readiness Agent and Questions to Insights v2. Kept as history. Earlier status: Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
