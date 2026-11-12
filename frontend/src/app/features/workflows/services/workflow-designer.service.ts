@@ -8,6 +8,7 @@ import { ToastService } from '../../../core/toast/toast.service';
 import {
   ChatMessage,
   MessageFeedback,
+  RfpPackage,
   WorkflowView,
 } from '../../sessions/models/session.model';
 import {
@@ -21,11 +22,15 @@ import {
 import { WorkflowRunsApiService } from './workflow-runs-api.service';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
+  RFP_ID_FIELD,
   RunFormValues,
   canRunFromPage,
+  continueRequest,
   followUpRequest,
   initialInputValues,
   questionFieldName,
+  rfpDocumentItem,
+  rfpPackageFilename,
   runAgainValues,
   runInput,
 } from './workflows.util';
@@ -122,6 +127,20 @@ export class WorkflowDesigner {
   readonly ratingPending = signal(false);
   /** The earlier run this one follows up (its context), if any. */
   readonly contextRun = signal<{ id: string; question: string } | null>(null);
+  /**
+   * The RFP Builder's Continue (plan 4.3): the run the next Execute continues,
+   * with its RFP when it has one; cleared once that run starts, or by
+   * starting fresh.
+   */
+  readonly pendingContinue = signal<{
+    id: string;
+    question: string;
+    rfpId?: string;
+  } | null>(null);
+  /** The RFP document the run shown put in the panel (rfp R9, R16), once read. */
+  readonly rfpDocument = signal<{ title: string; text: string } | null>(null);
+  /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
+  readonly rfpDownloading = signal<string | null>(null);
 
   /** Live: the step events so far, by step id. */
   readonly liveSteps = signal<Record<string, WorkflowRunStep>>({});
@@ -131,7 +150,7 @@ export class WorkflowDesigner {
   readonly toolCalls = signal<LiveToolCall[]>([]);
   /** Live: the answer text so far (not authoritative; `done.run` replaces it). */
   readonly streamingText = signal('');
-  /** Live: the agent's phases (`workflow` event), for the phases bar. */
+  /** Live: the agent's phases (`workflow` event; the RFP Builder's stages), for the phases bar. */
   private readonly livePhases = signal<WorkflowView | null>(null);
   /** The agent's phases bar: live while it streams, then as stored. */
   readonly phases = computed<WorkflowView | null>(
@@ -147,6 +166,8 @@ export class WorkflowDesigner {
 
   private loadSubscription: Subscription | null = null;
   private datasetsSubscription: Subscription | null = null;
+  private documentSubscription: Subscription | null = null;
+  private downloadSubscription: Subscription | null = null;
   private stoppedSubscription: Subscription | null = null;
   private stoppedTimer: ReturnType<typeof setTimeout> | null = null;
   private abort: AbortController | null = null;
@@ -235,7 +256,21 @@ export class WorkflowDesigner {
     return statuses;
   });
 
-  /** Follow up is offered under a stored answer of a workflow with a question. */
+  /**
+   * Whether the workflow builds an RFP over several runs (plan 4.3): it has
+   * the hidden `rfpId` field Continue sets.
+   */
+  readonly continuesRfp = computed(
+    () =>
+      this.workflow()?.input.some(
+        (field) => field.name === RFP_ID_FIELD && field.hidden === true,
+      ) ?? false,
+  );
+
+  /**
+   * Follow up is offered under a stored answer of a workflow with a question;
+   * the RFP Builder offers Continue instead.
+   */
   readonly canFollowUp = computed(() => {
     const run = this.run();
     return (
@@ -243,6 +278,7 @@ export class WorkflowDesigner {
       run.answer !== undefined &&
       run.status === 'success' &&
       this.questionField() !== null &&
+      !this.continuesRfp() &&
       !this.running()
     );
   });
@@ -254,6 +290,22 @@ export class WorkflowDesigner {
   prefillRunAgain(input: WorkflowRun['input']): void {
     this.prefill = input as RunFormValues;
   }
+
+  /**
+   * Continue is offered under every stored RFP Builder answer: a first run
+   * may only propose, and creates no RFP until the consultant confirms (rfp R4).
+   */
+  readonly canContinue = computed(() => {
+    const run = this.run();
+    return (
+      run !== null &&
+      run.answer !== undefined &&
+      run.status === 'success' &&
+      this.continuesRfp() &&
+      this.questionField() !== null &&
+      !this.running()
+    );
+  });
 
   /** Open a workflow: everything of the previous one is discarded. */
   load(id: string): void {
@@ -300,6 +352,9 @@ export class WorkflowDesigner {
     this.loadSubscription = null;
     this.datasetsSubscription?.unsubscribe();
     this.datasetsSubscription = null;
+    this.downloadSubscription?.unsubscribe();
+    this.downloadSubscription = null;
+    this.rfpDownloading.set(null);
     this.cancelStream();
     this.loading.set(false);
     this.error.set(null);
@@ -310,6 +365,7 @@ export class WorkflowDesigner {
     this.inputValues.set({});
     this.followUpText.set('');
     this.runError.set(null);
+    this.pendingContinue.set(null);
     this.resetRun();
   }
 
@@ -359,11 +415,75 @@ export class WorkflowDesigner {
     );
   }
 
-  /** Run the workflow once on the form's values (api.md 119). */
+  /**
+   * Run the workflow once on the form's values (api.md 119); after Continue,
+   * on the continued run's RFP with that run as the context (plan 4.3).
+   */
   execute(): void {
     const workflow = this.workflow();
     if (workflow === null || this.running()) return;
+    const pending = this.pendingContinue();
+    if (pending !== null) {
+      this.start(
+        workflow,
+        continueRequest(workflow.input, this.inputValues(), pending),
+        { id: pending.id, question: pending.question },
+      );
+      return;
+    }
     this.start(workflow, { input: runInput(workflow.input, this.inputValues()) }, null);
+  }
+
+  /**
+   * The RFP Builder's Continue (plan 4.3): the message field is cleared for
+   * the consultant's reply, and the next Execute continues the shown run (its
+   * message and proposal as the context) on its RFP, when it has one.
+   */
+  continueRun(): void {
+    const run = this.run();
+    const field = this.questionField();
+    if (!this.canContinue() || run === null || field === null) return;
+    this.setInput(field, '');
+    this.pendingContinue.set({
+      id: run.id,
+      question: run.question ?? '',
+      ...(run.rfpId ? { rfpId: run.rfpId } : {}),
+    });
+  }
+
+  /** Drop a pending Continue: the next Execute starts a fresh exchange. */
+  cancelContinue(): void {
+    this.pendingContinue.set(null);
+  }
+
+  /**
+   * Save the shown run's RFP package, or one of its files, from the run's
+   * route (rfp R9, R16; api.md 127), named as the server names it.
+   */
+  downloadRfpPackage(pkg: RfpPackage, file?: string): void {
+    const runId = this.run()?.id ?? this.runId();
+    if (runId === null || this.rfpDownloading() !== null) return;
+    this.rfpDownloading.set(`${pkg.rfpId}/${file ?? ''}`);
+    this.downloadSubscription = this.runsApi
+      .downloadRfpPackage(runId, pkg.rfpId, file, pkg.draft)
+      .subscribe({
+        next: (blob) => {
+          this.rfpDownloading.set(null);
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = rfpPackageFilename(pkg, file);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+          this.toast.success('RFP package downloaded');
+        },
+        error: (err) => {
+          this.rfpDownloading.set(null);
+          this.toast.error(err?.error?.message ?? 'RFP package download failed');
+        },
+      });
   }
 
   /**
@@ -380,7 +500,12 @@ export class WorkflowDesigner {
     if (this.running()) return;
     this.setInput(field, text);
     this.followUpText.set('');
-    this.start(workflow, followUpRequest(run, field, text), {
+    const request = followUpRequest(run, field, text);
+    // An RFP Builder's clarification pick stays on the run's RFP (plan 4.3).
+    if (this.continuesRfp() && run.rfpId) {
+      request.input = { ...request.input, [RFP_ID_FIELD]: run.rfpId };
+    }
+    this.start(workflow, request, {
       id: run.id,
       question: run.question ?? '',
     });
@@ -435,7 +560,7 @@ export class WorkflowDesigner {
           );
           return;
         }
-        if (run.status !== 'running') this.run.set(run);
+        if (run.status !== 'running') this.showStored(run);
       },
       error: () => undefined,
     });
@@ -452,7 +577,28 @@ export class WorkflowDesigner {
     this.stoppedTimer = null;
   }
 
+  /** The run as stored: shown, with the RFP document it put in the panel read. */
+  private showStored(run: WorkflowRun): void {
+    this.run.set(run);
+    const item = this.continuesRfp() ? rfpDocumentItem(run.panelItems) : null;
+    if (item === null) return;
+    const generation = this.generation;
+    this.documentSubscription?.unsubscribe();
+    this.documentSubscription = this.runsApi
+      .panelItemFile(run.id, item.id)
+      .subscribe({
+        next: (file) => {
+          if (generation !== this.generation) return;
+          this.rfpDocument.set({ title: item.title, text: file.text });
+        },
+        error: () => undefined,
+      });
+  }
+
   private resetRun(): void {
+    this.documentSubscription?.unsubscribe();
+    this.documentSubscription = null;
+    this.rfpDocument.set(null);
     this.runId.set(null);
     this.run.set(null);
     this.contextRun.set(null);
@@ -486,7 +632,9 @@ export class WorkflowDesigner {
         request,
         {
           onRun: ({ runId }) => {
-            if (live()) this.runId.set(runId);
+            if (!live()) return;
+            this.runId.set(runId);
+            this.pendingContinue.set(null);
           },
           onStep: (step) => {
             if (!live()) return;
@@ -528,9 +676,9 @@ export class WorkflowDesigner {
           },
           onDone: (run) => {
             if (!live()) return;
-            this.run.set(run);
             this.runId.set(run.id);
             this.running.set(false);
+            this.showStored(run);
           },
           onError: (message) => {
             if (!live()) return;

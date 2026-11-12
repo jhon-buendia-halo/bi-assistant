@@ -1040,35 +1040,35 @@ specs/capabilities/monitoring/spec.md:144-311  ## Flows
 specs/capabilities/monitoring/spec.md:313-324  ## Acceptance
 
 specs/capabilities/rfp/spec.md:5-13  ## Concepts
-specs/capabilities/rfp/spec.md:15-46  ## Rules
-specs/capabilities/rfp/spec.md:17-20  ### The agent on the hub
+specs/capabilities/rfp/spec.md:15-47  ## Rules
+specs/capabilities/rfp/spec.md:17-21  ### The agent on the hub
 specs/capabilities/rfp/spec.md:19-19  R1 The RFP Builder SHALL be a built-in agent shown on the Agent Hub in th
-specs/capabilities/rfp/spec.md:20-20  R2 **Start chat** on the RFP Builder's workflow (R1) SHALL create a sessi
-specs/capabilities/rfp/spec.md:22-28  ### How the agent works
-specs/capabilities/rfp/spec.md:24-24  R3 The RFP Builder SHALL reach the Intellify data only through the Intell
-specs/capabilities/rfp/spec.md:25-25  R4 The agent SHALL build an RFP in seven stages, in this order: 1 client
-specs/capabilities/rfp/spec.md:26-26  R5 An RFP record SHALL hold: the client (code and name); a title, by defa
-specs/capabilities/rfp/spec.md:27-27  R6 An RFP's status SHALL only move forward: `draft` → `ready` → `issued`
-specs/capabilities/rfp/spec.md:28-28  R7 RFP records SHALL be kept by the Intellify RFP API, not in the app's d
-specs/capabilities/rfp/spec.md:30-34  ### The package
-specs/capabilities/rfp/spec.md:32-32  R8 The RFP package (final or draft, R16) SHALL be a projection of the sto
-specs/capabilities/rfp/spec.md:33-33  R9 The agent SHALL export the package only after the consultant confirms
-specs/capabilities/rfp/spec.md:34-34  R16 The agent SHALL also export a **draft** of the package at any stage, w
-specs/capabilities/rfp/spec.md:36-41  ### The Intellify RFP API
-specs/capabilities/rfp/spec.md:38-38  R10 The API SHALL read the Intellify data in read-only transactions, so no
-specs/capabilities/rfp/spec.md:39-39  R11 Every route except the health check and the OpenAPI document SHALL req
-specs/capabilities/rfp/spec.md:40-40  R12 The API SHALL start with the app on its own port (3100 by default) unl
-specs/capabilities/rfp/spec.md:41-41  R13 The "Intellify RFP API" sample in Settings → Testing Data SHALL regist
-specs/capabilities/rfp/spec.md:43-46  ### Evals
-specs/capabilities/rfp/spec.md:45-45  R14 The RFP Builder SHALL have one eval set, `rfp`, bound to the "Intellif
-specs/capabilities/rfp/spec.md:46-46  R15 A chat bound to the RFP Builder SHALL NOT offer the assistant's own co
-specs/capabilities/rfp/spec.md:48-62  ## Edge cases and errors
-specs/capabilities/rfp/spec.md:64-71  ## Contracts
-specs/capabilities/rfp/spec.md:73-81  ## UI
-specs/capabilities/rfp/spec.md:83-218  ## Flows
-specs/capabilities/rfp/spec.md:85-164  ### Feature: RFP builder
-specs/capabilities/rfp/spec.md:166-218  ### Feature: Intellify RFP API
-specs/capabilities/rfp/spec.md:220-226  ## Acceptance
+specs/capabilities/rfp/spec.md:20-21  R2 **Start chat** on the RFP Builder's workflow (R1) SHALL create a sessi
+specs/capabilities/rfp/spec.md:23-29  ### How the agent works
+specs/capabilities/rfp/spec.md:25-25  R3 The RFP Builder SHALL reach the Intellify data only through the Intell
+specs/capabilities/rfp/spec.md:26-26  R4 The agent SHALL build an RFP in seven stages, in this order: 1 client
+specs/capabilities/rfp/spec.md:27-27  R5 An RFP record SHALL hold: the client (code and name); a title, by defa
+specs/capabilities/rfp/spec.md:28-28  R6 An RFP's status SHALL only move forward: `draft` → `ready` → `issued`
+specs/capabilities/rfp/spec.md:29-29  R7 RFP records SHALL be kept by the Intellify RFP API, not in the app's d
+specs/capabilities/rfp/spec.md:31-35  ### The package
+specs/capabilities/rfp/spec.md:33-33  R8 The RFP package (final or draft, R16) SHALL be a projection of the sto
+specs/capabilities/rfp/spec.md:34-34  R9 The agent SHALL export the package only after the consultant confirms
+specs/capabilities/rfp/spec.md:35-35  R16 The agent SHALL also export a **draft** of the package at any stage, w
+specs/capabilities/rfp/spec.md:37-42  ### The Intellify RFP API
+specs/capabilities/rfp/spec.md:39-39  R10 The API SHALL read the Intellify data in read-only transactions, so no
+specs/capabilities/rfp/spec.md:40-40  R11 Every route except the health check and the OpenAPI document SHALL req
+specs/capabilities/rfp/spec.md:41-41  R12 The API SHALL start with the app on its own port (3100 by default) unl
+specs/capabilities/rfp/spec.md:42-42  R13 The "Intellify RFP API" sample in Settings → Testing Data SHALL regist
+specs/capabilities/rfp/spec.md:44-47  ### Evals
+specs/capabilities/rfp/spec.md:46-46  R14 The RFP Builder SHALL have one eval set, `rfp`, bound to the "Intellif
+specs/capabilities/rfp/spec.md:47-47  R15 A chat bound to the RFP Builder SHALL NOT offer the assistant's own co
+specs/capabilities/rfp/spec.md:49-63  ## Edge cases and errors
+specs/capabilities/rfp/spec.md:65-72  ## Contracts
+specs/capabilities/rfp/spec.md:74-82  ## UI
+specs/capabilities/rfp/spec.md:84-224  ## Flows
+specs/capabilities/rfp/spec.md:86-170  ### Feature: RFP builder
+specs/capabilities/rfp/spec.md:172-224  ### Feature: Intellify RFP API
+specs/capabilities/rfp/spec.md:226-232  ## Acceptance
 
 specs/capabilities/sessions-chat/spec.md:5-7  ## Concepts
 specs/capabilities/sessions-chat/spec.md:9-211  ## Rules
@@ -1407,7 +1407,7 @@ specs/capabilities/workflows/spec.md:40-42  R17 A run MAY name one earlier run a
 specs/capabilities/workflows/spec.md:43-43  R18 Every run of a workflow on an input, code-only or agent, streamed (119
 specs/capabilities/workflows/spec.md:44-44  R19 The Runs page's **Runs** tab (app-shell R46) SHALL show the run histor
 specs/capabilities/workflows/spec.md:45-47  R20 Deleting a run SHALL remove it, its workspace and its files, and its m
-specs/capabilities/workflows/spec.md:48-48  R21 The Assistant, Questions to Insights v2, the Data Readiness Agent and
+specs/capabilities/workflows/spec.md:48-48  R21 The Assistant, Questions to Insights v2, the Data Readiness Agent, the
 specs/capabilities/workflows/spec.md:49-49  R22 The answer on the Run tab SHALL offer the same rating as a chat answer
 specs/capabilities/workflows/spec.md:51-64  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:66-70  ## Contracts
@@ -1707,7 +1707,7 @@ specs/system/agents.md:1087-1235  ## 4. Per-turn context
 specs/system/agents.md:1089-1199  ### 4.1 System context blocks
 specs/system/agents.md:1201-1224  ### 4.2 requestContext keys
 specs/system/agents.md:1226-1235  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1237-1552  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1237-1553  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1239-1276  ### 5.1 Streamed chat turn
 specs/system/agents.md:1278-1282  ### 5.2 Read-only enforcement
 specs/system/agents.md:1284-1298  ### 5.3 Execution-guided repair
@@ -1721,36 +1721,36 @@ specs/system/agents.md:1384-1409  ### 5.10 Chart-form heuristic
 specs/system/agents.md:1411-1457  ### 5.11 Workflow-backed turn: `qti-v2-turn` (Questions to Insights v2)
 specs/system/agents.md:1459-1496  ### 5.12 Workflows: the catalogue, ids and the one-step workflow
 specs/system/agents.md:1498-1516  ### 5.13 Run workflows: `seq-text-demo` (the sequential test workflow)
-specs/system/agents.md:1518-1552  ### 5.14 Runs of agent workflows
-specs/system/agents.md:1554-1727  ## 6. Visual designer pipeline
-specs/system/agents.md:1558-1568  ### 6.1 Entry points
-specs/system/agents.md:1570-1572  ### 6.2 Data handed to the designer
-specs/system/agents.md:1574-1590  ### 6.3 Modes and loop
-specs/system/agents.md:1592-1627  ### 6.4 Designer prompt
-specs/system/agents.md:1629-1634  ### 6.5 Repair
-specs/system/agents.md:1636-1638  ### 6.6 Assembled files
-specs/system/agents.md:1640-1642  ### 6.7 Call options
-specs/system/agents.md:1644-1687  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1689-1727  ### 6.9 Chart runtime contract
-specs/system/agents.md:1729-1970  ## 7. Skills and workspaces
-specs/system/agents.md:1731-1740  ### 7.1 Session workspaces
-specs/system/agents.md:1742-1783  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:1785-1811  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:1813-1964  ### 7.4 Skills per agent
-specs/system/agents.md:1966-1970  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:1972-2119  ## 8. Evals
-specs/system/agents.md:1976-2076  ### 8.1 Case and set format
-specs/system/agents.md:2078-2085  ### 8.2 Data preflight
-specs/system/agents.md:2087-2098  ### 8.3 Executing a case
-specs/system/agents.md:2100-2105  ### 8.4 Runs, regression and report
-specs/system/agents.md:2107-2119  ### 8.5 Other entry points
-specs/system/agents.md:2121-2125  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2127-2142  ## Open questions and gaps
-specs/system/agents.md:2144-2282  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2284-2320  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2322-2430  ## Appendix C — `rfp` (RFP Builder) system prompt (shipped wording)
-specs/system/agents.md:2432-2509  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2511-2523  ## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
+specs/system/agents.md:1518-1553  ### 5.14 Runs of agent workflows
+specs/system/agents.md:1555-1728  ## 6. Visual designer pipeline
+specs/system/agents.md:1559-1569  ### 6.1 Entry points
+specs/system/agents.md:1571-1573  ### 6.2 Data handed to the designer
+specs/system/agents.md:1575-1591  ### 6.3 Modes and loop
+specs/system/agents.md:1593-1628  ### 6.4 Designer prompt
+specs/system/agents.md:1630-1635  ### 6.5 Repair
+specs/system/agents.md:1637-1639  ### 6.6 Assembled files
+specs/system/agents.md:1641-1643  ### 6.7 Call options
+specs/system/agents.md:1645-1688  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1690-1728  ### 6.9 Chart runtime contract
+specs/system/agents.md:1730-1971  ## 7. Skills and workspaces
+specs/system/agents.md:1732-1741  ### 7.1 Session workspaces
+specs/system/agents.md:1743-1784  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:1786-1812  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:1814-1965  ### 7.4 Skills per agent
+specs/system/agents.md:1967-1971  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:1973-2120  ## 8. Evals
+specs/system/agents.md:1977-2077  ### 8.1 Case and set format
+specs/system/agents.md:2079-2086  ### 8.2 Data preflight
+specs/system/agents.md:2088-2099  ### 8.3 Executing a case
+specs/system/agents.md:2101-2106  ### 8.4 Runs, regression and report
+specs/system/agents.md:2108-2120  ### 8.5 Other entry points
+specs/system/agents.md:2122-2126  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2128-2143  ## Open questions and gaps
+specs/system/agents.md:2145-2283  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2285-2321  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2323-2431  ## Appendix C — `rfp` (RFP Builder) system prompt (shipped wording)
+specs/system/agents.md:2433-2510  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2512-2524  ## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

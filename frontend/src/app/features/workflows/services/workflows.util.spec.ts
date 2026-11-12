@@ -2,8 +2,11 @@ import { WorkflowInputField, WorkflowSummary } from '../models/workflow.model';
 import {
   buildWorkflowSections,
   canRunFromPage,
+  continueRequest,
   followUpRequest,
   initialInputValues,
+  rfpDocumentItem,
+  rfpPackageFilename,
   questionFieldName,
   runInput,
   filterRuns,
@@ -325,7 +328,7 @@ describe('workflows.util', () => {
       },
     ];
 
-    it('the run workflows, the Assistant, v2, Data Readiness and user agents run from their page; the RFP Builder not yet', () => {
+    it('the run workflows and every agent workflow (the Assistant, v2, Data Readiness, the RFP Builder and user agents) run from their page', () => {
       const runnable = [SEQ, ...CATALOGUE]
         .map((w) => ({ ...w, input: w.input.length ? w.input : ASSISTANT_INPUT }))
         .filter(canRunFromPage)
@@ -335,6 +338,7 @@ describe('workflows.util', () => {
         'agent:assistant',
         'qti-v2-turn',
         'agent:data-readiness',
+        'agent:rfp',
         'agent:u2',
         'agent:u1',
       ]);
@@ -407,6 +411,83 @@ describe('workflows.util', () => {
     });
   });
 
+  describe('the RFP Builder, one exchange per run (plan 4.3; rfp R2, R9, R16)', () => {
+    const RFP_INPUT: WorkflowInputField[] = [
+      {
+        name: 'message',
+        label: 'Message',
+        type: 'textarea',
+        required: true,
+        placeholder: 'Name the client and plan year, or state your decision',
+      },
+      { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
+    ];
+
+    it("Continue sends the typed message, the earlier run's RFP and the earlier run as its context", () => {
+      expect(
+        continueRequest(
+          RFP_INPUT,
+          { message: '  yes  ', rfpId: 'stale' },
+          { id: 'run-1', rfpId: 'rfp-1' },
+        ),
+      ).toEqual({
+        input: { message: '  yes  ', rfpId: 'rfp-1' },
+        context: { fromRunId: 'run-1' },
+      });
+      // A run that only proposed (no RFP yet) is continued by its context alone.
+      expect(continueRequest(RFP_INPUT, { message: 'yes' }, { id: 'run-1' })).toEqual({
+        input: { message: 'yes' },
+        context: { fromRunId: 'run-1' },
+      });
+    });
+
+    it('names the package as the server does: rfp-<title>[-draft].zip, or the file itself', () => {
+      const pkg = {
+        rfpId: '0b6c1f2e-1111-2222-3333-444455556666',
+        title: 'Orchard Manufacturing — 2027 benefits RFP',
+        files: [],
+      };
+      expect(rfpPackageFilename(pkg)).toBe(
+        'rfp-orchard-manufacturing-2027-benefits-rfp.zip',
+      );
+      expect(rfpPackageFilename({ ...pkg, draft: true })).toBe(
+        'rfp-orchard-manufacturing-2027-benefits-rfp-draft.zip',
+      );
+      expect(rfpPackageFilename({ ...pkg, title: '—' })).toBe('rfp-0b6c1f2e.zip');
+      expect(rfpPackageFilename(pkg, 'exhibits/exhibit-a-census.csv')).toBe(
+        'exhibit-a-census.csv',
+      );
+    });
+
+    it("the RFP document is the run's latest rfp.md file item, final or draft", () => {
+      const file = (id: string, path: string, shownAt: string) => ({
+        id,
+        kind: 'file' as const,
+        title: path,
+        path,
+        bytes: 10,
+        shownAt,
+      });
+      expect(rfpDocumentItem(undefined)).toBeNull();
+      expect(
+        rfpDocumentItem([
+          file('p1', 'notes.md', '2026-11-11T10:00:03.000Z'),
+          file('p2', 'rfp/r-1/draft/rfp.md', '2026-11-11T10:00:01.000Z'),
+          file('p3', 'rfp/r-1/rfp.md', '2026-11-11T10:00:02.000Z'),
+          {
+            id: 'p4',
+            kind: 'document' as const,
+            title: 'rfp/r-1/rfp.md',
+            markdown: '# x',
+            shownAt: '2026-11-11T10:00:04.000Z',
+          },
+        ])?.id,
+      ).toBe('p3');
+      expect(
+        rfpDocumentItem([file('p1', 'exhibits/rfp.md', '2026-11-11T10:00:00.000Z')]),
+      ).toBeNull();
+    });
+  });
 });
 
 describe('Runs list helpers (plan 1.24.11)', () => {

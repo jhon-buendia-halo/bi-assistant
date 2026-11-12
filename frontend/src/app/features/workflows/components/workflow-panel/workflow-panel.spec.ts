@@ -4,6 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import {
   WorkflowDetail,
   WorkflowRun,
@@ -14,7 +15,6 @@ import {
   RunStreamHandlers,
   WorkflowRunsApiService,
 } from '../../services/workflow-runs-api.service';
-import { of } from 'rxjs';
 import {
   sampleReadinessPanelItem,
   sampleReadinessReport,
@@ -99,6 +99,16 @@ class FakeRunsApi {
   }[] = [];
   getRun = jasmine.createSpy('getRun');
   downloadPanelItem = jasmine.createSpy('downloadPanelItem');
+  downloadRfpPackage = jasmine
+    .createSpy('downloadRfpPackage')
+    .and.returnValue(of(new Blob(['zip'])));
+  panelItemFile = jasmine.createSpy('panelItemFile').and.returnValue(
+    of({
+      item: { id: 'p1' },
+      contentType: 'text/markdown',
+      text: '# DRAFT — Orchard Manufacturing — 2027 benefits RFP',
+    }),
+  );
 
   streamRun(
     workflowId: string,
@@ -829,6 +839,161 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(text('workflow-run-status')).toBe('Run stopped');
       expect(q('workflow-run-step-answer')?.textContent).toContain('Stopped');
       expect(text('workflow-run')).toBe('Execute');
+    });
+  });
+
+  describe('Run tab of the RFP Builder (plan 4.3; rfp R2, R4, R9, R16)', () => {
+    const RFP: WorkflowDetail = {
+      ...ASSISTANT,
+      id: 'agent:rfp',
+      name: 'RFP Builder',
+      agents: [{ key: 'rfp', name: 'RFP Builder' }],
+      picksDatasets: false,
+      datasets: ['Intellify RFP API'],
+      input: [
+        {
+          name: 'message',
+          label: 'Message',
+          type: 'textarea',
+          required: true,
+          placeholder: 'Name the client and plan year, or state your decision',
+        },
+        { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
+      ],
+    };
+    const START = 'Start an RFP for Orchard Manufacturing, plan year 2027';
+    const STAGES = [
+      { number: 1, title: 'Client and renewal' },
+      { number: 2, title: 'Current program' },
+      { number: 3, title: 'What to market' },
+    ];
+
+    function rfpRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+      return assistantRun({
+        workflowId: 'agent:rfp',
+        workflowName: 'RFP Builder',
+        input: { message: START },
+        question: START,
+        answer: { role: 'assistant', content: 'Stage 1 proposal. Confirm?', at: 'x' },
+        rfpId: 'rfp-1',
+        ...overrides,
+      });
+    }
+
+    function openRfp(workflow: WorkflowDetail = RFP): void {
+      open(workflow);
+      click('workflow-panel-tab-run');
+    }
+
+    function typeMessage(value: string): void {
+      const field = q('workflow-input-message') as HTMLTextAreaElement;
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('the form is the message only; the hidden RFP has no control', () => {
+      openRfp();
+      expect(
+        (q('workflow-input-message') as HTMLTextAreaElement).placeholder,
+      ).toBe('Name the client and plan year, or state your decision');
+      expect(q('workflow-input-rfpId')).toBeNull();
+      expect(q('workflow-input-datasets')).toBeNull();
+    });
+
+    it('without the API sample Execute is disabled with the requirement', () => {
+      const requirement =
+        'Load the "Intellify RFP API" sample in Settings → Testing Data first';
+      openRfp({ ...RFP, runRequirement: requirement });
+      const button = q('workflow-run') as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(button.title).toBe(requirement);
+      expect(text('workflow-run-requirement')).toBe(requirement);
+    });
+
+    it('shows the stages inside the agent step, then Continue under the answer; Continue sends the RFP and the context', () => {
+      openRfp();
+      typeMessage(START);
+      click('workflow-run');
+      const h = runs.last.handlers;
+      h.onRun!({ runId: 'run-1', workflowId: 'agent:rfp' });
+      h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+      h.onWorkflow!({ phases: STAGES, current: 1, done: [], source: 'prompt', skipped: [] });
+      fixture.detectChanges();
+      const phases = q('workflow-run-phases')!;
+      expect(phases).not.toBeNull();
+      expect(q('workflow-run-phase-1')?.getAttribute('aria-current')).toBe('step');
+      expect(q('workflow-run-phase-1')?.textContent).toContain('Client and renewal');
+
+      h.onDone!(
+        rfpRun({
+          workflow: { phases: STAGES, current: 2, done: [1], source: 'prompt', skipped: [] },
+        }),
+      );
+      fixture.detectChanges();
+      expect(q('workflow-run-phase-1')?.textContent).toContain('Done');
+      expect(q('workflow-run-phase-2')?.getAttribute('aria-current')).toBe('step');
+      expect(q('workflow-follow-up-input')).toBeNull();
+      expect(text('workflow-run-continue')).toBe('Continue');
+
+      click('workflow-run-continue');
+      expect((q('workflow-input-message') as HTMLTextAreaElement).value).toBe('');
+      expect(text('workflow-run-continue-from')).toContain(`Continues “${START}”`);
+      typeMessage('yes');
+      click('workflow-run');
+      expect(runs.last.body).toEqual({
+        input: { message: 'yes', rfpId: 'rfp-1' },
+        context: { fromRunId: 'run-1' },
+      });
+    });
+
+    it("the package card downloads from the run's route, and the RFP document shows in the panel", () => {
+      openRfp();
+      typeMessage('Export a draft');
+      click('workflow-run');
+      const h = runs.last.handlers;
+      h.onRun!({ runId: 'run-3', workflowId: 'agent:rfp' });
+      h.onDone!(
+        rfpRun({
+          id: 'run-3',
+          answer: {
+            role: 'assistant',
+            content: 'Here is a draft, marked DRAFT.',
+            at: 'x',
+            rfpPackage: {
+              rfpId: 'rfp-1',
+              title: 'Orchard Manufacturing — 2027 benefits RFP',
+              files: [{ name: 'rfp.md', bytes: 10 }],
+              exportedAt: 'x',
+              draft: true,
+            },
+          },
+          panelItems: [
+            {
+              id: 'p1',
+              kind: 'file',
+              title: 'rfp.md',
+              path: 'rfp/rfp-1/draft/rfp.md',
+              bytes: 10,
+              shownAt: 'x',
+            },
+          ],
+        }),
+      );
+      fixture.detectChanges();
+      expect(runs.panelItemFile).toHaveBeenCalledWith('run-3', 'p1');
+      expect(text('run-rfp-document')).toContain(
+        'DRAFT — Orchard Manufacturing — 2027 benefits RFP',
+      );
+      const click$ = spyOn(HTMLAnchorElement.prototype, 'click');
+      click('rfp-package-download');
+      expect(runs.downloadRfpPackage).toHaveBeenCalledWith(
+        'run-3',
+        'rfp-1',
+        undefined,
+        true,
+      );
+      expect(click$).toHaveBeenCalledTimes(1);
     });
   });
 });

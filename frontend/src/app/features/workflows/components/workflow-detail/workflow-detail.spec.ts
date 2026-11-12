@@ -146,14 +146,27 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(events).toEqual(['openPanel']);
   });
 
-  it('the Data Readiness Agent and the RFP Builder have no Execute yet', () => {
+  it('the Data Readiness Agent has Execute and the Run tab (every agent workflow runs from its page)', () => {
+    open({
+      ...V2,
+      id: 'agent:data-readiness',
+      input: [{ name: 'question', label: 'Question', type: 'textarea', required: false }],
+    });
+    expect(text('workflow-execute')).toBe('Execute');
+    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
+  });
+
+  it('the RFP Builder has Execute: one exchange per run (plan 4.3)', () => {
     open({
       ...V2,
       id: 'agent:rfp',
-      input: [{ name: 'message', label: 'Message', type: 'textarea', required: true }],
+      input: [
+        { name: 'message', label: 'Message', type: 'textarea', required: true },
+        { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
+      ],
     });
-    expect(q('workflow-execute')).toBeNull();
-    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'code']);
+    expect(text('workflow-execute')).toBe('Execute');
+    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
   });
 
   it('writes the chat requirement beside a disabled Start chat', () => {

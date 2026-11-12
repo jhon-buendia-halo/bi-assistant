@@ -88,6 +88,7 @@ import {
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
+  WorkflowState,
   WorkflowView,
 } from './entities/session.entity';
 import { SessionDatasets } from './turn/session-datasets';
@@ -124,6 +125,8 @@ export interface RunHostSpec {
   /** The input's datasets; absent for the RFP Builder and user agents. */
   datasets?: string[];
   rfpId?: string;
+  /** The stage tracker an RFP Continue starts from: the earlier run's (plan 4.3). */
+  workflowState?: WorkflowState;
   /** The earlier run's question and answer, put before this run's question. */
   context?: { question: string; answer: string };
 }
@@ -632,6 +635,9 @@ export class SessionsService implements OnModuleInit {
       ...binding,
       workflowId: sessionWorkflowId(binding),
       ...(spec.rfpId ? { rfpId: spec.rfpId } : {}),
+      ...(spec.workflowState
+        ? { workflowState: { ...spec.workflowState } }
+        : {}),
       run: true,
       messages: spec.context
         ? [
