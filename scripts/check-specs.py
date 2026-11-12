@@ -55,7 +55,7 @@ check(listed_epics == set(epics), "specs/README.md lists exactly the epic specs 
 
 # 2. Every relative link resolves.
 # changelog.md and retrospective.md are excluded: past entries are never rewritten, so their links may point at moved files.
-files = ["CLAUDE.md", "README.md", "roadmap.md", "lessons.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md") + glob.glob(".claude/tools/**/*.md", recursive=True)
+files = ["CLAUDE.md", "README.md", "roadmap.md", "roadmap-archive.md", "lessons.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob(".claude/skills/*/SKILL.md") + glob.glob(".claude/tools/**/*.md", recursive=True)
 broken = []
 for f in files:
     for target in re.findall(r"\]\(([^)\s]+)\)", strip_code(read(f))):
@@ -112,14 +112,40 @@ absent = [a for a in agents if f"`{a}`" not in agents_md]
 check(agents and not absent, f"{len(agents)} registered agents appear in specs/system/agents.md", absent)
 
 # 8. Epic gate: every epic named in a roadmap milestone heading has a spec with a status.
+# Finished milestones live in roadmap-archive.md (roadmap 1.23.30); both files are read.
 # Epics are repo-only since 2026-11-11 (roadmap 0.5.1): a heading ends in "(M<R>-<M>)".
 # Older milestones still name their former Jira key as a link, "[BA-<n>]".
-roadmap_epics = set(re.findall(r"^### Milestone [\d.]+ — .*?(?:\[(BA-\d+)\]|\((M\d+-\d+)\))", read("roadmap.md"), flags=re.M))
+roadmap_epics = set(re.findall(r"^### Milestone [\d.]+ — .*?(?:\[(BA-\d+)\]|\((M\d+-\d+)\))", read("roadmap.md") + "\n" + read("roadmap-archive.md"), flags=re.M))
 roadmap_epics = {a or b for a, b in roadmap_epics}
 missing = sorted(roadmap_epics - set(epics))
 check(not missing, f"{len(roadmap_epics)} roadmap milestone epics have a spec in specs/epics/", missing)
 no_status = sorted(e for e, t in epics.items() if not re.search(r"\*\*Status:\*\* (Draft|Confirmed)", t))
 check(not no_status, "every epic spec has a Status of Draft or Confirmed", no_status)
+
+# 9. Gherkin once (roadmap 1.23.29): a Feature written as bare `Scenario:` titles (no Given/When/Then lines
+#    under them) lives in its E2E file only, so each title must appear there as a test or scenarioStep title.
+#    Features that keep their steps in the spec are not checked here.
+STEP = re.compile(r"^\s*(Given|When|Then|And|But)\b")
+bare = []
+for c, t in capabilities.items():
+    ref = re.search(r"^E2E: `([^`]+)`", t, flags=re.M)
+    if not ref or not os.path.isfile(ref.group(1)):
+        continue
+    e2e = read(ref.group(1))
+    for block in re.findall(r"```gherkin\n(.*?)```", t, flags=re.S):
+        parts = re.split(r"^\s*Scenario(?: Outline)?:\s*(.*)$", block, flags=re.M)
+        for title, body in zip(parts[1::2], parts[2::2]):
+            if not any(STEP.match(line) for line in body.splitlines()):
+                if title.strip() not in e2e and title.strip().replace('"', '\\"') not in e2e:
+                    bare.append(f"{c}: {title.strip()} (not in {ref.group(1)})")
+check(not bare, "every step-less Scenario title exists in its E2E file", bare)
+
+# 10. The spec section index is current (roadmap 1.23.29): regenerate it in memory and compare.
+try:
+    stale = subprocess.run(["node", "scripts/spec-index.mjs", "--check"], capture_output=True, text=True).returncode != 0
+    check(not stale, "specs/INDEX.md is current (node scripts/spec-index.mjs)")
+except FileNotFoundError:
+    check(True, "specs/INDEX.md freshness skipped (node is not installed)")
 
 print("\n" + ("ALL CHECKS PASSED" if not failures else f"{failures} CHECK(S) FAILED"))
 sys.exit(1 if failures else 0)
