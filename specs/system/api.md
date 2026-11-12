@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **92 HTTP route handlers** across 15 app controllers (sessions 16, deep analysis 3, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, monitoring 5, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **92 HTTP route handlers** across 15 app controllers (sessions 16, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, monitoring 5, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -42,7 +42,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, the whole ontology and personas controllers, and the data-readiness and synthetic-data controllers.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the whole ontology and personas controllers, and the data-readiness and synthetic-data controllers.
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -55,7 +55,7 @@ interface HttpErrorBody { statusCode: number; message: string | string[]; error:
 | 408 Request Timeout | A visual generation exceeded 120 s (`RequestTimeoutException`). Under Style A this surfaces as `ok:false`. |
 | 500 Internal Server Error | Any unhandled error (framework default body `{ statusCode: 500, message: "Internal server error" }`). |
 
-Clients read the error text from `error.message` (Style B) or `body.message` with `body.ok === false` (Style A). Two endpoints mix the styles: `GET /sessions/:id/deep-analysis/:jobId` and `GET /agents/:key/evals/runs/:jobId` report "not found" as Style A (`200 { ok:false }`).
+Clients read the error text from `error.message` (Style B) or `body.message` with `body.ok === false` (Style A). One endpoint mixes the styles: `GET /agents/:key/evals/runs/:jobId` reports "not found" as Style A (`200 { ok:false }`).
 
 ### 1.4 Success status codes
 
@@ -131,7 +131,7 @@ Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, wor
 
 The session on the wire (endpoints 1 and 2) is the stored `SessionDoc` (data-model 3.4) plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`assistant-v2`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (past-chats R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`. A stored `agentKey: "rfp"` (the removed RFP Builder) does not resolve: such a session reads as a plain one. It is computed on every read, never stored.
 
-Every session on the wire also carries an always-present, derived `workflowRef: { id: string; name: string; kind: 'code' | 'agent'; deleted: boolean }`: the workflow the session runs ([workflows](../capabilities/workflows/spec.md) R4; [agents.md](agents.md) 5.12). `id` is the stored `workflowId` while it resolves, else the id derived from `agentKey` / `agentId` (data-model 3.4). `name` is the workflow's catalogue name (116): `Assistant` for `agent:assistant`, `Questions to Insights v2` for `qti-v2-turn`, the registered agent's name for `agent:data-readiness`; for a user agent's workflow the agent's Live name, for a preview the draft's name, and once the agent is deleted the stored `agentName` with `deleted: true` (`deleted` is `false` otherwise). `kind` is `code` for a code-defined workflow, else `agent`. It is computed on every read, never stored. The `agent` and `workflow` fields above are unchanged: `workflow` is the workflow bar's view, not this reference.
+Every session on the wire also carries an always-present, derived `workflowRef: { id: string; name: string; kind: 'code' | 'agent'; deleted: boolean }`: the workflow the session runs ([workflows](../capabilities/workflows/spec.md) R4; [agents.md](agents.md) 5.12). Since 2026-11-12 only `qti-v2-turn` is a workflow: a session of Questions to Insights v2 reads `{ id: 'qti-v2-turn', name: 'Questions to Insights v2', kind: 'code', deleted: false }`; every other session (a plain one, one bound to the Data Readiness Agent or to a user agent, a stored `agent:*`, `seq-text-demo` or `deep-analysis` id) reads with `deleted: true`, its stored `workflowId` (else the id derived from its agent binding) as `id` and the name it last had (the stored `agentName`, else the id) as `name`, and opens as a plain past chat. It is computed on every read, never stored. The `agent` and `workflow` fields above are unchanged: `workflow` is the workflow bar's view, not this reference.
 
 Since 1.23.27 the routes that wrote to a session are removed (3, 5, 6, 7, 8, 10-13 here and 46, 47 in 2.7): a stored session is listed, read, downloaded from and deleted, nothing more ([past-chats](../capabilities/past-chats/spec.md)). A preview session never exists any more; the agent editor's preview is a draft run (api.md 129).
 
@@ -451,7 +451,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 
 #### 34. `GET /agents/:key`
 - Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant, assistant-v2 and data-readiness only; false for the System agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */; workflow?: AgentWorkflow /* workflow-backed built-in agents only (today assistant-v2) */; usedInWorkflows: { id: string; name: string }[] /* always present */ }`.
-- `usedInWorkflows` lists the workflows whose steps call the agent, in catalogue order (116; [agents.md](agents.md) 5.12): `assistant` → `[{ id: 'agent:assistant', name: 'Assistant' }]`, `assistant-v2` → `[{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]`, `data-readiness` → `[{ id: 'agent:data-readiness', name: 'Data Readiness Agent' }]`, a Live user agent → `[{ id: 'agent:<id>', name: <its Live name> }]`; a draft-only user agent and the System agents → `[]`.
+- `usedInWorkflows` lists the workflows whose steps call the agent ([agents.md](agents.md) 5.12): `assistant-v2` → `[{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]`; every other agent (the assistant, the Data Readiness Agent, every user agent, the System agents) → `[]`. Agents are a library, not workflows (ADR-0042).
 - `AgentWorkflow = { id: string; steps: { id: string; title: string; kind: 'code' | 'agent'; summary: string; input: string[]; output: string[]; agent?: { name: string; tools: string[]; maxSteps: number } /* the agent step only */; exits: { label: string; outcome: 'fails' | 'stops' }[] }[] }`. The steps are in run order, and it is built from the workflow's step catalogue ([agents.md](agents.md) 5.11): for v2, `id` is `qti-v2-turn`, the agent is `Questions to Insights v2` with its three tools and `maxSteps` 15. It is read-only and never stored ([agents-evals](../capabilities/agents-evals/spec.md) R108).
 - For a built-in agent, `instructions` is the prompt as served, so it reflects an override (ADR-0026), and `prompt` carries the editable text, the shipped text and the override state ([data-model.md](data-model.md) 3.10.3). For the `assistant`, `editable` and `shipped` exclude the generated `## Tools` section ([agents.md](agents.md) 2.1).
 - A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
@@ -604,7 +604,7 @@ The `built-in` routes are declared before `/skills/:id`.
 - Failures (Style A): `"Unknown built-in skill \"<name>\""`.
 
 #### 103. `PUT /agents/:key/prompt`
-- Body: `{ prompt: string }`, trimmed; the checks below run on the trimmed text. Saves the override (ADR-0026); it applies to the next call of every session, user agent, deep analysis, visual and eval run.
+- Body: `{ prompt: string }`, trimmed; the checks below run on the trimmed text. Saves the override (ADR-0026); it applies to the next call of every session, user agent, visual and eval run.
 - Success: `{ ok:true, message:"System prompt of \"<name>\" saved", agent: AgentDetail }`.
 - Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Only built-in skills can be linked here: this prompt is shared by every user"` (a `[[skill:<name>]]` whose name is not a built-in on-demand skill; a built-in one is accepted), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for the `data-readiness` agent only (agents.md 2.10): `"The Data Readiness Agent's prompt must start with \"You are the Data Readiness Agent\""`, `"Only the Data Readiness Agent's own skills can be linked here: this prompt is shared by every user"` (any `[[skill:…]]` other than `data-readiness`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `assess_data_readiness`, `get_readiness_report`, `list_readiness_reports`, `show_in_panel`, `ask_clarification`); for the `assistant-v2` agent only (agents.md 2.11): `"The Questions to Insights v2 prompt must start with \"You are Questions to Insights v2\""`, `"Skills can't be linked here: Questions to Insights v2 has no skills"` (any `[[skill:…]]`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not one of its tools: `list_entities`, `describe_entity`, `run_readonly_sql`); for a System agent only: `"This agent's prompt can't contain links"` (any `[[…]]`).
 - Declared before the `GET /agents/:key` catch-alls.
@@ -615,7 +615,7 @@ The `built-in` routes are declared before `/skills/:id`.
 
 ### 2.6.2 Workflows
 
-Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11, R14-R18). Workflows are defined in code (ADR-0040), and there is no write route. A workflow with input fields can be run once (118) or run streamed (119) (ADR-0041); every run is stored (since 1.23.14, [data-model.md](data-model.md) 3.16) and read back through section 2.6.3. `:id` is a workflow id (`qti-v2-turn`, `seq-text-demo`, `deep-analysis`, `agent:<registry key>`, `agent:<user-agent id>`; [agents.md](agents.md) 5.12). Ids contain `:`; clients send them URL-encoded (`agent%3Adata-readiness`) and the server decodes them.
+Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflows/spec.md) (R1-R4, R11, R14-R18). Workflows are defined in code (ADR-0040), and there is no write route. Since 2026-11-12 (ADR-0042) the catalogue holds one workflow, `qti-v2-turn`; the ids `agent:<registry key>`, `agent:<user-agent id>`, `seq-text-demo` and `deep-analysis` are removed and answer the not-found error of 117-119. A workflow with input fields can be run once (118) or run streamed (119) (ADR-0041); every run is stored (since 1.23.14, [data-model.md](data-model.md) 3.16) and read back through section 2.6.3. `:id` is a workflow id (`qti-v2-turn`; [agents.md](agents.md) 5.12).
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -628,17 +628,17 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - Response `200`: `{ workflows: WorkflowSummary[] }`.
   ```ts
   type WorkflowSummary = {
-    id: string;                       // 'qti-v2-turn' | 'seq-text-demo' | 'deep-analysis' | 'agent:<registry key>' | 'agent:<user-agent id>'
+    id: string;                       // 'qti-v2-turn' (the only one since 2026-11-12)
     name: string;
     description: string;
-    kind: 'code' | 'agent';           // code-defined, or the one-step workflow of an agent
-    owner: 'Official' | 'You';        // 'You' for a user agent's workflow
+    kind: 'code';                     // code-defined; the one-step 'agent' kind was removed 2026-11-12
+    owner: 'Official';                // 'You' (a user agent's workflow) was removed 2026-11-12
     agents: { key: string; name: string }[];   // the agents its steps call, in step order, each once
     stepCount: number;
     bar: 'steps' | 'agent';           // what drove a chat's workflow bar (kept for the stored chats): these steps, or the agent's own phases
     trigger: 'run';                   // every workflow runs once on a typed input (118, 119); since 1.23.22 there is no 'chat' trigger
     input: WorkflowInputField[];      // the typed input a run takes, in form order (every workflow has one since 1.23.12)
-    datasets: string[];               // the datasets the workflow's agent declares; [] when the run picks them (Assistant, Questions to Insights v2, Deep analysis)
+    datasets: string[];               // the datasets the workflow's agent declares; [] when the run picks them (Questions to Insights v2)
     missingDatasets: string[];        // named datasets that don't exist (as AgentSummary.missingDatasets)
     starterQuestions: string[];       // the agent's, as AgentSummary.starterQuestions
     runRequirement?: string;          // why a run can't start now; absent when it can
@@ -662,25 +662,17 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 
   | id | name | kind | agents | stepCount | bar | datasets / requirement |
   |---|---|---|---|---|---|---|
-  | `agent:assistant` | `Assistant` | agent | `assistant` (Questions to Insights Assistant) | 1 | agent | none |
   | `qti-v2-turn` | `Questions to Insights v2` | code | `assistant-v2` | 4 | steps | none |
-  | `seq-text-demo` | `Sequential test workflow` | code | none (`[]`) | 3 | steps | none |
-  | `deep-analysis` | `Deep analysis` | code | `assistant` (Questions to Insights Assistant) | 4 | steps | the assistant's (none today) |
-  | `agent:data-readiness` | `Data Readiness Agent` | agent | `data-readiness` | 1 | agent | as its AgentSummary (`Add a PostgreSQL or Databricks dataset first`) |
-  | `agent:<id>` (each Live user agent) | its Live name | agent | the user agent (`key` = id, `name` = Live name) | 1 | agent | its Live datasets that exist; `runRequirement` `None of this agent's datasets exist` when none do |
 
-- Description, starter questions and missing datasets come from the agent's catalogue entry (33). The two exceptions are the Assistant's description, `Answers questions over the datasets you pick.`, and v2's starter questions, which are empty, as in its AgentSummary.
-- **Trigger and input:** `seq-text-demo` is a run workflow: `trigger: 'run'`, `input: [{ name: 'text', label: 'Text', type: 'textarea', required: true, placeholder: 'Paste or type any text' }]`, description `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`, owner `Official`, no datasets, missing datasets or starter questions. Since 1.23.24 `deep-analysis` is one too ([agents.md](agents.md) 5.15): `trigger: 'run'`, `input` the Assistant's `question` and `datasets` (below), description `Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.`, owner `Official`, agent the assistant (whose missing datasets and requirement it takes), no starter questions. Every other workflow has `trigger: 'chat'` until 1.23.22, and since 1.23.12 also an `input` it runs on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
+- Description, starter questions and missing datasets come from the agent's catalogue entry (33); v2's starter questions are empty, as in its AgentSummary.
+- **Trigger and input:** `qti-v2-turn` is a run workflow: `trigger: 'run'` and, since 1.23.12, an `input` it runs on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
 
   | id | `input` (in order) |
   |---|---|
-  | `agent:assistant` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`); `datasets` (`Datasets`, datasets, required); `careful` (`Careful: cross-check the result with an independent query`, boolean, `default: false`) |
-  | `qti-v2-turn` | `question` (as the Assistant's); `datasets` (as the Assistant's) |
-  | `agent:data-readiness` | `dataset` (`Dataset`, dataset, required, `datasourceKinds: ['postgres', 'databricks']`); `question` (`Question`, textarea, optional, placeholder and `default` `Assess the readiness of this dataset`) |
-  | `agent:<id>` (user agent) | `question` (as the Assistant's); `careful` (as the Assistant's). Its datasets are the agent's Live datasets that exist (`datasets`), not an input. |
+  | `qti-v2-turn` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`); `datasets` (`Datasets`, datasets, required) |
 
-- **Run requirement:** `runRequirement` is set with the agent's requirement text (the Data Readiness Agent's, a user agent's `None of this agent's datasets exist`). While it is set, 118 and 119 refuse the run with it.
-- **Order:** `agent:assistant`, `qti-v2-turn`, `seq-text-demo`, `deep-analysis`, then the other Official workflows by name, then the user agents' workflows by name. System agents and draft-only user agents are never listed.
+- **Run requirement:** `runRequirement` is set with the agent's requirement text when the workflow's agent has one. While it is set, 118 and 119 refuse the run with it.
+- **Order:** `qti-v2-turn` only. No agent (System, Official or user) is listed.
 
 #### 117. `GET /workflows/:id`
 - Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[] }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
@@ -695,13 +687,13 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     agent?: { key: string; name: string; tools: string[]; maxSteps: number };   // `key`: the agent's registry key or user-agent id
   };
   ```
-- Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`), the agent it calls (`assistant` for `deep-analysis`), or the one-step workflow's own agent. `agents` is 116's list with each agent's `model` and `systemPrompt` read from 34; 116 itself is unchanged.
-- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`. For `seq-text-demo`, `steps` are its three code steps (`clean-text`, `count-words`, `format-result`; [agents.md](agents.md) 5.13), none with an `agent`. For `deep-analysis`, `steps` are `plan`, `investigate`, `write` (kind `agent`) and `assemble` (kind `code`; [agents.md](agents.md) 5.15); the agent steps' `agent` is `{ name: <the assistant's name>, tools: [], maxSteps: 1 }` for `plan` and `write`, and `{ name, tools: <the assistant's AgentSummary.tools>, maxSteps: 15 }` for `investigate`. A one-step workflow has one step, `answer` (`Answer`, kind `agent`, summary `The agent answers with its tools, streamed to the chat.`, input `question`, `datasets`, output `calls`, `stopped`, exits `Model error` fails and `Stop` stops, plus `Clarifying question` stops when the agent's tools include `ask_clarification`), whose `agent` is `{ name: <the agent's name>, tools: <its AgentSummary.tools>, maxSteps }`: `maxSteps` is 15 for `assistant` and user agents, 10 for `data-readiness`.
-- Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a draft-only user agent, a System agent (`agent:sql-fixer`), or a code workflow's own agent (`agent:assistant-v2`).
+- Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`). `agents` is 116's list with each agent's `model` and `systemPrompt` read from 34; 116 itself is unchanged.
+- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`.
+- Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a removed one (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `seq-text-demo`, `deep-analysis`), a System agent (`agent:sql-fixer`), or the workflow's own agent (`agent:assistant-v2`).
 
 #### 118. `POST /workflows/:id/runs`
 - Body: `{ input: Record<string, string | number | boolean | string[]>, context?: { fromRunId: string } }`. Runs the workflow once on `input` and answers when the run ends (no streaming). Capability: [workflows](../capabilities/workflows/spec.md) R11, R14; engine: [agents.md](agents.md) 5.13, 5.14. The UI uses 119.
-- Response `200` for a code-only workflow (`seq-text-demo`): `WorkflowRunResult & { runId: string }`, whether the run succeeded or a step failed (the run happened); `runId` is the stored run's id (121). For a workflow whose steps call an agent (`deep-analysis` included): the `WorkflowRun` 119 ends with (`done.run`), whatever its status.
+- Response `200`: the `WorkflowRun` 119 ends with (`done.run`), whatever its status. (A code-only workflow, answering `WorkflowRunResult & { runId }`, no longer exists; the type below stays for stored runs.)
   ```ts
   type WorkflowRunResult = {
     workflowId: string;
@@ -717,16 +709,16 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     error?: string;                   // the failing step's error (failed only)
   };
   ```
-- A failing step makes the run `failed`, with its error as the run's `error`; the steps after it are `skipped`. For `seq-text-demo` with `{ text: '  Hello   workflow   world  ' }`: `success`, three `success` steps and `output: { summary: '3 words, 20 characters: "Hello workflow world"' }`; with `{ text: '   ' }`: `failed`, `clean-text` failed with `The text is empty`, the other two `skipped`, `error: 'The text is empty'`.
+- A failing step makes the run `failed`, with its error as the run's `error`; the steps after it are `skipped`.
 - Input: only the workflow's declared fields are read, in field order; a number field's value is converted to a number; a `datasets` value is a list of names, trimmed, without repeats; any other key is ignored. A whitespace-only text is accepted (the run decides what it means; an agent run refuses a blank question). A field that is missing or empty takes its `default` (a boolean `false`); an optional one without a default is left out.
-- Errors (Style B, 400), checked before anything runs, the first one winning: `"Workflow \"<id>\" can't run on an input"` for a workflow with no input fields; the workflow's `runRequirement`; `"<label> is required"` for a required field that is missing or `""` (`"Text is required"`, `"Question is required"`, `"Dataset is required"`), and for an agent run (or a `deep-analysis` run) whose question or message is blank; `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`); `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
-- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A code-only run writes no workflow bar, persists no engine snapshot and has no workspace. An agent run is 119's, without the stream.
+- Errors (Style B, 400), checked before anything runs, the first one winning: `"Workflow \"<id>\" can't run on an input"` for a workflow with no input fields; the workflow's `runRequirement`; `"<label> is required"` for a required field that is missing or `""` (`"Question is required"`), and for a run whose question is blank; `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`); `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer. `404 "Workflow \"<id>\" not found"` for any id 116 does not list.
+- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream.
 
 #### 119. `POST /workflows/:id/runs/stream`
-- Body: as 118. Runs the workflow once on `input`, streamed. Any workflow with input fields: a code-only one streams its step events; an agent workflow runs one agent turn on a run host through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's for the same input. `deep-analysis` streams its four step events while its engine run makes the assistant's three deep-analysis calls on a run host ([agents.md](agents.md) 5.15); when it succeeds, `done.run` carries the executive summary as `answer` (with `report: { jobId: <run id>, title, path, angles }`) and the report as the file item `deep-analysis-report` of `panelItems`, downloaded through 126. Capability: [workflows](../capabilities/workflows/spec.md) R14-R17; [deep-analysis](../capabilities/deep-analysis/spec.md) R20-R27.
+- Body: as 118. Runs the workflow once on `input`, streamed: `qti-v2-turn` streams its step events, its analyse step running one agent turn on a run host through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's for the same input. Capability: [workflows](../capabilities/workflows/spec.md) R14-R17.
 - Refusals: 118's, answered with their real status (Style B) **before** the stream starts; nothing runs.
 - Response `200`, SSE (section 3.6).
-- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before the `run` event is sent, and updated when it ends (`success`, `failed` or `stopped`, a stop included); a run that throws while it ends is stored `failed` with that error. An agent run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory. The workspace stays with the stored run, so its files download through 123-127, until the run is deleted (122).
+- Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before the `run` event is sent, and updated when it ends (`success`, `failed` or `stopped`, a stop included); a run that throws while it ends is stored `failed` with that error. A run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory. The workspace stays with the stored run, so its files download through 123-127, until the run is deleted (122).
 
 ### 2.6.3 Workflow runs
 
@@ -832,26 +824,24 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Success `201`: `{ ok: true, message: "Repaired as version <n>", run, visualization }`.
 - Errors (Style B): as 130; `400 "Only the current version can be repaired (requested v<x>, current v<y>)"`; `400 "Version <n> is already an automatic repair; not repairing again"`.
 
-### 2.7 Deep analysis
+### 2.7 Deep analysis (removed 2026-11-12)
 
-Controller prefix `/sessions` (same prefix as 2.1, separate controller). Capability: deep-analysis. Only the report download of a past chat stays (48); the start and poll routes were removed in 1.23.27 and no job lives in memory any more.
+Controller prefix `/sessions`. Capability: none (the `deep-analysis` capability spec was deleted). Deep analysis was removed with ADR-0042: its start and poll routes went in 1.23.27, its report download and its workflow on 2026-11-12. Every route answers `404`; the numbers are not reused. Report files an old session left in its workspace stay on disk, unused.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
 | 46 | `POST /sessions/:id/deep-analysis` | Start a job (Removed in 1.23.27) | — |
 | 47 | `GET /sessions/:id/deep-analysis/:jobId` | Poll a job (Removed in 1.23.27) | — |
-| 48 | `GET /sessions/:id/deep-analysis/:jobId/download` | Report as Markdown | yes |
+| 48 | `GET /sessions/:id/deep-analysis/:jobId/download` | Report as Markdown (Removed 2026-11-12) | — |
 
 #### 46. `POST /sessions/:id/deep-analysis`
-Removed in 1.23.27: a deep analysis is a run of the `deep-analysis` workflow (119; [3.2](#32-deep-analysis)). Nothing in the app or its scripts calls it, and a call answers `404`.
+Removed in 1.23.27, and the workflow that replaced it on 2026-11-12. A call answers `404`.
 
 #### 47. `GET /sessions/:id/deep-analysis/:jobId`
-Removed in 1.23.27: a deep analysis is a run of the `deep-analysis` workflow (119; [3.2](#32-deep-analysis)). Nothing in the app or its scripts calls it, and a call answers `404`.
+Removed in 1.23.27, and the workflow that replaced it on 2026-11-12. A call answers `404`.
 
 #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
-- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="<slug-of-title>.md"` (fallback `deep-analysis-<first 8 of jobId>.md`; after a restart the title is unknown so the fallback applies).
-- Errors (Style B): `400 "invalid deep analysis id"` (jobId must match `^[a-zA-Z0-9-]+$`), `404 "No deep analysis report for <jobId>"`, session not found.
-- Reads the stored report from the workspace (`reports/` directory) by id, independent of in-memory state.
+Removed 2026-11-12 with Deep analysis: the route no longer exists (the number is not reused). Reports an old session stored in its workspace (`reports/`) stay on disk, unreachable from the app.
 
 ### 2.8 Ontology
 
@@ -1250,7 +1240,7 @@ Controller prefix `/health`. Capability: [app-shell](../capabilities/app-shell/s
 
 ## 3. Streaming and long-running work
 
-Three Server-Sent-Events endpoints exist (chat, workflow runs, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
+Three Server-Sent-Events endpoints exist (chat, workflow runs, ontology bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. One background-job pattern uses start + poll instead of SSE (eval runs).
 
 ### 3.1 Chat stream (removed in 1.23.27)
 
@@ -1318,14 +1308,9 @@ interface StreamMessageRequest {
 
 **Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
 
-### 3.2 Deep analysis
+### 3.2 Deep analysis (removed 2026-11-12)
 
-Pattern: **start, poll, then download**, until 1.23.27. Endpoints 46 and 47 (start, poll) are removed: a deep analysis is a run of the `deep-analysis` workflow (3.6), its report a run output, and only 48 (download a past chat's report) stays. What follows describes the job the removed routes ran; the run workflow's steps are in agents.md 5.15.
-
-- State machine: `planning` → `investigating` (one step per angle, 1..`steps`, at most 5 angles, 3-5 planned) → `writing` → `done`; any failure → `error`. Not resumable.
-- Progress is observed by polling `GET /sessions/:id/deep-analysis/:jobId` (the shipped chat polls every **3000 ms**, gives up after 5 consecutive poll failures). `progress` is the human line for the pending card: `"Planning the investigation"`, `"Investigating angle <i> of <n>: <title>"`, `"Writing the report"`, `"Report ready — <n> angle(s) investigated"`, `"Deep analysis failed"`. `step`/`steps` are 1-based.
-- Completion is also observable in the transcript: on `done` an assistant message with `report` is appended; on `error` an assistant failure message is appended (so a reload shows the outcome even if polling stopped).
-- One running job per session (conflict returns the running `jobId` with `ok:false`). Job records are in memory (50 most recent kept); aborted on backend shutdown. Reports persist in the workspace and remain downloadable.
+Removed with ADR-0042: no deep analysis job, poll or workflow exists. Section number kept so the numbering of the sections below stays stable.
 
 ### 3.3 Eval runs
 
@@ -1387,12 +1372,12 @@ type WorkflowRun = {
   context?: { fromRunId: string };
   status: 'running' | 'success' | 'failed' | 'stopped';   // 'running' only while it runs (121); done.run is never 'running'
   steps: WorkflowRunStep[];        // status 'success' | 'failed' | 'skipped' | 'stopped' once the run ended
-  output?: Record<string, unknown>;   // success: the last step's output (Wrap up's for v2; `{ calls, stopped }` for a one-step workflow; the engine's result for a code-only run)
+  output?: Record<string, unknown>;   // success: the last step's output (Wrap up's for v2)
   error?: string;                  // failed
-  // Agent workflows only:
+  // Questions to Insights v2 runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1); absent when it stopped or failed before answering
-  datasets: string[];              // the host's datasets ([] for a code-only run)
+  datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;
   agent?: SessionAgentRef;         // as a session's (2.1)
   panelItems?: PanelItem[];        // as a session's derived list (2.1)

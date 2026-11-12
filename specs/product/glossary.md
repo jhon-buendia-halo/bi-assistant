@@ -10,7 +10,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *Data Readiness Agent* and *Questions to Insights v2*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
-**Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
+**Angle.** One sub-question of a *deep analysis* (removed 2026-11-12).
 
 **Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
 
@@ -30,7 +30,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
-**Code-defined workflow.** A *workflow* written in code with its own steps, some deterministic and some calling an agent, and shipped with the app; today *Questions to Insights v2*'s four-step turn. It drives the *workflow bar* from its steps. See [../system/architecture.md](../system/architecture.md) ADR-0034 and ADR-0040.
+**Code-defined workflow.** A *workflow* written in code with its own steps, some deterministic and some calling an agent, and shipped with the app; today only *Questions to Insights v2*'s four-step turn (2026-11-12). It drives the *workflow bar* from its steps. See [../system/architecture.md](../system/architecture.md) ADR-0034 and ADR-0040.
 
 **Concept.** An *ontology item* of kind `concept`: a business term with a name, a definition, optional synonyms and optional **mappings** that say where it lives in the data (an entity, and optionally a column and/or a SQL expression). Rendered to the assistant as a `[term]` line. Replaces the former knowledge entry of kind `term`.
 
@@ -60,7 +60,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Datasource.** A saved connection to a data platform. Three kinds: `databricks` (a SQL warehouse, via host, token and warehouse id), `postgres` (host, port, database, user, password, SSL) and `rest` (an HTTP API with a base URL, an auth mode and a list of endpoints that are mapped to tables). Legacy name: *connection* (collection `connections`). The first single Databricks connection was migrated to a datasource with id `legacy-databricks`.
 
-**Deep analysis.** A background investigation of one question from several *angles*, producing a downloadable markdown *report*. One at a time per session. The chat stays usable while it runs. The result is posted as an assistant message whose text is the executive summary.
+**Deep analysis.** Removed 2026-11-12 (ADR-0042). It was a background investigation of one question from several *angles*, producing a downloadable markdown *report*. Reports in old transcripts stay readable.
 
 **Diagnostics.** The system log of the app: backend log lines, desktop shell events and interface errors, kept in a bounded buffer, shown in the System logs panel and exportable as a redacted, LLM-readable markdown report. A *log run* groups entries by backend process lifetime.
 
@@ -128,7 +128,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, *Questions to Insights v2* and the *Data Readiness Agent*.
 
-**One-step workflow.** The *workflow* the app makes for an agent that a chat can run and that has no workflow of its own (the assistant, the *Data Readiness Agent*, every *Live* *user agent*): one step that runs the agent. Its id is `agent:<agent key or id>`. It never writes the *workflow bar*; the agent's own *workflow phases* keep driving it. See [../system/architecture.md](../system/architecture.md) ADR-0040.
+**One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: only *Questions to Insights v2* is. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
 
 **Ontology.** What a dataset means, written down for the assistant: the *ontology items* (concepts, relations, constraints and instructions) that belong to the dataset, plus the *shared items*. Edited in the dataset's Ontology tab. Only enabled items reach the assistant, within a size budget per turn. Replaces the knowledge library, whose entries became ontology items (ADR-0036). See [dataset-ontology](../capabilities/dataset-ontology/spec.md).
 
@@ -158,7 +158,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Renewal kick-off.** The date work on a line's renewal starts: the renewal effective date minus the policy's kick-off timing, a number of days. Intellify plans are taken to run by calendar year, so a renewal takes effect on 1 January after the plan year.
 
-**Report.** The markdown output of a *deep analysis*: title, executive summary, findings by angle, data appendix.
+**Report.** The markdown output of a *deep analysis* (removed 2026-11-12): title, executive summary, findings by angle, data appendix. Old ones stay in stored transcripts.
 
 **Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
 
@@ -235,7 +235,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Warning.** A fault note from a *result guard*, shown with the data record and returned to the assistant so it re-runs before answering.
 
-**Workflow.** What a chat runs on every message: a fixed sequence of steps defined in code, each one deterministic code or a call to an *agent*. Every *session* runs one workflow: a *code-defined workflow* or an agent's *one-step workflow*. Workflows are listed in the Workflows area and never edited in the app. The hierarchy is workflows → agents → skills → tools. See [../system/architecture.md](../system/architecture.md) ADR-0040.
+**Workflow.** A fixed sequence of steps defined in code, each one deterministic code or a call to an *agent*, run once on a typed input. Since 2026-11-12 the only workflow is *Questions to Insights v2*. Workflows are listed in the Workflows area and never edited in the app; agents are a separate library the steps call. The hierarchy is workflows → agents → skills → tools. See [../system/architecture.md](../system/architecture.md) ADR-0040 and ADR-0042.
 
 **Workflow bar.** The strip pinned under the page header, above the chat, that shows the steps of the process an agent is guiding the user through, the status of each (done, current, waiting for the user, skipped), and what the agent needs now. The agent drives it with `update_workflow`; its steps come from the agent's *workflow section*, or from the agent itself when it has none. See [agent-panel](../capabilities/agent-panel/spec.md) R13 to R20.
 

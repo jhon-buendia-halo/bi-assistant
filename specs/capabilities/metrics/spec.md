@@ -23,7 +23,7 @@ Shape and validation
 Reaching the assistant
 - R9. For each chat turn the system SHALL assemble a governed-metrics block from metrics whose entity is one of the entities of the session's datasets. When none apply, no block SHALL be added.
 - R10. Each metric SHALL render as one line: `- <label> (<name>) on <entity>: <expression>`, then `; dimensions: …` and `; <description>` when present. The block header SHALL be "Governed metric definitions (curated — ALWAYS prefer these exact expressions when the question asks for the metric):". The block SHALL be limited to 4,000 characters, stopping at the first metric that does not fit.
-- R11. The block SHALL be the first system message after the entity orientation, before the knowledge block and the verified reference queries. It SHALL be present in deep-analysis calls as well.
+- R11. The block SHALL be the first system message after the entity orientation, before the knowledge block and the verified reference queries.
 
 Promotion from verified queries
 - R12. The system SHALL offer up to 12 prefilled drafts ("candidates"), one per verified query that has at least one entity and is not already the source of a metric. A candidate SHALL carry: the verified query id, a suggested name (the approved question as a slug: lowercase, non-alphanumerics become `_`, trimmed, at most 64 characters; empty when it cannot form a valid name), a suggested label (the approved question), the first entity, the datasource when known, and the approved SQL.

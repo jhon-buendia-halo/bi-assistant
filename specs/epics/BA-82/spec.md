@@ -19,7 +19,7 @@ Jira lists **no child issues**.
 | — | — | none (Backlog entry only) |
 
 ## Specs touched
-To be agreed. Likely candidates once defined: [agents-evals](../../capabilities/agents-evals/spec.md), [deep-analysis](../../capabilities/deep-analysis/spec.md), [agent-answers](../../capabilities/agent-answers/spec.md); system [agents](../../system/agents.md) and [api](../../system/api.md).
+To be agreed. Likely candidates once defined: [agents-evals](../../capabilities/agents-evals/spec.md), [agent-answers](../../capabilities/agent-answers/spec.md); system [agents](../../system/agents.md) and [api](../../system/api.md).
 
 ## Acceptance
 To be agreed.

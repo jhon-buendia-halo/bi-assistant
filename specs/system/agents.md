@@ -4,7 +4,7 @@ Every LLM agent in Questions to Insights: how agents are run, which model each o
 
 This file owns **prompts, tool contracts, per-turn context and model routing**. It links rather than repeats:
 
-- User-visible behaviour: [agent-answers](../capabilities/agent-answers/spec.md), [visuals](../capabilities/visuals/spec.md), [dataset-ontology](../capabilities/dataset-ontology/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md).
+- User-visible behaviour: [agent-answers](../capabilities/agent-answers/spec.md), [visuals](../capabilities/visuals/spec.md), [dataset-ontology](../capabilities/dataset-ontology/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md).
 - Persisted shapes (chat messages, tool data records, visual metadata, visual version files, ontology items, eval runs, LLM settings): [data-model.md](data-model.md).
 - HTTP endpoints and the chat event stream wire format: [api.md](api.md).
 - Why an agent framework at all, and why visuals are versioned conversation participants: ADR-0004 and ADR-0005 in [architecture.md](architecture.md).
@@ -31,7 +31,7 @@ Callers invoke an agent in one of two modes:
 
 Per-call options the app uses: `maxSteps` (tool-loop budget), `toolChoice: 'none'` (forbid tools), `context` (extra system messages appended for this call only), `memory` (`{thread, resource}`), `requestContext` (a key/value bag visible to tools and to the workspace resolver), `abortSignal`, `providerOptions`, `modelSettings` (e.g. `maxOutputTokens`), `structuredOutput` (a schema), and `instructions` (override the system prompt for one call).
 
-**Structured output convention.** Every single-shot agent (fixer, verifier, designer, bootstrap, judge, deep-analysis planner/writer) asks for structured output with the schema **injected inline into the prompt** (not via a provider-native JSON mode), then validates the reply against the same schema. The parsed object is taken from the framework's `object` result when present, else from the reply text parsed as JSON after stripping a leading ```` ```json ```` / ```` ``` ```` fence and trailing fence. Anything that fails validation is treated as "no usable output" by the caller (each caller's fallback is specified below).
+**Structured output convention.** Every single-shot agent (fixer, verifier, designer, bootstrap, judge) asks for structured output with the schema **injected inline into the prompt** (not via a provider-native JSON mode), then validates the reply against the same schema. The parsed object is taken from the framework's `object` result when present, else from the reply text parsed as JSON after stripping a leading ```` ```json ```` / ```` ``` ```` fence and trailing fence. Anything that fails validation is treated as "no usable output" by the caller (each caller's fallback is specified below).
 
 > Implementation note: agents are `@mastra/core` `Agent` instances; structured output uses `structuredOutput: { schema, jsonPromptInjection: 'inline' }` with Zod schemas. The Zod `.describe()` strings are part of the prompt the model sees and are quoted below as field descriptions.
 
@@ -58,7 +58,7 @@ Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings, or custom settings with the Anthropic API style, or `copilot` settings (its model comes from the model factory, 1.3). See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the nine agents, a composite storage, a Pino logger and observability. It also registers two workflows: `agent-turn`, the one engine of every one-step workflow (5.12), and `qti-v2-turn` (5.11). Every streamed chat turn is a run of one of them (5.1). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the nine agents, a composite storage, a Pino logger and observability. It also registers one workflow, `qti-v2-turn` (5.11); the `agent-turn` engine of the removed one-step workflows (5.12) is gone, and Try it and the eval runner call an agent's turn directly (ADR-0042). `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it), `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -131,7 +131,7 @@ Which effort each call uses:
 
 | Call | Effort |
 |---|---|
-| Assistant chat turn, grounding-guard pass, tool-only synthesis pass, deep-analysis calls | user setting (via the turn options), or the session agent's `reasoningEffort` override when set (`agent-overrides`, 4.2) |
+| Assistant chat turn, grounding-guard pass, tool-only synthesis pass | user setting (via the turn options), or the session agent's `reasoningEffort` override when set (`agent-overrides`, 4.2) |
 | SQL verifier | user setting ("a second opinion should think as hard as the answer it is checking") |
 | SQL fixer | always `low` |
 | Visual designer | always `low` |
@@ -188,10 +188,9 @@ A `copilot` config is never swapped: rules 2 and 3 do not apply to it, so the de
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The **Answer** step of `agent-turn` (5.12), which runs the agent turn of every run of `agent:assistant` and of a user agent (`agent:<id>`), on a run host (5.14) | stream | session thread | all | 15 |
+| A user agent's Try it (draft run) and the eval runner's turn, on a preview-shaped host (agents-evals R5) | stream | session thread | all | 15 |
 | Grounding-guard corrective pass (5.6) | generate | **none** | all | 15 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
-| Deep analysis planner / angle investigator / report writer (2.7) | generate | none | none / all / none | 1 / 15 / 1 |
 | Assistant eval suite (8) | generate | none | all | 15 |
 
 **Inputs.** The user message (see 4.3 for exactly what is sent), the system prompt, the per-turn system context blocks (4.1) and the requestContext (4.2).
@@ -603,90 +602,9 @@ when it violates the rubric (e.g. answering instead of asking a
 required clarification, or stating a fact with no backing tool call).
 ```
 
-### 2.7 Deep analysis (three `assistant` calls, no dedicated agent)
+### 2.7 Deep analysis (removed 2026-11-12)
 
-Deep analysis reuses the `assistant` agent with a session's grounding but **without its memory thread** (its many sub-calls must not pollute the history the next chat question is answered from). Since 1.23.24 it is the `deep-analysis` run workflow (5.15), whose Plan, Investigate and Write steps make these three calls on the run's run host; until the chat routes go (epic C) a chat can also start it as a background job, one per session at a time. Both make the same calls with the same prompts and options (`modules/deep-analysis/deep-analysis.calls.ts`). Behaviour, job states and the report are owned by [deep-analysis](../capabilities/deep-analysis/spec.md); the prompts are contracts here.
-
-The three prompts below are the phase files of the harness-loaded `deep-analysis` skill (7.4): `phases/1-plan.md`, `phases/2-investigate.md` and `phases/3-report.md`. Its `SKILL.md` is the phase map. The phases run in order, with no user approval between them. For each call the service reads only that call's phase file, drops its final newline and fills its `{{name}}` placeholders by exact string replacement, in one pass, without re-scanning inserted values. The call fails if a placeholder is left unfilled or a required one is missing from the file. The text the model receives is the wording below, with the `<…>` parts filled in.
-
-1. **Plan** — generate, `maxSteps: 1`, `toolChoice: 'none'`, structured output:
-
-   ```
-   Plan a deep analysis of the question below.
-   Produce between 3 and 5 investigation angles: distinct, answerable
-   sub-questions over the entities listed in the session context —
-   different dimensions, comparisons, time windows or drivers, never
-   restatements of one another.
-   Plan only: run no queries, ask no clarifying questions.
-
-   <question>
-   <question>
-   </question>
-   ```
-
-   Schema: `{ title: string ("Short report title (under 80 characters), no markdown"), angles: [{ title: string ("Short label for this angle, e.g. \"Denials by payer\""), question: string ("The precise sub-question this angle answers with SQL over the session entities") }] (min 1, "Between 3 and 5 distinct, non-overlapping investigation angles") }`. At most 5 angles are used. Invalid → job fails with `the planner returned no usable investigation plan`; zero angles → `the planner returned no angles`.
-
-2. **Investigate** — per angle, sequentially, generate with all tools and `maxSteps: 15`; grounding context is rebuilt with the angle's question (so verified-query references match the angle):
-
-   ```
-   Deep analysis — angle <i> of <n>: <angle title>
-
-   Investigate this angle with SQL over the session entities and
-   report what you found. This is one section of a longer report, so
-   stay on this angle.
-
-   <overall-question>
-   <question>
-   </overall-question>
-
-   <angle>
-   <angle question>
-   </angle>
-
-   Rules:
-   - Run the queries yourself. Never ask the user anything and never
-     call ask_clarification; when something is ambiguous pick the most
-     reasonable reading and state the assumption.
-   - Do not create or update visuals.
-   - Report concrete numbers — values, counts, shares, deltas — and
-     name the entities behind them. Flag anomalies you notice.
-   - Finish with a "SQL used" section listing every statement you ran,
-     each in its own ```sql fenced block.
-   ```
-
-   Findings text is capped at 12,000 chars (empty → `No findings returned.`); the SQL list is every distinct ```` ```sql ```` fenced block in it. A failed angle records `This angle could not be investigated — <error>` and the job continues.
-
-3. **Write** — generate, `maxSteps: 1`, `toolChoice: 'none'`, structured output:
-
-   ```
-   Write the deep-analysis report for the question below from the
-   investigation findings that follow. Use only what the findings
-   contain — never invent numbers.
-
-   The body must start at "## Findings by angle" (one subsection per
-   angle, with its numbers), then "## Anomalies and drivers", then
-   "## Recommendations" (concrete next actions). Do not write an
-   executive summary or a data appendix in the body — those are added
-   around it.
-
-   <question>
-   <question>
-   </question>
-
-   <findings>
-   ### Angle 1: <title>
-   <angle question>
-
-   <findings>
-   …(angles separated by a blank line)
-   </findings>
-   ```
-
-   Schema: `{ title: string ("Report title, no markdown heading marks"), executiveSummary: string ("Markdown: 3-6 sentences or bullets a decision-maker can act on, with the key numbers"), report: string ("Markdown body starting at \"## Findings by angle\"; no executive summary and no data appendix — those are added around it") }`. Invalid → `the report writer returned no usable report`.
-
-The report markdown (title, question, meta line, executive summary, body, data appendix of SQL per angle) is assembled deterministically, not by the model. On success the executive summary is appended to the chat as an assistant message carrying a `report` reference; on failure the chat gets `Deep analysis of "<question>" could not be completed — <detail>`.
-
-> Note: during the investigate step the assistant technically still has `ask_clarification`, `create_visual` and `update_visual`; only the prompt forbids them, and the stream-level clarification interception (5.1) does not apply to `generate`. See Open questions.
+Removed with ADR-0042: the three phase prompts (plan, investigate each angle, write the report), their `assistant` calls and the report assembly no longer exist. The section number is kept so the numbering stays stable. [api.md](api.md) 2.7 lists the removed routes.
 
 ### 2.8 Retired (2026-11-12): the RFP Builder
 
@@ -706,11 +624,11 @@ The four showcase agents (`benchmarking`, `survey`, `lad-coe`, `strategy`; BA-23
 
 | Caller | Mode | Memory | Tools | Steps |
 |---|---|---|---|---|
-| The **Answer** step of `agent-turn` (5.12), which runs every streamed chat turn of a session bound to it (`agent:data-readiness`, `agentKey: 'data-readiness'`, agent-answers R61) | stream | session thread | all | 10 |
+| The eval runner's turn (the agent stays in the library; the UI starts no new assessment, 2026-11-12; stored sessions of it stay readable) | stream | session thread | all | 10 |
 | Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
 | `data-readiness` eval set (8) | generate | none | all | 10 |
 
-It is never called by the grounding guard (5.6), careful mode (5.8) or deep analysis (2.7).
+It is never called by the grounding guard (5.6), careful mode (5.8) (and no deep analysis exists).
 
 **Inputs.** The user message (4.3), the system prompt, Block D1 (4.1) and the requestContext (4.2): `datasets`, `session-id`, `turn-question`, `session-workspace-id`, `turn-data-records`.
 
@@ -1006,7 +924,7 @@ The Data Readiness Agent's two synthetic-data tools (2.10 D14, ADR-0039, [synthe
 
 ### 4.1 System context blocks
 
-For every assistant call made on behalf of a session (chat turns, the grounding pass, deep-analysis calls) the orchestrator appends these system messages, **in this order**, after the system prompt (the one served: an override of it, 2.1, changes only that prompt, never these blocks). Blocks that would be empty are omitted.
+For every assistant call made on behalf of a session (chat turns, the grounding pass) the orchestrator appends these system messages, **in this order**, after the system prompt (the one served: an override of it, 2.1, changes only that prompt, never these blocks). Blocks that would be empty are omitted.
 
 **Block 1 — orientation (always present):**
 
@@ -1113,7 +1031,7 @@ No score is put in the context. The agent reads scores only through its tools (2
 | `datasets` | every session-scoped assistant call; evals | array of the session's dataset names | data tools (scoping) |
 | `session-id` | every session-scoped call; evals (when a throwaway run host exists) | session id | `create_visual`, `update_visual`, `show_in_panel`, `update_workflow` |
 | `active-visual-id` | chat turns, only when the client sent the open visual's id | visual id | `update_visual` default target |
-| `turn-question` | every assistant call that has a question (chat turn, grounding pass, deep analysis); evals (the case question) | the user's message for this turn | `create_visual`, as the instruction when the model passes none |
+| `turn-question` | every assistant call that has a question (chat turn, grounding pass); evals (the case question) | the user's message for this turn | `create_visual`, as the instruction when the model passes none |
 | `turn-data-records` | streamed chat turn of every agent, the assistant's (fresh empty array per turn), evals | **live** array of this turn's captured data records, appended as tool results arrive | `create_visual` / `update_visual` (merge into the visual's data); `show_in_panel` (the rows of a `table` item, 3.11) |
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the ontology items put in Block 3 | persistence of the answer's `knowledge` field |
@@ -1142,7 +1060,7 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 
 ### 5.1 Streamed chat turn
 
-**Every streamed turn is one run of the session's workflow** (5.12, ADR-0040). Step 1 happens before the run; steps 2 and 3 happen inside its agent step (the **Answer** step of `agent-turn` for a one-step workflow, the **Analyse** step of `qti-v2-turn` for v2, 5.11); steps 4 to 7 happen after the run, as before. The run adds nothing the user sees: the same events, answer and stored message. Only a code-defined workflow's steps write the workflow bar (5.11); a one-step workflow's run never does, and the agent's own phases, and `update_workflow` keep driving it (ADR-0029).
+**Every streamed turn is one run of the session's workflow** (5.12, ADR-0040). Step 1 happens before the run; steps 2 and 3 happen inside its agent step (the **Analyse** step of `qti-v2-turn`, 5.11); steps 4 to 7 happen after the run, as before. The run adds nothing the user sees: the same events, answer and stored message. Only a code-defined workflow's steps write the workflow bar (5.11); a Try it run never does, and the agent's own phases and `update_workflow` keep driving it (ADR-0029).
 
 1. Append (or reuse, 4.3) the user message and **persist it before the model starts**, so a stop during provider connection still survives reload.
 2. Build input (4.3) and options (4.1, 4.2, memory thread, effort, `maxSteps: 15`). Own abort controller, chained to the client's abort.
@@ -1353,89 +1271,50 @@ The agent detail returns it as `workflow` ([api.md](api.md) 34). For the agent s
 
 > Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off: the session document holds the state. The step ids, titles and pure step code are in `qti-v2-turn.steps.ts`, which imports no framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`. `TurnEngine.runTurnWorkflow` (`modules/sessions/turn/turn-engine.ts`) runs every streamed turn, of v2 and of a one-step workflow alike, and maps the step events to the state only when the workflow's `bar` is `steps`.
 
-### 5.12 Workflows: the catalogue, ids and the one-step workflow
+### 5.12 Workflows: the catalogue and the ids
 
-Every session runs a **workflow** (ADR-0040; [workflows](../capabilities/workflows/spec.md)). A workflow is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent. Workflows are never created, edited or stored by the app.
+A **workflow** is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent ([workflows](../capabilities/workflows/spec.md); ADR-0040, partly superseded by ADR-0042). Workflows are never created, edited or stored by the app. Agents are not workflows (2026-11-12): they are a library that workflow steps call.
 
-**The catalogue.** Two kinds of workflow:
+**The catalogue.** One code-defined workflow, `qti-v2-turn`, *Questions to Insights v2*, a run workflow (`trigger: 'run'`) whose agent is `assistant-v2` (its `primaryFor` agent) and whose steps are those of 5.11. It drives the workflow bar's view from its steps (`bar: 'steps'`). The one-step workflow of ADR-0040 (one per agent, id `agent:<registry key>` or `agent:<user-agent id>`), the `agent-turn` engine behind it, `seq-text-demo` (5.13) and `deep-analysis` (5.15) are removed; a user agent's only run is its draft preview, Try it (agents-evals R5), which runs the agent turn directly on a preview host.
 
-- **Code-defined workflows**, each with its own id, name, description, steps, trigger and, when its agent step runs one, its agent (its `primaryFor` agent). Today three: `qti-v2-turn`, *Questions to Insights v2*, a chat workflow whose agent is `assistant-v2` and whose steps are those of 5.11; `seq-text-demo`, the *Sequential test workflow*, a run workflow that calls no agent (5.13); and since 1.23.24 `deep-analysis`, *Deep analysis*, a run workflow whose agent steps call the `assistant` (its `calls` agent, which keeps its own one-step workflow and lists both under "Used in"; 5.15). A code workflow drives the workflow bar from its steps (`bar: 'steps'`).
-- **One-step workflows**: one for each agent a chat can run that has no code-defined workflow of its own: the `assistant`, the Data Readiness Agent (`data-readiness`) and every **Live** user agent. A `primaryFor` agent (`assistant-v2`) gets none, and neither do the System agents. A one-step workflow is computed at read time from the agent registry and the `agents` collection; nothing is registered per agent. It never writes the workflow bar (`bar: 'agent'`): the agent's own workflow phases, and `update_workflow` keep driving it (ADR-0029).
+**Triggers.** Every workflow is a run workflow: `trigger: 'run'`, once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden? }`; [api.md](api.md) 116, 118). No chat starts (ADR-0041). `qti-v2-turn` declares `question` and `datasets` and runs one agent turn in its analyse step (5.14).
 
-**Triggers** (ADR-0040 amendment; ADR-0041). Every workflow is started one of two ways: a **chat** workflow (`trigger: 'chat'`) runs on every message of a chat; a **run** workflow (`trigger: 'run'`) runs once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden? }`; 5.13; [api.md](api.md) 116, 118). Every one-step workflow and `qti-v2-turn` are chat workflows until 1.23.22, and since 1.23.12 they also declare an input and run on it, one agent turn per run (5.14). A run workflow can't start a chat; any workflow with input fields can be run.
+**Ids.** `qti-v2-turn` is the only workflow id. Any other id, including a former one-step id (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `agent:rfp`), `seq-text-demo` and `deep-analysis`, is not a workflow and answers `Workflow "<id>" not found` ([api.md](api.md) 117).
 
-**Ids.** A code workflow keeps its own id (`qti-v2-turn`, `seq-text-demo`, `deep-analysis`). A one-step workflow's id is `agent:<registry key>` for a built-in agent (`agent:assistant`, `agent:data-readiness`) and `agent:<user-agent id>` for a user agent; the removed agent's `agent:rfp` is not a workflow (2026-11-12). An `agent:` id naming a System agent, a `primaryFor` agent or nothing at all is not a workflow. Ids contain `:`; clients send them URL-encoded.
-
-**Names and listing** ([api.md](api.md) 116). A one-step workflow takes its agent's name and description, except the assistant's, which is named `Assistant` with the description `Answers questions over the datasets you pick.`. A user agent's workflow takes its Live version's name, datasets and starter questions, and is listed only while the agent is Live; a draft-only agent's id answers 404 ([api.md](api.md) 117). The order is `agent:assistant`, the code workflows in catalogue order (`qti-v2-turn`, `seq-text-demo`, `deep-analysis`), the other Official agents' workflows by name, then the user agents' by name.
-
-**The one-step workflow's step.** One agent step:
-
-| Step id | Title | Kind | Summary | Input | Output | Other exits |
-|---|---|---|---|---|---|---|
-| `answer` | Answer | agent | `The agent answers with its tools, streamed to the chat.` | question, datasets | calls, stopped | `Model error` fails; `Stop` stops; `Clarifying question` stops (only when the agent has `ask_clarification`) |
-
-Its agent is the workflow's agent with its tools (a user agent: the assistant's tools its selection gives it, 2.1) and its tool-loop budget: 15 for the `assistant` and user agents, 10 for the Data Readiness Agent. Every one-step workflow shares one engine, `agent-turn`, never one per agent. Its input is `{ question, datasets }`, and its output is the step's (`{ calls: { tool, rowCount?, failed }[], stopped }`); it never persists a snapshot. How a turn of a one-step workflow runs is 5.1's per-agent turn: the session code picks the agent and hands the run the turn on its `RequestContext`.
-
-**A session's workflow** ([data-model.md](data-model.md) 3.4). A new session stores `workflowId`, whichever body of [api.md](api.md) 3 created it. A session without it, or whose stored id no longer resolves, derives it from its agent fields:
+**A session's workflow** ([data-model.md](data-model.md) 3.4). A stored session keeps its `workflowId` as stored; the derived `workflowRef` ([api.md](api.md) 2.1) is:
 
 | Session stored | Derived workflow |
 |---|---|
-| `workflowId` set and resolvable | that id |
-| `agentKey: 'assistant-v2'` | `qti-v2-turn` (the code workflow whose `primaryFor` is the key) |
-| `agentKey: 'data-readiness'` | `agent:data-readiness` (a stored `agentKey: 'rfp'`, the removed RFP Builder, no longer resolves and is ignored) |
-| `agentId: <id>`, agent exists or deleted | `agent:<id>` |
-| neither (or an `agentKey` that is neither wrapped nor a `primaryFor`) | `agent:assistant` |
+| `agentKey: 'assistant-v2'` or `workflowId: 'qti-v2-turn'` | `qti-v2-turn` |
+| anything else (a plain session, `agentKey: 'data-readiness'`, an `agentId`, a stored `agent:*`, `seq-text-demo` or `deep-analysis` id) | no workflow: `workflowRef.deleted: true` with the stored id (else the one derived from the binding), and the name the session last had; it opens as a plain past chat |
 
-Which agent a turn runs is unchanged: `agentKey`, else the `assistant` (with a user agent's Live configuration, or a preview's draft). A deleted user agent's session keeps `agent:<id>`, shows the stored `agentName` with `deleted: true` ([api.md](api.md) 2.1), and its turns run the plain assistant (past-chats R59).
+Which agent a stored session's turn ran is unchanged history; no new turn runs on a session (ADR-0041).
 
-**Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): the code workflows whose `primaryFor` it is and its own one-step workflow, in catalogue order. `assistant` → `agent:assistant`; `assistant-v2` → `qti-v2-turn`; `data-readiness` → `agent:data-readiness`; a Live user agent → `agent:<id>`; a draft-only user agent and the System agents → none.
+**Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): `assistant-v2` → `qti-v2-turn`; every other agent → none.
 
-> Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, `WRAPPED_AGENT_KEYS`, `agentWorkflowId`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`, `oneStepWorkflowSteps`) and `agent-turn.steps.ts` (the `answer` step). `agent-turn.workflow.ts` builds the `agent-turn` workflow, registered in `mastra/index.ts` next to `qti-v2-turn`; its step reads `AgentTurnRuntime` from the run's `RequestContext` (`AGENT_TURN_RUNTIME_KEY`) and returns `runtime.answer()`. The Official and System registry keys and the tool-loop budgets are in `mastra/agent-constants.ts`; drift tests read `mastra/index.ts`'s registered keys as text, so they never load Mastra. `agentWorkflow()` (`agent-workflows.ts`) reads v2's steps from `CODE_WORKFLOWS`. `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from the pure catalogue and `AgentsService.list()`; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue.
+> Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`). `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from it; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue. `agentWorkflow()` (`agent-workflows.ts`) reads v2's steps from `CODE_WORKFLOWS`.
 
-### 5.13 Run workflows: `seq-text-demo` (the sequential test workflow)
+### 5.13 Run workflows: `seq-text-demo` (removed 2026-11-12)
 
-A **run workflow** runs once on a typed input and returns a result, with no chat (ADR-0040 amendment; [workflows](../capabilities/workflows/spec.md) R11). `POST /workflows/:id/runs` ([api.md](api.md) 118) checks the input against the workflow's fields (`<label> is required`, `<label> must be a number`), runs the registered workflow once and answers each step's status and output, and the final output. A failing step fails the run; the steps after it are `skipped`. Nothing is stored: the run is not a session, writes no workflow bar and persists no snapshot.
+Removed with ADR-0042: the sequential test workflow (Clean text, Count words, Format result) was a test fixture and no longer exists. Its stored runs stay readable as legacy runs ([workflows](../capabilities/workflows/spec.md) R23). Tests that used it as a cheap no-LLM workflow run `qti-v2-turn` with the stub model instead. The section number is kept so the numbering stays stable.
 
-The first run workflow is `seq-text-demo`, *Sequential test workflow*, described as `A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.`. Its input is one required field, `text` (label `Text`, a textarea, placeholder `Paste or type any text`). Its three steps are deterministic code, in this order:
+### 5.14 Runs of Questions to Insights v2
 
-| # | Step id | Title | Kind | Summary | Input | Output | Other exits |
-|---|---|---|---|---|---|---|---|
-| 1 | `clean-text` | Clean text | code | `Trims the text and collapses repeated spaces. An empty text fails the step.` | text | text | `Empty text` fails |
-| 2 | `count-words` | Count words | code | `Counts the words and characters of the cleaned text.` | text | text, words, characters | — |
-| 3 | `format-result` | Format result | code | `Writes a one-line summary of the counts and the start of the text.` | text, words, characters | summary | — |
+A run of Questions to Insights v2 (`qti-v2-turn`, the only workflow since 2026-11-12) has an analyse step that is **one agent turn** (ADR-0041; [workflows](../capabilities/workflows/spec.md) R14-R17; [api.md](api.md) 118, 119). It runs on a **run host** through the turn path of 5.1 unchanged, so its model request equals a chat turn's for the same input: the same agent, input messages, system and context blocks, tools, options and requestContext keys. Only what names the host differs: `session-id` is the host id, `session-workspace-id` and the workspace's `Local filesystem at …` line name the run's workspace, and the memory thread is the host's.
 
-- **Clean text** trims the text and collapses every run of whitespace to one space. A text that is empty after that fails the step with `The text is empty`.
-- **Count words** counts the whitespace-separated words and the characters of the cleaned text.
-- **Format result** writes `summary` = `<words> word(s), <characters> character(s): "<the text>"`, singular for 1, with the text cut to its first 60 characters and `…` appended when it is longer. For `  Hello   workflow   world  ` the run's output is `{ summary: '3 words, 20 characters: "Hello workflow world"' }`.
-
-The workflow page draws these steps with the 1.23.1 drawing (GET /workflows/seq-text-demo, [api.md](api.md) 117: no step has an `agent`). A unit test checks the steps' schema fields against the catalogue, as for 5.11.
-
-> Implementation note: `mastra/workflows/seq-text-demo.steps.ts` (framework-free: `SEQ_TEXT_DEMO_STEPS`, `cleanText`, `countWords`, `formatResult`) and `seq-text-demo.workflow.ts` (the Mastra workflow, registered in `mastra/index.ts` as `seq-text-demo`, snapshot persistence off). The catalogue entry, `trigger`, `input` and `parseWorkflowInput` are in `workflow-catalog.ts`. `MastraService.runWorkflow(key, inputData)` creates a run, `start()`s it and maps the engine's result with `workflowRunResult` (`workflow-run.ts`): the steps in the workflow's step-graph order, with the step description as the title. `WorkflowRunsService` (`modules/workflows/workflow-runs.service.ts`) checks the input first (`prepare`), then runs it through `MastraService.runWorkflow` (118) or streams it through `MastraService.streamWorkflow` (119, 5.14).
-
-### 5.14 Runs of agent workflows
-
-A run of an agent workflow (the Assistant, Questions to Insights v2, the Data Readiness Agent, a user agent's one-step workflow) is **one agent turn** (ADR-0041; [workflows](../capabilities/workflows/spec.md) R14-R17; [api.md](api.md) 118, 119). It runs on a **run host** through the turn path of 5.1 unchanged, so its model request equals a chat turn's for the same input: the same agent, input messages, system and context blocks, tools, options and requestContext keys. Only what names the host differs: `session-id` is the host id, `session-workspace-id` and the workspace's `Local filesystem at …` line name the run's workspace, and the memory thread is the host's.
-
-**Inputs** ([api.md](api.md) 116). In code, with the catalogue (`workflow-catalog.ts`):
-
-| Workflow | Input | The turn |
-|---|---|---|
-| `agent:assistant` | `question`, `datasets`, `careful` | the user message `question` over `datasets`; careful mode from `careful` (5.8) |
-| `qti-v2-turn` | `question`, `datasets` | as a v2 chat turn (5.11) |
-| `agent:data-readiness` | `dataset` (PostgreSQL or Databricks), `question` (default `Assess the readiness of this dataset`) | over the one dataset |
-| `agent:<user-agent id>` | `question`, `careful` | over the agent's Live datasets that exist, with its Live instructions, overrides, tools and skills (4.2) |
+**Inputs** ([api.md](api.md) 116). In code, with the catalogue: `qti-v2-turn` takes `question` and `datasets` and runs as a v2 chat turn (5.11).
 
 **The run host.** An in-memory session (`SessionDoc` with `run: true`), held in the sessions service's map with the agent editor's previews, never stored or listed:
 - id `run-<run id>`; name the workflow's; workspace `workspaces/session-run-<run id>/`, created as a session's (7);
-- bound as `POST /sessions` would bind a session of the workflow: `agentKey` for v2 and the Data Readiness Agent, `agentId` for a user agent, none for the Assistant; `workflowId` derived as a session's (5.12);
-- datasets: the input's (`datasets`, or `[dataset]`), or a user agent's Live datasets that exist;
+- bound as `POST /sessions` would bind a session of the workflow: `agentKey: 'assistant-v2'`; `workflowId` is `qti-v2-turn`;
+- datasets: the input's (`datasets`);
 - workflow state: none;
 - messages: empty, or the context of one earlier run (below).
 
 **One run.**
 1. `WorkflowRunsService.prepare` checks the input ([api.md](api.md) 118 refusals) before anything runs.
 2. It creates the host and sends `run`.
-3. `SessionsService.streamRunTurn` runs the host's turn through the turn engine's `streamTurn` (`modules/sessions/turn/turn-engine.ts`, 5.1): the workflow run (`agent-turn` or `qti-v2-turn`), the agent step, tool-only synthesis (5.5), the grounding guard (5.6), careful mode (5.8), clarification, visuals, panel items and readiness progress, persisted into the host. A step-event listener hands every `workflow-step-start` and `workflow-step-result` of the run to the run, which sends it as a `step` event whatever the workflow's `bar`, with what the step received (the step-start's `payload.payload`) and its start and end times; the turn's other events are forwarded unchanged, except its `done`, and its `tool` and `tool-result` events also become the running agent step's `toolCalls` (tool, input, row count, error, duration; [api.md](api.md) 3.6).
+3. `SessionsService.streamRunTurn` runs the host's turn through the turn engine's `streamTurn` (`modules/sessions/turn/turn-engine.ts`, 5.1): the workflow run (`qti-v2-turn`), the agent step, tool-only synthesis (5.5), the grounding guard (5.6), careful mode (5.8), clarification, visuals and panel items, persisted into the host. A step-event listener hands every `workflow-step-start` and `workflow-step-result` of the run to the run, which sends it as a `step` event with what the step received (the step-start's `payload.payload`) and its start and end times; the turn's other events are forwarded unchanged, except its `done`, and its `tool` and `tool-result` events also become the running agent step's `toolCalls` (tool, input, row count, error, duration; [api.md](api.md) 3.6).
 4. When the turn ends, `finishRunHost` reads the host as the API shows a session (its derived panel items and workflow view), deletes its memory thread `run-<run id>` and drops it from memory. The run takes the host's last message as its `answer` (when it is an assistant message after this run's question), its datasets, agent binding, panel items, visuals and workflow state, and ends with `done { run }`, or `error { content }` when the turn threw (the chat stream's message).
 5. **Stop** is a client abort, as for a chat: the turn aborts (which cancels a readiness assessment, ADR-0033), the run ends `stopped` with any partial answer, and nothing more is sent.
 
@@ -1445,29 +1324,9 @@ A run of an agent workflow (the Assistant, Questions to Insights v2, the Data Re
 
 > Implementation note: `modules/workflows/workflow-runs.service.ts` (`WorkflowRunsService`: `prepare`, `stream`, `run`, the history `list`/`get`/`delete`, the file routes, and the start-up recovery in `onModuleInit`), `workflow-runs.controller.ts` (`/workflow-runs`), `repositories/workflow-runs.repository.ts`, and `workflow-run-steps.ts` (framework-free: `WorkflowRun`, `WorkflowRunDoc`, `RunStepTracker`, `noteToolFrame`, `runAnswerOf`, `runTitle`, `runHostDoc`). `SessionsService` serves the files through `panelItemFileOf`, `downloadPanelItemOf`, `getVisualizationOf`, `downloadVisualizationOf` and lists run workspaces with `runHostWorkspaceIds`. `SessionsService` (`createRunHost`, `streamRunTurn`, `finishRunHost`, `deleteRunHostResources`) never depends on `WorkflowsService` or `WorkflowRunsService` (module cycle); `WorkflowsModule` imports `SessionsModule`. The pure `parseWorkflowInput`, `agentRunTurn` and `oneStepWorkflowInput` are in `workflow-catalog.ts`. Parity is proven by `modules/sessions/run-host-sessions.spec.ts` (stubbed agents, the four workflows and a user agent) and `test/workflow-runs.e2e-spec.ts` (the recording stub model).
 
-### 5.15 Run workflows that call an agent: `deep-analysis`
+### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
 
-`deep-analysis`, *Deep analysis* (since 1.23.24; plan 1.25.3; [deep-analysis](../capabilities/deep-analysis/spec.md) R20-R27), is a run workflow defined in code whose agent steps call the `assistant` without being its workflow: its catalogue entry names the agent in `calls` rather than `primaryFor`, so the assistant keeps `agent:assistant`. Described as `Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.`. Its input is the Assistant's `question` and `datasets` fields (no `careful`). It is listed with the assistant as its agent, `picksDatasets: true` and the assistant's requirement ([api.md](api.md) 116).
-
-| Step | Kind | What it does | Input → output |
-|---|---|---|---|
-| `plan` (Plan) | agent | The Plan call of 2.7 (`maxSteps: 1`, `toolChoice: 'none'`, structured). At most 5 angles are kept; none fails the step (`the planner returned no angles`); a blank title becomes the question's first 80 characters. Exit `No usable plan` fails. | `question`, `datasets` → `question`, `title`, `angles` |
-| `investigate` (Investigate) | agent | The Investigate call of 2.7 once per angle, in order, inside the step (`maxSteps: 15`, all tools). A failing angle becomes its note; it does not fail the step. | `question`, `title`, `angles` → `question`, `title`, `findings` |
-| `write` (Write) | agent | The Report call of 2.7 (`maxSteps: 1`, `toolChoice: 'none'`, structured); the writer's title replaces the plan's when not blank. Exit `No usable report` fails. | `question`, `title`, `findings` → `question`, `title`, `executiveSummary`, `body`, `findings` |
-| `assemble` (Assemble) | code | Assembles the report (the chat job's layout without the session line, closing `Report <run id>`) and writes it to `reports/<slug of the title>.md` in the run's workspace. No LLM. | → `title`, `executiveSummary`, `path`, `angles` |
-
-`GET /workflows/deep-analysis` ([api.md](api.md) 117) gives each agent step an `agent`: `{ name: <the assistant's name>, tools: [], maxSteps: 1 }` for Plan and Write, `{ name, tools: <the assistant's tools>, maxSteps: 15 }` for Investigate. A unit test checks the steps' schema fields against the catalogue, as for 5.11 and 5.13.
-
-**One run** ([api.md](api.md) 118, 119; the stored run, [data-model.md](data-model.md) 3.16):
-1. `prepare` checks the input as any run's, and refuses a blank question with `Question is required`.
-2. The run is stored and `run` sent. A **run host** is created as for an agent workflow (5.14), over the input's datasets and shaped as an Assistant chat (no agent binding), so `backgroundAgentOptions` gives each call exactly the grounding a chat's deep analysis gets, with no memory thread.
-3. The engine runs `deep-analysis` with a RequestContext holding the run's **runtime** (`deep-analysis-runtime`): the three calls of 2.7 on the host (the same functions the chat job calls, so the model request is identical for the same question and replies) and the writer of the run's workspace. Every step event is a `step` event of the stream.
-4. When it ends, the host leaves memory (its workspace stays with the run). A run that succeeded keeps the executive summary as its `answer` (an assistant message carrying `report: { jobId: <run id>, title, path, angles }`), the report as a file item `deep-analysis-report` in `panelItems`, its `question` and `datasets`, and Assemble's output as its `output`. A failed step fails the run with its error (no answer, no file); `done { run }` is sent either way.
-5. **Stop** (a client abort): the call in flight aborts, the running step ends `stopped` and the rest `skipped`; nothing more is sent.
-
-The Run tab shows the answer as the deep-analysis report card; its Report button downloads `deep-analysis-report` through `GET /workflow-runs/:id/panel-items/:itemId/download` ([api.md](api.md) 126), named as the file.
-
-> Implementation note: `mastra/workflows/deep-analysis.steps.ts` (framework-free: `DEEP_ANALYSIS_STEPS`, the `DeepAnalysisRuntime` contract, `receivePlan`, `angleFinding`, `failedAngle`, `findingsBlock`, `reportTitle`, `runReportPath`, `reportMarkdown`, `assembleReport`) and `deep-analysis.workflow.ts` (the Mastra workflow, registered in `mastra/index.ts` as `deep-analysis`, snapshot persistence off). The three calls are `modules/deep-analysis/deep-analysis.calls.ts` (`planAnalysis`, `investigateAngle`, `writeAnalysis`), shared with `DeepAnalysisService`. `modules/workflows/deep-analysis-run.ts` builds the runtime and the run's answer and file; `WorkflowRunsService.runDeepAnalysis` runs it (the engine streaming of `runCode`, with the RequestContext and the abort signal). `SessionsService.createRunHost` accepts a code workflow whose `calls` is the assistant. `WorkflowsService` lists it (`callingRunEntry`); the catalogue's `workflowsUsingAgent` counts `calls`. Proven by `deep-analysis.steps.spec.ts`, `deep-analysis.workflow.spec.ts` and `modules/workflows/deep-analysis-run.spec.ts`.
+Removed with ADR-0042: the `deep-analysis` workflow, its steps, runtime and capability spec no longer exist. A stored run of it stays readable as a legacy run ([workflows](../capabilities/workflows/spec.md) R23). The section number is kept so the numbering stays stable.
 
 ---
 

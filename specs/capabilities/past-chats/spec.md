@@ -4,7 +4,7 @@ Before runs, the user held named, persistent conversations (sessions) with the a
 
 ## Concepts
 
-All terms are defined in [glossary](../../product/glossary.md): **Session** (a stored past chat), **Dataset**, **Datasource**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (a report a past chat holds, see [deep-analysis](../deep-analysis/spec.md)), **Run** (see [workflows](../workflows/spec.md)).
+All terms are defined in [glossary](../../product/glossary.md): **Session** (a stored past chat), **Dataset**, **Datasource**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (removed 2026-11-12; a report an old past chat holds stays in its transcript), **Run** (see [workflows](../workflows/spec.md)).
 
 ## Rules
 
@@ -17,13 +17,13 @@ All terms are defined in [glossary](../../product/glossary.md): **Session** (a s
 - R5. The system SHALL NOT offer renaming a session or changing its datasets. *(Open question: confirm they are out of scope.)*
 - R6. The system SHALL show, in the header of an open past chat, every datasource its datasets are bound to (name and kind). A dataset with no bound datasource is treated as bound to the default datasource: the first Databricks datasource, else the first datasource.
 - R7. On startup the system SHALL make sure every existing session has a workspace and re-register it, so visuals and files survive restarts.
-- R49. The full transcript SHALL be stored with the session and shown on reopen, including clarifications, visual event cards and deep-analysis reports. It survives app restarts.
+- R49. The full transcript SHALL be stored with the session and shown on reopen, including clarifications, visual event cards and, in an old chat, a deep-analysis report (Deep analysis was removed 2026-11-12). It survives app restarts.
 
 ### Which workflow a past chat names
 
 - R57. Every session SHALL name the workflow it ran (R65) in the page header's session context (`Workflow` and a chip with the workflow's name, before the datasources) and in its row of the Past chats list (R63), as the row's workflow chip. Both come from the session's `workflowRef` ([api.md](../../system/api.md) 2.1). The name SHALL be the workflow's catalogue name ([workflows](../workflows/spec.md) R1): `Assistant` for a plain session, the built-in agent's workflow (`Questions to Insights v2`, `Data Readiness Agent`) for a session bound to it, and the agent's current Live name for a session started from a user agent. A session saved before workflows existed names the workflow derived from its agent binding (R65): one saved with only `agentKey: "data-readiness"` reads `Data Readiness Agent`. A session saved with the removed agent `rfp` reads as a plain session (`Assistant`) and its stored RFP package messages and `rfpId` are ignored.
 - R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets. The page header's Workflow chip and the list row's workflow chip SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session.
-- R65. Every session runs exactly one workflow ([workflows](../workflows/spec.md) R1, R4; ADR-0040): a plain session the assistant's one-step workflow (`agent:assistant`, named `Assistant`), a session bound to a built-in agent that agent's workflow, and a session bound to a user agent that agent's one-step workflow (`agent:<id>`, named after its Live name). A stored session carries its `workflowId`; one saved before workflows existed derives it from its agent binding. When the user agent is deleted, its sessions keep their workflow's id and name it with the name the agent last had, marked deleted (R59).
+- R65. A session bound to Questions to Insights v2 reads its workflow `qti-v2-turn` ([workflows](../workflows/spec.md) R1, R4). Every other stored session ran a one-step workflow (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`; ADR-0040) that no longer exists (ADR-0042, 2026-11-12): it keeps its stored `workflowId` and reads as a plain past chat, its `workflowRef` marked `deleted: true` with the name it last had (a user agent's Live name, R59), and shows no link to a workflow page. Nothing is migrated or deleted.
 
 ### The Past chats list and the read-only chat
 
@@ -46,14 +46,14 @@ All terms are defined in [glossary](../../product/glossary.md): **Session** (a s
 | Datasource lookup for header fails or finds none | The header shows "Unavailable". |
 | Session dataset deleted or renamed later | The header still lists the stored dataset names; the past chat stays readable. |
 | Agent renamed and republished | Its past chats show the new name from their next load. The session names don't change. |
-| A removed write route is called | 404: `POST /sessions`, `POST /sessions/:id/messages`, `/messages/stream`, `/messages/feedback`, `/visualizations` and its tailor, revert, refresh and repair routes, and `POST /sessions/:id/deep-analysis` no longer exist. |
+| A removed write route is called | 404: `POST /sessions`, `POST /sessions/:id/messages`, `/messages/stream`, `/messages/feedback`, `/visualizations` and its tailor, revert, refresh and repair routes, `POST /sessions/:id/deep-analysis` and a deep-analysis report download no longer exist. |
 | Copy to clipboard | "Copied to clipboard" / "Copy failed". |
 
 ## Contracts
 
-- Endpoints, all in [api.md](../../system/api.md): list, get and delete a session (2.1 #1, #2, #4); a visual's document and zip (#9, #14); a file or table panel item (#106, #107); a deep-analysis report download (2.7 #48). The write routes are marked "Removed in 1.23.27".
+- Endpoints, all in [api.md](../../system/api.md): list, get and delete a session (2.1 #1, #2, #4); a visual's document and zip (#9, #14); a file or table panel item (#106, #107); the write routes (and the removed deep-analysis routes, 2.7 #46-#48) are not offered. The write routes are marked "Removed in 1.23.27".
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (unchanged; sessions stay on disk), the agent memory store and the per-session workspace directory.
-- Related capabilities: [agent-answers](../agent-answers/spec.md) (how an agent's answer is produced and shown, what a past chat's transcript holds), [workflows](../workflows/spec.md) (the Runs page and runs), [visuals](../visuals/spec.md), [deep-analysis](../deep-analysis/spec.md), [data-readiness](../data-readiness/spec.md).
+- Related capabilities: [agent-answers](../agent-answers/spec.md) (how an agent's answer is produced and shown, what a past chat's transcript holds), [workflows](../workflows/spec.md) (the Runs page and runs), [visuals](../visuals/spec.md), [data-readiness](../data-readiness/spec.md).
 
 ## UI
 
