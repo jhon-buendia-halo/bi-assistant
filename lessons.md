@@ -31,6 +31,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - macOS has no `timeout`: let the script exit itself and write output to a file before grepping it. On Windows, run Python as `py -3`.
 
 ## Builds and the running app
+- Before pushing a change to `frontend/build/installer.nsh` or the electron-builder config, compile the Windows installer locally (`CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis --x64 -c.win.signAndEditExecutable=false -c.directories.output=<scratch>`, no Wine needed on macOS); a custom NSIS hook must include what the template's `!ifmacrondef` guards then skip.
 - Backend `npm run lint` is `eslint --fix` over the whole tree: check with `npx eslint <changed files>`, then `git status` and restore anything outside scope.
 - For browser checks run web mode (`npm --prefix backend run build:all`, then `node backend/dist/cli.js`), never bare `ng serve`.
 - The web target serves `backend/public`: rebuild it (`npm run test:e2e:prepare` or `npm run test:e2e -- <spec>`) before a targeted `npx playwright test`; a bare `nest build` wipes it, so follow with `npm run build:web`. If a build fails, fix it before reading any Playwright failure. Backend e2e and Playwright run the compiled `dist`: if `qa.mjs` exits before its build step (a usage error), run `build:all` yourself before trusting any e2e result.

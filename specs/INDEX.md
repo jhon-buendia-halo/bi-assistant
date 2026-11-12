@@ -210,14 +210,14 @@ roadmap.md:30-30  ### Milestone 0.2 — Delivery process ([BA-89](https://halo-p
 roadmap.md:32-32  ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111)) — archived, see roadmap-archive.md
 roadmap.md:34-34  ### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119)) — archived, see roadmap-archive.md
 roadmap.md:36-36  ### Milestone 0.5 — Faster workflow, repo-only planning (M0-5) — archived, see roadmap-archive.md
-roadmap.md:38-412  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:38-431  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:58-58  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:60-60  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:62-62  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
 roadmap.md:64-64  ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12)) — archived, see roadmap-archive.md
 roadmap.md:66-66  ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5)) — archived, see roadmap-archive.md
 roadmap.md:68-68  ### Milestone 1.6 — User Testing ([BA-10](https://halo-powered.atlassian.net/browse/BA-10)) — archived, see roadmap-archive.md
-roadmap.md:70-193  ### Milestone 1.7 — Bug Fixes ([BA-11](https://halo-powered.atlassian.net/browse/BA-11))
+roadmap.md:70-212  ### Milestone 1.7 — Bug Fixes ([BA-11](https://halo-powered.atlassian.net/browse/BA-11))
 roadmap.md:74-81  #### 1.7.1 — Session thread is empty after navigating away and back ([BA-83](https://halo-powered.atlassian.net/browse/BA-83))  `📋 Planned`
 roadmap.md:83-88  #### 1.7.2 — Release stabilization  `📋 Planned`
 roadmap.md:90-93  #### 1.7.3 — Datasource credentials stored in plaintext ([BA-101](https://halo-powered.atlassian.net/browse/BA-101))  `📋 Planned`
@@ -238,58 +238,60 @@ roadmap.md:169-172  #### 1.7.17 — Datasource-scoped knowledge is never used ([
 roadmap.md:174-177  #### 1.7.18 — Stale application-shell visual baseline ([BA-99](https://halo-powered.atlassian.net/browse/BA-99))  `📋 Planned`
 roadmap.md:179-182  #### 1.7.19 — Sidebar session order goes stale ([BA-100](https://halo-powered.atlassian.net/browse/BA-100))  `📋 Planned`
 roadmap.md:184-193  #### 1.7.20 — Renderer honours a non-default `BACKEND_PORT` ([BA-109](https://halo-powered.atlassian.net/browse/BA-109))  `📋 Planned`
-roadmap.md:195-195  ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) — archived, see roadmap-archive.md
-roadmap.md:197-197  ### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) — archived, see roadmap-archive.md
-roadmap.md:199-199  ### Milestone 1.10 — LLM configuration ([BA-159](https://halo-powered.atlassian.net/browse/BA-159)) — archived, see roadmap-archive.md
-roadmap.md:201-201  ### Milestone 1.11 — Claude Code workflow mod ([BA-169](https://halo-powered.atlassian.net/browse/BA-169)) — archived, see roadmap-archive.md
-roadmap.md:203-203  ### Milestone 1.13 — Assistant skills: progressive-disclosure agent structure ([BA-198](https://halo-powered.atlassian.net/browse/BA-198)) — archived, see roadmap-archive.md
-roadmap.md:205-205  ### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213)) — archived, see roadmap-archive.md
-roadmap.md:207-207  ### Milestone 1.15 — US Health demo ([BA-233](https://halo-powered.atlassian.net/browse/BA-233)) — archived, see roadmap-archive.md
-roadmap.md:209-209  ### Milestone 1.16 — Data Readiness Agent ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)) — archived, see roadmap-archive.md
-roadmap.md:211-211  ### Milestone 1.17 — Custom LLM endpoint provider ([BA-281](https://halo-powered.atlassian.net/browse/BA-281)) — archived, see roadmap-archive.md
-roadmap.md:213-213  ### Milestone 1.18 — Desktop installer builds ([BA-302](https://halo-powered.atlassian.net/browse/BA-302)) — archived, see roadmap-archive.md
-roadmap.md:215-215  ### Milestone 1.19 — US Health testing data ([BA-305](https://halo-powered.atlassian.net/browse/BA-305)) — archived, see roadmap-archive.md
-roadmap.md:217-217  ### Milestone 1.20 — Schema metadata in datasets ([BA-318](https://halo-powered.atlassian.net/browse/BA-318)) — archived, see roadmap-archive.md
-roadmap.md:219-219  ### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320)) — archived, see roadmap-archive.md
-roadmap.md:221-221  ### Milestone 1.22 — Sampled profiling and synthetic data (M1-22) — archived, see roadmap-archive.md
-roadmap.md:223-412  ### Milestone 1.23 — Workflow-first: chats run workflows, agents are building blocks (M1-23)
-roadmap.md:227-266  #### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `✅ Done`
-roadmap.md:268-276  #### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `✅ Done`
-roadmap.md:278-283  #### 1.23.8 — Remove the showcase agents  `✅ Done`
-roadmap.md:285-290  #### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `✅ Done`
-roadmap.md:292-297  #### 1.23.4 — Every streamed turn runs the session's workflow  `✅ Done`
-roadmap.md:299-304  #### 1.23.5 — A Workflows area: list, workflow page and Start chat  `✅ Done`
-roadmap.md:306-311  #### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `✅ Done`
-roadmap.md:313-318  #### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `✅ Done`
-roadmap.md:320-327  #### 1.23.9 — Run a workflow on an input: the sequential test workflow  `✅ Done`
-roadmap.md:329-334  #### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `✅ Done`
-roadmap.md:336-337  #### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `✅ Done`
-roadmap.md:339-340  #### 1.23.12 — Streamed runs of agent workflows on the backend  `✅ Done`
-roadmap.md:342-343  #### 1.23.13 — The answer view, extracted from the chat  `✅ Done`
-roadmap.md:345-346  #### 1.23.14 — Stored runs, the run history API and run files  `✅ Done`
-roadmap.md:348-349  #### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `✅ Done`
-roadmap.md:351-352  #### 1.23.16 — Run the Data Readiness Agent on a dataset  `✅ Done`
-roadmap.md:354-355  #### 1.23.17 — Run the RFP Builder one exchange at a time  `✅ Done`
-roadmap.md:357-358  #### 1.23.18 — Move the request-recording E2E specs from chats to runs  `✅ Done`
-roadmap.md:360-361  #### 1.23.19 — Rate a run's answer: verified queries from runs  `✅ Done`
-roadmap.md:363-364  #### 1.23.20 — Monitoring shows runs  `✅ Done`
-roadmap.md:366-367  #### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `✅ Done`
-roadmap.md:369-370  #### 1.23.22 — Chats can no longer start  `✅ Done`
-roadmap.md:372-373  #### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `✅ Done`
-roadmap.md:375-376  #### 1.23.24 — Deep analysis as a run workflow  `✅ Done`
-roadmap.md:378-379  #### 1.23.25 — Visual actions on a run's result  `✅ Done`
-roadmap.md:381-383  #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `✅ Done`
-roadmap.md:385-387  #### 1.23.26b — Evals and dev scripts on run hosts  `✅ Done`
-roadmap.md:389-392  #### 1.23.27 — Remove the chat write paths and specs  `✅ Done`
-roadmap.md:394-395  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `✅ Done`
-roadmap.md:397-398  #### 1.23.29 — `story-pack.mjs` and the spec section index  `✅ Done`
-roadmap.md:400-401  #### 1.23.30 — Archive finished milestones of the roadmap  `✅ Done`
-roadmap.md:403-404  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `✅ Done`
-roadmap.md:406-407  #### 1.23.32 — Playwright in parallel  `✅ Done`
-roadmap.md:409-412  #### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
-roadmap.md:414-418  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:418-418  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:420-422  ## Backlog
+roadmap.md:195-205  #### 1.7.21 — No orphaned backend survives the desktop app or an upgrade  `✅ Done`
+roadmap.md:207-212  #### 1.7.22 — Windows install takes over 5 minutes  `✅ Done`
+roadmap.md:214-214  ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) — archived, see roadmap-archive.md
+roadmap.md:216-216  ### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) — archived, see roadmap-archive.md
+roadmap.md:218-218  ### Milestone 1.10 — LLM configuration ([BA-159](https://halo-powered.atlassian.net/browse/BA-159)) — archived, see roadmap-archive.md
+roadmap.md:220-220  ### Milestone 1.11 — Claude Code workflow mod ([BA-169](https://halo-powered.atlassian.net/browse/BA-169)) — archived, see roadmap-archive.md
+roadmap.md:222-222  ### Milestone 1.13 — Assistant skills: progressive-disclosure agent structure ([BA-198](https://halo-powered.atlassian.net/browse/BA-198)) — archived, see roadmap-archive.md
+roadmap.md:224-224  ### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213)) — archived, see roadmap-archive.md
+roadmap.md:226-226  ### Milestone 1.15 — US Health demo ([BA-233](https://halo-powered.atlassian.net/browse/BA-233)) — archived, see roadmap-archive.md
+roadmap.md:228-228  ### Milestone 1.16 — Data Readiness Agent ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)) — archived, see roadmap-archive.md
+roadmap.md:230-230  ### Milestone 1.17 — Custom LLM endpoint provider ([BA-281](https://halo-powered.atlassian.net/browse/BA-281)) — archived, see roadmap-archive.md
+roadmap.md:232-232  ### Milestone 1.18 — Desktop installer builds ([BA-302](https://halo-powered.atlassian.net/browse/BA-302)) — archived, see roadmap-archive.md
+roadmap.md:234-234  ### Milestone 1.19 — US Health testing data ([BA-305](https://halo-powered.atlassian.net/browse/BA-305)) — archived, see roadmap-archive.md
+roadmap.md:236-236  ### Milestone 1.20 — Schema metadata in datasets ([BA-318](https://halo-powered.atlassian.net/browse/BA-318)) — archived, see roadmap-archive.md
+roadmap.md:238-238  ### Milestone 1.21 — Questions to Insights v2 ([BA-320](https://halo-powered.atlassian.net/browse/BA-320)) — archived, see roadmap-archive.md
+roadmap.md:240-240  ### Milestone 1.22 — Sampled profiling and synthetic data (M1-22) — archived, see roadmap-archive.md
+roadmap.md:242-431  ### Milestone 1.23 — Workflow-first: chats run workflows, agents are building blocks (M1-23)
+roadmap.md:246-285  #### 1.23.1 — The Graph tab draws a workflow-backed agent's turn  `✅ Done`
+roadmap.md:287-295  #### 1.23.2 — Workflow-first: ADR, epic spec, glossary and roadmap  `✅ Done`
+roadmap.md:297-302  #### 1.23.8 — Remove the showcase agents  `✅ Done`
+roadmap.md:304-309  #### 1.23.3 — The workflow catalogue: list, detail, and sessions bound to a workflow  `✅ Done`
+roadmap.md:311-316  #### 1.23.4 — Every streamed turn runs the session's workflow  `✅ Done`
+roadmap.md:318-323  #### 1.23.5 — A Workflows area: list, workflow page and Start chat  `✅ Done`
+roadmap.md:325-330  #### 1.23.6 — The New conversation screen picks a workflow; chats name their workflow  `✅ Done`
+roadmap.md:332-337  #### 1.23.7 — Agents are building blocks: no Start chat, and "Used in" workflows  `✅ Done`
+roadmap.md:339-346  #### 1.23.9 — Run a workflow on an input: the sequential test workflow  `✅ Done`
+roadmap.md:348-353  #### 1.23.10 — The workflow page as a designer: graph canvas in the middle, configuration on the right  `✅ Done`
+roadmap.md:355-356  #### 1.23.11 — Chats retired: ADR-0041, epic spec, glossary and roadmap  `✅ Done`
+roadmap.md:358-359  #### 1.23.12 — Streamed runs of agent workflows on the backend  `✅ Done`
+roadmap.md:361-362  #### 1.23.13 — The answer view, extracted from the chat  `✅ Done`
+roadmap.md:364-365  #### 1.23.14 — Stored runs, the run history API and run files  `✅ Done`
+roadmap.md:367-368  #### 1.23.15 — Run the Assistant, Questions to Insights v2 and user agents from their page  `✅ Done`
+roadmap.md:370-371  #### 1.23.16 — Run the Data Readiness Agent on a dataset  `✅ Done`
+roadmap.md:373-374  #### 1.23.17 — Run the RFP Builder one exchange at a time  `✅ Done`
+roadmap.md:376-377  #### 1.23.18 — Move the request-recording E2E specs from chats to runs  `✅ Done`
+roadmap.md:379-380  #### 1.23.19 — Rate a run's answer: verified queries from runs  `✅ Done`
+roadmap.md:382-383  #### 1.23.20 — Monitoring shows runs  `✅ Done`
+roadmap.md:385-386  #### 1.23.21 — Runs replace Sessions on the rail; past chats open read-only  `✅ Done`
+roadmap.md:388-389  #### 1.23.22 — Chats can no longer start  `✅ Done`
+roadmap.md:391-392  #### 1.23.23 — Try it: run an agent's draft instead of a preview chat  `✅ Done`
+roadmap.md:394-395  #### 1.23.24 — Deep analysis as a run workflow  `✅ Done`
+roadmap.md:397-398  #### 1.23.25 — Visual actions on a run's result  `✅ Done`
+roadmap.md:400-402  #### 1.23.26 — Extract the turn engine; evals and dev scripts on run hosts  `✅ Done`
+roadmap.md:404-406  #### 1.23.26b — Evals and dev scripts on run hosts  `✅ Done`
+roadmap.md:408-411  #### 1.23.27 — Remove the chat write paths and specs  `✅ Done`
+roadmap.md:413-414  #### 1.23.28 — Lean story lane, model and effort routing, decide-before-build  `✅ Done`
+roadmap.md:416-417  #### 1.23.29 — `story-pack.mjs` and the spec section index  `✅ Done`
+roadmap.md:419-420  #### 1.23.30 — Archive finished milestones of the roadmap  `✅ Done`
+roadmap.md:422-423  #### 1.23.31 — `qa.mjs --wave`: one verification for several stories  `✅ Done`
+roadmap.md:425-426  #### 1.23.32 — Playwright in parallel  `✅ Done`
+roadmap.md:428-431  #### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
+roadmap.md:433-437  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:437-437  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:439-441  ## Backlog
 
 specs/README.md:7-89  ## Layout
 specs/README.md:28-56  ### Capabilities
@@ -545,7 +547,7 @@ specs/capabilities/agents-evals/spec.md:1292-1298  ## Acceptance
 specs/capabilities/agents-evals/spec.md:1300-1309  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
-specs/capabilities/app-shell/spec.md:16-89  ## Rules
+specs/capabilities/app-shell/spec.md:16-91  ## Rules
 specs/capabilities/app-shell/spec.md:19-19  R1 The system SHALL present, left to right: the navigation rail (expandab
 specs/capabilities/app-shell/spec.md:20-20  R2 On launch the navigation drawer SHALL be expanded unless the user last
 specs/capabilities/app-shell/spec.md:21-23  R3 The rail SHALL offer, under "Workspace navigation", one icon button ea
@@ -568,43 +570,45 @@ specs/capabilities/app-shell/spec.md:43-43  R19 The system SHALL show a banner a
 specs/capabilities/app-shell/spec.md:44-44  R20 For `restarting` the banner SHALL read "Backend restarting…" on an amb
 specs/capabilities/app-shell/spec.md:45-45  R21 When the app runs without the desktop shell (a plain browser, as in we
 specs/capabilities/app-shell/spec.md:46-46  R22 The desktop shell SHALL run the backend as a supervised child process
-specs/capabilities/app-shell/spec.md:47-47  R23 The readiness probe SHALL be an HTTP GET of the sessions list on the l
-specs/capabilities/app-shell/spec.md:48-48  R24 The window SHALL open as soon as the backend is ready, or after the 30
-specs/capabilities/app-shell/spec.md:49-49  R25 When the backend exits unexpectedly (anything other than the app quitt
-specs/capabilities/app-shell/spec.md:50-50  R26 A backend that has stayed ready for 60 seconds SHALL be treated as hea
-specs/capabilities/app-shell/spec.md:51-53  R27 Quitting the app SHALL stop the backend and SHALL NOT trigger a relaun
-specs/capabilities/app-shell/spec.md:54-54  R28 The system SHALL show short messages as toasts stacked at the bottom-r
-specs/capabilities/app-shell/spec.md:55-55  R29 A toast SHALL be one of three kinds: `success`, `error` or `info`, eac
-specs/capabilities/app-shell/spec.md:56-56  R30 Each toast SHALL have a dismiss button, named "Dismiss notification",
-specs/capabilities/app-shell/spec.md:57-59  R31 Every error toast SHALL also be recorded as an error entry with source
-specs/capabilities/app-shell/spec.md:60-60  R32 The Settings list pane SHALL end with the build identity: the text "Ag
-specs/capabilities/app-shell/spec.md:61-61  R33 The window title and the document title SHALL be "Agentic Hub". The op
-specs/capabilities/app-shell/spec.md:62-64  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
-specs/capabilities/app-shell/spec.md:65-65  R46 In the Runs area the content shows an open run (`run-detail`: its work
-specs/capabilities/app-shell/spec.md:66-66  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
-specs/capabilities/app-shell/spec.md:67-67  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
-specs/capabilities/app-shell/spec.md:68-68  R49 In the Runs area the page SHALL start with a header: an icon, then the
-specs/capabilities/app-shell/spec.md:69-69  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
-specs/capabilities/app-shell/spec.md:70-72  R51 The home view (R2) SHALL welcome the user and explain how the product
-specs/capabilities/app-shell/spec.md:73-73  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
-specs/capabilities/app-shell/spec.md:74-76  R53 All text in the app SHALL be selectable and copyable with the mouse an
-specs/capabilities/app-shell/spec.md:77-77  R39 The Appearance section SHALL offer a single choice labelled **Theme**
-specs/capabilities/app-shell/spec.md:78-78  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
-specs/capabilities/app-shell/spec.md:79-79  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
-specs/capabilities/app-shell/spec.md:80-80  R42 The resolved theme SHALL be applied before the page first paints, so t
-specs/capabilities/app-shell/spec.md:81-81  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
-specs/capabilities/app-shell/spec.md:82-82  R44 In the desktop app, the window's own background (shown while resizing
-specs/capabilities/app-shell/spec.md:83-85  R45 Both themes SHALL produce zero violations in the automated accessibili
-specs/capabilities/app-shell/spec.md:86-86  R35 The application shell, in its initial state, SHALL produce zero violat
-specs/capabilities/app-shell/spec.md:87-87  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
-specs/capabilities/app-shell/spec.md:88-88  R37 Every icon-only control in the shell SHALL have an accessible name (a
-specs/capabilities/app-shell/spec.md:89-89  R38 The application shell in its initial state SHALL match the approved `a
-specs/capabilities/app-shell/spec.md:91-101  ## Edge cases and errors
-specs/capabilities/app-shell/spec.md:103-110  ## Contracts
-specs/capabilities/app-shell/spec.md:112-118  ## UI
-specs/capabilities/app-shell/spec.md:120-367  ## Flows
-specs/capabilities/app-shell/spec.md:369-373  ## Acceptance
-specs/capabilities/app-shell/spec.md:375-381  ## Open questions
+specs/capabilities/app-shell/spec.md:47-47  R54 The desktop app SHALL run as a single instance per profile: launching
+specs/capabilities/app-shell/spec.md:48-48  R55 The desktop shell SHALL NOT report `ready` for a server it did not sta
+specs/capabilities/app-shell/spec.md:49-49  R23 The readiness probe SHALL be an HTTP GET of the sessions list on the l
+specs/capabilities/app-shell/spec.md:50-50  R24 The window SHALL open as soon as the backend is ready, or after the 30
+specs/capabilities/app-shell/spec.md:51-51  R25 When the backend exits unexpectedly (anything other than the app quitt
+specs/capabilities/app-shell/spec.md:52-52  R26 A backend that has stayed ready for 60 seconds SHALL be treated as hea
+specs/capabilities/app-shell/spec.md:53-55  R27 Quitting the app SHALL stop the backend and SHALL NOT trigger a relaun
+specs/capabilities/app-shell/spec.md:56-56  R28 The system SHALL show short messages as toasts stacked at the bottom-r
+specs/capabilities/app-shell/spec.md:57-57  R29 A toast SHALL be one of three kinds: `success`, `error` or `info`, eac
+specs/capabilities/app-shell/spec.md:58-58  R30 Each toast SHALL have a dismiss button, named "Dismiss notification",
+specs/capabilities/app-shell/spec.md:59-61  R31 Every error toast SHALL also be recorded as an error entry with source
+specs/capabilities/app-shell/spec.md:62-62  R32 The Settings list pane SHALL end with the build identity: the text "Ag
+specs/capabilities/app-shell/spec.md:63-63  R33 The window title and the document title SHALL be "Agentic Hub". The op
+specs/capabilities/app-shell/spec.md:64-66  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
+specs/capabilities/app-shell/spec.md:67-67  R46 In the Runs area the content shows an open run (`run-detail`: its work
+specs/capabilities/app-shell/spec.md:68-68  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
+specs/capabilities/app-shell/spec.md:69-69  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
+specs/capabilities/app-shell/spec.md:70-70  R49 In the Runs area the page SHALL start with a header: an icon, then the
+specs/capabilities/app-shell/spec.md:71-71  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
+specs/capabilities/app-shell/spec.md:72-74  R51 The home view (R2) SHALL welcome the user and explain how the product
+specs/capabilities/app-shell/spec.md:75-75  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
+specs/capabilities/app-shell/spec.md:76-78  R53 All text in the app SHALL be selectable and copyable with the mouse an
+specs/capabilities/app-shell/spec.md:79-79  R39 The Appearance section SHALL offer a single choice labelled **Theme**
+specs/capabilities/app-shell/spec.md:80-80  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
+specs/capabilities/app-shell/spec.md:81-81  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
+specs/capabilities/app-shell/spec.md:82-82  R42 The resolved theme SHALL be applied before the page first paints, so t
+specs/capabilities/app-shell/spec.md:83-83  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
+specs/capabilities/app-shell/spec.md:84-84  R44 In the desktop app, the window's own background (shown while resizing
+specs/capabilities/app-shell/spec.md:85-87  R45 Both themes SHALL produce zero violations in the automated accessibili
+specs/capabilities/app-shell/spec.md:88-88  R35 The application shell, in its initial state, SHALL produce zero violat
+specs/capabilities/app-shell/spec.md:89-89  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
+specs/capabilities/app-shell/spec.md:90-90  R37 Every icon-only control in the shell SHALL have an accessible name (a
+specs/capabilities/app-shell/spec.md:91-91  R38 The application shell in its initial state SHALL match the approved `a
+specs/capabilities/app-shell/spec.md:93-103  ## Edge cases and errors
+specs/capabilities/app-shell/spec.md:105-112  ## Contracts
+specs/capabilities/app-shell/spec.md:114-120  ## UI
+specs/capabilities/app-shell/spec.md:122-375  ## Flows
+specs/capabilities/app-shell/spec.md:377-381  ## Acceptance
+specs/capabilities/app-shell/spec.md:383-389  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
 specs/capabilities/data-readiness/spec.md:24-223  ## Rules
@@ -1939,19 +1943,19 @@ specs/system/api.md:1441-1449  ### 3.3 Eval runs
 specs/system/api.md:1451-1463  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
 specs/system/api.md:1465-1474  ### 3.5 Other long-running calls (no progress channel)
 specs/system/api.md:1476-1528  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1530-1592  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1530-1595  ## 4. Desktop bridge (IPC)
 specs/system/api.md:1534-1551  ### 4.1 Globals exposed on `window`
 specs/system/api.md:1553-1569  ### 4.2 IPC channels
-specs/system/api.md:1571-1584  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1586-1592  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1594-1640  ## 5. CLI contract
-specs/system/api.md:1642-1697  ## 6. Environment variables
-specs/system/api.md:1644-1670  ### 6.1 Backend (server process)
-specs/system/api.md:1672-1676  ### 6.2 CLI-only
-specs/system/api.md:1678-1687  ### 6.3 Electron main process
-specs/system/api.md:1689-1691  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1693-1697  ### 6.5 Frontend build/runtime
-specs/system/api.md:1699-1715  ## 7. Gaps and open questions
+specs/system/api.md:1571-1587  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1589-1595  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1597-1643  ## 5. CLI contract
+specs/system/api.md:1645-1702  ## 6. Environment variables
+specs/system/api.md:1647-1675  ### 6.1 Backend (server process)
+specs/system/api.md:1677-1681  ### 6.2 CLI-only
+specs/system/api.md:1683-1692  ### 6.3 Electron main process
+specs/system/api.md:1694-1696  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1698-1702  ### 6.5 Frontend build/runtime
+specs/system/api.md:1704-1720  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-260  ## Level 2 — Containers
@@ -1994,90 +1998,90 @@ specs/system/architecture.md:1003-1055  #### ADR-0040 — Workflow-first: a sess
 specs/system/architecture.md:1057-1094  #### ADR-0041 — Chats retired: every workflow runs once on a typed input; runs are stored; existing sessions become read-only past chats
 specs/system/architecture.md:1096-1151  ## Level 4 — Code
 
-specs/system/data-model.md:13-57  ## 1. Storage overview
+specs/system/data-model.md:13-58  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory
-specs/system/data-model.md:29-48  ### 1.2 Stores
-specs/system/data-model.md:50-57  ### 1.3 Identity and time conventions
-specs/system/data-model.md:59-97  ## 2. Document store contract
-specs/system/data-model.md:61-73  ### 2.1 Abstract interface
-specs/system/data-model.md:75-79  ### 2.2 Filters and sorts
-specs/system/data-model.md:81-89  ### 2.3 Secret handling (`CryptoService`)
-specs/system/data-model.md:91-97  ### 2.4 Concurrency and atomicity
-specs/system/data-model.md:99-675  ## 3. Collections
-specs/system/data-model.md:125-180  ### 3.1 `connections` — datasources
-specs/system/data-model.md:182-210  ### 3.2 `settings` — LLM settings
-specs/system/data-model.md:201-210  #### 3.2.1 `settings` document `ui-preferences`
-specs/system/data-model.md:212-237  ### 3.3 `datasets`
-specs/system/data-model.md:239-346  ### 3.4 `sessions`
-specs/system/data-model.md:263-284  #### 3.4.1 `ChatMessage`
-specs/system/data-model.md:286-302  #### 3.4.2 `ToolDataRecord` and `ReasoningStep`
-specs/system/data-model.md:304-321  #### 3.4.3 `SessionVisualization` (session metadata for a visual)
-specs/system/data-model.md:323-346  #### 3.4.4 `PanelItem`, `WorkflowState` and the derived workflow view
-specs/system/data-model.md:348-357  ### 3.5 `datasource_inventories`
-specs/system/data-model.md:359-376  ### 3.6 `verified_queries`
-specs/system/data-model.md:378-396  ### 3.7 `metrics`
-specs/system/data-model.md:398-423  ### 3.8 `eval_runs`
-specs/system/data-model.md:425-454  ### 3.9 `ontology_items`
-specs/system/data-model.md:456-473  ### 3.9a `user_personas`
-specs/system/data-model.md:475-494  ### 3.9b `visual_charts`
-specs/system/data-model.md:496-527  ### 3.10 `agents` — user agents
-specs/system/data-model.md:530-544  ### 3.10.1 `skills` — in-app skills
-specs/system/data-model.md:546-558  ### 3.10.2 `skill_overrides` — built-in skills edited in the app
-specs/system/data-model.md:560-570  ### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
-specs/system/data-model.md:572-574  ### 3.11 Deep-analysis jobs (not persisted)
-specs/system/data-model.md:576-581  ### 3.12 Other non-persisted data
-specs/system/data-model.md:583-608  ### 3.13 Relationships and referential rules
-specs/system/data-model.md:610-617  ### 3.14 Ownership (legacy `ownerId`)
-specs/system/data-model.md:619-640  ### 3.15 `readiness_reports` — data-readiness assessments
-specs/system/data-model.md:642-675  ### 3.16 `workflow_runs` — workflow runs
-specs/system/data-model.md:677-825  ## 4. Files on disk
-specs/system/data-model.md:681-714  ### 4.1 Workspace layout
-specs/system/data-model.md:716-734  ### 4.2 Visual version directory
-specs/system/data-model.md:736-751  ### 4.3 `manifest.json`
-specs/system/data-model.md:753-801  ### 4.4 Visual spec (`spec.json`, schema v1)
-specs/system/data-model.md:803-807  ### 4.5 Reports
-specs/system/data-model.md:809-811  ### 4.6 No skills in workspaces
-specs/system/data-model.md:813-815  ### 4.8 Old user skill folder
-specs/system/data-model.md:817-825  ### 4.7 Legacy visual layout
-specs/system/data-model.md:827-836  ## 5. Agent memory
-specs/system/data-model.md:838-870  ## 6. Migrations
-specs/system/data-model.md:872-981  ## 7. External databases
-specs/system/data-model.md:876-897  ### 7.1 The Intellify database
-specs/system/data-model.md:899-972  ### 7.2 The `rfp` schema
-specs/system/data-model.md:974-981  ### 7.3 Migration rule
-specs/system/data-model.md:983-994  ## Open questions, gaps and discrepancies
+specs/system/data-model.md:29-49  ### 1.2 Stores
+specs/system/data-model.md:51-58  ### 1.3 Identity and time conventions
+specs/system/data-model.md:60-98  ## 2. Document store contract
+specs/system/data-model.md:62-74  ### 2.1 Abstract interface
+specs/system/data-model.md:76-80  ### 2.2 Filters and sorts
+specs/system/data-model.md:82-90  ### 2.3 Secret handling (`CryptoService`)
+specs/system/data-model.md:92-98  ### 2.4 Concurrency and atomicity
+specs/system/data-model.md:100-676  ## 3. Collections
+specs/system/data-model.md:126-181  ### 3.1 `connections` — datasources
+specs/system/data-model.md:183-211  ### 3.2 `settings` — LLM settings
+specs/system/data-model.md:202-211  #### 3.2.1 `settings` document `ui-preferences`
+specs/system/data-model.md:213-238  ### 3.3 `datasets`
+specs/system/data-model.md:240-347  ### 3.4 `sessions`
+specs/system/data-model.md:264-285  #### 3.4.1 `ChatMessage`
+specs/system/data-model.md:287-303  #### 3.4.2 `ToolDataRecord` and `ReasoningStep`
+specs/system/data-model.md:305-322  #### 3.4.3 `SessionVisualization` (session metadata for a visual)
+specs/system/data-model.md:324-347  #### 3.4.4 `PanelItem`, `WorkflowState` and the derived workflow view
+specs/system/data-model.md:349-358  ### 3.5 `datasource_inventories`
+specs/system/data-model.md:360-377  ### 3.6 `verified_queries`
+specs/system/data-model.md:379-397  ### 3.7 `metrics`
+specs/system/data-model.md:399-424  ### 3.8 `eval_runs`
+specs/system/data-model.md:426-455  ### 3.9 `ontology_items`
+specs/system/data-model.md:457-474  ### 3.9a `user_personas`
+specs/system/data-model.md:476-495  ### 3.9b `visual_charts`
+specs/system/data-model.md:497-528  ### 3.10 `agents` — user agents
+specs/system/data-model.md:531-545  ### 3.10.1 `skills` — in-app skills
+specs/system/data-model.md:547-559  ### 3.10.2 `skill_overrides` — built-in skills edited in the app
+specs/system/data-model.md:561-571  ### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
+specs/system/data-model.md:573-575  ### 3.11 Deep-analysis jobs (not persisted)
+specs/system/data-model.md:577-582  ### 3.12 Other non-persisted data
+specs/system/data-model.md:584-609  ### 3.13 Relationships and referential rules
+specs/system/data-model.md:611-618  ### 3.14 Ownership (legacy `ownerId`)
+specs/system/data-model.md:620-641  ### 3.15 `readiness_reports` — data-readiness assessments
+specs/system/data-model.md:643-676  ### 3.16 `workflow_runs` — workflow runs
+specs/system/data-model.md:678-826  ## 4. Files on disk
+specs/system/data-model.md:682-715  ### 4.1 Workspace layout
+specs/system/data-model.md:717-735  ### 4.2 Visual version directory
+specs/system/data-model.md:737-752  ### 4.3 `manifest.json`
+specs/system/data-model.md:754-802  ### 4.4 Visual spec (`spec.json`, schema v1)
+specs/system/data-model.md:804-808  ### 4.5 Reports
+specs/system/data-model.md:810-812  ### 4.6 No skills in workspaces
+specs/system/data-model.md:814-816  ### 4.8 Old user skill folder
+specs/system/data-model.md:818-826  ### 4.7 Legacy visual layout
+specs/system/data-model.md:828-837  ## 5. Agent memory
+specs/system/data-model.md:839-871  ## 6. Migrations
+specs/system/data-model.md:873-982  ## 7. External databases
+specs/system/data-model.md:877-898  ### 7.1 The Intellify database
+specs/system/data-model.md:900-973  ### 7.2 The `rfp` schema
+specs/system/data-model.md:975-982  ### 7.3 Migration rule
+specs/system/data-model.md:984-995  ## Open questions, gaps and discrepancies
 
-specs/system/delivery.md:7-41  ## 1. Electron single-app delivery
-specs/system/delivery.md:24-26  ### Why `--base-href ./`
-specs/system/delivery.md:28-36  ### Data directory and secret
-specs/system/delivery.md:38-41  ### Dev and branding helpers
-specs/system/delivery.md:43-136  ## 2. npm scripts
-specs/system/delivery.md:45-66  ### `frontend/package.json`
-specs/system/delivery.md:68-91  ### `backend/package.json`
-specs/system/delivery.md:93-103  ### Repo scripts (`scripts/`, no root `package.json`)
-specs/system/delivery.md:105-125  ### Local run recipes
-specs/system/delivery.md:127-136  ### Verification gate (what must be green before a change ships)
-specs/system/delivery.md:138-167  ## 3. Desktop packaging (electron-builder)
-specs/system/delivery.md:169-209  ## 4. The web app as an npm package
-specs/system/delivery.md:211-313  ## 5. Versioning and releases
-specs/system/delivery.md:217-231  ### `version-on-merge.yml` — Version on merge
-specs/system/delivery.md:233-250  ### `build-desktop.yml` — Build desktop installers
-specs/system/delivery.md:252-261  ### `publish-npm.yml` — Publish npm package
-specs/system/delivery.md:263-278  ### `spec-checks.yml` — Spec checks
-specs/system/delivery.md:280-313  ### Branch rulesets on `main`
-specs/system/delivery.md:284-289  #### "main: specs match the code"
-specs/system/delivery.md:291-309  #### "main: PR approval, admin may merge without"
-specs/system/delivery.md:311-313  #### Both rulesets
-specs/system/delivery.md:315-343  ## 6. Docker Compose: the World Cup sample database and the observability profile
-specs/system/delivery.md:331-343  ### Observability profile (opt-in)
-specs/system/delivery.md:345-363  ## 7. Running a second instance (worktrees and parallel runs)
-specs/system/delivery.md:365-380  ## 8. The product page (`site/`)
-specs/system/delivery.md:382-443  ## 9. Claude Code mods (`.claude/mods/`)
-specs/system/delivery.md:395-443  ### `workflow-steps`
-specs/system/delivery.md:445-472  ## 10. Claude Code project skills (`.claude/skills/`)
-specs/system/delivery.md:474-483  ## 11. Claude Code tools (`.claude/tools/`)
-specs/system/delivery.md:485-504  ## 12. Claude Code agents (`.claude/agents/`)
-specs/system/delivery.md:506-560  ## 13. Deterministic QA (`scripts/qa.mjs`)
+specs/system/delivery.md:7-42  ## 1. Electron single-app delivery
+specs/system/delivery.md:25-27  ### Why `--base-href ./`
+specs/system/delivery.md:29-37  ### Data directory and secret
+specs/system/delivery.md:39-42  ### Dev and branding helpers
+specs/system/delivery.md:44-137  ## 2. npm scripts
+specs/system/delivery.md:46-67  ### `frontend/package.json`
+specs/system/delivery.md:69-92  ### `backend/package.json`
+specs/system/delivery.md:94-104  ### Repo scripts (`scripts/`, no root `package.json`)
+specs/system/delivery.md:106-126  ### Local run recipes
+specs/system/delivery.md:128-137  ### Verification gate (what must be green before a change ships)
+specs/system/delivery.md:139-168  ## 3. Desktop packaging (electron-builder)
+specs/system/delivery.md:170-210  ## 4. The web app as an npm package
+specs/system/delivery.md:212-314  ## 5. Versioning and releases
+specs/system/delivery.md:218-232  ### `version-on-merge.yml` — Version on merge
+specs/system/delivery.md:234-251  ### `build-desktop.yml` — Build desktop installers
+specs/system/delivery.md:253-262  ### `publish-npm.yml` — Publish npm package
+specs/system/delivery.md:264-279  ### `spec-checks.yml` — Spec checks
+specs/system/delivery.md:281-314  ### Branch rulesets on `main`
+specs/system/delivery.md:285-290  #### "main: specs match the code"
+specs/system/delivery.md:292-310  #### "main: PR approval, admin may merge without"
+specs/system/delivery.md:312-314  #### Both rulesets
+specs/system/delivery.md:316-344  ## 6. Docker Compose: the World Cup sample database and the observability profile
+specs/system/delivery.md:332-344  ### Observability profile (opt-in)
+specs/system/delivery.md:346-364  ## 7. Running a second instance (worktrees and parallel runs)
+specs/system/delivery.md:366-381  ## 8. The product page (`site/`)
+specs/system/delivery.md:383-444  ## 9. Claude Code mods (`.claude/mods/`)
+specs/system/delivery.md:396-444  ### `workflow-steps`
+specs/system/delivery.md:446-473  ## 10. Claude Code project skills (`.claude/skills/`)
+specs/system/delivery.md:475-484  ## 11. Claude Code tools (`.claude/tools/`)
+specs/system/delivery.md:486-505  ## 12. Claude Code agents (`.claude/agents/`)
+specs/system/delivery.md:507-561  ## 13. Deterministic QA (`scripts/qa.mjs`)
 
 specs/system/tech-stack.md:7-15  ## Languages and runtime
 specs/system/tech-stack.md:17-39  ## Frontend (`frontend/`)
