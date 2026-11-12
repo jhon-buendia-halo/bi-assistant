@@ -7,9 +7,11 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Ask only the questions with no safe default, all in one picker call; state the defaults for the rest and proceed.
 - When a request could become a repo change, ask whether the result lives in the repo (fixture, seed) or only on this machine before building it.
 - Answer an out-of-band question in the very next reply, before any status update.
-- Hand over the running app only with the demo link (`node scripts/qa.mjs <id> --fast`, then `node scripts/demo-page.mjs <id>`), and after a restart tell the user to hard-reload the open tab (Ctrl+Shift+R / Cmd+Shift+R).
+- Hand over the running app after the wave check (`node scripts/qa.mjs --wave <ids> --base <ref>`; add `--demo <id>` and `node scripts/demo-page.mjs <id>` for the wave's user-visible milestone), and after a restart tell the user to hard-reload the open tab (Ctrl+Shift+R / Cmd+Shift+R).
+- Before an L epic or an unclear M feature, show a cheap prototype, then ask one batched confirmation per epic (spec, ADR, questions with recommendations, branch); re-plan a direction change once, not story by story.
+- Never read a file over 500 lines whole (`grep -n` or `specs/INDEX.md`, then the range); run tests quietly (Playwright `--reporter=dot`, Jest `--silent`, a log file) and read back only the summary or failure block.
 - Before hand-over, look at the first screen a viewer sees, in both themes and with the right panel open (nothing behind Show more, no overlap), and look at every evidence screenshot.
-- Commit each story as soon as its fast loop is green; never start a second story on top of uncommitted work.
+- Commit each story as soon as its related tests are green; never start a second story on top of uncommitted work.
 - Measure before designing: prompt sizes from the compiled agent (`getInstructions()`, `evidence/1.14.1/measure-prompt.cjs`), SQL or profiling changes timed live on one small and one large real table.
 - Trace before theorising: capture one failing case's real request or traffic (stub dump, logging proxy) before guessing a cause.
 - Before blaming a change for a failing test, count its flake rate on unchanged code (run it alone 5–10 times); after making test steps concurrent, run the real gate several times.
@@ -17,7 +19,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 ## Subagents and parallel units
 - Give parallel units one written contract first (types, routes copied from `specs/system/api.md`, test ids, copy); a helper or Feature file two units might both add belongs to exactly one of them.
 - Brief every subagent: Edit/Write tools only, a private scratch subfolder (never shared `/tmp` names), never kill a process it did not start, and "if a build or budget blocks you, report it; do not change build config".
-- Do not trust a subagent's report: re-run its gates (build, touched unit tests, the story's E2E, `check-specs`) before committing, especially after it was stopped and resumed.
+- Do not trust a subagent's report: the lead's wave check (`qa.mjs --wave`) re-runs the gates (build, related unit tests, the Features' E2E, `check-specs`) once over the merged wave, especially after a builder was stopped and resumed.
 - On "keep going" with no context, check for another live session on the epic (commits in the last minutes, files changing under you) and ask who owns the work.
 - At the gate, run `git merge-base --is-ancestor <branch> HEAD` for every `unit/<EPIC-ID>-*` branch and merge anything missing before E2E or evals.
 
@@ -42,14 +44,14 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Before the first Playwright run of a session: `npx playwright install chromium chromium-headless-shell` in `frontend/`, `docker ps`, and `E2E_SKIP_DOCKER=1` if a Postgres already listens on 55432.
 - After every Playwright run: `git status -- evidence/ frontend/e2e/*-snapshots/`; restore evidence other stories own and delete new baselines unless a visual change was intended.
 - Never put your own files under `frontend/test-results` (Playwright empties it); use `.qa-reports/`.
-- In the fast loop, pass `--base HEAD` to `qa.mjs` when a shared fixture changed on the epic; the default base makes `--only-changed` select most of the suite.
+- In a wave check, pass `--base <ref>` (the epic branch before the wave, or `HEAD` when a shared fixture changed on the epic); the default base makes `--only-changed` select most of the suite.
 - With `launchApp`, destructure `appDataDir` first (`{ appDataDir, launchApp }`) so the app stops before its data dir is removed.
 - Use `{ exact: true }` on `getByText`/`getByLabel` when a `DEMO=1` caption or a nearby aria-label contains the same text; assert `toHaveAccessibleName`.
 - Never branch on `isVisible()` or read a list with `allInnerTexts()` before an `await expect(...).toBeVisible()` on a known element.
 - Before asserting what reaches the model, dump one real request from the stub; pick "which turn" from the last user message only, and assert relative order, never "last".
 - In step 6, grep the impacted specs, their helpers and unit tests for every selector, copy or default the change removes or alters (e.g. `emulateMedia({ colorScheme`).
 - Assert semantics (role, `aria-pressed`, text), not colour classes; assert side-by-side layout with `boundingBox()`; wait ~500 ms for transitions before a screenshot.
-- Run the axe scan on every new screen, and on a shared class's first use of a state, in both themes.
+- Run the axe scan on every new screen, and on a shared class's first use of a state, in both themes; the lead does it at the wave check, not each builder.
 
 ## Evals and agents
 - Run evals only on a fresh copy of the data dir per run, never on `~/.questions-to-insights` or the user's live data; run RFP eval runs one after another (shared `intellify_mercer_demo`).

@@ -24,7 +24,7 @@ Process documents:
 
 > **MANDATORY FIRST ACTION — read [lessons.md](lessons.md) before doing anything else.** Before you restate the goal, ask a question, run a command or touch a file, on every task, read it. It is short on purpose.
 
-Every change follows these eleven steps, **scaled to its size** (below). They run in two loops, a **fast loop** and an **acceptance gate**. Within a loop the steps are sequential gates; within a step, independent units fan out to parallel subagents (see **Model usage**). Load a step's skill before the step starts; one skill covers several steps.
+Every change follows these eleven steps, **scaled to its size** (below). They run in two stages, the **story lane** (with a wave check) and the **acceptance gate**. Within a loop the steps are sequential gates; within a step, independent units fan out to parallel subagents (see **Model usage**). Load a step's skill before the step starts; one skill covers several steps.
 
 1. **Understand the goal** — restate the request in your own words and judge its size (S, M or L). Skill: `workflow-start`.
 2. **Clarify** — ask only what changes what you'd build, in one batch with your recommended answers; state assumptions instead of asking when the request is clear. Skill: `workflow-start`.
@@ -48,11 +48,17 @@ Every change follows these eleven steps, **scaled to its size** (below). They ru
 
 When in doubt between two sizes, take the larger and say so. The user can always re-size a change.
 
-### When the steps run — fast loop, then acceptance gate
+### When the steps run — decide, story lane, wave check, acceptance gate
 
-- **Fast loop, every change the user requests:** steps 1–5 scaled to the size, then step 8. For an M or L UI story, step 8 also writes the story's main Gherkin scenario as a Playwright test tagged `@demo` and `@story-<roadmap-id>`, with `scenarioStep` captions. Then `node scripts/qa.mjs <roadmap-id> --fast` (the related unit tests, the builds, `check-specs`, the Playwright specs of the Features touched, then the demo video `evidence/<roadmap-id>/demo.webm`, or `demo.txt` for a story with no UI), then `node scripts/demo-page.mjs <roadmap-id>`, published as a Claude artifact. Then hand the user the running web app **with the demo artifact link**, and tell them to hard-reload any open tab. An S change hands over the running app without a demo. Steps 6, 7, 9, 10 and 11 wait. A follow-up request on the same story goes round the fast loop again. Skill: `verify`.
-- **Acceptance gate, once the user accepts the change by hand:** steps 6, 7, 9 and 10 per story; then, when the epic's last story is through, the epic's changelog entry, PR and retrospective (step 11). Several accepted stories may go through the gate together.
+- **Decide before you build.** For an L epic, or an M feature whose end state is unclear, first show a cheap prototype (an HTML mock or an ASCII/Markdown sketch, at most 10 minutes, no spec, no ADR). Then ask **one batched confirmation per epic**: spec, ADR, open questions with recommendations, and branch, in one message. A direction change after it is re-planned once, not story by story. Skill: `workflow-start`.
+- **Story lane, every story:** steps 1–5 scaled to the size, then step 8. A story built by a `builder` agent starts from its **story pack** (`node scripts/story-pack.mjs <id>`). It writes the code, its unit tests, for a UI story **one** Playwright scenario (tagged `@demo` and `@story-<roadmap-id>`, with `scenarioStep` captions), and only the spec lines its change makes false. It runs only the related unit tests and its own Playwright file. No axe scan, screenshots, evidence, demo or `qa.mjs` unless the brief asks. Skill: `workflow-implement`.
+- **Wave check, once per set of parallel stories:** the lead merges the wave's unit branches and runs `node scripts/qa.mjs --wave <id>,<id> --base <ref> [--demo <id>]`, then hands the user the running web app and tells them to hard-reload any open tab. A demo is recorded only for the wave's user-visible milestone. Evidence and demos are recorded per wave. Skill: `verify`.
+- **Plain session without a builder agent:** a single-story change, and every S change, may run `node scripts/qa.mjs <roadmap-id> --fast` (with `--no-demo` for S) instead of a wave check, then hand over the same way. Skill: `verify`.
+- **Acceptance gate, once the user accepts the change by hand:** steps 6, 7, 9 and 10 per story; then, when the epic's last story is through, the epic's changelog entry, PR and retrospective (step 11). Steps 6, 7, 9, 10 and 11 wait until then. Several accepted stories may go through the gate together.
 - **No epic PR opens** while one of its stories has not passed the acceptance gate.
+- **Gherkin once.** A flow's steps live in its Playwright test. The capability spec keeps the Feature heading, its `E2E:` line and one `Scenario: <title>` line per scenario. Skill: `workflow-start`.
+- **Read and output rules, every agent.** Never read a file over 500 lines whole: `grep -n` or use the section index `specs/INDEX.md`, then read the range. Keep output quiet: Playwright `--reporter=dot`, Jest `--silent`, builds and test runs to a log file, and read back only the summary or the failure block.
+- **Session hygiene.** One lead session per epic wave. Before starting a new session, write `.context/handoff.md` (template in `workflow-gate`).
 
 Versioning stays automatic: the changelog is the human-readable record of what shipped; Conventional Commit subjects drive the version bump. Never edit `version` by hand; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
 
@@ -69,8 +75,14 @@ Run `node scripts/bootstrap.mjs` once in a fresh checkout or worktree: it instal
 
 ## Model usage: plan vs. execute
 
-For planning an M or L change, Opus 5.5 (`claude-opus-5-5`) at high effort creates the plan. An S change needs no separate plan.
+Plan an M or L change with Opus 5.5 (`claude-opus-5-5`) at high effort. An S change needs no separate plan.
 
-For execution, do not pin a fixed model. Once the plan is well defined, the session LLM picks the model it judges best for the work (capability vs. speed vs. cost) and runs the plan with it.
+Execute by fanning out: split the plan into independent units and dispatch them to parallel subagents (all calls for independent units in a single message). Keep sequential only what depends on a previous result. Pick the model per unit from this table. Subagents that work from a brief (`builder`, `reviewer`) don't load this file.
 
-Execute by fanning out: split the plan into independent units and dispatch them to parallel subagents (all calls for independent units in a single message). Keep sequential only what depends on a previous result. Pick the model per subagent the same way: cheap and fast for mechanical or narrow units, stronger for design judgment or cross-file reasoning. Subagents that work from a brief (`builder`, `reviewer`) don't load this file.
+| Work | Model | Effort |
+|---|---|---|
+| Plans, ADRs, design, critical or risky paths | Opus | high for plans, default for code |
+| UI on an existing pattern, tests, test migrations, deletions, docs | Sonnet | default or low |
+| Search, inventories, "where is X" | Haiku (`Explore`) | low |
+
+When two or more builders run in parallel, at most two use Opus.
