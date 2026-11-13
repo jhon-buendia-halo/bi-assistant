@@ -655,7 +655,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         await expect(current).toHaveCount(1);
         await expect(current).toHaveAttribute('data-testid', 'workflow-run-progress-analyse');
         await expect(page.getByTestId('workflow-run-progress-plan')).toHaveAttribute('data-state', 'done');
-        await expect(page.getByTestId('workflow-run-activity')).toHaveText(/^Analys/);
+        await expect(page.getByTestId('workflow-run-activity')).toHaveText(/^\s*Analys/);
         release();
       });
       await scenarioStep(
@@ -1098,7 +1098,7 @@ test.describe('Feature: Workflows (the designer)', () => {
               'true',
             );
           }
-          for (const id of ['plan-clarify', 'clarify-end']) {
+          for (const id of ['plan-clarify', 'clarify-plan']) {
             await expect(canvas.getByTestId(`workflow-connector-${id}`)).toHaveAttribute('data-skipped', 'true');
             await expect(canvas.getByTestId(`workflow-connector-${id}`)).toHaveAttribute('data-done', 'false');
           }
