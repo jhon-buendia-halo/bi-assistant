@@ -16,8 +16,10 @@ import {
 /**
  * What a run is given in skills, in specs/capabilities/agent-answers/spec.md.
  * The one runnable workflow is Questions to Insights v2 (`qti-v2-turn`),
- * whose agent `assistant-v2` has no skills: the scenario checks that no skill,
- * not even one left in the data dir by an older version, reaches the model.
+ * whose agent `assistant-v2` loads its built-in skills on demand
+ * (`curated-knowledge`, `sql-analysis`, `result-validation`): the scenario
+ * checks that they reach the model through the framework's skill catalog,
+ * and that a skill left in the data dir by an older version never does.
  * The model is the recording OpenAI-compatible stub, so the scenario checks
  * what the backend sent.
  */
@@ -94,7 +96,7 @@ async function withOldSkillsFolder(
   return (await launchApp(appDataDir)).page;
 }
 
-test('a Questions to Insights v2 run is offered no skills, and an old skills folder is ignored', async ({
+test('a Questions to Insights v2 run is offered its built-in skills only, and an old skills folder is ignored', async ({
   app,
   appDataDir,
   launchApp,
@@ -111,12 +113,20 @@ test('a Questions to Insights v2 run is offered no skills, and an old skills fol
   // When I run Questions to Insights v2.
   const request = await ask(page, QUESTION);
 
-  // Then no skill catalog or skill tool reaches the model.
+  // Then the framework's skill catalog lists its three built-in skills and
+  // the model is offered the skill tool, but no file or script tool.
   const systems = systemTexts(request).join('\n');
   expect(systems).toContain('You are Questions to Insights v2');
   expect(systems).not.toContain('\n## Skills\n');
-  expect(systems).not.toContain('<available_skills>');
-  expect(request.tools).not.toContain('skill');
+  expect(systems).toContain('<available_skills>');
+  for (const skill of [
+    'curated-knowledge',
+    'sql-analysis',
+    'result-validation',
+  ]) {
+    expect(systems).toContain(skill);
+  }
+  expect(request.tools).toContain('skill');
   expect(request.tools).not.toContain('read_file');
   expect(request.tools).not.toContain('run_skill_script');
   // And nothing of the old skill does.

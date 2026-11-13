@@ -191,10 +191,12 @@ function validatePrompt(key: string, value: unknown): string {
         `The Questions to Insights v2 prompt must start with "${ASSISTANT_V2_IDENTITY_START}"`,
       );
     }
+    // Its own skills and tools only (agents.md 2.11); links are mentions.
     const links = parseLinks(prompt);
-    if (links.skills.length) {
+    const skills = AGENT_SKILLS[ASSISTANT_V2_AGENT_KEY] ?? [];
+    if (links.skills.some((name) => !skills.includes(name))) {
       throw new BadRequestException(
-        "Skills can't be linked here: Questions to Insights v2 has no skills",
+        "Only Questions to Insights v2's own skills can be linked here: this prompt is shared by every user",
       );
     }
     const unknown = links.tools.find(

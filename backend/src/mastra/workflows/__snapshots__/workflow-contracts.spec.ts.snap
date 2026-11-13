@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) qti-v2-turn's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "66f1c458827e",
+  "contractHash": "b27dee7fd7b1",
   "input": [
     {
       "name": "question",
@@ -233,7 +233,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "array",
           },
           "stopped": {
-            "description": "The user stopped the turn.",
+            "description": "The turn ended early: the user stopped it or the agent asked a clarifying question.",
             "type": "boolean",
           },
         },
@@ -274,7 +274,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "array",
           },
           "stopped": {
-            "description": "The user stopped the turn.",
+            "description": "The turn ended early: the user stopped it or the agent asked a clarifying question.",
             "type": "boolean",
           },
         },

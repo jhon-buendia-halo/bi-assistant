@@ -18,8 +18,16 @@ const ASSISTANT = 'Questions to Insights Assistant';
 const V2 = 'Questions to Insights v2';
 const V2_KEY = 'assistant-v2';
 const V2_DESCRIPTION =
-  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
-const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+  'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
+const V2_TOOLS = [
+  'list_entities',
+  'describe_entity',
+  'sample_rows',
+  'run_readonly_sql',
+  'ask_clarification',
+];
+/** Its built-in skills, on demand (agents.md 7.4), sorted by name. */
+const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 /**
  * The Official cards in hub order, alphabetical by name ("Data Readiness
  * Agent", "Questions to Insights Assistant", "Questions to Insights v2";
@@ -473,7 +481,7 @@ test('Questions to Insights v2 is an Official card', async ({ page }) => {
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
 });
 
-test("Questions to Insights v2's page shows its prompt, three tools and no skills", async ({
+test("Questions to Insights v2's page shows its prompt, five tools and three skills", async ({
   page,
 }) => {
   await openHub(page);
@@ -491,7 +499,7 @@ test("Questions to Insights v2's page shows its prompt, three tools and no skill
     'You are Questions to Insights v2',
   );
 
-  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(3\)/);
+  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(5\)/);
   await page.getByTestId('agent-tab-tools').click();
   for (const tool of V2_TOOLS) {
     await expect(
@@ -503,8 +511,13 @@ test("Questions to Insights v2's page shows its prompt, three tools and no skill
   ).toHaveCount(0);
 
   await page.getByTestId('agent-tab-skills').click();
-  await expect(page.getByTestId('agent-tab-skills')).toHaveText(/Skills \(0\)/);
-  await expect(page.getByText('This agent has no skills.')).toBeVisible();
+  await expect(page.getByTestId('agent-tab-skills')).toHaveText(/Skills \(3\)/);
+  for (const skill of V2_SKILLS) {
+    await expect(page.getByTestId(`agent-skill-${skill}`)).toContainText(
+      'On demand',
+    );
+  }
+  await expect(page.getByText('This agent has no skills.')).toHaveCount(0);
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(page.getByText('Recent messages replayed')).toBeVisible();

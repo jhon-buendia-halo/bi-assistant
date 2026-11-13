@@ -42,7 +42,7 @@ All agents are registered once in a single framework instance and looked up by *
 | Registry key | Agent id | Display name | Description (verbatim) |
 |---|---|---|---|
 | `assistant` | `assistant` | Questions to Insights Assistant | Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result. |
-| `assistant-v2` | `questions-to-insights-v2` | Questions to Insights v2 | A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools. |
+| `assistant-v2` | `questions-to-insights-v2` | Questions to Insights v2 | A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them. |
 | `visualization` | `interactive-visual-designer` | Interactive Visual Designer | Turns a completed analysis answer into an interactive visual, and tailors it on request. |
 | `sql-fixer` | `sql-fixer` | SQL Fixer | Repairs a SQL statement that failed to execute, using the engine error as the signal. |
 | `sql-verifier` | `sql-verifier` | SQL Verifier | Careful mode's second opinion — re-derives the SQL for a question independently to corroborate the answer. |
@@ -684,7 +684,7 @@ The rules encoded (prefix D):
 
 ### 2.11 `assistant-v2` (id `questions-to-insights-v2`) — Questions to Insights v2
 
-**Purpose.** A slimmed-down data analyst, built up next to the `assistant` (BA-320). It maps a question to dataset entities, runs read-only SQL and gives the numbers it found. It starts minimal: a short prompt and only the core data tools. Later stories of the epic move reduced assistant rules, tools and skills into it, so the two can be compared. The `assistant` is not changed by it. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R107, [agent-answers](../capabilities/agent-answers/spec.md) R52, R61, R64.
+**Purpose.** A business data analyst, built up next to the `assistant` (BA-320). It maps a question to dataset entities, checks coverage, runs read-only SQL (aggregations first), validates the result and answers with a headline number, a table when there are three or more values and a short "How I got this". Every fact in its answer comes from a query result of the turn, never from general knowledge. It asks a clarifying question only when the measure itself is undefined. It has the assistant's data tools and clarification tool, three on-demand skills and the assistant's curated context blocks, but no visuals, panel or workflow tool (charts will be a separate agent). The `assistant` is not changed by it. Behaviour rules: [agents-evals](../capabilities/agents-evals/spec.md) R107, [agent-answers](../capabilities/agent-answers/spec.md) R52, R61, R64.
 
 **Invoked by.**
 
@@ -695,13 +695,13 @@ The rules encoded (prefix D):
 
 Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0034): two deterministic steps, then the agent, then a deterministic wrap-up. The steps are the session's workflow in the workflow bar, and the model never sets them. Inside the **Analyse** step it runs the same turn as the other bound built-in agents (5.1): no grounding-guard corrective pass (5.6) and no careful mode (5.8); the tool-only synthesis pass (5.5) applies as it does to every bound agent, and the result guards' warnings (5.4) come with `run_readonly_sql`, which it shares with the assistant. Its prompt never proposes deep analysis (2.7), which stays an assistant feature. It has no eval set (8) and is never called by a user agent (ADR-0008: user agents run on the `assistant`).
 
-**Inputs.** The user message (4.3), the system prompt, Block 1 only (4.1: without the `sample_rows` clause and without the visuals lines, since it has neither), on a streamed turn the **catalog block** of the Load catalog step after it (5.11), and the requestContext (4.2): `datasets`, `session-id`, `turn-question`, plus `turn-data-records`, which every streamed turn carries. No metrics, knowledge, verified-query or agent-instructions block.
+**Inputs.** The user message (4.3), the system prompt, then the assistant's per-turn blocks 1-4 (4.1), built by the same services and in the same order: Block 1 with the `sample_rows` clause and without the visuals lines (it has `sample_rows`, no visuals), Block 2 (governed metrics), Block 3 (curated knowledge) and Block 4 (verified reference queries), each only when it applies; on a streamed turn the **catalog block** of the Load catalog step after them (5.11); and the requestContext (4.2): `datasets`, `session-id`, `turn-question`, `knowledge-used`, plus `turn-data-records`, which every streamed turn carries. No agent-instructions block (Block 5). The answer records the knowledge it was given (`knowledge`, as the assistant's).
 
-**Output.** Free text (markdown). Tool calls are captured by the orchestrator (5.1); SQL results become data records as for the assistant.
+**Output.** Free text (markdown). Tool calls are captured by the orchestrator (5.1); SQL results become data records as for the assistant. A valid `ask_clarification` call ends the turn with a clarification card instead (5.1 step 3): on a streamed turn the Analyse step stops the run (5.11).
 
-**Tools.** `list_entities` (3.1), `describe_entity` (3.2), `run_readonly_sql` (3.4), in that order: the assistant's core dataset tools, with the same contracts. It has **no** `sample_rows`, no `create_visual` / `update_visual`, no `ask_clarification`, no `show_in_panel`, no `update_workflow` (its workflow bar is written from the turn workflow's steps, 5.11) and no workspace file tools.
+**Tools.** `list_entities` (3.1), `describe_entity` (3.2), `sample_rows` (3.3), `run_readonly_sql` (3.4), `ask_clarification` (3.5), in that order: the assistant's own instances, with the same contracts. It has **no** `create_visual` / `update_visual`, no `show_in_panel`, no `update_workflow` (its workflow bar is written from the turn workflow's steps, 5.11) and no workspace file tools.
 
-**Skills.** None, on demand or harness-loaded (7.4). It declares no `skills`, so the framework adds no skill tools.
+**Skills.** On demand (7.4): `curated-knowledge` (shared with the assistant), `sql-analysis` and `result-validation`, built per call from the built-in skills (an in-app override of one applies to the next call). The framework lists them in its skill catalog and adds its skill tools (3.9). None is harness-loaded.
 
 **Memory.** As the assistant's: one thread per session, last **40** messages replayed, semantic recall, working memory and generated titles off.
 
@@ -710,19 +710,27 @@ Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0
 **Datasets.** Like the assistant it has no datasets of its own: empty `datasets`. A session takes the datasets the user picked ([api.md](api.md) 3).
 
 **Prompt requirements.** The prompt MUST start with `You are Questions to Insights v2`.
-- **Structure.** The identity paragraph only (no `## Workflow` section: its steps live in code, 5.11), then the generated `## Tools` section (one line per tool, `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`, as the assistant's and the Data Readiness Agent's). With no `## Working rules` heading the served `## Tools` is appended after a blank line; otherwise it is inserted before the first line that is exactly `## Working rules`. The shipped text has no rules, workflow or links.
+- **Structure.** The identity paragraph (a business data analyst over the session's datasets and their datasources), then the generated `## Tools` section (one line per tool, `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`, as the assistant's and the Data Readiness Agent's), then `## Working rules`. No `## Workflow` section: its steps live in code (5.11). The served `## Tools` is inserted before the first line that is exactly `## Working rules`; an override without that heading gets it appended after a blank line.
+- **Working rules**, in this order, reusing the assistant's wording where it applies (2.1):
+  - *Method*: map the question to entities and columns (`list_entities`, `describe_entity`; `sample_rows` when value formats are unclear); check coverage before a scope-dependent answer; run the analysis with `run_readonly_sql`, aggregations first, chaining as many queries as needed (load `sql-analysis` for ties, ratios, period comparisons, distinct counts and NULLs); validate the result (row counts, NULLs, truncation, totals that reconcile, ties; `result-validation`); answer in the format below.
+  - *Grounding*: every number, name, date and comparison in the answer comes from a query result of this turn, never from general or parametric knowledge. Nothing is added from general knowledge: no context, real-world totals, comparisons, records or "for reference" facts, even to explain coverage. Out of coverage, or only partly covered: say what IS covered, from the data, and stop. Curated knowledge, metric definitions and verified queries in the context outrank its own reading of the schema (`curated-knowledge` when the context carries knowledge).
+  - *Ambiguity*: `ask_clarification` only when the metric or meaning is undefined and the choice changes the analysis, before any query, with 2-4 options grounded in the data; at most one per question; a fuzzy scope is answered over the full scope or the natural default, stated as an assumption.
+  - *SQL practice*: fully-qualified names, the entity's datasource dialect and `datasourceId`, one datasource per query; names, not ids; retry a failed query simpler; a result at the row limit is partial; act on a result warning.
+  - *Say why*: the `rationale` of `run_readonly_sql` and `sample_rows` in the first person, for a business reader, never naming SQL.
+  - *Answer format*: a one-line headline with the key number; a compact Markdown table with three or more values; `How I got this` in 1-3 plain bullets, no SQL; `Assumptions` and `Caveats` only when there are some; never a schema dump; "what data do I have" answered from the context and `describe_entity` without a query.
 - **Overrides** (ADR-0026) follow the assistant's rules: the editable text and Reset leave out `## Tools`, and an override must start with the identity line.
-- **Links** (`linksAllowed: true`). An override may link only the agent's own three tools, as `[[tool:<name>]]`, and nothing else.
-  - Any `[[skill:…]]` link is refused with `Skills can't be linked here: Questions to Insights v2 has no skills`.
+- **Links** (`linksAllowed: true`). The shipped text links its five tools and its three skills. An override may link only the agent's own tools, as `[[tool:<name>]]`, and its own skills, as `[[skill:<name>]]`.
+  - A skill that is not one of its own is refused with `Only Questions to Insights v2's own skills can be linked here: this prompt is shared by every user`.
   - Another tool is refused with `Unknown tool "<name>"` ([api.md](api.md) 103).
-  - Links are **mentions only** and are resolved to plain mentions before the model reads them (4.1); it keeps all three tools.
+  - Links are **mentions only** and are resolved to plain mentions before the model reads them (4.1); it keeps all its tools and skills.
+- **Size.** The served prompt is about 6,200 characters (6,181 when measured with `assistantV2Instructions()`, 2026-11-12), against 766 before.
 - Exact shipped text: Appendix E.
 
-> Implementation note: `mastra/agents/assistant-v2.agent.ts` (`assistantV2Agent`, registered as `assistant-v2`), built from the assistant's dataset tools. The shipped text without `## Tools` is `ASSISTANT_V2_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['assistant-v2']` in `shipped-agent-prompts.ts`. A turn of a session with `agentKey: 'assistant-v2'` runs this agent in place of the `assistant` through the session code's per-agent branch (ADR-0028); a streamed turn runs it from the workflow `qti-v2-turn` (5.11).
+> Implementation note: `mastra/agents/assistant-v2.agent.ts` (`assistantV2Agent`, registered as `assistant-v2`), built from the assistant's dataset and clarification tools; its skills come from `catalogFrameworkSkills('assistant-v2')` (`AGENT_SKILLS` in `app-skills.ts`); its tool names, in order, are `ASSISTANT_V2_TOOL_NAMES` in `assistant-v2-catalog.ts`; its context is `assistantV2AgentOptions` in `modules/sessions/turn/turn-options.ts`. The shipped text without `## Tools` is `ASSISTANT_V2_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['assistant-v2']` in `shipped-agent-prompts.ts`. A turn of a session with `agentKey: 'assistant-v2'` runs this agent in place of the `assistant` through the session code's per-agent branch (ADR-0028); a streamed turn runs it from the workflow `qti-v2-turn` (5.11).
 
 ## 3. Tools
 
-All tools belong to the `assistant` (3.1-3.9), or to the Data Readiness Agent (3.13, 3.14); `assistant-v2` (2.11) reuses three of the assistant's (3.1, 3.2, 3.4); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
+All tools belong to the `assistant` (3.1-3.9), or to the Data Readiness Agent (3.13, 3.14); `assistant-v2` (2.11) reuses five of the assistant's (3.1-3.5); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by the assistant and the Data Readiness Agent. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
 
 **Entity/datasource resolution rules** (shared):
 
@@ -1011,6 +1019,8 @@ No budget beyond the 4,000-character limit on instructions (agents-evals R43). I
 
 The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus Block 3; a case with `agentTools` gets its selection's hint (2.1), and its tool-only synthesis pass (5.5) runs with the case's requestContext.
 
+**Questions to Insights v2** (`assistant-v2`, 2.11) gets Blocks 1-4 the same way, from the same services and in the same order: Block 1's dataset half with the `sample_rows` clause and no visuals lines, then Blocks 2, 3 and 4 when they apply. It gets no Block 5. On a streamed turn the catalog block of its workflow (5.11) follows them.
+
 **Block D1 — data readiness orientation** (a session bound to the Data Readiness Agent, 2.10, and its eval cases). For the `data-readiness` agent, Block 1 is replaced by this block, and Blocks 2-5 are not sent:
 
 ```
@@ -1039,7 +1049,7 @@ No score is put in the context. The agent reads scores only through its tools (2
 | `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a draft run host, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
 | `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a draft run host, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
 
-The `assistant-v2` agent's calls carry `datasets`, `session-id` and `turn-question` only (2.11).
+The `assistant-v2` agent's calls carry `datasets`, `session-id`, `turn-question` and `knowledge-used` only (2.11), plus `turn-data-records` on a streamed turn. They carry no `session-workspace-id` (it has no workspace) and none of the `agent-*` keys.
 
 The `data-readiness` agent's calls carry `datasets`, `session-id`, `turn-question`, `session-workspace-id` and `turn-data-records`. They carry none of the `agent-*` keys, `active-visual-id` or `knowledge-used`.
 
@@ -1086,7 +1096,7 @@ Wire format of these events: [api.md](api.md). Errors thrown during the stream (
 
 **Data record** (from a `run_readonly_sql` / `sample_rows` result; shape in [data-model.md](data-model.md)): `input` = the corrected SQL when repaired, else the SQL, else the entity key; failed calls keep `{tool, input, error, rationale?}`; successful ones keep `columns` (declared, else first row's keys), at most **200** rows, `rowCount` = rows returned, `truncated` when the tool flagged it or rows > 200, `rationale`, and the tool's `warnings`.
 
-**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). Which of the steps below apply depends on that agent, never on the workflow. For `agentKey: 'assistant-v2'` (2.11) the streamed turn runs as the workflow `qti-v2-turn` (5.11): steps 2 and 3 happen inside its **Analyse** step, whose context is Block 1 (4.1) and the catalog block; the grounding guard (5.6), careful mode (5.8) and deep analysis do not apply; clarification interception has nothing to intercept (no `ask_clarification`).
+**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). Which of the steps below apply depends on that agent, never on the workflow. For `agentKey: 'assistant-v2'` (2.11) the streamed turn runs as the workflow `qti-v2-turn` (5.11): steps 2 and 3 happen inside its **Analyse** step, whose context is Blocks 1-4 (4.1) and the catalog block; the grounding guard (5.6), careful mode (5.8) and deep analysis do not apply; clarification interception applies as for the assistant: a valid `ask_clarification` ends the turn with its card, and the Analyse step stops the run (5.11).
 
 **Non-streamed turn** (`POST /sessions/:id/messages`): removed in 1.23.27 with the chat write paths; the turn engine has only the streamed turn.
 
@@ -1231,7 +1241,7 @@ A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a work
 |---|---|---|---|---|
 | 1 | `receive-question` | Receive question | deterministic | Trims the question. It never fails: the input node has validated the whole input before the run ([api.md](api.md) 118, 119), so a blank question never reaches it. |
 | 2 | `load-catalog` | Load catalog | deterministic | Reads the session's datasets through the dataset tools' own services (3.1) and lists their entities as `{ entity, dataset, datasourceId, datasourceKind, columnCount }` (null when unknown), in dataset then table order. No LLM. |
-| 3 | `analyse` | Analyse | LLM | Streams the `assistant-v2` agent with its three tools, its memory thread and the turn's options (2.11, 4.1, 4.2), plus the **catalog block** below as the last system message. Every chunk is handled as in 5.1 step 3, so the chat, the stop button, the transcript and memory behave as for any bound agent. A model error reported in the stream fails the step, whatever the provider (an assistant turn keeps 5.1's handling). Returns the turn's tool calls (`{ tool, rowCount?, failed }`) and whether the user stopped the turn. |
+| 3 | `analyse` | Analyse | LLM | Streams the `assistant-v2` agent with its tools and skills, its memory thread and the turn's options (2.11, 4.1, 4.2), plus the **catalog block** below as the last system message. Every chunk is handled as in 5.1 step 3, so the chat, the stop button, the transcript and memory behave as for any bound agent. A model error reported in the stream fails the step, whatever the provider (an assistant turn keeps 5.1's handling). A valid `ask_clarification` ends the turn with the question and its options (5.1 step 3) and stops the run here. Returns the turn's tool calls (`{ tool, rowCount?, failed }`) and whether the turn ended early (`stopped`: the user stopped it or the agent asked a clarifying question). |
 | 4 | `wrap-up` | Wrap up | deterministic | Counts the turn's `run_readonly_sql` calls: `{ sqlQueries, failedQueries, rows }` (rows summed over the successful calls). This summary is the run's result, and the orchestrator logs it. No UI. |
 
 The catalog block has one line per entity (`?` when the column count is unknown):
@@ -1248,7 +1258,7 @@ With one entity the first line reads `1 entity.`; with none, the block is `Catal
 - A step starts: it is `current`. The first step clears `done` and `failed`, so each turn starts over.
 - A step ends successfully: it joins `done`.
 - A step fails: `failed` is its number and it stays `current`. The run stops there.
-- Any other end (the Analyse step ends early because the user stopped the turn): nothing changes, so the bar keeps that step current, and Wrap up does not run.
+- Any other end (the Analyse step ends early because the user stopped the turn or the agent asked a clarifying question): nothing changes, so the bar keeps that step current, and Wrap up does not run. A clarifying question still ends the turn with `done`: the answer is the clarification card, and the user's pick is the next turn's message, sent after the question (4.3). A run of the workflow ends `success` with that answer, its Analyse step `stopped` and Wrap up `skipped`; picking an option follows the run up with the option as the question ([workflows](../capabilities/workflows/spec.md)).
 
 The model never writes this state: v2 has no `update_workflow`. A failed step ends the turn with its error, as any failed turn does (5.1: the controller sends `error`). When the Analyse step failed, the error is the agent's own (for a custom endpoint, the R50 text of [llm-settings](../capabilities/llm-settings/spec.md)). After the run succeeds, the turn goes on at 5.1 step 4 (final text, tool-only synthesis 5.5, persist, `done`).
 
@@ -1267,7 +1277,7 @@ The agent detail returns it as `workflow` ([api.md](api.md) 34), without the sch
 |---|---|---|---|---|
 | Receive question | `Trims the question. The input node has checked it before the run.` | question, datasets | question, datasets | — |
 | Load catalog | `Lists the entities of the session's datasets. No LLM.` | question, datasets | question, catalog | — |
-| Analyse | `The agent answers with its tools and the catalog as context, streamed to the chat.` | question, catalog | calls, stopped | `Model error` fails; `Stop` stops |
+| Analyse | `The agent answers with its tools and the catalog as context, streamed to the chat.` | question, catalog | calls, stopped | `Model error` fails; `Stop` stops; `Clarifying question` stops |
 | Wrap up | `Counts the turn's SQL queries, failed queries and rows, and logs the summary.` | calls, stopped | sqlQueries, failedQueries, rows | — |
 
 > Implementation note: `mastra/workflows/qti-v2-turn.workflow.ts` builds the workflow with `createWorkflow` / `createStep` from `@mastra/core/workflows` and registers it on the `Mastra` instance as `qti-v2-turn` (`workflows`), with snapshot persistence off (the session document holds the state) and `validateInputs: true`. Each step's execute is wrapped by `withContract` (5.12). The step schemas are in `qti-v2-turn.schemas.ts` (Zod only); the step ids, titles and pure step code are in `qti-v2-turn.steps.ts`; neither imports a framework. The session code starts a run with `run.stream()` and reads `workflow-step-start` and `workflow-step-result` (`status` `success`, `failed`, or `bailed` for a stopped turn) from its `fullStream`. The Analyse step calls back into the session code through a per-run object on the run's `RequestContext`. The event-to-state mapping is `workflowRunState` in `modules/sessions/workflow-run-state.ts`. `TurnEngine.runTurnWorkflow` (`modules/sessions/turn/turn-engine.ts`) runs every streamed turn, of v2 and of a one-step workflow alike, and maps the step events to the state only when the workflow's `bar` is `steps`.
@@ -1634,9 +1644,21 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 | `data-readiness` (Data Readiness Agent, 2.10) | `data-readiness` and `readiness-drilldown` (below) | none |
-| `assistant-v2` (Questions to Insights v2, 2.11) | none | none |
+| `assistant-v2` (Questions to Insights v2, 2.11) | `curated-knowledge` (shared with the assistant), `sql-analysis` and `result-validation` (below) | none |
 
-`curated-knowledge` is the assistant's only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move.
+`curated-knowledge` is the assistant's only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. Questions to Insights v2's SQL patterns and result checks are on-demand skills of its own, so they cost the assistant nothing.
+
+**The `sql-analysis` skill** (`mastra/skills/sql-analysis/`, `AGENT_SKILLS['assistant-v2']`) is loaded on demand when v2 writes the SQL of an analysis (2.11, method step 3).
+- It is a single `SKILL.md` with no reference files. Its tools line links `run_readonly_sql` and `sample_rows`.
+- Front matter: `name: sql-analysis`, `description: Use when writing the SQL of an analysis — a ranking or top-N that may tie, a ratio or share, a period-over-period comparison, a distinct count across joins, columns with NULLs, or a query for a specific datasource dialect (PostgreSQL, Databricks SQL, SQLite).`
+- Sections: **Top-N and ties** (rank with `RANK()`/`ROW_NUMBER()` over a window, keep every row tied at the cut-off and say so, a name as tie-breaker, top per group); **Ratios and shares** (two different measures, `* 1.0` before dividing, `NULLIF(…, 0)`, shares over `SUM(…) OVER ()` that add up to 100 %); **Period over period** (`LAG` over the period, like with like, date truncation per dialect); **Distinct counts and join fan-out** (`COUNT(DISTINCT key)` vs `COUNT(*)`, aggregate the child before joining, compare the two counts after a join); **NULLs** (aggregates skip them, `<>` drops them, `NOT EXISTS` over `NOT IN`, a group for missing values); **Dialects** (PostgreSQL, Databricks SQL and SQLite notes, and checking a text value's spelling with `sample_rows` before filtering on it).
+- A rebuild may tune the wording but keeps the front matter, the tools line and the six sections.
+
+**The `result-validation` skill** (`mastra/skills/result-validation/`, `AGENT_SKILLS['assistant-v2']`) is loaded on demand when a query has returned and before v2 answers from it (2.11, method step 4).
+- It is a single `SKILL.md` with no reference files. Its tools line links `run_readonly_sql`.
+- Front matter: `name: result-validation`, `description: Use when a query has returned and before you answer from it — the sanity checks that catch empty or partial results, totals that do not reconcile, duplicates from joins, outliers and constant values, and questions outside the data's coverage.`
+- Sections: **Empty or partial results** (confirm the filter before saying "none", a result at the row limit is partial, a failed query is not an empty one); **Totals that should reconcile** (parts add up to the whole, two queries of the same number agree); **Duplicates from joins** (compare `COUNT(*)` with `COUNT(DISTINCT key)`, a name listed twice); **Outliers and constant values** (an implausible value is checked first, a constant 1 or 0 is a query fault, a ranking where all tie says so); **Coverage** (confirm the scope exists, say what is covered and stop, nothing from general knowledge, check every number, name and date of the answer against a result of the turn).
+- A failed check means fixing the query and running it again; what cannot be fixed goes in the answer's `Caveats`. A rebuild may tune the wording but keeps the front matter, the tools line and the five sections.
 
 **The `data-readiness` skill** (`mastra/skills/data-readiness/`, `AGENT_SKILLS['data-readiness']`) is one of the Data Readiness Agent's two skills (the other is `readiness-drilldown`, below). It is loaded on demand before the first assessment in a session (2.10 D5).
 - It is a single `SKILL.md` with no reference files. Its tools line links the three readiness tools (3.13).
@@ -2102,11 +2124,97 @@ Scope:
 The shipped text is `ASSISTANT_V2_PROMPT`. It is also the editable text and what Reset restores (2.11). Lines are joined with `
 `.
 - A rebuild may tune the wording but must keep the opening phrase `You are Questions to Insights v2`.
-- **What the model receives** is this text plus the generated `## Tools` section appended after a blank line (it has no `## Working rules`).
+- **What the model receives** is this text, its links resolved to plain mentions, with the generated `## Tools` section inserted before `## Working rules` (2.11). Measured served size: 6,181 characters.
+- The byte-for-byte copies the unit tests compare against are `mastra/agents/__fixtures__/assistant-v2-prompt.shipped.txt` (this text) and `assistant-v2-prompt.full.txt` (as served).
 
 ```
-You are Questions to Insights v2 — a data analyst working over the catalogs,
-schemas and entities in the user's session datasets. Answer the user's
-question from the data: find the entities, run read-only SQL, and give the
-numbers you found.
+You are Questions to Insights v2 — a business data analyst working over the
+catalogs, schemas and entities in the user's session datasets. Each dataset
+is bound to a datasource — a Databricks SQL warehouse, a PostgreSQL database
+or a REST API (queried as SQLite) — and the session context tells you which.
+You answer the user's business questions yourself, from the data, with
+numbers a business reader can act on.
+
+## Working rules
+Method, for every question:
+1. Map the question to concrete entities and columns ([[tool:list_entities]],
+   [[tool:describe_entity]]; [[tool:sample_rows]] when value formats are unclear).
+2. When the answer depends on a scope you have not confirmed the data
+   covers (an era, a tournament, a segment), check coverage first — e.g.
+   query which years exist — before answering.
+3. Run the analysis yourself with [[tool:run_readonly_sql]]. Aggregate first
+   (GROUP BY, COUNT, SUM, AVG, window functions) so results come back small
+   and meaningful. Chain as many queries as the analysis needs — never ask
+   the user to run anything or wait for permission. For rankings with ties,
+   ratios and shares, period comparisons, distinct counts across joins and
+   NULLs, load [[skill:sql-analysis]].
+4. Validate before you answer: row counts, NULLs, truncated results,
+   totals that should reconcile, ties in a ranking ([[skill:result-validation]]).
+   Fix your query when a check fails.
+5. Answer in the format below.
+
+Grounding:
+- Every number, name, date and comparison in your answer must come from a
+  query result of this turn ([[tool:run_readonly_sql]]). Never answer a data
+  question from general or parametric knowledge, even when you are sure
+  of the answer: run the query, then answer from what it returns.
+- Add nothing from general knowledge: no context, real-world totals,
+  comparisons, records or "for reference" facts, even to explain the
+  coverage or to round off a correct answer. A fact that is not in a
+  result you got this turn stays out of the answer.
+- When the question falls outside what the data covers, or the data
+  covers only part of it (only knockout matches, only 2018 and 2022),
+  say what IS covered, from the data, and stop: "the data covers only
+  2018 and 2022; 2014 is not in it." Never fill the gap: no score,
+  winner, scorer or background for what the data does not hold.
+- Curated knowledge, governed metric definitions and verified reference
+  queries in the session context outrank your own reading of the schema:
+  use the metric expressions as defined and reuse a verified query's
+  tables, joins and filters when the question is similar. When the context
+  carries curated knowledge, load [[skill:curated-knowledge]] first.
+
+Ambiguity:
+- Call [[tool:ask_clarification]] only when the metric or meaning itself is
+  undefined ("best", "top" or "performed well" without a measure) and the
+  choice would change the analysis: one short question with 2-4 concrete
+  options grounded in the data, asked before any query, then stop and
+  wait. When a filter value or name turns out to have several plausible
+  matches in the data, the options quote the values you found.
+- Ask at most ONE clarification per question. When only the scope is
+  fuzzy — which year, tournament or subset — do NOT ask: answer over the
+  full scope or the most natural default and state the assumption. When
+  the user just answered a clarification or says to proceed, continue
+  without asking again.
+
+SQL practice:
+- Always use fully-qualified catalog.schema.table names and only the
+  session's entities. Write each query in the dialect of its entity's
+  datasource (Databricks SQL, PostgreSQL or SQLite) and pass its
+  datasourceId; one query never spans two datasources.
+- Identifiers are not answers: join to the entity that holds the name in
+  the same query and report the name.
+- If a query fails or times out, retry it simpler (fewer columns, a
+  coarser aggregation, a LIMIT) before reporting a problem.
+- When a result says the row limit was reached, the numbers are partial:
+  re-run it as an aggregation, or give the partial result and say so.
+- A warning attached to a query result is about your own SQL: act on it
+  and re-run before answering.
+
+Say why, every time:
+- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the
+  first person for a business reader: what this step checks and how it
+  gets you closer to the answer. Never restate the statement or name SQL
+  syntax, functions or columns in it. One or two sentences.
+
+Answer format:
+- Start with a one-line headline that states the key number.
+- With three or more values, add a compact Markdown table holding only
+  the columns that matter.
+- Then "How I got this": 1-3 bullets in plain words — the data, the
+  filters and the measure you used. No SQL.
+- Then "Assumptions" and "Caveats", each only when there is one: a scope
+  you assumed, a filter you applied, a partial result, a tie.
+- Never dump schemas or column lists unless the user asks for them. When
+  the user asks what data they have, describe the datasets from the
+  session context and [[tool:describe_entity]] without running a query.
 ```

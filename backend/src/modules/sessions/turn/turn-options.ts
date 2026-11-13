@@ -273,9 +273,11 @@ export class TurnOptions {
 
   /**
    * A turn of Questions to Insights v2 (agents.md 2.11, 4.1, 4.2): Block 1's
-   * dataset half only, with the hint of a call without `sample_rows` (no
-   * visuals, metrics, knowledge, verified-query or agent-instructions
-   * block), and only the `datasets`, `session-id` and `turn-question` keys.
+   * dataset half with the `sample_rows` hint (no visuals lines), then the
+   * governed metrics, curated knowledge and verified-query blocks, built by
+   * the same services and in the same order as the assistant's (no
+   * agent-instructions block), and the `datasets`, `session-id`,
+   * `turn-question` and `knowledge-used` keys.
    */
   private async assistantV2AgentOptions(
     session: SessionDoc,
@@ -288,17 +290,31 @@ export class TurnOptions {
     if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
     const datasets = await this.deps.datasets.bound(session.datasets);
     const { reasoningEffort } = await this.deps.llmService.getView();
+    const verified = question
+      ? await this.deps.verifiedQueries.referenceBlock(question)
+      : undefined;
+    const metrics = await this.deps.metrics.definitionBlock(
+      datasets.flatMap((s) => s.tables ?? []),
+    );
+    const knowledge = await this.deps.knowledge.contextFor(session.datasets);
+    // The answer records the knowledge the model saw (agents.md 4.1 Block 3).
+    requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
     return {
       maxSteps: ASSISTANT_V2_MAX_STEPS,
       providerOptions: await turnProviderOptions({ reasoningEffort }),
       context: [
         {
           role: 'system' as const,
-          // An empty selection: neither `sample_rows` nor the visuals.
-          content: entityOrientationLines(session.datasets, datasets, []).join(
-            '\n',
-          ),
+          // Its tools: `sample_rows`, but no visuals (agents.md 2.11).
+          content: entityOrientationLines(session.datasets, datasets, [
+            'sample_rows',
+            'ask_clarification',
+          ]).join('\n'),
         },
+        ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
+        // Its rules are the on-demand curated-knowledge skill (ADR-0025).
+        ...knowledgeContext(knowledge.block),
+        ...(verified ? [{ role: 'system' as const, content: verified }] : []),
       ],
       requestContext,
       abortSignal,

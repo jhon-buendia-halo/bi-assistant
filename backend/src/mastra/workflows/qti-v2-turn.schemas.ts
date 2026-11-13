@@ -47,7 +47,11 @@ export const analyseOutcomeSchema = z.object({
   calls: z
     .array(analyseCallSchema)
     .describe("The turn's tool calls, in order."),
-  stopped: z.boolean().describe('The user stopped the turn.'),
+  stopped: z
+    .boolean()
+    .describe(
+      'The turn ended early: the user stopped it or the agent asked a clarifying question.',
+    ),
 });
 
 /** The Wrap up summary: the run's result. */

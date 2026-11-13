@@ -16,7 +16,13 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     const steps = agentWorkflow('assistant-v2')!.steps;
     expect(steps.find((step) => step.id === 'analyse')?.agent).toEqual({
       name: 'Questions to Insights v2',
-      tools: ['list_entities', 'describe_entity', 'run_readonly_sql'],
+      tools: [
+        'list_entities',
+        'describe_entity',
+        'sample_rows',
+        'run_readonly_sql',
+        'ask_clarification',
+      ],
       maxSteps: 15,
     });
     expect(
@@ -33,9 +39,11 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     });
     // Receive question has no exit: the input node checks the question first.
     expect(steps[0].exits).toEqual([]);
+    // Analyse can end with a clarifying question: the run stops with it.
     expect(steps[2].exits).toEqual([
       { label: 'Model error', outcome: 'fails' },
       { label: 'Stop', outcome: 'stops' },
+      { label: 'Clarifying question', outcome: 'stops' },
     ]);
   });
 
@@ -52,6 +60,6 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     first.steps[2].agent!.tools.push('y');
     const second = agentWorkflow('assistant-v2')!;
     expect(second.steps[0].input).toEqual(['question', 'datasets']);
-    expect(second.steps[2].agent!.tools).toHaveLength(3);
+    expect(second.steps[2].agent!.tools).toHaveLength(5);
   });
 });

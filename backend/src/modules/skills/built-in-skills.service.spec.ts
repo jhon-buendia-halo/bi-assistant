@@ -52,10 +52,12 @@ describe('BuiltInSkillsService', () => {
       'data-readiness',
       'interactive-visuals',
       'readiness-drilldown',
+      'result-validation',
+      'sql-analysis',
     ]);
     expect(list[0]).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant'],
+      agents: ['assistant', 'assistant-v2'],
       modified: false,
       builtInChanged: false,
       updatedAt: null,

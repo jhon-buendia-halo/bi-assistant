@@ -152,7 +152,9 @@ describe('AgentsService (built-in and user agents)', () => {
         'assistant-v2': fakeAgent('Questions to Insights v2', [
           'list_entities',
           'describe_entity',
+          'sample_rows',
           'run_readonly_sql',
+          'ask_clarification',
         ]),
       });
       const agents = await v2.service.list();
@@ -161,7 +163,13 @@ describe('AgentsService (built-in and user agents)', () => {
         kind: 'official',
         owner: 'Official',
         status: 'builtin',
-        tools: ['describe_entity', 'list_entities', 'run_readonly_sql'],
+        tools: [
+          'ask_clarification',
+          'describe_entity',
+          'list_entities',
+          'run_readonly_sql',
+          'sample_rows',
+        ],
         datasets: [],
         missingDatasets: [],
         starterQuestions: [],
@@ -169,9 +177,11 @@ describe('AgentsService (built-in and user agents)', () => {
       expect(entry).not.toHaveProperty('chatRequirement');
       const detail = await v2.service.get('assistant-v2');
       expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
+        'ask_clarification',
         'describe_entity',
         'list_entities',
         'run_readonly_sql',
+        'sample_rows',
       ]);
       // Its turn workflow, for the Graph tab (api.md 34, R108).
       expect(detail?.workflow?.id).toBe('qti-v2-turn');
@@ -182,9 +192,15 @@ describe('AgentsService (built-in and user agents)', () => {
         'Wrap up',
       ]);
       expect((await v2.service.get('assistant'))?.workflow).toBeUndefined();
-      expect(await v2.service.skills('assistant-v2')).toMatchObject({
-        skills: [],
-      });
+      // Its built-in skills, on demand (agents.md 7.4).
+      const skills = (await v2.service.skills('assistant-v2')).skills;
+      expect(
+        skills.map(({ name, level, loading }) => ({ name, level, loading })),
+      ).toEqual(
+        ['curated-knowledge', 'result-validation', 'sql-analysis'].map(
+          (name) => ({ name, level: 'built-in', loading: 'on-demand' }),
+        ),
+      );
       expect(v2.service.evalSets('assistant-v2')).toEqual([]);
       v2.db.close();
     }),
