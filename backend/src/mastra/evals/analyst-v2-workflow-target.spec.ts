@@ -153,7 +153,7 @@ describe('the v2 eval target runs the whole qti-v2-turn workflow (agents.md 8.1)
       expect.objectContaining({
         question: 'Who scored the most in 2018?',
         catalogBlock:
-          'Catalog loaded for this turn: 1 entity.\n- world_cup.goals (dataset: World Cup; ? columns)',
+          'Catalog loaded for this turn: 1 entity.\n- world_cup.goals (dataset: World Cup; ? columns)\n\nNo columns are known for these entities.',
       }),
       expect.objectContaining({ requestContext: options.requestContext }),
     );

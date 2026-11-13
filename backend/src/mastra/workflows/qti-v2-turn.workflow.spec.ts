@@ -255,10 +255,10 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
       ],
       'load-catalog': [
         ['question', 'datasets'],
-        ['question', 'catalog'],
+        ['question', 'catalog', 'columns'],
       ],
       plan: [
-        ['question', 'catalog'],
+        ['question', 'catalog', 'columns'],
         ['question', 'catalog', 'plan'],
       ],
       clarify: [
@@ -354,8 +354,18 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
       '- wc.public.matches (dataset: World Cup; 2 columns)',
       '- wc.public.teams (dataset: World Cup; ? columns)',
     ].join('\n');
+    // Plan also sees each entity's columns (names and types).
     expect(turn.plan).toHaveBeenCalledWith(
-      expect.objectContaining({ question: 'How many matches?', catalogBlock }),
+      expect.objectContaining({
+        question: 'How many matches?',
+        catalogBlock: [
+          catalogBlock,
+          '',
+          'Columns of each entity (name type):',
+          // The stand-in's columns have no type.
+          '- wc.public.matches: id, year',
+        ].join('\n'),
+      }),
     );
     expect(turn.analyse).toHaveBeenCalledTimes(1);
     expect(turn.analyse).toHaveBeenCalledWith(

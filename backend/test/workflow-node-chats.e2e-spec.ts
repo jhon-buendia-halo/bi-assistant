@@ -28,7 +28,7 @@ import {
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
 import { type Backend, boot, stop } from './backend-process';
-import { isPlanRequest, isWriteAnswerRequest, withV2Steps } from './v2-stub';
+import { isPlanRequest, isWriteAnswerRequest, useV2Steps } from './v2-stub';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-node-chats-'));
 
@@ -96,7 +96,7 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
     stub = await startLlmStub();
     // A chat turn calls `list_entities` once, then answers; the run's own
     // turn answers at once.
-    stub.reply = withV2Steps((req) => {
+    useV2Steps(stub, (req) => {
       if (!lastUser(req).startsWith('Chat:')) return { text: STUB_ANSWER };
       const last = req.messages.at(-1);
       return last?.role === 'tool'

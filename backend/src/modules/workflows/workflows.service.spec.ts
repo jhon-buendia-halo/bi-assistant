@@ -220,8 +220,9 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         properties: {
           question: { type: 'string' },
           catalog: { type: 'array', items: { type: 'object' } },
+          columns: { type: 'array', items: { type: 'object' } },
         },
-        required: ['question', 'catalog'],
+        required: ['question', 'catalog', 'columns'],
       });
       // The flow is its edges, a copy of the catalogue's (api.md 117).
       expect(detail.edges).toEqual(CODE_WORKFLOWS[0].edges);

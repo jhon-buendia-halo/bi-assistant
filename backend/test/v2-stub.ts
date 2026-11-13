@@ -1,16 +1,22 @@
 /**
- * The stub model's answers to the two tool-less steps of Questions to
- * Insights v2 (agents.md 5.11): a request is Plan's or Write answer's by its
- * system prompt's first line (the instructions' fixed first lines), and is
- * answered with a plan or an answer as JSON; any other request (Analyse, a
- * node chat) is left to the spec's own reply.
+ * Questions to Insights v2's two tool-less steps (agents.md 5.11) on the
+ * shared stub model: the stub recognises Plan and Write answer by their
+ * instructions' first lines (`frontend/e2e/helpers/v2-steps.ts`) and answers
+ * them with `stub.plan` / `stub.answer`, never with `stub.reply`. These
+ * helpers script both for a backend spec, and tell a recorded request's step.
  */
 import {
   messageText,
   STUB_ANSWER,
+  type LlmStub,
   type StubReply,
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
+import {
+  answerFrom,
+  v2StepOf,
+  type V2Plan,
+} from '../../frontend/e2e/helpers/v2-steps';
 import {
   PLAN_FIRST_LINE,
   WRITE_ANSWER_FIRST_LINE,
@@ -18,26 +24,37 @@ import {
 
 export { PLAN_FIRST_LINE, WRITE_ANSWER_FIRST_LINE };
 
-/** The first line of a request's first system message. */
-export function systemFirstLine(req: StubRequest): string {
-  const system = req.messages.find((message) => message.role === 'system');
-  return system ? messageText(system).split('\n')[0].trim() : '';
+type Recorded = Pick<StubRequest, 'messages'>;
+
+/** The v2 step a request (or a recorded copy of it) belongs to, if any. */
+function stepOf(req: Recorded) {
+  return v2StepOf(
+    req.messages
+      .filter((message) => message.role === 'system')
+      .map(messageText),
+  );
 }
 
 /** Whether a request is v2's Plan step's. */
-export const isPlanRequest = (req: StubRequest) =>
-  systemFirstLine(req) === PLAN_FIRST_LINE;
+export const isPlanRequest = (req: Recorded) => stepOf(req) === 'plan';
 
 /** Whether a request is v2's Write answer step's. */
-export const isWriteAnswerRequest = (req: StubRequest) =>
-  systemFirstLine(req) === WRITE_ANSWER_FIRST_LINE;
+export const isWriteAnswerRequest = (req: Recorded) => stepOf(req) === 'answer';
 
 /** Whether a request is v2's Analyse step's (the agent with its tools). */
-export const isAnalyseRequest = (req: StubRequest) =>
-  systemFirstLine(req).startsWith('You are Questions to Insights v2');
+export const isAnalyseRequest = (req: Recorded) => {
+  const system = req.messages.find((message) => message.role === 'system');
+  return (
+    !!system &&
+    messageText(system).startsWith('You are Questions to Insights v2')
+  );
+};
 
 /** A plan that analyses the question as asked. */
-export function stubPlan(question = 'The question.', overrides: object = {}) {
+export function stubPlan(
+  question = 'The question.',
+  overrides: Partial<V2Plan> = {},
+): V2Plan {
   return {
     question,
     measures: [],
@@ -50,32 +67,25 @@ export function stubPlan(question = 'The question.', overrides: object = {}) {
   };
 }
 
-/** What the stub's Plan and Write answer reply, when a spec sets them. */
+/** What Plan and Write answer return, when a spec sets them. */
 export interface V2StepReplies {
   /** The plan for a Plan request; the default plans the question as asked. */
-  plan?: (req: StubRequest) => object;
+  plan?: (req: StubRequest) => V2Plan;
   /** The answer's Markdown; the default is `STUB_ANSWER`. */
   answer?: (req: StubRequest) => string;
 }
 
 /**
- * The spec's reply with v2's Plan and Write answer routed first: a plan or
- * an answer as JSON, by the request's system prompt's first line.
+ * Script a spec's stub: `reply` answers every other call (Analyse, a node
+ * chat), Plan returns `steps.plan` (a clear plan by default) and Write
+ * answer `steps.answer` (`STUB_ANSWER` by default, whatever Analyse said).
  */
-export function withV2Steps(
+export function useV2Steps(
+  stub: LlmStub,
   reply: (req: StubRequest) => StubReply,
   steps: V2StepReplies = {},
-): (req: StubRequest) => StubReply {
-  return (req) => {
-    if (isPlanRequest(req)) {
-      return { text: JSON.stringify(steps.plan?.(req) ?? stubPlan()) };
-    }
-    if (isWriteAnswerRequest(req)) {
-      const answer = steps.answer?.(req) ?? STUB_ANSWER;
-      return {
-        text: JSON.stringify({ headline: answer.split('\n')[0], answer }),
-      };
-    }
-    return reply(req);
-  };
+): void {
+  stub.reply = reply;
+  stub.plan = (req) => steps.plan?.(req) ?? stubPlan();
+  stub.answer = (req) => answerFrom(steps.answer?.(req) ?? STUB_ANSWER);
 }

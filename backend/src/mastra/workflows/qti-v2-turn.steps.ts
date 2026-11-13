@@ -17,6 +17,7 @@ import {
   type analyseOutcomeSchema,
   type analyseQuerySchema,
   type catalogEntitySchema,
+  type entityColumnsSchema,
   type clarifyOutcomeSchema,
   type turnInputSchema,
   type turnSummarySchema,
@@ -235,6 +236,9 @@ export type QtiV2TurnInput = z.output<typeof turnInputSchema>;
 /** One entity of the session's datasets, as the Load catalog step lists it. */
 export type CatalogEntity = z.output<typeof catalogEntitySchema>;
 
+/** One entity's columns, as Load catalog hands them to Plan. */
+export type EntityColumns = z.output<typeof entityColumnsSchema>;
+
 /** The analysis plan (PlanOutput). */
 export type QtiV2Plan = z.output<typeof planSchema>;
 
@@ -312,24 +316,76 @@ export function receiveQuestion(question: string): string {
   return (question ?? '').trim();
 }
 
+/** The most columns of one entity Load catalog hands Plan. */
+export const PLAN_COLUMNS_PER_ENTITY = 40;
+
+/** The most columns in all Load catalog hands Plan. */
+export const PLAN_COLUMNS_TOTAL = 400;
+
 /**
  * Step 2: the entities of the session's datasets, read through the dataset
- * tools' own services, in dataset then table order. No LLM.
+ * tools' own services, in dataset then table order, and the columns of each
+ * as the datasets record them (name and type; at most
+ * `PLAN_COLUMNS_PER_ENTITY` per entity and `PLAN_COLUMNS_TOTAL` in all, the
+ * rest counted in `more`), so Plan can ground its measures in them. No LLM.
  */
-export async function loadCatalog(
-  datasets: readonly string[],
-): Promise<CatalogEntity[]> {
+export async function loadCatalog(datasets: readonly string[]): Promise<{
+  catalog: CatalogEntity[];
+  columns: EntityColumns[];
+}> {
   const snapshots = await getDatasetToolServices().getDatasets([...datasets]);
-  return snapshots.flatMap((dataset) =>
-    dataset.tables.map((entity) => ({
-      entity,
-      dataset: dataset.name,
-      datasourceId: dataset.datasourceId ?? null,
-      datasourceKind: dataset.datasourceKind ?? null,
-      columnCount:
-        dataset.entities?.find((e) => e.key === entity)?.columns.length ?? null,
-    })),
-  );
+  const catalog: CatalogEntity[] = [];
+  const columns: EntityColumns[] = [];
+  let room = PLAN_COLUMNS_TOTAL;
+  for (const dataset of snapshots) {
+    for (const entity of dataset.tables) {
+      const known =
+        dataset.entities?.find((e) => e.key === entity)?.columns ?? null;
+      catalog.push({
+        entity,
+        dataset: dataset.name,
+        datasourceId: dataset.datasourceId ?? null,
+        datasourceKind: dataset.datasourceKind ?? null,
+        columnCount: known ? known.length : null,
+      });
+      if (!known) continue;
+      const listed = known
+        .slice(0, Math.min(PLAN_COLUMNS_PER_ENTITY, room))
+        .map((column) => ({ name: column.name, type: column.type ?? '' }));
+      room -= listed.length;
+      columns.push({
+        entity,
+        columns: listed,
+        more: known.length - listed.length,
+      });
+    }
+  }
+  return { catalog, columns };
+}
+
+/**
+ * The catalog with each entity's columns, as Plan's request carries it
+ * (agents.md 5.11): the catalog block, then `Columns of each entity (name
+ * type):` and one line per entity with its listed columns and, when some
+ * were left out, how many.
+ */
+export function planCatalogBlock(
+  catalog: readonly CatalogEntity[],
+  columns: readonly EntityColumns[],
+): string {
+  const lines = columns.map((entry) => {
+    const listed = entry.columns
+      .map((column) => `${column.name}${column.type ? ` ${column.type}` : ''}`)
+      .join(', ');
+    const more = entry.more ? ` (+${entry.more} more not listed)` : '';
+    return `- ${entry.entity}: ${listed || '(none listed)'}${more}`;
+  });
+  return [
+    catalogBlock(catalog),
+    ...(lines.length
+      ? ['', 'Columns of each entity (name type):', ...lines]
+      : ['', 'No columns are known for these entities.']),
+  ].join('\n');
 }
 
 /** The catalog as the Plan and Analyse steps' system message (agents.md 5.11). */
