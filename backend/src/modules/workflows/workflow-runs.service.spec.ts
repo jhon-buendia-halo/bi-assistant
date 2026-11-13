@@ -34,6 +34,8 @@ import {
   type RunStreamEvent,
 } from './workflow-runs.service';
 import { WorkflowRunsController } from './workflow-runs.controller';
+import { WorkflowNodeChatsService } from './workflow-node-chats.service';
+import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowsController } from './workflows.controller';
 import { WorkflowsService } from './workflows.service';
 
@@ -337,17 +339,22 @@ function build(
   const repository = new WorkflowRunsRepository(
     new SqliteDocStore(db, 'workflow_runs'),
   );
+  const nodeChats = new WorkflowNodeChatsRepository(
+    new SqliteDocStore(db, 'workflow_run_node_chats'),
+  );
   const service = new WorkflowRunsService(
     workflows,
     sessions as unknown as SessionsService,
     datasetsRepository,
     mastra,
     repository,
+    nodeChats,
   );
   return {
     db,
     service,
     repository,
+    nodeChats,
     deleteMemoryThread,
     /** The same store and collaborators after a backend restart. */
     restarted: () =>
@@ -357,6 +364,7 @@ function build(
         datasetsRepository,
         mastra,
         new WorkflowRunsRepository(new SqliteDocStore(db, 'workflow_runs')),
+        nodeChats,
       ),
     sessions,
     userAgents,
@@ -1503,11 +1511,22 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
   it('deletes a run with its workspace and memory thread; refuses a running one and an unknown one', async () => {
     ctx = build();
     const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const said = {
+      id: 'm1',
+      role: 'user' as const,
+      content: 'Why?',
+      createdAt: 't',
+    };
+    await ctx.nodeChats.append(run.id, 'analyse', said);
+    await ctx.nodeChats.append('another-run', 'analyse', said);
     await ctx.service.delete(run.id);
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
       `run-${run.id}`,
     );
     await expect(ctx.repository.get(run.id)).resolves.toBeNull();
+    // Its node chats go with it (data-model 3.17); another run's stay.
+    await expect(ctx.nodeChats.get(run.id, 'analyse')).resolves.toBeNull();
+    expect(await ctx.nodeChats.get('another-run', 'analyse')).not.toBeNull();
     await expect(ctx.service.delete(run.id)).rejects.toThrow(
       new NotFoundException(`Run "${run.id}" not found`),
     );
@@ -1703,7 +1722,10 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
     };
     const moduleRef = await Test.createTestingModule({
       controllers: [WorkflowRunsController],
-      providers: [{ provide: WorkflowRunsService, useValue: runs }],
+      providers: [
+        { provide: WorkflowRunsService, useValue: runs },
+        { provide: WorkflowNodeChatsService, useValue: {} },
+      ],
     }).compile();
     const app = moduleRef.createNestApplication();
     await app.init();

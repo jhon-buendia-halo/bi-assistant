@@ -35,6 +35,7 @@ import {
   type RunVisualAction,
   type StreamEvent,
 } from '../sessions/sessions.service';
+import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import {
   RunStepTracker,
@@ -145,6 +146,7 @@ export class WorkflowRunsService implements OnModuleInit {
     private readonly datasets: DatasetsRepository,
     private readonly mastra: MastraService,
     private readonly repository: WorkflowRunsRepository,
+    private readonly nodeChats: WorkflowNodeChatsRepository,
   ) {}
 
   /**
@@ -404,8 +406,9 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /**
-   * Delete a run (api.md 122): its document and, for an agent run, its
-   * workspace and memory thread. A running run is refused.
+   * Delete a run (api.md 122): its document, its node chats (data-model
+   * 3.17) and, for an agent run, its workspace and memory thread. A running
+   * run is refused.
    */
   async delete(id: string): Promise<void> {
     const run = await this.stored(id);
@@ -415,6 +418,7 @@ export class WorkflowRunsService implements OnModuleInit {
     if (run.question !== undefined) {
       await this.sessions.deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${id}`);
     }
+    await this.nodeChats.deleteByRun(id);
     await this.repository.delete(id);
   }
 

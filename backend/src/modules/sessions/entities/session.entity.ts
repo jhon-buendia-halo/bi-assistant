@@ -323,6 +323,12 @@ export interface SessionDoc {
    * its agent turn on (ADR-0041; agents.md 5.14). Never stored or listed.
    */
   run?: boolean;
+  /**
+   * A run host's extra system block, put after the agent's own context on
+   * every turn: a node chat's context block (agents.md 5.16). In memory
+   * only, like the host.
+   */
+  contextBlock?: string;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */

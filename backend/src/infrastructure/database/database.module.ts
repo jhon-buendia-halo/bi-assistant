@@ -22,6 +22,7 @@ import {
   SKILL_OVERRIDES_STORE,
   VERIFIED_QUERIES_STORE,
   WORKFLOW_RUNS_STORE,
+  WORKFLOW_RUN_NODE_CHATS_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
 import { SqliteTransactions } from './sqlite-transactions';
@@ -55,6 +56,7 @@ const COLLECTIONS = [
   { token: AGENT_PROMPT_OVERRIDES_STORE, table: 'agent_prompt_overrides' },
   { token: READINESS_REPORTS_STORE, table: 'readiness_reports' },
   { token: WORKFLOW_RUNS_STORE, table: 'workflow_runs' },
+  { token: WORKFLOW_RUN_NODE_CHATS_STORE, table: 'workflow_run_node_chats' },
 ];
 
 const sqliteDbProvider: Provider = {

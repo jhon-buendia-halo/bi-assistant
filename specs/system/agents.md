@@ -1331,6 +1331,29 @@ A run of Questions to Insights v2 (`qti-v2-turn`, the only workflow since 2026-1
 
 Removed with ADR-0042: the `deep-analysis` workflow, its steps, runtime and capability spec no longer exist. A stored run of it stays readable as a legacy run ([workflows](../capabilities/workflows/spec.md) R23). The section number is kept so the numbering stays stable.
 
+### 5.16 Node chats: chatting with a run step's agent
+
+After a run, the user can chat with an agent step's agent about that step's data in the stored run ([workflows](../capabilities/workflows/spec.md) R25; [api.md](api.md) 136, 137; since 2026-11-12). Q&A only: the run is never changed.
+
+**The turn.** `WorkflowNodeChatsService.prepare` checks the request (api.md 137 refusals) before any SSE frame; then `stream` stores the user message and runs **one turn on a run host of its own**, through the run path of 5.14 unchanged (`createRunHost`, `streamRunTurn`, `finishRunHost`):
+- host id `run-<run id>-node-<step id>`, so its memory thread is `run-<run id>-node-<step id>` and its workspace `session-run-<run id>-node-<step id>`; the run's own host, thread and workspace are not touched;
+- bound to the run's workflow (`workflowId`, so `qti-v2-turn` gives `agentKey: 'assistant-v2'`, the Analyse step's agent): the step's agent with **its own tools** (for `assistant-v2`: `list_entities`, `describe_entity`, `run_readonly_sql`, all read-only, 5.2), its model and effort, over the **run's `datasets`**; the turn runs the workflow as a run does, so the agent also gets the Load catalog step's catalog block;
+- messages: the chat's earlier messages (at most the last 20, `NODE_CHAT_HISTORY_LIMIT`, user and assistant text only) as the transcript, then the new message. The host has no memory thread when the turn starts (the previous turn's was deleted), so the agent input is that whole transcript (4.3);
+- the **context block** (below) as one more system block, after the agent's own context blocks and before the Analyse step's catalog block (`SessionDoc.contextBlock`, in memory only; `TurnEngine.streamTurn` appends it).
+
+The stream forwards only the turn's `reasoning`, `text`, `tool`, `tool-result` and `tool-progress` events; the turn's `tool` and `tool-result` events become the assistant message's `toolCalls`, tracked as a run's agent step's are (`RunStepTracker`, `noteToolFrame`). When the turn ends, the host is finished (its memory thread deleted) and its workspace deleted, and the assistant message is stored: the host's final answer (after the grounding guard and tool-only synthesis, 5.5, 5.6), or on a stop the text that came with `stopped: true`, or on a failure the text that came with `error` (the chat stream's message, 5.1). Then `done { message }` or `error { content }`. One turn per run and step at a time.
+
+**The context block** (`nodeChatContextBlock`, framework-free in `modules/workflows/node-chat-context.ts`), built from the stored run, never from the client:
+1. A header: `You are answering questions about one step of a stored workflow run: step "<title>" (<id>) of run <run id> of "<workflow name>".`, that the run is finished and nothing changes it, that the tools are read-only over the run's datasets; the run's status (and error), start and finish times; its datasets.
+2. `## Workflow input`: `run.input` as JSON.
+3. `## Step "<title>": <status>`, the step's error and times; `### Step input` and `### Step output`: the step's stored `input` and `output` as JSON (already capped at 20 000 characters each by the run, data-model 3.16), or `(not kept: larger than 20000 characters when the run stored it)`, or `(none recorded)`.
+4. `### Tool calls of the step (<n>)`: each call numbered, `<tool> (<n> rows; error: <e>)`, then its input (the SQL), or `(none)`.
+5. `## Final answer of the run`: `run.answer.content`, when there is one.
+
+The whole block is at most **40 000 characters** (`NODE_CHAT_CONTEXT_CAP`). When it is larger, the cuttable parts (the workflow input, step input, step output, tool calls and final answer) are cut by water-filling: short parts stay whole and the long ones are cut to the same length, each ending `[shortened: <n> of <m> characters shown]`, and the block opens with `Note: some parts below were shortened to fit; each is marked "[shortened: …]". Use your tools to look at the data again when you need more.` Measured on 2026-11-12: the Analyse step of a real-shaped run over the World Cup dataset (15 entities, 7 tool calls of which 4 real SQL queries, a 1 500-character answer) gives about 7 200 characters, so a real run is never cut; the largest step a run can store (20 000-character input and output, 50 calls of 2 000 characters) gives about 144 000 before the cap.
+
+> Implementation note: `modules/workflows/workflow-node-chats.service.ts` (`WorkflowNodeChatsService`: `messages`, `prepare`, `stream`), the routes on `workflow-runs.controller.ts` (`streamSse` from `workflows.controller.ts` frames the stream), `repositories/workflow-node-chats.repository.ts` ([data-model.md](data-model.md) 3.17). `RunHostSpec` gained `transcript` and `contextBlock`. Proven by `node-chat-context.spec.ts`, `workflow-node-chats.service.spec.ts`, `run-host-sessions.spec.ts` (the host's input and system blocks) and `test/workflow-node-chats.e2e-spec.ts` (the recording stub model: the request carries the block).
+
 ---
 
 ## 6. Visual designer pipeline

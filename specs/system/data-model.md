@@ -119,8 +119,9 @@ Summary:
 | `agent_prompt_overrides` | Org-wide overrides of built-in agents' system prompts, edited in the app | `key` (a built-in agent's registry key) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `readiness_reports` | Stored data-readiness assessments, one per run, never edited | `id` | `generatedAt` desc (per datasource) | [data-readiness](../capabilities/data-readiness/spec.md) |
 | `workflow_runs` | Every run of a workflow on an input: its input, steps, outcome and, for an agent workflow, its answer and files | `id` | `startedAt` desc | [workflows](../capabilities/workflows/spec.md) |
+| `workflow_run_node_chats` | The chats with a stored run's agent steps (node chats), one per run and step | `id`; `(runId, stepId)` unique | n/a (read by run and step) | [workflows](../capabilities/workflows/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints** between collections, and no cascading deletes but one (a run's node chats go with it, 3.17); references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -604,6 +605,7 @@ Removed with ADR-0042: no deep-analysis job exists. The report files and the ass
 | `workflow_runs` | `datasets[]`, `agentId` | `datasets.name`, `agents.id` | By value, no cascade, may dangle. |
 | `workflow_runs` | `context.fromRunId` | `workflow_runs.id` | By value. Deleting the earlier run leaves it dangling; it is read only when the later run starts. |
 | `workflow_runs` | `id` | workspace `session-run-<id>`; memory thread `run-<id>` while it runs | The workspace is deleted with the run (api.md 122); the thread is deleted when its turn ends. |
+| `workflow_run_node_chats` | `runId`, `stepId` | `workflow_runs.id`, a step id of that run | Deleted with the run (api.md 122), by the runs service: the one cascade between collections. `stepId` is by value. |
 
 ---
 
@@ -673,6 +675,22 @@ The wire `WorkflowRun` ([api.md](api.md) 3.6, 121) is this document plus, for an
 **Start-up recovery.** When the backend starts, a run still `running` was cut off when the app stopped: it becomes `failed` with `error` `The app stopped before the run finished` and `finishedAt` the start-up time, any step still `running` becomes `failed` with the same error, and its memory thread `run-<id>` is deleted; its workspace is kept. A `workspaces/session-run-*` directory with no run document is deleted with its memory thread.
 
 > Implementation note: `modules/workflows/repositories/workflow-runs.repository.ts` (`WorkflowRunsRepository`, token `WORKFLOW_RUNS_STORE`); the shape, the summary, the title rule and the run-backed host are framework-free in `workflow-run-steps.ts`; the recovery is `WorkflowRunsService.onModuleInit`.
+
+### 3.17 `workflow_run_node_chats` — node chats
+
+One document per stored run and agent step that someone chatted with ([workflows](../capabilities/workflows/spec.md) R25; [api.md](api.md) 136, 137; since 2026-11-12). Inserted with the chat's first message, its `messages` replaced on each later one: the user message when a turn starts, the assistant message when it ends. Deleted with its run (api.md 122); nothing else deletes it. The run document is never written by a node chat. No retention limit. Additive collection, no migration (section 6).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | The chat's id. |
+| `runId` | uuid | yes | The run (`workflow_runs.id`). |
+| `stepId` | string | yes | The agent step of the run's workflow, e.g. `analyse`. |
+| `messages` | `NodeChatMessage[]` | yes | Oldest first: `{ id: uuid; role: 'user' \| 'assistant'; content: string; toolCalls?: WorkflowRunToolCall[]; stopped?: true; error?: string; createdAt: ISO }` (api.md 136). `toolCalls` are an assistant turn's calls, shaped as a run step's (3.16); `stopped` marks a stopped turn (its `content` is what came), `error` a failed one. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+No `ownerId`: the collection is newer than ownership (3.14).
+
+> Implementation note: `modules/workflows/repositories/workflow-node-chats.repository.ts` (`WorkflowNodeChatsRepository`, token `WORKFLOW_RUN_NODE_CHATS_STORE`); the message shape and the context block are framework-free in `node-chat-context.ts`.
 
 ## 4. Files on disk
 
@@ -849,6 +867,8 @@ None for `agents`: it is a new collection, and the store creates the table on fi
 None for the RFP Builder (BA-213, ADR-0028), and none for its removal (2026-11-12): stored `agentKey: "rfp"`, `rfpId`, `rfpPackage` and an `rfp` prompt override stay in place and are ignored; the `rfp` schema in the Intellify database is left alone (section 7).
 
 None for `workflow_runs` (1.23.14): it is a new collection, and the runs of earlier versions were never stored (they were held in memory and their `session-run-*` workspaces are deleted at the first start-up, 3.16).
+
+None for `workflow_run_node_chats` (2026-11-12): it is a new collection, and the store creates the table on first open.
 
 None for the agent panel (BA-231, ADR-0029): `panelItems` and `workflowState` on sessions are new optional fields; visuals made before are synthesized into the item list at read time (3.4.4), so no stored document is rewritten.
 
