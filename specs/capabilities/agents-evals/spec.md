@@ -1160,7 +1160,7 @@ Feature: Built-in agent prompts
     And the arrow from "Load catalog" to "Plan" reads "question, catalog"
     And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", and "Analyse" also "Clarifying question → ends the turn here"
     When I click the "Load catalog" step
-    Then the step details show Input "question, datasets" and Output "question, catalog"
+    Then the step details show Input "question, datasets" and Output "question, catalog, columns"
     And I see "Prompt links" with the agent's tools
     When I open the "Questions to Insights Assistant" agent and its Graph tab
     Then I do not see the workflow drawing

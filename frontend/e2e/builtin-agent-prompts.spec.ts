@@ -431,7 +431,7 @@ test(
     });
     await scenarioStep(
       page,
-      'Then the step details show Input "question, datasets" and Output "question, catalog"',
+      'Then the step details show Input "question, datasets" and Output "question, catalog, columns"',
       async () => {
         const details = page.getByTestId('workflow-step-details');
         await expect(details).toContainText('2. Load catalog');
@@ -440,7 +440,7 @@ test(
           'question, datasets',
         );
         await expect(details.getByTestId('workflow-detail-output')).toHaveText(
-          'question, catalog',
+          'question, catalog, columns',
         );
       },
     );
