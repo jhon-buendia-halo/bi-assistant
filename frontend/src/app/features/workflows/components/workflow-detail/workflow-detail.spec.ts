@@ -74,7 +74,6 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     fixture.componentRef.setInput('workflowId', workflow.id);
     const page = fixture.componentInstance;
     page.back.subscribe(() => events.push('back'));
-    page.openPanel.subscribe(() => events.push('openPanel'));
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Loading workflow…');
@@ -111,15 +110,17 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     ).toEqual(['Clean text', 'Count words', 'Format result']);
   });
 
-  it('Execute workflow on the canvas opens the panel and asks for its run form; it never runs', () => {
+  it('Execute workflow on the canvas unfolds the Run panel and asks for its composer; it never runs', () => {
     open(THREE_STEPS);
     expect(q('workflow-start-chat')).toBeNull();
     expect(text('workflow-execute')).toBe('Execute workflow');
     expect(el.querySelector('header [data-testid="workflow-execute"]')).toBeNull();
+    designer.stateOpen.set(false);
     designer.setInput('text', 'a b');
     q('workflow-execute')!.click();
+    expect(designer.stateOpen()).toBe(true);
     expect(designer.runFormRequest()).toBe(1);
-    expect(events).toEqual(['openPanel']);
+    expect(events).toEqual([]);
     expect(designer.running()).toBe(false);
     expect(designer.runResult()).toBeNull();
   });
@@ -137,10 +138,10 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(q('workflow-start-chat')).toBeNull();
     q('workflow-execute')!.click();
     expect(designer.runFormRequest()).toBe(1);
-    expect(events).toEqual(['openPanel']);
+    expect(events).toEqual([]);
   });
 
-  it('a node selects it on the canvas and in the Workflow state panel; the background clears it', () => {
+  it('a node selects it on the canvas and in the Logs; the background clears it', () => {
     open(THREE_STEPS);
     q('workflow-node-count-words')!.click();
     fixture.detectChanges();
@@ -160,17 +161,19 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(events).toEqual([]);
   });
 
-  it('a state panel row selects its node; the toggle collapses the panel', () => {
+  it('a Logs row selects its node; the Run toggle folds the panel to its header', () => {
     open(THREE_STEPS);
     q('workflow-state-node-clean-text')!.click();
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('clean-text');
     expect(q('workflow-node-clean-text')?.getAttribute('aria-pressed')).toBe('true');
+    expect(text('workflow-state-toggle')).toBe('Run');
     expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('true');
     q('workflow-state-toggle')!.click();
     fixture.detectChanges();
     expect(designer.stateOpen()).toBe(false);
     expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    expect(q('workflow-state-node-all')).toBeNull();
     designer.stateOpen.set(true);
   });
 
@@ -258,12 +261,16 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.inputValues()).toEqual({});
   });
 
-  it('leaves room for the Expand button when the right panel is closed', () => {
+  it('has the Run panel under the canvas and no right panel to open or make room for', () => {
     open(THREE_STEPS);
-    const header = el.querySelector('header')!;
-    expect(header.classList).toContain('pr-6');
-    fixture.componentRef.setInput('panelOpen', false);
-    fixture.detectChanges();
-    expect(header.classList).toContain('pr-14');
+    const dock = q('workflow-run-dock')!;
+    expect(dock.tagName.toLowerCase()).toBe('app-workflow-run-dock');
+    expect(dock.querySelector('app-workflow-run-chat')).not.toBeNull();
+    expect(dock.querySelector('app-workflow-state-panel')).not.toBeNull();
+    expect(q('workflow-canvas')!.compareDocumentPosition(dock)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(el.querySelector('header')!.classList).toContain('px-6');
+    expect('openPanel' in fixture.componentInstance).toBe(false);
   });
 });

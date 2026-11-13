@@ -1,9 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { WorkflowStateSummary } from '../../models/workflow-node.model';
+import { NodeInspection } from '../../models/workflow-node.model';
 import {
   FIXTURE_NODES,
   FIXTURE_NODES_NOT_RUN,
-  FIXTURE_SUMMARY,
 } from '../workflow-node-dialog/workflow-node.testing';
 import { buildNodeInspections } from '../../services/workflow-node-inspection';
 import {
@@ -23,16 +22,12 @@ describe('WorkflowStatePanel', () => {
   function make(
     opts: {
       nodes?: typeof FIXTURE_NODES;
-      summary?: WorkflowStateSummary;
       selectedId?: string | null;
-      open?: boolean;
     } = {},
   ) {
     fixture = TestBed.createComponent(WorkflowStatePanel);
     fixture.componentRef.setInput('nodes', opts.nodes ?? FIXTURE_NODES);
-    fixture.componentRef.setInput('summary', opts.summary ?? FIXTURE_SUMMARY);
     fixture.componentRef.setInput('selectedId', opts.selectedId ?? null);
-    fixture.componentRef.setInput('open', opts.open ?? true);
     fixture.detectChanges();
   }
 
@@ -40,66 +35,116 @@ describe('WorkflowStatePanel', () => {
     TestBed.configureTestingModule({ imports: [WorkflowStatePanel] }),
   );
 
-  it('summarises the run', () => {
-    make();
-    expect(text('workflow-state-toggle')).toBe('Workflow state');
-    expect(text('workflow-state-status')).toBe('success');
-    expect(text('workflow-state-progress')).toBe('4 of 4 nodes ran');
-    expect(text('workflow-state-duration')).toBe('14.0 s');
-    expect(text('workflow-state-run-id')).toBe('run_8f21c4');
-  });
-
-  it('says so when there is no run', () => {
-    make({
-      nodes: FIXTURE_NODES_NOT_RUN,
-      summary: {
-        status: null,
-        ran: 0,
-        total: 4,
-        durationMs: null,
-        runId: null,
-        invalidFields: 0,
-      },
+  /** FIXTURE_NODES with the run status (and attempts) of chosen nodes replaced. */
+  function withRuns(
+    runs: Record<
+      string,
+      { status: NonNullable<NodeInspection['run']>['status']; startedAt?: string; attempts?: number }
+    >,
+  ): NodeInspection[] {
+    return FIXTURE_NODES.map((n) => {
+      const r = runs[n.nodeId];
+      if (r === undefined) return n;
+      const run = {
+        ...(n.run ?? { durationMs: null, toolCalls: [] }),
+        status: r.status,
+        ...(r.startedAt ? { startedAt: r.startedAt } : {}),
+      };
+      return {
+        ...n,
+        run,
+        ...(r.attempts ? { attempts: Array.from({ length: r.attempts }, () => run) } : {}),
+      };
     });
-    expect(text('workflow-state-progress')).toBe('0 of 4 nodes ran');
-    expect(text('workflow-state-run-id')).toBe(
-      "No run yet. Execute the workflow to see each node's data.",
-    );
-    expect(byId('workflow-state-status')).toBeNull();
-    expect(byId('workflow-state-invalid')).toBeNull();
-  });
+  }
 
-  it('says how many fields refused the last Execute', () => {
-    const refused: WorkflowStateSummary = {
-      status: null,
-      ran: 0,
-      total: 4,
-      durationMs: null,
-      runId: null,
-      invalidFields: 2,
-    };
-    make({ nodes: FIXTURE_NODES_NOT_RUN, summary: refused });
-    expect(text('workflow-state-invalid')).toBe('Input invalid: 2 fields');
-    make({ nodes: FIXTURE_NODES_NOT_RUN, summary: { ...refused, invalidFields: 1 } });
-    expect(text('workflow-state-invalid')).toBe('Input invalid: 1 field');
-  });
-
-  it('toggles open and closed through openChange', () => {
+  it('has no header of its own and is labelled Logs', () => {
     make();
-    const changes: boolean[] = [];
-    fixture.componentInstance.openChange.subscribe((v) => changes.push(v));
-    expect(byId('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe(
-      'true',
-    );
-    byId('workflow-state-toggle')?.click();
-    expect(changes).toEqual([false]);
+    expect(byId('workflow-state')?.getAttribute('aria-label')).toBe('Logs');
+    expect(byId('workflow-state-toggle')).toBeNull();
+    expect(byId('workflow-state-status')).toBeNull();
+    expect(byId('workflow-state-progress')).toBeNull();
+    expect(byId('workflow-state-run-id')).toBeNull();
+    expect(el().querySelector('h3')?.textContent).toContain('Logs');
+  });
 
-    fixture.componentRef.setInput('open', false);
-    fixture.detectChanges();
-    expect(byId('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe(
-      'false',
-    );
-    expect(byId('workflow-state-node-all')).toBeNull();
+  describe('Logs rows', () => {
+    const row = (id: string) => byId(`workflow-state-node-${id}`)!;
+
+    it('marks every node pending before a run, with the Not run label', () => {
+      make({ nodes: FIXTURE_NODES_NOT_RUN });
+      for (const id of ['start', 'receive', 'analyse', 'end']) {
+        expect(row(id).getAttribute('data-state')).toBe('pending');
+        expect(row(id).querySelector('.sr-only')?.textContent?.trim()).toBe('Not run');
+        expect(row(id).hasAttribute('aria-current')).toBeFalse();
+      }
+    });
+
+    it('lists Start and End as rows with their state', () => {
+      make();
+      expect(row('start').getAttribute('data-state')).toBe('done');
+      expect(row('end').getAttribute('data-state')).toBe('done');
+      expect(row('start').textContent).toContain('Start');
+      expect(row('end').textContent).toContain('End');
+    });
+
+    it('sets data-state, a marker and a screen-reader label per status', () => {
+      const cases: [string, string, string][] = [
+        ['success', 'done', 'Done'],
+        ['failed', 'failed', 'Failed'],
+        ['skipped', 'skipped', 'Skipped'],
+        ['stopped', 'stopped', 'Stopped'],
+      ];
+      for (const [status, state, label] of cases) {
+        make({
+          nodes: withRuns({
+            receive: { status: status as 'success' },
+          }),
+        });
+        const r = row('receive');
+        expect(r.getAttribute('data-state')).toBe(state);
+        expect(r.querySelector('lucide-angular, svg')).not.toBeNull();
+        expect(r.querySelector('.sr-only')?.textContent?.trim()).toBe(label);
+      }
+    });
+
+    it('marks the running node current with aria-current and its elapsed time', () => {
+      make({
+        nodes: withRuns({
+          analyse: {
+            status: 'running',
+            startedAt: new Date(Date.now() - 5_000).toISOString(),
+          },
+        }),
+      });
+      const r = row('analyse');
+      expect(r.getAttribute('data-state')).toBe('current');
+      expect(r.getAttribute('aria-current')).toBe('step');
+      expect(r.querySelector('.sr-only')?.textContent?.trim()).toBe('Running');
+      expect(text('workflow-state-elapsed')).toMatch(/^[5-7] s$/);
+      expect(row('receive').querySelector('[data-testid="workflow-state-elapsed"]')).toBeNull();
+    });
+
+    it('shows a Waiting for you chip for a suspended node, without the sr-only label', () => {
+      make({ nodes: withRuns({ analyse: { status: 'suspended' } }) });
+      const r = row('analyse');
+      expect(r.getAttribute('data-state')).toBe('waiting');
+      expect(r.querySelector('.chip')?.textContent?.trim()).toBe('Waiting for you');
+      expect(r.querySelector('.sr-only')).toBeNull();
+    });
+
+    it('shows Skipped as the time of a skipped node', () => {
+      make({ nodes: withRuns({ receive: { status: 'skipped' } }) });
+      expect(row('receive').textContent).toContain('Skipped');
+    });
+
+    it('shows ×n and an sr-only count for a node that ran more than once', () => {
+      make({ nodes: withRuns({ analyse: { status: 'success', attempts: 3 } }) });
+      const r = row('analyse');
+      expect(r.textContent).toContain('×3');
+      expect(r.textContent).toContain('Ran 3 times');
+      expect(row('receive').textContent).not.toContain('×');
+    });
   });
 
   it('lists All nodes first, then each node with its duration', () => {
@@ -194,14 +239,6 @@ describe('WorkflowStatePanel', () => {
   it('shows the not-run text for a node that has not run', () => {
     make({
       nodes: FIXTURE_NODES_NOT_RUN,
-      summary: {
-        status: null,
-        ran: 0,
-        total: 4,
-        durationMs: null,
-        runId: null,
-        invalidFields: 0,
-      },
       selectedId: 'analyse',
     });
     expect(byId('workflow-state-input')?.textContent).toContain(

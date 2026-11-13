@@ -81,6 +81,14 @@ export class ShellState {
   readonly settingsOpen = signal(false);
   /** Closed on launch; opens on demand (app-shell R2, R10). */
   readonly rightPanelOpen = signal(false);
+  /**
+   * Whether the view has a right panel at all: a workflow's page has none,
+   * its run is in the Run panel under its canvas (ui.md 4.4b). Hidden, the
+   * panel keeps its open state for the other views.
+   */
+  readonly rightPanelAvailable = computed(
+    () => this.settingsOpen() || this.mainView() !== 'workflow-detail',
+  );
 
   private readonly agentEditor = inject(AgentEditorService);
   private readonly skillEditor = inject(SkillEditorService);

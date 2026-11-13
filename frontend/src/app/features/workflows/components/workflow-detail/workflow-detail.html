@@ -1,10 +1,6 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="workflow-detail-page">
   <!-- Header: breadcrumb, name, id, kind and missing datasets (Execute is on the canvas) -->
-  <header
-    class="shrink-0 border-b border-border py-3 pl-6"
-    [class.pr-6]="panelOpen()"
-    [class.pr-14]="!panelOpen()"
-  >
+  <header class="shrink-0 border-b border-border px-6 py-3">
     <nav aria-label="Breadcrumb">
       <ol class="m-0 flex list-none items-center gap-1.5 p-0 text-[12px]">
         <li>
@@ -68,12 +64,11 @@
       {{ err }}
     </p>
   } @else if (designer.workflow(); as w) {
-    <!-- The canvas takes the room left; the Workflow state panel under it
-         keeps a bounded height and scrolls inside; on a short window the
-         page scrolls rather than squeezing the canvas. -->
-    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <!-- The canvas takes the room the Run panel under it leaves; the Run
+         panel is resizable, maximizable and folds to its header (ui.md 4.4b). -->
+    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <app-workflow-canvas
-        class="min-h-[300px] flex-1"
+        class="min-h-[140px] flex-1"
         [workflow]="w"
         [selectedId]="designer.selectedStepId()"
         [statuses]="designer.nodeStatuses()"
@@ -83,16 +78,7 @@
         (openNode)="designer.openNode($event)"
         (execute)="execute()"
       />
-      <app-workflow-state-panel
-        class="flex shrink-0 flex-col"
-        [nodes]="designer.nodes()"
-        [summary]="designer.stateSummary()"
-        [selectedId]="designer.selectedStepId()"
-        [open]="designer.stateOpen()"
-        (selectNode)="designer.select($event)"
-        (openNode)="designer.openNode($event)"
-        (openChange)="designer.stateOpen.set($event)"
-      />
+      <app-workflow-run-dock />
     </div>
     @if (designer.openInspection(); as node) {
       <app-workflow-node-dialog

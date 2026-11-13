@@ -1,0 +1,417 @@
+@if (designer.workflow(); as w) {
+  <!-- The Chat column of the Run panel (workflows R21; ui.md 4.4b): the
+       question, the run's answer as it forms, and the composer. The steps
+       are in the Logs column beside it, never here. -->
+  <div class="flex shrink-0 items-center gap-2 px-4 pt-2.5 pb-1">
+    <h3
+      class="m-0 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+    >
+      <lucide-angular [img]="MessageSquare" [size]="12" />
+      Chat
+    </h3>
+    @if (designer.runResult() !== null && !designer.running()) {
+      <button
+        type="button"
+        data-testid="workflow-run-new"
+        (click)="designer.newQuestion()"
+        class="btn btn-ghost px-2.5 py-1 ml-auto"
+      >
+        <lucide-angular [img]="SquarePen" [size]="13" />
+        <span>New question</span>
+      </button>
+    }
+  </div>
+
+  <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
+  <section
+    #log
+    aria-label="Chat"
+    tabindex="0"
+    data-testid="workflow-run-chat-log"
+    (scroll)="onLogScroll()"
+    class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
+  >
+    @if (designer.runResult(); as result) {
+      @if (designer.contextRun(); as earlier) {
+        <p data-testid="workflow-run-context" class="m-0 text-[12px] text-fg-muted">
+          Follows up on “{{ earlier.question }}”
+        </p>
+      }
+      @if (designer.shownQuestion(); as question) {
+        <p
+          data-testid="workflow-run-question"
+          class="m-0 max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg-strong"
+        >{{ question }}</p>
+      }
+      @if (designer.waitingFor(); as waiting) {
+        <app-workflow-run-input-required
+          [waiting]="waiting"
+          [busy]="designer.running()"
+          [error]="designer.resumeError()"
+          (answered)="designer.resume($event)"
+          (rerun)="designer.rerunWithAnswer($event)"
+        />
+      }
+      <p
+        data-testid="workflow-run-status"
+        role="status"
+        class="m-0 text-[13px] font-medium text-fg-strong"
+      >
+        {{ runStatus() }}
+      </p>
+
+      @if (liveAgentStep()) {
+        <!-- The running agent step, live: Thinking, its tool calls and the answer forming -->
+        <div class="flex flex-col gap-2" data-testid="workflow-run-live">
+          <div class="flex min-w-0 items-center gap-2">
+            <lucide-angular [img]="Brain" [size]="14" class="shrink-0 text-fg-muted" />
+            <span class="text-[13px] font-medium text-fg">Thinking</span>
+            @if (reasoningSnippet()) {
+              <span
+                class="min-w-0 truncate rounded bg-surface-muted px-2 py-0.5 text-[12px] text-fg-muted"
+                >{{ reasoningSnippet() }}</span
+              >
+            }
+          </div>
+          @for (call of designer.toolCalls(); track $index) {
+            <div
+              class="flex min-w-0 items-center gap-2 text-fg-muted"
+              data-testid="workflow-run-tool"
+            >
+              <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
+              <span class="truncate font-mono text-[12px]">{{ call.name }}</span>
+              @if (call.error) {
+                <span class="text-[12px] text-on-danger-soft">failed</span>
+              } @else if (call.rowCount !== undefined) {
+                <span class="text-[12px]">{{ call.rowCount }} rows</span>
+              } @else if (!call.finished) {
+                <lucide-angular [img]="Loader2" [size]="11" class="shrink-0 animate-spin" />
+                @if (call.progress) {
+                  <span class="min-w-0 truncate text-[12px]">{{ call.progress }}</span>
+                }
+              }
+            </div>
+          }
+          @if (designer.streamingText()) {
+            <div
+              class="prose-dark text-[13px]"
+              [innerHTML]="designer.streamingText() | markdown"
+            ></div>
+          }
+        </div>
+      }
+
+      @if (result.answer; as answer) {
+        <div data-testid="run-answer">
+          <app-answer-view
+            [message]="answer"
+            [latest]="true"
+            [busy]="designer.running()"
+            [showRating]="true"
+            [ratingPending]="designer.ratingPending()"
+            [showGenerateVisual]="!designer.running() && designer.run() !== null"
+            [visualGenerating]="visualGenerating()"
+            (rate)="designer.rateAnswer($event)"
+            (optionPicked)="designer.followUp($event)"
+            (generateVisual)="generateVisual()"
+            (viewVisual)="viewVisual($event)"
+          />
+          @if (designer.run(); as stored) {
+            @for (event of stored.events ?? []; track event.at) {
+              <app-answer-view
+                class="mt-2 block"
+                [message]="event"
+                [busy]="designer.running()"
+                (viewVisual)="viewVisual($event)"
+              />
+            }
+            <!-- Deferred: the interactive panel stays out of the initial bundle -->
+            @defer (when visuals.shown() !== null || visuals.loading() || visuals.error() !== null) {
+              <app-run-visual [run]="stored" (runChange)="applyRun($event)" />
+            }
+          }
+        </div>
+      }
+
+      @if (runOutput().length > 0) {
+        <div data-testid="workflow-run-output">
+          <h4 class="m-0 text-[12px] font-medium text-fg-muted">Output</h4>
+          <dl class="m-0 mt-2 flex flex-col gap-1.5">
+            @for (entry of runOutput(); track entry.key) {
+              <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+                <dt class="font-mono text-[12px] text-fg-muted">{{ entry.key }}</dt>
+                @if (entry.structured) {
+                  <dd
+                    class="m-0 max-h-48 w-full overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] break-words whitespace-pre-wrap text-fg"
+                  >{{ entry.value }}</dd>
+                } @else {
+                  <dd class="m-0 text-[13px] break-words text-fg-strong">
+                    {{ entry.value }}
+                  </dd>
+                }
+              </div>
+            }
+          </dl>
+        </div>
+      }
+    } @else {
+      <div class="my-auto flex flex-col gap-3 py-4" data-testid="workflow-run-empty">
+        <div class="text-center">
+          <p class="m-0 text-[14px] font-medium text-fg-strong">Ask {{ w.name }}</p>
+          <p class="m-0 mt-1 text-[13px] text-fg-muted">{{ emptyHint() }}</p>
+        </div>
+        @if (designer.questionField() !== null && w.starterQuestions.length > 0) {
+          <ul
+            class="m-0 flex list-none flex-wrap justify-center gap-1.5 p-0"
+            aria-label="Example questions"
+          >
+            @for (example of w.starterQuestions; track example; let n = $index) {
+              <li>
+                <button
+                  type="button"
+                  [attr.data-testid]="'workflow-example-' + n"
+                  (click)="pickExample(example)"
+                  class="rounded-full border border-border px-2.5 py-1 text-left text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted"
+                >
+                  {{ example }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+  </section>
+
+  @if (canRun()) {
+    <!-- The composer: a follow-up under a stored answer, else the run's input -->
+    <div class="shrink-0 px-3 pb-3">
+      @if (followUpMode()) {
+        <form
+          data-testid="workflow-run-composer"
+          class="composer flex items-end gap-2"
+          (submit)="$event.preventDefault(); sendFollowUp()"
+        >
+          <textarea
+            data-testid="workflow-follow-up-input"
+            aria-label="Follow-up question"
+            aria-describedby="workflow-follow-up-hint"
+            placeholder="Ask a follow-up about this result"
+            rows="1"
+            [value]="designer.followUpText()"
+            (input)="onFollowUpInput($event)"
+            (keydown.enter)="onEnter($event, 'follow-up')"
+            class="composer-input min-w-0 flex-1 self-center"
+          ></textarea>
+          <span id="workflow-follow-up-hint" class="sr-only">Follows up on this run</span>
+          <button
+            type="submit"
+            data-testid="workflow-run-follow-up"
+            [disabled]="!designer.followUpText().trim()"
+            class="btn btn-primary shrink-0 px-2.5 py-1"
+          >
+            <lucide-angular [img]="MessageSquareReply" [size]="14" />
+            <span>Follow up</span>
+          </button>
+        </form>
+      } @else {
+        <form
+          data-testid="workflow-run-composer"
+          aria-label="Input"
+          class="composer flex flex-col gap-2"
+          (submit)="$event.preventDefault(); designer.execute()"
+        >
+          @for (field of composerFields(); track field.name) {
+            @switch (field.type) {
+              @case ("boolean") {
+                <div class="flex flex-col gap-1">
+                  <label class="flex items-start gap-2 text-[13px] text-fg">
+                    <input
+                      type="checkbox"
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [checked]="designer.checked(field.name)"
+                      [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                      [attr.aria-describedby]="describedBy(field.name)"
+                      (change)="onCheck(field.name, $event)"
+                      class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    />
+                    <span>{{ field.label }}</span>
+                  </label>
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">{{ field.help }}</p>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("datasets") {
+                <div
+                  role="group"
+                  tabindex="-1"
+                  [attr.aria-labelledby]="inputId(field.name) + '-label'"
+                  [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                  [attr.aria-describedby]="describedBy(field.name)"
+                  data-testid="workflow-input-datasets"
+                  class="flex flex-col gap-1 outline-none"
+                >
+                  <span
+                    [id]="inputId(field.name) + '-label'"
+                    class="text-[12px] font-medium text-fg-muted"
+                    >{{ field.label }}</span
+                  >
+                  @if (datasetChoices(field).length === 0) {
+                    <p class="m-0 text-[12px] text-fg-muted">
+                      No datasets yet — create one in Datasets first.
+                    </p>
+                  } @else {
+                    <ul class="m-0 flex max-h-[76px] list-none flex-wrap gap-1.5 overflow-y-auto p-0">
+                      @for (dataset of datasetChoices(field); track dataset.name) {
+                        <li>
+                          <button
+                            type="button"
+                            [attr.aria-pressed]="designer.picked(field.name).includes(dataset.name)"
+                            [attr.title]="dataset.tables.length + ' entities'"
+                            (click)="designer.toggleDataset(field.name, dataset.name)"
+                            class="dataset-pill"
+                          >
+                            @if (designer.picked(field.name).includes(dataset.name)) {
+                              <lucide-angular [img]="CircleCheck" [size]="13" class="shrink-0 text-primary" />
+                            } @else {
+                              <lucide-angular [img]="Database" [size]="13" class="shrink-0 text-fg-muted" />
+                            }
+                            <span class="max-w-[200px] truncate">{{ dataset.name }}</span>
+                            <span class="sr-only">, {{ dataset.tables.length }} entities</span>
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("textarea") {
+                <div class="flex flex-col gap-1">
+                  <label
+                    [for]="inputId(field.name)"
+                    [class]="field.name === designer.questionField() ? 'sr-only' : 'text-[12px] font-medium text-fg-muted'"
+                    >{{ field.label }}</label
+                  >
+                  <textarea
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.placeholder]="field.placeholder ?? null"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    [value]="designer.inputValue(field.name)"
+                    (input)="onInput(field.name, $event)"
+                    (keydown.enter)="onEnter($event, 'execute')"
+                    rows="2"
+                    class="composer-input"
+                    [class.composer-input-invalid]="!!fieldError(field.name)"
+                  ></textarea>
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @default {
+                <div class="flex flex-col gap-1">
+                  <label [for]="inputId(field.name)" class="text-[12px] font-medium text-fg-muted">{{
+                    field.label
+                  }}</label>
+                  <input
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [type]="field.type === 'number' ? 'number' : 'text'"
+                    [attr.placeholder]="field.placeholder ?? null"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    [value]="designer.inputValue(field.name)"
+                    (input)="onInput(field.name, $event)"
+                    class="field"
+                    [class.border-on-danger-soft]="!!fieldError(field.name)"
+                  />
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+            }
+          }
+          @if (w.runRequirement) {
+            <p data-testid="workflow-run-requirement" class="m-0 text-[12px] text-fg-muted">
+              {{ w.runRequirement }}
+            </p>
+          }
+          @if (designer.runError(); as message) {
+            <p
+              data-testid="workflow-run-error"
+              role="alert"
+              class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+            >
+              {{ message }}
+            </p>
+          }
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            @if (designer.running()) {
+              <button
+                type="button"
+                data-testid="workflow-run-stop"
+                (click)="designer.stop()"
+                class="btn btn-secondary px-2.5 py-1"
+              >
+                <lucide-angular [img]="Square" [size]="13" />
+                <span>Stop</span>
+              </button>
+            }
+            <button
+              type="submit"
+              data-testid="workflow-run"
+              [disabled]="designer.running() || !!w.runRequirement"
+              [attr.title]="w.runRequirement ?? null"
+              class="btn btn-primary px-2.5 py-1"
+            >
+              @if (designer.running()) {
+                <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+                <span>Executing…</span>
+              } @else {
+                <lucide-angular [img]="SendHorizontal" [size]="14" />
+                <span>Execute</span>
+              }
+            </button>
+          </div>
+        </form>
+      }
+    </div>
+  }
+}

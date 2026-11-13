@@ -42,7 +42,6 @@ import { SessionsPanel } from './features/sessions/components/sessions-panel/ses
 import { SessionsState } from './features/sessions/services/sessions-state';
 import { SettingsContent } from './features/settings/components/settings-content/settings-content';
 import { SettingsNav } from './features/settings/components/settings-nav/settings-nav';
-import { WorkflowPanel } from './features/workflows/components/workflow-panel/workflow-panel';
 import { WorkflowsArea } from './features/workflows/components/workflows-area/workflows-area';
 import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
@@ -81,7 +80,6 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     SessionsPanel,
     AgentTryIt,
     EvalTrace,
-    WorkflowPanel,
     EntityDetails,
   ],
   templateUrl: './app.html',

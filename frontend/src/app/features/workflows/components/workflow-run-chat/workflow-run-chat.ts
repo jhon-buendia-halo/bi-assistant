@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   untracked,
+  viewChild,
 } from '@angular/core';
 import {
   Brain,
@@ -12,9 +13,11 @@ import {
   Database,
   Loader2,
   LucideAngularModule,
+  MessageSquare,
   MessageSquareReply,
-  Rocket,
+  SendHorizontal,
   Square,
+  SquarePen,
   Wrench,
 } from 'lucide-angular';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
@@ -24,62 +27,127 @@ import { RunVisualsState } from '../../../runs/services/run-visuals-state';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
-import { WorkflowRunActivity } from '../workflow-run-activity/workflow-run-activity';
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
-import { WorkflowRunProgress } from '../workflow-run-progress/workflow-run-progress';
-import {
-  activityLine,
-  progressSteps,
-} from '../../services/workflow-run-progress';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import {
-  RunOutputEntry,
   canRunFromPage,
   runOutputEntries,
   runStatusLine,
-  runStepStatusLabel,
 } from '../../services/workflows.util';
 
-/** The run form's controls Execute workflow may focus, in order. */
+/** The composer's controls Execute workflow may focus, in order. */
 const FORM_CONTROLS =
   'form input:not([disabled]):not([type="hidden"]), form textarea:not([disabled]), form select:not([disabled]), form button:not([disabled])';
 
 /**
- * The right panel of a workflow's page, headed Run (workflows R13, R21;
- * ui.md 4.4b): the run form and the run shown, for a workflow that runs from
- * its page. The workflow's configuration is in the node dialogs on the page.
- * It shares its state with the page through the designer.
+ * The Chat column of a workflow's Run panel, under the canvas (workflows
+ * R13, R21; ui.md 4.4b): the question asked, the waiting card, the agent
+ * working live and the answer, then the composer: the run's input with
+ * Execute and Stop, or, under a stored answer, Follow up. The steps are in
+ * the Logs column beside it. It shares its state with the page through the
+ * designer.
  */
 @Component({
-  selector: 'app-workflow-panel',
+  selector: 'app-workflow-run-chat',
   imports: [
     AnswerView,
     LucideAngularModule,
     MarkdownPipe,
     RunVisual,
-    WorkflowRunActivity,
     WorkflowRunInputRequired,
-    WorkflowRunProgress,
   ],
-  templateUrl: './workflow-panel.html',
-  host: { class: 'flex min-h-0 flex-col', 'data-testid': 'workflow-panel' },
+  templateUrl: './workflow-run-chat.html',
+  styles: `
+    .composer {
+      border: 1px solid var(--qti-border);
+      border-radius: 0.75rem;
+      background-color: var(--qti-surface);
+      padding: 0.5rem 0.625rem;
+      box-shadow: var(--qti-shadow-card);
+    }
+    .composer:focus-within {
+      border-color: var(--qti-border-selected);
+    }
+    .composer-input {
+      width: 100%;
+      resize: none;
+      border: 0;
+      background: transparent;
+      padding: 0.125rem 0.125rem;
+      font-size: 13px;
+      line-height: 1.25rem;
+      color: var(--qti-fg);
+      outline: none;
+    }
+    .composer-input::placeholder {
+      color: var(--qti-fg-muted);
+    }
+    .composer-input-invalid {
+      box-shadow: inset 0 -1px 0 var(--qti-on-danger-soft);
+    }
+    .dataset-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      border: 1px solid var(--qti-border);
+      border-radius: 9999px;
+      background-color: var(--qti-surface-muted);
+      padding: 0.125rem 0.625rem;
+      font-size: 12px;
+      color: var(--qti-fg);
+      cursor: pointer;
+    }
+    .dataset-pill:hover {
+      border-color: var(--qti-border-strong);
+    }
+    .dataset-pill[aria-pressed='true'] {
+      border-color: var(--qti-border-selected);
+      background-color: var(--qti-surface-selected);
+      color: var(--qti-on-primary-soft);
+    }
+    .dataset-pill:focus-visible {
+      outline: 2px solid var(--qti-focus);
+      outline-offset: 2px;
+    }
+  `,
+  host: {
+    class: 'flex min-h-0 flex-col',
+    'data-testid': 'workflow-run-chat',
+  },
 })
-export class WorkflowPanel {
+export class WorkflowRunChat {
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Database = Database;
   protected readonly Loader2 = Loader2;
+  protected readonly MessageSquare = MessageSquare;
   protected readonly MessageSquareReply = MessageSquareReply;
-  protected readonly Rocket = Rocket;
+  protected readonly SendHorizontal = SendHorizontal;
   protected readonly Square = Square;
+  protected readonly SquarePen = SquarePen;
   protected readonly Wrench = Wrench;
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly log = viewChild<ElementRef<HTMLElement>>('log');
+  /** The chat follows the run's newest text while the user stays near its end. */
+  private stickToEnd = true;
+  /** The run whose question and answer were last scrolled into view. */
+  private shownRunId: string | null = null;
 
   constructor() {
-    // Execute workflow on the canvas: focus the run form, once per request.
+    // While a run streams, keep its newest text in view; once it ends, show
+    // its question and the start of its answer.
+    effect(() => {
+      this.designer.streamingText();
+      this.designer.reasoning();
+      this.designer.toolCalls().length;
+      const status = this.designer.runResult()?.status ?? null;
+      const runId = this.designer.run()?.id ?? null;
+      untracked(() => setTimeout(() => this.follow(status, runId)));
+    });
+    // Execute workflow on the canvas: focus the composer, once per request.
     effect(() => {
       const request = this.designer.runFormRequest();
       if (request === 0) return;
@@ -96,6 +164,38 @@ export class WorkflowPanel {
         setTimeout(() => this.focusFirstInvalid());
       });
     });
+  }
+
+  /** Scrolling the chat by hand: it follows the run again only near its end. */
+  protected onLogScroll(): void {
+    const el = this.log()?.nativeElement;
+    if (el === undefined) return;
+    this.stickToEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
+  private follow(status: string | null, runId: string | null): void {
+    const el = this.log()?.nativeElement;
+    if (el === undefined) return;
+    if (status === 'running') {
+      if (this.shownRunId !== null) {
+        this.shownRunId = null;
+        this.stickToEnd = true;
+      }
+      if (this.stickToEnd) el.scrollTop = el.scrollHeight;
+      return;
+    }
+    if (runId === null || runId === this.shownRunId) return;
+    this.shownRunId = runId;
+    const question = el.querySelector<HTMLElement>(
+      '[data-testid="workflow-run-question"]',
+    );
+    el.scrollTop =
+      question === null
+        ? 0
+        : question.getBoundingClientRect().top -
+          el.getBoundingClientRect().top +
+          el.scrollTop -
+          8;
   }
 
   /** The first invalid control; a dataset group focuses its first choice, else itself. */
@@ -147,23 +247,34 @@ export class WorkflowPanel {
     if (run !== null) this.visuals.view(run, event);
   }
 
-  protected readonly stepStatusLabel = runStepStatusLabel;
+  /** The agent step running now, while the run streams: its live block shows. */
+  protected readonly liveAgentStep = computed(
+    () =>
+      this.designer.running() &&
+      this.designer
+        .runPanelSteps()
+        .some((step) => step.kind === 'agent' && step.status === 'running'),
+  );
 
-  /** The run progress: empty with no run shown. */
-  protected readonly progress = computed(() => {
+  /** Under a stored answer that asks nothing: the composer follows up on it. */
+  protected readonly followUpMode = computed(
+    () =>
+      this.designer.canFollowUp() &&
+      !this.designer.runResult()?.answer?.clarification,
+  );
+
+  /** The line under "Ask <workflow>" before a run. */
+  protected readonly emptyHint = computed(() => {
     const workflow = this.designer.workflow();
-    const result = this.designer.runResult();
-    return workflow === null || result === null
-      ? []
-      : progressSteps(workflow, result);
-  });
-
-  /** The live activity line under it; null once the run ended. */
-  protected readonly activity = computed(() => {
-    const result = this.designer.runResult();
-    return result === null
-      ? null
-      : activityLine(this.progress(), result.status, this.designer.toolCalls());
+    const datasets = workflow?.input.some(
+      (field) => !field.hidden && field.type === 'datasets',
+    );
+    if (this.designer.questionField() === null) {
+      return 'Fill in the input below and press Execute.';
+    }
+    return datasets
+      ? 'Pick the datasets below and type a question.'
+      : 'Type a question below.';
   });
 
   protected readonly runStatus = computed(() => {
@@ -177,10 +288,19 @@ export class WorkflowPanel {
     return runOutputEntries(result.output);
   });
 
-  /** The form's controls: every field the app does not set itself. */
-  protected readonly visibleFields = computed(
-    () => this.designer.workflow()?.input.filter((field) => !field.hidden) ?? [],
-  );
+  /**
+   * The composer's controls: every field the app does not set itself, the
+   * question first, then the others in order.
+   */
+  protected readonly composerFields = computed(() => {
+    const fields =
+      this.designer.workflow()?.input.filter((field) => !field.hidden) ?? [];
+    const question = this.designer.questionField();
+    return [
+      ...fields.filter((field) => field.name === question),
+      ...fields.filter((field) => field.name !== question),
+    ];
+  });
 
   /** The latest line of the agent's reasoning, for the Thinking block. */
   protected readonly reasoningSnippet = computed(() => {
@@ -218,11 +338,6 @@ export class WorkflowPanel {
     this.designer.setInput(name, (event.target as HTMLInputElement).checked);
   }
 
-  /** A step's output, field by field (texts unescaped). */
-  protected stepOutput(value: Record<string, unknown>): RunOutputEntry[] {
-    return runOutputEntries(value);
-  }
-
   /** The datasets a `datasets` field offers: its kinds only, when it names some. */
   protected datasetChoices(field: WorkflowInputField): Dataset[] {
     const kinds = field.datasourceKinds;
@@ -241,6 +356,15 @@ export class WorkflowPanel {
 
   protected onFollowUpInput(event: Event): void {
     this.designer.followUpText.set((event.target as HTMLInputElement).value);
+  }
+
+  /** Enter sends (Execute or Follow up); Shift+Enter adds a line. */
+  protected onEnter(event: Event, action: 'execute' | 'follow-up'): void {
+    const key = event as KeyboardEvent;
+    if (key.shiftKey || key.isComposing) return;
+    event.preventDefault();
+    if (action === 'follow-up') this.sendFollowUp();
+    else this.designer.execute();
   }
 
   protected sendFollowUp(): void {

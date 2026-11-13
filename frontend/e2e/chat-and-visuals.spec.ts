@@ -93,7 +93,8 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
       runAnswer(page).locator('pre', { hasText: SQL }),
     ).toBeVisible();
 
-    // A slow run can be stopped.
+    // A slow run can be stopped (New question brings the run form back).
+    await page.getByTestId('workflow-run-new').click();
     await page.getByTestId('workflow-input-question').fill(SLOW_QUESTION);
     await page.getByTestId('workflow-run').click();
     await expect(page.getByTestId('workflow-run-stop')).toBeVisible();

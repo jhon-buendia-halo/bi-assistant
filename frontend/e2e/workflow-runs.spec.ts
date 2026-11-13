@@ -108,8 +108,9 @@ function railItem(page: Page, name: string): Locator {
     .getByRole('button', { name, exact: true });
 }
 
-function detailsPanel(page: Page): Locator {
-  return page.getByRole('complementary', { name: 'Details panel' });
+/** The Run panel under the canvas: Chat (the run form) and Logs. */
+function runDock(page: Page): Locator {
+  return page.getByTestId('workflow-run-dock');
 }
 
 async function openWorkflowPage(page: Page, id: string, name: string): Promise<void> {
@@ -136,8 +137,9 @@ async function fillRun(page: Page, question: string, dataset?: string): Promise<
   await page.getByTestId('workflow-input-question').fill(question);
 }
 
+/** A node's row in the Run panel's Logs; its state is `data-state`. */
 function runStep(page: Page, id: string): Locator {
-  return page.getByTestId(`workflow-run-step-${id}`);
+  return runDock(page).getByTestId(`workflow-state-node-${id}`);
 }
 
 function nodeStatus(page: Page, id: string): Locator {
@@ -169,7 +171,8 @@ test.describe('Feature: Workflow runs', () => {
         page,
         'Then the Run tab shows the question and the datasets to pick, and no Careful',
         async () => {
-          const panel = detailsPanel(page);
+          const panel = runDock(page);
+          await expect(page.getByRole('complementary', { name: 'Details panel' })).toHaveCount(0);
           await expect(panel.getByLabel('Question', { exact: true })).toHaveAttribute(
             'placeholder',
             'Ask a question about your data',
@@ -191,7 +194,7 @@ test.describe('Feature: Workflow runs', () => {
         'Then the Analyse step is running on the canvas and in the Run tab, with its SQL call',
         async () => {
           await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
-          await expect(runStep(page, 'analyse').getByText('Running', { exact: true })).toBeVisible();
+          await expect(runStep(page, 'analyse')).toHaveAttribute('data-state', 'current');
           await expect(page.getByTestId('workflow-run-live')).toContainText('Thinking');
           await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
           await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
@@ -208,7 +211,7 @@ test.describe('Feature: Workflow runs', () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
           for (const id of V2_STEPS) {
             await expect(nodeStatus(page, id)).toHaveText('Done');
-            await expect(runStep(page, id).getByText('Done', { exact: true })).toBeVisible();
+            await expect(runStep(page, id)).toHaveAttribute('data-state', 'done');
           }
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
         },
@@ -222,7 +225,7 @@ test.describe('Feature: Workflow runs', () => {
         await expect(page.getByTestId('workflow-run-context')).toHaveText(
           `Follows up on “${QUESTION}”`,
         );
-        await expect(page.getByTestId('workflow-input-question')).toHaveValue(FOLLOW_UP);
+        await expect(page.getByTestId('workflow-run-question')).toHaveText(FOLLOW_UP);
       });
       await scenarioStep(
         page,
@@ -273,6 +276,9 @@ test.describe('Feature: Workflow runs', () => {
         page,
         'When I run the same question again, then its answer shows Verified',
         async () => {
+          // New question keeps the dataset picked; the question is typed again.
+          await page.getByTestId('workflow-run-new').click();
+          await page.getByTestId('workflow-input-question').fill(QUESTION);
           await page.getByTestId('workflow-run').click();
           await expect(runAnswer(page)).toContainText(ANSWER);
           await expect(runAnswer(page).getByText('Verified', { exact: true })).toBeVisible();
@@ -280,6 +286,92 @@ test.describe('Feature: Workflow runs', () => {
       );
     },
   );
+
+  test('Enter runs the question, New question starts over and a follow-up replaces the form', async ({
+    page,
+  }) => {
+    stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+    await test.step(`Given I am on the Run panel of "${V2}" with "${WORLD_CUP_DATASET}" picked`, async () => {
+      await openWorkflowPage(page, V2_ID, V2);
+      await openRunTab(page);
+      await datasetCard(page, WORLD_CUP_DATASET).click();
+      await expect(datasetCard(page, WORLD_CUP_DATASET)).toHaveAttribute('aria-pressed', 'true');
+    });
+    await test.step('When I type the question and press Enter', async () => {
+      const question = page.getByTestId('workflow-input-question');
+      await question.fill(QUESTION);
+      await question.press('Enter');
+    });
+    await test.step('Then the workflow runs and I see the answer', async () => {
+      await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      await expect(runAnswer(page)).toContainText(ANSWER);
+      await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+    });
+    await test.step('And the follow-up composer replaces the run form under the answer', async () => {
+      const followUp = page.getByTestId('workflow-follow-up-input');
+      await expect(followUp).toBeVisible();
+      await expect(followUp).toHaveAccessibleName('Follow-up question');
+      await expect(followUp).toHaveJSProperty('tagName', 'TEXTAREA');
+      await expect(page.getByTestId('workflow-run-follow-up')).toBeDisabled();
+      await expect(page.getByTestId('workflow-input-question')).toHaveCount(0);
+      await expect(page.getByTestId('workflow-run')).toHaveCount(0);
+    });
+    await test.step('When I click New question', async () => {
+      await page.getByTestId('workflow-run-new').click();
+    });
+    await test.step('Then the run is cleared, the question is empty and the dataset stays picked', async () => {
+      await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
+      await expect(runAnswer(page)).toHaveCount(0);
+      await expect(page.getByTestId('workflow-follow-up-input')).toHaveCount(0);
+      await expect(page.getByTestId('workflow-input-question')).toHaveValue('');
+      await expect(page.getByTestId('workflow-input-question')).toBeFocused();
+      await expect(datasetCard(page, WORLD_CUP_DATASET)).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByTestId('workflow-run-new')).toHaveCount(0);
+    });
+  });
+
+  test('The Run panel maximizes, folds and resizes from the keyboard', async ({ page }) => {
+    const dock = runDock(page);
+    const maximize = dock.getByTestId('workflow-run-dock-maximize');
+    const toggle = dock.getByTestId('workflow-state-toggle');
+    const height = async () => (await dock.boundingBox())!.height;
+    await test.step(`Given I am on the Run panel of "${V2}"`, async () => {
+      await openWorkflowPage(page, V2_ID, V2);
+      await openRunTab(page);
+      await expect(maximize).toHaveAttribute('aria-pressed', 'false');
+    });
+    const normal = await height();
+    await test.step('When I maximize it, it grows; when I restore it, it returns', async () => {
+      await maximize.click();
+      await expect(maximize).toHaveAttribute('aria-pressed', 'true');
+      await expect(maximize).toHaveAccessibleName('Restore Run panel');
+      await expect.poll(height).toBeGreaterThan(normal);
+      await maximize.click();
+      await expect(maximize).toHaveAttribute('aria-pressed', 'false');
+      await expect(maximize).toHaveAccessibleName('Maximize Run panel');
+      await expect.poll(height).toBe(normal);
+    });
+    await test.step('When I fold it, only its header stays; when I unfold it, it returns', async () => {
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.getByTestId('workflow-run-chat')).toHaveCount(0);
+      await expect.poll(height).toBeLessThan(normal);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect.poll(height).toBe(normal);
+    });
+    await test.step('When I press Arrow Up on the resize separator, the panel grows', async () => {
+      const separator = dock.getByRole('separator', { name: 'Resize Run panel' });
+      await expect(separator).toHaveAttribute('aria-orientation', 'horizontal');
+      const before = Number(await separator.getAttribute('aria-valuenow'));
+      await separator.focus();
+      await page.keyboard.press('ArrowUp');
+      await expect
+        .poll(async () => Number(await separator.getAttribute('aria-valuenow')))
+        .toBeGreaterThan(before);
+      await expect.poll(height).toBeGreaterThan(normal);
+    });
+  });
 
   test('A run needs its datasets', async ({ page }) => {
     await test.step(`Given I am on the Run tab of "${V2}"`, async () => {
@@ -296,7 +388,8 @@ test.describe('Feature: Workflow runs', () => {
         'Select at least one dataset',
       );
       await expect(page.getByTestId('workflow-run-error')).toHaveCount(0);
-      await expect(page.getByTestId('workflow-run-result')).toHaveCount(0);
+      await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
+      await expect(page.getByTestId('run-answer')).toHaveCount(0);
       expect(stub.requests.filter((request) => request.stream)).toHaveLength(0);
     });
   });
@@ -319,7 +412,7 @@ test.describe('Feature: Workflow runs', () => {
       });
       await test.step('Then the run reads "Run stopped" and its Analyse step "Stopped"', async () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run stopped');
-        await expect(runStep(page, 'analyse').getByText('Stopped', { exact: true })).toBeVisible();
+        await expect(runStep(page, 'analyse')).toHaveAttribute('data-state', 'stopped');
         await expect(nodeStatus(page, 'analyse')).toHaveText('Stopped');
         await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
         await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
@@ -344,14 +437,24 @@ test('the Run tab with an answer has no detectable accessibility violations in e
   await expect(runAnswer(page)).toContainText(ANSWER);
   await expect(page.getByTestId('workflow-follow-up-input')).toBeVisible();
 
-  for (const theme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme: theme });
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    // Let the theme's colour transitions finish before axe reads colours.
-    await page.waitForTimeout(500);
-    const results = await page.evaluate(async () => {
-      return (window as unknown as { axe: typeof axe }).axe.run(document);
-    });
-    expect(results.violations, `${V2} Run tab with an answer, ${theme}`).toEqual([]);
+  async function scan(label: string): Promise<void> {
+    for (const theme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      // Let the theme's colour transitions finish before axe reads colours.
+      await page.waitForTimeout(500);
+      const results = await page.evaluate(async () => {
+        return (window as unknown as { axe: typeof axe }).axe.run(document);
+      });
+      expect(results.violations, `${V2} ${label}, ${theme}`).toEqual([]);
+    }
   }
+
+  await scan('Run panel with an answer');
+  await runDock(page).getByTestId('workflow-run-dock-maximize').click();
+  await expect(runDock(page).getByTestId('workflow-run-dock-maximize')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await scan('Run panel with an answer, maximized');
 });

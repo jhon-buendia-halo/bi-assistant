@@ -1,287 +1,296 @@
+<!-- The Logs column and the selected node's data (ui.md 4.4b): one list of
+     nodes for the run shown, live, and what the selected one received and
+     produced. The run's summary is in the Run panel's header. -->
 <section
   data-testid="workflow-state"
-  aria-label="Workflow state"
-  class="flex min-h-0 flex-col border-t border-border bg-surface"
+  aria-label="Logs"
+  class="grid h-full min-h-0 grid-cols-[minmax(200px,240px)_minmax(0,1fr)] overflow-hidden"
 >
-  <div class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-    <h2 class="m-0 text-[14px] font-medium">
-      <button
-        type="button"
-        data-testid="workflow-state-toggle"
-        [attr.aria-expanded]="open()"
-        class="inline-flex items-center gap-1.5 text-[14px] font-medium text-fg-strong"
-        (click)="openChange.emit(!open())"
-      >
-        <lucide-angular [img]="open() ? ChevronDown : ChevronRight" [size]="14" />
-        Workflow state
-      </button>
-    </h2>
-    @if (pill(); as pill) {
-      <span [class]="pill.chip" data-testid="workflow-state-status">{{
-        pill.label
-      }}</span>
-    }
-    @if (invalidLine(); as line) {
-      <span class="chip chip-danger" data-testid="workflow-state-invalid">{{
-        line
-      }}</span>
-    }
-    <span
-      class="text-[12px] text-fg-muted"
-      data-testid="workflow-state-progress"
-      >{{ progress() }}</span
+  <div class="flex min-h-0 flex-col border-r border-border">
+    <h3
+      class="m-0 flex shrink-0 items-center gap-1.5 px-3 pt-2.5 pb-1 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
     >
-    @if (summary().runId) {
-      <span
-        class="text-[12px] text-fg-muted"
-        data-testid="workflow-state-duration"
-        >{{ duration(summary().durationMs) }}</span
-      >
-      <span class="text-[12px] text-fg-muted"
-        >run
-        <span class="font-mono" data-testid="workflow-state-run-id">{{
-          summary().runId
-        }}</span></span
-      >
-    } @else {
-      <span
-        class="text-[12px] text-fg-muted"
-        data-testid="workflow-state-run-id"
-        >No run yet. Execute the workflow to see each node's data.</span
-      >
-    }
-  </div>
-
-  @if (open()) {
-    <div
-      class="grid max-h-[360px] min-h-[200px] flex-1 grid-cols-[180px_minmax(0,1fr)] overflow-hidden border-t border-border"
+      <lucide-angular [img]="ListTree" [size]="12" />
+      Logs
+    </h3>
+    <ul
+      class="m-0 min-h-0 flex-1 list-none overflow-y-auto px-2 pb-2"
+      aria-label="Nodes"
     >
-      <ul
-        class="m-0 min-h-0 list-none overflow-y-auto border-r border-border p-2"
-        aria-label="Nodes"
-      >
+      <li>
+        <button
+          type="button"
+          data-testid="workflow-state-node-all"
+          [attr.aria-pressed]="selected() === null"
+          class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-fg-muted hover:bg-surface-muted"
+          [class.bg-surface-selected]="selected() === null"
+          (click)="selectNode.emit(null)"
+        >
+          <span
+            class="flex h-5 w-5 shrink-0 items-center justify-center"
+            aria-hidden="true"
+          >
+            <lucide-angular [img]="ListTree" [size]="12" />
+          </span>
+          All nodes
+        </button>
+      </li>
+      @for (row of rows(); track row.node.nodeId) {
         <li>
           <button
             type="button"
-            data-testid="workflow-state-node-all"
-            [attr.aria-pressed]="selected() === null"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-fg hover:bg-surface-muted"
-            [class.bg-surface-selected]="selected() === null"
-            (click)="selectNode.emit(null)"
+            [attr.data-testid]="'workflow-state-node-' + row.node.nodeId"
+            [attr.data-state]="row.state"
+            [attr.aria-pressed]="selected()?.nodeId === row.node.nodeId"
+            [attr.aria-current]="row.state === 'current' ? 'step' : null"
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-surface-muted"
+            [class.bg-surface-selected]="selected()?.nodeId === row.node.nodeId"
+            [class.text-fg-muted]="row.state === 'pending' || row.state === 'skipped'"
+            [class.text-fg-strong]="row.state === 'current'"
+            [class.font-medium]="row.state === 'current' || row.state === 'waiting'"
+            [class.text-fg]="row.state !== 'pending' && row.state !== 'skipped' && row.state !== 'current'"
+            (click)="selectNode.emit(row.node.nodeId)"
+            (dblclick)="openNode.emit(row.node.nodeId)"
           >
-            <span class="h-2 w-2 shrink-0 rounded-full bg-fg-muted/40"></span>
-            All nodes
+            <span
+              class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+              [class.bg-success-soft]="row.state === 'done'"
+              [class.text-on-success-soft]="row.state === 'done'"
+              [class.bg-warning-soft]="row.state === 'waiting' || row.state === 'stopped'"
+              [class.text-on-warning-soft]="row.state === 'waiting' || row.state === 'stopped'"
+              [class.bg-danger-soft]="row.state === 'failed'"
+              [class.text-on-danger-soft]="row.state === 'failed'"
+              aria-hidden="true"
+            >
+              @switch (row.state) {
+                @case ("done") {
+                  <lucide-angular [img]="Check" [size]="12" />
+                }
+                @case ("current") {
+                  <lucide-angular [img]="Circle" [size]="12" class="animate-pulse text-primary" />
+                }
+                @case ("waiting") {
+                  <lucide-angular [img]="Clock" [size]="12" />
+                }
+                @case ("failed") {
+                  <lucide-angular [img]="X" [size]="12" />
+                }
+                @case ("stopped") {
+                  <lucide-angular [img]="Square" [size]="10" />
+                }
+                @case ("skipped") {
+                  <lucide-angular [img]="Minus" [size]="12" />
+                }
+                @default {
+                  <lucide-angular [img]="Circle" [size]="8" class="opacity-40" />
+                }
+              }
+            </span>
+            <span class="min-w-0 flex-1 truncate">{{ row.node.title }}</span>
+            @if (row.attempts > 1) {
+              <span class="text-[11px] text-fg-muted"
+                ><span aria-hidden="true">×{{ row.attempts }}</span
+                ><span class="sr-only">Ran {{ row.attempts }} times</span></span
+              >
+            }
+            @if (row.state === "waiting") {
+              <span class="chip chip-warning">Waiting for you</span>
+            } @else {
+              <span class="sr-only">{{ row.label }}</span>
+              <span
+                class="shrink-0 text-[12px] font-normal text-fg-muted"
+                [attr.data-testid]="row.state === 'current' ? 'workflow-state-elapsed' : null"
+                >{{ row.time }}</span
+              >
+            }
           </button>
         </li>
-        @for (node of nodes(); track node.nodeId) {
-          <li>
-            <button
-              type="button"
-              [attr.data-testid]="'workflow-state-node-' + node.nodeId"
-              [attr.aria-pressed]="selected()?.nodeId === node.nodeId"
-              class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-fg hover:bg-surface-muted"
-              [class.bg-surface-selected]="selected()?.nodeId === node.nodeId"
-              (click)="selectNode.emit(node.nodeId)"
-              (dblclick)="openNode.emit(node.nodeId)"
-            >
-              <span
-                class="h-2 w-2 shrink-0 rounded-full"
-                [class]="dot(node.run?.status ?? null)"
-              ></span>
-              <span class="min-w-0 flex-1 truncate">{{ node.title }}</span>
-              <span class="sr-only">{{ statusLabel(node) }}</span>
-              <span class="text-[12px] text-fg-muted">{{
-                duration(node.run?.durationMs)
-              }}</span>
-            </button>
-          </li>
-        }
-      </ul>
+      }
+    </ul>
+  </div>
 
-      <!-- Focusable: it scrolls, and may hold nothing else to focus (axe scrollable-region-focusable). -->
-      <div
-        class="min-h-0 overflow-auto p-4 focus-visible:outline-2 focus-visible:outline-focus"
-        tabindex="0"
-        aria-label="Node data"
-        role="group"
-      >
-        @if (selected(); as node) {
-          <div data-testid="workflow-state-detail">
-            <div class="mb-3 flex flex-wrap items-center gap-2">
-              <h3 class="m-0 text-[15px] font-medium text-fg-strong">
-                {{ node.title }}
-              </h3>
-              <span class="chip chip-neutral">{{ kindLabel(node.kind) }}</span>
-              <span [class]="chip(shown()?.status ?? null)">{{
-                shownStatusLabel()
-              }}</span>
-              @if (node.summary) {
-                <span class="text-[13px] text-fg-muted">{{
-                  node.summary
-                }}</span>
-              }
-              <!-- A step that ran more than once: which attempt Input and Output show -->
-              <app-workflow-attempt-switcher
-                class="ml-auto"
-                [attempts]="attemptNumbers()"
-                [selected]="selectedAttempt()"
-                (selectAttempt)="selectedAttempt.set($event)"
-              />
-            </div>
-            <div
-              class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4"
-            >
-              <section
-                data-testid="workflow-state-input"
-                role="group"
-                aria-label="Input"
-                class="min-w-0"
-              >
-                <h4
-                  class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-                >
-                  Input
-                </h4>
-                <app-workflow-data-view
-                  [value]="shown()?.input"
-                  [truncated]="shown()?.inputTruncated === true"
-                  [modes]="modes"
-                  [emptyText]="inputEmpty(node)"
-                />
-              </section>
-              <section
-                data-testid="workflow-state-output"
-                role="group"
-                aria-label="Output"
-                class="min-w-0"
-              >
-                <h4
-                  class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-                >
-                  Output
-                </h4>
-                @if (shown()?.error; as error) {
-                  <p
-                    class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
-                  >
-                    {{ error }}
-                  </p>
-                }
-                <app-workflow-data-view
-                  [value]="shown()?.output"
-                  [truncated]="shown()?.outputTruncated === true"
-                  [modes]="modes"
-                  [emptyText]="outputEmpty(node)"
-                />
-              </section>
-              @if (node.context; as context) {
-                <section
-                  data-testid="workflow-state-context"
-                  role="group"
-                  aria-label="Context"
-                  class="min-w-0 text-[13px]"
-                >
-                  <h4
-                    class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-                  >
-                    Context
-                  </h4>
-                  <dl class="m-0 flex flex-col gap-1.5">
-                    <dt class="text-fg-muted">Workflow input</dt>
-                    <dd class="m-0 font-mono text-[12px] break-words text-fg">
-                      {{ inputNames(node) }}
-                    </dd>
-                    <dt class="text-fg-muted">Earlier steps</dt>
-                    <dd class="m-0 font-mono text-[12px] break-words text-fg">
-                      @for (
-                        step of context.earlierSteps;
-                        track step.id;
-                        let last = $last
-                      ) {
-                        {{ step.title }}{{ last ? "" : ", " }}
-                      } @empty {
-                        None
-                      }
-                    </dd>
-                    @if (context.agent; as agent) {
-                      <dt class="text-fg-muted">Agent</dt>
-                      <dd class="m-0 text-fg">{{ agent.name }}</dd>
-                      <dt class="text-fg-muted">Model</dt>
-                      <dd class="m-0 font-mono text-[12px] break-words text-fg">
-                        {{ agent.model ?? "No model set" }}
-                      </dd>
-                      <dt class="text-fg-muted">Tools</dt>
-                      <dd class="m-0 font-mono text-[12px] break-words text-fg">
-                        {{
-                          agent.tools.length ? agent.tools.join(", ") : "None"
-                        }}
-                      </dd>
-                    }
-                  </dl>
-                </section>
-              }
-            </div>
-          </div>
-        } @else {
-          <table
-            class="w-full border-collapse text-[13px]"
-            data-testid="workflow-state-table"
+  <!-- Focusable: it scrolls, and may hold nothing else to focus (axe scrollable-region-focusable). -->
+  <div
+    class="min-h-0 overflow-auto p-4 focus-visible:outline-2 focus-visible:outline-focus"
+    tabindex="0"
+    aria-label="Node data"
+    role="group"
+  >
+    @if (selected(); as node) {
+      <div data-testid="workflow-state-detail">
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+          <h3 class="m-0 text-[15px] font-medium text-fg-strong">
+            {{ node.title }}
+          </h3>
+          <span class="chip chip-neutral">{{ kindLabel(node.kind) }}</span>
+          <span [class]="chip(shown()?.status ?? null)">{{
+            shownStatusLabel()
+          }}</span>
+          @if (node.summary) {
+            <span class="text-[13px] text-fg-muted">{{
+              node.summary
+            }}</span>
+          }
+          <!-- A step that ran more than once: which attempt Input and Output show -->
+          <app-workflow-attempt-switcher
+            class="ml-auto"
+            [attempts]="attemptNumbers()"
+            [selected]="selectedAttempt()"
+            (selectAttempt)="selectedAttempt.set($event)"
+          />
+        </div>
+        <div
+          class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4"
+        >
+          <section
+            data-testid="workflow-state-input"
+            role="group"
+            aria-label="Input"
+            class="min-w-0"
           >
-            <thead>
-              <tr class="text-left text-[12px] text-fg-muted">
-                <th
-                  scope="col"
-                  class="border-b border-border px-2 py-1.5 font-medium"
-                >
-                  Node
-                </th>
-                <th
-                  scope="col"
-                  class="border-b border-border px-2 py-1.5 font-medium"
-                >
-                  Kind
-                </th>
-                <th
-                  scope="col"
-                  class="border-b border-border px-2 py-1.5 font-medium"
-                >
-                  Status
-                </th>
-                <th
-                  scope="col"
-                  class="border-b border-border px-2 py-1.5 font-medium"
-                >
-                  Duration
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (node of nodes(); track node.nodeId) {
-                <tr>
-                  <td class="border-b border-border px-2 py-1">
-                    <button
-                      type="button"
-                      class="text-left text-primary hover:underline"
-                      (click)="selectNode.emit(node.nodeId)"
-                    >
-                      {{ node.title }}
-                    </button>
-                  </td>
-                  <td class="border-b border-border px-2 py-1.5 text-fg">
-                    {{ kindLabel(node.kind) }}
-                  </td>
-                  <td class="border-b border-border px-2 py-1.5 text-fg">
-                    {{ statusLabel(node) }}
-                  </td>
-                  <td class="border-b border-border px-2 py-1.5 text-fg">
-                    {{ duration(node.run?.durationMs) }}
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        }
+            <h4
+              class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Input
+            </h4>
+            <app-workflow-data-view
+              [value]="shown()?.input"
+              [truncated]="shown()?.inputTruncated === true"
+              [modes]="modes"
+              [emptyText]="inputEmpty(node)"
+            />
+          </section>
+          <section
+            data-testid="workflow-state-output"
+            role="group"
+            aria-label="Output"
+            class="min-w-0"
+          >
+            <h4
+              class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Output
+            </h4>
+            @if (shown()?.error; as error) {
+              <p
+                class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+              >
+                {{ error }}
+              </p>
+            }
+            <app-workflow-data-view
+              [value]="shown()?.output"
+              [truncated]="shown()?.outputTruncated === true"
+              [modes]="modes"
+              [emptyText]="outputEmpty(node)"
+            />
+          </section>
+          @if (node.context; as context) {
+            <section
+              data-testid="workflow-state-context"
+              role="group"
+              aria-label="Context"
+              class="min-w-0 text-[13px]"
+            >
+              <h4
+                class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+              >
+                Context
+              </h4>
+              <dl class="m-0 flex flex-col gap-1.5">
+                <dt class="text-fg-muted">Workflow input</dt>
+                <dd class="m-0 font-mono text-[12px] break-words text-fg">
+                  {{ inputNames(node) }}
+                </dd>
+                <dt class="text-fg-muted">Earlier steps</dt>
+                <dd class="m-0 font-mono text-[12px] break-words text-fg">
+                  @for (
+                    step of context.earlierSteps;
+                    track step.id;
+                    let last = $last
+                  ) {
+                    {{ step.title }}{{ last ? "" : ", " }}
+                  } @empty {
+                    None
+                  }
+                </dd>
+                @if (context.agent; as agent) {
+                  <dt class="text-fg-muted">Agent</dt>
+                  <dd class="m-0 text-fg">{{ agent.name }}</dd>
+                  <dt class="text-fg-muted">Model</dt>
+                  <dd class="m-0 font-mono text-[12px] break-words text-fg">
+                    {{ agent.model ?? "No model set" }}
+                  </dd>
+                  <dt class="text-fg-muted">Tools</dt>
+                  <dd class="m-0 font-mono text-[12px] break-words text-fg">
+                    {{
+                      agent.tools.length ? agent.tools.join(", ") : "None"
+                    }}
+                  </dd>
+                }
+              </dl>
+            </section>
+          }
+        </div>
       </div>
-    </div>
-  }
+    } @else {
+      <table
+        class="w-full border-collapse text-[13px]"
+        data-testid="workflow-state-table"
+      >
+        <thead>
+          <tr class="text-left text-[12px] text-fg-muted">
+            <th
+              scope="col"
+              class="border-b border-border px-2 py-1.5 font-medium"
+            >
+              Node
+            </th>
+            <th
+              scope="col"
+              class="border-b border-border px-2 py-1.5 font-medium"
+            >
+              Kind
+            </th>
+            <th
+              scope="col"
+              class="border-b border-border px-2 py-1.5 font-medium"
+            >
+              Status
+            </th>
+            <th
+              scope="col"
+              class="border-b border-border px-2 py-1.5 font-medium"
+            >
+              Duration
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (node of nodes(); track node.nodeId) {
+            <tr>
+              <td class="border-b border-border px-2 py-1">
+                <button
+                  type="button"
+                  class="text-left text-primary hover:underline"
+                  (click)="selectNode.emit(node.nodeId)"
+                >
+                  {{ node.title }}
+                </button>
+              </td>
+              <td class="border-b border-border px-2 py-1.5 text-fg">
+                {{ kindLabel(node.kind) }}
+              </td>
+              <td class="border-b border-border px-2 py-1.5 text-fg">
+                {{ statusLabel(node) }}
+              </td>
+              <td class="border-b border-border px-2 py-1.5 text-fg">
+                {{ duration(node.run?.durationMs) }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
 </section>
