@@ -17,6 +17,7 @@ import {
   Check,
   CircleAlert,
   CircleX,
+  Hourglass,
   Cpu,
   Flag,
   LucideAngularModule,
@@ -95,6 +96,7 @@ const STATUS_ICONS: Record<WorkflowNodeStatus, LucideIconData> = {
   running: Loader2,
   skipped: Minus,
   stopped: Square,
+  suspended: Hourglass,
 };
 
 /**

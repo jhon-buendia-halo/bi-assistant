@@ -136,6 +136,4 @@ export interface WorkflowStateSummary {
  * A node's status on the canvas: its status in the run shown, or `invalid`
  * for Start when the last Execute was refused (ui.md 4.4b).
  */
-export type WorkflowNodeStatus =
-  | Exclude<WorkflowRunStepStatus, 'suspended'>
-  | 'invalid';
+export type WorkflowNodeStatus = WorkflowRunStepStatus | 'invalid';

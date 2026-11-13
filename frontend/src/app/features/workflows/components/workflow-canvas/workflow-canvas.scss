@@ -168,6 +168,10 @@
     border-color: var(--qti-on-info-soft);
   }
 
+  &[data-status="suspended"] {
+    border-color: var(--qti-on-warning-soft);
+  }
+
   &[aria-pressed="true"] {
     box-shadow: 0 0 0 4px var(--qti-surface-selected);
   }
@@ -274,6 +278,11 @@
   &[data-status="running"] {
     background: var(--qti-info-soft);
     color: var(--qti-on-info-soft);
+  }
+
+  &[data-status="suspended"] {
+    background: var(--qti-warning-soft);
+    color: var(--qti-on-warning-soft);
   }
 }
 

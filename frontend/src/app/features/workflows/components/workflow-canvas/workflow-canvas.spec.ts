@@ -635,6 +635,19 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     );
   });
 
+  it('shows a step waiting for an answer with "Waiting for you" for screen readers', () => {
+    fixture.componentRef.setInput('statuses', { analyse: 'suspended' });
+    fixture.detectChanges();
+    const badge = q('workflow-node-analyse')?.querySelector(
+      '[data-testid="workflow-node-status"]',
+    );
+    expect(badge?.getAttribute('data-status')).toBe('suspended');
+    expect(badge?.textContent?.trim()).toBe('Waiting for you');
+    expect(q('workflow-node-analyse')?.getAttribute('data-status')).toBe(
+      'suspended',
+    );
+  });
+
   it('shows Start invalid when the input was refused, with "Invalid input" for screen readers', () => {
     fixture.componentRef.setInput('statuses', { start: 'invalid' });
     fixture.detectChanges();
