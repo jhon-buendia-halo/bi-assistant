@@ -116,6 +116,27 @@ describe('WorkflowNodeDialog', () => {
     );
   });
 
+  it("shows a model-only step's own instructions, not the agent's job description", () => {
+    const analyse = node('analyse');
+    open({
+      ...analyse,
+      step: {
+        ...analyse.step!,
+        agent: { ...analyse.step!.agent!, name: 'Michael', tools: [], maxSteps: 1 },
+        instructions: 'You plan a data analysis for Questions to Insights v2.',
+      },
+    });
+    expect(text('workflow-step-field-instructions')).toBe(
+      'You plan a data analysis for Questions to Insights v2.',
+    );
+    expect(text('workflow-step-instructions-note')).toBe(
+      "Michael does this step in one model call, without tools; the job description isn't used here.",
+    );
+    expect(byId('workflow-step-field-system-prompt')).toBeNull();
+    expect(el().textContent).toContain('Step instructions');
+    expect(el().textContent).not.toContain('Job description');
+  });
+
   it('notes a shortened system prompt', () => {
     const analyse = node('analyse');
     open({

@@ -82,6 +82,8 @@ export interface AgentWorkflowStep {
   output: string[];
   /** The agent step only: its persona's name and job title, tools and step limit. */
   agent?: { name: string; role?: string; tools: string[]; maxSteps: number };
+  /** A model-only step (Plan, Write answer): the instructions its one call runs on. */
+  instructions?: string;
   exits: { label: string; outcome: 'fails' | 'stops' | 'waits' }[];
 }
 

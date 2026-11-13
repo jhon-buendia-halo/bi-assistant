@@ -1,3 +1,7 @@
+import {
+  PLAN_INSTRUCTIONS,
+  WRITE_ANSWER_INSTRUCTIONS,
+} from './qti-v2-turn.prompts';
 import { agentWorkflow } from './agent-workflows';
 
 const V2_TOOLS = [
@@ -47,6 +51,19 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     ).toEqual([undefined, undefined, undefined, undefined, undefined]);
     // The catalogue's own flag stays out of the API's step.
     expect(steps.every((step) => !('modelOnly' in step))).toBe(true);
+  });
+
+  it("gives Plan and Write answer the instructions their one call runs on, not the agent's job description", () => {
+    const steps = agentWorkflow('assistant-v2')!.steps;
+    const instructionsOf = (id: string) =>
+      steps.find((step) => step.id === id)?.instructions;
+    expect(instructionsOf('plan')).toBe(PLAN_INSTRUCTIONS);
+    expect(instructionsOf('write-answer')).toBe(WRITE_ANSWER_INSTRUCTIONS);
+    // Analyse runs the agent itself, on its job description.
+    expect(instructionsOf('analyse')).toBeUndefined();
+    expect(
+      steps.filter((step) => step.kind === 'code').map((s) => s.instructions),
+    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
   });
 
   it('carries each step’s fields and other exits', () => {

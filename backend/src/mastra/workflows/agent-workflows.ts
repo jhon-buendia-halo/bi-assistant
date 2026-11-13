@@ -12,6 +12,10 @@ import {
   ASSISTANT_V2_TOOL_NAMES,
 } from '../agents/assistant-v2-catalog';
 import { builtinAgentPersona } from '../agent-personas';
+import {
+  PLAN_INSTRUCTIONS,
+  WRITE_ANSWER_INSTRUCTIONS,
+} from './qti-v2-turn.prompts';
 import type { WorkflowStepExit } from './qti-v2-turn.steps';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
@@ -27,6 +31,12 @@ export interface AgentWorkflowStep {
    * title (agents.md 1.1), its tools and its step limit.
    */
   agent?: { name: string; role: string; tools: string[]; maxSteps: number };
+  /**
+   * A model-only step (Plan, Write answer) only: the instructions its one
+   * model call runs on, in place of the agent's job description, which it
+   * does not get (agents.md 5.11, Appendix F).
+   */
+  instructions?: string;
   exits: WorkflowStepExit[];
 }
 
@@ -34,6 +44,12 @@ export interface AgentWorkflow {
   id: string;
   steps: AgentWorkflowStep[];
 }
+
+/** The own instructions of each model-only step, by step id (agents.md Appendix F). */
+const STEP_INSTRUCTIONS: Readonly<Record<string, string>> = {
+  plan: PLAN_INSTRUCTIONS,
+  'write-answer': WRITE_ANSWER_INSTRUCTIONS,
+};
 
 /** The agent each code workflow's agent step runs, by its registry key. */
 const STEP_AGENTS: Record<
@@ -80,6 +96,11 @@ export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
               maxSteps: step.modelOnly ? 1 : source.agent.maxSteps,
             },
           }
+        : {}),
+      ...(step.kind === 'agent' &&
+      step.modelOnly &&
+      Object.hasOwn(STEP_INSTRUCTIONS, step.id)
+        ? { instructions: STEP_INSTRUCTIONS[step.id] }
         : {}),
       exits: step.exits.map((exit) => ({ ...exit })),
     })),
