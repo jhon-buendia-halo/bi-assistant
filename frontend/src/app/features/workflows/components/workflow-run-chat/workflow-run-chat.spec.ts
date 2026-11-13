@@ -14,7 +14,7 @@ import {
   RunStreamHandlers,
   WorkflowRunsApiService,
 } from '../../services/workflow-runs-api.service';
-import { WorkflowPanel } from './workflow-panel';
+import { WorkflowRunChat } from './workflow-run-chat';
 
 const STEP = (id: string, title: string, input: string[], output: string[]) => ({
   id,
@@ -177,8 +177,8 @@ function assistantRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   });
 }
 
-describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13; ui.md 4.4b)', () => {
-  let fixture: ComponentFixture<WorkflowPanel>;
+describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13; ui.md 4.4b)', () => {
+  let fixture: ComponentFixture<WorkflowRunChat>;
   let designer: WorkflowDesigner;
   let http: HttpTestingController;
   let el: HTMLElement;
@@ -186,7 +186,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [WorkflowPanel],
+      imports: [WorkflowRunChat],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -206,7 +206,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(workflow.id)}`))
       .flush(workflow);
     afterLoad?.();
-    fixture = TestBed.createComponent(WorkflowPanel);
+    fixture = TestBed.createComponent(WorkflowRunChat);
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
   }
@@ -308,7 +308,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       call.handlers.onRun!({ runId: 'run-1', workflowId: 'three-steps' });
       call.handlers.onStep!({ id: 'clean-text', title: 'Clean text', status: 'running' });
       fixture.detectChanges();
-      expect(q('workflow-run-step-clean-text')?.textContent).toContain('Running');
+      expect(el.querySelector('[data-testid^="workflow-run-step-"]')).toBeNull();
 
       done({
         steps: [
@@ -321,14 +321,8 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(button.disabled).toBe(false);
       expect(q('workflow-run-stop')).toBeNull();
       expect(text('workflow-run-status')).toBe('Run succeeded');
-      const row = q('workflow-run-step-clean-text')!;
-      expect(row.textContent).toContain('Clean text');
-      expect(row.textContent).toContain('Done');
-      // Step outputs read as key/value rows, a text with its quotes unescaped.
-      const output = row.querySelector('[data-testid="workflow-run-step-output"]')!;
-      expect(output.querySelector('dt')?.textContent?.trim()).toBe('text');
-      expect(output.querySelector('dd')?.textContent?.trim()).toBe('"Hello"');
-      expect(output.textContent).not.toContain('\\"');
+      // The steps are in the Logs, not here.
+      expect(el.querySelector('[data-testid^="workflow-run-step-"]')).toBeNull();
       expect(q('workflow-run-output')?.textContent).toContain('1 word, 5 characters: "Hello"');
       expect(designer.nodeStatuses()).toEqual({
         start: 'success',
@@ -354,9 +348,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
         error: 'The text is empty',
       });
       expect(text('workflow-run-status')).toBe('Run failed: The text is empty');
-      expect(q('workflow-run-step-clean-text')?.textContent).toContain('Failed');
-      expect(q('workflow-run-step-clean-text')?.textContent).toContain('The text is empty');
-      expect(q('workflow-run-step-count-words')?.textContent).toContain('Skipped');
+      expect(el.querySelector('[data-testid^="workflow-run-step-"]')).toBeNull();
       expect(q('workflow-run-output')).toBeNull();
     });
 
@@ -478,8 +470,8 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
           Array.from(b.querySelectorAll('span')).map((span) => span.textContent?.trim()),
         ),
       ).toEqual([
-        ['World Cup Core', '2 entities'],
-        ['Sales', '1 entities'],
+        ['World Cup Core', ', 2 entities'],
+        ['Sales', ', 1 entities'],
       ]);
       expect(cards[0].getAttribute('aria-pressed')).toBe('false');
       cards[0].click();
@@ -613,7 +605,7 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       click('workflow-run-stop');
       expect(runs.last.signal?.aborted).toBe(true);
       expect(text('workflow-run-status')).toBe('Run stopped');
-      expect(q('workflow-run-step-answer')?.textContent).toContain('Stopped');
+      expect(q('workflow-run-step-answer')).toBeNull();
       expect(text('workflow-run')).toBe('Execute');
     });
 
@@ -654,6 +646,202 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(q('workflow-run-scorecard')).toBeNull();
       expect(q('workflow-run-phases')).toBeNull();
       expect(el.querySelector('[aria-label="Download report"]')).toBeNull();
+    });
+  });
+
+  describe('the chat and its composer (ui.md 4.4b)', () => {
+    const DATASETS = [
+      { name: 'World Cup Core', tables: ['a', 'b'], datasourceKind: 'postgres' },
+    ];
+    const WITH_EXAMPLES: WorkflowDetail = {
+      ...ASSISTANT,
+      starterQuestions: ['Which team scored the most goals?', 'Who won in 2022?'],
+    };
+
+    function openForm(workflow: WorkflowDetail = WITH_EXAMPLES): void {
+      open(workflow, () => {
+        if (workflow.input.some((f) => f.type === 'datasets')) {
+          http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
+        }
+      });
+    }
+
+    /** Opens the workflow showing a stored run, as "Answer in the workflow" does. */
+    function openStored(run: WorkflowRun, workflow: WorkflowDetail = WITH_EXAMPLES): void {
+      designer.showRunOnLoad(run);
+      openForm(workflow);
+    }
+
+    function typeQuestion(value: string): void {
+      const field = q('workflow-input-question') as HTMLTextAreaElement;
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    function pressEnter(testId: string, init: KeyboardEventInit = {}): KeyboardEvent {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      q(testId)!.dispatchEvent(event);
+      fixture.detectChanges();
+      return event;
+    }
+
+    const answered = (overrides: Partial<WorkflowRun> = {}) =>
+      assistantRun({
+        answer: { role: 'assistant', content: 'Brazil scored the most goals.', at: 'x' },
+        ...overrides,
+      });
+
+    it('before a run shows the empty state with the hint and the example chips, and no New question', () => {
+      openForm();
+      expect(q('workflow-run-empty')).not.toBeNull();
+      expect(q('workflow-run-empty')!.textContent).toContain('Questions to Insights v2');
+      expect(q('workflow-run-empty')!.textContent).toContain(
+        'Pick the datasets below and type a question.',
+      );
+      const list = el.querySelector('[aria-label="Example questions"]')!;
+      expect(list.querySelectorAll('button').length).toBe(2);
+      expect(text('workflow-example-1')).toBe('Who won in 2022?');
+      expect(q('workflow-run-new')).toBeNull();
+      expect(q('workflow-run-question')).toBeNull();
+      expect(el.querySelector('h3')?.textContent).toContain('Chat');
+    });
+
+    it('an example chip fills the question but never runs', () => {
+      openForm();
+      click('workflow-example-1');
+      expect((q('workflow-input-question') as HTMLTextAreaElement).value).toBe('Who won in 2022?');
+      expect(runs.calls.length).toBe(0);
+    });
+
+    it('says to type a question when there are no datasets to pick, and to fill the input without a question', () => {
+      openForm({
+        ...ASSISTANT,
+        input: ASSISTANT.input.filter((f) => f.type !== 'datasets'),
+      });
+      expect(text('workflow-run-empty')).toContain('Type a question below.');
+      open({
+        ...SEQ,
+        input: [{ name: 'count', label: 'Count', type: 'number', required: true }],
+      });
+      expect(text('workflow-run-empty')).toContain('Fill in the input below and press Execute.');
+      expect(el.querySelector('[aria-label="Example questions"]')).toBeNull();
+    });
+
+    it('the question field comes first, its label is screen-reader only and it has two rows', () => {
+      openForm();
+      const form = q('workflow-run-composer')!;
+      expect(form.getAttribute('aria-label')).toBe('Input');
+      expect(form.querySelector('textarea')).toBe(q('workflow-input-question') as HTMLTextAreaElement);
+      expect((q('workflow-input-question') as HTMLTextAreaElement).rows).toBe(2);
+      const label = el.querySelector('label[for="workflow-input-question"]')!;
+      expect(label.classList).toContain('sr-only');
+      expect(q('workflow-follow-up-input')).toBeNull();
+    });
+
+    it('Enter in the question submits; Shift+Enter does not', () => {
+      openForm();
+      typeQuestion('Which team scored the most goals?');
+      q('workflow-input-datasets')!.querySelector('button')!.click();
+      fixture.detectChanges();
+      const shifted = pressEnter('workflow-input-question', { shiftKey: true });
+      expect(shifted.defaultPrevented).toBeFalse();
+      expect(runs.calls.length).toBe(0);
+      const plain = pressEnter('workflow-input-question');
+      expect(plain.defaultPrevented).toBeTrue();
+      expect(runs.calls.length).toBe(1);
+      expect(runs.last.body.input).toEqual(
+        jasmine.objectContaining({ question: 'Which team scored the most goals?' }),
+      );
+    });
+
+    it('under a stored answer the composer follows up, without the run form', () => {
+      openStored(answered());
+      expect(q('workflow-follow-up-input')).not.toBeNull();
+      expect(q('workflow-input-question')).toBeNull();
+      expect(q('workflow-input-datasets')).toBeNull();
+      expect(q('workflow-run')).toBeNull();
+      const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
+      expect(follow.rows).toBe(1);
+      expect(follow.getAttribute('aria-describedby')).toBe('workflow-follow-up-hint');
+      const hint = el.querySelector('#workflow-follow-up-hint')!;
+      expect(hint.textContent?.trim()).toBe('Follows up on this run');
+      expect(hint.classList).toContain('sr-only');
+      expect(q('workflow-run-empty')).toBeNull();
+    });
+
+    it('Enter in the follow-up sends it; Shift+Enter does not', () => {
+      openStored(answered());
+      const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
+      follow.value = 'And the fewest?';
+      follow.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      pressEnter('workflow-follow-up-input', { shiftKey: true });
+      expect(runs.calls.length).toBe(0);
+      pressEnter('workflow-follow-up-input');
+      expect(runs.calls.length).toBe(1);
+      expect(runs.last.body.context).toEqual({ fromRunId: 'run-1' });
+    });
+
+    it('a clarification answer keeps the normal composer', () => {
+      openStored(
+        answered({
+          answer: {
+            role: 'assistant',
+            content: 'Which year?',
+            at: 'x',
+            clarification: { question: 'Which year?', options: [{ label: '2018' }, { label: '2022' }] },
+          },
+        }),
+      );
+      expect(q('workflow-follow-up-input')).toBeNull();
+      expect(q('workflow-input-question')).not.toBeNull();
+      expect(q('workflow-run')).not.toBeNull();
+    });
+
+    it('a run shown has its question bubble and New question, which returns to the run form', () => {
+      openStored(answered());
+      expect(text('workflow-run-question')).toBe('Which team scored the most goals?');
+      expect(q('workflow-run-empty')).toBeNull();
+      const newQuestion = spyOn(designer, 'newQuestion').and.callThrough();
+      click('workflow-run-new');
+      expect(newQuestion).toHaveBeenCalledTimes(1);
+      expect(designer.runResult()).toBeNull();
+      expect(q('workflow-run-question')).toBeNull();
+      expect(q('workflow-run-empty')).not.toBeNull();
+      expect(q('workflow-input-question')).not.toBeNull();
+      expect(q('workflow-run-new')).toBeNull();
+    });
+
+    it('New question is hidden while a run streams', () => {
+      openForm();
+      typeQuestion('Which team?');
+      q('workflow-input-datasets')!.querySelector('button')!.click();
+      fixture.detectChanges();
+      click('workflow-run');
+      runs.last.handlers.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+      fixture.detectChanges();
+      expect(designer.running()).toBeTrue();
+      expect(q('workflow-run-new')).toBeNull();
+      expect(text('workflow-run-question')).toBe('Which team?');
+      // The normal composer shows while it streams.
+      expect(text('workflow-run')).toBe('Executing…');
+      expect(q('workflow-follow-up-input')).toBeNull();
+      runs.last.handlers.onDone!(answered());
+      fixture.detectChanges();
+      expect(q('workflow-run-new')).not.toBeNull();
+    });
+
+    it('renders no step card and no progress list, with or without a run', () => {
+      openStored(answered());
+      expect(el.querySelector('[data-testid^="workflow-run-step-"]')).toBeNull();
+      expect(el.querySelector('[data-testid^="workflow-run-progress"]')).toBeNull();
+      expect(q('workflow-run-result')).toBeNull();
     });
   });
 
@@ -700,17 +888,17 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       return runs.last.handlers;
     }
 
-    it('shows the progress with the running step current, and its activity line', () => {
+    it('shows no step cards, progress list or activity line in the chat while the run goes (they live in the Logs and the Run header)', () => {
       const h = startV2();
       h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
       h.onStep!({ id: 'receive-question', title: 'Receive question', status: 'success' });
       h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', startedAt: new Date().toISOString() });
       h.onTool!({ name: 'run_readonly_sql', rationale: 'Counting matches' } as never);
       fixture.detectChanges();
-      const current = el.querySelectorAll('[data-testid="workflow-run-progress"] [aria-current="step"]');
-      expect(current.length).toBe(1);
-      expect(current[0].getAttribute('data-testid')).toBe('workflow-run-progress-analyse');
-      expect(text('workflow-run-activity')).toBe('Analyse · Counting matches');
+      expect(el.querySelector('[data-testid^="workflow-run-step-"]')).toBeNull();
+      expect(el.querySelector('[data-testid^="workflow-run-progress"]')).toBeNull();
+      expect(q('workflow-run-activity')).toBeNull();
+      expect(q('workflow-run-live')).not.toBeNull();
       expect(q('workflow-run-input-required')).toBeNull();
     });
 
@@ -731,12 +919,16 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       );
       fixture.detectChanges();
       expect(text('workflow-run-input-question')).toBe('Which year?');
-      expect(text('workflow-run-activity')).toBe('Waiting for your answer');
       expect(text('workflow-run-status')).toBe('Waiting for you');
-      const order = Array.from(
-        el.querySelector('section[aria-label="Run"]')!.children,
-      ).map((child) => child.tagName.toLowerCase());
-      expect(order[0]).toBe('app-workflow-run-input-required');
+      const order = Array.from(q('workflow-run-chat-log')!.children).map((child) =>
+        child.tagName.toLowerCase(),
+      );
+      // After the question bubble, before the status line.
+      expect(order.indexOf('app-workflow-run-input-required')).toBeGreaterThan(-1);
+      expect(order.indexOf('app-workflow-run-input-required')).toBeLessThan(
+        order.indexOf('p', order.indexOf('app-workflow-run-input-required')),
+      );
+      expect(q('workflow-run-question')).not.toBeNull();
       click('workflow-run-input-option-1');
       expect(runs.resumes.length).toBe(1);
       expect(runs.resumes[0]).toEqual(

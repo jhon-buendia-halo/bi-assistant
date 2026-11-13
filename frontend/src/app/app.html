@@ -193,7 +193,7 @@
           <div class="flex min-w-0 flex-1 flex-col">
             @if (shell.currentArea() === "runs") {
               <app-sessions-header />
-            } @else if (!shell.rightPanelOpen()) {
+            } @else if (!shell.rightPanelOpen() && shell.rightPanelAvailable()) {
               <button
                 type="button"
                 (click)="shell.rightPanelOpen.set(true)"
@@ -246,7 +246,7 @@
         </main>
 
         <!-- Right panel -->
-        @if (shell.rightPanelOpen()) {
+        @if (shell.rightPanelOpen() && shell.rightPanelAvailable()) {
           <aside
             aria-label="Details panel"
             class="card relative flex shrink-0 flex-col"
@@ -267,7 +267,7 @@
               (dblclick)="resetRightPanelWidth()"
             ></div>
 
-            <!-- Panel header: collapse; the agent editor's Try it and a workflow's Run add their title -->
+            <!-- Panel header: collapse; the agent editor's Try it adds its title -->
             <div
               class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3"
             >
@@ -277,13 +277,6 @@
                 >
                   Try it
                 </h3>
-              } @else if (shell.mainView() === "workflow-detail") {
-                <h2
-                  class="pl-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-                  data-testid="workflow-panel-title"
-                >
-                  Run
-                </h2>
               }
               <button
                 type="button"
@@ -310,10 +303,6 @@
                 />
               } @else if (shell.mainView() === "agent-detail") {
                 <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
-              } @else if (shell.mainView() === "workflow-detail") {
-                @defer (on immediate) {
-                  <app-workflow-panel class="min-h-0 flex-1" />
-                }
               } @else {
                 <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />
               }

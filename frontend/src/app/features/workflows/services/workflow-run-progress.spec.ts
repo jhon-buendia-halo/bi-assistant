@@ -3,6 +3,7 @@ import { GRAPH_WORKFLOW } from './workflow-graph.testing';
 import {
   activityLine,
   elapsedLabel,
+  nodeProgressState,
   progressSteps,
 } from './workflow-run-progress';
 
@@ -169,5 +170,18 @@ describe('elapsedLabel', () => {
       '1 min 4 s',
     );
     expect(elapsedLabel('2026-11-11T10:00:00.000Z', t - 5_000)).toBe('0 s');
+  });
+});
+
+describe('nodeProgressState (Logs rows, ui.md 4.4b)', () => {
+  it('maps every step status to its progress state', () => {
+    expect(nodeProgressState(undefined)).toBe('pending');
+    expect(nodeProgressState(null)).toBe('pending');
+    expect(nodeProgressState('success')).toBe('done');
+    expect(nodeProgressState('running')).toBe('current');
+    expect(nodeProgressState('suspended')).toBe('waiting');
+    expect(nodeProgressState('failed')).toBe('failed');
+    expect(nodeProgressState('skipped')).toBe('skipped');
+    expect(nodeProgressState('stopped')).toBe('stopped');
   });
 });

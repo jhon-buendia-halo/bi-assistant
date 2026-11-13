@@ -82,6 +82,20 @@ describe('App', () => {
     ).toBe(String(initialWidth - 100));
   });
 
+  it('offers the Expand button elsewhere but neither it nor the Details panel on a workflow page', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('button[title="Expand right panel"]')).toBeTruthy();
+    shellState().mainView.set('workflow-detail');
+    fixture.detectChanges();
+    expect(el.querySelector('button[title="Expand right panel"]')).toBeNull();
+    shellState().rightPanelOpen.set(true);
+    fixture.detectChanges();
+    expect(el.querySelector('aside[aria-label="Details panel"]')).toBeNull();
+    expect(el.querySelector('.right-panel-resize-handle')).toBeNull();
+  });
+
   it('should support keyboard resizing from the separator', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();

@@ -83,6 +83,28 @@ export function progressSteps(
   });
 }
 
+/**
+ * How a node of the Logs list reads (ui.md 4.4b): its status in the run
+ * shown as a progress state; a node that has not run is `pending`.
+ */
+export function nodeProgressState(
+  status: RunStepView['status'] | undefined,
+): ProgressState {
+  switch (status) {
+    case undefined:
+    case null:
+      return 'pending';
+    case 'success':
+      return 'done';
+    case 'running':
+      return 'current';
+    case 'suspended':
+      return 'waiting';
+    default:
+      return status;
+  }
+}
+
 /** `12 s`, `1 min 4 s`: whole elapsed seconds since `startedAt`. */
 export function elapsedLabel(startedAt: string, now: number): string {
   const seconds = Math.max(

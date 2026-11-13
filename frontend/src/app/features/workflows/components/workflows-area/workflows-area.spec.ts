@@ -51,18 +51,37 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
     expect(shellState().mainView()).toBe('workflows');
   });
 
-  it('opens a workflow page with the right panel open on its configuration (ui.md 4.4b)', async () => {
-    const { app, fixture, el } = setup();
+  it('opens a workflow page without the right panel: the Run panel sits under the canvas (ui.md 4.4b)', async () => {
+    const { fixture, el } = setup();
     expect(shellState().rightPanelOpen()).toBe(false);
     workflowsNav().openWorkflow('qti-v2-turn');
     fixture.detectChanges();
-    // Both are deferred blocks.
+    // The page is a deferred block.
+    await fixture.whenStable();
+    fixture.detectChanges();
+    // Opening a workflow no longer opens the right panel.
+    expect(shellState().rightPanelOpen()).toBe(false);
+    expect(shellState().rightPanelAvailable()).toBe(false);
+    expect(el.querySelector('aside[aria-label="Details panel"]')).toBeNull();
+    expect(el.querySelector('button[title="Expand right panel"]')).toBeNull();
+    expect(el.querySelector('app-workflow-panel')).toBeNull();
+    expect(el.querySelector('[data-testid="workflow-panel-title"]')).toBeNull();
+    expect(el.querySelector('main app-workflow-detail')).toBeTruthy();
+  });
+
+  it('does not render the Details panel on a workflow page even when it was left open', async () => {
+    const { fixture, el } = setup();
+    shellState().rightPanelOpen.set(true);
+    workflowsNav().openWorkflow('qti-v2-turn');
+    fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
     expect(shellState().rightPanelOpen()).toBe(true);
-    const panel = el.querySelector('aside[aria-label="Details panel"]');
-    expect(panel?.querySelector('app-workflow-panel')).toBeTruthy();
-    expect(panel?.querySelector('app-entity-details')).toBeNull();
-    expect(el.querySelector('main app-workflow-detail')).toBeTruthy();
+    expect(el.querySelector('aside[aria-label="Details panel"]')).toBeNull();
+    // Leaving the page brings it back.
+    shellState().selectArea('workflows');
+    fixture.detectChanges();
+    expect(shellState().mainView()).toBe('workflows');
+    expect(el.querySelector('aside[aria-label="Details panel"]')).toBeTruthy();
   });
 });

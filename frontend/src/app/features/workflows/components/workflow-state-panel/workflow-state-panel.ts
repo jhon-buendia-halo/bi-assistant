@@ -1,32 +1,69 @@
 import {
   Component,
+  DestroyRef,
   computed,
+  inject,
   input,
   linkedSignal,
   output,
+  signal,
 } from '@angular/core';
-import { ChevronDown, ChevronRight, LucideAngularModule } from 'lucide-angular';
+import {
+  Check,
+  Circle,
+  Clock,
+  ListTree,
+  LucideAngularModule,
+  Minus,
+  Square,
+  X,
+} from 'lucide-angular';
+import {
+  ProgressState,
+  elapsedLabel,
+  nodeProgressState,
+} from '../../services/workflow-run-progress';
 import { DataMode } from '../workflow-data-view/workflow-data-view.util';
 import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { runStepStatusLabel } from '../../services/workflows.util';
-import {
-  NodeInspection,
-  WorkflowStateSummary,
-} from '../../models/workflow-node.model';
+import { NodeInspection } from '../../models/workflow-node.model';
 import {
   formatNodeDuration,
   nodeKindLabel,
   nodeStatusChip,
-  nodeStatusDot,
 } from '../workflow-node-dialog/workflow-node-format';
+
+const STATE_LABELS: Record<ProgressState, string> = {
+  pending: 'Not run',
+  done: 'Done',
+  current: 'Running',
+  waiting: 'Waiting for you',
+  failed: 'Failed',
+  skipped: 'Skipped',
+  stopped: 'Stopped',
+};
+
+/** One row of the Logs list: a node with its state in the run shown. */
+export interface LogRow {
+  node: NodeInspection;
+  state: ProgressState;
+  /** The screen-reader label of its state. */
+  label: string;
+  /** How many times it ran; 1 for a node that ran once or not at all. */
+  attempts: number;
+  /** Its duration, or for the running node the time since it started. */
+  time: string;
+}
 
 const NOT_RUN =
   'This node has not run yet. Execute the workflow to see its data.';
 
 /**
- * The Workflow state panel under the canvas (ui.md 4.4b): the run's summary,
- * the node list, and the selected node's input, output and context.
+ * The Logs and node data of the Run panel under the canvas (ui.md 4.4b): one
+ * list of every node with its state in the run shown (live, the running one
+ * with its elapsed time), and the selected node's input, output and context,
+ * or the All nodes table. The run's summary is in the Run panel's header.
  */
 @Component({
   selector: 'app-workflow-state-panel',
@@ -34,23 +71,58 @@ const NOT_RUN =
   templateUrl: './workflow-state-panel.html',
 })
 export class WorkflowStatePanel {
-  readonly ChevronDown = ChevronDown;
-  readonly ChevronRight = ChevronRight;
+  readonly Check = Check;
+  readonly Circle = Circle;
+  readonly Clock = Clock;
+  readonly ListTree = ListTree;
+  readonly Minus = Minus;
+  readonly Square = Square;
+  readonly X = X;
 
   readonly nodes = input<NodeInspection[]>([]);
-  readonly summary = input.required<WorkflowStateSummary>();
   readonly selectedId = input<string | null>(null);
-  readonly open = input(true);
 
   readonly selectNode = output<string | null>();
   readonly openNode = output<string>();
-  readonly openChange = output<boolean>();
 
   readonly modes: DataMode[] = ['json', 'schema'];
-  readonly dot = nodeStatusDot;
   readonly chip = nodeStatusChip;
   readonly kindLabel = nodeKindLabel;
   readonly duration = formatNodeDuration;
+
+  /** Ticks every second, for the running node's elapsed time. */
+  private readonly now = signal(Date.now());
+
+  constructor() {
+    const timer = setInterval(() => this.now.set(Date.now()), 1000);
+    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+  }
+
+  /** Every node (tool nodes aside) with its state, attempts and time. */
+  readonly rows = computed<LogRow[]>(() =>
+    this.nodes()
+      .filter((node) => node.kind !== 'tool')
+      .map((node) => {
+        const state = nodeProgressState(node.run?.status);
+        const startedAt = node.run?.startedAt;
+        return {
+          node,
+          state,
+          label: STATE_LABELS[state],
+          attempts: node.attempts?.length || 1,
+          time:
+            state === 'current'
+              ? startedAt !== undefined
+                ? elapsedLabel(startedAt, this.now())
+                : ''
+              : state === 'skipped'
+                ? 'Skipped'
+                : node.run
+                  ? formatNodeDuration(node.run.durationMs)
+                  : '',
+        };
+      }),
+  );
 
   readonly selected = computed(
     () => this.nodes().find((n) => n.nodeId === this.selectedId()) ?? null,
@@ -85,30 +157,6 @@ export class WorkflowStatePanel {
     return run ? runStepStatusLabel(run.status) : 'Not run';
   });
 
-  readonly progress = computed(
-    () => `${this.summary().ran} of ${this.summary().total} nodes ran`,
-  );
-  /** `Input invalid: <n> field(s)` after a refused Execute; null otherwise. */
-  readonly invalidLine = computed(() => {
-    const n = this.summary().invalidFields;
-    return n > 0 ? `Input invalid: ${n} ${n === 1 ? 'field' : 'fields'}` : null;
-  });
-  readonly pill = computed(() => {
-    const status = this.summary().status;
-    if (!status) return null;
-    const chip =
-      status === 'success'
-        ? 'chip chip-success'
-        : status === 'failed'
-          ? 'chip chip-danger'
-          : status === 'stopped' || status === 'suspended'
-            ? 'chip chip-warning'
-            : 'chip chip-info';
-    return {
-      label: status === 'suspended' ? 'Waiting for you' : status,
-      chip,
-    };
-  });
 
   statusLabel(node: NodeInspection): string {
     return node.run ? runStepStatusLabel(node.run.status) : 'Not run';

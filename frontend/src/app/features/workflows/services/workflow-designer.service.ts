@@ -67,8 +67,8 @@ const NO_RUN_SUMMARY: WorkflowStateSummary = {
 
 /**
  * The state of the workflow designer, shared by the page in the content area
- * (header, canvas, Workflow state panel, node dialog) and its right panel,
- * the Run form (workflows R7, R12, R13, R21): the open workflow, the selected
+ * (header, canvas, node dialog) and the Run panel under the canvas (Chat,
+ * Logs, node data) (workflows R7, R12, R13, R21): the open workflow, the selected
  * and the open node, the run form, and the run shown, streamed live (api.md
  * 119, 3.6) and then as stored. Leaving the page discards the form and the
  * run shown (the run itself stays stored).
@@ -88,11 +88,11 @@ export class WorkflowDesigner {
   readonly selectedStepId = signal<string | null>(null);
   /** The node whose dialog is open; null when none is. */
   readonly openNodeId = signal<string | null>(null);
-  /** Whether the Workflow state panel under the canvas is expanded. */
+  /** Whether the Run panel under the canvas is unfolded. */
   readonly stateOpen = signal(true);
   /**
-   * Bumped by Execute workflow on the canvas: the right panel focuses the run
-   * form. Execute workflow itself never runs.
+   * Bumped by Execute workflow on the canvas (and New question): the Run
+   * panel's composer takes the focus. Execute workflow itself never runs.
    */
   readonly runFormRequest = signal(0);
 
@@ -492,8 +492,9 @@ export class WorkflowDesigner {
     this.openNodeId.set(null);
   }
 
-  /** Execute workflow on the canvas: ask the right panel to focus its run form. */
+  /** Execute workflow on the canvas: the Run panel unfolds and focuses its composer. */
   requestRunForm(): void {
+    this.stateOpen.set(true);
     this.runFormRequest.update((n) => n + 1);
   }
 
@@ -591,6 +592,35 @@ export class WorkflowDesigner {
       question: run.question ?? '',
     });
   }
+
+  /**
+   * New question (ui.md 4.4b): the chat drops the run shown and its question,
+   * so the composer starts a fresh run; the other fields (the datasets) keep
+   * their values. The run itself stays stored. Not while a run is going.
+   */
+  newQuestion(): void {
+    if (this.running()) return;
+    this.cancelStream();
+    this.resetRun();
+    this.runError.set(null);
+    this.inputErrors.set([]);
+    this.followUpText.set('');
+    const field = this.questionField();
+    if (field !== null) this.setInput(field, '');
+    this.requestRunForm();
+  }
+
+  /**
+   * The question of the run shown, as the user asked it: the question field
+   * of its input, else the message the agent received; null without one.
+   */
+  readonly shownQuestion = computed(() => {
+    const field = this.questionField();
+    const input = this.liveInput() ?? this.run()?.input ?? null;
+    const value = field !== null && input !== null ? input[field] : undefined;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    return this.run()?.question?.trim() || null;
+  });
 
   /**
    * Rate the answer shown (api.md 128): a thumbs-up saves a verified query,

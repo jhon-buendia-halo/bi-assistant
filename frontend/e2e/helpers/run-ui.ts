@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
- * The Run tab of a workflow page (workflows R21), driven from the UI: the
+ * The Run panel of a workflow page (workflows R21), driven from the UI: the
  * same controls `workflow-runs.spec.ts` uses, for specs that check how a run
  * renders (not only what reaches the model, which `runs-api.ts` covers).
  */

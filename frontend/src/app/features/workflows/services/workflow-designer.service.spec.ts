@@ -623,6 +623,72 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect('phases' in designer).toBe(false);
     expect(runs.last.handlers.onWorkflow).toBeUndefined();
   });
+
+  it('New question drops the run and the question, keeps the datasets and asks for the run form', () => {
+    executeQuestion();
+    runs.last.handlers.onDone!(storedRun());
+    expect(designer.runResult()).not.toBeNull();
+    const before = designer.runFormRequest();
+    designer.newQuestion();
+    expect(designer.runResult()).toBeNull();
+    expect(designer.run()).toBeNull();
+    expect(designer.shownQuestion()).toBeNull();
+    expect(designer.inputValue('question')).toBe('');
+    expect(designer.picked('datasets')).toEqual(['World Cup Core']);
+    expect(designer.runFormRequest()).toBe(before + 1);
+  });
+
+  it('asking for the run form unfolds the Run panel: Execute workflow, New question and Run again', () => {
+    designer.stateOpen.set(false);
+    designer.requestRunForm();
+    expect(designer.stateOpen()).toBeTrue();
+
+    designer.stateOpen.set(false);
+    designer.newQuestion();
+    expect(designer.stateOpen()).toBeTrue();
+
+    designer.stateOpen.set(false);
+    designer.prefillRunAgain({ question: 'Q', datasets: ['World Cup Core'] });
+    designer.load(ASSISTANT.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    expect(designer.stateOpen()).toBeTrue();
+  });
+
+  it('New question does nothing while a run is going', () => {
+    executeQuestion();
+    expect(designer.running()).toBeTrue();
+    const before = designer.runFormRequest();
+    designer.newQuestion();
+    expect(designer.running()).toBeTrue();
+    expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
+    expect(designer.runFormRequest()).toBe(before);
+  });
+
+  it("shownQuestion reads the live input's question, else null before any run", () => {
+    expect(designer.shownQuestion()).toBeNull();
+    executeQuestion();
+    expect(designer.shownQuestion()).toBe('Which team scored the most goals?');
+  });
+
+  function openStored(run: WorkflowRun): void {
+    designer.showRunOnLoad(run);
+    designer.load(ASSISTANT.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+  }
+
+  it("shownQuestion reads a stored run's input question, trimmed", () => {
+    openStored(
+      storedRun({ input: { question: '  Stored question  ', datasets: [] } }),
+    );
+    expect(designer.shownQuestion()).toBe('Stored question');
+  });
+
+  it('shownQuestion falls back to the run question when its input has none', () => {
+    openStored(storedRun({ input: { datasets: [] }, question: ' From the run ' }));
+    expect(designer.shownQuestion()).toBe('From the run');
+  });
 });
 
 describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
