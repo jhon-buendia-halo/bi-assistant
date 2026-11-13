@@ -51,7 +51,7 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     const step = (id: string) => steps.steps.find((s) => s.id === id)!;
     expect(step('load-catalog')).toMatchObject({
       input: ['question', 'datasets'],
-      output: ['question', 'catalog'],
+      output: ['question', 'catalog', 'columns'],
       exits: [],
     });
     // Receive question has no exit: the input node checks the question first.

@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) qti-v2-turn's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "7b3f033e8a7c",
+  "contractHash": "563df47a5c6e",
   "edges": [
     {
       "from": "start",
@@ -192,6 +192,51 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "columns": {
+            "description": "The columns of each entity, for Plan only: at most 40 per entity and 400 in all.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columns": {
+                  "description": "Its columns, in dataset order (capped).",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "description": "The column name.",
+                        "type": "string",
+                      },
+                      "type": {
+                        "description": "Its type, as the dataset records it.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+                "more": {
+                  "description": "How many more columns it has that are not listed.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "entity",
+                "columns",
+                "more",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -200,6 +245,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
         "required": [
           "question",
           "catalog",
+          "columns",
         ],
         "type": "object",
       },
@@ -253,6 +299,49 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "columns": {
+            "description": "The columns of each entity, for Plan only: at most 40 per entity and 400 in all.",
+            "items": {
+              "properties": {
+                "columns": {
+                  "description": "Its columns, in dataset order (capped).",
+                  "items": {
+                    "properties": {
+                      "name": {
+                        "description": "The column name.",
+                        "type": "string",
+                      },
+                      "type": {
+                        "description": "Its type, as the dataset records it.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+                "more": {
+                  "description": "How many more columns it has that are not listed.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "entity",
+                "columns",
+                "more",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -261,6 +350,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
         "required": [
           "question",
           "catalog",
+          "columns",
         ],
         "type": "object",
       },

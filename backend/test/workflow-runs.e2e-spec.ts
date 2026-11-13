@@ -14,7 +14,7 @@
  * Needs no Postgres: the datasources point at closed ports, and the stub
  * model never calls a tool, so Validate always finds no query and the
  * analysis runs twice (attempts 1 and 2). The stub routes Plan and Write
- * answer by their instructions' first lines (`withV2Steps`). Set
+ * answer by their instructions' first lines (`useV2Steps`). Set
  * `WORKFLOW_RUNS_TRANSCRIPT=<file>` to write
  * the SSE transcript of one v2 run there.
  */
@@ -34,7 +34,7 @@ import {
   isAnalyseRequest,
   isPlanRequest,
   stubPlan,
-  withV2Steps,
+  useV2Steps,
 } from './v2-stub';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-workflow-runs-'));
@@ -180,7 +180,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
   beforeAll(async () => {
     stub = await startLlmStub();
-    stub.reply = withV2Steps(stub.reply);
+    useV2Steps(stub, stub.reply);
     backend = await boot(dataDir);
     const saved = (
       await http().put('/llm/settings').send({
@@ -578,12 +578,12 @@ describe('Streamed runs of agent workflows (API)', () => {
     const CLARIFY = 'Which measure should decide the best team?';
 
     afterEach(() => {
-      stub.reply = withV2Steps(() => ({ text: STUB_ANSWER }));
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }));
     });
 
     it('stops the run at Clarify when the plan needs clarification; picking an option plans the pick with its question', async () => {
       const DOMINANT = 'Which team was the most dominant?';
-      stub.reply = withV2Steps(() => ({ text: STUB_ANSWER }), {
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
         plan: (req) =>
           req.messages.some((m) => messageText(m).includes(DOMINANT)) &&
           !req.messages.some((m) => messageText(m).includes('Most wins'))
@@ -673,7 +673,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         messageText(
           [...req.messages].reverse().find((m) => m.role === 'user')!,
         );
-      stub.reply = withV2Steps((req) =>
+      useV2Steps(stub, (req) =>
         req.stream && lastUser(req) === ASKED
           ? {
               toolCall: {
@@ -757,7 +757,7 @@ describe('Streamed runs of agent workflows (API)', () => {
   });
 
   it("streams only Write answer's text as the run's answer, never Analyse's", async () => {
-    stub.reply = withV2Steps(() => ({ text: 'An analysis note.' }), {
+    useV2Steps(stub, () => ({ text: 'An analysis note.' }), {
       answer: () => 'Written: 64 matches.\n\nHow I got this: one count.',
     });
     try {
@@ -786,7 +786,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       };
       expect(written.output?.headline).toBe('Written: 64 matches.');
     } finally {
-      stub.reply = withV2Steps(() => ({ text: STUB_ANSWER }));
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }));
     }
   });
 

@@ -33,12 +33,33 @@ export const catalogEntitySchema = z.object({
   columnCount: z.number().nullable().describe('Its column count, when known.'),
 });
 
+/** One entity's columns, as Load catalog hands them to Plan. */
+export const entityColumnsSchema = z.object({
+  entity: z.string().describe('The entity (table) key.'),
+  columns: z
+    .array(
+      z.object({
+        name: z.string().describe('The column name.'),
+        type: z.string().describe('Its type, as the dataset records it.'),
+      }),
+    )
+    .describe('Its columns, in dataset order (capped).'),
+  more: z
+    .number()
+    .describe('How many more columns it has that are not listed.'),
+});
+
 /** What Load catalog passes on, and what Plan receives. */
 export const catalogedQuestionSchema = z.object({
   question: z.string().describe('The trimmed question.'),
   catalog: z
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
+  columns: z
+    .array(entityColumnsSchema)
+    .describe(
+      'The columns of each entity, for Plan only: at most 40 per entity and 400 in all.',
+    ),
 });
 
 /** The clarifying question a plan asks instead of analysing. */

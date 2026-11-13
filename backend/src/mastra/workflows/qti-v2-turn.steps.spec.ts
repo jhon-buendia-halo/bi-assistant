@@ -11,6 +11,9 @@ import {
   answerOf,
   catalogBlock,
   loadCatalog,
+  PLAN_COLUMNS_PER_ENTITY,
+  PLAN_COLUMNS_TOTAL,
+  planCatalogBlock,
   planOf,
   receiveQuestion,
   turnSummaryOf,
@@ -107,6 +110,23 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
       'You write the final answer for Questions to Insights v2.',
     );
     expect(PLAN_INSTRUCTIONS.split('\n')[0]).toBe(PLAN_FIRST_LINE);
+    // Plan's assumptions are choices; its options rest on the columns.
+    expect(PLAN_INSTRUCTIONS).toContain(
+      'Never a fact about the world or the domain',
+    );
+    expect(PLAN_INSTRUCTIONS).toContain(
+      'Each option is a measure the listed columns can compute',
+    );
+    // Write answer rounds derived figures and adds nothing from the world.
+    expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
+      'round averages, ratios and other derived figures to at most 2 decimals, and percentages to at most 1 decimal',
+    );
+    expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
+      'leave out any that states a fact about the world or the domain',
+    );
+    expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
+      'Nothing from general knowledge anywhere, assumptions and caveats included',
+    );
     expect(WRITE_ANSWER_INSTRUCTIONS.split('\n')[0]).toBe(
       WRITE_ANSWER_FIRST_LINE,
     );
@@ -143,27 +163,116 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
           datasourceId: 'ds-pg',
           datasourceKind: 'postgres',
           tables: ['wc.public.matches'],
-          entities: [{ key: 'wc.public.matches', columns: [{}, {}, {}] }],
+          entities: [
+            {
+              key: 'wc.public.matches',
+              columns: [
+                { name: 'id', type: 'integer' },
+                { name: 'year', type: 'integer' },
+                { name: 'stage', type: 'text' },
+              ],
+            },
+          ],
         },
         { name: 'Notes', tables: ['n.public.notes'] },
       ]);
-      await expect(loadCatalog(['World Cup', 'Notes'])).resolves.toEqual([
+      await expect(loadCatalog(['World Cup', 'Notes'])).resolves.toEqual({
+        catalog: [
+          {
+            entity: 'wc.public.matches',
+            dataset: 'World Cup',
+            datasourceId: 'ds-pg',
+            datasourceKind: 'postgres',
+            columnCount: 3,
+          },
+          {
+            entity: 'n.public.notes',
+            dataset: 'Notes',
+            datasourceId: null,
+            datasourceKind: null,
+            columnCount: null,
+          },
+        ],
+        // Plan's columns: the entities whose columns are known.
+        columns: [
+          {
+            entity: 'wc.public.matches',
+            columns: [
+              { name: 'id', type: 'integer' },
+              { name: 'year', type: 'integer' },
+              { name: 'stage', type: 'text' },
+            ],
+            more: 0,
+          },
+        ],
+      });
+      expect(getDatasets).toHaveBeenCalledWith(['World Cup', 'Notes']);
+    });
+
+    it(`lists at most ${PLAN_COLUMNS_PER_ENTITY} columns per entity and ${PLAN_COLUMNS_TOTAL} in all, counting the rest`, async () => {
+      const wide = (key: string, n: number) => ({
+        key,
+        columns: Array.from({ length: n }, (_, i) => ({
+          name: `c${i}`,
+          type: 'text',
+        })),
+      });
+      const tables = Array.from({ length: 12 }, (_, i) => `t.s.e${i}`);
+      getDatasets.mockResolvedValue([
         {
-          entity: 'wc.public.matches',
-          dataset: 'World Cup',
-          datasourceId: 'ds-pg',
-          datasourceKind: 'postgres',
-          columnCount: 3,
-        },
-        {
-          entity: 'n.public.notes',
-          dataset: 'Notes',
-          datasourceId: null,
-          datasourceKind: null,
-          columnCount: null,
+          name: 'Wide',
+          tables,
+          entities: tables.map((key) => wide(key, 50)),
         },
       ]);
-      expect(getDatasets).toHaveBeenCalledWith(['World Cup', 'Notes']);
+      const { columns } = await loadCatalog(['Wide']);
+      expect(columns[0].columns).toHaveLength(PLAN_COLUMNS_PER_ENTITY);
+      expect(columns[0].more).toBe(10);
+      expect(
+        columns.reduce((sum, entry) => sum + entry.columns.length, 0),
+      ).toBe(PLAN_COLUMNS_TOTAL);
+      expect(columns[11]).toMatchObject({ columns: [], more: 50 });
+    });
+  });
+
+  describe('planCatalogBlock', () => {
+    const catalog = [
+      {
+        entity: 'wc.public.goals',
+        dataset: 'World Cup',
+        datasourceId: null,
+        datasourceKind: null,
+        columnCount: 3,
+      },
+    ];
+
+    it("adds each entity's columns, name and type, to the catalog block", () => {
+      expect(
+        planCatalogBlock(catalog, [
+          {
+            entity: 'wc.public.goals',
+            columns: [
+              { name: 'player', type: 'text' },
+              { name: 'minute', type: 'integer' },
+            ],
+            more: 1,
+          },
+        ]),
+      ).toBe(
+        [
+          'Catalog loaded for this turn: 1 entity.',
+          '- wc.public.goals (dataset: World Cup; 3 columns)',
+          '',
+          'Columns of each entity (name type):',
+          '- wc.public.goals: player text, minute integer (+1 more not listed)',
+        ].join('\n'),
+      );
+    });
+
+    it('says so when no column is known', () => {
+      expect(planCatalogBlock(catalog, [])).toMatch(
+        /\n\nNo columns are known for these entities\.$/,
+      );
     });
   });
 

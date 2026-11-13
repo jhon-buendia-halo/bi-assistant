@@ -21,6 +21,7 @@ import {
   analysisLoopDone,
   catalogBlock,
   loadCatalog,
+  planCatalogBlock,
   receiveQuestion,
   validateAttempt,
   wrapUp,
@@ -108,7 +109,7 @@ const loadCatalogStep = createStep({
     SCHEMAS['load-catalog'],
     async ({ inputData }: StepParams<(typeof SCHEMAS)['load-catalog']>) => ({
       question: inputData.question,
-      catalog: await loadCatalog(inputData.datasets),
+      ...(await loadCatalog(inputData.datasets)),
     }),
   ),
 });
@@ -126,7 +127,9 @@ const planStep = createStep({
       const { plan, stopped } = await runtimeOf(params, STEP.plan.title).plan({
         question: inputData.question,
         catalog: inputData.catalog,
-        catalogBlock: catalogBlock(inputData.catalog),
+        // Plan sees each entity's columns, so its measures and its
+        // clarifying options rest on what the data can compute.
+        catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns),
       });
       const output = {
         question: inputData.question,

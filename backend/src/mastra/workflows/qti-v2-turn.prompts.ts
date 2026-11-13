@@ -24,16 +24,16 @@ export const WRITE_ANSWER_FIRST_LINE =
 /** The Plan step's instructions (agents.md Appendix F). */
 export const PLAN_INSTRUCTIONS = `${PLAN_FIRST_LINE}
 
-You receive a business question, the conversation before it when there is one, and the catalog of the entities (tables) the analysis can read. You have no tools and you run no query: you decide what the analysis must find, and whether the question can be analysed as asked.
+You receive a business question, the conversation before it when there is one, and the catalog of the entities (tables) the analysis can read, with the columns of each (name and type). You have no tools, you run no query and you have not seen the data: you decide what the analysis must find, and whether the question can be analysed as asked.
 
 Reply with one JSON object and nothing else:
 - question: the question restated in one sentence, with the natural default for any fuzzy scope made explicit. When the question answers an earlier clarifying question, restate the original question with that answer.
-- measures: the figures the answer needs, each a short noun phrase (for example "goals per player").
+- measures: the figures the answer needs, each a short noun phrase (for example "goals per player"), each one the listed columns can compute.
 - entities: the catalog entities the analysis will likely read, by their catalog names.
 - scope: the slice of the data the answer covers (periods, filters, groups), in one sentence.
-- assumptions: each default you chose for something the question leaves open, one sentence each; empty when there are none.
+- assumptions: each choice the analysis makes for something the question leaves open: a default scope, how a measure is defined, a filter. One sentence each; empty when there are none. Never a fact about the world or the domain (who hosted an event, what a rule says, what a dataset covers, what usually happens): you have not seen the data, and the analysis states only what its queries return.
 - needsClarification: true only when the metric or meaning is undefined and the choice would change the analysis (for example "the best team" with no measure named). A fuzzy scope is not a reason: assume the natural default and list it under assumptions. Never true when the question answers an earlier clarifying question.
-- clarification: when needsClarification is true, { "question": one short question, "options": 2-4 concrete options, each a short title optionally followed by " — " and one line explaining it }; otherwise null.
+- clarification: when needsClarification is true, { "question": one short question, "options": 2-4 concrete options, each a short title optionally followed by " — " and one line explaining it }; otherwise null. Each option is a measure the listed columns can compute (say which in its explanation, in plain words); never offer a measure the columns cannot give, or one that mixes several measures into a score.
 
 Never answer the question and never state a figure: the analysis step runs the queries.`;
 
@@ -47,12 +47,14 @@ Reply with one JSON object and nothing else:
 - answer: the whole answer in Markdown, starting with the headline line, then:
   - a compact Markdown table when the answer has three or more values;
   - "How I got this": 1-3 bullets in plain words for a business reader, no SQL;
-  - "Assumptions": the plan's assumptions the answer rests on, only when there are some;
-  - "Caveats": only limits the queries or the findings show (a result cut at its row limit, a failed check, data that does not cover part of the question), only when there are some.
+  - "Assumptions": only the plan's assumptions that are choices the analysis made (a default scope, how a measure is defined, a filter) and that the answer rests on; leave out any that states a fact about the world or the domain; only when there are some;
+  - "Caveats": only limits a query result or a validation finding shows (a result cut at its row limit, a failed check, data that does not cover part of the question); only when there are some.
 
 Rules:
+- Numbers: keep counts exact; round averages, ratios and other derived figures to at most 2 decimals, and percentages to at most 1 decimal (2.875 is 2.88, 3.000 is 3, 0.125 is 0.13, 25.00% is 25%); never add precision the data does not have.
 - Ties: when values tie at a ranking's cut-off, name every tied entry and say they are tied.
 - Coverage: when the data does not cover what the question asks, say so and state what the data does cover; never fill the gap from general knowledge.
+- Nothing from general knowledge anywhere, assumptions and caveats included: no remark about what the domain usually is (how many matches a tournament normally has, how a rule usually counts), and nothing about values that did not appear in the results (do not say how own goals count when no own goal appears).
 - No usable rows (every query failed, or none ran): say the analysis could not get the data and give no figure.
 - Never dump a schema, a table list or SQL.`;
 
@@ -66,7 +68,7 @@ type Plan = z.output<typeof planSchema>;
 type AnalyseQuery = z.output<typeof analyseQuerySchema>;
 type Finding = z.output<typeof validationFindingSchema>;
 
-/** The Plan step's request: the question and the catalog block. */
+/** The Plan step's request: the question and the catalog block with its columns. */
 export function planRequest(question: string, catalogBlock: string): string {
   return [`Question: ${question}`, '', catalogBlock].join('\n');
 }
