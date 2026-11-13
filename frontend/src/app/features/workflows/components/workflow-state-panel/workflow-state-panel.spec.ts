@@ -65,7 +65,8 @@ describe('WorkflowStatePanel', () => {
     expect(byId('workflow-state-status')).toBeNull();
     expect(byId('workflow-state-progress')).toBeNull();
     expect(byId('workflow-state-run-id')).toBeNull();
-    expect(el().querySelector('h3')?.textContent).toContain('Logs');
+    // The Logs panel's header (an h2) names the panel; this h3 names the list.
+    expect(el().querySelector('h3')?.textContent).toContain('Nodes');
   });
 
   describe('Logs rows', () => {

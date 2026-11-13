@@ -6,94 +6,130 @@
       role="separator"
       tabindex="0"
       aria-label="Resize Run panel"
-      aria-orientation="horizontal"
+      aria-orientation="vertical"
       [attr.aria-valuemin]="bounds().min"
       [attr.aria-valuemax]="bounds().max"
-      [attr.aria-valuenow]="height()"
+      [attr.aria-valuenow]="width()"
       title="Drag to resize · Double-click to reset"
       data-testid="workflow-run-dock-resize"
       (pointerdown)="startResize($event)"
       (keydown)="resizeWithKeyboard($event)"
-      (dblclick)="resetHeight()"
+      (dblclick)="resetWidth()"
     ></div>
   }
 
-  <!-- Header: the run's summary and what it is doing now -->
+  <!-- Header: the run's summary and what it is doing now. Folded, it is a
+       narrow strip on the page's right edge: the toggle, the pill and
+       Maximize, stacked. -->
   <div
-    class="flex shrink-0 items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2"
-    [class.border-b-0]="!designer.stateOpen()"
+    class="flex shrink-0 gap-x-3 gap-y-2"
+    [class]="
+      designer.stateOpen()
+        ? 'items-start border-b border-border px-4 py-2'
+        : 'h-full flex-col items-center px-1.5 py-2'
+    "
   >
-    <h2 class="m-0 shrink-0 text-[14px] font-medium">
+    <h2 class="m-0 shrink-0 text-[14px] leading-7 font-medium">
       <button
         type="button"
         data-testid="workflow-state-toggle"
         [attr.aria-expanded]="designer.stateOpen()"
-        class="inline-flex items-center gap-1.5 text-[14px] font-medium text-fg-strong"
+        [attr.title]="
+          designer.stateOpen() ? 'Fold Run panel' : 'Unfold Run panel'
+        "
+        class="inline-flex items-center gap-1.5 rounded-md text-[14px] font-medium text-fg-strong"
+        [class]="
+          designer.stateOpen()
+            ? ''
+            : 'flex-col px-1 py-1.5 hover:bg-surface-muted'
+        "
         (click)="toggle()"
       >
         <lucide-angular
-          [img]="designer.stateOpen() ? ChevronDown : ChevronRight"
+          [img]="designer.stateOpen() ? ChevronRight : ChevronLeft"
           [size]="14"
         />
-        Run
+        <span [class.run-dock-vertical]="!designer.stateOpen()">Run</span>
       </button>
     </h2>
-    <div class="flex min-w-0 flex-1 items-center gap-x-3 overflow-hidden whitespace-nowrap">
-      @if (pill(); as pill) {
-        <span [class]="pill.chip" data-testid="workflow-state-status">{{
-          pill.label
-        }}</span>
-      }
-      @if (invalidLine(); as line) {
-        <span class="chip chip-danger" data-testid="workflow-state-invalid">{{
-          line
-        }}</span>
-      }
-      <span class="text-[12px] text-fg-muted" data-testid="workflow-state-progress">{{
-        progressLine()
-      }}</span>
-      @if (summary().runId) {
-        <span class="text-[12px] text-fg-muted" data-testid="workflow-state-duration">{{
-          duration(summary().durationMs)
-        }}</span>
-        <span class="text-[12px] text-fg-muted"
-          >run
-          <span class="font-mono" data-testid="workflow-state-run-id">{{
-            summary().runId
-          }}</span></span
+
+    @if (designer.stateOpen()) {
+      <div
+        class="flex min-h-7 min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1"
+      >
+        @if (pill(); as pill) {
+          <span [class]="pill.chip" data-testid="workflow-state-status">{{
+            pill.label
+          }}</span>
+        }
+        @if (invalidLine(); as line) {
+          <span class="chip chip-danger" data-testid="workflow-state-invalid">{{
+            line
+          }}</span>
+        }
+        <span
+          class="text-[12px] text-fg-muted"
+          data-testid="workflow-state-progress"
+          >{{ progressLine() }}</span
         >
-      } @else {
-        <span class="truncate text-[12px] text-fg-muted" data-testid="workflow-state-run-id"
-          >No run yet. Execute the workflow to see each node's data.</span
-        >
-      }
-      <app-workflow-run-activity class="min-w-0 truncate" [line]="activity()" />
-    </div>
+        @if (summary().runId) {
+          <span
+            class="text-[12px] text-fg-muted"
+            data-testid="workflow-state-duration"
+            >{{ duration(summary().durationMs) }}</span
+          >
+          <span class="text-[12px] text-fg-muted"
+            >run
+            <span class="font-mono" data-testid="workflow-state-run-id">{{
+              summary().runId
+            }}</span></span
+          >
+        } @else {
+          <span
+            class="text-[12px] text-fg-muted"
+            data-testid="workflow-state-run-id"
+            >No run yet. Execute the workflow to see each node's data.</span
+          >
+        }
+        <app-workflow-run-activity
+          class="min-w-0 max-w-full truncate"
+          [line]="activity()"
+        />
+      </div>
+    } @else if (pill(); as pill) {
+      <span
+        [class]="pill.chip + ' run-dock-vertical'"
+        data-testid="workflow-state-status"
+        >{{ pill.label }}</span
+      >
+    }
+
     <button
       type="button"
       class="btn-icon shrink-0"
       data-testid="workflow-run-dock-maximize"
-      [attr.aria-pressed]="maximized()"
-      [attr.aria-label]="maximized() ? 'Restore Run panel' : 'Maximize Run panel'"
-      [attr.title]="maximized() ? 'Restore Run panel' : 'Maximize Run panel'"
-      (click)="toggleMaximized()"
+      [attr.aria-pressed]="designer.stateOpen() && maximized()"
+      [attr.aria-label]="
+        designer.stateOpen() && maximized()
+          ? 'Restore Run panel'
+          : 'Maximize Run panel'
+      "
+      [attr.title]="
+        designer.stateOpen() && maximized()
+          ? 'Restore Run panel'
+          : 'Maximize Run panel'
+      "
+      (click)="designer.stateOpen() ? toggleMaximized() : maximizeFromFold()"
     >
-      <lucide-angular [img]="maximized() ? Minimize2 : Maximize2" [size]="15" />
+      <lucide-angular
+        [img]="designer.stateOpen() && maximized() ? Minimize2 : Maximize2"
+        [size]="15"
+      />
     </button>
   </div>
 
   @if (designer.stateOpen()) {
-    <div
-      class="grid min-h-0 flex-1 grid-cols-[minmax(340px,46%)_minmax(0,1fr)] overflow-hidden"
-    >
-      <app-workflow-run-chat class="min-h-0 border-r border-border" />
-      <app-workflow-state-panel
-        class="min-h-0"
-        [nodes]="designer.nodes()"
-        [selectedId]="designer.selectedStepId()"
-        (selectNode)="designer.select($event)"
-        (openNode)="designer.openNode($event)"
-      />
-    </div>
+    <!-- The Chat at full height; the Logs are under the canvas -->
+    <app-workflow-run-chat class="min-h-0 flex-1" />
   }
 </section>

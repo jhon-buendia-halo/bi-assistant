@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import {
-  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   LucideAngularModule,
   Maximize2,
@@ -22,55 +22,49 @@ import {
 import { formatNodeDuration } from '../workflow-node-dialog/workflow-node-format';
 import { WorkflowRunActivity } from '../workflow-run-activity/workflow-run-activity';
 import { WorkflowRunChat } from '../workflow-run-chat/workflow-run-chat';
-import { WorkflowStatePanel } from '../workflow-state-panel/workflow-state-panel';
 import {
-  DOCK_DEFAULT_RATIO,
   DOCK_KEY_STEP,
+  RUN_DOCK,
   dockBounds,
-  dockHeight,
+  dockSize,
   readDockRatio,
   writeDockRatio,
 } from './workflow-run-dock.util';
 
 /**
- * The Run panel under the canvas of a workflow's page (n8n-style; ui.md
- * 4.4b): a header with the run's summary and live activity, then the Chat
- * (question, answer, composer), the Logs (every node, live) and the selected
- * node's data side by side. It is resizable by dragging its top edge (or
- * the arrow keys on it), maximizable, and folds to its header; its height is
- * kept as a share of the page. The app's right panel is not used here.
+ * The Run panel on the right of a workflow's page, beside the canvas and the
+ * Logs under it (ui.md 4.4b): a header with the run's summary and live
+ * activity, then the Chat (question, answer, composer) at full height. It is
+ * resizable by dragging its left edge (or the arrow keys on it), maximizable,
+ * and folds to a narrow strip; its width is kept as a share of the page. The
+ * app's right panel is not used here.
  */
 @Component({
   selector: 'app-workflow-run-dock',
-  imports: [
-    LucideAngularModule,
-    WorkflowRunActivity,
-    WorkflowRunChat,
-    WorkflowStatePanel,
-  ],
+  imports: [LucideAngularModule, WorkflowRunActivity, WorkflowRunChat],
   templateUrl: './workflow-run-dock.html',
   styles: `
     :host {
       position: relative;
     }
-    /* The top edge: a 10 px grab area, a 2 px line on hover, focus and drag. */
+    /* The left edge: a 10 px grab area, a 2 px line on hover, focus and drag. */
     .run-dock-handle {
       position: absolute;
       z-index: 30;
-      top: -5px;
-      left: 0;
-      right: 0;
-      height: 10px;
-      cursor: row-resize;
+      left: -5px;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+      cursor: col-resize;
       touch-action: none;
       outline: none;
     }
     .run-dock-handle::after {
       position: absolute;
-      left: 0;
-      right: 0;
-      top: 4px;
-      height: 2px;
+      top: 0;
+      bottom: 0;
+      left: 4px;
+      width: 2px;
       content: '';
       background: transparent;
       transition: background-color 120ms ease;
@@ -80,6 +74,10 @@ import {
     .run-dock-handle-active::after {
       background: var(--qti-border-selected);
     }
+    /* Folded: the strip's label and pill read top to bottom. */
+    .run-dock-vertical {
+      writing-mode: vertical-rl;
+    }
     :host(.run-dock-resizing),
     :host(.run-dock-resizing) * {
       user-select: none !important;
@@ -87,13 +85,13 @@ import {
   `,
   host: {
     '[class.run-dock-resizing]': 'resizing()',
-    class: 'flex shrink-0 flex-col border-t border-border bg-surface',
+    class: 'flex min-h-0 shrink-0 flex-col border-l border-border bg-surface',
     'data-testid': 'workflow-run-dock',
-    '[style.height.px]': 'designer.stateOpen() ? height() : null',
+    '[style.width.px]': 'designer.stateOpen() ? width() : null',
   },
 })
 export class WorkflowRunDock {
-  protected readonly ChevronDown = ChevronDown;
+  protected readonly ChevronLeft = ChevronLeft;
   protected readonly ChevronRight = ChevronRight;
   protected readonly Maximize2 = Maximize2;
   protected readonly Minimize2 = Minimize2;
@@ -103,14 +101,14 @@ export class WorkflowRunDock {
 
   /** The page room the canvas and the dock share, measured. */
   private readonly room = signal(0);
-  /** The dock's share of that room, as last dragged (kept across pages). */
-  private readonly ratio = signal(readDockRatio());
+  /** The dock's share of that room's width, as last dragged (kept across pages). */
+  private readonly ratio = signal(readDockRatio(RUN_DOCK));
   protected readonly maximized = signal(false);
   protected readonly resizing = signal(false);
 
-  protected readonly bounds = computed(() => dockBounds(this.room()));
-  protected readonly height = computed(() =>
-    dockHeight(this.room(), this.ratio(), this.maximized()),
+  protected readonly bounds = computed(() => dockBounds(this.room(), RUN_DOCK));
+  protected readonly width = computed(() =>
+    dockSize(this.room(), this.ratio(), this.maximized(), RUN_DOCK),
   );
 
   constructor() {
@@ -118,10 +116,10 @@ export class WorkflowRunDock {
     afterNextRender(() => {
       const parent = this.host.nativeElement.parentElement;
       if (parent === null) return;
-      this.room.set(parent.clientHeight);
+      this.room.set(parent.clientWidth);
       if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver(() =>
-        this.room.set(parent.clientHeight),
+        this.room.set(parent.clientWidth),
       );
       observer.observe(parent);
       destroyRef.onDestroy(() => observer.disconnect());
@@ -177,13 +175,19 @@ export class WorkflowRunDock {
     this.designer.stateOpen.update((open) => !open);
   }
 
-  /** Maximize: the canvas keeps its minimum; again restores the dragged height. */
+  /** Maximize: the canvas keeps its minimum; again restores the dragged width. */
   protected toggleMaximized(): void {
     this.designer.stateOpen.set(true);
     this.maximized.update((max) => !max);
   }
 
-  /** Dragging the top edge sets the dock's height (and its share, on release). */
+  /** Maximize on the folded strip: unfold it, maximized. */
+  protected maximizeFromFold(): void {
+    this.designer.stateOpen.set(true);
+    this.maximized.set(true);
+  }
+
+  /** Dragging the left edge sets the dock's width (and its share, on release). */
   protected startResize(event: PointerEvent): void {
     const parent = this.host.nativeElement.parentElement;
     if (parent === null || event.button !== 0) return;
@@ -193,28 +197,31 @@ export class WorkflowRunDock {
     this.resizing.set(true);
     const move = (e: PointerEvent) => {
       const rect = parent.getBoundingClientRect();
-      this.setHeight(rect.bottom - e.clientY);
+      this.setWidth(rect.right - e.clientX);
     };
     const up = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', up);
       handle.removeEventListener('pointercancel', up);
       this.resizing.set(false);
-      writeDockRatio(this.ratio());
+      writeDockRatio(RUN_DOCK, this.ratio());
     };
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', up);
     handle.addEventListener('pointercancel', up);
   }
 
-  /** Arrow Up / Down grow or shrink it by a step; Home and End go to the bounds. */
+  /**
+   * Arrow Left / Right grow or shrink it by a step (it grows leftwards, as
+   * the app's right panel does); Home and End go to the bounds.
+   */
   protected resizeWithKeyboard(event: KeyboardEvent): void {
     const { min, max } = this.bounds();
-    const now = this.height();
+    const now = this.width();
     const next =
-      event.key === 'ArrowUp'
+      event.key === 'ArrowLeft'
         ? now + DOCK_KEY_STEP
-        : event.key === 'ArrowDown'
+        : event.key === 'ArrowRight'
           ? now - DOCK_KEY_STEP
           : event.key === 'Home'
             ? max
@@ -223,18 +230,18 @@ export class WorkflowRunDock {
               : null;
     if (next === null) return;
     event.preventDefault();
-    this.setHeight(next);
-    writeDockRatio(this.ratio());
+    this.setWidth(next);
+    writeDockRatio(RUN_DOCK, this.ratio());
   }
 
   /** Double-click on the edge: back to the default share. */
-  protected resetHeight(): void {
+  protected resetWidth(): void {
     this.maximized.set(false);
-    this.ratio.set(DOCK_DEFAULT_RATIO);
-    writeDockRatio(DOCK_DEFAULT_RATIO);
+    this.ratio.set(RUN_DOCK.defaultRatio);
+    writeDockRatio(RUN_DOCK, RUN_DOCK.defaultRatio);
   }
 
-  private setHeight(px: number): void {
+  private setWidth(px: number): void {
     const room = this.room();
     if (room <= 0) return;
     const { min, max } = this.bounds();

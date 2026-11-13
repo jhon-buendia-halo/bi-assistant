@@ -35,14 +35,16 @@
               class="font-mono text-[12px] text-fg-muted"
               >{{ w.id }}</span
             >
-            <span
-              data-testid="workflow-detail-kind"
-              class="chip chip-info"
-              >{{ kindLabel() }}</span
-            >
+            <span data-testid="workflow-detail-kind" class="chip chip-info">{{
+              kindLabel()
+            }}</span>
             @if (missing()) {
               <span class="chip chip-warning whitespace-normal">
-                <lucide-angular [img]="TriangleAlert" [size]="12" class="shrink-0" />
+                <lucide-angular
+                  [img]="TriangleAlert"
+                  [size]="12"
+                  class="shrink-0"
+                />
                 <span>Missing dataset: {{ missing() }}</span>
               </span>
             }
@@ -64,20 +66,25 @@
       {{ err }}
     </p>
   } @else if (designer.workflow(); as w) {
-    <!-- The canvas takes the room the Run panel under it leaves; the Run
-         panel is resizable, maximizable and folds to its header (ui.md 4.4b). -->
-    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <app-workflow-canvas
-        class="min-h-[140px] flex-1"
-        [workflow]="w"
-        [selectedId]="designer.selectedStepId()"
-        [statuses]="designer.nodeStatuses()"
-        [violations]="designer.contractViolations()"
-        [attempts]="designer.nodeAttempts()"
-        (selectNode)="designer.select($event)"
-        (openNode)="designer.openNode($event)"
-        (execute)="execute()"
-      />
+    <!-- Three zones (ui.md 4.4b): the canvas, wide and short, with the Logs
+         under it at its full width, and the Run panel (the Chat) on the
+         right at full height. The Logs resize and fold; the Run panel
+         resizes, maximizes and folds to a strip. -->
+    <div class="flex min-h-0 flex-1 flex-row overflow-hidden">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <app-workflow-canvas
+          class="min-h-[200px] flex-1"
+          [workflow]="w"
+          [selectedId]="designer.selectedStepId()"
+          [statuses]="designer.nodeStatuses()"
+          [violations]="designer.contractViolations()"
+          [attempts]="designer.nodeAttempts()"
+          (selectNode)="designer.select($event)"
+          (openNode)="designer.openNode($event)"
+          (execute)="execute()"
+        />
+        <app-workflow-logs-dock />
+      </div>
       <app-workflow-run-dock />
     </div>
     @if (designer.openInspection(); as node) {

@@ -9,6 +9,7 @@ import {
   CanvasLayout,
   MAX_ZOOM,
   MIN_ZOOM,
+  FIT_MIN_ZOOM,
   ZOOM_LEVELS,
   canvasBoxes,
   fitZoom,
@@ -649,12 +650,15 @@ describe('Questions to Insights v2 as the API returns it (roomy canvas)', () => 
       const layout = workflowCanvasLayout(w);
       const node = (id: string) => layout.nodes.find((n) => n.id === id)!;
 
-      it('readability wins over fitting: 40% at 1440 × 900 (pans sideways, its full height shows), 50% at 1920 × 1080', () => {
-        // The canvas viewport measured with the Run panel open.
-        expect(fitZoom(layout, 602, 300)).toBe(MIN_ZOOM);
-        // At the minimum zoom the whole height shows, down to the Clarify row.
-        expect(layout.height * MIN_ZOOM).toBeLessThanOrEqual(300);
-        expect(fitZoom(layout, 1082, 472)).toBe(0.5);
+      it('readability wins over fitting: 70% at 1440 × 900 (pans sideways, its full height shows)', () => {
+        // The canvas viewport at 1440 × 900, with the Chat on its right and the Logs under it.
+        expect(fitZoom(layout, 830, 420)).toBe(FIT_MIN_ZOOM);
+        // At that zoom the whole height shows, down to the Clarify row.
+        expect(layout.height * FIT_MIN_ZOOM).toBeLessThanOrEqual(420);
+        // A shorter canvas lowers it only as far as the height needs.
+        expect(fitZoom(layout, 830, 300)).toBe(
+          Math.floor((300 / layout.height) * 20 + 1e-6) / 20,
+        );
       });
 
       it('overlaps nothing: nodes, labels, exit notes, ports, sub-nodes, edge labels and the Clarify row', () => {
@@ -803,8 +807,14 @@ describe('canvas zoom', () => {
   it('fit picks the largest 5% step that shows the whole canvas, never above 100%', () => {
     expect(fitZoom(layout, 2000, 2000)).toBe(1);
     expect(fitZoom(layout, 1000, 500)).toBe(1);
-    expect(fitZoom(layout, 640, 2000)).toBe(0.6);
+    expect(fitZoom(layout, 800, 2000)).toBe(0.8);
+  });
+
+  it('fit keeps FIT_MIN_ZOOM when only the width would need less, and lowers it only for the height', () => {
+    expect(fitZoom(layout, 640, 2000)).toBe(FIT_MIN_ZOOM);
+    expect(fitZoom(layout, 100, 2000)).toBe(FIT_MIN_ZOOM);
     expect(fitZoom(layout, 2000, 330)).toBe(0.65);
+    expect(fitZoom(layout, 640, 330)).toBe(0.65);
   });
 
   it('fit never goes below MIN_ZOOM', () => {
@@ -812,8 +822,10 @@ describe('canvas zoom', () => {
     expect(fitZoom(layout, 0, 0)).toBe(0.4);
   });
 
-  it('a four-step chain (1205 px wide) fits a 600 px wide canvas at 45%', () => {
-    expect(fitZoom(workflowCanvasLayout(V2), 600, 400)).toBe(0.45);
+  it('a four-step chain (1205 px wide) keeps 70% in a 600 px wide canvas and pans', () => {
+    const chain = workflowCanvasLayout(V2);
+    expect(chain.height * FIT_MIN_ZOOM).toBeLessThanOrEqual(400);
+    expect(fitZoom(chain, 600, 400)).toBe(FIT_MIN_ZOOM);
   });
 
   it('zoom in and out step through the levels and stop at the ends', () => {

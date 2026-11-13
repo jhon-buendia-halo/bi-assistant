@@ -46,6 +46,8 @@ export const CANVAS = {
 /** The zoom levels zoom in / out step through; fit may land between them. */
 export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5] as const;
 export const MIN_ZOOM = 0.4;
+/** Fit prefers at least this zoom, for readable nodes, as long as the canvas's height shows. */
+export const FIT_MIN_ZOOM = 0.7;
 export const MAX_ZOOM = 1.5;
 
 /** Between an agent's exit notes and its top edge (room for the status badge). */
@@ -978,18 +980,19 @@ function edgeShape(
 
 /**
  * Fit to screen: the largest zoom, in steps of 5%, at which the whole canvas
- * shows in the viewport; never above 100% and never below MIN_ZOOM (the
- * canvas scrolls and pans below that).
+ * shows in the viewport, never above 100%. Readability wins over showing the
+ * whole width: when that zoom is below FIT_MIN_ZOOM, fit takes FIT_MIN_ZOOM
+ * (or less, only as far as the canvas's full height needs) and the canvas
+ * pans sideways. Never below MIN_ZOOM.
  */
 export function fitZoom(
   layout: Pick<CanvasLayout, 'width' | 'height'>,
   viewportWidth: number,
   viewportHeight: number,
 ): number {
-  const ratio = Math.min(
-    viewportWidth / layout.width,
-    viewportHeight / layout.height,
-  );
+  const byHeight = viewportHeight / layout.height;
+  const whole = Math.min(viewportWidth / layout.width, byHeight);
+  const ratio = whole >= FIT_MIN_ZOOM ? whole : Math.min(FIT_MIN_ZOOM, byHeight);
   const fives = Math.floor(ratio * 20 + 1e-6) / 20;
   return Math.min(1, Math.max(MIN_ZOOM, fives));
 }
