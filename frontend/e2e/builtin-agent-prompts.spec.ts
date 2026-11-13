@@ -23,9 +23,10 @@ import {
  * is no permission to gate the edit on.
  */
 
-const ASSISTANT = 'Questions to Insights Assistant';
+/** The built-in agents' persona names, which the hub and their page show. */
+const ASSISTANT = 'Emily';
 const V2_KEY = 'assistant-v2';
-const V2 = 'Questions to Insights v2';
+const V2 = 'Michael';
 const V2_TOOLS = [
   'list_entities',
   'describe_entity',
@@ -86,7 +87,7 @@ const saveButton = (page: Page) => page.getByTestId('agent-prompt-save');
 
 /** The Tiptap editor of an Official agent's prompt. */
 function promptEditor(page: Page): Locator {
-  return page.getByRole('textbox', { name: 'System prompt', exact: true });
+  return page.getByRole('textbox', { name: 'Job description', exact: true });
 }
 
 async function startEditing(page: Page): Promise<void> {
@@ -165,12 +166,12 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
       .getByTestId('agent-prompt-editing')
       .getByTestId('agent-prompt-tools-note'),
   ).toHaveText(
-    'The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules.',
+    `The ## Tools list is generated from the tools ${ASSISTANT} gets and is inserted before ## Working rules.`,
   );
   await appendToEditor(page, DONE_LINE, true);
   await saveButton(page).click();
   await expect(
-    page.getByText(`System prompt of "${ASSISTANT}" saved`),
+    page.getByText(`Job description of "${ASSISTANT}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
   await page
@@ -190,7 +191,7 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByTestId('agent-prompt-reset').click();
   await expect(
-    page.getByText(`System prompt of "${ASSISTANT}" reset`),
+    page.getByText(`Job description of "${ASSISTANT}" reset`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
   expect((await promptView(page, 'assistant')).modified).toBe(false);
@@ -216,7 +217,7 @@ test("I edit Questions to Insights v2's prompt, its runs read it, and Reset rest
   );
   await appendToEditor(page, DONE_LINE, true);
   await saveButton(page).click();
-  await expect(page.getByText(`System prompt of "${V2}" saved`)).toBeVisible();
+  await expect(page.getByText(`Job description of "${V2}" saved`)).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
 
   // Then a run of Questions to Insights v2 sends the edited prompt.
@@ -233,7 +234,7 @@ test("I edit Questions to Insights v2's prompt, its runs read it, and Reset rest
   await openPromptTab(page);
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByTestId('agent-prompt-reset').click();
-  await expect(page.getByText(`System prompt of "${V2}" reset`)).toBeVisible();
+  await expect(page.getByText(`Job description of "${V2}" reset`)).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
 
   const reset = systemTexts(await askInRun(page, QUESTION));
@@ -245,7 +246,7 @@ test("I edit Questions to Insights v2's prompt, its runs read it, and Reset rest
 test("a System agent's prompt is edited in a text area, with no link menu", async ({
   page,
 }) => {
-  await openAgent(page, 'sql-fixer', 'SQL Fixer');
+  await openAgent(page, 'sql-fixer', 'David');
   await openPromptTab(page);
   await startEditing(page);
 
@@ -302,7 +303,7 @@ test('the shipped assistant prompt shows its tools and skill as chips', async ({
   await expect(skill).toHaveText('curated-knowledge');
   await expect(skill).toHaveClass(/chip-info/);
   await expect(page.getByTestId('agent-prompt-tools-note')).toHaveText(
-    '## Tools — generated from the tools the assistant gets',
+    `## Tools — generated from the tools ${ASSISTANT} gets`,
   );
   await expect(view).not.toContainText('[[');
   // The end of the prompt, with its chips and the generated-Tools note.
@@ -322,7 +323,7 @@ test("a built-in skill link in the assistant's prompt is accepted", async ({
   await appendToEditor(page, ' [[skill:curated-knowledge]]');
   await saveButton(page).click();
   await expect(
-    page.getByText(`System prompt of "${ASSISTANT}" saved`),
+    page.getByText(`Job description of "${ASSISTANT}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
 });
@@ -334,7 +335,7 @@ test(
   "Questions to Insights v2's Graph tab draws what happens on each message",
   { tag: ['@demo', '@story-1.23.1'] },
   async ({ page }) => {
-    await scenarioStep(page, 'When I open the "Questions to Insights v2" agent', async () => {
+    await scenarioStep(page, `When I open the "${V2}" agent`, async () => {
       await openAgent(page, V2_KEY, V2);
     });
     await scenarioStep(page, 'And I open the Graph tab', async () => {
@@ -455,7 +456,7 @@ test(
     });
     await scenarioStep(
       page,
-      'When I open the "Questions to Insights Assistant" agent and its Graph tab',
+      `When I open the "${ASSISTANT}" agent and its Graph tab`,
       async () => {
         // From an agent's detail, its back button returns to the hub.
         await page.getByRole('button', { name: 'All agents' }).click();

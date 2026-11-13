@@ -13,6 +13,8 @@ export type AgentOwner = 'Official' | 'System' | 'You';
 /** A user agent's configuration (data-model 3.10, rule R43). */
 export interface AgentConfig {
   name: string;
+  /** Optional job title shown under the name (data-model 3.10). */
+  role?: string;
   description: string;
   instructions: string;
   /** Dataset names, by value; they may dangle (data-model 3.13). */
@@ -68,6 +70,7 @@ export interface BuiltinAgentPinsDoc {
 /** Limits from R43. */
 export const AGENT_LIMITS = {
   name: 64,
+  role: 64,
   description: 280,
   instructions: 4000,
   starterQuestions: 5,

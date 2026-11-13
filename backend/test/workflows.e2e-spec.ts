@@ -105,7 +105,7 @@ describe('The workflow catalogue (API)', () => {
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
-        agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+        agents: [{ key: 'assistant-v2', name: 'Michael' }],
         stepCount: 8,
         bar: 'steps',
         trigger: 'run',
@@ -292,7 +292,7 @@ describe('The workflow catalogue (API)', () => {
       expect(v2.agents).toEqual([
         {
           key: 'assistant-v2',
-          name: 'Questions to Insights v2',
+          name: 'Michael',
           model: null,
           systemPrompt: expect.any(String) as string,
           toolDetails: expect.any(Array) as unknown[],

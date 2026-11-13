@@ -21,6 +21,23 @@ describe('agent editor: unsaved changes', () => {
     expect(agentFormChanged(emptyAgentForm(), emptyAgentForm())).toBeFalse();
   });
 
+  it('counts a changed job title as a change, not its surrounding spaces', () => {
+    const saved = form({ role: 'Claims Analyst' });
+    expect(
+      agentFormChanged(form({ role: ' Claims Analyst ' }), saved),
+    ).toBeFalse();
+    expect(agentFormChanged(form({ role: 'Actuary' }), saved)).toBeTrue();
+    expect(
+      agentFormFromConfig({
+        ...agentSaveInput(saved),
+        instructions: '',
+        description: '',
+        datasets: [],
+        starterQuestions: [],
+      }).role,
+    ).toBe('Claims Analyst');
+  });
+
   it('counts a typed field as a change', () => {
     expect(agentFormChanged(form(), emptyAgentForm())).toBeTrue();
     expect(
@@ -113,6 +130,11 @@ describe('agent editor: save', () => {
       datasets: ['A'],
       starterQuestions: ['Who won?'],
     });
+    // The job title is sent trimmed, and left out when blank.
+    expect(agentSaveInput(form({ role: '  Claims Analyst ' })).role).toBe(
+      'Claims Analyst',
+    );
+    expect('role' in agentSaveInput(form({ role: '  ' }))).toBeFalse();
     // The links in the instructions decide tools and skills: none is sent.
     const input = agentSaveInput(form());
     expect('tools' in input).toBeFalse();

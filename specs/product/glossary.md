@@ -87,7 +87,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Freeform visual.** A *visual* whose bundle is generated HTML, CSS and JavaScript, used when a *visual spec* cannot be produced. Tailoring a freeform visual stays freeform. Contrast *spec visual*.
 
-**Built-in agent prompt override.** An edit of the *system prompt* of a built-in agent (an *Official agent* or a System agent), made on the agent's System Prompt tab. It is stored in the database, and replaces the shipped prompt on the next call, for every session and user agent, until **Reset to built-in** deletes it. The assistant's generated `## Tools` section is not part of the edited text. See [../system/data-model.md](../system/data-model.md) 3.10.3 and ADR-0026.
+**Built-in agent prompt override.** An edit of the *system prompt* of a built-in agent (an *Official agent* or a System agent), made on the agent's Job Description tab. It is stored in the database, and replaces the shipped prompt on the next call, for every session and user agent, until **Reset to built-in** deletes it. The assistant's generated `## Tools` section is not part of the edited text. See [../system/data-model.md](../system/data-model.md) 3.10.3 and ADR-0026.
 
 **Built-in skill override.** An edit of a built-in *skill*, made in the skills library. It is stored in the database, and replaces the shipped skill on the next call until **Reset to built-in** deletes it. See [../system/data-model.md](../system/data-model.md) 3.10.2 and ADR-0023.
 
@@ -99,6 +99,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
+
+**Job description.** What the app shows for an agent's *system prompt*: the tab, the headings, the editor's label and the save button all say "Job description" (the agent page's Job Description tab; the editor's Job description field). Only the words changed: the API fields `prompt` and `instructions`, the `/agents/:key/prompt` endpoints and `agent_prompt_overrides` keep their names. See *Persona* and *System prompt*.
 
 **Knowledge used.** The list of *ontology items* that were actually included in the context of one answer, recorded when the context was built and stored on the answer in the field `knowledge`. It shows what the model was given, not what it applied. The UI says "Ontology in context".
 
@@ -139,6 +141,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Panel item.** One thing an agent showed in the right panel with `show_in_panel`, saved on the *session* with the time it was shown: a workspace file, a Markdown document, a query result table or a *visual*. The latest one is what the panel opens on; every one is listed in the *session panel*'s shown-items menu. See [agent-panel](../capabilities/agent-panel/spec.md).
 
 **Past chat.** A *session* saved before chats were retired. It stays on disk and opens read-only under Runs: its transcript, visuals and files, and Delete. No chat can continue (ADR-0041).
+
+**Persona (agent).** The human identity of an agent in the Agents catalogue: a first name and a job title (`name` and `role` in `GET /agents`). Every built-in agent has one (the assistant is Emily, Data Analyst; the table is in [../system/agents.md](../system/agents.md) 1.1); a user agent has the name it was given and an optional job title. Presentation only: traces, monitoring, workflow steps and chat sessions keep the agent's technical name, and the model never sees it. Not a *User persona*, which profiles a person who asks questions.
 
 **Pin.** A user's mark on an agent, built-in or user-built, so it can be found quickly. Pins are stored locally and survive a restart.
 
@@ -206,6 +210,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge). It is read-only, runs inside the app's own flows and cannot start a chat.
 
 **System logs.** The UI name for *diagnostics*.
+
+**System prompt.** The technical term for an agent's standing instructions to the model (`prompt` and `instructions` in the API). The app calls it the *Job description*. See *Built-in agent prompt override*.
 
 **Table.** The last level of an *entity* name.
 

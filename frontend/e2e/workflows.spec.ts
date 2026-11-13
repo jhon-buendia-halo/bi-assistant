@@ -250,12 +250,12 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its eight steps on the canvas and the agent "Questions to Insights v2" under Agents in its Start node',
+        'Then I see its eight steps on the canvas and the agent "Michael" under Agents in its Start node',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(detailsPanel(page).getByTestId('workflow-bar-note')).toHaveCount(0);
           const start = await openNode(page, 'start', 'Start');
-          await expect(start.getByTestId('workflow-agent-assistant-v2')).toContainText(V2);
+          await expect(start.getByTestId('workflow-agent-assistant-v2')).toContainText('Michael');
           await closeNode(page);
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -1177,7 +1177,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       async () => {
         const dialog = nodeDialog(page);
         await expect(dialog.getByText('TOOL', { exact: true })).toBeVisible();
-        await expect(dialog.getByText('Tool of Questions to Insights v2 · Analyse')).toBeVisible();
+        await expect(dialog.getByText('Tool of Michael · Analyse')).toBeVisible();
         await expect(dialog.getByTestId('workflow-tool-field-name')).toHaveText('run_readonly_sql');
         await expect(dialog.getByTestId('workflow-tool-field-description')).toBeVisible();
         await expect(dialog.getByTestId('workflow-tool-field-description')).not.toHaveText('None');

@@ -24,6 +24,21 @@ An **agent** is a named, stateless-by-default LLM wrapper with:
 - a **model**, resolved *at call time* (never at construction) from the persisted LLM settings — see 1.3;
 - optionally a **tool set**, a **conversation memory** and a **workspace** (a per-session sandboxed folder, see 7).
 
+**Personas.** Every built-in agent is also a **user persona**: a human first name and a job title, so the Agents catalogue reads as a team. The table lives in code, `backend/src/mastra/agent-personas.ts`, by registry key:
+
+| Registry key | Persona | Job title |
+|---|---|---|
+| `assistant` | Emily | Data Analyst |
+| `assistant-v2` | Michael | Insights Analyst |
+| `data-readiness` | Sarah | Data Quality Analyst |
+| `visualization` | Ryan | Visualization Designer |
+| `sql-fixer` | David | SQL Developer |
+| `sql-verifier` | Rachel | SQL Reviewer |
+| `knowledge-bootstrap` | Kevin | Knowledge Engineer |
+| `assistant-eval-judge` | Laura | QA Evaluator |
+
+The persona is presentation only. The Mastra agent keeps its technical name (for example `Data Readiness Agent`) in traces, monitoring, workflow steps and chat sessions, and the model never sees the persona. Only the agent catalogue (`GET /agents`, `GET /agents/:key`, [api.md](api.md) 33, 34) reports it: `name` is the persona's name and `role` its job title; the catalogue sorts by that `name`. The persona name also names the agent in the messages of the job-description editor (agents-evals R101, R102, R107). A user agent has no persona: its `name` is what the user typed and its optional `role` is the job title it was given (data-model.md 3.10). In the app a system prompt is called a **job description**; the `prompt` and `instructions` fields, the prompt endpoints and `agent_prompt_overrides` keep their names.
+
 Callers invoke an agent in one of two modes:
 
 - **generate** — one request, returns the final text, the tool calls/results of every step, and (when requested) a parsed structured object;

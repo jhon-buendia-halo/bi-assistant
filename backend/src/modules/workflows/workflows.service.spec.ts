@@ -141,7 +141,7 @@ const QTI_V2_SUMMARY = {
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
-  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  agents: [{ key: 'assistant-v2', name: 'Michael' }],
   stepCount: 8,
   bar: 'steps',
   trigger: 'run',
@@ -246,7 +246,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.agents).toEqual([
         {
           key: 'assistant-v2',
-          name: 'Questions to Insights v2',
+          // The agent's persona name, as the catalogue shows it.
+          name: 'Michael',
           model: null,
           systemPrompt: 'You answer with the core data tools.',
           toolDetails: [
@@ -289,9 +290,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     it('lists the summary agents only, without model or prompt (api.md 116 unchanged)', async () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
       const [v2] = await ctx.service.list();
-      expect(v2.agents).toEqual([
-        { key: 'assistant-v2', name: 'Questions to Insights v2' },
-      ]);
+      expect(v2.agents).toEqual([{ key: 'assistant-v2', name: 'Michael' }]);
     });
 
     it.each([

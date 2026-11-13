@@ -1,7 +1,7 @@
 @if (isUserAgent()) {
   <div class="flex items-center gap-3">
     <h3 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
-      Agent instructions
+      Job description
     </h3>
     @if (canEdit() && !editing()) {
       <button
@@ -27,7 +27,7 @@
           [builtInSkills]="linkableSkills()"
           toolbar="single"
           [toolbarHint]="toolbarHint"
-          label="Agent instructions"
+          label="Job description"
           [maxLength]="limit"
           countTestId="prompt-count"
           (valueChange)="draft.set($event)"
@@ -80,7 +80,7 @@
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
             <span>Saving…</span>
           } @else {
-            <span>Save prompt</span>
+            <span>Save job description</span>
           }
         </button>
       </div>
@@ -91,7 +91,7 @@
       class="mt-2 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
     ><app-linked-text [text]="instructions()" [known]="known()" /></pre>
   } @else {
-    <p class="mt-2 text-[13px] text-fg-muted">No instructions yet.</p>
+    <p class="mt-2 text-[13px] text-fg-muted">No job description yet.</p>
   }
 
   @if (agent().instructions) {
@@ -107,7 +107,7 @@
 } @else if (builtIn(); as prompt) {
   <div class="flex flex-wrap items-center gap-3">
     <h3 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
-      System prompt
+      Job description
     </h3>
     <span class="chip">Built-in</span>
     @if (prompt.modified) {
@@ -186,7 +186,7 @@
             [linkSkills]="false"
             toolbar="single"
             [toolbarHint]="officialCopy().toolbarHint"
-            label="System prompt"
+            label="Job description"
             [maxLength]="builtInLimit"
             countTestId="agent-prompt-count"
             (valueChange)="draft.set($event)"
@@ -204,7 +204,7 @@
         <textarea
           data-testid="agent-prompt-textarea"
           rows="16"
-          aria-label="System prompt"
+          aria-label="Job description"
           [maxLength]="builtInLimit"
           [value]="draft()"
           (input)="onDraftInput($event)"
@@ -239,7 +239,7 @@
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
             <span>Saving…</span>
           } @else {
-            <span>Save prompt</span>
+            <span>Save job description</span>
           }
         </button>
       </div>

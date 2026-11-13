@@ -90,7 +90,7 @@ describe('WorkflowNodeDialog', () => {
       'You are a data analyst.',
     );
     expect(el().textContent).toContain(
-      "The agent's base prompt; each run adds its own context.",
+      "The agent's job description; each run adds its own context.",
     );
     expect(el().textContent).not.toContain('Shortened to 20 000 characters.');
 

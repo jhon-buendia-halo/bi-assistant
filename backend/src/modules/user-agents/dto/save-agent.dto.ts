@@ -7,6 +7,8 @@ import type { ReasoningEffort } from '../../llm/llm.types';
  */
 export class SaveAgentDto {
   name: string;
+  /** Optional job title, at most 64 characters. */
+  role?: string;
   description?: string;
   instructions?: string;
   datasets?: string[];

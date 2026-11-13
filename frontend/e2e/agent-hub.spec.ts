@@ -13,9 +13,14 @@ import {
 
 /** Mirrors the Feature "Agent Hub" in specs/capabilities/agents-evals/spec.md. */
 
-const ASSISTANT = 'Questions to Insights Assistant';
-/** Questions to Insights v2 (agents-evals R107, BA-320). */
+/** The built-in agents' personas: a human name and a job title (R1). */
+const ASSISTANT = 'Emily';
+const ASSISTANT_ROLE = 'Data Analyst';
+/** Questions to Insights v2's persona (agents-evals R107, BA-320). */
+const V2_AGENT = 'Michael';
+/** The workflow it runs keeps its name. */
 const V2 = 'Questions to Insights v2';
+const READINESS = 'Sarah';
 const V2_KEY = 'assistant-v2';
 const V2_DESCRIPTION =
   'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
@@ -29,11 +34,10 @@ const V2_TOOLS = [
 /** Its built-in skills, on demand (agents.md 7.4), sorted by name. */
 const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 /**
- * The Official cards in hub order, alphabetical by name ("Data Readiness
- * Agent", "Questions to Insights Assistant", "Questions to Insights v2";
- * agents-evals R1, R107).
+ * The Official cards in hub order, alphabetical by persona name ("Emily",
+ * "Michael", "Sarah"; agents-evals R1, R107).
  */
-const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY];
+const OFFICIAL_KEYS = ['assistant', V2_KEY, 'data-readiness'];
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -129,6 +133,9 @@ test('shows the built-in agents and mine in sections', async ({ page }) => {
   await expect(official.getByTestId('agent-card-assistant')).toContainText(
     ASSISTANT,
   );
+  await expect(official.getByTestId('agent-role-assistant')).toHaveText(
+    ASSISTANT_ROLE,
+  );
   await expect(official.getByTestId('agent-card-assistant')).toContainText(
     'Owner: Official',
   );
@@ -160,7 +167,10 @@ test('shows the built-in agents and mine in sections', async ({ page }) => {
   await button(page, 'Show more (2)').click();
   await expect(cards(system)).toHaveCount(5);
   await expect(system.getByTestId('agent-card-sql-verifier')).toContainText(
-    'SQL Verifier',
+    'Rachel',
+  );
+  await expect(system.getByTestId('agent-role-sql-verifier')).toHaveText(
+    'SQL Reviewer',
   );
   await expect(showMore).toHaveAttribute('aria-expanded', 'true');
 
@@ -195,7 +205,7 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
 
   await filter(page, 'Official').click();
   // The assistant, Questions to Insights v2 and the Data Readiness Agent
-  // are Official; every card shows, alphabetical by name
+  // are Official; every card shows, alphabetical by persona name
   // (R1-R3, R107).
   await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
@@ -430,7 +440,7 @@ test(
     const official = section(page, 'official');
     await scenarioStep(
       page,
-      'Then the Official section shows "Questions to Insights Assistant", "Questions to Insights v2" and "Data Readiness Agent"',
+      'Then the Official section shows "Emily", "Michael" and "Sarah"',
       async () => {
         await expect(
           official.getByTestId('agent-card-assistant'),
@@ -438,8 +448,8 @@ test(
         expect(await cardKeys(official)).toEqual(OFFICIAL_KEYS);
         for (const [key, name] of [
           ['assistant', ASSISTANT],
-          [V2_KEY, V2],
-          ['data-readiness', 'Data Readiness Agent'],
+          [V2_KEY, V2_AGENT],
+          ['data-readiness', READINESS],
         ]) {
           const card = official.getByTestId(`agent-card-${key}`);
           await expect(card).toContainText(name);
@@ -474,9 +484,9 @@ test('Questions to Insights v2 is an Official card', async ({ page }) => {
   await openHub(page);
   const official = section(page, 'official');
   const card = official.getByTestId(`agent-card-${V2_KEY}`);
-  await expect(card).toContainText(V2);
+  await expect(card).toContainText(V2_AGENT);
   await expect(card).toContainText('Owner: Official');
-  // Right after "Questions to Insights Assistant" (R1, R107).
+  // Right after "Emily" (R1, R107).
   const keys = await cardKeys(official);
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
 });
@@ -485,9 +495,9 @@ test("Questions to Insights v2's page shows its prompt, five tools and three ski
   page,
 }) => {
   await openHub(page);
-  await openAgent(page, V2_KEY, V2);
+  await openAgent(page, V2_KEY, V2_AGENT);
   await expect(page.getByText(V2_DESCRIPTION)).toBeVisible();
-  // It opens on System Prompt and has no Chat Box (R5, R90, R107).
+  // It opens on Job Description and has no Chat Box (R5, R90, R107).
   await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
   await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
 
@@ -528,13 +538,13 @@ test('saving a Questions to Insights v2 prompt that loses its identity line is r
   page,
 }) => {
   await openHub(page);
-  await openAgent(page, V2_KEY, V2);
+  await openAgent(page, V2_KEY, V2_AGENT);
   await page.getByTestId('agent-tab-prompt').click();
   await page.getByTestId('agent-prompt-edit').click();
   await expect(page.getByTestId('agent-prompt-editing')).toBeVisible();
 
   const editor = page.getByRole('textbox', {
-    name: 'System prompt',
+    name: 'Job description',
     exact: true,
   });
   await editor.focus();
@@ -582,8 +592,8 @@ test(
         page.getByRole('button', { name: /Start chat/ }),
       ).toHaveCount(0);
     });
-    await scenarioStep(page, `When I open "${V2}"`, async () => {
-      await openAgent(page, V2_KEY, V2);
+    await scenarioStep(page, `When I open "${V2_AGENT}"`, async () => {
+      await openAgent(page, V2_KEY, V2_AGENT);
     });
     await scenarioStep(page, `Then I see "Used in" "${V2}"`, async () => {
       const usedIn = page.getByTestId('agent-used-in');
@@ -615,15 +625,15 @@ test(
     );
     await scenarioStep(
       page,
-      'When I open the "Data Readiness Agent" agent',
+      `When I open the "${READINESS}" agent`,
       async () => {
         await openHub(page);
-        await openAgent(page, 'data-readiness', 'Data Readiness Agent');
+        await openAgent(page, 'data-readiness', READINESS);
       },
     );
     await scenarioStep(
       page,
-      'Then I see no "Chat Box" tab, "System Prompt" is open, and it is used in no workflow',
+      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in no workflow',
       async () => {
         await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
         await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
@@ -681,7 +691,7 @@ test('a user agent is used in no workflow, even once published', async ({
 test('a System agent says the app calls it itself', async ({ page }) => {
   await openHub(page);
   await button(page, 'Show more (2)').click();
-  await openAgent(page, 'sql-fixer', 'SQL Fixer');
+  await openAgent(page, 'sql-fixer', 'David');
   await expect(page.getByTestId('agent-used-in')).toContainText(SYSTEM_EMPTY);
   await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
   await expect(button(page, 'Start chat')).toHaveCount(0);
@@ -707,7 +717,7 @@ test('the agent detail has no detectable accessibility violations in either them
   }
 
   await openHub(page);
-  await openAgent(page, V2_KEY, V2);
+  await openAgent(page, V2_KEY, V2_AGENT);
   await expect(page.getByTestId('agent-used-in-qti-v2-turn')).toBeVisible();
   await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
   await scan('Official agent');

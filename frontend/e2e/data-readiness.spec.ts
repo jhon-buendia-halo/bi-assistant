@@ -349,7 +349,11 @@ test('the Data Readiness Agent is an Official library agent with no workflow', a
   const official = page.getByTestId('agent-section-official');
   const card = official.getByTestId(`agent-card-${AGENT_KEY}`);
   await expect(card).toBeVisible();
-  await expect(card.getByTestId(`agent-${AGENT_KEY}`)).toContainText(AGENT);
+  // Its card shows its persona: Sarah, Data Quality Analyst.
+  await expect(card.getByTestId(`agent-${AGENT_KEY}`)).toContainText('Sarah');
+  await expect(card.getByTestId(`agent-role-${AGENT_KEY}`)).toHaveText(
+    'Data Quality Analyst',
+  );
   await expect(card).toContainText('Owner: Official');
   await expect(card).toContainText(DESCRIPTION.slice(0, 60));
   // The agent card never starts a chat, and chats cannot start at all.

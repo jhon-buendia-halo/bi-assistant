@@ -84,10 +84,7 @@ export class AgentEditor implements OnInit, OnDestroy {
     this.editor.update({ instructions: value });
   }
 
-  onText(
-    field: 'name' | 'description' | 'model',
-    event: Event,
-  ): void {
+  onText(field: 'name' | 'role' | 'description' | 'model', event: Event): void {
     this.editor.update({ [field]: (event.target as HTMLInputElement).value });
   }
 
