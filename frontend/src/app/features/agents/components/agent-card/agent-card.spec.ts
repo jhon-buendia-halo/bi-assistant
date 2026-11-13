@@ -60,4 +60,16 @@ describe('AgentCard', () => {
     )!.click();
     expect(opened).toHaveBeenCalledTimes(1);
   });
+
+  it('shows the persona: the human name with the job title under it', () => {
+    const el = render({ ...assistant, name: 'Emily', role: 'Data Analyst' });
+    expect(el.textContent).toContain('Emily');
+    expect(
+      el.querySelector('[data-testid="agent-role-assistant"]')?.textContent,
+    ).toBe('Data Analyst');
+    // No job title, no empty line.
+    expect(
+      render(historian).querySelector('[data-testid^="agent-role-"]'),
+    ).toBeNull();
+  });
 });

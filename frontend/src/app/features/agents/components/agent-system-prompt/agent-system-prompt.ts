@@ -46,10 +46,10 @@ import { LinkedText } from '../linked-text/linked-text';
 import { PromptEditor } from '../prompt-editor/prompt-editor';
 
 /**
- * The System Prompt tab (agents-evals R86, R87, ui.md 4.5): the core prompt
+ * The Job Description tab (agents-evals R86, R87, ui.md 4.5): the core prompt
  * read-only, and for a user agent its own instructions with Edit, as in the
  * agent-poc reference: link toolbar, a `Linked:` row, broken-link error,
- * Cancel and Save prompt. Save stores the draft with its other fields kept.
+ * Cancel and Save job description. Save stores the draft with its other fields kept.
  */
 @Component({
   selector: 'app-agent-system-prompt',
@@ -203,7 +203,7 @@ export class AgentSystemPrompt implements OnDestroy {
     const agent = this.agent();
     if (
       !window.confirm(
-        `Reset the system prompt of "${agent.name}" to the built-in version?`,
+        `Reset the job description of "${agent.name}" to the built-in version?`,
       )
     )
       return;

@@ -99,6 +99,21 @@
       </div>
 
       <div class="flex flex-col gap-1.5">
+        <label for="agent-editor-role" class="field-label"
+          >Job title <span class="text-fg-muted">(optional)</span></label
+        >
+        <input
+          id="agent-editor-role"
+          type="text"
+          placeholder="e.g. Claims Analyst"
+          [maxLength]="limits.role"
+          [value]="editor.form().role"
+          (input)="onText('role', $event)"
+          class="field"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
         <label for="agent-editor-description" class="field-label"
           >Description</label
         >
@@ -114,7 +129,7 @@
 
       <div class="flex flex-col gap-1.5">
         <span id="agent-editor-instructions-label" class="field-label"
-          >Instructions</span
+          >Job description</span
         >
         <p
           id="agent-editor-instructions-hint"
@@ -136,7 +151,7 @@
             [value]="editor.form().instructions"
             [skills]="editor.librarySkills()"
             [builtInSkills]="editor.builtInSkills()"
-            label="Instructions"
+            label="Job description"
             [maxLength]="limits.instructions"
             countTestId="agent-instructions-count"
             (valueChange)="onInstructions($event)"

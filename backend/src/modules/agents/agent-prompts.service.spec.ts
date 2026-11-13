@@ -126,7 +126,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
   it('saves, serves on the next call and shows the override as the editable text', async () => {
     const { service } = build();
     const name = await service.save('sql-fixer', { prompt: '  Fix it.  ' });
-    expect(name).toBe('SQL Fixer');
+    expect(name).toBe('David');
     // Trimmed, and mirrored into the bridge the agent reads per call.
     expect(agentPromptOverrideFor('sql-fixer')?.prompt).toBe('Fix it.');
     const view = await service.view('sql-fixer');
@@ -156,16 +156,12 @@ describe('AgentPromptsService (ADR-0026)', () => {
   it('resets, also when there was no override', async () => {
     const { service } = build();
     await service.save('visualization', { prompt: 'Edited.' });
-    expect(await service.reset('visualization')).toBe(
-      'Interactive Visual Designer',
-    );
+    expect(await service.reset('visualization')).toBe('Ryan');
     expect(agentPromptOverrideFor('visualization')).toBeUndefined();
     expect(await service.view('visualization')).toMatchObject({
       modified: false,
     });
-    await expect(service.reset('visualization')).resolves.toBe(
-      'Interactive Visual Designer',
-    );
+    await expect(service.reset('visualization')).resolves.toBe('Ryan');
   });
 
   it('loads the stored overrides into the bridge on init', async () => {
@@ -250,11 +246,11 @@ describe('AgentPromptsService (ADR-0026)', () => {
         service.save('data-readiness', {
           prompt: shippedAgentPrompt('data-readiness'),
         }),
-      ).resolves.toBe('data-readiness');
+      ).resolves.toBe('Sarah');
     });
 
     it("Questions to Insights v2's identity, then skills not its own, then tools not its own (BA-320)", async () => {
-      const identity = 'You are Questions to Insights v2';
+      const identity = 'You are Questions to Insights';
       expect(await refusal('assistant-v2', 'Be brief.')).toBe(
         `The Questions to Insights v2 prompt must start with "${identity}"`,
       );
@@ -303,7 +299,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       });
       await service.save('assistant-v2', {
         prompt:
-          'You are Questions to Insights v2. Call [[tool:list_entities]], [[tool:describe_entity]], [[tool:sample_rows]], [[tool:run_readonly_sql]] and [[tool:ask_clarification]]. Load [[skill:curated-knowledge]], [[skill:sql-analysis]] and [[skill:result-validation]].',
+          'You are Questions to Insights. Call [[tool:list_entities]], [[tool:describe_entity]], [[tool:sample_rows]], [[tool:run_readonly_sql]] and [[tool:ask_clarification]]. Load [[skill:curated-knowledge]], [[skill:sql-analysis]] and [[skill:result-validation]].',
       });
       expect(agentPromptOverrideFor('assistant-v2')?.prompt).toContain(
         '[[skill:result-validation]]',
@@ -312,7 +308,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
         service.save('assistant-v2', {
           prompt: shippedAgentPrompt('assistant-v2'),
         }),
-      ).resolves.toBe('assistant-v2');
+      ).resolves.toBe('Michael');
     });
 
     it("refuses the Data Readiness Agent's tools and skill in other agents' prompts", async () => {
@@ -343,7 +339,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       const { service } = build();
       await expect(
         service.save('sql-fixer', { prompt: 'x'.repeat(20000) }),
-      ).resolves.toBe('SQL Fixer');
+      ).resolves.toBe('David');
     });
 
     it("the assistant's identity, then skill links, then unknown tools", async () => {
@@ -372,7 +368,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
         service.save('assistant', {
           prompt: `${IDENTITY}. See [[skill:curated-knowledge]] and [[tool:sample_rows]].`,
         }),
-      ).resolves.toBe('Questions to Insights Assistant');
+      ).resolves.toBe('Emily');
     });
 
     it('any link in a System agent prompt', async () => {
@@ -437,12 +433,12 @@ describe('AgentsController prompt routes (api.md 103-104)', () => {
       controller.savePrompt('sql-fixer', { prompt: 'Fix it.' }),
     ).resolves.toEqual({
       ok: true,
-      message: 'System prompt of "SQL Fixer" saved',
+      message: 'Job description of "David" saved',
       agent: { key: 'sql-fixer', name: 'SQL Fixer' },
     });
     await expect(controller.resetPrompt('sql-fixer')).resolves.toMatchObject({
       ok: true,
-      message: 'System prompt of "SQL Fixer" reset',
+      message: 'Job description of "David" reset',
     });
     await expect(
       controller.savePrompt('sql-fixer', { prompt: '' }),

@@ -164,12 +164,18 @@ export interface CanvasNode {
   subtitle: string;
   /** A square's label under it (title and subtitle), estimated from their text: its height; 0 for an agent. */
   labelHeight: number;
-  /** An agent step's agent name, then ` · ≤ <n> steps` when it may take more than one; else null. */
-  agentLine: string | null;
+  /** An agent step's agent, drawn under the action (ui.md 4.4b); else null. */
+  agent: CanvasNodeAgent | null;
   step: WorkflowDetailStep | null;
   exits: CanvasExit[];
   ports: CanvasPort[];
   subNodes: CanvasSubNode[];
+}
+
+/** The agent an agent node names: its persona's name and job title ('' when none). */
+export interface CanvasNodeAgent {
+  name: string;
+  role: string;
 }
 
 export interface CanvasEdge {
@@ -274,25 +280,11 @@ function modelLabel(
   return model.split('/').pop() || model;
 }
 
-/** The agent line inside an agent node: its name, and its step limit when above one. */
-function agentLine(step: WorkflowDetailStep): string | null {
+/** The agent inside an agent node: its persona's name and job title. */
+function nodeAgent(step: WorkflowDetailStep): CanvasNodeAgent | null {
   const agent = step.agent;
   if (!agent) return null;
-  return agent.maxSteps > 1
-    ? `${agent.name} · ≤ ${agent.maxSteps} steps`
-    : agent.name;
-}
-
-/**
- * The agent line as drawn: the agent's name, then (after a space the line
- * may break at) its step limit `· ≤ <n> steps`, kept on one line; `limit`
- * is '' without one.
- */
-export function agentLineParts(line: string): { name: string; limit: string } {
-  const at = line.lastIndexOf(' · ≤ ');
-  return at === -1
-    ? { name: line, limit: '' }
-    : { name: line.slice(0, at), limit: line.slice(at + 1) };
+  return { name: agent.name, role: agent.role ?? '' };
 }
 
 /** How many lines an exit note takes at `width`. */
@@ -678,7 +670,7 @@ function squareNode(
     centerY,
     number: null,
     labelHeight,
-    agentLine: null,
+    agent: null,
     step: null,
     // Start is the first column: its note starts at its left edge, right under its label.
     exits: exitNote
@@ -779,7 +771,7 @@ function stepNode(
     title: step.title,
     subtitle: step.id,
     labelHeight,
-    agentLine: agentLine(step),
+    agent: nodeAgent(step),
     step,
     exits,
     ports,

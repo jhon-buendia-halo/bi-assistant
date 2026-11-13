@@ -58,7 +58,8 @@ const V2: WorkflowDetail = {
       output: ['calls', 'stopped'],
       agent: {
         key: 'assistant-v2',
-        name: 'Questions to Insights v2',
+        name: 'Michael',
+        role: 'Insights Analyst',
         tools: ['list_entities', 'describe_entity', 'run_readonly_sql'],
         maxSteps: 15,
       },
@@ -159,17 +160,17 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     ).toBe('Step 3:');
   });
 
-  it('labels each node: title and id for steps, CODE / LLM badges, the agent line and the exits', () => {
+  it('labels each node: title and id for code steps, the action then its agent for an agent step, CODE / LLM badges and the exits', () => {
     expect(all('workflow-node-title').map(text)).toEqual([
       'Receive question',
       'Load catalog',
       'Analyse',
       'Wrap up',
     ]);
+    // An agent step shows no id: the action, then who does it.
     expect(all('workflow-node-id').map(text)).toEqual([
       'receive-question',
       'load-catalog',
-      'analyse',
       'wrap-up',
     ]);
     expect(all('workflow-node-kind').map(text)).toEqual([
@@ -178,13 +179,13 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       'LLM',
       'CODE',
     ]);
-    expect(text(q('workflow-node-agent'))).toBe(
-      'Questions to Insights v2 · ≤ 15 steps',
-    );
-    // The step limit never splits across lines.
-    const limit = q('workflow-node-agent')!.querySelector('span');
-    expect(limit?.textContent).toBe('· ≤ 15 steps');
-    expect(getComputedStyle(limit!).whiteSpace).toBe('nowrap');
+    // The action in bold, then the agent's name and job title.
+    const title = q('workflow-node-analyse')!.querySelector<HTMLElement>(
+      '[data-testid="workflow-node-title"]',
+    )!;
+    expect(Number(getComputedStyle(title).fontWeight)).toBeGreaterThanOrEqual(600);
+    expect(text(q('workflow-node-agent'))).toBe('Michael');
+    expect(text(q('workflow-node-agent-role'))).toBe('Insights Analyst');
     const label = (id: string) =>
       ['.node-title', '.node-subtitle'].map((c) =>
         text(q(id)!.querySelector(c)),
@@ -274,7 +275,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
         s.getAttribute('data-testid'),
       ),
     ).toEqual(['workflow-subnode-analyse-model']);
-    expect(text(q('workflow-node-agent'))).toBe('Questions to Insights v2');
+    expect(text(q('workflow-node-agent'))).toBe('Michael');
   });
 
   describe('the Tools sub-node opens a list of its tools', () => {

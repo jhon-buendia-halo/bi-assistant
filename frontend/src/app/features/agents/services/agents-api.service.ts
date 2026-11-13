@@ -14,6 +14,8 @@ export type AgentToolId = 'sample_rows' | 'ask_clarification' | 'visuals';
 /** A user agent's stored configuration (draft or Live version). */
 export interface AgentConfig {
   name: string;
+  /** Optional job title shown under the name (api.md 41). */
+  role?: string;
   description: string;
   instructions: string;
   datasets: string[];
@@ -30,7 +32,10 @@ export interface Agent {
   /** Registry key of a built-in agent, or a user agent's id. */
   key: string;
   id: string;
+  /** The persona's human name (api.md 33). */
   name: string;
+  /** The persona's job title; empty when a user agent has none. */
+  role?: string;
   description: string;
   tools: string[];
   kind?: AgentKind;
@@ -75,8 +80,8 @@ export interface AgentWorkflowStep {
   summary: string;
   input: string[];
   output: string[];
-  /** The agent step only. */
-  agent?: { name: string; tools: string[]; maxSteps: number };
+  /** The agent step only: its persona's name and job title, tools and step limit. */
+  agent?: { name: string; role?: string; tools: string[]; maxSteps: number };
   exits: { label: string; outcome: 'fails' | 'stops' | 'waits' }[];
 }
 

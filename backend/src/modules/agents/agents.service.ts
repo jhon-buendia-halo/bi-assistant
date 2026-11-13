@@ -55,6 +55,7 @@ import type {
 } from '../user-agents/entities/user-agent.entity';
 
 import { OFFICIAL_AGENT_KEYS } from '../../mastra/agent-constants';
+import { builtinAgentPersona } from '../../mastra/agent-personas';
 import {
   agentWorkflow,
   type AgentWorkflow,
@@ -69,7 +70,11 @@ export interface AgentSummary {
   key: string;
   /** The agent's own id, which may differ from the registry key. */
   id: string;
+  /** The persona's human name: a built-in's from its persona, a user
+   * agent's as its owner typed it (api.md 33). */
   name: string;
+  /** The persona's job title; empty when a user agent has none. */
+  role: string;
   description: string;
   /** Tool names the agent can call, sorted alphabetically. A user agent
    * runs on the assistant, so it lists the assistant's tools its effective
@@ -507,6 +512,7 @@ export class AgentsService {
     pins: string[],
   ): Promise<AgentSummary> {
     const official = OFFICIAL_AGENT_KEYS.includes(key);
+    const persona = builtinAgentPersona(key);
     // A built-in agent with datasets of its own (a named one, or the Data
     // Readiness Agent's kind) shows them (api.md 2.6 #33).
     const builtinSession = builtinAgentSession(key);
@@ -519,7 +525,8 @@ export class AgentsService {
     return {
       key,
       id: agent.id ?? key,
-      name: agent.name ?? key,
+      name: persona?.name ?? agent.name ?? key,
+      role: persona?.role ?? '',
       description: (await safe(() => agent.getDescription())) ?? '',
       tools: Object.keys((await safe(() => agent.listTools())) ?? {}).sort(),
       kind: official ? 'official' : 'system',
@@ -550,6 +557,7 @@ function summarizeUserAgent(
     key: doc.id,
     id: doc.id,
     name: config.name,
+    role: config.role ?? '',
     description: config.description,
     tools: [...assistantTools],
     kind: 'user',

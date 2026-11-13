@@ -45,7 +45,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   const assistantRow = page.getByTestId('agent-assistant');
   await expect(
     page.getByTestId('agent-section-official').getByTestId('agent-assistant'),
-  ).toContainText('Questions to Insights Assistant');
+  ).toContainText('Emily');
   await page.getByTestId('agent-show-more-system').click();
   await expect(
     page.getByTestId('agent-section-system').getByTestId('agent-sql-fixer'),
@@ -55,10 +55,10 @@ test('opens an agent from the Agents list and switches between its tabs', async 
 
   // Detail header, then one tab at a time.
   await expect(
-    page.getByRole('heading', { name: 'Questions to Insights Assistant' }),
+    page.getByRole('heading', { name: 'Emily', exact: true }),
   ).toBeVisible();
 
-  // An Official agent has no Chat Box and opens on System Prompt (R5, R90).
+  // An Official agent has no Chat Box and opens on Job Description (R5, R90).
   await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
   await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
 

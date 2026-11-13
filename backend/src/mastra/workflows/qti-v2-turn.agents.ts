@@ -1,23 +1,18 @@
 /**
  * The model calls of the two tool-less steps of Questions to Insights v2
- * (agents.md 5.11): Plan and Write answer. Each is an agent on v2's model
- * (`resolveAgentModel`, as `assistant-v2`), with its own instructions, no
- * tools, no memory and structured output by JSON prompt injection, so any
- * provider answers it (a native response format is not required). Not
- * registered on the Mastra instance: they are steps of v2's workflow, not
- * agents of the library (agents.md 2.11). The session's turn and the eval
- * runner call them through `QtiV2TurnRuntime`.
+ * (agents.md 5.11): Plan and Write answer. Each runs a registered System
+ * agent (Olivia, `analysis-planner`; Jessica, `answer-writer`; agents.md
+ * 1.1, 2.11) on v2's model (`resolveAgentModel`), with its own editable
+ * instructions, no tools, no memory and structured output by JSON prompt
+ * injection, so any provider answers it (a native response format is not
+ * required). The session's turn and the eval runner call them through
+ * `QtiV2TurnRuntime`.
  */
-import { Agent } from '@mastra/core/agent';
 import type { MessageListInput } from '@mastra/core/agent/message-list';
 import type { RequestContext } from '@mastra/core/request-context';
-import { resolveAgentModel } from '../model-resolver';
-import {
-  PLAN_INSTRUCTIONS,
-  WRITE_ANSWER_INSTRUCTIONS,
-  planMessages,
-  writeAnswerRequest,
-} from './qti-v2-turn.prompts';
+import { analysisPlannerAgent } from '../agents/analysis-planner.agent';
+import { answerWriterAgent } from '../agents/answer-writer.agent';
+import { planMessages, writeAnswerRequest } from './qti-v2-turn.prompts';
 import { answerSchema, planSchema } from './qti-v2-turn.schemas';
 import { runErrorMessage } from './workflow-run';
 import {
@@ -30,21 +25,9 @@ import {
   type ValidationFinding,
 } from './qti-v2-turn.steps';
 
-const qtiV2PlanAgent = new Agent({
-  id: 'questions-to-insights-v2-plan',
-  name: 'Questions to Insights v2: Plan',
-  description: 'Plans the analysis of one question. No tools.',
-  instructions: PLAN_INSTRUCTIONS,
-  model: async () => resolveAgentModel(),
-});
-
-const qtiV2WriteAnswerAgent = new Agent({
-  id: 'questions-to-insights-v2-write-answer',
-  name: 'Questions to Insights v2: Write answer',
-  description: "Writes a run's answer from its queries' rows. No tools.",
-  instructions: WRITE_ANSWER_INSTRUCTIONS,
-  model: async () => resolveAgentModel(),
-});
+/** The agents of the two calls (agents.md 1.1): Olivia plans, Jessica writes. */
+const qtiV2PlanAgent = analysisPlannerAgent;
+const qtiV2WriteAnswerAgent = answerWriterAgent;
 
 /** What both calls share with the turn: its stop, effort and context. */
 export interface StepModelOptions {

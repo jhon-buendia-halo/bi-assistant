@@ -103,10 +103,11 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
   it('does not list the removed RFP Builder, even with a pin saved for it', async () => {
     const service = build([], [], ['rfp']);
     const agents = await service.list();
+    // Alphabetical by persona name: David, Emily, Sarah.
     expect(agents.map((agent) => agent.key)).toEqual([
+      'sql-fixer',
       'assistant',
       'data-readiness',
-      'sql-fixer',
     ]);
     expect(await service.get('rfp')).toBeNull();
     const assistant = agents.find((agent) => agent.key === 'assistant');
@@ -158,7 +159,8 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
     ).list();
     const readiness = agents.find((agent) => agent.key === 'data-readiness');
     expect(readiness).toMatchObject({
-      name: 'Data Readiness Agent',
+      name: 'Sarah',
+      role: 'Data Quality Analyst',
       kind: 'official',
       owner: 'Official',
       status: 'builtin',

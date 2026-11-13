@@ -157,7 +157,7 @@
     } @else {
       <div class="my-auto flex flex-col gap-3 py-4" data-testid="workflow-run-empty">
         <div class="text-center">
-          <p class="m-0 text-[14px] font-medium text-fg-strong">Ask {{ w.name }}</p>
+          <p class="m-0 text-[14px] font-medium text-fg-strong">{{ w.name }}</p>
           <p class="m-0 mt-1 text-[13px] text-fg-muted">{{ emptyHint() }}</p>
         </div>
         @if (designer.questionField() !== null && w.starterQuestions.length > 0) {

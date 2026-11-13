@@ -165,7 +165,11 @@ export class WorkflowNodeDialog {
     const tool = this.tool();
     if (tool !== null) return `Tool of ${tool.agentName} · ${tool.stepTitle}`;
     const agent = this.node().step?.agent;
-    return agent ? `${agent.name} · ≤ ${agent.maxSteps} steps` : null;
+    if (!agent) return null;
+    // A one-call step (Plan, Write answer) names its agent alone.
+    return agent.maxSteps > 1
+      ? `${agent.name} · ≤ ${agent.maxSteps} steps`
+      : agent.name;
   });
 
   /** A tool opened from its sub-node; null for any other node. */

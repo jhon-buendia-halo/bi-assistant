@@ -48,7 +48,11 @@ describe('official-links (agents-evals R99, R105)', () => {
     );
     expect(officialLinkTools(report)).toEqual([
       { kind: 'tool', name: 'list_clients', description: 'List the clients.' },
-      { kind: 'tool', name: 'get_report', description: 'Read one report record.' },
+      {
+        kind: 'tool',
+        name: 'get_report',
+        description: 'Read one report record.',
+      },
       {
         kind: 'tool',
         name: 'ask_clarification',
@@ -96,39 +100,17 @@ describe('official-links (agents-evals R99, R105)', () => {
     ]);
   });
 
-  it("names the agent in the editor's copy, the assistant's unchanged", () => {
-    expect(
-      officialPromptCopy({
-        key: 'assistant',
-        name: 'Questions to Insights Assistant',
-      }),
-    ).toEqual({
+  it("names the agent in the editor's copy by its persona name, with no article (R107)", () => {
+    expect(officialPromptCopy({ key: 'assistant', name: 'Emily' })).toEqual({
       toolbarHint:
-        'Type / to link a tool or a built-in skill. Links here are mentions; the assistant keeps all its tools.',
+        'Type / to link a tool or a built-in skill. Links here are mentions; Emily keeps every tool.',
       toolsNote:
-        'The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules.',
-      generatedToolsNote:
-        '## Tools — generated from the tools the assistant gets',
+        'The ## Tools list is generated from the tools Emily gets and is inserted before ## Working rules.',
+      generatedToolsNote: '## Tools — generated from the tools Emily gets',
     });
     expect(
-      officialPromptCopy({ key: 'report', name: 'Report Builder' })
+      officialPromptCopy({ key: 'data-readiness', name: 'Sarah' })
         .generatedToolsNote,
-    ).toBe('## Tools — generated from the tools the Report Builder gets');
-  });
-
-  it('names Questions to Insights v2 without an article and offers its tools and skills (R107)', () => {
-    expect(
-      officialPromptCopy({
-        key: 'assistant-v2',
-        name: 'Questions to Insights v2',
-      }),
-    ).toEqual({
-      toolbarHint:
-        'Type / to link a tool or a built-in skill. Links here are mentions; Questions to Insights v2 keeps all its tools.',
-      toolsNote:
-        'The ## Tools list is generated from the tools Questions to Insights v2 gets and is inserted before ## Working rules.',
-      generatedToolsNote:
-        '## Tools — generated from the tools Questions to Insights v2 gets',
-    });
+    ).toBe('## Tools — generated from the tools Sarah gets');
   });
 });

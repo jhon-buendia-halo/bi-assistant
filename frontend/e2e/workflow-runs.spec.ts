@@ -20,7 +20,7 @@ import { worldCupKey } from './helpers/world-cup-db';
  */
 
 const V2_ID = 'qti-v2-turn';
-const V2 = 'Questions to Insights v2';
+const V2 = 'Answer a Business Question';
 const QUESTION = 'Which team scored the most goals?';
 const ANSWER = 'Brazil scored the most goals in this data.';
 const FOLLOW_UP = 'And the fewest?';
@@ -154,7 +154,7 @@ function runAnswer(page: Page): Locator {
 
 test.describe('Feature: Workflow runs', () => {
   test(
-    'I run Questions to Insights v2 on a question',
+    'I run Answer a Business Question on a question',
     { tag: ['@demo', '@story-1.23.15'] },
     async ({ page }) => {
       stub.reply = answerWithSql({ [QUESTION]: ANSWER, [FOLLOW_UP]: FOLLOW_UP_ANSWER });

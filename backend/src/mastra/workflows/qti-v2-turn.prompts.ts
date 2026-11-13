@@ -15,11 +15,11 @@ import type {
 
 /** The Plan step's instructions' first line (the stub model routes by it). */
 export const PLAN_FIRST_LINE =
-  'You plan a data analysis for Questions to Insights v2.';
+  'You plan a data analysis for Questions to Insights.';
 
 /** The Write answer step's instructions' first line. */
 export const WRITE_ANSWER_FIRST_LINE =
-  'You write the final answer for Questions to Insights v2.';
+  'You write the final answer for Questions to Insights.';
 
 /** The Plan step's instructions (agents.md Appendix F). */
 export const PLAN_INSTRUCTIONS = `${PLAN_FIRST_LINE}

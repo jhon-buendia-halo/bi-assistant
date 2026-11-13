@@ -90,7 +90,7 @@ describe('WorkflowNodeDialog', () => {
       'You are a data analyst.',
     );
     expect(el().textContent).toContain(
-      "The agent's base prompt; each run adds its own context.",
+      "The agent's job description; each run adds its own context.",
     );
     expect(el().textContent).not.toContain('Shortened to 20 000 characters.');
 
@@ -114,6 +114,19 @@ describe('WorkflowNodeDialog', () => {
     expect(byId('workflow-ndv-output')?.textContent).toContain(
       'No tool calls recorded.',
     );
+  });
+
+  it('names a one-call step\'s agent without a step limit in its header', () => {
+    const analyse = node('analyse');
+    open({
+      ...analyse,
+      step: {
+        ...analyse.step!,
+        agent: { ...analyse.step!.agent!, name: 'Olivia', tools: [], maxSteps: 1 },
+      },
+    });
+    expect(el().textContent).toContain('Olivia');
+    expect(el().textContent).not.toContain('≤ 1 steps');
   });
 
   it('notes a shortened system prompt', () => {

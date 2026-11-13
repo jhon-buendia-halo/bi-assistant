@@ -10,7 +10,6 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   ZOOM_LEVELS,
-  agentLineParts,
   canvasBoxes,
   fitZoom,
   workflowCanvasLayout,
@@ -50,7 +49,8 @@ const agentStep = (
   title: 'Analyse',
   kind: 'agent',
   agent: {
-    name: 'Questions to Insights v2',
+    name: 'Michael',
+    role: 'Insights Analyst',
     tools,
     maxSteps,
     key: 'assistant-v2',
@@ -268,7 +268,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
         (n) => n.ports.length === 0 && n.subNodes.length === 0,
       ),
     ).toBe(true);
-    expect(layout.nodes.map((n) => n.agentLine)).toEqual([
+    expect(layout.nodes.map((n) => n.agent)).toEqual([
       null,
       null,
       null,
@@ -323,7 +323,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(new Set(layout.nodes.map((n) => n.centerY))).toEqual(new Set([cy]));
 
     const analyse = layout.nodes[3];
-    expect(analyse.agentLine).toBe('Questions to Insights v2 · ≤ 15 steps');
+    expect(analyse.agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
     expect(analyse.exits).toEqual([
       {
         text: 'Model error → fails',
@@ -431,27 +431,24 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(none.nodes[1].ports.map((p) => p.label)).toEqual(['Model', 'Tools']);
   });
 
-  it('the agent line names the agent, and its step limit only above one step', () => {
+  it('an agent node names its agent by persona: name and job title, never the step limit', () => {
     const one = workflowCanvasLayout({
       input: [],
       agents: AGENTS,
       steps: [agentStep('plan', [], 1)],
     });
-    expect(one.nodes[1].agentLine).toBe('Questions to Insights v2');
+    expect(one.nodes[1].agent).toEqual({
+      name: 'Michael',
+      role: 'Insights Analyst',
+    });
     const many = workflowCanvasLayout({
       input: [],
       agents: AGENTS,
       steps: [agentStep('analyse', [], 2)],
     });
-    expect(many.nodes[1].agentLine).toBe('Questions to Insights v2 · ≤ 2 steps');
-    // Drawn as the name, then the limit kept on one line.
-    expect(agentLineParts(many.nodes[1].agentLine!)).toEqual({
-      name: 'Questions to Insights v2',
-      limit: '· ≤ 2 steps',
-    });
-    expect(agentLineParts('Questions to Insights v2')).toEqual({
-      name: 'Questions to Insights v2',
-      limit: '',
+    expect(many.nodes[1].agent).toEqual({
+      name: 'Michael',
+      role: 'Insights Analyst',
     });
   });
 
@@ -696,9 +693,9 @@ describe('Questions to Insights v2 as the API returns it (roomy canvas)', () => 
         ]);
         expect(node('plan').subNodes.map((s) => s.id)).toEqual(['plan-model']);
         expect(node('write-answer').subNodes.map((s) => s.id)).toEqual(['write-answer-model']);
-        expect(node('plan').agentLine).toBe('Questions to Insights v2');
-        expect(node('write-answer').agentLine).toBe('Questions to Insights v2');
-        expect(node('analyse').agentLine).toBe('Questions to Insights v2 · ≤ 15 steps');
+        expect(node('plan').agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
+        expect(node('write-answer').agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
+        expect(node('analyse').agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
         // As wide as the agent: every exit note takes one row.
         expect(node('analyse').exits.map((e) => e.lines)).toEqual([1, 1, 1]);
       });

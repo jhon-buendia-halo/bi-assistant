@@ -700,7 +700,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
     it('before a run shows the empty state with the hint and the example chips, and no New question', () => {
       openForm();
       expect(q('workflow-run-empty')).not.toBeNull();
-      expect(q('workflow-run-empty')!.textContent).toContain('Ask Questions to Insights v2');
+      expect(q('workflow-run-empty')!.textContent).toContain('Questions to Insights v2');
       expect(q('workflow-run-empty')!.textContent).toContain(
         'Pick the datasets below and type a question.',
       );

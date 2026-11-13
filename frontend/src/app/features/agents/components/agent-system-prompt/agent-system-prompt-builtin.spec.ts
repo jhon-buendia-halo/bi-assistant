@@ -186,7 +186,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     // An assistant-only tool is not one of the Report Builder's.
     expect(chip('run_readonly_sql')?.className).toContain('chip-danger');
     expect(byId('agent-prompt-tools-note')?.textContent).toContain(
-      '## Tools — generated from the tools the Report Builder gets',
+      '## Tools — generated from the tools Report Builder gets',
     );
     expect(component.officialTools().map((tool) => tool.name)).toEqual([
       'list_clients',
@@ -221,7 +221,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     confirm.and.returnValue(true);
     byId('agent-prompt-reset')!.click();
     expect(confirm).toHaveBeenCalledWith(
-      'Reset the system prompt of "SQL fixer" to the built-in version?',
+      'Reset the job description of "SQL fixer" to the built-in version?',
     );
     const del = http.expectOne(`${API_BASE_URL}/agents/sql-fixer/prompt`);
     expect(del.request.method).toBe('DELETE');

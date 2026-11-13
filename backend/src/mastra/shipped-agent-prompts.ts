@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { assistantShippedPrompt } from './agents/assistant-prompt';
 import {
+  PLAN_INSTRUCTIONS,
+  WRITE_ANSWER_INSTRUCTIONS,
+} from './workflows/qti-v2-turn.prompts';
+import {
   ASSISTANT_V2_PROMPT,
   DATA_READINESS_PROMPT,
   EVAL_JUDGE_PROMPT,
@@ -25,6 +29,8 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'knowledge-bootstrap': KNOWLEDGE_BOOTSTRAP_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
   'data-readiness': DATA_READINESS_PROMPT,
+  'analysis-planner': PLAN_INSTRUCTIONS,
+  'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

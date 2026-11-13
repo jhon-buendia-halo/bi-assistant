@@ -263,7 +263,7 @@ export class WorkflowRunChat {
       !this.designer.runResult()?.answer?.clarification,
   );
 
-  /** The line under "Ask <workflow>" before a run. */
+  /** The line under the workflow's name before a run. */
   protected readonly emptyHint = computed(() => {
     const workflow = this.designer.workflow();
     const datasets = workflow?.input.some(

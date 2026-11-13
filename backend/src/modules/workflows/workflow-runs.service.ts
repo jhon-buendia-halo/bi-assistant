@@ -318,6 +318,7 @@ export class WorkflowRunsService implements OnModuleInit {
     const question = typeof raw === 'string' ? raw.trim() : '';
     if (!question) throw new BadRequestException('Question is required');
     const steps = oneStepWorkflowSteps({
+      key: agentId,
       name: target.name,
       tools: [],
       maxSteps: wrappedAgentMaxSteps(agentId),

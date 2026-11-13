@@ -48,8 +48,8 @@ const LOG = env.COPILOT_STUB_LOG;
 const DELTA_MS = Number(env.COPILOT_STUB_DELTA_MS ?? 40);
 
 /** The first lines of v2's Plan and Write answer instructions (helpers/v2-steps.ts). */
-const V2_PLAN_LINE = 'You plan a data analysis for Questions to Insights v2.';
-const V2_ANSWER_LINE = 'You write the final answer for Questions to Insights v2.';
+const V2_PLAN_LINE = 'You plan a data analysis for Questions to Insights.';
+const V2_ANSWER_LINE = 'You write the final answer for Questions to Insights.';
 
 function firstLine(text) {
   return (

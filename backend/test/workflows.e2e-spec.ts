@@ -101,11 +101,16 @@ describe('The workflow catalogue (API)', () => {
     expect(listed).toEqual([
       {
         id: 'qti-v2-turn',
-        name: 'Questions to Insights v2',
+        name: 'Answer a Business Question',
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
-        agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+        // Michael analyses; Olivia plans and Jessica writes (agents.md 5.11).
+        agents: [
+          { key: 'assistant-v2', name: 'Michael' },
+          { key: 'analysis-planner', name: 'Olivia' },
+          { key: 'answer-writer', name: 'Jessica' },
+        ],
         stepCount: 8,
         bar: 'steps',
         trigger: 'run',
@@ -279,23 +284,42 @@ describe('The workflow catalogue (API)', () => {
       expect(v2.steps.flatMap((step) => step.exits)).not.toContainEqual(
         expect.objectContaining({ label: 'Empty question' }),
       );
-      // Plan, Analyse and Write answer call v2; only Analyse with its tools.
+      // Olivia plans, Michael analyses with his tools, Jessica writes.
       expect(
         v2.steps
           .filter((step) => step.agent)
           .map((step) => [step.id, step.agent?.key, step.agent?.tools.length]),
       ).toEqual([
-        ['plan', 'assistant-v2', 0],
+        ['plan', 'analysis-planner', 0],
         ['analyse', 'assistant-v2', 5],
-        ['write-answer', 'assistant-v2', 0],
+        ['write-answer', 'answer-writer', 0],
       ]);
       expect(v2.agents).toEqual([
         {
           key: 'assistant-v2',
-          name: 'Questions to Insights v2',
+          name: 'Michael',
           model: null,
           systemPrompt: expect.any(String) as string,
           toolDetails: expect.any(Array) as unknown[],
+        },
+        // Olivia and Jessica: their job descriptions, no tools.
+        {
+          key: 'analysis-planner',
+          name: 'Olivia',
+          model: null,
+          systemPrompt: expect.stringMatching(
+            /^You plan a data analysis for Questions to Insights\./,
+          ) as string,
+          toolDetails: [],
+        },
+        {
+          key: 'answer-writer',
+          name: 'Jessica',
+          model: null,
+          systemPrompt: expect.stringMatching(
+            /^You write the final answer for Questions to Insights\./,
+          ) as string,
+          toolDetails: [],
         },
       ]);
       // Its tools are the ones GET /agents/:key lists (api.md 34).
@@ -403,16 +427,19 @@ describe('The workflow catalogue (API)', () => {
       expect(again.contractHash).toBe(v2.contractHash);
     });
 
-    it("an agent's detail says which workflows use it: only assistant-v2 is used in one", async () => {
+    it("an agent's detail says which workflows use it: Michael, Olivia and Jessica are used in one", async () => {
       const used = async (key: string) =>
         (
           (await http().get(`/agents/${key}`).expect(200)).body as {
             usedInWorkflows: { id: string; name: string }[];
           }
         ).usedInWorkflows;
-      expect(await used('assistant-v2')).toEqual([
-        { id: 'qti-v2-turn', name: 'Questions to Insights v2' },
-      ]);
+      for (const key of ['assistant-v2', 'analysis-planner', 'answer-writer']) {
+        expect({ key, used: await used(key) }).toEqual({
+          key,
+          used: [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
+        });
+      }
       for (const key of ['assistant', 'data-readiness', liveId, draftId]) {
         expect({ key, used: await used(key) }).toEqual({ key, used: [] });
       }

@@ -149,7 +149,7 @@ describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () =>
     expect(ASSISTANT_V2_PROMPT).toBe(SHIPPED);
     expect(shippedAgentPrompt('assistant-v2')).toBe(SHIPPED);
     expect(
-      ASSISTANT_V2_PROMPT.startsWith('You are Questions to Insights v2'),
+      ASSISTANT_V2_PROMPT.startsWith('You are Questions to Insights'),
     ).toBe(true);
     expect(ASSISTANT_V2_PROMPT).not.toContain('## Tools');
     expect(ASSISTANT_V2_PROMPT).not.toContain('## Workflow');
@@ -214,7 +214,7 @@ describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () =>
 
   it('serves an override with the Tools section before its Working rules, links resolved', () => {
     const override = [
-      'You are Questions to Insights v2, terse.',
+      'You are Questions to Insights, terse.',
       '',
       '## Working rules',
       '- Call [[tool:list_entities]] first.',
@@ -224,7 +224,7 @@ describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () =>
     ]);
     expect(assistantV2Instructions()).toBe(
       [
-        'You are Questions to Insights v2, terse.',
+        'You are Questions to Insights, terse.',
         '',
         ...TOOLS_SECTION,
         '',
@@ -240,16 +240,14 @@ describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () =>
     setAgentPromptOverrides([
       {
         key: 'assistant-v2',
-        prompt: 'You are Questions to Insights v2. Be brief.',
+        prompt: 'You are Questions to Insights. Be brief.',
         baseHash: 'x',
       },
     ]);
     expect(assistantV2Instructions()).toBe(
-      [
-        'You are Questions to Insights v2. Be brief.',
-        '',
-        ...TOOLS_SECTION,
-      ].join('\n'),
+      ['You are Questions to Insights. Be brief.', '', ...TOOLS_SECTION].join(
+        '\n',
+      ),
     );
   });
 

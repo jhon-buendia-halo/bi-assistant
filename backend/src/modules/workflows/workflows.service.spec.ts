@@ -110,6 +110,19 @@ function build(
       '',
       'You assess readiness.',
     ),
+    // The agents of v2's Plan and Write answer steps (agents.md 5.11).
+    'analysis-planner': fakeAgent(
+      'Questions to Insights v2: Plan',
+      [],
+      '',
+      'You plan a data analysis.',
+    ),
+    'answer-writer': fakeAgent(
+      'Questions to Insights v2: Write answer',
+      [],
+      '',
+      'You write the final answer.',
+    ),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
   const llm = options.llmView
@@ -137,11 +150,16 @@ const agentConfig = (name: string, datasets: string[]) => ({
 /** The one catalogue workflow, as `GET /workflows` lists it. */
 const QTI_V2_SUMMARY = {
   id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  name: 'Answer a Business Question',
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
-  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  // Every agent its steps run: Michael, then Olivia (Plan) and Jessica (Write answer).
+  agents: [
+    { key: 'assistant-v2', name: 'Michael' },
+    { key: 'analysis-planner', name: 'Olivia' },
+    { key: 'answer-writer', name: 'Jessica' },
+  ],
   stepCount: 8,
   bar: 'steps',
   trigger: 'run',
@@ -195,13 +213,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     it("qti-v2-turn's steps are agentWorkflow('assistant-v2')'s, with their declared schemas", async () => {
       ctx = build();
       const detail = await ctx.service.get('qti-v2-turn');
-      // Its agent steps also name their agent's key, and every step carries
-      // its declared input and output schema (api.md 117; agents.md 5.12).
+      // Its agent steps name their own agent's key (Olivia plans, Michael
+      // analyses, Jessica writes), and every step carries its declared input
+      // and output schema (api.md 117; agents.md 5.11, 5.12).
+      expect(
+        detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
+      ).toEqual(['analysis-planner', 'assistant-v2', 'answer-writer']);
       expect(detail.steps).toEqual(
         agentWorkflow('assistant-v2')!.steps.map((step, index) => ({
-          ...(step.agent
-            ? { ...step, agent: { ...step.agent, key: 'assistant-v2' } }
-            : step),
+          ...step,
           inputSchema: QTI_V2_TURN_STEPS[index].inputSchema,
           outputSchema: QTI_V2_TURN_STEPS[index].outputSchema,
         })),
@@ -240,13 +260,14 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(summary).not.toHaveProperty('contractHash');
     });
 
-    it('details the agent its steps call: its key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {
+    it('details the agents its steps call: their key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {
       ctx = build();
       const detail = await ctx.service.get('qti-v2-turn');
       expect(detail.agents).toEqual([
         {
           key: 'assistant-v2',
-          name: 'Questions to Insights v2',
+          // The agent's persona name, as the catalogue shows it.
+          name: 'Michael',
           model: null,
           systemPrompt: 'You answer with the core data tools.',
           toolDetails: [
@@ -266,6 +287,21 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
               inputs: ['sql', 'reason'],
             },
           ],
+        },
+        // Olivia and Jessica: one model call each, on their own job description.
+        {
+          key: 'analysis-planner',
+          name: 'Olivia',
+          model: null,
+          systemPrompt: 'You plan a data analysis.',
+          toolDetails: [],
+        },
+        {
+          key: 'answer-writer',
+          name: 'Jessica',
+          model: null,
+          systemPrompt: 'You write the final answer.',
+          toolDetails: [],
         },
       ]);
       ctx.db.close();
@@ -290,7 +326,9 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
       const [v2] = await ctx.service.list();
       expect(v2.agents).toEqual([
-        { key: 'assistant-v2', name: 'Questions to Insights v2' },
+        { key: 'assistant-v2', name: 'Michael' },
+        { key: 'analysis-planner', name: 'Olivia' },
+        { key: 'answer-writer', name: 'Jessica' },
       ]);
     });
 
@@ -339,7 +377,10 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
   afterEach(() => ctx.db.close());
 
   it.each([
-    ['assistant-v2', [{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]],
+    [
+      'assistant-v2',
+      [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
+    ],
     ['assistant', []],
     ['data-readiness', []],
     ['sql-fixer', []],
@@ -375,7 +416,11 @@ describe('WorkflowsController (ids contain ":")', () => {
       list: jest.fn().mockResolvedValue([]),
       get: jest.fn((id: string) =>
         id === 'qti-v2-turn'
-          ? Promise.resolve({ id, name: 'Questions to Insights v2', steps: [] })
+          ? Promise.resolve({
+              id,
+              name: 'Answer a Business Question',
+              steps: [],
+            })
           : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
       ),
     };
@@ -396,7 +441,7 @@ describe('WorkflowsController (ids contain ":")', () => {
         .expect(({ body }) =>
           expect(body).toMatchObject({
             id: 'qti-v2-turn',
-            name: 'Questions to Insights v2',
+            name: 'Answer a Business Question',
           }),
         );
       await request(server)

@@ -37,6 +37,13 @@ export type { WorkflowEdge } from './workflow-contract';
 /** The workflow's registry key and id. */
 export const QTI_V2_TURN_WORKFLOW_ID = 'qti-v2-turn';
 
+/**
+ * The name the app shows for the workflow (workflows R1). Michael, the
+ * `assistant-v2` agent, runs it; the agent and its prompts keep the name
+ * Questions to Insights v2. A stored run keeps the name it ran under.
+ */
+export const QTI_V2_TURN_WORKFLOW_NAME = 'Answer a Business Question';
+
 /** How a step can end other than by passing its output on. */
 export interface WorkflowStepExit {
   label: string;

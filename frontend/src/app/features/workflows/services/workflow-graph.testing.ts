@@ -46,7 +46,8 @@ function agent(
     output,
     agent: {
       key: 'qti',
-      name: 'Questions to Insights v2',
+      name: 'Michael',
+      role: 'Insights Analyst',
       tools,
       maxSteps: 15,
     },

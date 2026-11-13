@@ -52,13 +52,13 @@ export async function fillRun(
   await page.getByTestId('workflow-input-question').fill(question);
 }
 
-/** Opens Questions to Insights v2's Run tab, fills it and clicks Execute. */
+/** Opens Answer a Business Question's Run tab, fills it and clicks Execute. */
 export async function runQuestionInTab(
   page: Page,
   question: string,
   dataset: string,
 ): Promise<void> {
-  await openWorkflowPage(page, 'qti-v2-turn', 'Questions to Insights v2');
+  await openWorkflowPage(page, 'qti-v2-turn', 'Answer a Business Question');
   await openRunTab(page);
   await fillRun(page, question, dataset);
   await page.getByTestId('workflow-run').click();

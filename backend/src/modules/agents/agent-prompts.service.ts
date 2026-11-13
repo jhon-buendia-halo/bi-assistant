@@ -17,6 +17,7 @@ import {
   ASSISTANT_V2_TOOL_NAMES,
 } from '../../mastra/agents/assistant-v2-catalog';
 import { MastraService } from '../../mastra/mastra.service';
+import { builtinAgentPersona } from '../../mastra/agent-personas';
 import {
   agentPromptHash,
   shippedAgentPrompt,
@@ -113,7 +114,11 @@ export class AgentPromptsService implements OnModuleInit {
   }
 
   private nameOf(key: string): string {
-    return this.mastra.listAgents()[key]?.name ?? key;
+    return (
+      builtinAgentPersona(key)?.name ??
+      this.mastra.listAgents()[key]?.name ??
+      key
+    );
   }
 
   /** The shipped prompt of built-in `key`; refuses a user agent or a stranger. */

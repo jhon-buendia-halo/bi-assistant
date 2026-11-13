@@ -180,7 +180,7 @@ test('a Questions to Insights v2 run runs v2 on every question', async ({
     expect(result.text).toContain(STUB_ANSWER);
     // The run ran v2 (R61): its prompt and only its own tools.
     const request = firstTurnRequest(question);
-    expect(systemTexts(request)[0]).toContain('You are Questions to Insights v2');
+    expect(systemTexts(request)[0]).toContain('You are Questions to Insights');
     expect(systemTexts(request).join('\n')).not.toContain(BASE_PROMPT_START);
     expect([...request.tools].sort()).toEqual([...V2_TOOLS].sort());
   }

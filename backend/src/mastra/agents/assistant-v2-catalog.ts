@@ -16,7 +16,7 @@ export const ASSISTANT_V2_DESCRIPTION =
   'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
 
 /** Where its prompt, shipped or overridden, must start (api.md 103). */
-export const ASSISTANT_V2_IDENTITY_START = 'You are Questions to Insights v2';
+export const ASSISTANT_V2_IDENTITY_START = 'You are Questions to Insights';
 
 /** Its tool-loop budget per turn (agents.md, its section in 2). */
 export const ASSISTANT_V2_MAX_STEPS = 15;

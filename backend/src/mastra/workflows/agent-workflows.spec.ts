@@ -24,21 +24,31 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     ]);
   });
 
-  it('gives the agent steps their agent: Analyse with its tools, Plan and Write answer one model call without tools', () => {
+  it('gives each agent step its own agent: Michael analyses with his tools, Olivia plans and Jessica writes in one model call without tools', () => {
     const steps = agentWorkflow('assistant-v2')!.steps;
     const agentOf = (id: string) => steps.find((step) => step.id === id)?.agent;
+    // Each agent by its key and persona (agents.md 1.1, 5.11).
     expect(agentOf('analyse')).toEqual({
-      name: 'Questions to Insights v2',
+      key: 'assistant-v2',
+      name: 'Michael',
+      role: 'Insights Analyst',
       tools: V2_TOOLS,
       maxSteps: 15,
     });
-    for (const id of ['plan', 'write-answer']) {
-      expect(agentOf(id)).toEqual({
-        name: 'Questions to Insights v2',
-        tools: [],
-        maxSteps: 1,
-      });
-    }
+    expect(agentOf('plan')).toEqual({
+      key: 'analysis-planner',
+      name: 'Olivia',
+      role: 'Analysis Lead',
+      tools: [],
+      maxSteps: 1,
+    });
+    expect(agentOf('write-answer')).toEqual({
+      key: 'answer-writer',
+      name: 'Jessica',
+      role: 'Insights Writer',
+      tools: [],
+      maxSteps: 1,
+    });
     expect(
       steps.filter((step) => step.kind === 'code').map((step) => step.agent),
     ).toEqual([undefined, undefined, undefined, undefined, undefined]);
