@@ -552,13 +552,15 @@ test.describe('Feature: Workflows (run workflows)', () => {
       );
       await scenarioStep(
         page,
-        'Then "Clarify" is "Done" and "Analyse", "Validate" and "Write answer" are "Skipped"',
+        'Then "Clarify" is "Stopped", the run ended on its question, and "Analyse", "Validate" and "Write answer" are "Skipped"',
         async () => {
-          await expect(page.getByTestId('workflow-run-status')).not.toHaveText('Running…');
-          await expect(page.getByTestId('workflow-run-status')).not.toHaveText(/Run failed/);
-          for (const id of ['receive-question', 'load-catalog', 'plan', 'clarify']) {
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          for (const id of ['receive-question', 'load-catalog', 'plan']) {
             await expect(nodeStatus(page, id)).toHaveText('Done');
           }
+          // A clarifying question ends the run there (workflows R27).
+          await expect(nodeStatus(page, 'clarify')).toHaveText('Stopped');
+          await expect(runStep(page, 'clarify').getByText('Stopped', { exact: true })).toBeVisible();
           for (const id of V2_ANALYSIS_STEP_IDS) {
             await expect(nodeStatus(page, id)).toHaveText('Skipped');
             await expect(page.getByTestId(`workflow-node-${id}`)).toHaveAttribute('data-skipped', 'true');
@@ -888,7 +890,7 @@ test.describe('Feature: Workflows (the designer)', () => {
           await expect(dialog.getByTestId('workflow-ndv-title')).toHaveText('Analyse');
           await expect(dialog.getByTestId('workflow-step-field-model')).toBeVisible();
           await expect(dialog.getByTestId('workflow-step-field-tools')).toHaveText(
-            'list_entities, describe_entity, run_readonly_sql',
+            'list_entities, describe_entity, sample_rows, run_readonly_sql, ask_clarification',
           );
           await expect(dialog.getByText('Max steps', { exact: true })).toBeVisible();
           await expect(dialog.getByTestId('workflow-step-field-max-steps')).toHaveText('15');

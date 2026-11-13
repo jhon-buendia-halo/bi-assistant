@@ -126,9 +126,9 @@ Feature: Agent panel
   Scenario: Questions to Insights v2 shows its code-defined steps advancing
     When the stub answers by running "run_readonly_sql" and then "There were 64 matches."
     And I run "Questions to Insights v2" on "How many matches were played in 2018?"
-    Then its four steps "Receive question", "Load catalog", "Analyse" and "Wrap up" each report running, then success, in order
+    Then the steps of a clear question, "Receive question", "Load catalog", "Plan", "Analyse", "Validate", "Write answer" and "Wrap up", each report running, then success, in order, and "Clarify" is skipped
     And the model was offered only v2's own tools: "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and the skill tools, never "update_workflow"
-    And the run's workflow shows 4 of 4 steps done
+    And the run's workflow shows every step done but Clarify
 
   Scenario: A failing step of the v2 workflow is marked failed
     Given the stub fails the model call with an error

@@ -486,7 +486,7 @@ Capability: [agents-evals](../capabilities/agents-evals/spec.md) R88. The agent 
   4. `Every answer comes from read-only queries over the agent's datasets.`
 - **Workflow-backed agent** (Questions to Insights v2; [agents-evals](../capabilities/agents-evals/spec.md) R108). The tab opens with the `h3` **What happens on each message** and the drawing `data-testid="agent-workflow"`, built from the detail's `workflow` (api.md 34). It is HTML, not SVG, so it can wrap and be read by assistive technology.
   - **Drawing:**
-    - An ordered list of step cards in one row that shares the tab's width: each code step takes 1 part, the agent step 1.6 parts and each connector a fixed 88 px. With more than one step, below 920 px the row scrolls sideways; a single card fills the available width. (The workflow page draws its own graph since 1.23.10, 4.4b.) Words are never broken mid-word.
+    - An ordered list of step cards in one row that shares the tab's width: each code step takes 1 part, an agent step 1.6 parts and each connector a fixed 88 px; a code step's column is at least 136 px wide and an agent step's 184 px. With more than one step, below 920 px (or below what its columns need, as for Questions to Insights v2's eight steps) the row scrolls sideways; a single card fills the available width. (The workflow page draws its own graph since 1.23.10, 4.4b.) Words are never broken mid-word.
     - Each card is a `card` 12 px radius, `data-testid="workflow-step-<id>"`, holding:
       - its number in a small circle, its title in 14 px `fg-strong`, and a kind chip: `Code` (`chip-neutral`) or `LLM` (`chip-info`);
       - its summary in 12 px `fg-muted`.

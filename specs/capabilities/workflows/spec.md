@@ -113,7 +113,7 @@ Feature: Workflows
     When I click "Workflows" on the rail
     Then I see only "Questions to Insights v2" under Official, and no Mine section
     When I open "Questions to Insights v2"
-    Then I see its four steps on the canvas and the agent "Questions to Insights v2" under Agents in its Start node
+    Then I see its eight steps on the canvas and the agent "Questions to Insights v2" under Agents in its Start node
     When I click "Execute workflow"
     Then the panel opens on Run and no chat is started
 
@@ -135,25 +135,25 @@ Feature: Workflows
     When I open Workflows
     Then I see "Questions to Insights v2" with "8 steps" and no Start chat
     When I click its Run
-    Then I see its four steps on the canvas, Execute and no Start chat
+    Then I see its eight steps on the canvas, Execute and no Start chat
     When I click Execute workflow
     Then the Run panel shows the "Question" input and the datasets to pick
     When I pick "World Cup Core" and type "How many matches were played in each stage?"
     And I click Execute in the panel
-    Then I see "Run succeeded" with "Receive question", "Load catalog", "Analyse" and "Wrap up" all "Done"
+    Then I see "Run succeeded" with every step "Done" but "Clarify", which is "Skipped"
     And I see the model's answer
 
   Scenario: A failing step stops the run
     Given I am on the "Questions to Insights v2" page
     When the model fails and I run it on a question
     Then I see "Run failed" with the error
-    And "Receive question" and "Load catalog" are "Done", "Analyse" is "Failed" and "Wrap up" is "Skipped"
+    And the steps up to "Plan" are "Done", "Analyse" is "Failed" and the steps after it are "Skipped"
     And the canvas shows "Failed" on "Analyse" and "Skipped" on "Wrap up"
 
   @demo @story-1.23.10
   Scenario: A workflow opens as a designer
     When I open "Questions to Insights v2" from Workflows
-    Then the canvas shows Start, its four steps in order with their badges, and End, left to right
+    Then the canvas shows Start, its steps in order with their badges, and End, left to right, with Clarify below Plan
     And the right panel is open on Run beside the canvas, with the Workflow state panel under the canvas
     When I double-click Start
     Then its dialog shows the trigger, the input parameters and the output
@@ -164,15 +164,15 @@ Feature: Workflows
     When I click Execute workflow
     Then the Run panel focuses its input and nothing runs
     When I pick a dataset, type a question and click Execute
-    Then I see the answer and "Done" on the four canvas nodes
+    Then I see the answer and "Done" on every canvas node but "Clarify"
 
   @demo
   Scenario: A run shows each node's data in the Workflow state panel and the node dialog
     Given I am on the "Questions to Insights v2" page
     When I run it on "How many matches were played in each stage?"
-    Then every connector is done and the Workflow state panel reads "6 of 6 nodes ran"
+    Then every connector of the main path is done, the branch to "Clarify" is muted, and the Workflow state panel reads "9 of 10 nodes ran"
     When I double-click "Wrap up"
-    Then its Input holds the Analyse step's SQL call and its Output the counts
+    Then its Output holds the counts of the SQL calls and the answer
     When the model fails and I run it again
     Then the "Analyse" dialog shows the error in its Output
 
@@ -205,7 +205,7 @@ Feature: Workflow runs
     Then the Run tab shows the question and the datasets to pick, and no Careful
     When I pick "World Cup Core", type "Which team scored the most goals?" and click Execute
     Then the Analyse step is running on the canvas and in the Run tab, with its SQL call
-    And I see the stub's answer with its SQL, and its four steps Done
+    And I see the stub's answer with its SQL, and every step Done but Clarify
     When I follow up with "And the fewest?"
     Then I see the second answer
     And the follow-up reached the model after the earlier question and answer
@@ -235,12 +235,12 @@ Feature: Workflow runs
 - No route or control writes a workflow (R3); the Feature `Workflows` checks the pages for any Edit, New, Delete or reorder control.
 - The Workflows page lists Questions to Insights v2 under Official only, filters by search, and opens its page with its graph and, in its Start node dialog, its agent; its card has Run and no Start chat (R5-R8, R12).
 - The axe scan finds no violation on the Workflows page and on the workflow's page with the right panel open on Run, with a node dialog open, and with the Workflow state panel expanded on a node, in both themes.
-- A workflow's page is an n8n-style designer: the canvas draws Start, each step with its badge and End left to right on one centre line, fitted at 100% or less; the right panel opens on Run, beside the canvas, with no tabs; the Workflow state panel sits under the canvas; a click selects a node on the canvas and in the state panel; a double click opens its dialog (Start: the trigger, input parameters, output and agents; Analyse: its model, tools and `Max steps 15`); Execute workflow opens Run and focuses the form without running; a run puts each node's status on it, marks each connector done, reads `6 of 6 nodes ran`, and shows each node's input and output in its dialog, and a failed step's error (R7, R8, R12, R13). Proven by the unit tests of the canvas layout and canvas, the node inspection builder, the data view, the node dialog, the state panel, the designer (`workflow-designer.service.spec.ts`), the panel and the page, and the `@story-1.23.10` and `A run shows each node's data in the Workflow state panel and the node dialog` scenarios.
+- A workflow's page is an n8n-style designer: the canvas draws Start, each step with its badge and End left to right on one centre line, fitted at 100% or less; the right panel opens on Run, beside the canvas, with no tabs; the Workflow state panel sits under the canvas; a click selects a node on the canvas and in the state panel; a double click opens its dialog (Start: the trigger, input parameters, output and agents; Analyse: its model, tools and `Max steps 15`); Execute workflow opens Run and focuses the form without running; a run puts each node's status on it, marks each connector of the path it took done and mutes the branch it skipped, reads `9 of 10 nodes ran` (Clarify skipped), and shows each node's input and output in its dialog, and a failed step's error (R7, R8, R12, R13). Proven by the unit tests of the canvas layout and canvas, the node inspection builder, the data view, the node dialog, the state panel, the designer (`workflow-designer.service.spec.ts`), the panel and the page, and the `@story-1.23.10` and `A run shows each node's data in the Workflow state panel and the node dialog` scenarios.
 - Double-clicking the `run_readonly_sql` sub-node under Analyse opens a dialog titled `run_readonly_sql` with its description and inputs and without the agent's system prompt; after a run that called it, its Input shows the SQL and its Output `Done`; the Model and `+<n> tools` sub-nodes still open Analyse; `GET /workflows/qti-v2-turn` gives its agent the `toolDetails` of `GET /agents/assistant-v2` (R7). Proven by `workflow-node-inspection.spec.ts` (`buildToolInspection`), `workflow-designer.service.spec.ts`, `workflow-canvas.spec.ts`, `workflow-node-dialog.spec.ts`, `backend/src/modules/workflows/workflows.service.spec.ts`, `backend/test/workflows.e2e-spec.ts`, the scenario `A tool sub-node opens the tool's own details` and the axe scan of the tool dialog in both themes.
 - `GET /workflows` gives Questions to Insights v2 its input (no run requirement exists); each refusal of R14 has its exact message (R14). A streamed run of v2 sends the stub model the same Analyse requests as a chat turn on the same question and datasets, reports its steps (on the stub, which runs no query, Analyse and Validate twice, attempts 1 and 2, and Clarify `skipped`) and ends with `done` carrying Write answer's answer; closing the connection stops the run; a follow-up run sends the earlier question and answer first (R15-R17).
 - The catalogue refuses a workflow whose step reads a field that neither its input nor an earlier step gives, and every catalogued workflow passes; `GET /workflows` and `GET /workflows/qti-v2-turn` give each input field its `usedBy` (`question` and `datasets`: `receive-question`) and its rules (`question`: `maxLength` 4000); `POST /workflows/qti-v2-turn/runs` and `/runs/stream` with a blank question and no datasets answer one JSON 400 with `message` `Question is required` and both errors in `errors`, before any SSE frame, and `GET /workflow-runs` stays as it was; Receive question has no exit (R14, R24). Proven by `backend/src/mastra/workflows/workflow-input.spec.ts`, `workflow-contract.spec.ts`, `backend/src/modules/workflows/workflow-runs.service.spec.ts`, `backend/test/workflows.e2e-spec.ts` and `backend/test/workflow-runs.e2e-spec.ts`; the page's side by the scenario `An invalid input is refused before the workflow runs`.
 - Every run is stored when it starts and updated when it ends, including failed and stopped runs and a run that throws while ending; the history lists runs newest first with their titles, filtered by workflow; a run reads back as its stream ended it; its panel files download from its workspace; deleting it removes its workspace, and a running run can't be deleted; after a restart, a run the app was killed in is `failed` with `The app stopped before the run finished`, an orphan run workspace is gone, and a stored run is still a follow-up's context (R17-R20). A stored run of a removed workflow lists, opens and deletes like any run, with no Run again and no follow-up (R23). Proven by `backend/test/workflow-run-history.e2e-spec.ts` (the stub model, a real restart), `backend/src/modules/workflows/workflow-runs.service.spec.ts`, `workflow-run-steps.spec.ts`, `repositories/workflow-runs.repository.spec.ts` and `backend/src/modules/sessions/run-host-sessions.spec.ts` (the previews-only sweep). Evidence: [../../../evidence/1.23.14/api-transcript.txt](../../../evidence/1.23.14/api-transcript.txt).
-- From the workflow's page, Execute workflow opens the Run panel with the question and the datasets picker; Execute streams the run (its four nodes going `Running` then `Done`, with the Thinking block and its SQL call), then shows the answer with its SQL; Follow up runs again with the earlier question and answer before the new question in the model request; a run without a dataset is refused with `Select at least one dataset`; Stop reads `Run stopped`; a clarification's pick runs with the clarifying question in the request (R21). Proven by `frontend/e2e/workflow-runs.spec.ts` (the stub model, World Cup), the unit tests of the run form per field type, the run stream (`workflow-runs-api.service.spec.ts`), the stream-to-state mapping, Stop and the Follow up body (`workflow-designer.service.spec.ts`, `workflow-panel.spec.ts`, `workflows.util.spec.ts`), the backend e2e `backend/test/workflow-runs.e2e-spec.ts` (a Questions to Insights v2 run that asks a clarifying question ends `success` with the question and its options, Analyse `stopped` and Wrap up `skipped`; a run on the picked option, following it up, sends the question before the pick and answers), and the axe scan of the Run panel with an answer in both themes.
+- From the workflow's page, Execute workflow opens the Run panel with the question and the datasets picker; Execute streams the run (its nodes going `Running` then `Done`, Clarify `Skipped`, with Analyse's Thinking block and its SQL call), then shows the answer with its SQL; Follow up runs again with the earlier question and answer before the new question in the model request; a run without a dataset is refused with `Select at least one dataset`; Stop reads `Run stopped`; a clarification's pick runs with the clarifying question in the request (R21). Proven by `frontend/e2e/workflow-runs.spec.ts` (the stub model, World Cup), the unit tests of the run form per field type, the run stream (`workflow-runs-api.service.spec.ts`), the stream-to-state mapping, Stop and the Follow up body (`workflow-designer.service.spec.ts`, `workflow-panel.spec.ts`, `workflows.util.spec.ts`), the backend e2e `backend/test/workflow-runs.e2e-spec.ts` (a Questions to Insights v2 run that asks a clarifying question ends `success` with the question and its options, Analyse `stopped` and Wrap up `skipped`; a run on the picked option, following it up, sends the question before the pick and answers), and the axe scan of the Run panel with an answer in both themes.
 - Questions to Insights v2 plans, then clarifies or analyses, validates, retries once and writes its answer (R27): `GET /workflows/qti-v2-turn` gives its eight steps and its eleven edges; a clear question runs Plan, Analyse, Validate, Write answer and Wrap up, Clarify `skipped`; a failed Validate runs Analyse and Validate again as attempt 2, with the failed checks in Analyse's input, and the stored run keeps both attempts; a plan that needs clarification ends the run at Clarify (`stopped`, the answer the question with its options, every later step `skipped`), and the pick runs with the clarifying question before it in Plan's request; only Write answer's text streams and is stored as the answer, Analyse's stays in its step output; a node chat with Plan or Write answer runs v2's agent alone; the `assistant-v2` eval target runs the whole workflow. Proven by `backend/src/mastra/workflows/qti-v2-turn.steps.spec.ts`, `qti-v2-turn.workflow.spec.ts`, `workflow-contract.spec.ts`, `workflow-contracts.spec.ts`, `backend/src/modules/workflows/workflow-run-steps.spec.ts`, `backend/src/modules/sessions/assistant-v2-sessions.spec.ts`, `backend/src/mastra/evals/analyst-v2-workflow-target.spec.ts`, `backend/test/workflows.e2e-spec.ts`, `backend/test/workflow-runs.e2e-spec.ts` and `backend/test/workflow-node-chats.e2e-spec.ts` (the stub model routes Plan and Write answer by their instructions' first lines); the page's side by the scenarios `A v2 run plans, analyses, validates and writes its answer` and `A question that needs clarification stops at Clarify`.
 - Every step's input and output is validated against its declared contract (R26): `GET /workflows/qti-v2-turn` gives every step an `inputSchema` and `outputSchema` (object JSON Schemas whose properties are its `input` and `output`; Analyse receives `question`, a string, and `catalog`) and the workflow a 12-hex `contractHash`, the same on every read; the catalogue refuses a workflow with a `missing`, `type` or `optional` problem and every catalogued workflow passes; a step whose input or output breaks its schema fails with `Contract violation in <Step title>[ (input)]: <path> <message>` (`(root)` for the whole value), the later steps don't run and the run is `failed`; a sample run of every catalogued workflow on the stubbed model passes every step's output schema; a v2 run stores the `contractHash` 117 shows, and `done.run` carries it; each workflow's schemas and hash are a reviewed snapshot. Proven by `backend/src/mastra/workflows/workflow-contract.spec.ts`, `workflow-contracts.spec.ts` (and its snapshot), `qti-v2-turn.workflow.spec.ts`, `backend/src/modules/workflows/workflows.service.spec.ts`, `workflow-runs.service.spec.ts`, `backend/test/workflows.e2e-spec.ts` and `backend/test/workflow-runs.e2e-spec.ts`.
 - Proven by the backend's unit tests and its API-level tests of the workflow catalogue and runs (R1-R4, R11, R14-R17, R25: `backend/test/workflows.e2e-spec.ts`, `backend/test/workflow-runs.e2e-spec.ts`, `backend/test/workflow-node-chats.e2e-spec.ts`, `backend/src/modules/sessions/run-host-sessions.spec.ts`, `backend/src/modules/workflows/workflow-runs.service.spec.ts`), the frontend unit tests of the run page, and `frontend/e2e/workflows.spec.ts` (R3, R5-R8, R10, R12, R13).

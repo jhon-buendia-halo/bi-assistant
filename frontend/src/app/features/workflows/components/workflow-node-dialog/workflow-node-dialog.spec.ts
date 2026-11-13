@@ -762,6 +762,12 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     expect(all('workflow-plan-clarification-option').map((o) => o.textContent?.trim())).toEqual(['2018', '2022']);
   });
 
+  it('shows no plan for a step that only passes the plan on', () => {
+    open('analyse');
+    expect(byId('workflow-plan-view')).toBeNull();
+    expect(byId('workflow-validate-view')).toBeNull();
+  });
+
   it("shows Validate's findings as a checklist, per attempt", () => {
     open('validate');
     expect(text('workflow-validate-ok')).toBe('Valid');

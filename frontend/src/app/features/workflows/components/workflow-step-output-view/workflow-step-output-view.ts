@@ -23,10 +23,17 @@ export class WorkflowStepOutputView {
   protected readonly CircleX = CircleX;
 
   readonly output = input<Record<string, unknown> | null | undefined>(null);
+  /** The step's input field names: a step that received `plan` only passes it on. */
+  readonly inputFields = input<readonly string[]>([]);
 
-  protected readonly plan = computed(() => planOutputOf(this.output()));
+  /** A validation first: Validate passes the plan on beside its findings. */
   protected readonly validation = computed(() =>
-    this.plan() === null ? validateOutputOf(this.output()) : null,
+    validateOutputOf(this.output()),
+  );
+  protected readonly plan = computed(() =>
+    this.validation() === null
+      ? planOutputOf(this.output(), this.inputFields().includes('plan'))
+      : null,
   );
   protected readonly passed = computed(
     () => this.validation()?.findings.filter((f) => f.passed).length ?? 0,

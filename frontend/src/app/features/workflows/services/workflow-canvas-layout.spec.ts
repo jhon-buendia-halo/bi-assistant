@@ -461,6 +461,27 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
     expect(edge('clarify-end').label).toBe('');
   });
 
+  it("keeps an agent's sub-nodes clear of an earlier agent's that run past it", () => {
+    const tools = ['list_entities', 'describe_entity', 'sample_rows', 'run_readonly_sql', 'ask_clarification'];
+    const wide = workflowCanvasLayout({
+      ...GRAPH_WORKFLOW,
+      steps: GRAPH_WORKFLOW.steps.map((s) =>
+        s.id === 'analyse' ? { ...s, agent: { ...s.agent!, tools } } : s,
+      ),
+    });
+    const centres = wide.nodes
+      .flatMap((n) => n.subNodes)
+      .map((s) => s.x + s.size / 2)
+      .sort((a, b) => a - b);
+    for (let i = 1; i < centres.length; i++) {
+      expect(centres[i] - centres[i - 1]).withContext(`sub-node ${i}`).toBeGreaterThanOrEqual(CANVAS.subSpacing);
+    }
+    const analyse = wide.nodes.find((n) => n.id === 'analyse')!;
+    const writeAnswer = wide.nodes.find((n) => n.id === 'write-answer')!;
+    const lastOfAnalyse = analyse.subNodes.at(-1)!;
+    expect(writeAnswer.x).toBeGreaterThanOrEqual(lastOfAnalyse.x + lastOfAnalyse.size / 2 + CANVAS.subSpacing / 2);
+  });
+
   it("End's subtitle is the main path's last step's output", () => {
     expect(node('end').subtitle).toBe('answer');
   });

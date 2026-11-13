@@ -405,13 +405,20 @@ test(
     );
     await scenarioStep(
       page,
-      'And I see "Model error → fails the turn", "Stop → ends the turn here" and "Clarifying question → ends the turn here"',
+      'And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", and "Analyse" also "Clarifying question → ends the turn here"',
       async () => {
-        // "Receive question" has no exit: the input is checked before the run.
+        // The code steps have no exit: "Receive question"'s input is checked
+        // before the run, Clarify ends it by design.
+        const fails = 'Model error → fails the turn';
+        const stops = 'Stop → ends the turn here';
         await expect(page.getByTestId('workflow-step-exit')).toHaveText([
-          'Model error → fails the turn',
-          'Stop → ends the turn here',
+          fails,
+          stops,
+          fails,
+          stops,
           'Clarifying question → ends the turn here',
+          fails,
+          stops,
         ]);
       },
     );

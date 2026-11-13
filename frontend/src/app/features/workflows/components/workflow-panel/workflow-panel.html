@@ -365,8 +365,10 @@
                         <div class="flex flex-wrap gap-x-3 gap-y-0.5">
                           <dt class="font-mono text-fg-muted">{{ entry.key }}</dt>
                           @if (entry.structured) {
+                            <!-- Scrolls when long: focusable so the keyboard can scroll it -->
                             <dd
                               class="m-0 w-full max-h-48 overflow-auto rounded bg-surface-muted px-2 py-1 font-mono text-[11px] whitespace-pre-wrap break-words text-fg"
+                              tabindex="0"
                             >{{ entry.value }}</dd>
                           } @else {
                             <dd class="m-0 min-w-0 break-words text-fg-strong">
