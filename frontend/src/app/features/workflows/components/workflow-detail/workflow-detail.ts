@@ -14,6 +14,7 @@ import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { workflowKindLabel } from '../../services/workflows.util';
 import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
 import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog';
+import { WorkflowLogsDock } from '../workflow-logs-dock/workflow-logs-dock';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 
 /**
@@ -30,6 +31,7 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
     LucideAngularModule,
     WorkflowCanvas,
     WorkflowNodeDialog,
+    WorkflowLogsDock,
     WorkflowRunDock,
   ],
   templateUrl: './workflow-detail.html',
