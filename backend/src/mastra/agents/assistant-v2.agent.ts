@@ -11,7 +11,10 @@ import {
   describeEntityTool,
   listEntitiesTool,
   runReadOnlySqlTool,
+  sampleRowsTool,
 } from '../tools/dataset.tools';
+import { askClarificationTool } from '../tools/clarification.tool';
+import { catalogFrameworkSkills } from '../skill-sources';
 import { ASSISTANT_V2_PROMPT } from './system-prompts';
 import {
   ASSISTANT_V2_AGENT_KEY,
@@ -25,15 +28,23 @@ export {
 } from './assistant-v2-catalog';
 
 /**
- * Its tools: the assistant's own core data tools (the same instances), and
- * nothing else — no sample_rows, visuals, clarification, panel or workflow
- * tool, no skills and no workspace.
+ * Its tools (agents.md 2.11): the assistant's dataset tools and its
+ * clarification tool (the same instances), in the order of
+ * `ASSISTANT_V2_TOOL_NAMES`, and nothing else — no visuals, panel or
+ * workflow tool and no workspace.
  */
 export const assistantV2Tools = {
   list_entities: listEntitiesTool,
   describe_entity: describeEntityTool,
+  sample_rows: sampleRowsTool,
   run_readonly_sql: runReadOnlySqlTool,
+  ask_clarification: askClarificationTool,
 };
+
+/** Its on-demand skills, built per call (agents.md 7.3, 7.4). */
+export function assistantV2Skills() {
+  return catalogFrameworkSkills(ASSISTANT_V2_AGENT_KEY);
+}
 
 // Links become plain mentions before the model reads them (agents.md 4.1).
 const shippedInstructions = withToolSection(
@@ -62,14 +73,16 @@ export function assistantV2Instructions(): string {
   return served.text;
 }
 
-// A slimmed-down data analyst under construction (BA-320), next to the
-// `assistant`, which it leaves unchanged. Its tools are scoped per call to
-// the session's datasets via requestContext (see ../tools/dataset.tools).
+// A business data analyst (BA-320), next to the `assistant`, which it
+// leaves unchanged. Its tools are scoped per call to the session's datasets
+// via requestContext (see ../tools/dataset.tools).
 export const assistantV2Agent = new Agent({
   id: 'questions-to-insights-v2',
   name: ASSISTANT_V2_NAME,
   description: ASSISTANT_V2_DESCRIPTION,
   instructions: () => assistantV2Instructions(),
+  // Loaded on demand through Mastra's skill tools (ADR-0025).
+  skills: () => assistantV2Skills(),
   // Resolved at call time from the persisted LLM settings (agents.md 1.3).
   model: async () => resolveAgentModel(),
   // One thread per session, configured as the assistant's.

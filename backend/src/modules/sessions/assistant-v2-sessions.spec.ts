@@ -113,7 +113,7 @@ const turnWorkflow = qtiV2TurnWorkflow as unknown as {
 
 const NAME = 'Questions to Insights v2';
 const DESCRIPTION =
-  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
+  'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
 
 async function* streamOf(chunks: unknown[]) {
   for (const chunk of chunks) yield await Promise.resolve(chunk);
@@ -216,10 +216,13 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
       .fn()
       .mockResolvedValue(new Set(DATASETS.map((d) => d.name))),
   };
-  const knowledge = { contextFor: jest.fn() };
-  const metrics = { definitionBlock: jest.fn() };
+  // No metric, knowledge or verified query applies unless a test says so.
+  const knowledge = {
+    contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
+  };
+  const metrics = { definitionBlock: jest.fn().mockResolvedValue('') };
   const verifiedQueries = {
-    referenceBlock: jest.fn(),
+    referenceBlock: jest.fn().mockResolvedValue(undefined),
     isVerifiedSql: jest.fn().mockResolvedValue(false),
   };
   const service = new SessionsService(
@@ -318,8 +321,22 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
     });
   });
 
-  it('runs v2 with Block 1 only and the datasets, session-id and turn-question keys (agents.md 2.11, 4.1, 4.2)', async () => {
+  it('runs v2 with Block 1, the metrics, knowledge and verified-query blocks, in that order, then the catalog (agents.md 2.11, 4.1, 4.2)', async () => {
     const ctx = build(undefined, { datasets: ['World Cup', 'Sales'] });
+    const used = [
+      {
+        id: 'k-1',
+        kind: 'default_filter',
+        title: 'No friendlies',
+        body: "stage <> 'friendly'",
+      },
+    ];
+    ctx.metrics.definitionBlock.mockResolvedValue('METRICS BLOCK');
+    ctx.knowledge.contextFor.mockResolvedValue({
+      block: 'KNOWLEDGE BLOCK',
+      used,
+    });
+    ctx.verifiedQueries.referenceBlock.mockResolvedValue('VERIFIED BLOCK');
     await turn(ctx, 'How many goals per year?');
     expect(ctx.mastra.getAgent).toHaveBeenCalledWith('assistant-v2');
     expect(ctx.assistant.stream).not.toHaveBeenCalled();
@@ -334,9 +351,13 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
           '- wc.public.matches (dataset: World Cup; datasource: postgres ds-pg)',
           '- wc.public.teams (dataset: World Cup; datasource: postgres ds-pg)',
           '- main.sales.orders (dataset: Sales; datasource: databricks ds-dbx)',
-          'Use describe_entity / run_readonly_sql to inspect and query them.',
+          // It has sample_rows (2.11), and no visuals lines.
+          'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
         ].join('\n'),
       },
+      { role: 'system', content: 'METRICS BLOCK' },
+      { role: 'system', content: 'KNOWLEDGE BLOCK' },
+      { role: 'system', content: 'VERIFIED BLOCK' },
       {
         role: 'system',
         content: [
@@ -347,17 +368,116 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         ].join('\n'),
       },
     ]);
+    // The same services as the assistant's turn, for the session's datasets.
+    expect(ctx.metrics.definitionBlock).toHaveBeenCalledWith([
+      'wc.public.matches',
+      'wc.public.teams',
+      'main.sales.orders',
+    ]);
+    expect(ctx.knowledge.contextFor).toHaveBeenCalledWith([
+      'World Cup',
+      'Sales',
+    ]);
+    expect(ctx.verifiedQueries.referenceBlock).toHaveBeenCalledWith(
+      'How many goals per year?',
+    );
     const context = options.requestContext;
     expect(context.get('datasets')).toEqual(['World Cup', 'Sales']);
     expect(context.get('session-id')).toBe('s-1');
     expect(context.get('turn-question')).toBe('How many goals per year?');
+    expect(context.get('knowledge-used')).toEqual(used);
     expect(context.get('session-workspace-id')).toBeUndefined();
-    expect(context.get('knowledge-used')).toBeUndefined();
     expect(context.get('agent-tools')).toBeUndefined();
-    expect(ctx.metrics.definitionBlock).not.toHaveBeenCalled();
-    expect(ctx.knowledge.contextFor).not.toHaveBeenCalled();
-    expect(ctx.verifiedQueries.referenceBlock).not.toHaveBeenCalled();
+    expect(context.get('agent-skills')).toBeUndefined();
     expect(ctx.mastra.ensureSessionWorkspace).not.toHaveBeenCalled();
+    // The answer records the knowledge the model saw.
+    expect(ctx.session.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      knowledge: used,
+    });
+  });
+
+  it('leaves out the metrics, knowledge and verified-query blocks when none applies', async () => {
+    const ctx = build();
+    ctx.metrics.definitionBlock.mockResolvedValue('');
+    ctx.knowledge.contextFor.mockResolvedValue({ block: '', used: [] });
+    ctx.verifiedQueries.referenceBlock.mockResolvedValue(undefined);
+    await turn(ctx, 'How many matches?');
+    const contents = ctx.streamOptions().context.map((block) => block.content);
+    expect(contents).toHaveLength(2);
+    expect(contents[0]).toMatch(/^Datasets for this session: World Cup\./);
+    expect(contents[1]).toMatch(/^Catalog loaded for this turn:/);
+  });
+
+  describe('a clarifying question (agents.md 2.11, 5.11)', () => {
+    const ASK = {
+      type: 'tool-call',
+      payload: {
+        toolCallId: 'c1',
+        toolName: 'ask_clarification',
+        args: {
+          question: 'Which measure makes a team the best?',
+          options: 'Most wins\nMost goals — scored over all matches',
+        },
+      },
+    };
+
+    it('stops the turn at Analyse with the question and its options, and sends done', async () => {
+      const ctx = build([
+        ASK,
+        { type: 'text-delta', payload: { text: 'never streamed' } },
+      ]);
+      const events = await turn(ctx, 'Which team is the best?');
+      const answer = ctx.session.messages.at(-1);
+      expect(answer).toMatchObject({
+        role: 'assistant',
+        content: 'Which measure makes a team the best?',
+        clarification: {
+          question: 'Which measure makes a team the best?',
+          options: [
+            { label: 'Most wins' },
+            { label: 'Most goals', description: 'scored over all matches' },
+          ],
+        },
+      });
+      expect(answer?.content).not.toContain('never streamed');
+      // The run ends at Analyse: Wrap up does not run.
+      expect(workflowMoves(events).at(-1)).toEqual({
+        current: 3,
+        done: [1, 2],
+      });
+      expect(events.some((event) => event.type === 'done')).toBe(true);
+    });
+
+    it("replays the question before the user's pick on the next turn", async () => {
+      const ctx = build([ASK]);
+      await turn(ctx, 'Which team is the best?');
+      ctx.v2.stream.mockImplementation(() =>
+        Promise.resolve({
+          fullStream: streamOf([
+            { type: 'text-delta', payload: { text: 'Brazil: 76 wins.' } },
+          ]),
+          text: Promise.resolve(''),
+        }),
+      );
+      const events = await turn(ctx, 'Most wins');
+      const calls = ctx.v2.stream.mock.calls as unknown[][];
+      expect(calls.at(-1)?.[0]).toEqual([
+        {
+          role: 'assistant',
+          content: 'Which measure makes a team the best?',
+        },
+        { role: 'user', content: 'Most wins' },
+      ]);
+      expect(ctx.session.messages.at(-1)).toMatchObject({
+        role: 'assistant',
+        content: 'Brazil: 76 wins.',
+      });
+      expect(workflowMoves(events).at(-1)).toEqual({
+        current: 4,
+        done: [1, 2, 3, 4],
+      });
+    });
   });
 
   it('runs no grounding pass on a turn without tools, and no careful cross-check', async () => {
@@ -544,7 +664,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
       );
     });
 
-    it('leaves the assistant turn as it was: no workflow run', async () => {
+    it("leaves the assistant turn as it was: its one-step workflow, never v2's", async () => {
       const ctx = build(undefined, { agentKey: undefined });
       ctx.assistant.stream.mockResolvedValue({
         fullStream: streamOf([]),
@@ -552,7 +672,11 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
       });
       ctx.assistant.generate.mockResolvedValue({ text: 'Answer.' });
       await turn(ctx, 'How many?').catch(() => undefined);
-      expect(ctx.mastra.streamWorkflow).not.toHaveBeenCalled();
+      // Every turn is a run since ADR-0040; the assistant's is `agent-turn`.
+      const engines = ctx.mastra.streamWorkflow.mock.calls.map(
+        (call) => call[0],
+      );
+      expect(engines).not.toContain('qti-v2-turn');
     });
   });
 });

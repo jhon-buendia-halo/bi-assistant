@@ -409,6 +409,187 @@ describe('Streamed runs of agent workflows (API)', () => {
     ]);
   });
 
+  it('a v2 run sends the analyst its five tools, its skills and the orientation, metrics, knowledge and catalog blocks, in order', async () => {
+    // A dataset of its own, so no other test's requests change.
+    const datasourceId = (
+      (await http().get('/datasets').expect(200)).body as {
+        datasets: { name: string; datasourceId?: string }[];
+      }
+    ).datasets.find((d) => d.name === 'World Cup Core')!.datasourceId!;
+    await save('/datasets', {
+      name: 'Analyst Goals',
+      tables: ['world_cup.world_cup.goals'],
+      entities: [
+        {
+          key: 'world_cup.world_cup.goals',
+          columns: [{ name: 'goal_id', type: 'integer', nullable: false }],
+        },
+      ],
+      datasourceId,
+      datasourceKind: 'postgres',
+    });
+    await save('/metrics', {
+      name: 'goals_total',
+      label: 'Total goals',
+      entity: 'world_cup.world_cup.goals',
+      expression: 'COUNT(goal_id)',
+      datasourceId,
+    });
+    await http()
+      .post('/datasets/Analyst%20Goals/ontology')
+      .send({
+        kind: 'instruction',
+        name: 'Own goals',
+        description: 'Own goals count for the team that benefited.',
+      })
+      .expect(201);
+    const question = 'How many goals were scored in total?';
+    const sent = await recorded(() =>
+      runStream('qti-v2-turn', {
+        input: { question, datasets: ['Analyst Goals'] },
+      }),
+    );
+    const turn = sent.find((req) => req.stream)!;
+    const dump = process.env['V2_REQUEST_DUMP'];
+    if (dump) writeFileSync(dump, JSON.stringify(turn, null, 2));
+    expect(turn.tools).toEqual(
+      expect.arrayContaining([
+        'list_entities',
+        'describe_entity',
+        'sample_rows',
+        'run_readonly_sql',
+        'ask_clarification',
+      ]),
+    );
+    for (const absent of [
+      'create_visual',
+      'show_in_panel',
+      'update_workflow',
+    ]) {
+      expect(turn.tools).not.toContain(absent);
+    }
+    const system = turn.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => messageText(message));
+    const at = (start: string) =>
+      system.findIndex((text) => text.startsWith(start));
+    expect(at('You are Questions to Insights v2')).toBe(0);
+    const orientation = at('Datasets for this session: Analyst Goals.');
+    const metrics = at('Governed metric definitions');
+    const knowledge = at('Curated dataset knowledge');
+    const catalog = at('Catalog loaded for this turn: 1 entity.');
+    expect(orientation).toBeGreaterThan(0);
+    expect(system[orientation]).toContain(
+      'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+    );
+    expect(system[metrics]).toContain(
+      'Total goals (goals_total) on world_cup.world_cup.goals: COUNT(goal_id)',
+    );
+    expect(system[knowledge]).toContain('[instruction] Own goals:');
+    // The per-turn blocks keep the assistant's order, the catalog last.
+    expect(orientation).toBeLessThan(metrics);
+    expect(metrics).toBeLessThan(knowledge);
+    expect(knowledge).toBeLessThan(catalog);
+    // Its on-demand skills reach the model through the framework's catalog.
+    const all = system.join('\n');
+    for (const skill of [
+      'curated-knowledge',
+      'sql-analysis',
+      'result-validation',
+    ]) {
+      expect(all).toContain(skill);
+    }
+  });
+
+  describe('a clarifying question (agents.md 2.11, 5.11)', () => {
+    const ASKED = 'Which team performed best?';
+    const CLARIFY = 'Which measure should decide the best team?';
+
+    afterEach(() => {
+      stub.reply = () => ({ text: STUB_ANSWER });
+    });
+
+    it('stops the run at Analyse with the question and its options; picking an option follows up with the answer', async () => {
+      const lastUser = (req: StubRequest) =>
+        messageText(
+          [...req.messages].reverse().find((m) => m.role === 'user')!,
+        );
+      stub.reply = (req) =>
+        req.stream && lastUser(req) === ASKED
+          ? {
+              toolCall: {
+                name: 'ask_clarification',
+                arguments: {
+                  question: CLARIFY,
+                  options: 'Most wins\nMost goals — scored over all matches',
+                },
+              },
+            }
+          : { text: STUB_ANSWER };
+      const first = await runStream('qti-v2-turn', {
+        input: { question: ASKED, datasets: ['World Cup Core'] },
+      });
+      expect(first.status).toBe(200);
+      const run = first.frames.at(-1)!.run! as NonNullable<Frame['run']> & {
+        answer?: { clarification?: unknown };
+      };
+      expect(first.frames.at(-1)!.type).toBe('done');
+      expect(run.status).toBe('success');
+      expect(run.answer).toMatchObject({
+        role: 'assistant',
+        content: CLARIFY,
+        clarification: {
+          question: CLARIFY,
+          options: [
+            { label: 'Most wins' },
+            { label: 'Most goals', description: 'scored over all matches' },
+          ],
+        },
+      });
+      // Analyse ends the run with the question: Wrap up never runs.
+      expect(
+        Object.fromEntries(run.steps.map((step) => [step.id, step.status])),
+      ).toEqual({
+        'receive-question': 'success',
+        'load-catalog': 'success',
+        analyse: 'stopped',
+        'wrap-up': 'skipped',
+      });
+
+      // The pick is the next run's question, with the clarification as context.
+      const sent = await recorded(async () => {
+        const second = await runStream('qti-v2-turn', {
+          input: { question: 'Most wins', datasets: ['World Cup Core'] },
+          context: { fromRunId: run.id },
+        });
+        const done = second.frames.at(-1)!;
+        expect(done.type).toBe('done');
+        expect(done.run).toMatchObject({
+          status: 'success',
+          answer: { role: 'assistant', content: STUB_ANSWER },
+        });
+        expect(
+          done.run!.steps.map((step) => `${step.id}:${step.status}`),
+        ).toEqual([
+          'receive-question:success',
+          'load-catalog:success',
+          'analyse:success',
+          'wrap-up:success',
+        ]);
+      });
+      const turn = sent.find((req) => req.stream)!;
+      expect(
+        turn.messages
+          .filter((message) => message.role !== 'system')
+          .map((message) => [message.role, messageText(message)]),
+      ).toEqual([
+        ['user', ASKED],
+        ['assistant', CLARIFY],
+        ['user', 'Most wins'],
+      ]);
+    });
+  });
+
   it('closing the connection stops the run: no terminal event, and it has no answer to continue from', async () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));

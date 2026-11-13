@@ -253,7 +253,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ).resolves.toBe('data-readiness');
     });
 
-    it("Questions to Insights v2's identity, then any skill link, then tools not its own (BA-320)", async () => {
+    it("Questions to Insights v2's identity, then skills not its own, then tools not its own (BA-320)", async () => {
       const identity = 'You are Questions to Insights v2';
       expect(await refusal('assistant-v2', 'Be brief.')).toBe(
         `The Questions to Insights v2 prompt must start with "${identity}"`,
@@ -263,8 +263,8 @@ describe('AgentPromptsService (ADR-0026)', () => {
         `The Questions to Insights v2 prompt must start with "${identity}"`,
       );
       const skillRefusal =
-        "Skills can't be linked here: Questions to Insights v2 has no skills";
-      for (const skill of ['x', 'curated-knowledge', 'data-readiness']) {
+        "Only Questions to Insights v2's own skills can be linked here: this prompt is shared by every user";
+      for (const skill of ['x', 'data-readiness', 'readiness-drilldown']) {
         expect(
           await refusal(
             'assistant-v2',
@@ -275,20 +275,23 @@ describe('AgentPromptsService (ADR-0026)', () => {
       // Neither the assistant's other tools nor another agent's.
       for (const tool of [
         'x',
-        'sample_rows',
         'create_visual',
-        'ask_clarification',
+        'update_visual',
         'show_in_panel',
         'update_workflow',
+        'assess_data_readiness',
         'get_rfp',
       ]) {
         expect(
-          await refusal('assistant-v2', `${identity}. [[tool:${tool}]]`),
+          await refusal(
+            'assistant-v2',
+            `${identity}. [[skill:sql-analysis]] [[tool:${tool}]]`,
+          ),
         ).toBe(`Unknown tool "${tool}"`);
       }
     });
 
-    it("accepts Questions to Insights v2's own tools in its prompt, and shows it with links allowed", async () => {
+    it("accepts Questions to Insights v2's own tools and skills in its prompt, and shows it with links allowed", async () => {
       const { service } = build();
       expect(await service.view('assistant-v2')).toEqual({
         editable: shippedAgentPrompt('assistant-v2'),
@@ -300,10 +303,10 @@ describe('AgentPromptsService (ADR-0026)', () => {
       });
       await service.save('assistant-v2', {
         prompt:
-          'You are Questions to Insights v2. Call [[tool:list_entities]], [[tool:describe_entity]] and [[tool:run_readonly_sql]].',
+          'You are Questions to Insights v2. Call [[tool:list_entities]], [[tool:describe_entity]], [[tool:sample_rows]], [[tool:run_readonly_sql]] and [[tool:ask_clarification]]. Load [[skill:curated-knowledge]], [[skill:sql-analysis]] and [[skill:result-validation]].',
       });
       expect(agentPromptOverrideFor('assistant-v2')?.prompt).toContain(
-        '[[tool:run_readonly_sql]]',
+        '[[skill:result-validation]]',
       );
       await expect(
         service.save('assistant-v2', {

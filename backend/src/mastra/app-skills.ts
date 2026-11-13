@@ -30,6 +30,10 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
   // The Data Readiness Agent's skills: assessing and explaining, then
   // drilling into findings with read-only SQL (agents.md 7.4, ADR-0035).
   'data-readiness': ['data-readiness', 'readiness-drilldown'],
+  // Questions to Insights v2's skills: the curated-knowledge rules it shares
+  // with the assistant, its SQL patterns and the checks it runs on a result
+  // before answering (agents.md 7.4).
+  'assistant-v2': ['curated-knowledge', 'sql-analysis', 'result-validation'],
 };
 
 /** Built-in skills code sends to each agent itself (agents.md 7.4). */

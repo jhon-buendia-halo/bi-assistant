@@ -75,7 +75,7 @@ const ANTHROPIC_VIEW = {
 };
 
 const V2_DESCRIPTION =
-  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
+  'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
 
 function build(
   datasets: { name: string; datasourceKind?: string }[] = [

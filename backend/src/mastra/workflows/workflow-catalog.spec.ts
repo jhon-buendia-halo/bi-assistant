@@ -56,7 +56,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'wrap-up',
     ]);
     expect(CODE_WORKFLOWS[0].description).toBe(
-      'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.',
+      'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.',
     );
     expect(CODE_WORKFLOWS[0].input).toEqual([
       {

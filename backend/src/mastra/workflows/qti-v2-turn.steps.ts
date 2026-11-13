@@ -114,9 +114,12 @@ export const QTI_V2_TURN_STEPS: readonly ContractStepEntry[] = [
       kind: 'agent',
       summary:
         'The agent answers with its tools and the catalog as context, streamed to the chat.',
+      // A clarifying question ends the run with the question and its
+      // options, as a one-step workflow's does (agents.md 5.11).
       exits: [
         { label: 'Model error', outcome: 'fails' },
         { label: 'Stop', outcome: 'stops' },
+        { label: 'Clarifying question', outcome: 'stops' },
       ],
     },
     SCHEMAS.analyse,
