@@ -87,34 +87,40 @@
     <!-- Parameters / Settings -->
     <section
       class="min-h-0 overflow-y-auto p-4"
+      [class.flex]="activeTab() === 'chat'"
+      [class.flex-col]="activeTab() === 'chat'"
       data-testid="workflow-ndv-params"
-      aria-label="Parameters and settings"
+      [attr.aria-label]="
+        hasChat() ? 'Parameters, settings and chat' : 'Parameters and settings'
+      "
     >
       <div
         role="tablist"
         aria-label="Node configuration"
-        class="mb-3 flex gap-1 border-b border-border"
+        class="mb-3 flex shrink-0 gap-1 border-b border-border"
       >
-        @for (t of ["parameters", "settings"]; track t) {
+        @for (t of tabs(); track t) {
           <button
             type="button"
             role="tab"
+            [id]="'workflow-ndv-tab-' + t"
             [attr.data-testid]="'workflow-ndv-tab-' + t"
-            [attr.aria-selected]="tab() === t"
-            (click)="tab.set($any(t))"
+            [attr.aria-selected]="activeTab() === t"
+            [attr.aria-controls]="t === 'chat' && chatMounted() ? 'workflow-ndv-panel-chat' : null"
+            (click)="selectTab(t)"
             class="-mb-px border-b-2 px-3 py-1.5 text-[13px]"
-            [class.border-border-selected]="tab() === t"
-            [class.text-fg-strong]="tab() === t"
-            [class.font-medium]="tab() === t"
-            [class.border-transparent]="tab() !== t"
-            [class.text-fg-muted]="tab() !== t"
+            [class.border-border-selected]="activeTab() === t"
+            [class.text-fg-strong]="activeTab() === t"
+            [class.font-medium]="activeTab() === t"
+            [class.border-transparent]="activeTab() !== t"
+            [class.text-fg-muted]="activeTab() !== t"
           >
-            {{ t === "parameters" ? "Parameters" : "Settings" }}
+            {{ tabLabels[t] }}
           </button>
         }
       </div>
 
-      @if (tab() === "settings" && tool(); as tool) {
+      @if (activeTab() === "settings" && tool(); as tool) {
         <dl
           class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
         >
@@ -134,7 +140,7 @@
             {{ (tool.ran ? runId() : null) ?? "Not run yet" }}
           </dd>
         </dl>
-      } @else if (tab() === "settings") {
+      } @else if (activeTab() === "settings") {
         <dl
           class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
         >
@@ -154,7 +160,7 @@
             {{ runId() ?? "Not run yet" }}
           </dd>
         </dl>
-      } @else {
+      } @else if (activeTab() === "parameters") {
         @switch (node().kind) {
           @case ("trigger") {
             <dl
@@ -433,6 +439,21 @@
             }
           }
         }
+      }
+
+      @if (hasChat() && chatMounted()) {
+        <div
+          id="workflow-ndv-panel-chat"
+          role="tabpanel"
+          aria-labelledby="workflow-ndv-tab-chat"
+          class="flex min-h-0 flex-1 flex-col"
+          [hidden]="activeTab() !== 'chat'"
+        >
+          <app-workflow-node-chat
+            [availability]="chat()"
+            [stepId]="node().nodeId"
+          />
+        </div>
       }
     </section>
 

@@ -13,6 +13,7 @@ import {
   readEventStream,
 } from '../../sessions/services/sessions-api.service';
 import {
+  NodeChatMessage,
   WorkflowInputError,
   WorkflowRun,
   WorkflowRunRequest,
@@ -42,6 +43,18 @@ export interface RunStreamHandlers extends AgentStreamHandlers {
    * `Stream disconnected`, `Stream ended before completion`).
    */
   onError?: (message: string, errors?: WorkflowInputError[]) => void;
+}
+
+/** What a step chat's turn reports (api.md 137), beside the agent turn's events. */
+export interface NodeChatStreamHandlers extends AgentStreamHandlers {
+  /** Terminal, success: the assistant message as stored. */
+  onDone?: (message: NodeChatMessage) => void;
+  /**
+   * Terminal, failure: a refusal before the stream (the server's message),
+   * the turn's `error`, or the client's own (`Backend unreachable`,
+   * `Stream disconnected`, `Stream ended before completion`).
+   */
+  onError?: (message: string) => void;
 }
 
 /** A refusal's `errors[]` (api.md 118, 119): the well-formed entries; undefined without any. */
@@ -263,12 +276,86 @@ export class WorkflowRunsApiService {
     );
   }
 
+  /** A step's chat about the run's data, oldest first; empty when none (api.md 136). */
+  getNodeChat(
+    runId: string,
+    stepId: string,
+  ): Observable<{ messages: NodeChatMessage[] }> {
+    return this.http.get<{ messages: NodeChatMessage[] }>(
+      this.nodeChatUrl(runId, stepId),
+    );
+  }
+
+  /**
+   * Ask a step's agent about the run's data, streamed (api.md 137). Aborting
+   * `signal` is Stop: nothing more is reported, and the server stores the
+   * partial answer `stopped`.
+   */
+  async streamNodeChat(
+    runId: string,
+    stepId: string,
+    content: string,
+    handlers: NodeChatStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.postStream(
+      `${this.nodeChatUrl(runId, stepId)}/messages/stream`,
+      { content },
+      handlers,
+      signal,
+      (event) => {
+        if (event.type !== 'done') return false;
+        handlers.onDone?.(event['message'] as NodeChatMessage);
+        return true;
+      },
+    );
+  }
+
+  private nodeChatUrl(runId: string, stepId: string): string {
+    return `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/node-chats/${encodeURIComponent(stepId)}`;
+  }
+
   private async streamFrom(
     url: string,
     workflowId: string,
     body: WorkflowRunRequest,
     handlers: RunStreamHandlers,
     signal?: AbortSignal,
+  ): Promise<void> {
+    await this.postStream(url, body, handlers, signal, (event) => {
+      switch (event.type) {
+        case 'run':
+          handlers.onRun?.({
+            runId: String(event['runId'] ?? ''),
+            workflowId: String(event['workflowId'] ?? workflowId),
+          });
+          return false;
+        case 'step':
+          handlers.onStep?.(stepOf(event));
+          return false;
+        case 'done':
+          handlers.onDone?.(event['run'] as WorkflowRun);
+          return true;
+        default:
+          return false;
+      }
+    });
+  }
+
+  /**
+   * POST `body` and read the SSE answer: a refusal before any frame (its
+   * JSON message), the agent turn's events, an `error` frame, or the
+   * stream's own failure go to `handlers`; every other frame goes to
+   * `onFrame`, which answers whether it was the terminal one.
+   */
+  private async postStream(
+    url: string,
+    body: unknown,
+    handlers: AgentStreamHandlers & {
+      onError?: (message: string, errors?: WorkflowInputError[]) => void;
+    },
+    signal: AbortSignal | undefined,
+    onFrame: (event: StreamFrame) => boolean,
   ): Promise<void> {
     let res: Response;
     try {
@@ -307,25 +394,12 @@ export class WorkflowRunsApiService {
       (event) => {
         if (terminal) return;
         if (dispatchAgentEvent(event, handlers)) return;
-        switch (event.type) {
-          case 'run':
-            handlers.onRun?.({
-              runId: String(event['runId'] ?? ''),
-              workflowId: String(event['workflowId'] ?? workflowId),
-            });
-            break;
-          case 'step':
-            handlers.onStep?.(stepOf(event));
-            break;
-          case 'done':
-            terminal = true;
-            handlers.onDone?.(event['run'] as WorkflowRun);
-            break;
-          case 'error':
-            terminal = true;
-            handlers.onError?.(event.content ?? 'Unknown error');
-            break;
+        if (event.type === 'error') {
+          terminal = true;
+          handlers.onError?.(event.content ?? 'Unknown error');
+          return;
         }
+        terminal = onFrame(event);
       },
       signal,
     );

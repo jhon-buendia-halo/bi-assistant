@@ -154,6 +154,34 @@ export interface WorkflowRunToolCall {
 }
 
 /**
+ * One message of a chat with an agent step about its run data (api.md 136,
+ * 137), stored with the run, per step.
+ */
+export interface NodeChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** An assistant message: the read-only tool calls of its turn, in order. */
+  toolCalls?: WorkflowRunToolCall[];
+  /** The turn was stopped; `content` is the partial answer. */
+  stopped?: true;
+  /** The turn failed after it started. */
+  error?: string;
+  createdAt: string;
+}
+
+/**
+ * Whether the node dialog of an agent step offers its Chat tab: `hidden`
+ * when the run shown has no workflow in the catalogue, `no-run` before a
+ * stored run is shown, `running` while it streams, `ready` once it ended.
+ */
+export type NodeChatAvailability =
+  | { state: 'hidden' }
+  | { state: 'no-run' }
+  | { state: 'running' }
+  | { state: 'ready'; runId: string };
+
+/**
  * One `step` event of the run stream, or a step of a stored run (api.md 3.6).
  * Runs stored before the n8n-style page lack `input`, the timestamps and
  * `toolCalls`.

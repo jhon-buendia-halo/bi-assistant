@@ -5,7 +5,13 @@ import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET, followOsTheme } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
-import { LlmStub, StubRequest, StubReply, startLlmStub } from './helpers/llm-stub';
+import {
+  LlmStub,
+  StubRequest,
+  StubReply,
+  messageText,
+  startLlmStub,
+} from './helpers/llm-stub';
 import { fillRun } from './helpers/run-ui';
 import { worldCupKey } from './helpers/world-cup-db';
 
@@ -50,6 +56,38 @@ function queryThenAnswer(request: StubRequest): StubReply {
     toolCall: {
       name: request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ?? 'run_readonly_sql',
       arguments: { sql: SQL, rationale: 'Counting matches per stage.' },
+    },
+  };
+}
+
+const CHAT_QUESTION = 'Which query did you run, and what did it return?';
+const CHAT_ANSWER = 'I counted the matches of each stage with one query.';
+const CHAT_SQL = `SELECT COUNT(DISTINCT stage) AS stages FROM ${worldCupKey('matches')}`;
+
+/** The text of a request's last user message. */
+function lastUserText(request: StubRequest): string {
+  const users = request.messages.filter((message) => message.role === 'user');
+  return users.length ? messageText(users[users.length - 1]) : '';
+}
+
+/** A model call of the step chat's turn: its last user message is the chat question. */
+function isChatTurn(request: StubRequest): boolean {
+  return lastUserText(request).includes(CHAT_QUESTION);
+}
+
+/**
+ * The run as `queryThenAnswer`; a step chat's turn queries once with its
+ * own SQL, then answers.
+ */
+function chatOrRun(request: StubRequest): StubReply {
+  if (!isChatTurn(request)) return queryThenAnswer(request);
+  if (!request.stream || request.messages.at(-1)?.role === 'tool') {
+    return { text: CHAT_ANSWER };
+  }
+  return {
+    toolCall: {
+      name: request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ?? 'run_readonly_sql',
+      arguments: { sql: CHAT_SQL, rationale: 'Checking the stages again.' },
     },
   };
 }
@@ -798,6 +836,107 @@ test.describe('Feature: Workflows (the designer)', () => {
       await closeNode(page);
     });
   });
+
+  test(
+    "I chat with a step's agent about its run data",
+    { tag: ['@demo'] },
+    async ({ page }) => {
+      stub.reply = chatOrRun;
+
+      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+        await openWorkflows(page);
+        await openV2FromRun(page);
+      });
+      await scenarioStep(
+        page,
+        'When I open "Analyse" before any run, its Chat tab says to execute the workflow first',
+        async () => {
+          const dialog = await openNode(page, 'analyse', 'Analyse');
+          await expect(dialog.getByRole('tab')).toHaveText(['Parameters', 'Settings', 'Chat']);
+          await dialog.getByRole('tab', { name: 'Chat', exact: true }).click();
+          await expect(dialog.getByTestId('workflow-ndv-tab-chat')).toHaveAttribute(
+            'aria-selected',
+            'true',
+          );
+          await expect(dialog.getByTestId('workflow-node-chat-unavailable')).toHaveText(
+            "Execute the workflow, then chat with this agent about this step's data.",
+          );
+          await expect(dialog.getByTestId('workflow-node-chat-input')).toHaveCount(0);
+          await closeNode(page);
+        },
+      );
+      await scenarioStep(page, `When I run it on "${QUESTION}"`, async () => {
+        await page.getByTestId('workflow-execute').click();
+        await runOnQuestion(page, QUESTION);
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      });
+      await scenarioStep(page, 'And I open "Analyse" on its Chat tab', async () => {
+        const dialog = await openNode(page, 'analyse', 'Analyse');
+        await dialog.getByTestId('workflow-ndv-tab-chat').click();
+        await expect(dialog.getByTestId('workflow-node-chat-note')).toHaveText(
+          /^Chatting about run \S{8}: this step's input, output and tool calls\.$/,
+        );
+        await expect(dialog.getByRole('log')).toBeVisible();
+        await expect(dialog.getByTestId('workflow-node-chat-message')).toHaveCount(0);
+        await expect(dialog.getByTestId('workflow-node-chat-send')).toBeDisabled();
+      });
+      await scenarioStep(page, `And I ask "${CHAT_QUESTION}"`, async () => {
+        const box = nodeDialog(page).getByRole('textbox', { name: "Ask this step's agent" });
+        await box.fill(CHAT_QUESTION);
+        await box.press('Enter');
+      });
+      await scenarioStep(
+        page,
+        "Then the agent's answer appears under my question, with the query it ran",
+        async () => {
+          const messages = nodeDialog(page).getByTestId('workflow-node-chat-message');
+          await expect(messages).toHaveCount(2);
+          await expect(messages.nth(0)).toHaveAttribute('data-role', 'user');
+          await expect(messages.nth(0)).toHaveText(CHAT_QUESTION);
+          await expect(messages.nth(1)).toHaveAttribute('data-role', 'assistant');
+          await expect(messages.nth(1)).toContainText(CHAT_ANSWER);
+          const call = messages.nth(1).getByTestId('workflow-node-chat-tool-call');
+          await expect(call).toHaveCount(1);
+          await expect(call).toContainText('run_readonly_sql');
+          await expect(call.locator('pre')).toHaveText(CHAT_SQL);
+          await expect(nodeDialog(page).getByTestId('workflow-node-chat-error')).toHaveCount(0);
+          await expect(nodeDialog(page).getByTestId('workflow-node-chat-stop')).toHaveCount(0);
+        },
+      );
+      await scenarioStep(
+        page,
+        "And the agent received this step's input question and the SQL it ran in the run",
+        async () => {
+          const chat = stub.requests.filter((request) => isChatTurn(request));
+          expect(chat.length, `a model call for "${CHAT_QUESTION}"`).toBeGreaterThan(0);
+          // The first call of the chat turn, as the model received it.
+          await test.info().attach('first node-chat request', {
+            body: JSON.stringify(chat[0], null, 2),
+            contentType: 'application/json',
+          });
+          const texts = chat[0].messages.map(messageText).join('\n');
+          expect(texts, "the step's input question").toContain(QUESTION);
+          expect(texts, "the run's SQL").toContain(SQL);
+          // The run itself was not changed by the chat.
+          await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
+        },
+      );
+      await scenarioStep(
+        page,
+        'When I close the dialog and open its Chat again, both messages are still there',
+        async () => {
+          await closeNode(page);
+          const dialog = await openNode(page, 'analyse', 'Analyse');
+          await dialog.getByTestId('workflow-ndv-tab-chat').click();
+          const messages = dialog.getByTestId('workflow-node-chat-message');
+          await expect(messages).toHaveCount(2);
+          await expect(messages.nth(0)).toHaveText(CHAT_QUESTION);
+          await expect(messages.nth(1)).toContainText(CHAT_ANSWER);
+          await closeNode(page);
+        },
+      );
+    },
+  );
 });
 
 test('the Workflows pages have no detectable accessibility violations in either theme', async ({
@@ -868,6 +1007,18 @@ test('the Workflows pages have no detectable accessibility violations in either 
 
   await openNode(page, 'wrap-up', 'Wrap up');
   await scan('Questions to Insights v2 page, Wrap up dialog after a run');
+  await page.keyboard.press('Escape');
+  await expect(nodeDialog(page)).toHaveCount(0);
+
+  // The Analyse dialog's Chat tab, with a question, its answer and a tool call.
+  stub.reply = chatOrRun;
+  const chatDialog = await openNode(page, 'analyse', 'Analyse');
+  await chatDialog.getByTestId('workflow-ndv-tab-chat').click();
+  await chatDialog.getByTestId('workflow-node-chat-input').fill(CHAT_QUESTION);
+  await chatDialog.getByTestId('workflow-node-chat-send').click();
+  await expect(chatDialog.getByTestId('workflow-node-chat-message')).toHaveCount(2);
+  await expect(chatDialog.getByTestId('workflow-node-chat-tool-call')).toHaveCount(1);
+  await scan('Questions to Insights v2 page, Analyse dialog on its Chat tab');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 

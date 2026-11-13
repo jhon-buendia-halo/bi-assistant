@@ -8,6 +8,7 @@ import { ToastService } from '../../../core/toast/toast.service';
 import { MessageFeedback } from '../../sessions/models/session.model';
 import {
   LiveToolCall,
+  NodeChatAvailability,
   RunStepView,
   RunView,
   WorkflowDetail,
@@ -268,6 +269,26 @@ export class WorkflowDesigner {
       nodes.find((node) => node.nodeId === id) ?? buildToolInspection(nodes, id)
     );
   }
+
+  /**
+   * Whether an agent step's dialog can chat about the run shown (api.md 136,
+   * 137): only once that run ended and is stored, and only for a run of the
+   * workflow this page resolved (a run of a removed workflow has none).
+   */
+  readonly nodeChat = computed<NodeChatAvailability>(() => {
+    const workflow = this.workflow();
+    if (workflow === null) return { state: 'hidden' };
+    const stored = this.run();
+    if (stored !== null) {
+      if (stored.workflowId !== workflow.id) return { state: 'hidden' };
+      return stored.status === 'running'
+        ? { state: 'running' }
+        : { state: 'ready', runId: stored.id };
+    }
+    if (this.running()) return { state: 'running' };
+    const id = this.runId();
+    return id === null ? { state: 'no-run' } : { state: 'ready', runId: id };
+  });
 
   /** Follow up is offered under a stored answer of a workflow with a question. */
   readonly canFollowUp = computed(() => {

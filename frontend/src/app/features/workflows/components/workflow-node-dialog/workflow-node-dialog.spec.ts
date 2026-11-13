@@ -1,5 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { NodeInspection } from '../../models/workflow-node.model';
+import { NodeChatAvailability } from '../../models/workflow.model';
+import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
 import { WorkflowNodeDialog } from './workflow-node-dialog';
 import {
   FIXTURE_NODES,
@@ -145,6 +148,87 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-ndv-setting-duration')).toBe('13.9 s');
     expect(text('workflow-ndv-setting-run-id')).toBe('run_8f21c4');
     expect(byId('workflow-step-field-id')).toBeNull();
+  });
+
+  describe('the Chat tab of an agent step (api.md 136, 137)', () => {
+    let api: jasmine.SpyObj<WorkflowRunsApiService>;
+    const tabs = () =>
+      Array.from(el().querySelectorAll<HTMLElement>('[role="tab"]')).map(
+        (tab) => tab.textContent?.trim(),
+      );
+
+    beforeEach(() => {
+      api = jasmine.createSpyObj<WorkflowRunsApiService>('WorkflowRunsApiService', [
+        'getNodeChat',
+        'streamNodeChat',
+      ]);
+      api.getNodeChat.and.returnValue(of({ messages: [] }));
+      TestBed.overrideProvider(WorkflowRunsApiService, { useValue: api });
+    });
+
+    function openWithChat(n: NodeInspection, chat: NodeChatAvailability) {
+      fixture = TestBed.createComponent(WorkflowNodeDialog);
+      fixture.componentRef.setInput('node', n);
+      fixture.componentRef.setInput('workflow', FIXTURE_WORKFLOW);
+      fixture.componentRef.setInput('runId', 'run_8f21c4');
+      fixture.componentRef.setInput('chat', chat);
+      fixture.detectChanges();
+    }
+
+    it('comes after Settings, as a tab like the others', () => {
+      openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
+      expect(tabs()).toEqual(['Parameters', 'Settings', 'Chat']);
+      const chatTab = byId('workflow-ndv-tab-chat')!;
+      expect(chatTab.getAttribute('role')).toBe('tab');
+      expect(chatTab.getAttribute('aria-selected')).toBe('false');
+      // Not read until the tab first shows.
+      expect(byId('workflow-node-chat')).toBeNull();
+      expect(api.getNodeChat).not.toHaveBeenCalled();
+
+      chatTab.click();
+      fixture.detectChanges();
+      expect(chatTab.getAttribute('aria-selected')).toBe('true');
+      expect(byId('workflow-node-chat')).not.toBeNull();
+      expect(api.getNodeChat).toHaveBeenCalledOnceWith('run_8f21c4', 'analyse');
+      expect(byId('workflow-step-field-id')).toBeNull();
+    });
+
+    it('stays mounted while another tab shows, so the conversation is kept', () => {
+      openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
+      byId('workflow-ndv-tab-chat')!.click();
+      fixture.detectChanges();
+      const panel = byId('workflow-node-chat')!;
+      byId('workflow-ndv-tab-settings')!.click();
+      fixture.detectChanges();
+      expect(panel.isConnected).toBe(true);
+      expect(panel.closest('[hidden]')).not.toBeNull();
+      expect(text('workflow-ndv-setting-status')).toBe('Done');
+      byId('workflow-ndv-tab-chat')!.click();
+      fixture.detectChanges();
+      expect(byId('workflow-node-chat')).toBe(panel);
+      expect(panel.closest('[hidden]')).toBeNull();
+      expect(api.getNodeChat).toHaveBeenCalledTimes(1);
+    });
+
+    it('explains why it cannot chat yet before a run', () => {
+      openWithChat(node('analyse'), { state: 'no-run' });
+      byId('workflow-ndv-tab-chat')!.click();
+      fixture.detectChanges();
+      expect(text('workflow-node-chat-unavailable')).toBe(
+        "Execute the workflow, then chat with this agent about this step's data.",
+      );
+    });
+
+    it('is hidden for a run of a removed workflow, and on any node but an agent step', () => {
+      openWithChat(node('analyse'), { state: 'hidden' });
+      expect(byId('workflow-ndv-tab-chat')).toBeNull();
+      for (const id of ['start', 'receive', 'end']) {
+        openWithChat(node(id), { state: 'ready', runId: 'run_8f21c4' });
+        expect(byId('workflow-ndv-tab-chat')).withContext(id).toBeNull();
+      }
+      openWithChat(FIXTURE_TOOL, { state: 'ready', runId: 'run_8f21c4' });
+      expect(byId('workflow-ndv-tab-chat')).toBeNull();
+    });
   });
 
   it('shows the not-run states', () => {

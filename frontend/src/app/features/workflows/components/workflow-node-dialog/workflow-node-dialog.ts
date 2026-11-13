@@ -19,6 +19,7 @@ import {
   Zap,
 } from 'lucide-angular';
 import {
+  NodeChatAvailability,
   TRIGGER_LABELS,
   WorkflowDetail,
   WorkflowInputField,
@@ -39,9 +40,16 @@ import {
   runStepStatusLabel,
 } from '../../services/workflows.util';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
+import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { formatNodeDuration, nodeStatusChip } from './workflow-node-format';
 
-type DialogTab = 'parameters' | 'settings';
+type DialogTab = 'parameters' | 'settings' | 'chat';
+
+const TAB_LABELS: Record<DialogTab, string> = {
+  parameters: 'Parameters',
+  settings: 'Settings',
+  chat: 'Chat',
+};
 
 const NOT_RUN =
   'This node has not run yet. Execute the workflow to see its data.';
@@ -61,12 +69,13 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * The node dialog (ui.md 4.4b): a node's input, its parameters and settings,
- * and its output in three columns. The parent returns focus on `close`.
+ * The node dialog (ui.md 4.4b): a node's input, its parameters and settings
+ * (and, for an agent step, a chat about its run data), and its output in
+ * three columns. The parent returns focus on `close`.
  */
 @Component({
   selector: 'app-workflow-node-dialog',
-  imports: [LucideAngularModule, WorkflowDataView],
+  imports: [LucideAngularModule, WorkflowDataView, WorkflowNodeChat],
   templateUrl: './workflow-node-dialog.html',
   host: {
     '(document:keydown.escape)': 'close.emit()',
@@ -85,8 +94,34 @@ export class WorkflowNodeDialog {
   /** A tool's Step link: open its agent step's dialog. */
   readonly openStep = output<string>();
 
+  /** Whether this run's step can be chatted about (api.md 136, 137). */
+  readonly chat = input<NodeChatAvailability>({ state: 'hidden' });
+
   readonly triggerLabels = TRIGGER_LABELS;
+  readonly tabLabels = TAB_LABELS;
   readonly tab = signal<DialogTab>('parameters');
+
+  /** An agent step offers Chat, unless the run's workflow is gone. */
+  readonly hasChat = computed(
+    () => this.node().kind === 'agent' && this.chat().state !== 'hidden',
+  );
+  readonly tabs = computed<DialogTab[]>(() =>
+    this.hasChat()
+      ? ['parameters', 'settings', 'chat']
+      : ['parameters', 'settings'],
+  );
+  /** The tab shown: Chat falls back to Parameters on a node without it. */
+  readonly activeTab = computed<DialogTab>(() => {
+    const tab = this.tab();
+    return tab === 'chat' && !this.hasChat() ? 'parameters' : tab;
+  });
+  /** The chat panel is created when Chat first shows, then kept while other tabs show. */
+  readonly chatMounted = signal(false);
+
+  selectTab(tab: DialogTab): void {
+    this.tab.set(tab);
+    if (tab === 'chat') this.chatMounted.set(true);
+  }
 
   private readonly dialog =
     viewChild.required<ElementRef<HTMLElement>>('dialog');

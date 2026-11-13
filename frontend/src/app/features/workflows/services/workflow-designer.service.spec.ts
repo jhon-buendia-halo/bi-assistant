@@ -544,6 +544,30 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.canFollowUp()).toBe(true);
   });
 
+  it("offers a step's chat only once the run shown ended and is stored", () => {
+    expect(designer.nodeChat()).toEqual({ state: 'no-run' });
+    executeQuestion();
+    expect(designer.nodeChat()).toEqual({ state: 'running' });
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    expect(designer.nodeChat()).toEqual({ state: 'running' });
+    runs.last.handlers.onDone!(storedRun());
+    expect(designer.nodeChat()).toEqual({ state: 'ready', runId: 'run-1' });
+
+    // A run of another workflow (not this page's, so not resolved here): no chat.
+    designer.run.set(storedRun({ workflowId: 'removed-workflow' }));
+    expect(designer.nodeChat()).toEqual({ state: 'hidden' });
+
+    designer.clear();
+    expect(designer.nodeChat()).toEqual({ state: 'hidden' });
+  });
+
+  it('a run that failed after it started is stored, so its steps can be chatted about', () => {
+    executeQuestion();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    runs.last.handlers.onError!('Model down');
+    expect(designer.nodeChat()).toEqual({ state: 'ready', runId: 'run-1' });
+  });
+
   it('no longer reads agent phases from the stream (agents have no workflow of their own)', () => {
     executeQuestion();
     expect('phases' in designer).toBe(false);
