@@ -27,14 +27,17 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   it('gives the agent steps their agent: Analyse with its tools, Plan and Write answer one model call without tools', () => {
     const steps = agentWorkflow('assistant-v2')!.steps;
     const agentOf = (id: string) => steps.find((step) => step.id === id)?.agent;
+    // The agent by its persona: Michael, Insights Analyst (agents.md 1.1).
     expect(agentOf('analyse')).toEqual({
-      name: 'Questions to Insights v2',
+      name: 'Michael',
+      role: 'Insights Analyst',
       tools: V2_TOOLS,
       maxSteps: 15,
     });
     for (const id of ['plan', 'write-answer']) {
       expect(agentOf(id)).toEqual({
-        name: 'Questions to Insights v2',
+        name: 'Michael',
+        role: 'Insights Analyst',
         tools: [],
         maxSteps: 1,
       });

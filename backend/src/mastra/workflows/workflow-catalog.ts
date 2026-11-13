@@ -283,6 +283,8 @@ const CLARIFICATION_TOOL = 'ask_clarification';
  */
 export function oneStepWorkflowSteps(agent: {
   name: string;
+  /** The agent's job title; '' when it has none. */
+  role?: string;
   tools: string[];
   maxSteps: number;
 }): AgentWorkflow['steps'] {
@@ -295,6 +297,7 @@ export function oneStepWorkflowSteps(agent: {
     output: [...step.output],
     agent: {
       name: agent.name,
+      role: agent.role ?? '',
       tools: [...agent.tools],
       maxSteps: agent.maxSteps,
     },

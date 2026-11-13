@@ -360,7 +360,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('gives the step its agent', () => {
       expect(
         oneStepWorkflowSteps({
-          name: 'Data Readiness Agent',
+          name: 'Sarah',
+          role: 'Data Quality Analyst',
           tools: ['assess_data_readiness'],
           maxSteps: 10,
         }),
@@ -373,7 +374,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           input: ['question', 'datasets'],
           output: ['calls', 'stopped'],
           agent: {
-            name: 'Data Readiness Agent',
+            name: 'Sarah',
+            role: 'Data Quality Analyst',
             tools: ['assess_data_readiness'],
             maxSteps: 10,
           },

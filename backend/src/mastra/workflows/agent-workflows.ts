@@ -11,6 +11,7 @@ import {
   ASSISTANT_V2_NAME,
   ASSISTANT_V2_TOOL_NAMES,
 } from '../agents/assistant-v2-catalog';
+import { builtinAgentPersona } from '../agent-personas';
 import type { WorkflowStepExit } from './qti-v2-turn.steps';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
@@ -21,8 +22,11 @@ export interface AgentWorkflowStep {
   summary: string;
   input: string[];
   output: string[];
-  /** The agent step only: the agent it runs. */
-  agent?: { name: string; tools: string[]; maxSteps: number };
+  /**
+   * The agent step only: the agent it runs, by its persona's name and job
+   * title (agents.md 1.1), its tools and its step limit.
+   */
+  agent?: { name: string; role: string; tools: string[]; maxSteps: number };
   exits: WorkflowStepExit[];
 }
 
@@ -54,6 +58,7 @@ export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
       ? STEP_AGENTS[agentKey]
       : undefined;
   if (!workflow || !agent) return undefined;
+  const persona = builtinAgentPersona(agentKey);
   const source = { id: workflow.id, steps: workflow.steps, agent };
   return {
     id: source.id,
@@ -69,7 +74,8 @@ export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
       ...(step.kind === 'agent'
         ? {
             agent: {
-              name: source.agent.name,
+              name: persona?.name ?? source.agent.name,
+              role: persona?.role ?? '',
               tools: step.modelOnly ? [] : [...source.agent.tools],
               maxSteps: step.modelOnly ? 1 : source.agent.maxSteps,
             },

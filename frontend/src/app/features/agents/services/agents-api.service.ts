@@ -80,8 +80,8 @@ export interface AgentWorkflowStep {
   summary: string;
   input: string[];
   output: string[];
-  /** The agent step only. */
-  agent?: { name: string; tools: string[]; maxSteps: number };
+  /** The agent step only: its persona's name and job title, tools and step limit. */
+  agent?: { name: string; role?: string; tools: string[]; maxSteps: number };
   exits: { label: string; outcome: 'fails' | 'stops' | 'waits' }[];
 }
 
