@@ -18,10 +18,10 @@ Capability-local vocabulary:
 ## Rules
 
 Agent Hub and agent detail
-- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, which opens the agent editor for a new agent (R54); a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, **Official** and **Mine**; and the agents as cards in sections. Under All the sections SHALL be, in this order, **Official** (`official`), **Mine** (`user`) and **System** (`system`), and each agent SHALL appear in the section of its kind, pinned or not; there is no Pinned section under All. A section with no agents SHALL be omitted, so Mine is omitted when there are no user agents. Within a section, pinned cards SHALL come first, then the others, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show a sparkles icon, the name (a built-in agent's persona name, R110), the job title under it in muted text when there is one (`agent-role-<key>`), a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The Official agents are the assistant, Questions to Insights v2 `assistant-v2` (R107) and the Data Readiness Agent `data-readiness`. Cards SHALL NOT show **Start chat** (R53), tools or the id.
-- R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the Official agents (the assistant, the Data Readiness Agent and Questions to Insights v2), in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
-- R3. Each section SHALL show its first row of 3 cards, except the **Official** section, which SHALL always show every card and never offer `Show more` (since 2026-10-15, BA-235). When more of a Mine, System or Pinned section's agents match the search and filter, a `Show more (<n>)` control SHALL follow, where n is the number of hidden cards. Clicking it SHALL show every card of the section and turn the control into `Show less`, which collapses the section to its first row again. Each section expands on its own. The search text, the filter and the expanded sections SHALL reset each time the hub opens, including on return from a detail view.
-- R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
+- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, which opens the agent editor for a new agent (R54); a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, then one pill per domain that has at least one agent (`agent-filter-<domain id>`, counted over all agents, whatever the search or owner); an owner menu, a `select` labelled `Filter by owner` with the options `Any owner` (default), `Official`, `Mine` and `System`; and the agents as cards in sections grouped by **domain** (the agent's specialty, not its owner). The domains SHALL be, in this order, **Data Foundations** (`data-foundations`), **Analysis** (`analysis`), **SQL Engineering** (`sql`), **Storytelling** (`storytelling`), **Quality & Evals** (`quality`) and **General** (`general`). Built-in agents carry a fixed domain ([agents.md](../../system/agents.md) 1.2); a user agent carries the domain chosen in the editor (R55) and, with none chosen, is in General. Under All the sections SHALL be one per domain with matching agents, in that order (`agent-section-<domain id>`, heading = the label), and each agent SHALL appear in the section of its domain, pinned or not; there is no Pinned section under All. A section with no matching agents SHALL be omitted. Within a section, pinned cards SHALL come first, then Official, Mine and System agents, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show the icon of its domain (`agent-domain-<key>`, `data-domain`, `title` = the label; the sparkles icon only for General), the name (a built-in agent's persona name, R110), the job title under it in muted text when there is one (`agent-role-<key>`), a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The Official agents are the assistant, Questions to Insights v2 `assistant-v2` (R107) and the Data Readiness Agent `data-readiness`. Cards SHALL NOT show **Start chat** (R53), tools or the id.
+- R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The pills SHALL show: All, the sections of R1; Pinned, a single **Pinned** section (`agent-section-pinned`) holding every pinned agent matching the owner menu and the search, ordered by kind (Official, Mine, System) and then by name; a domain pill, only that domain's section. The owner menu SHALL limit every view to the agents of that owner (Official, Mine = user agents, System). Search, pill and owner menu combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned pill with nothing pinned shows `No pinned agents yet.`, the owner Mine under All with no user agents shows `No agents of yours yet.`, and any other combination that matches nothing shows `No agents match these filters.`.
+- R3. Every section SHALL show all its cards; there is no `Show more` or `Show less` (removed with the grouping by domain, 2026-11-13). The search text, the pill and the owner menu SHALL reset each time the hub opens (to empty, All and Any owner), including on return from a detail view.
+- R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own domain section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
 - R5. Clicking a card anywhere but its pin toggle SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the job title under it when there is one (`agent-detail-role`), the id, the line **Used in** (R109), the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Try it** (user agents only), **Job Description**, **Skills (N)**, **Tools (N)**, **Graph** (user agents only), **Memory**, **Evals** and **LLM Config**. The first tab shown is Try it for a user agent, and Job Description for an Official or System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. No agent's detail SHALL offer **Start chat** or **Run** (R53); a user agent is tried only through **Try it** (R60). A user agent's detail SHALL offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
   - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
   - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
@@ -127,7 +127,7 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 
 User agents (definitions)
 - R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), an optional `role` (the job title: trimmed, at most 64 characters, omitted when blank), a `description` (at most 280), `instructions` (at most 4,000; may contain links, R81), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated), an optional `model` (a model or deployment name of the configured provider), an optional `reasoningEffort`, and the stored lists `tools` and `skills`. **The links in the instructions are the only source of the agent's tools and skills** (ADR-0024): on every create and every draft save the backend SHALL derive `tools` (the optional tool groups the instructions link directly: `sample_rows`, `ask_clarification` and `visuals`) and `skills` (the ids of the in-app skills the instructions link, R68) from them, and SHALL ignore any `tools` or `skills` in the request. The tools an agent gets, including those its skills link, are in [agents.md](../../system/agents.md) 2.1; an agent saved before links, with no `tools`, keeps every tool (R85). Over-long text SHALL be clipped to the limit. A link to a tool that is not in the library SHALL be refused with `Unknown tool "<name>"`, a link to a skill that is neither a built-in on-demand skill (R82) nor one of the owner's with `Unknown skill "<name>"`, and more than 10 distinct linked in-app skills (a built-in skill link is not counted) with `An agent can have at most 10 skills` (R85).
-- R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version, together with a copy of each skill it names, and record when. A Live agent SHALL run on those copies until it is published again (R73). The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version, or when a skill its draft names has changed since its copy was taken. Saving a draft SHALL NOT change the Live version.
+- R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version, together with a copy of each skill it names, and record when. A Live agent SHALL run on those copies until it is published again (R73). The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version, or when a skill its draft names has changed since its copy was taken. Changing the draft's domain (R55) counts as a change. Saving a draft SHALL NOT change the Live version.
 - R45. Publishing SHALL require a name and at least one dataset, else `Select at least one dataset to publish`. Creating a draft SHALL require only a name, else `Agent name is required`. A name already used by another user agent SHALL be refused with `An agent named "<name>" already exists`.
 - R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`. Their **Job Description** alone can be edited, through its own operations (R97-R105; [api.md](../../system/api.md) 103, 104).
 - R47. Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A user agent's pin SHALL be stored with it and a built-in agent's pin in the app settings, so pins survive a restart.
@@ -144,6 +144,7 @@ User agents (definitions)
 - R55. The editor SHALL hold these fields, which enforce the R43 limits as the user types:
   - **Name** (required, at most 64 characters);
   - **Job title** (optional, at most 64 characters), under Name, with the placeholder `e.g. Claims Analyst`;
+  - **Domain** (optional), after Job title: a `select` (`agent-editor-domain`) with the six domain labels (R1), default General, and the hint `The Agents screen groups agents by domain.`. General is sent and stored as no domain ([data-model.md](../../system/data-model.md) 3.10);
   - **Description** (at most 280);
   - **Job description** (the agent's instructions; at most 4,000 characters, counting the saved text): the link editor (R81), with the hint `Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.`, and under it `Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.`;
   - **Datasets**: one checkbox per existing dataset, by name. A dataset in the draft that no longer exists SHALL stay listed, ticked, as `<name> (missing)`, so the user can untick it. With no datasets at all: `No datasets yet — create one in Datasets first.`;
@@ -258,7 +259,7 @@ The Job Description tab (the system prompt) of the Official and System agents, e
 
 - R106. Retired (1.23.8): the four showcase agents were removed from the app.
 - R107. **Questions to Insights v2** (`assistant-v2`; BA-320, [agents.md](../../system/agents.md) 2.11) SHALL be a built-in Official agent next to the assistant: a business data analyst with the tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql` and `ask_clarification`, the on-demand skills `curated-knowledge`, `sql-analysis` and `result-validation`, and the eval set `analyst-v2`. The current assistant is not changed by it.
-  - the catalogue SHALL list it with kind `official`, owner `Official` and no datasets ([api.md](../../system/api.md) 33). Its card sits in the Official section, alphabetical by name (R1), so after the assistant;
+  - the catalogue SHALL list it with kind `official`, owner `Official` and no datasets ([api.md](../../system/api.md) 33). Its card sits in the Analysis section, Official agents alphabetical by name (R1), so after the assistant;
   - it is the agent of the workflow `Answer a Business Question`, which runs from the Workflows page ([workflows](../workflows/spec.md) R12), not from the agent's page (R53); the agent has no datasets of its own, so the dataset picker and the required name stay;
   - the detail SHALL open on **Job Description** (R91), say **Used in** `Answer a Business Question` (R109) and show its description `A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.`; the **Tools** tab SHALL list its five tools, the **Memory** tab the assistant's settings (R7: 40 messages, no semantic recall, no working memory, no generated titles), the **Skills** tab its three built-in skills, each `On demand` (R63), and the **Evals** tab no sets;
   - the **Job Description** tab SHALL be that of an Official agent (R97-R105): `Built-in` and `Modified` chips, the editable text without `## Tools` and **Edit**, **Reset to built-in**, with the hint `Type / to link a tool or a built-in skill. Links here are mentions; Michael keeps every tool.` and the note `The ## Tools list is generated from the tools Michael gets and is inserted before ## Working rules.` Its editor links only its five tools and its three skills; **Save job description** refuses a prompt that does not start with `You are Questions to Insights`, a `[[skill:…]]` link to a skill not its own and an unknown tool, with the backend's message ([api.md](../../system/api.md) 103).
@@ -286,7 +287,7 @@ The Job Description tab (the system prompt) of the Official and System agents, e
 ## Edge cases and errors
 
 - Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".
-- A search typed under the Pinned or Mine filter that matches nothing shows `No agents match "<query>"`, not the filter's empty message.
+- A search typed under the Pinned pill or the owner Mine that matches nothing shows `No agents match "<query>"`, not the filter's empty message.
 - Pinning an agent under All keeps it in its own section and moves it to the front of that section; unpinning puts it back in alphabetical order after the pinned cards.
 - Deleting an agent that another window or the API already deleted shows the toast `Agent "<id>" not found` (R51) and stays on the detail; **All agents** returns to a hub without it.
 - Publishing a Live agent with no unpublished changes is not offered (no **Publish** button).
@@ -314,20 +315,19 @@ The Job Description tab (the system prompt) of the Official and System agents, e
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and the agent detail carry no **Start chat** (R53); the agent detail's header carries the **Used in** line (R109); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the Try it panel in the Details panel (empty, no-dataset, running, result, stopped, reset). Agent detail: loading, error, its tabs (the Try it tab, the Job Description tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (one section per domain, pinned cards first), a domain pill, the owner menu, the Pinned pill's single Pinned section, no match, empty Pinned pill, empty owner Mine, no match for the filters. Hub cards and the agent detail carry no **Start chat** (R53); the agent detail's header carries the **Used in** line (R109); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the Try it panel in the Details panel (empty, no-dataset, running, result, stopped, reset). Agent detail: loading, error, its tabs (the Try it tab, the Job Description tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
 
 ## Flows
 
-E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the System steps now open "Show more", R3).
+E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the sections are the domains, R1, and have no "Show more", R3).
 
 ```gherkin
 Feature: Agents
 
   Scenario: Opens an agent from the Agents list and switches between its tabs
     When I click "Agents"
-    Then I see "Emily" in the Official section
-    When I click "Show more" in the System section
-    Then I see the "sql-fixer" agent in the System section
+    Then I see "Emily" in the Analysis section
+    And I see the "sql-fixer" agent in the SQL Engineering section
     When I open the "Emily" agent
     Then I see the heading "Emily"
     And there is no Try it tab, and the Job Description tab is shown
@@ -350,12 +350,10 @@ Feature: Agents
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
-    And I click "Show more" in the System section
-    Then I see the "sql-verifier" agent in the System section
+    Then I see the "sql-verifier" agent in the SQL Engineering section
 
   Scenario: Shows the stateless, no-tool agents accurately
     When I click "Agents"
-    And I click "Show more" in the System section
     And I open the "sql-fixer" agent
     And I open the Tools tab
     Then I see "This agent runs in a single step with no tools."
@@ -456,19 +454,25 @@ Feature: Agent Hub
     And a Live user agent "Health plan analyst", described as "Answers questions about the 2026 health plan", over "World Cup Core"
     And a draft user agent "Claims triage", described as "Sorts incoming claims by urgency", with no datasets
 
-  Scenario: Shows the built-in agents and mine in sections
+  Scenario: Shows the built-in agents and mine in sections by domain
     When I click "Agents"
-    Then I see the sections "Official", "Mine" and "System", in that order, and no "Pinned" section
+    Then I see the sections "Data Foundations", "Analysis", "SQL Engineering", "Storytelling", "Quality & Evals" and "General", in that order, and no "Pinned" section
     And the "New agent" button is enabled
-    And the Official section shows "Emily" with "Owner: Official"
-    And the Mine section shows "Health plan analyst" with "Owner: You" and the chip "Live"
-    And the Mine section shows "Claims triage" with the chip "Draft"
-    And the Official section shows 3 cards, in order "Emily", "Michael" and "Sarah", and no "Show more"
-    And the System section shows 3 cards and "Show more (4)"
-    When I click "Show more (4)" in the System section
-    Then the System section shows 7 cards, including "Rachel" (the SQL Verifier), "Olivia" and "Jessica"
-    When I click "Show less" in the System section
-    Then the System section shows 3 cards
+    And the Analysis section shows "Emily" with "Owner: Official", then "Michael" and "Olivia"
+    And the Data Foundations section shows "Sarah" and "Kevin"
+    And the SQL Engineering section shows "David" and "Rachel" (the SQL Verifier)
+    And the Storytelling section shows "Jessica" and "Ryan"
+    And the Quality & Evals section shows "Laura"
+    And the General section shows "Health plan analyst" with "Owner: You" and the chip "Live"
+    And the General section shows "Claims triage" with the chip "Draft"
+    And no section offers "Show more"
+
+  Scenario: A user agent moves to the section of the domain chosen in the editor
+    When I open "Claims triage" and click "Edit"
+    And I choose "SQL Engineering" in "Domain" and click "Save"
+    And I click "Agents"
+    Then the SQL Engineering section shows "Claims triage"
+    And the General section no longer shows it
 
   Scenario: Search narrows the agents by name or description
     When I click "Agents"
@@ -479,23 +483,27 @@ Feature: Agent Hub
     When I type "nothing here" into "Search agents by name or description"
     Then I see 'No agents match "nothing here"'
 
-  Scenario: Filters limit the hub to one kind of agent
+  Scenario: Pills and the owner menu limit the hub
     When I click "Agents"
-    And I click the "Mine" filter
+    And I choose "Mine" in "Filter by owner"
     Then I see only "Claims triage" and "Health plan analyst"
-    When I click the "Official" filter
-    Then I see only the Official section, with "Emily", "Michael" and "Sarah", in that order, and no "Show more"
+    When I choose "Official" in "Filter by owner"
+    Then I see "Sarah" in Data Foundations, and "Emily" and "Michael" in Analysis, and no System agent
+    When I click the "Analysis" filter
+    Then I see only the Analysis section, with "Emily" and "Michael"
+    When I click the "SQL Engineering" filter
+    Then I see "No agents match these filters."
     When I click the "Pinned" filter
     Then I see "No pinned agents yet."
-    When I click the "All" filter
-    Then I see the System section again
+    When I choose "Any owner" in "Filter by owner" and click the "All" filter
+    Then I see every domain section again
 
   Scenario: Pinned agents come first in their own section and survive a restart
     When I click "Agents"
     And I click "Pin Health plan analyst"
     And I click "Pin Emily"
-    Then the Official section shows "Emily" first, reading "Pinned"
-    And the Mine section shows "Health plan analyst" first, reading "Pinned"
+    Then the Analysis section shows "Emily" first, reading "Pinned"
+    And the General section shows "Health plan analyst" first, reading "Pinned"
     And there is no "Pinned" section
     When I click the "Pinned" filter
     Then the Pinned section shows "Emily" and "Health plan analyst"
@@ -506,7 +514,7 @@ Feature: Agent Hub
     When I click "Unpin Health plan analyst"
     Then the Pinned section shows only "Emily"
     When I click the "All" filter
-    Then the Mine section shows "Health plan analyst" reading "Pin"
+    Then the General section shows "Health plan analyst" reading "Pin"
 
   Scenario: Flags an agent whose dataset no longer exists
     Given the draft of "Claims triage" uses the dataset "Gone"
@@ -536,7 +544,7 @@ Feature: Agent Hub
     Then I see the toast 'Agent "Claims triage" is Live'
     And the "Publish" button is gone
     When I click "All agents"
-    Then the Mine section shows "Claims triage" with the chip "Live"
+    Then the General section shows "Claims triage" with the chip "Live"
 
   Scenario: Deleting an agent asks first
     When I click "Agents"
@@ -556,14 +564,15 @@ Feature: Agent Hub
     When I click "Back"
     Then I am back on the Agent Hub
 
-  Scenario: The Official section holds only agents that can chat
+  Scenario: The Official owner holds only agents that can chat
     When I open "Agents"
-    Then the Official section shows "Emily", "Michael" and "Sarah"
+    And I choose "Official" in "Filter by owner"
+    Then I see "Emily", "Michael" and "Sarah", and no other agent
     And I see no "Showcase" chip and no "Benchmarking Agent", "Survey Agent", "LAD COE Agent" or "Strategy Agent"
 
   Scenario: Questions to Insights v2 is an Official card
     When I click "Agents"
-    Then the Official section shows "Michael" after "Emily", with "Owner: Official"
+    Then the Analysis section shows "Michael" after "Emily", with "Owner: Official"
 
   Scenario: Questions to Insights v2's page shows its prompt, five tools and three skills
     When I click "Agents"
@@ -592,7 +601,6 @@ Feature: Agent Hub
 
   Scenario: The hub has no detectable accessibility violations in either theme
     When I click "Agents"
-    And I click "Show more (4)" in the System section
     Then the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
 
@@ -619,7 +627,6 @@ Feature: Agent Hub
 
   Scenario: A System agent says the app calls it itself
     When I click "Agents"
-    And I click "Show more (4)" in the System section
     And I open "SQL Fixer"
     Then the "Used in" line says "Not used in any workflow. The app calls this agent itself."
     And there is no Try it tab and no "Start chat"

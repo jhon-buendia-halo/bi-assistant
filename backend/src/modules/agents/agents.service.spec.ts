@@ -118,6 +118,7 @@ describe('AgentsService (built-in and user agents)', () => {
         key: 'assistant',
         name: 'Emily',
         role: 'Data Analyst',
+        domain: 'analysis',
         kind: 'official',
         owner: 'Official',
         status: 'builtin',
@@ -131,8 +132,13 @@ describe('AgentsService (built-in and user agents)', () => {
         key: 'sql-fixer',
         name: 'David',
         role: 'SQL Developer',
+        domain: 'sql',
         kind: 'system',
         owner: 'System',
+      });
+      expect(agents[2]).toMatchObject({
+        key: 'assistant-eval-judge',
+        domain: 'quality',
       });
     }),
   );
@@ -272,6 +278,8 @@ describe('AgentsService (built-in and user agents)', () => {
         id: created.id,
         name: 'Health plan analyst',
         role: 'Claims Analyst',
+        // No domain chosen: General.
+        domain: 'general',
         description: 'Plans',
         // No links: only the always-on tools (ADR-0024).
         tools: ['run_readonly_sql'],

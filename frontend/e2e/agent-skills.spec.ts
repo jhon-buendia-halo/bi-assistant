@@ -21,10 +21,7 @@ async function openAgent(page: Page, key: string): Promise<void> {
     .getByRole('complementary', { name: 'Navigation rail' })
     .getByRole('button', { name: 'Agents' })
     .click();
-  // The System section shows its first row until "Show more" (agents-evals R3).
-  if (key !== 'assistant') {
-    await page.getByTestId('agent-show-more-system').click();
-  }
+  // Every card shows in its domain section (agents-evals R3).
   await page.getByTestId(`agent-${key}`).click();
 }
 

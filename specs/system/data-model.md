@@ -515,6 +515,7 @@ User-built agents: a stored configuration of the assistant, with a working draft
 |---|---|---|---|
 | `name` | string | yes | Trimmed, 1 to 64 characters, unique among the user agents (case-insensitive). |
 | `role` | string | no | The agent's job title (shown under its name; "persona" role, [agents.md](agents.md) 1.1): trimmed, at most 64 characters, omitted when blank. Part of the draft-versus-Live comparison (unpublished changes). Absent in agents saved before it. |
+| `domain` | enum | no | The agent's specialty, which section of the Agent Hub it sits in: `data-foundations`, `analysis`, `sql`, `storytelling` or `quality`. Never `general`: General, an unknown value or none is stored as no field, and the API answers `general`. Part of the draft-versus-Live comparison (unpublished changes). Optional, so no migration: agents saved before it have none. |
 | `description` | string | yes | Up to 280 characters; may be empty. |
 | `instructions` | string | yes | Up to 4,000 characters; may be empty. Stored as written, with links `[[skill:<name>]]` and `[[tool:<name>]]` (R81 of the agents spec; resolved to plain mentions only when the model sees them, [agents.md](agents.md) 4.1). |
 | `datasets` | string[] | yes | Dataset **names**; de-duplicated. At least one to publish. |

@@ -3,11 +3,11 @@ import {
   LucideAngularModule,
   Pin,
   PinOff,
-  Sparkles,
   TriangleAlert,
 } from 'lucide-angular';
 import { Agent } from '../../services/agents-api.service';
 import { agentKind } from '../../services/agent-hub.util';
+import { agentDomain, domainInfo } from '../../services/agent-domains';
 
 /**
  * One agent on the hub (ui.md 4.4). The open control and the pin toggle are
@@ -23,12 +23,14 @@ import { agentKind } from '../../services/agent-hub.util';
 export class AgentCard {
   readonly Pin = Pin;
   readonly PinOff = PinOff;
-  readonly Sparkles = Sparkles;
   readonly TriangleAlert = TriangleAlert;
 
   readonly agent = input.required<Agent>();
   readonly open = output<void>();
   readonly togglePin = output<void>();
+
+  /** The domain's label and the icon on the tile (ui.md 4.4). */
+  readonly domain = computed(() => domainInfo(agentDomain(this.agent())));
 
   readonly isUser = computed(() => agentKind(this.agent()) === 'user');
 

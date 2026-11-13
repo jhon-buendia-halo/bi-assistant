@@ -8,8 +8,6 @@ import {
 } from '@angular/core';
 import {
   BookOpen,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   LucideAngularModule,
   Plus,
@@ -17,20 +15,20 @@ import {
 } from 'lucide-angular';
 import { Agent, AgentsApiService } from '../../services/agents-api.service';
 import {
-  HUB_FILTERS,
   HubFilter,
-  HubSectionId,
+  OWNER_FILTERS,
+  OwnerFilter,
   buildHubSections,
   hubEmptyMessage,
-  visibleCards,
+  hubFilters,
 } from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AgentCard } from '../agent-card/agent-card';
 
 /**
- * The Agents screen (agents-evals R1-R4, R53, ui.md 4.4). Search, filter and
- * expanded sections live in this component, so they reset each time the hub
- * opens.
+ * The Agents screen (agents-evals R1-R4, R53, ui.md 4.4): one section per
+ * domain. Search, filter and owner live in this component, so they reset
+ * each time the hub opens.
  */
 @Component({
   selector: 'app-agent-hub',
@@ -39,13 +37,11 @@ import { AgentCard } from '../agent-card/agent-card';
 })
 export class AgentHub implements OnInit {
   readonly BookOpen = BookOpen;
-  readonly ChevronDown = ChevronDown;
-  readonly ChevronUp = ChevronUp;
   readonly Loader2 = Loader2;
   readonly Plus = Plus;
   readonly Search = Search;
 
-  readonly filters = HUB_FILTERS;
+  readonly owners = OWNER_FILTERS;
 
   private readonly api = inject(AgentsApiService);
   private readonly toast = inject(ToastService);
@@ -60,25 +56,17 @@ export class AgentHub implements OnInit {
   readonly agents = signal<Agent[]>([]);
   readonly query = signal('');
   readonly filter = signal<HubFilter>('all');
-  readonly expanded = signal<ReadonlySet<HubSectionId>>(new Set());
+  readonly owner = signal<OwnerFilter>('any');
+
+  /** All, Pinned and the domains that have agents (R2). */
+  readonly filters = computed(() => hubFilters(this.agents()));
 
   readonly sections = computed(() =>
-    buildHubSections(this.agents(), this.filter(), this.query()).map(
-      (section) => ({
-        ...section,
-        expanded: this.expanded().has(section.id),
-        // The Official section shows every card and no Show more (R3); the
-        // others start on
-        // their first row.
-        ...(section.id === 'official'
-          ? { shown: section.agents, hidden: 0 }
-          : visibleCards(section.agents, this.expanded().has(section.id))),
-      }),
-    ),
+    buildHubSections(this.agents(), this.filter(), this.owner(), this.query()),
   );
 
   readonly emptyMessage = computed(() =>
-    hubEmptyMessage(this.filter(), this.query(), this.sections()),
+    hubEmptyMessage(this.filter(), this.owner(), this.query(), this.sections()),
   );
 
   ngOnInit(): void {
@@ -98,11 +86,8 @@ export class AgentHub implements OnInit {
     this.query.set((event.target as HTMLInputElement).value);
   }
 
-  toggleSection(id: HubSectionId): void {
-    const next = new Set(this.expanded());
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    this.expanded.set(next);
+  onOwner(event: Event): void {
+    this.owner.set((event.target as HTMLSelectElement).value as OwnerFilter);
   }
 
   /**

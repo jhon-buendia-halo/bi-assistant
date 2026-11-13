@@ -55,7 +55,11 @@ import type {
 } from '../user-agents/entities/user-agent.entity';
 
 import { OFFICIAL_AGENT_KEYS } from '../../mastra/agent-constants';
-import { builtinAgentPersona } from '../../mastra/agent-personas';
+import {
+  DEFAULT_AGENT_DOMAIN,
+  builtinAgentPersona,
+  type AgentDomain,
+} from '../../mastra/agent-personas';
 import {
   agentWorkflow,
   type AgentWorkflow,
@@ -75,6 +79,9 @@ export interface AgentSummary {
   name: string;
   /** The persona's job title; empty when a user agent has none. */
   role: string;
+  /** The specialty the hub groups the agent under (agents.md 1.2): a
+   * built-in's from its persona, a user agent's as chosen, else `general`. */
+  domain: AgentDomain;
   description: string;
   /** Tool names the agent can call, sorted alphabetically. A user agent
    * runs on the assistant, so it lists the assistant's tools its effective
@@ -527,6 +534,7 @@ export class AgentsService {
       id: agent.id ?? key,
       name: persona?.name ?? agent.name ?? key,
       role: persona?.role ?? '',
+      domain: persona?.domain ?? DEFAULT_AGENT_DOMAIN,
       description: (await safe(() => agent.getDescription())) ?? '',
       tools: Object.keys((await safe(() => agent.listTools())) ?? {}).sort(),
       kind: official ? 'official' : 'system',
@@ -558,6 +566,7 @@ function summarizeUserAgent(
     id: doc.id,
     name: config.name,
     role: config.role ?? '',
+    domain: config.domain ?? DEFAULT_AGENT_DOMAIN,
     description: config.description,
     tools: [...assistantTools],
     kind: 'user',

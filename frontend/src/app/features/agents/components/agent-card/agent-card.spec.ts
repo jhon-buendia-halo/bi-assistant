@@ -72,4 +72,17 @@ describe('AgentCard', () => {
       render(historian).querySelector('[data-testid^="agent-role-"]'),
     ).toBeNull();
   });
+
+  it("marks the tile with the agent's domain, General when it has none", () => {
+    const sql = render({ ...assistant, domain: 'sql' }).querySelector(
+      '[data-testid="agent-domain-assistant"]',
+    );
+    expect(sql?.getAttribute('data-domain')).toBe('sql');
+    expect(sql?.getAttribute('title')).toBe('SQL Engineering');
+    const general = render(historian).querySelector(
+      '[data-testid="agent-domain-u-historian"]',
+    );
+    expect(general?.getAttribute('data-domain')).toBe('general');
+    expect(general?.getAttribute('title')).toBe('General');
+  });
 });

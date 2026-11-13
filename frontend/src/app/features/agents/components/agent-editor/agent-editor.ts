@@ -25,6 +25,8 @@ import {
   ReasoningEffortChoice,
   modelPlaceholder,
 } from '../../services/agent-editor.util';
+import { AgentDomain } from '../../services/agents-api.service';
+import { AGENT_DOMAINS } from '../../services/agent-domains';
 
 /**
  * The agent editor (agents-evals R54-R59, ui.md 4.5.1): a user agent's draft
@@ -47,6 +49,7 @@ export class AgentEditor implements OnInit, OnDestroy {
 
   readonly limits = AGENT_FIELD_LIMITS;
   readonly efforts = REASONING_EFFORT_CHOICES;
+  readonly domains = AGENT_DOMAINS;
   readonly instructionsHint =
     "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.";
   readonly linksHint =
@@ -86,6 +89,12 @@ export class AgentEditor implements OnInit, OnDestroy {
 
   onText(field: 'name' | 'role' | 'description' | 'model', event: Event): void {
     this.editor.update({ [field]: (event.target as HTMLInputElement).value });
+  }
+
+  onDomain(event: Event): void {
+    this.editor.update({
+      domain: (event.target as HTMLSelectElement).value as AgentDomain,
+    });
   }
 
   onEffort(event: Event): void {

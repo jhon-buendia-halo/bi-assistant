@@ -38,6 +38,21 @@ describe('agent editor: unsaved changes', () => {
     ).toBe('Claims Analyst');
   });
 
+  it('counts a changed domain as a change and loads a draft without one as General', () => {
+    expect(
+      agentFormChanged(form({ domain: 'analysis' }), form()),
+    ).toBeTrue();
+    expect(
+      agentFormFromConfig({
+        name: 'A',
+        description: '',
+        instructions: '',
+        datasets: [],
+        starterQuestions: [],
+      }).domain,
+    ).toBe('general');
+  });
+
   it('counts a typed field as a change', () => {
     expect(agentFormChanged(form(), emptyAgentForm())).toBeTrue();
     expect(
@@ -135,6 +150,9 @@ describe('agent editor: save', () => {
       'Claims Analyst',
     );
     expect('role' in agentSaveInput(form({ role: '  ' }))).toBeFalse();
+    // A chosen domain is sent; General is the default and left out.
+    expect(agentSaveInput(form({ domain: 'sql' })).domain).toBe('sql');
+    expect('domain' in agentSaveInput(form())).toBeFalse();
     // The links in the instructions decide tools and skills: none is sent.
     const input = agentSaveInput(form());
     expect('tools' in input).toBeFalse();

@@ -130,7 +130,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap*, saved disabled until a human accepts it.
 
-**Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, *Questions to Insights v2* and the *Data Readiness Agent*.
+**Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): the *assistant*, *Questions to Insights v2* and the *Data Readiness Agent*.
 
 **One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: only *Answer a Business Question* is. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
 

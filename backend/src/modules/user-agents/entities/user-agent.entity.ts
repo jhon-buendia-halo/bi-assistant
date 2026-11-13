@@ -1,6 +1,7 @@
 import type { ReasoningEffort } from '../../llm/llm.types';
 import type { OptionalAgentTool } from '../../../mastra/agent-tools';
 import type { SkillCopy } from '../../skills/entities/skill.entity';
+import type { AgentDomain } from '../../../mastra/agent-personas';
 
 /** `official` = the assistant, `system` = the five helpers, `user` = built here. */
 export type AgentKind = 'official' | 'system' | 'user';
@@ -15,6 +16,11 @@ export interface AgentConfig {
   name: string;
   /** Optional job title shown under the name (data-model 3.10). */
   role?: string;
+  /**
+   * The specialty the hub groups the agent under (agents-evals R1); absent
+   * means `general`, which is never stored (data-model 3.10).
+   */
+  domain?: Exclude<AgentDomain, 'general'>;
   description: string;
   instructions: string;
   /** Dataset names, by value; they may dangle (data-model 3.13). */
