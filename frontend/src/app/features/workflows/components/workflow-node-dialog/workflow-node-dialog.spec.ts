@@ -134,6 +134,8 @@ describe('WorkflowNodeDialog', () => {
     );
     expect(byId('workflow-step-field-system-prompt')).toBeNull();
     expect(el().textContent).toContain('Step instructions');
+    // One model call: the header names the agent alone, no "≤ 1 steps".
+    expect(el().textContent).not.toContain('≤ 1 steps');
     expect(el().textContent).not.toContain('Job description');
   });
 
