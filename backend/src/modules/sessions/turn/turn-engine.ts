@@ -143,6 +143,13 @@ export class TurnEngine {
       turn.signal,
       activeVisualId,
     );
+    // A node chat's context block (agents.md 5.16), after the agent's own.
+    if (session.contextBlock) {
+      options.context.push({
+        role: 'system' as const,
+        content: session.contextBlock,
+      });
+    }
     // A live reference to this turn's captured records, handed to the visual
     // tools via requestContext so create_visual/update_visual called later in
     // the same turn can see SQL the turn already ran (drill-down queries a

@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **92 HTTP route handlers** across 15 app controllers (sessions 16, agents 17, skills 9, datasources 6, ontology 6, personas 4, visuals 4, monitoring 5, metrics 5, llm 6, datasets 3, developer settings 3, testing data 3, UI preferences 2). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **109 HTTP route handlers** across 20 app controllers (agents 17, workflow runs 15, skills 9, sessions 7, llm 7, datasources 6, ontology 6, metrics 5, monitoring 5, personas 4, visuals 4, synthetic data 4, workflows 4, datasets 3, data readiness 3, developer settings 3, testing data 3, UI preferences 2, draft runs 1, health 1). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -722,7 +722,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 
 ### 2.6.3 Workflow runs
 
-Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/workflows/spec.md) (R18-R20) and [visuals](../capabilities/visuals/spec.md) (130-134). The stored runs of 118 and 119 ([data-model.md](data-model.md) 3.16): the history, one run, its deletion, and the files of its workspace. The file routes are served by the same services as a session's (9, 14, 105-107), given the run's **run-backed host**: a `SessionDoc` shaped from the stored run (id `run-<id>`, workspace `session-run-<id>`, its agent binding, panel items, visuals, and its question and answer as the transcript), never held or listed. `:id` is a run id (a uuid). Style B throughout.
+Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/workflows/spec.md) (R18-R20, R25) and [visuals](../capabilities/visuals/spec.md) (130-134). The stored runs of 118 and 119 ([data-model.md](data-model.md) 3.16): the history, one run, its deletion, the files of its workspace, and the chats with its agent steps (136, 137). The file routes are served by the same services as a session's (9, 14, 105-107), given the run's **run-backed host**: a `SessionDoc` shaped from the stored run (id `run-<id>`, workspace `session-run-<id>`, its agent binding, panel items, visuals, and its question and answer as the transcript), never held or listed. `:id` is a run id (a uuid). Style B throughout.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -741,6 +741,8 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 132 | `POST /workflow-runs/:id/visualizations/:vid/revert` | Move a run's visual to an earlier version | yes |
 | 133 | `POST /workflow-runs/:id/visualizations/:vid/refresh` | Re-run the SQL behind a run's visual | yes |
 | 134 | `POST /workflow-runs/:id/visualizations/:vid/repair` | Repair a run's failing visual once | yes |
+| 136 | `GET /workflow-runs/:id/node-chats/:stepId` | A step's node chat in a run: its messages | yes |
+| 137 | `POST /workflow-runs/:id/node-chats/:stepId/messages/stream` | Chat with a step's agent about the run's data, streamed (SSE) | yes |
 
 #### 120. `GET /workflow-runs`
 - Query: `workflowId` (optional): only that workflow's runs.
@@ -765,7 +767,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 
 #### 122. `DELETE /workflow-runs/:id`
 - Response `200`: `{ ok: true, message: "Run deleted" }`.
-- Side effects: for an agent run, deletes its workspace `workspaces/session-run-<id>/` (its visuals, panel files, synthetic scripts) and its memory thread `run-<id>`, then the document. A code-only run has neither, so only the document goes. A run given as another run's `context` may be deleted; the later run keeps `context.fromRunId` as a dangling reference.
+- Side effects: for an agent run, deletes its workspace `workspaces/session-run-<id>/` (its visuals, panel files, synthetic scripts) and its memory thread `run-<id>`, then its node chats (136, 137; [data-model.md](data-model.md) 3.17), then the document. A code-only run has neither, so only the document goes. A run given as another run's `context` may be deleted; the later run keeps `context.fromRunId` as a dangling reference.
 - Errors (Style B): `404 "Run \"<id>\" not found"`; `400 "Stop the run before deleting it"` for a run still `running`.
 
 #### 123. `GET /workflow-runs/:id/visualizations/:vid`
@@ -823,6 +825,29 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Body: `{ error?: string; version: number }`. As 13: only the current version, and never an automatic repair again; no card.
 - Success `201`: `{ ok: true, message: "Repaired as version <n>", run, visualization }`.
 - Errors (Style B): as 130; `400 "Only the current version can be repaired (requested v<x>, current v<y>)"`; `400 "Version <n> is already an automatic repair; not repairing again"`.
+
+#### 136. `GET /workflow-runs/:id/node-chats/:stepId`
+- Response `200`: `{ messages: NodeChatMessage[] }`, oldest first; `[]` when nobody chatted with that step of the run (any `:stepId`).
+  ```ts
+  type NodeChatMessage = {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;                       // assistant: the answer, or what came before a stop or failure
+    toolCalls?: WorkflowRunToolCall[];     // assistant: the turn's tool calls, as a run step's (3.6)
+    stopped?: true;                        // assistant: the turn was stopped
+    error?: string;                        // assistant: why the turn failed
+    createdAt: string;
+  };
+  ```
+- Errors (Style B): `404 "Run \"<id>\" not found"`.
+
+#### 137. `POST /workflow-runs/:id/node-chats/:stepId/messages/stream`
+- Body: `{ content: string }` (trimmed). Capability: [workflows](../capabilities/workflows/spec.md) R25.
+- Runs one turn of the step's agent about that step's data in the stored run ([agents.md](agents.md) 5.16): the agent's own tools (read-only), the run's `datasets`, the chat's earlier messages, and a context block built server-side from the stored run (never from the client).
+- Refusals (Style B, JSON, before any SSE frame; nothing is stored), in this order: `404 "Run \"<id>\" not found"`; `400 "Message is required"` (missing or blank `content`); `409 "The run is still running"`; `404 "Workflow \"<workflowId>\" not found"` for a run of a workflow the catalogue no longer holds; `400 "Step \"<stepId>\" has no agent to chat with"` (an unknown step or a code step); `400 "Step \"<stepId>\" did not run in this run"` (the run has no such step, or it is `skipped`); `409 "A reply about step \"<stepId>\" is already being written"` while another turn of the same chat runs.
+- Response `200`: SSE with the framing of 3.1 (`data: <json>\n\n`). Events, in order: the agent turn's `reasoning`, `text`, `tool`, `tool-result` and `tool-progress` events (3.1, as the run stream sends them; no `run`, `step`, `workflow`, `panel-item` or `visual-updated`), then exactly one of `done { message: NodeChatMessage }` (the assistant message as stored) or `error { content }` (the turn failed; its message is stored with `error`).
+- Closing the connection stops the turn: nothing more is sent, and the assistant message is stored with what came and `stopped: true`.
+- Side effects: the user message is stored before the turn starts, the assistant message when it ends, in the chat of that run and step ([data-model.md](data-model.md) 3.17). The run document is never changed. The turn's host `run-<id>-node-<stepId>`, its memory thread and its workspace `session-run-<id>-node-<stepId>` exist only while the turn runs.
 
 ### 2.7 Deep analysis (removed 2026-11-12)
 

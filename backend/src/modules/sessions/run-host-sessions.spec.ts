@@ -103,6 +103,7 @@ import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
+import { WorkflowNodeChatsRepository } from '../workflows/repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from '../workflows/repositories/workflow-runs.repository';
 import type { WorkflowRun } from '../workflows/workflow-run-steps';
 import {
@@ -340,6 +341,12 @@ function build(options: BuildOptions = {}) {
     mastra as never,
     new WorkflowRunsRepository(
       new SqliteDocStore(new BetterSqlite3(':memory:'), 'workflow_runs'),
+    ),
+    new WorkflowNodeChatsRepository(
+      new SqliteDocStore(
+        new BetterSqlite3(':memory:'),
+        'workflow_run_node_chats',
+      ),
     ),
   );
   /** A chat session over the same input as `workflow`'s run. */
@@ -600,6 +607,44 @@ describe('the run host (agents.md 5.14)', () => {
       { role: 'assistant', content: 'Brazil won.' },
       { role: 'user', content: 'And in 2014?' },
     ]);
+  });
+
+  it('a node chat host sends its transcript before the message and its context block after the agent’s own (agents.md 5.16)', async () => {
+    const ctx = build();
+    const host = await ctx.sessions.createRunHost({
+      runId: 'r-1-node-analyse',
+      workflowId: 'qti-v2-turn',
+      name: 'Questions to Insights v2: Analyse',
+      datasets: ['World Cup'],
+      transcript: [
+        { role: 'user', content: 'Why?' },
+        { role: 'assistant', content: 'Because.' },
+      ],
+      contextBlock: 'NODE CHAT CONTEXT',
+    });
+    await ctx.sessions.streamRunTurn(
+      host.id,
+      'And then?',
+      () => undefined,
+      undefined,
+      false,
+      () => undefined,
+    );
+    await ctx.sessions.finishRunHost(host.id);
+    const call = ctx.calls['assistant-v2'][0];
+    expect(call.input).toEqual([
+      { role: 'user', content: 'Why?' },
+      { role: 'assistant', content: 'Because.' },
+      { role: 'user', content: 'And then?' },
+    ]);
+    const system = (
+      call.options as unknown as { context: { content: string }[] }
+    ).context.map((block) => block.content);
+    const at = system.indexOf('NODE CHAT CONTEXT');
+    expect(at).toBeGreaterThan(0);
+    // The Analyse step's catalog block still comes last.
+    expect(system.at(-1)).toContain('Catalog loaded for this turn');
+    expect(at).toBe(system.length - 2);
   });
 
   it('a stopped run aborts the agent stream and is stopped', async () => {

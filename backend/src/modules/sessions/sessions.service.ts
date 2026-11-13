@@ -144,6 +144,13 @@ export interface RunHostSpec {
   /** The earlier run's question and answer, put before this run's question. */
   context?: { question: string; answer: string };
   /**
+   * Earlier messages put before the turn's message instead of `context`: a
+   * node chat's earlier messages (agents.md 5.16).
+   */
+  transcript?: { role: 'user' | 'assistant'; content: string }[];
+  /** A system block every turn of the host gets (agents.md 5.16). */
+  contextBlock?: string;
+  /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
    */
@@ -426,12 +433,15 @@ export class SessionsService implements OnModuleInit {
       ...binding,
       workflowId: sessionWorkflowId(binding),
       run: true,
-      messages: spec.context
-        ? [
-            { role: 'user', content: spec.context.question, at: now },
-            { role: 'assistant', content: spec.context.answer, at: now },
-          ]
-        : [],
+      messages: spec.transcript
+        ? spec.transcript.map((message) => ({ ...message, at: now }))
+        : spec.context
+          ? [
+              { role: 'user', content: spec.context.question, at: now },
+              { role: 'assistant', content: spec.context.answer, at: now },
+            ]
+          : [],
+      ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
