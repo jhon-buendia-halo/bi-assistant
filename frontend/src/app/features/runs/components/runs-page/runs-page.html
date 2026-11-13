@@ -111,8 +111,8 @@
               <span
                 data-testid="row-run-status"
                 class="chip shrink-0"
-                [class.chip-neutral]="run.status !== 'failed'"
-                [class.chip-warning]="run.status === 'failed'"
+                [class.chip-neutral]="run.status !== 'failed' && run.status !== 'suspended'"
+                [class.chip-warning]="run.status === 'failed' || run.status === 'suspended'"
                 >{{ status(run.status) }}</span
               >
               <button

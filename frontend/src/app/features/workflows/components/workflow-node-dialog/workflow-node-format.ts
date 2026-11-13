@@ -16,6 +16,8 @@ export function nodeStatusChip(status: WorkflowRunStepStatus | null): string {
       return 'chip chip-danger';
     case 'stopped':
       return 'chip chip-warning';
+    case 'suspended':
+      return 'chip chip-warning';
     case 'running':
       return 'chip chip-info';
     default:
@@ -31,6 +33,8 @@ export function nodeStatusDot(status: WorkflowRunStepStatus | null): string {
     case 'failed':
       return 'bg-on-danger-soft';
     case 'stopped':
+      return 'bg-on-warning-soft';
+    case 'suspended':
       return 'bg-on-warning-soft';
     case 'running':
       return 'bg-primary animate-pulse';

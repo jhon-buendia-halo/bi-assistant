@@ -102,6 +102,18 @@ class FakeRunsApi {
     return new Promise<void>(() => undefined);
   }
 
+  resumes: { runId: string; stepId: string; answer: string; handlers: RunStreamHandlers }[] = [];
+
+  resumeRun(
+    runId: string,
+    stepId: string,
+    answer: string,
+    handlers: RunStreamHandlers,
+  ): Promise<void> {
+    this.resumes.push({ runId, stepId, answer, handlers });
+    return new Promise<void>(() => undefined);
+  }
+
   get last() {
     return this.calls[this.calls.length - 1];
   }
@@ -642,6 +654,116 @@ describe('WorkflowPanel, the right panel of a workflow page (workflows R7–R13;
       expect(q('workflow-run-scorecard')).toBeNull();
       expect(q('workflow-run-phases')).toBeNull();
       expect(el.querySelector('[aria-label="Download report"]')).toBeNull();
+    });
+  });
+
+  describe('run progress and a run that waits for an answer (ui.md 4.4b)', () => {
+    const WAITING = {
+      stepId: 'analyse',
+      title: 'Analyse',
+      question: 'Which year?',
+      options: ['2018', '2022'],
+      expiresAt: '2026-11-11T10:30:00.000Z',
+    };
+
+    const FLOW: WorkflowDetail = {
+      ...ASSISTANT,
+      stepCount: 2,
+      steps: [
+        STEP('receive-question', 'Receive question', ['question'], ['question']),
+        {
+          ...STEP('analyse', 'Analyse', ['question'], ['calls', 'stopped']),
+          kind: 'agent',
+        },
+      ],
+    };
+
+    function openFlow(afterLoad?: () => void): void {
+      open(FLOW, () => {
+        http.expectOne((r) => r.url.endsWith('/datasets')).flush({
+          datasets: [
+            { name: 'World Cup Core', tables: ['a'], datasourceKind: 'postgres' },
+          ],
+        });
+        afterLoad?.();
+      });
+    }
+
+    function startV2(): RunStreamHandlers {
+      openFlow();
+      const field = q('workflow-input-question') as HTMLTextAreaElement;
+      field.value = 'Which year?';
+      field.dispatchEvent(new Event('input'));
+      q('workflow-input-datasets')!.querySelector('button')!.click();
+      fixture.detectChanges();
+      click('workflow-run');
+      return runs.last.handlers;
+    }
+
+    it('shows the progress with the running step current, and its activity line', () => {
+      const h = startV2();
+      h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+      h.onStep!({ id: 'receive-question', title: 'Receive question', status: 'success' });
+      h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', startedAt: new Date().toISOString() });
+      h.onTool!({ name: 'run_readonly_sql', rationale: 'Counting matches' } as never);
+      fixture.detectChanges();
+      const current = el.querySelectorAll('[data-testid="workflow-run-progress"] [aria-current="step"]');
+      expect(current.length).toBe(1);
+      expect(current[0].getAttribute('data-testid')).toBe('workflow-run-progress-analyse');
+      expect(text('workflow-run-activity')).toBe('Analyse · Counting matches');
+      expect(q('workflow-run-input-required')).toBeNull();
+    });
+
+    it('pins the waiting card at the top when the run suspends and resumes it with the answer', () => {
+      const h = startV2();
+      h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+      h.onStep!({ id: 'analyse', title: 'Analyse', status: 'suspended' });
+      h.onInputRequired!({ runId: 'run-1', ...WAITING });
+      h.onDone!(
+        assistantRun({
+          id: 'run-1',
+          workflowId: 'qti-v2-turn',
+          status: 'suspended',
+          answer: undefined,
+          waitingFor: WAITING,
+          steps: [{ id: 'analyse', title: 'Analyse', status: 'suspended' }],
+        }),
+      );
+      fixture.detectChanges();
+      expect(text('workflow-run-input-question')).toBe('Which year?');
+      expect(text('workflow-run-activity')).toBe('Waiting for your answer');
+      expect(text('workflow-run-status')).toBe('Waiting for you');
+      const order = Array.from(
+        el.querySelector('section[aria-label="Run"]')!.children,
+      ).map((child) => child.tagName.toLowerCase());
+      expect(order[0]).toBe('app-workflow-run-input-required');
+      click('workflow-run-input-option-1');
+      expect(runs.resumes.length).toBe(1);
+      expect(runs.resumes[0]).toEqual(
+        jasmine.objectContaining({ runId: 'run-1', stepId: 'analyse', answer: '2022' }),
+      );
+      expect(q('workflow-run-input-required')).toBeNull();
+    });
+
+    it('an expired run shows the card expired and Run again with my answer starts a follow-up', () => {
+      openFlow(() => {
+        designer.showRunOnLoad(
+          assistantRun({
+            id: 'run-1',
+            workflowId: 'qti-v2-turn',
+            status: 'stopped',
+            answer: undefined,
+            waitingFor: { ...WAITING, expired: true },
+          }),
+        );
+        designer.load(FLOW.id);
+        http
+          .expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn'))
+          .flush(FLOW);
+        http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+      });
+      expect(text('workflow-run-input-expired')).toBe('This run can no longer continue.');
+      expect((q('workflow-run-input-rerun') as HTMLButtonElement).disabled).toBeTrue();
     });
   });
 });

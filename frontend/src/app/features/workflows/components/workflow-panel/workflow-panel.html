@@ -2,6 +2,26 @@
   <!-- The run form and the run shown (workflows R21); the workflow's
        configuration is in the node dialogs on the page (ui.md 4.4b). -->
   <section aria-label="Run" class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+    @if (designer.waitingFor(); as waiting) {
+      <app-workflow-run-input-required
+        class="mb-4"
+        [waiting]="waiting"
+        [busy]="designer.running()"
+        [error]="designer.resumeError()"
+        (answered)="designer.resume($event)"
+        (rerun)="designer.rerunWithAnswer($event)"
+      />
+    }
+    @if (progress().length > 0) {
+      <section
+        aria-label="Run progress"
+        class="mb-4 flex flex-col gap-2"
+        data-testid="workflow-run-progress-block"
+      >
+        <app-workflow-run-progress [steps]="progress()" />
+        <app-workflow-run-activity [line]="activity()" />
+      </section>
+    }
     @if (canRun()) {
       <section aria-labelledby="workflow-input-heading">
         <h2
@@ -294,6 +314,7 @@
                       [class.chip-danger]="step.status === 'failed'"
                       [class.chip-info]="step.status === 'running'"
                       [class.chip-neutral]="step.status === 'skipped' || step.status === 'stopped'"
+                      [class.chip-warning]="step.status === 'suspended'"
                       >{{ stepStatusLabel(step.status) }}</span
                     >
                   }

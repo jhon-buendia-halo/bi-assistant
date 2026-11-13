@@ -309,7 +309,9 @@ export function nodeStatuses(
   const out: Record<string, WorkflowNodeStatus> = {};
   for (const n of nodes) {
     if (n.inputErrors?.length) out[n.nodeId] = 'invalid';
-    else if (n.run) out[n.nodeId] = n.run.status;
+    // A waiting node has no canvas status yet: the canvas badge for
+    // `suspended` is added with the canvas layout unit.
+    else if (n.run && n.run.status !== 'suspended') out[n.nodeId] = n.run.status;
   }
   return out;
 }

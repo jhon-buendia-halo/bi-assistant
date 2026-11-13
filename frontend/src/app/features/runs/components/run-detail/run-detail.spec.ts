@@ -65,6 +65,33 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     expect(again).toHaveBeenCalledWith(RUN);
   });
 
+  it('a run waiting for an answer offers Answer in the workflow instead of Run again', () => {
+    const waiting: WorkflowRun = {
+      ...RUN,
+      status: 'suspended',
+      answer: undefined,
+      waitingFor: {
+        stepId: 'clarify',
+        title: 'Clarify',
+        question: 'Which one?',
+        options: [],
+        expiresAt: '2026-01-01T00:30:00Z',
+      },
+    };
+    const el = mount(waiting);
+    expect(
+      el.querySelector('[data-testid="run-detail-status"]')?.textContent,
+    ).toContain('Waiting for you');
+    expect(el.querySelector('[data-testid="run-again"]')).toBeNull();
+    const open = spyOn(TestBed.inject(RunsState), 'answerInWorkflow');
+    const button = el.querySelector<HTMLButtonElement>(
+      '[data-testid="run-answer-in-workflow"]',
+    )!;
+    expect(button.textContent?.trim()).toBe('Answer in the workflow');
+    button.click();
+    expect(open).toHaveBeenCalledWith(waiting);
+  });
+
   it('a run of a removed workflow reads as a plain run: its answer, no Run again, no phases bar', () => {
     const el = mount(
       {

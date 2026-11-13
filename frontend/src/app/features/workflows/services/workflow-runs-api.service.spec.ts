@@ -322,3 +322,94 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 });
+
+describe('WorkflowRunsApiService, resume (api.md 138)', () => {
+  let service: WorkflowRunsApiService;
+  let fetchSpy: jasmine.Spy;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(WorkflowRunsApiService);
+    fetchSpy = spyOn(window, 'fetch');
+  });
+
+  it('posts the step and answer to the encoded run id and reports the same events as a run', async () => {
+    fetchSpy.and.resolveTo(
+      sseResponse(
+        { type: 'step', id: 'clarify', title: 'Clarify', status: 'success' },
+        { type: 'step', id: 'analyse', title: 'Analyse', status: 'suspended' },
+        {
+          type: 'input-required',
+          runId: 'agent:run-1',
+          stepId: 'analyse',
+          title: 'Analyse',
+          question: 'Which year?',
+          options: ['2018', '2022'],
+          expiresAt: '2026-11-11T10:30:00.000Z',
+        },
+        { type: 'done', run: { ...RUN, status: 'suspended' } },
+      ),
+    );
+    const seen: string[] = [];
+    const handlers: RunStreamHandlers = {
+      onStep: (s) => seen.push(`step:${s.id}:${s.status}`),
+      onInputRequired: (e) =>
+        seen.push(`input:${e.stepId}:${e.options.join('|')}`),
+      onDone: (r) => seen.push(`done:${r.status}`),
+    };
+    await service.resumeRun('agent:run-1', 'clarify', '2022', handlers);
+    const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+    expect(url).toMatch(/\/workflow-runs\/agent%3Arun-1\/resume\/stream$/);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      stepId: 'clarify',
+      answer: '2022',
+    });
+    expect(seen).toEqual([
+      'step:clarify:success',
+      'step:analyse:suspended',
+      'input:analyse:2018|2022',
+      'done:suspended',
+    ]);
+  });
+
+  const refusals: [number, string][] = [
+    [404, 'Run "run-1" not found'],
+    [409, 'Run "run-1" is not waiting for an answer'],
+    [400, 'Answer is required'],
+    [400, 'Step "plan" is not waiting for an answer'],
+    [410, 'This run can no longer continue — run it again with your answer'],
+  ];
+  refusals.forEach(([status, message]) => {
+    it(`reports the ${status} refusal "${message}" before any stream, with its status`, async () => {
+      fetchSpy.and.resolveTo(
+        new Response(JSON.stringify({ statusCode: status, message }), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const onError = jasmine.createSpy('onError');
+      const onRefused = jasmine.createSpy('onRefused');
+      const onDone = jasmine.createSpy('onDone');
+      await service.resumeRun('run-1', 'clarify', 'x', {
+        onError,
+        onRefused,
+        onDone,
+      });
+      expect(onRefused).toHaveBeenCalledOnceWith(status);
+      expect(onError).toHaveBeenCalledOnceWith(message);
+      expect(onDone).not.toHaveBeenCalled();
+    });
+  });
+
+  it('reports nothing once stopped (aborted)', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    fetchSpy.and.rejectWith(new DOMException('Aborted', 'AbortError'));
+    const onError = jasmine.createSpy('onError');
+    await service.resumeRun('run-1', 'clarify', 'x', { onError }, controller.signal);
+    expect(onError).not.toHaveBeenCalled();
+  });
+});

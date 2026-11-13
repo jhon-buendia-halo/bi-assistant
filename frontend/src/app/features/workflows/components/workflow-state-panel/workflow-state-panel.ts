@@ -101,10 +101,13 @@ export class WorkflowStatePanel {
         ? 'chip chip-success'
         : status === 'failed'
           ? 'chip chip-danger'
-          : status === 'stopped'
+          : status === 'stopped' || status === 'suspended'
             ? 'chip chip-warning'
             : 'chip chip-info';
-    return { label: status, chip };
+    return {
+      label: status === 'suspended' ? 'Waiting for you' : status,
+      chip,
+    };
   });
 
   statusLabel(node: NodeInspection): string {

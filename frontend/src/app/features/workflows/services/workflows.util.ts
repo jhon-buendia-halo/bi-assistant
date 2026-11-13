@@ -84,6 +84,8 @@ export function runStatusLine(run: {
       return 'Run stopped';
     case 'running':
       return 'Running…';
+    case 'suspended':
+      return 'Waiting for you';
     default:
       return run.error ? `Run failed: ${run.error}` : 'Run failed';
   }
@@ -95,6 +97,7 @@ const STEP_STATUS_LABELS: Record<WorkflowRunStepStatus, string> = {
   failed: 'Failed',
   skipped: 'Skipped',
   stopped: 'Stopped',
+  suspended: 'Waiting for you',
 };
 
 /** A run step's status chip (plan 5.6). */
@@ -248,7 +251,11 @@ export function filterRuns<
 
 /** A run row's status chip text. */
 export function runRowStatus(status: WorkflowRun['status']): string {
-  return { success: 'Done', failed: 'Failed', stopped: 'Stopped', running: 'Running' }[
-    status
-  ];
+  return {
+    success: 'Done',
+    failed: 'Failed',
+    stopped: 'Stopped',
+    running: 'Running',
+    suspended: 'Waiting for you',
+  }[status];
 }

@@ -37,6 +37,25 @@ class FakeRunsApi {
     });
   }
 
+  resumes: {
+    runId: string;
+    stepId: string;
+    answer: string;
+    handlers: RunStreamHandlers;
+    end: () => void;
+  }[] = [];
+
+  resumeRun(
+    runId: string,
+    stepId: string,
+    answer: string,
+    handlers: RunStreamHandlers,
+  ): Promise<void> {
+    return new Promise<void>((end) => {
+      this.resumes.push({ runId, stepId, answer, handlers, end });
+    });
+  }
+
   get last() {
     return this.calls[this.calls.length - 1];
   }
@@ -694,5 +713,155 @@ describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
       'write-answer',
       'wrap-up',
     ]);
+  });
+});
+
+describe('WorkflowDesigner, a run that waits for an answer (api.md 138)', () => {
+  let designer: WorkflowDesigner;
+  let runs: FakeRunsApi;
+  let http: HttpTestingController;
+
+  const WAITING = {
+    stepId: 'clarify',
+    title: 'Clarify',
+    question: 'Which World Cup do you mean?',
+    options: ['2018', '2022'],
+    expiresAt: '2026-11-11T10:30:00.000Z',
+  };
+
+  function suspendedRun(): WorkflowRun {
+    return storedRun({
+      status: 'suspended',
+      waitingFor: { ...WAITING, since: '2026-11-11T10:00:02.000Z' },
+      steps: [
+        { id: 'plan', title: 'Plan', status: 'success', startedAt: '2026-11-11T10:00:01.000Z' },
+        { id: 'clarify', title: 'Clarify', status: 'suspended' },
+      ],
+      answer: undefined,
+    });
+  }
+
+  beforeEach(() => {
+    runs = new FakeRunsApi();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: WorkflowRunsApiService, useValue: runs },
+      ],
+    });
+    designer = TestBed.inject(WorkflowDesigner);
+    http = TestBed.inject(HttpTestingController);
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+  });
+
+  afterEach(() => http.verify());
+
+  it('shows the waiting question while the stream suspends, then as stored', () => {
+    designer.setInput('question', 'Q');
+    designer.execute();
+    runs.last.handlers.onRun?.({ runId: 'run-1', workflowId: GRAPH_WORKFLOW.id });
+    runs.last.handlers.onStep?.({ id: 'clarify', title: 'Clarify', status: 'suspended' });
+    runs.last.handlers.onInputRequired?.({ runId: 'run-1', ...WAITING });
+    expect(designer.waitingFor()?.question).toBe(WAITING.question);
+    expect(designer.runResult()?.status).toBe('suspended');
+    runs.last.handlers.onDone?.(suspendedRun());
+    expect(designer.running()).toBeFalse();
+    expect(designer.waitingFor()?.options).toEqual(['2018', '2022']);
+    expect(designer.runResult()?.status).toBe('suspended');
+  });
+
+  it('resumes the same run: runId unchanged, the events appended to the steps it had', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    expect(designer.waitingFor()).not.toBeNull();
+    designer.resume('  2022 ');
+    expect(runs.resumes.length).toBe(1);
+    expect(runs.resumes[0]).toEqual(
+      jasmine.objectContaining({ runId: 'run-1', stepId: 'clarify', answer: '2022' }),
+    );
+    expect(designer.running()).toBeTrue();
+    expect(designer.waitingFor()).toBeNull();
+    expect(designer.runId()).toBe('run-1');
+    const handlers = runs.resumes[0].handlers;
+    handlers.onStep?.({ id: 'clarify', title: 'Clarify', status: 'success' });
+    handlers.onStep?.({ id: 'plan', title: 'Plan', status: 'running', attempt: 2 });
+    const steps = designer.runResult()?.steps ?? [];
+    expect(designer.runResult()?.status).toBe('running');
+    expect(steps.filter((s) => s.id === 'plan').map((s) => s.status)).toEqual(['success', 'running']);
+    expect(steps.find((s) => s.id === 'clarify')?.status).toBe('success');
+    handlers.onDone?.(storedRun({ status: 'success' }));
+    expect(designer.runId()).toBe('run-1');
+    expect(designer.waitingFor()).toBeNull();
+    expect(designer.runResult()?.status).toBe('success');
+  });
+
+  it('can suspend again after a resume', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    const handlers = runs.resumes[0].handlers;
+    handlers.onInputRequired?.({ runId: 'run-1', ...WAITING, stepId: 'analyse', title: 'Analyse' });
+    expect(designer.waitingFor()?.stepId).toBe('analyse');
+    expect(designer.runResult()?.status).toBe('suspended');
+  });
+
+  it('ignores a blank answer and a run that is not waiting', () => {
+    designer.showRunOnLoad(storedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    expect(runs.resumes.length).toBe(0);
+  });
+
+  it('keeps the run waiting and shows the message when the server refuses (409)', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    runs.resumes[0].handlers.onRefused?.(409);
+    runs.resumes[0].handlers.onError?.('Run "run-1" is not waiting for an answer');
+    expect(designer.running()).toBeFalse();
+    expect(designer.waitingFor()?.expired).toBeUndefined();
+    expect(designer.resumeError()).toBe('Run "run-1" is not waiting for an answer');
+    expect(designer.runResult()?.status).toBe('suspended');
+  });
+
+  it('reads an expired run (410) as stopped, with the card expired', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    runs.resumes[0].handlers.onRefused?.(410);
+    runs.resumes[0].handlers.onError?.('This run can no longer continue — run it again with your answer');
+    expect(designer.waitingFor()?.expired).toBeTrue();
+    expect(designer.runResult()?.status).toBe('stopped');
+    expect(designer.resumeError()).toBeNull();
+  });
+
+  it('runs again with the answer as a follow-up on the expired run', () => {
+    const stopped = storedRun({
+      status: 'stopped',
+      waitingFor: { ...WAITING, expired: true },
+      answer: undefined,
+    });
+    designer.showRunOnLoad(stopped);
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    expect(designer.waitingFor()?.expired).toBeTrue();
+    designer.rerunWithAnswer('2022');
+    expect(runs.calls.length).toBe(1);
+    expect(runs.last.body.context).toEqual({ fromRunId: 'run-1' });
+    expect(runs.last.body.input['question']).toBe('2022');
   });
 });

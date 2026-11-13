@@ -59,6 +59,16 @@ describe('RunsPage (app-shell R46; plan 1.24.11)', () => {
     );
   });
 
+  it('shows a suspended run with a Waiting for you chip', () => {
+    const el = mount([{ ...summary(1), status: 'suspended' }, summary(2)]);
+    const chips = Array.from(
+      el.querySelectorAll('[data-testid="row-run-status"]'),
+    );
+    expect(chips[0].textContent?.trim()).toBe('Waiting for you');
+    expect(chips[0].classList).toContain('chip-warning');
+    expect(chips[1].textContent?.trim()).toBe('Done');
+  });
+
   it('shows the title, workflow, status and id of a run, and opens it on click', () => {
     const el = mount([summary(3)]);
     const row = el.querySelector('[data-testid="run-run-03-aaaa"]')!;

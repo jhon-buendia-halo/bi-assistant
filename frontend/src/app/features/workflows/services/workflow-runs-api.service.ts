@@ -15,6 +15,7 @@ import {
 import {
   NodeChatMessage,
   WorkflowInputError,
+  WorkflowInputRequired,
   WorkflowRun,
   WorkflowRunRequest,
   WorkflowRunSummary,
@@ -35,8 +36,15 @@ export interface RunStreamHandlers extends AgentStreamHandlers {
   onRun?: (run: { runId: string; workflowId: string }) => void;
   /** A step started (`running`) or ended. */
   onStep?: (step: WorkflowRunStep) => void;
-  /** Terminal, success: the stored run as it ended. */
+  /** The run suspended: the question it waits on (api.md 3.6 `input-required`); `done` follows. */
+  onInputRequired?: (event: WorkflowInputRequired) => void;
+  /** Terminal, success: the stored run as it ended (`suspended` when it waits for an answer). */
   onDone?: (run: WorkflowRun) => void;
+  /**
+   * A refusal before any frame (JSON 400/404/409/410): its status, reported
+   * just before `onError` with the server's message.
+   */
+  onRefused?: (status: number) => void;
   /**
    * Terminal, failure: a refusal before the stream (the server's message),
    * the agent turn's error, or the client's own (`Backend unreachable`,
@@ -323,7 +331,43 @@ export class WorkflowRunsApiService {
     handlers: RunStreamHandlers,
     signal?: AbortSignal,
   ): Promise<void> {
-    await this.postStream(url, body, handlers, signal, (event) => {
+    await this.postStream(
+      url,
+      body,
+      handlers,
+      signal,
+      this.runFrames(workflowId, handlers),
+    );
+  }
+
+  /**
+   * Continue a suspended run with the user's answer, streamed (api.md 138):
+   * the SAME run, with the events of a run's stream (3.6), ending in `done`
+   * (possibly `suspended` again). A refusal before the stream (404, 409,
+   * 400, 410) reports `onRefused(status)` then `onError(message)`.
+   */
+  async resumeRun(
+    runId: string,
+    stepId: string,
+    answer: string,
+    handlers: RunStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.postStream(
+      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/resume/stream`,
+      { stepId, answer },
+      handlers,
+      signal,
+      this.runFrames('', handlers),
+    );
+  }
+
+  /** The frames of a run's stream that are not the agent turn's: `onFrame` of `postStream`. */
+  private runFrames(
+    workflowId: string,
+    handlers: RunStreamHandlers,
+  ): (event: StreamFrame) => boolean {
+    return (event) => {
       switch (event.type) {
         case 'run':
           handlers.onRun?.({
@@ -334,13 +378,25 @@ export class WorkflowRunsApiService {
         case 'step':
           handlers.onStep?.(stepOf(event));
           return false;
+        case 'input-required':
+          handlers.onInputRequired?.({
+            runId: String(event['runId'] ?? ''),
+            stepId: String(event['stepId'] ?? ''),
+            title: String(event['title'] ?? ''),
+            question: String(event['question'] ?? ''),
+            options: Array.isArray(event['options'])
+              ? event['options'].map(String)
+              : [],
+            expiresAt: String(event['expiresAt'] ?? ''),
+          });
+          return false;
         case 'done':
           handlers.onDone?.(event['run'] as WorkflowRun);
           return true;
         default:
           return false;
       }
-    });
+    };
   }
 
   /**
@@ -354,6 +410,7 @@ export class WorkflowRunsApiService {
     body: unknown,
     handlers: AgentStreamHandlers & {
       onError?: (message: string, errors?: WorkflowInputError[]) => void;
+      onRefused?: (status: number) => void;
     },
     signal: AbortSignal | undefined,
     onFrame: (event: StreamFrame) => boolean,
@@ -381,6 +438,7 @@ export class WorkflowRunsApiService {
     }
     if (!res.ok) {
       const { message, errors } = await refusal(res);
+      handlers.onRefused?.(res.status);
       if (errors) handlers.onError?.(message, errors);
       else handlers.onError?.(message);
       return;

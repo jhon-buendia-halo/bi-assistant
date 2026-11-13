@@ -232,8 +232,8 @@ export class WorkflowNodeDialog {
         ? 'success'
         : run.status === 'stopped'
           ? 'stopped'
-          : run.status === 'running'
-            ? 'running'
+          : run.status === 'running' || run.status === 'suspended'
+            ? run.status
             : 'failed';
     return runStatusLine({ status });
   });

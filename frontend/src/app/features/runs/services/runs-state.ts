@@ -145,6 +145,15 @@ export class RunsState {
   }
 
   /**
+   * A run waiting for the user's answer (api.md 138): its workflow opens with
+   * that run loaded, where the waiting card is.
+   */
+  answerInWorkflow(run: WorkflowRun): void {
+    this.designer.showRunOnLoad(run);
+    this.workflowsNav.openWorkflow(run.workflowId);
+  }
+
+  /**
    * Run again with this input: the run's workflow opens on its Run tab with
    * the form filled in; the user presses Run.
    */
