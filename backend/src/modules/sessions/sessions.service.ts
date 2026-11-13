@@ -90,11 +90,20 @@ import { SessionDatasets } from './turn/session-datasets';
 import { SqlChecks } from './turn/sql-checks';
 import { TurnEngine } from './turn/turn-engine';
 import { TurnOptions } from './turn/turn-options';
-import type { RunStepEvent, StreamEvent } from './turn/stream-events';
+import type {
+  RunStepEvent,
+  StreamEvent,
+  TurnSuspension,
+} from './turn/stream-events';
 import { ASSISTANT_AGENT_KEY, lastSuccessfulSql } from './turn/turn-records';
 import { workflowSourceOf } from './turn/turn-workflow';
 
-export type { RunStepEvent, StreamEvent } from './turn/stream-events';
+export type {
+  RunStepEvent,
+  StreamEvent,
+  TurnResumeIo,
+  TurnSuspension,
+} from './turn/stream-events';
 export { toolCallInput } from './turn/turn-records';
 
 /** Id prefix of an agent editor's preview session (agents-evals R60). */
@@ -501,7 +510,9 @@ export class SessionsService implements OnModuleInit {
   /**
    * The run host's agent turn (agents.md 5.14): today's streamed turn,
    * unchanged (5.1), on the host. Every step event of the turn's workflow
-   * run goes to `onStepEvent`, whatever the workflow's bar.
+   * run goes to `onStepEvent`, whatever the workflow's bar. A turn whose
+   * workflow waits for the user (ADR-0043) answers its suspension: the host
+   * stays in memory until the turn is resumed or discarded.
    */
   async streamRunTurn(
     hostId: string,
@@ -510,12 +521,12 @@ export class SessionsService implements OnModuleInit {
     abortSignal: AbortSignal | undefined,
     careful: boolean,
     onStepEvent: (event: RunStepEvent) => void,
-  ): Promise<void> {
+  ): Promise<TurnSuspension | undefined> {
     const host = this.memoryHosts.get(hostId);
     if (!host?.run) throw new NotFoundException(`Session ${hostId} not found`);
     const trimmed = (question ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
-    await this.turns.streamTurn(
+    return this.turns.streamTurn(
       { ...host },
       trimmed,
       emit,
@@ -523,7 +534,18 @@ export class SessionsService implements OnModuleInit {
       undefined,
       careful,
       onStepEvent,
+      true,
     );
+  }
+
+  /**
+   * A run host as the API shows a session, while its run waits for the
+   * user (ADR-0043): the host stays in memory.
+   */
+  async runHostView(hostId: string): Promise<SessionView> {
+    const host = this.memoryHosts.get(hostId);
+    if (!host?.run) throw new NotFoundException(`Session ${hostId} not found`);
+    return this.toView({ ...host });
   }
 
   /**

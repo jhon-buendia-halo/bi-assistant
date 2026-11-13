@@ -8,10 +8,12 @@
  * catalogue can load it without Mastra.
  *
  * The flow (agents.md 5.11): Receive question → Load catalog → Plan, then a
- * branch: Clarify (the run ends), or the analysis loop (Analyse → Validate,
- * retried once) → Write answer → Wrap up. A step passes on what the steps
- * after it read, so each carries the question, the catalog and the plan
- * forward: the engine hands a step only its previous step's output.
+ * branch: Clarify (the run waits for the user's answer, then goes back to
+ * Plan with it), or the analysis loop (Analyse → Validate, retried once;
+ * Analyse can wait for an answer too) → Write answer → Wrap up. A step
+ * passes on what the steps after it read, so each carries the question, the
+ * catalog and the plan forward: the engine hands a step only its previous
+ * step's output.
  */
 import { z } from 'zod';
 
@@ -74,6 +76,45 @@ export const planClarificationSchema = z.object({
     ),
 });
 
+/**
+ * What a waiting step suspends with (the run's `waitingFor`, api.md 138):
+ * one clarifying question and its options.
+ */
+export const clarifyingQuestionSchema = z.object({
+  question: z.string().describe('The clarifying question the run waits on.'),
+  options: z.array(z.string()).describe('Its 2-4 answer options.'),
+});
+
+/** What resumes a waiting step (api.md 138): the user's answer. */
+export const clarificationAnswerSchema = z.object({
+  answer: z
+    .string()
+    .describe("The user's answer: one of the options or their own words."),
+});
+
+/** A clarifying question with the user's answer to it. */
+export const answeredClarificationSchema = z.object({
+  question: z.string().describe('The clarifying question the run asked.'),
+  options: z.array(z.string()).describe('Its answer options.'),
+  answer: z.string().describe("The user's answer."),
+});
+
+/** What Plan receives: Load catalog's output, or Clarify's with the answer. */
+export const planInputSchema = catalogedQuestionSchema.extend({
+  clarification: answeredClarificationSchema
+    .optional()
+    .describe(
+      'After Clarify: its question and the answer. Plan plans with them and never asks again.',
+    ),
+});
+
+/** What Clarify passes back to Plan: Plan's input with the answer. */
+export const clarifiedQuestionSchema = catalogedQuestionSchema.extend({
+  clarification: answeredClarificationSchema.describe(
+    'The clarifying question and the answer Plan plans with.',
+  ),
+});
+
 /** The plan the Plan step's model writes (PlanOutput). */
 export const planSchema = z.object({
   question: z
@@ -106,12 +147,12 @@ export const plannedQuestionSchema = z.object({
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
   plan: planSchema.describe('The analysis plan.'),
-});
-
-/** What Clarify ends the run with: the clarifying question and its options. */
-export const clarifyOutcomeSchema = z.object({
-  question: z.string().describe('The clarifying question the run ends with.'),
-  options: z.array(z.string()).describe('Its 2-4 answer options.'),
+  stopped: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set when the turn was stopped while Plan ran: nothing after Plan runs.',
+    ),
 });
 
 /** One check Validate ran over an analysis attempt. */
@@ -174,11 +215,7 @@ export const analyseOutcomeSchema = z.object({
     .array(analyseQuerySchema)
     .describe("The attempt's SQL queries, in order."),
   text: z.string().describe("The agent's own notes; never the run's answer."),
-  stopped: z
-    .boolean()
-    .describe(
-      'The turn ended early: the user stopped it or the agent asked a clarifying question.',
-    ),
+  stopped: z.boolean().describe('The turn ended early: the user stopped it.'),
 });
 
 /** What Validate passes on: its verdict, with what Write answer reads. */
@@ -254,12 +291,12 @@ export const turnSummarySchema = z.object({
 });
 
 /**
- * The run's result (the workflow's output): the branch taken, keyed by its
- * step or nested workflow id: `clarify`, or `analysis-path` holding
- * `answer-path`'s Wrap up summary (absent when the turn was stopped).
+ * The run's result (the workflow's output): the branch taken after the plan
+ * loop, keyed by its nested workflow id: `analysis-path` holding
+ * `answer-path`'s Wrap up summary (absent when the turn was stopped). A run
+ * waiting for an answer has no result until it is resumed.
  */
 export const qtiV2TurnResultSchema = z.object({
-  clarify: clarifyOutcomeSchema.optional(),
   'analysis-path': z
     .object({ 'answer-path': turnSummarySchema.optional() })
     .optional(),
@@ -269,9 +306,21 @@ export const qtiV2TurnResultSchema = z.object({
 export const QTI_V2_TURN_STEP_SCHEMAS = {
   'receive-question': { input: turnInputSchema, output: turnInputSchema },
   'load-catalog': { input: turnInputSchema, output: catalogedQuestionSchema },
-  plan: { input: catalogedQuestionSchema, output: plannedQuestionSchema },
-  clarify: { input: plannedQuestionSchema, output: clarifyOutcomeSchema },
-  analyse: { input: analyseInputSchema, output: analyseOutcomeSchema },
+  plan: { input: planInputSchema, output: plannedQuestionSchema },
+  // Clarify and Analyse can wait for the user (api.md 138): what they
+  // suspend with, and what resumes them.
+  clarify: {
+    input: plannedQuestionSchema,
+    output: clarifiedQuestionSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
+  },
+  analyse: {
+    input: analyseInputSchema,
+    output: analyseOutcomeSchema,
+    suspend: clarifyingQuestionSchema,
+    resume: clarificationAnswerSchema,
+  },
   validate: { input: analyseOutcomeSchema, output: validateOutcomeSchema },
   'write-answer': {
     input: writeAnswerInputSchema,

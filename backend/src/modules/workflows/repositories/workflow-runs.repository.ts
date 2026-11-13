@@ -38,6 +38,14 @@ export class WorkflowRunsRepository {
     return this.store.find({ status: 'running' });
   }
 
+  /**
+   * The runs still `suspended` (waiting for an answer): at start-up, the
+   * ones that can no longer be resumed (ADR-0043).
+   */
+  listSuspended(): Promise<WorkflowRunDoc[]> {
+    return this.store.find({ status: 'suspended' });
+  }
+
   update(
     id: string,
     patch: Partial<WorkflowRunDoc>,

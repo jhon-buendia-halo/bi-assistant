@@ -18,12 +18,32 @@ import type {
   WorkflowView,
 } from '../sessions/entities/session.entity';
 
-/** A run's status: `running` until it ends. */
-export type WorkflowRunStatus = 'running' | 'success' | 'failed' | 'stopped';
+/**
+ * A run's status: `running` until it ends; `suspended` while it waits for
+ * the user's answer (api.md 138, ADR-0043).
+ */
+export type WorkflowRunStatus =
+  'running' | 'suspended' | 'success' | 'failed' | 'stopped';
 
-/** A step's status in a run (api.md 119 `step`). */
+/** A step's status in a run (api.md 119 `step`); `suspended`: it waits. */
 export type WorkflowRunStepStatus =
-  'running' | 'success' | 'failed' | 'skipped' | 'stopped';
+  'running' | 'suspended' | 'success' | 'failed' | 'skipped' | 'stopped';
+
+/**
+ * What a suspended run waits for (api.md 119 `input-required`, 138;
+ * data-model 3.16): the waiting step, its question and options, when it
+ * started waiting and when it stops being resumable. `expired` once it no
+ * longer can (it expired or the app restarted): the run is then `stopped`.
+ */
+export interface WorkflowRunWaitingFor {
+  stepId: string;
+  title: string;
+  question: string;
+  options: string[];
+  since: string;
+  expiresAt: string;
+  expired?: true;
+}
 
 /**
  * One tool call of an agent step, from its agent turn's `tool` and
@@ -101,6 +121,11 @@ export interface WorkflowRun {
   output?: Record<string, unknown>;
   /** Why the run failed. */
   error?: string;
+  /**
+   * A suspended run: what it waits for (api.md 138). Kept, `expired`, on a
+   * run that could no longer be resumed; dropped once it is resumed.
+   */
+  waitingFor?: WorkflowRunWaitingFor;
   /** Agent workflows: the answer message, as a session's assistant message. */
   answer?: ChatMessage;
   /** Agent workflows: the user message the agent received. */
@@ -248,6 +273,33 @@ export function interruptedRunPatch(
   };
 }
 
+/** Why a suspended run can no longer go on (api.md 138 410). */
+export const RUN_EXPIRED_ERROR =
+  'This run can no longer continue — run it again with your answer';
+
+/**
+ * What a suspended run becomes once it can no longer be resumed (ADR-0043:
+ * it waited too long, or the app restarted): `stopped`, its `waitingFor`
+ * kept and marked `expired`, the waiting step `stopped`.
+ */
+export function expiredRunPatch(
+  run: WorkflowRunDoc,
+  finishedAt: string,
+): Partial<WorkflowRunDoc> {
+  return {
+    status: 'stopped',
+    ...(run.waitingFor
+      ? { waitingFor: { ...run.waitingFor, expired: true as const } }
+      : {}),
+    steps: run.steps.map((step) =>
+      step.status === 'suspended' || step.status === 'running'
+        ? { ...step, status: 'stopped', endedAt: finishedAt }
+        : step,
+    ),
+    finishedAt,
+  };
+}
+
 /** The largest step output or input carried, as JSON characters (plan 5.3). */
 export const STEP_OUTPUT_CAP = 20_000;
 
@@ -379,7 +431,12 @@ export class RunStepTracker {
     const prev = attempts.at(-1);
     let next: WorkflowRunStep | undefined;
     let replace = true;
-    if (event.type === 'workflow-step-start') {
+    if (event.type === 'workflow-step-start' && prev?.status === 'suspended') {
+      // A resumed step (ADR-0043) goes on in the same attempt: it keeps its
+      // input, its start and the tool calls it made before it waited.
+      next = { ...prev, status: 'running' };
+      delete next.toolCalls;
+    } else if (event.type === 'workflow-step-start') {
       const again = !!step.repeats && !!prev && prev.status !== 'running';
       const attempt = again ? (prev.attempt ?? 1) + 1 : (prev?.attempt ?? 1);
       replace = !again;
@@ -392,6 +449,15 @@ export class RunStepTracker {
         startedAt: this.now().toISOString(),
       };
       this.calls.delete(callKey(next));
+    } else if (event.type === 'workflow-step-suspended') {
+      // The step waits for the user's answer (api.md 138).
+      next = {
+        id: step.id,
+        title: step.title,
+        status: 'suspended',
+        ...(step.repeats ? { attempt: prev?.attempt ?? 1 } : {}),
+        ...startedFields(prev),
+      };
     } else if (event.type === 'workflow-step-result') {
       const status = event.payload?.status;
       const fields = outputFields(event.payload?.output);
@@ -545,6 +611,18 @@ export class RunStepTracker {
     return { steps, changed };
   }
 
+  /**
+   * The steps of a run that waits for the user (ADR-0043): those that ran
+   * or run, in catalogue order (a repeated step's attempts one after the
+   * other), the waiting one `suspended`. Steps that have not started are
+   * left out: they may still run once the run is resumed.
+   */
+  pause(): WorkflowRunStep[] {
+    return this.steps.flatMap((step) =>
+      (this.states.get(step.id) ?? []).map((state) => this.view(state)),
+    );
+  }
+
   /** The call key of the agent step attempt that is running, if any. */
   private runningAgentStep(): string | undefined {
     for (const step of this.steps) {
@@ -580,8 +658,10 @@ function callKey(state: Pick<WorkflowRunStep, 'id' | 'attempt'>): string {
 
 /**
  * The steps of a workflow inside a loop (agents.md 5.11): for each `loop`
- * edge, the steps on the `next` edges from its target back to its source,
- * both included. Such a step can run more than once in a run.
+ * edge, the steps on the way from its target back to its source, both
+ * included: an edge straight to the source, else the `next` edge (so v2's
+ * Plan → Clarify branch, looped back by Clarify → Plan, counts). Such a step
+ * can run more than once in a run.
  */
 export function loopStepIds(
   edges: readonly { from: string; to: string; kind: string }[] | undefined,
@@ -591,9 +671,16 @@ export function loopStepIds(
     const path = [loop.to];
     let current = loop.to;
     while (current !== loop.from && path.length <= (edges ?? []).length) {
-      const next = (edges ?? []).find(
-        (edge) => edge.from === current && edge.kind === 'next',
-      );
+      const next =
+        (edges ?? []).find(
+          (edge) =>
+            edge.from === current &&
+            edge.to === loop.from &&
+            edge.kind !== 'loop',
+        ) ??
+        (edges ?? []).find(
+          (edge) => edge.from === current && edge.kind === 'next',
+        );
       if (!next) break;
       current = next.to;
       path.push(current);

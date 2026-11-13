@@ -1105,6 +1105,29 @@ flowchart LR
   - **Amends ADR-0008:** a user agent no longer runs as a one-step workflow; Try it is its only run.
   - **Stack-neutral:** a rebuild needs one stored, streamed run workflow, an agent library with a draft preview, and read-only legacy runs.
 
+#### ADR-0043 — Human in the loop: a run that needs the user is suspended with Mastra's suspend/resume and continued in place; its runtime stays in memory, with a snapshot only while it waits
+- **Status:** Accepted (2026-11-13).
+- **Date:** 2026-11-13
+- **Context:**
+  - Questions to Insights v2 asks the user in two places: Clarify (Plan decided the question is ambiguous) and Analyse (the agent called `ask_clarification` because the data was). Until now both **ended** the run with the question, and the user's pick started a **new** run with the old one as context: two runs, the steps run twice, and the run page lost the thread.
+  - Mastra workflows can pause a step and continue the same run (`suspend()` in a step, `run.resume()` / `run.resumeStream()` with the suspended path, `suspendSchema` / `resumeSchema`; https://mastra.ai/docs/workflows/suspend-and-resume, https://mastra.ai/docs/workflows/human-in-the-loop). The user chose this (approach B) on 2026-11-13 over a persisted, restart-proof design (C, later).
+  - Probed on the installed `@mastra/core` 1.66 (2026-11-12): a suspend inside a nested workflow inside `.dountil()` reports the run `suspended` with `result.suspended = [[<top step>, …, <step>]]`; `run.resumeStream({ step: that path, resumeData, requestContext })` re-runs the step with `resumeData` and `suspendData` and goes on where the run stopped, re-reporting each enclosing nested workflow as a started step. **Resume reads the run's persisted snapshot**: with `shouldPersistSnapshot: () => false` it throws `No snapshot found for this workflow run`. A predicate that persists only the `suspended` status works; the snapshot then stays `suspended` in storage after the resumed run ends (only `suspended` is written), until deleted. The snapshot includes the run's `RequestContext`, serialized (functions drop out).
+- **Decision:**
+  - **The step suspends, the same run continues.** Clarify suspends with the plan's question and options and, resumed with `{ answer }`, hands Plan its input back with the answer; the plan loop (`.dountil()` over a nested `plan-round`: Plan, then Clarify when needed, then a `.map()` that passes on Clarify's output or Plan's) runs Plan again, which never asks twice. Analyse suspends when the agent asks, and resumed runs the agent again in the same attempt with the question and the answer. The run's status gains `suspended` and the stored run `waitingFor` (data-model 3.16); `POST /workflow-runs/:id/resume/stream` (api.md 138) answers it and streams the same run.
+  - **The runtime stays in server memory.** The turn's closures (the run host, its agent options and records, the step tracker, the Mastra run) are held in an in-memory registry keyed by run id for 30 minutes (`SuspendedRuns`); the runtime object on the RequestContext is handed in again on resume. Nothing of it needs to be serializable.
+  - **A snapshot only while suspended.** Every `qti-v2-turn` workflow (and its nested ones) persists its snapshot only on the `suspended` status, because Mastra resumes from it; the backend deletes it when the resumed run ends, when the run expires or is deleted, and, at start-up, every suspended `qti-v2-turn` snapshot left over.
+  - **Expiry and restarts stop the run.** A run not answered in 30 minutes, and any run still `suspended` when the app starts, is stored `stopped` with `waitingFor.expired`; a resume answers 410, and the client offers **Run again with my answer** (a new run whose context is the expired run's question and clarifying question).
+  - **Past chats keep the card.** A session's (past chat's) turn is not suspendable: a suspended workflow run ends the turn on the clarification card, as before, and the run's snapshot is deleted at once.
+- **Rejected:**
+  - **Persisted, restart-proof suspension (approach C):** needs every runtime object rebuilt from storage (the run host, the agent options, the step tracker); deferred.
+  - **Keeping a run that ends on the question plus a follow-up run (the old behaviour):** two runs per answer, every step re-run.
+  - **A loop in our own code around Mastra:** duplicates the engine's control flow and its step events.
+- **Consequences:**
+  - The contract hash of `qti-v2-turn` changes (Plan's input gains the optional `clarification`, its output `stopped`, Clarify's output becomes Plan's input; edges gain `clarify → plan` `loop` `Answered` and lose `clarify → end`).
+  - The run stream gains the `step` status `suspended` and the `input-required` event (api.md 3.6); a node chat on a waiting run answers 409; a waiting run can't be visualized.
+  - **Amends ADR-0034 / ADR-0041:** Clarify no longer ends a v2 run, and the eval target scores a suspended run on its question and options.
+  - **Stack-neutral:** a rebuild needs a workflow engine that pauses a step on a typed payload and continues the same run with a typed answer, and a store of the paused run (in memory, with an expiry, or persisted).
+
 ## Level 4 — Code
 
 ```mermaid

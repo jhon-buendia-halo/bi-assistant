@@ -18,6 +18,41 @@ interface StubWorkflow {
   }>;
 }
 
+/** A stand-in run (the workflows stub's), as `createRun` answers it. */
+interface ResumableStubRun {
+  stream(args: { inputData: unknown; requestContext: unknown }): unknown;
+  resumeStream(args: {
+    step: string[];
+    resumeData: unknown;
+    requestContext?: unknown;
+  }): unknown;
+}
+
+/**
+ * Stand-in for `MastraService.streamWorkflow` on a workflow built on the
+ * workflows stub, with `resume` and `discard` as the service gives them
+ * (ADR-0043): `discards` counts the discarded runs.
+ */
+export async function streamStubWorkflow(
+  workflow: unknown,
+  inputData: unknown,
+  requestContext: unknown,
+  discards: { count: number } = { count: 0 },
+): Promise<WorkflowRunStream> {
+  const run = await (
+    workflow as { createRun(): Promise<ResumableStubRun> }
+  ).createRun();
+  const wrap = (output: unknown): WorkflowRunStream => ({
+    ...(output as WorkflowRunStream),
+    resume: (args) => wrap(run.resumeStream(args)),
+    discard: () => {
+      discards.count += 1;
+      return Promise.resolve();
+    },
+  });
+  return wrap(run.stream({ inputData, requestContext }));
+}
+
 export async function streamTurnWorkflow(
   key: string,
   inputData: unknown,

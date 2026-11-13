@@ -33,6 +33,27 @@ export type RunStepEvent = {
   };
 };
 
+/** Where a resumed turn reports to: the new request's stream and stop. */
+export interface TurnResumeIo {
+  emit: (event: StreamEvent) => void;
+  abortSignal?: AbortSignal;
+  onStepEvent?: (event: RunStepEvent) => void;
+}
+
+/**
+ * A run host's turn that waits for the user (agents.md 5.14, ADR-0043): its
+ * workflow run is suspended at `stepId` on a clarifying question. `resume`
+ * continues the same turn with the answer (it may wait again); `discard`
+ * drops it for good (the workflow run's snapshot is deleted).
+ */
+export interface TurnSuspension {
+  stepId: string;
+  question: string;
+  options: string[];
+  resume(answer: string, io: TurnResumeIo): Promise<TurnSuspension | undefined>;
+  discard(): Promise<void>;
+}
+
 /**
  * A Data Readiness progress chunk as a `tool-progress` event (api.md 3.1), or
  * undefined for any other chunk. The tool writes `{ type:

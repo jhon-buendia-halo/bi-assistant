@@ -364,7 +364,8 @@ describe('The workflow catalogue (API)', () => {
       const written = v2.steps.find((step) => step.id === 'write-answer')!;
       expect(written.output).toEqual(['headline', 'answer', 'calls']);
       // The flow is its edges (117): a branch after Plan, a loop back from
-      // Validate to Analyse, End after Wrap up and after Clarify.
+      // Clarify to Plan once answered, a loop back from Validate to
+      // Analyse, End after Wrap up.
       const { edges } = (await http().get('/workflows/qti-v2-turn').expect(200))
         .body as {
         edges: { from: string; to: string; kind: string; label?: string }[];
@@ -379,6 +380,7 @@ describe('The workflow catalogue (API)', () => {
           kind: 'branch',
           label: 'Needs clarification',
         },
+        { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
         { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
         { from: 'analyse', to: 'validate', kind: 'next' },
         { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
@@ -390,7 +392,6 @@ describe('The workflow catalogue (API)', () => {
         },
         { from: 'write-answer', to: 'wrap-up', kind: 'next' },
         { from: 'wrap-up', to: 'end', kind: 'next' },
-        { from: 'clarify', to: 'end', kind: 'next' },
       ]);
       // 116 is unchanged: the summary carries neither.
       const [summary] = await workflows();
