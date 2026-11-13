@@ -261,7 +261,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.inputValues()).toEqual({});
   });
 
-  it('has the Run panel under the canvas and no right panel to open or make room for', () => {
+  it('has the Run panel on the right of the canvas and no app right panel to open or make room for', () => {
     open(THREE_STEPS);
     const dock = q('workflow-run-dock')!;
     expect(dock.tagName.toLowerCase()).toBe('app-workflow-run-dock');

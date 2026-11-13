@@ -1,48 +1,53 @@
 import {
   DOCK_DEFAULT_RATIO,
-  DOCK_FALLBACK_HEIGHT,
+  DOCK_FALLBACK_WIDTH,
   DOCK_MIN_CANVAS,
-  DOCK_MIN_HEIGHT,
+  DOCK_MIN_WIDTH,
   dockBounds,
-  dockHeight,
+  dockWidth,
   readDockRatio,
   writeDockRatio,
 } from './workflow-run-dock.util';
 
+const KEY = 'qti.workflow-run-dock.width-ratio';
+
 describe('workflow-run-dock.util', () => {
-  beforeEach(() => localStorage.removeItem('qti.workflow-run-dock.ratio'));
-  afterEach(() => localStorage.removeItem('qti.workflow-run-dock.ratio'));
+  beforeEach(() => localStorage.removeItem(KEY));
+  afterEach(() => localStorage.removeItem(KEY));
 
   describe('dockBounds', () => {
-    it('keeps the canvas minimum above the dock in a roomy page', () => {
-      expect(dockBounds(800)).toEqual({
-        min: DOCK_MIN_HEIGHT,
-        max: 800 - DOCK_MIN_CANVAS,
+    it('keeps the canvas minimum beside the dock in a wide page', () => {
+      expect(dockBounds(1200)).toEqual({
+        min: DOCK_MIN_WIDTH,
+        max: 1200 - DOCK_MIN_CANVAS,
       });
     });
 
-    it('never goes below the minimum height in a short page', () => {
-      expect(dockBounds(300)).toEqual({ min: DOCK_MIN_HEIGHT, max: DOCK_MIN_HEIGHT });
+    it('never goes below the minimum width in a narrow page', () => {
+      expect(dockBounds(500)).toEqual({
+        min: DOCK_MIN_WIDTH,
+        max: DOCK_MIN_WIDTH,
+      });
     });
   });
 
-  describe('dockHeight', () => {
+  describe('dockWidth', () => {
     it('falls back before the room is measured', () => {
-      expect(dockHeight(0, 0.5, false)).toBe(DOCK_FALLBACK_HEIGHT);
-      expect(dockHeight(0, 0.5, true)).toBe(DOCK_FALLBACK_HEIGHT);
+      expect(dockWidth(0, 0.5, false)).toBe(DOCK_FALLBACK_WIDTH);
+      expect(dockWidth(0, 0.5, true)).toBe(DOCK_FALLBACK_WIDTH);
     });
 
     it('is the share of the room', () => {
-      expect(dockHeight(800, 0.5, false)).toBe(400);
+      expect(dockWidth(1200, 0.5, false)).toBe(600);
     });
 
     it('clamps to the minimum and the maximum', () => {
-      expect(dockHeight(800, 0.05, false)).toBe(DOCK_MIN_HEIGHT);
-      expect(dockHeight(800, 0.99, false)).toBe(800 - DOCK_MIN_CANVAS);
+      expect(dockWidth(1200, 0.05, false)).toBe(DOCK_MIN_WIDTH);
+      expect(dockWidth(1200, 0.99, false)).toBe(1200 - DOCK_MIN_CANVAS);
     });
 
     it('is the maximum when maximized', () => {
-      expect(dockHeight(800, 0.3, true)).toBe(800 - DOCK_MIN_CANVAS);
+      expect(dockWidth(1200, 0.3, true)).toBe(1200 - DOCK_MIN_CANVAS);
     });
   });
 
@@ -51,9 +56,15 @@ describe('workflow-run-dock.util', () => {
       expect(readDockRatio()).toBe(DOCK_DEFAULT_RATIO);
     });
 
+    it('ignores the former height share', () => {
+      localStorage.setItem('qti.workflow-run-dock.ratio', '0.7');
+      expect(readDockRatio()).toBe(DOCK_DEFAULT_RATIO);
+      localStorage.removeItem('qti.workflow-run-dock.ratio');
+    });
+
     it('ignores out-of-range and broken values', () => {
       for (const bad of ['0', '1', '1.5', '-0.2', 'abc']) {
-        localStorage.setItem('qti.workflow-run-dock.ratio', bad);
+        localStorage.setItem(KEY, bad);
         expect(readDockRatio()).toBe(DOCK_DEFAULT_RATIO);
       }
     });

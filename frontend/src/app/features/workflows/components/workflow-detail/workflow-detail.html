@@ -64,11 +64,11 @@
       {{ err }}
     </p>
   } @else if (designer.workflow(); as w) {
-    <!-- The canvas takes the room the Run panel under it leaves; the Run
-         panel is resizable, maximizable and folds to its header (ui.md 4.4b). -->
-    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <!-- The canvas takes the room the Run panel on its right leaves; the Run
+         panel is resizable, maximizable and folds to a strip (ui.md 4.4b). -->
+    <div class="flex min-h-0 flex-1 flex-row overflow-hidden">
       <app-workflow-canvas
-        class="min-h-[140px] flex-1"
+        class="min-w-[280px] flex-1"
         [workflow]="w"
         [selectedId]="designer.selectedStepId()"
         [statuses]="designer.nodeStatuses()"

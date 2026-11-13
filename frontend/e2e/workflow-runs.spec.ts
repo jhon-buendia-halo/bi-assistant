@@ -108,7 +108,7 @@ function railItem(page: Page, name: string): Locator {
     .getByRole('button', { name, exact: true });
 }
 
-/** The Run panel under the canvas: Chat (the run form) and Logs. */
+/** The Run panel on the right of the canvas: Chat (the run form) and Logs. */
 function runDock(page: Page): Locator {
   return page.getByTestId('workflow-run-dock');
 }
@@ -334,42 +334,42 @@ test.describe('Feature: Workflow runs', () => {
     const dock = runDock(page);
     const maximize = dock.getByTestId('workflow-run-dock-maximize');
     const toggle = dock.getByTestId('workflow-state-toggle');
-    const height = async () => (await dock.boundingBox())!.height;
+    const width = async () => (await dock.boundingBox())!.width;
     await test.step(`Given I am on the Run panel of "${V2}"`, async () => {
       await openWorkflowPage(page, V2_ID, V2);
       await openRunTab(page);
       await expect(maximize).toHaveAttribute('aria-pressed', 'false');
     });
-    const normal = await height();
+    const normal = await width();
     await test.step('When I maximize it, it grows; when I restore it, it returns', async () => {
       await maximize.click();
       await expect(maximize).toHaveAttribute('aria-pressed', 'true');
       await expect(maximize).toHaveAccessibleName('Restore Run panel');
-      await expect.poll(height).toBeGreaterThan(normal);
+      await expect.poll(width).toBeGreaterThan(normal);
       await maximize.click();
       await expect(maximize).toHaveAttribute('aria-pressed', 'false');
       await expect(maximize).toHaveAccessibleName('Maximize Run panel');
-      await expect.poll(height).toBe(normal);
+      await expect.poll(width).toBe(normal);
     });
-    await test.step('When I fold it, only its header stays; when I unfold it, it returns', async () => {
+    await test.step('When I fold it, it narrows to a strip; when I unfold it, it returns', async () => {
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
       await expect(page.getByTestId('workflow-run-chat')).toHaveCount(0);
-      await expect.poll(height).toBeLessThan(normal);
+      await expect.poll(width).toBeLessThan(normal);
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      await expect.poll(height).toBe(normal);
+      await expect.poll(width).toBe(normal);
     });
-    await test.step('When I press Arrow Up on the resize separator, the panel grows', async () => {
+    await test.step('When I press Arrow Left on the resize separator, the panel grows', async () => {
       const separator = dock.getByRole('separator', { name: 'Resize Run panel' });
-      await expect(separator).toHaveAttribute('aria-orientation', 'horizontal');
+      await expect(separator).toHaveAttribute('aria-orientation', 'vertical');
       const before = Number(await separator.getAttribute('aria-valuenow'));
       await separator.focus();
-      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('ArrowLeft');
       await expect
         .poll(async () => Number(await separator.getAttribute('aria-valuenow')))
         .toBeGreaterThan(before);
-      await expect.poll(height).toBeGreaterThan(normal);
+      await expect.poll(width).toBeGreaterThan(normal);
     });
   });
 

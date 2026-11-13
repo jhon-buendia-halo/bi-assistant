@@ -196,12 +196,12 @@ async function closeNode(page: Page): Promise<void> {
   await expect(nodeDialog(page)).toHaveCount(0);
 }
 
-/** The Run panel under the canvas (Chat + Logs), which Execute workflow unfolds. */
+/** The Run panel on the right of the canvas (Chat + Logs), which Execute workflow unfolds. */
 function runDock(page: Page): Locator {
   return page.getByTestId('workflow-run-dock');
 }
 
-/** The Run panel is unfolded under the canvas, with the run form in its Chat. */
+/** The Run panel is unfolded on the right of the canvas, with the run form in its Chat. */
 async function expectRunPanel(page: Page): Promise<void> {
   await expect(runDock(page).getByRole('heading', { name: 'Run', exact: true })).toBeVisible();
   await expect(runDock(page).getByTestId('workflow-state-toggle')).toHaveAttribute(
@@ -289,14 +289,14 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then the Run panel is under the canvas, there is no Details panel and no chat is started',
+        'Then the Run panel is on the right of the canvas, there is no Details panel and no chat is started',
         async () => {
           await expectRunPanel(page);
           await expect(detailsPanel(page)).toHaveCount(0);
           await expect(page.getByTitle('Expand right panel')).toHaveCount(0);
           const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
           const dockBox = await runDock(page).boundingBox();
-          expect(dockBox!.y).toBeGreaterThanOrEqual(canvasBox!.y + canvasBox!.height - 1);
+          expect(dockBox!.x).toBeGreaterThanOrEqual(canvasBox!.x + canvasBox!.width - 1);
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -953,13 +953,13 @@ test.describe('Feature: Workflows (the designer)', () => {
       );
       await scenarioStep(
         page,
-        'And there is no Details panel and the Run panel, with Chat and Logs, is under the canvas',
+        'And there is no Details panel and the Run panel, with Chat and Logs, is on the right of the canvas',
         async () => {
           await expect(detailsPanel(page)).toHaveCount(0);
           await expectRunPanel(page);
           const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
           const dockBox = await runDock(page).boundingBox();
-          expect(canvasBox!.y + canvasBox!.height).toBeLessThanOrEqual(dockBox!.y + 1);
+          expect(canvasBox!.x + canvasBox!.width).toBeLessThanOrEqual(dockBox!.x + 1);
           await expect(runDock(page).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
           await expect(runDock(page).getByRole('heading', { name: 'Logs', exact: true })).toBeVisible();
         },
@@ -1357,7 +1357,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(section(page, 'official')).toBeVisible();
   await scan('Workflows page');
 
-  // A workflow's page: the canvas and the Run panel (Chat and Logs) under it.
+  // A workflow's page: the canvas and the Run panel (Chat and Logs) on its right.
   await openWorkflow(page, V2_ID, V2);
   await expect(drawnSteps(page)).toHaveCount(V2_STEPS.length);
   await expect(runDock(page)).toBeVisible();
