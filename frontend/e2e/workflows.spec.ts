@@ -874,7 +874,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         const dialog = await openNode(page, 'analyse', 'Analyse');
         await dialog.getByTestId('workflow-ndv-tab-chat').click();
         await expect(dialog.getByTestId('workflow-node-chat-note')).toHaveText(
-          /^Chatting about run \S{8}: this step's input, output and tool calls\.$/,
+          /^\s*Chatting about run \S{8}: this step's input, output and tool calls\.\s*$/,
         );
         await expect(dialog.getByRole('log')).toBeVisible();
         await expect(dialog.getByTestId('workflow-node-chat-message')).toHaveCount(0);
