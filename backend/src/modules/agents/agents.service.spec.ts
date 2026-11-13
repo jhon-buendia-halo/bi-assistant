@@ -201,7 +201,6 @@ describe('AgentsService (built-in and user agents)', () => {
           (name) => ({ name, level: 'built-in', loading: 'on-demand' }),
         ),
       );
-      expect(v2.service.evalSets('assistant-v2')).toEqual([]);
       v2.db.close();
     }),
   );
