@@ -1728,7 +1728,7 @@ specs/system/agents.md:1861-1999  ## Appendix A — `assistant` system prompt (c
 specs/system/agents.md:2001-2037  ## Appendix B — `curated-knowledge` skill body (current wording)
 specs/system/agents.md:2039-2041  ## Appendix C — Retired (2026-11-12)
 specs/system/agents.md:2043-2120  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2122-2220  ## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
+specs/system/agents.md:2122-2226  ## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

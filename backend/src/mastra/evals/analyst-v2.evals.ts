@@ -167,6 +167,9 @@ const ANALYST_V2_EVAL_CASES: AssistantEvalCase[] = [
       'offers 2-4 concrete options grounded in this World Cup data (a named ' +
       'measure such as matches won, goals or possession, or a tournament ' +
       'year in the data) and states no figure as if it were the answer. ' +
+      'The options of the ask_clarification call are shown to the user as ' +
+      'buttons: options given there count as offered even when the text ' +
+      'only says to pick one; judge them as the options. ' +
       'Score pass=false if it answers with data, asks several questions, ' +
       'asks a vague open question with no concrete options, or invents a ' +
       'measure or scope the data does not have.',
