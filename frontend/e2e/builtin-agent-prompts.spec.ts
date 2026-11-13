@@ -405,7 +405,7 @@ test(
     );
     await scenarioStep(
       page,
-      'And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", and "Analyse" also "Clarifying question → ends the turn here"',
+      `And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", and "Analyse" also "Clarifying question → waits for the user's answer"`,
       async () => {
         // The code steps have no exit: "Receive question"'s input is checked
         // before the run, Clarify ends it by design.
@@ -416,7 +416,7 @@ test(
           stops,
           fails,
           stops,
-          'Clarifying question → ends the turn here',
+          "Clarifying question → waits for the user's answer",
           fails,
           stops,
         ]);
