@@ -5,6 +5,7 @@ import {
   afterNextRender,
   computed,
   input,
+  linkedSignal,
   output,
   signal,
   viewChild,
@@ -45,7 +46,9 @@ import {
   runStatusLine,
   runStepStatusLabel,
 } from '../../services/workflows.util';
+import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
+import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { formatNodeDuration, nodeStatusChip } from './workflow-node-format';
 
@@ -84,8 +87,10 @@ const FOCUSABLE =
   imports: [
     LucideAngularModule,
     NgTemplateOutlet,
+    WorkflowAttemptSwitcher,
     WorkflowDataView,
     WorkflowNodeChat,
+    WorkflowStepOutputView,
   ],
   templateUrl: './workflow-node-dialog.html',
   host: {
@@ -170,7 +175,31 @@ export class WorkflowNodeDialog {
     formatNodeDuration(this.tool()?.totalDurationMs),
   );
 
-  readonly run = computed(() => this.node().run);
+  /** A step that ran more than once: its attempts' numbers, in order; else empty. */
+  readonly attemptNumbers = computed(() =>
+    (this.node().attempts ?? []).map((a, i) => a.attempt ?? i + 1),
+  );
+  /**
+   * The attempt shown: the last one, until another is picked; back to the
+   * last when another node (or a new run) shows.
+   */
+  readonly selectedAttempt = linkedSignal({
+    // A string, so a refresh of the same node's same attempts keeps the pick.
+    source: computed(
+      () => `${this.node().nodeId}:${this.attemptNumbers().join(',')}`,
+    ),
+    computation: (key) => Number(key.split(':').at(-1)?.split(',').at(-1)) || 1,
+  });
+  /** What the node received and produced: the attempt picked, or its only run. */
+  readonly run = computed(() => {
+    const attempts = this.node().attempts;
+    if (!attempts?.length) return this.node().run;
+    const picked = this.selectedAttempt();
+    return (
+      attempts.find((a, i) => (a.attempt ?? i + 1) === picked) ??
+      this.node().run
+    );
+  });
   /** Start: the errors that refused the last Execute; empty otherwise. */
   readonly inputErrors = computed(() => this.node().inputErrors ?? []);
   readonly statusLabel = computed(() => {

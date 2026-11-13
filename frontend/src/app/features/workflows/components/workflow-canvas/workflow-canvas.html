@@ -67,18 +67,22 @@
           </marker>
         </defs>
         @for (edge of l.edges; track edge.id) {
+          @let followed = edgeDone(edge);
           <path
             class="edge"
-            [class.done]="done(edge.from)"
+            [class.done]="followed"
             [class.violation]="violated(edge)"
+            [class.skipped]="edgeSkipped(edge)"
             [attr.d]="edge.path"
             [attr.data-testid]="'workflow-connector-' + edge.id"
-            [attr.data-done]="done(edge.from) ? 'true' : 'false'"
+            [attr.data-kind]="edge.kind"
+            [attr.data-done]="followed ? 'true' : 'false'"
+            [attr.data-skipped]="edgeSkipped(edge) ? 'true' : null"
             [attr.data-violation]="violated(edge) ? 'true' : null"
             [attr.marker-end]="
               violated(edge)
                 ? 'url(#workflow-canvas-arrow-violation)'
-                : done(edge.from)
+                : followed
                   ? 'url(#workflow-canvas-arrow-done)'
                   : 'url(#workflow-canvas-arrow)'
             "
@@ -107,6 +111,18 @@
             ><span class="sr-only">{{ edgeText(edge) }}</span></span
           >
         }
+        @if (edge.branchLabel) {
+          <!-- A branch's condition or the loop's: on its edge, muted with it -->
+          <span
+            class="edge-branch-label absolute -translate-x-1/2 -translate-y-1/2 rounded border border-border bg-surface px-1.5 text-[11px] leading-4 font-medium whitespace-nowrap text-fg"
+            [attr.data-testid]="'workflow-edge-label-' + edge.from + '-' + edge.to"
+            [attr.data-kind]="edge.kind"
+            [attr.data-skipped]="edgeSkipped(edge) ? 'true' : null"
+            [style.left.px]="edge.branchLabelX"
+            [style.top.px]="edge.branchLabelY"
+            >{{ edge.branchLabel }}</span
+          >
+        }
       }
 
       @for (node of l.nodes; track node.id) {
@@ -116,6 +132,7 @@
           class="canvas-node"
           [attr.data-kind]="node.kind"
           [attr.data-status]="s"
+          [attr.data-skipped]="s === 'skipped' ? 'true' : null"
           [attr.data-testid]="'workflow-node-' + node.id"
           [attr.aria-pressed]="selectedId() === node.id"
           [style.left.px]="node.x"
@@ -205,6 +222,14 @@
               data-testid="workflow-node-kind"
               >{{ node.kind === "agent" ? "LLM" : "CODE" }}</span
             >
+          }
+
+          @if (attemptCount(node.id); as count) {
+            <span class="attempts-badge">
+              <span aria-hidden="true" data-testid="workflow-node-attempts"
+                >×{{ count }}</span
+              ><span class="sr-only">, ran {{ count }} times</span>
+            </span>
           }
 
           @if (s !== null) {

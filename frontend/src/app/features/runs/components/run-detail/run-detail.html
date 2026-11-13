@@ -84,7 +84,8 @@
           Steps
         </h2>
         <ol class="m-0 mt-2 flex list-none flex-col gap-2 p-0">
-          @for (step of run.steps; track step.id) {
+          <!-- One entry per attempt: a retried step shows again, as Attempt 2 -->
+          @for (step of run.steps; track $index) {
             <li
               [attr.data-testid]="'run-detail-step-' + step.id"
               class="card flex flex-col gap-2 p-3"
@@ -94,6 +95,13 @@
                   class="min-w-0 flex-1 truncate text-[13px] font-medium text-fg-strong"
                   >{{ step.title }}</span
                 >
+                @if ((step.attempt ?? 1) > 1) {
+                  <span
+                    class="text-[12px] text-fg-muted"
+                    data-testid="run-detail-step-attempt"
+                    >Attempt {{ step.attempt }}</span
+                  >
+                }
                 <span
                   class="chip"
                   [class.chip-success]="step.status === 'success'"

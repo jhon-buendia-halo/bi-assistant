@@ -184,7 +184,17 @@ const STAGE_TURN: TurnScript = {
   answer: 'The group stage holds most of the matches.',
 };
 
-const V2_STEP_TITLES = ['Receive question', 'Load catalog', 'Analyse', 'Wrap up'];
+/** Its steps in catalogue order: Clarify is the other way after Plan. */
+const V2_STEP_TITLES = [
+  'Receive question',
+  'Load catalog',
+  'Plan',
+  'Clarify',
+  'Analyse',
+  'Validate',
+  'Write answer',
+  'Wrap up',
+];
 
 // --------------------------------------------------------------- scenarios
 
@@ -256,7 +266,16 @@ test("a v2 run's workflow never appears among its panel items", async ({
 
 // ------------------------------------------- Questions to Insights v2 (R8a)
 
-const V2_STEPS = ['receive-question', 'load-catalog', 'analyse', 'wrap-up'];
+/** The steps a clear question runs, in order (Clarify is skipped). */
+const V2_STEPS = [
+  'receive-question',
+  'load-catalog',
+  'plan',
+  'analyse',
+  'validate',
+  'write-answer',
+  'wrap-up',
+];
 // Its five tools and the framework's skill tools (agents.md 2.11, 3.9).
 const V2_TOOLS = [
   'list_entities',
@@ -310,7 +329,9 @@ test('Questions to Insights v2 shows its code-defined steps advancing', async ({
   expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
     V2_STEP_TITLES,
   );
-  expect(run.workflow?.done).toEqual([1, 2, 3, 4]);
+  // Every step but Clarify (4), the branch a clear question skips.
+  expect(run.workflow?.done).toEqual([1, 2, 3, 5, 6, 7, 8]);
+  expect(stepStatuses(result, 'clarify').at(-1)).toBe('skipped');
 });
 
 test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
@@ -326,7 +347,10 @@ test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
   expect(result.status).toBe(200);
   expect(stepStatuses(result, 'receive-question').at(-1)).toBe('success');
   expect(stepStatuses(result, 'load-catalog').at(-1)).toBe('success');
+  expect(stepStatuses(result, 'plan').at(-1)).toBe('success');
   expect(stepStatuses(result, 'analyse').at(-1)).toBe('failed');
+  expect(stepStatuses(result, 'validate').at(-1)).toBe('skipped');
+  expect(stepStatuses(result, 'write-answer').at(-1)).toBe('skipped');
   expect(stepStatuses(result, 'wrap-up').at(-1)).toBe('skipped');
   expect(turnRequests(stub, V2_QUESTION).length).toBeGreaterThan(0);
 

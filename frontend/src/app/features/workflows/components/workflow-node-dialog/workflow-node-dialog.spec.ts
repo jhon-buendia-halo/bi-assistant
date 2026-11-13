@@ -3,6 +3,12 @@ import { of } from 'rxjs';
 import { NodeInspection } from '../../models/workflow-node.model';
 import { NodeChatAvailability } from '../../models/workflow.model';
 import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
+import { buildNodeInspections } from '../../services/workflow-node-inspection';
+import {
+  GRAPH_PLAN,
+  GRAPH_RETRY_RUN,
+  GRAPH_WORKFLOW,
+} from '../../services/workflow-graph.testing';
 import { WorkflowNodeDialog } from './workflow-node-dialog';
 import {
   FIXTURE_CONTRACT_ANALYSE,
@@ -652,5 +658,134 @@ describe('WorkflowNodeDialog', () => {
     last.dispatchEvent(tab);
     expect(tab.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(focusable[0]);
+  });
+});
+
+describe('WorkflowNodeDialog on a graph with a retry loop', () => {
+  let fixture: ComponentFixture<WorkflowNodeDialog>;
+  const el = () => fixture.nativeElement as HTMLElement;
+  const byId = (id: string) =>
+    el().querySelector<HTMLElement>(`[data-testid="${id}"]`);
+  const all = (id: string) =>
+    Array.from(el().querySelectorAll<HTMLElement>(`[data-testid="${id}"]`));
+  const text = (id: string) =>
+    byId(id)?.textContent?.replace(/\s+/g, ' ').trim();
+  const nodes = (run = GRAPH_RETRY_RUN) =>
+    buildNodeInspections({
+      workflow: GRAPH_WORKFLOW,
+      run,
+      liveToolCalls: [],
+      running: false,
+    });
+
+  function open(id: string, run = GRAPH_RETRY_RUN, chat: NodeChatAvailability = { state: 'hidden' }) {
+    fixture = TestBed.createComponent(WorkflowNodeDialog);
+    fixture.componentRef.setInput('node', nodes(run).find((n) => n.nodeId === id)!);
+    fixture.componentRef.setInput('workflow', GRAPH_WORKFLOW);
+    fixture.componentRef.setInput('runId', 'run-retry');
+    fixture.componentRef.setInput('chat', chat);
+    fixture.detectChanges();
+  }
+
+  beforeEach(() => {
+    const api = jasmine.createSpyObj<WorkflowRunsApiService>('WorkflowRunsApiService', [
+      'getNodeChat',
+      'streamNodeChat',
+    ]);
+    api.getNodeChat.and.returnValue(of({ messages: [] }));
+    TestBed.configureTestingModule({
+      imports: [WorkflowNodeDialog],
+      providers: [{ provide: WorkflowRunsApiService, useValue: api }],
+    });
+  });
+
+  it('switches between the attempts of a repeated step, the last one first', () => {
+    open('analyse');
+    const one = byId('workflow-attempt-1')!;
+    const two = byId('workflow-attempt-2')!;
+    expect(one.textContent?.trim()).toBe('Attempt 1');
+    expect(two.getAttribute('aria-pressed')).toBe('true');
+    expect(one.getAttribute('aria-pressed')).toBe('false');
+    expect(byId('workflow-ndv-input')?.textContent).toContain('second');
+    expect(text('workflow-ndv-tool-call')).toContain('select 2');
+    expect(byId('workflow-ndv-output')?.textContent).toContain('9.0 s');
+
+    one.click();
+    fixture.detectChanges();
+    expect(one.getAttribute('aria-pressed')).toBe('true');
+    expect(byId('workflow-ndv-input')?.textContent).toContain('first');
+    expect(text('workflow-ndv-tool-call')).toContain('select 1');
+    expect(text('workflow-ndv-tool-call')).toContain('boom');
+    expect(byId('workflow-ndv-output')?.textContent).toContain('6.0 s');
+  });
+
+  it('shows no attempt switcher for a step that ran once', () => {
+    open('plan');
+    expect(byId('workflow-attempts')).toBeNull();
+  });
+
+  it("shows Plan's output as a plan above the data", () => {
+    open('plan');
+    const view = byId('workflow-plan-view')!;
+    expect(view).not.toBeNull();
+    expect(text('workflow-plan-question')).toBe('How many matches per stage?');
+    const items = (id: string) =>
+      Array.from(byId(id)!.querySelectorAll('li')).map((li) => li.textContent?.trim());
+    expect(items('workflow-plan-measures')).toEqual(['match count']);
+    expect(items('workflow-plan-entities')).toEqual(['matches', 'stages']);
+    expect(items('workflow-plan-assumptions')).toEqual(['A replayed match counts once']);
+    expect(text('workflow-plan-scope')).toBe('All tournaments');
+    expect(byId('workflow-plan-clarification')).toBeNull();
+    // The raw data still follows it.
+    expect(view.compareDocumentPosition(byId('workflow-ndv-output')!.querySelector('app-workflow-data-view')!))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("shows a plan's clarification with its options", () => {
+    const run = {
+      ...GRAPH_RETRY_RUN,
+      steps: GRAPH_RETRY_RUN.steps.map((s) =>
+        s.id === 'plan'
+          ? {
+              ...s,
+              output: {
+                ...GRAPH_PLAN,
+                needsClarification: true,
+                clarification: { question: 'Which tournament?', options: ['2018', '2022'] },
+              },
+            }
+          : s,
+      ),
+    };
+    open('plan', run);
+    expect(text('workflow-plan-clarification-question')).toBe('Which tournament?');
+    expect(all('workflow-plan-clarification-option').map((o) => o.textContent?.trim())).toEqual(['2018', '2022']);
+  });
+
+  it("shows Validate's findings as a checklist, per attempt", () => {
+    open('validate');
+    expect(text('workflow-validate-ok')).toBe('Valid');
+    expect(text('workflow-validate-attempt')).toContain('Attempt 2');
+    expect(all('workflow-validate-finding').map((f) => f.getAttribute('data-passed'))).toEqual(['true', 'true']);
+
+    byId('workflow-attempt-1')!.click();
+    fixture.detectChanges();
+    expect(text('workflow-validate-ok')).toBe('Not valid');
+    const findings = all('workflow-validate-finding');
+    expect(findings.map((f) => f.getAttribute('data-passed'))).toEqual(['false', 'true']);
+    expect(findings[0].textContent).toContain('Failed:');
+    expect(findings[0].textContent).toContain('No query returned rows.');
+  });
+
+  it('offers Chat on every agent step (Plan, Analyse, Write answer), not on code steps', () => {
+    const ready: NodeChatAvailability = { state: 'ready', runId: 'run-retry' };
+    for (const id of ['plan', 'analyse', 'write-answer']) {
+      open(id, GRAPH_RETRY_RUN, ready);
+      expect(byId('workflow-ndv-tab-chat')).withContext(id).not.toBeNull();
+    }
+    for (const id of ['clarify', 'validate']) {
+      open(id, GRAPH_RETRY_RUN, ready);
+      expect(byId('workflow-ndv-tab-chat')).withContext(id).toBeNull();
+    }
   });
 });

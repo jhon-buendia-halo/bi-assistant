@@ -137,7 +137,8 @@ async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const from = stub.requests.length;
   const result = await runQuestionOk(page, question);
   expect(result.text).toContain(STUB_ANSWER);
-  const request = stub.requests.slice(from).find((r) => r.stream);
+  // The analysis turn's call, not v2's structured Plan or Write answer call.
+  const request = stub.requests.slice(from).find((r) => r.stream && r.step === undefined);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
   return request!;
 }
@@ -342,16 +343,25 @@ test(
     });
     await scenarioStep(
       page,
-      'Then I see "What happens on each message" with the steps "Receive question", "Load catalog", "Analyse" and "Wrap up", numbered 1 to 4',
+      'Then I see "What happens on each message" with its eight steps from "Receive question" to "Wrap up", numbered 1 to 8',
       async () => {
         await expect(
           page.getByRole('heading', { name: 'What happens on each message' }),
         ).toHaveCount(1);
         await expect(
           page.getByTestId('agent-workflow').getByTestId('workflow-step-title'),
-        ).toHaveText(['Receive question', 'Load catalog', 'Analyse', 'Wrap up']);
+        ).toHaveText([
+          'Receive question',
+          'Load catalog',
+          'Plan',
+          'Clarify',
+          'Analyse',
+          'Validate',
+          'Write answer',
+          'Wrap up',
+        ]);
         await expect(workflowStep(page, 'wrap-up')).toHaveAccessibleName(
-          /^Step 4: Wrap up/,
+          /^Step 8: Wrap up/,
         );
       },
     );
@@ -369,8 +379,8 @@ test(
         );
       },
     );
-    await scenarioStep(page, 'And the other three steps are marked "Code"', async () => {
-      for (const id of ['receive-question', 'load-catalog', 'wrap-up']) {
+    await scenarioStep(page, 'And the code steps are marked "Code"', async () => {
+      for (const id of ['receive-question', 'load-catalog', 'clarify', 'validate', 'wrap-up']) {
         await expect(
           workflowStep(page, id).getByTestId('workflow-step-kind'),
         ).toHaveText('Code');
@@ -378,19 +388,19 @@ test(
     });
     await scenarioStep(
       page,
-      'And the arrow from "Load catalog" to "Analyse" reads "question, catalog"',
+      'And the arrow from "Load catalog" to "Plan" reads "question, catalog"',
       async () => {
         await expect(page.getByTestId('workflow-edge-load-catalog')).toHaveText(
           /question, catalog/,
         );
         // The arrow sits between the two cards, left to right.
-        const [load, edge, analyse] = await Promise.all([
+        const [load, edge, plan] = await Promise.all([
           workflowStep(page, 'load-catalog').boundingBox(),
           page.getByTestId('workflow-edge-load-catalog').boundingBox(),
-          workflowStep(page, 'analyse').boundingBox(),
+          workflowStep(page, 'plan').boundingBox(),
         ]);
         expect(edge!.x).toBeGreaterThanOrEqual(load!.x + load!.width - 1);
-        expect(analyse!.x).toBeGreaterThanOrEqual(edge!.x + edge!.width - 1);
+        expect(plan!.x).toBeGreaterThanOrEqual(edge!.x + edge!.width - 1);
       },
     );
     await scenarioStep(

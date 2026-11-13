@@ -1,6 +1,13 @@
-import { Component, computed, input, output } from '@angular/core';
+import {
+  Component,
+  computed,
+  input,
+  linkedSignal,
+  output,
+} from '@angular/core';
 import { ChevronDown, ChevronRight, LucideAngularModule } from 'lucide-angular';
 import { DataMode } from '../workflow-data-view/workflow-data-view.util';
+import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { runStepStatusLabel } from '../../services/workflows.util';
 import {
@@ -23,7 +30,7 @@ const NOT_RUN =
  */
 @Component({
   selector: 'app-workflow-state-panel',
-  imports: [LucideAngularModule, WorkflowDataView],
+  imports: [LucideAngularModule, WorkflowAttemptSwitcher, WorkflowDataView],
   templateUrl: './workflow-state-panel.html',
 })
 export class WorkflowStatePanel {
@@ -48,6 +55,36 @@ export class WorkflowStatePanel {
   readonly selected = computed(
     () => this.nodes().find((n) => n.nodeId === this.selectedId()) ?? null,
   );
+  /** The selected step's attempts' numbers when it ran more than once; else empty. */
+  readonly attemptNumbers = computed(() =>
+    (this.selected()?.attempts ?? []).map((a, i) => a.attempt ?? i + 1),
+  );
+  /** The attempt the detail shows: the last, until another is picked. */
+  readonly selectedAttempt = linkedSignal({
+    // A string, so a refresh of the same node's same attempts keeps the pick.
+    source: computed(
+      () =>
+        `${this.selected()?.nodeId ?? ''}:${this.attemptNumbers().join(',')}`,
+    ),
+    computation: (key) =>
+      Number(key.split(':').at(-1)?.split(',').at(-1)) || 1,
+  });
+  /** The selected node's run as the detail shows it: the attempt picked, or its only run. */
+  readonly shown = computed(() => {
+    const node = this.selected();
+    if (node === null) return null;
+    const attempts = node.attempts;
+    if (!attempts?.length) return node.run;
+    const picked = this.selectedAttempt();
+    return (
+      attempts.find((a, i) => (a.attempt ?? i + 1) === picked) ?? node.run
+    );
+  });
+  readonly shownStatusLabel = computed(() => {
+    const run = this.shown();
+    return run ? runStepStatusLabel(run.status) : 'Not run';
+  });
+
   readonly progress = computed(
     () => `${this.summary().ran} of ${this.summary().total} nodes ran`,
   );

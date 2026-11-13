@@ -78,6 +78,7 @@
         [selectedId]="designer.selectedStepId()"
         [statuses]="designer.nodeStatuses()"
         [violations]="designer.contractViolations()"
+        [attempts]="designer.nodeAttempts()"
         (selectNode)="designer.select($event)"
         (openNode)="designer.openNode($event)"
         (execute)="execute()"

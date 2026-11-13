@@ -5,6 +5,11 @@ import {
   FIXTURE_NODES_NOT_RUN,
   FIXTURE_SUMMARY,
 } from '../workflow-node-dialog/workflow-node.testing';
+import { buildNodeInspections } from '../../services/workflow-node-inspection';
+import {
+  GRAPH_RETRY_RUN,
+  GRAPH_WORKFLOW,
+} from '../../services/workflow-graph.testing';
 import { WorkflowStatePanel } from './workflow-state-panel';
 
 describe('WorkflowStatePanel', () => {
@@ -202,5 +207,26 @@ describe('WorkflowStatePanel', () => {
     expect(byId('workflow-state-input')?.textContent).toContain(
       'This node has not run yet. Execute the workflow to see its data.',
     );
+  });
+
+  it('switches the detail between the attempts of a repeated step, the last one first', () => {
+    const nodes = buildNodeInspections({
+      workflow: GRAPH_WORKFLOW,
+      run: GRAPH_RETRY_RUN,
+      liveToolCalls: [],
+      running: false,
+    });
+    make({ nodes, selectedId: 'analyse' });
+    const one = byId('workflow-attempt-1')!;
+    expect(byId('workflow-attempt-2')?.getAttribute('aria-pressed')).toBe('true');
+    expect(byId('workflow-state-input')?.textContent).toContain('second');
+    one.click();
+    fixture.detectChanges();
+    expect(one.getAttribute('aria-pressed')).toBe('true');
+    expect(byId('workflow-state-input')?.textContent).toContain('first');
+
+    fixture.componentRef.setInput('selectedId', 'plan');
+    fixture.detectChanges();
+    expect(byId('workflow-attempts')).toBeNull();
   });
 });

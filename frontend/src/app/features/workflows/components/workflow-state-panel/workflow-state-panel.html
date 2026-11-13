@@ -112,14 +112,21 @@
                 {{ node.title }}
               </h3>
               <span class="chip chip-neutral">{{ kindLabel(node.kind) }}</span>
-              <span [class]="chip(node.run?.status ?? null)">{{
-                statusLabel(node)
+              <span [class]="chip(shown()?.status ?? null)">{{
+                shownStatusLabel()
               }}</span>
               @if (node.summary) {
                 <span class="text-[13px] text-fg-muted">{{
                   node.summary
                 }}</span>
               }
+              <!-- A step that ran more than once: which attempt Input and Output show -->
+              <app-workflow-attempt-switcher
+                class="ml-auto"
+                [attempts]="attemptNumbers()"
+                [selected]="selectedAttempt()"
+                (selectAttempt)="selectedAttempt.set($event)"
+              />
             </div>
             <div
               class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4"
@@ -136,8 +143,8 @@
                   Input
                 </h4>
                 <app-workflow-data-view
-                  [value]="node.run?.input"
-                  [truncated]="node.run?.inputTruncated === true"
+                  [value]="shown()?.input"
+                  [truncated]="shown()?.inputTruncated === true"
                   [modes]="modes"
                   [emptyText]="inputEmpty(node)"
                 />
@@ -153,7 +160,7 @@
                 >
                   Output
                 </h4>
-                @if (node.run?.error; as error) {
+                @if (shown()?.error; as error) {
                   <p
                     class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
                   >
@@ -161,8 +168,8 @@
                   </p>
                 }
                 <app-workflow-data-view
-                  [value]="node.run?.output"
-                  [truncated]="node.run?.outputTruncated === true"
+                  [value]="shown()?.output"
+                  [truncated]="shown()?.outputTruncated === true"
                   [modes]="modes"
                   [emptyText]="outputEmpty(node)"
                 />

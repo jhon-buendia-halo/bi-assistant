@@ -1,5 +1,14 @@
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
+import {
+  JSON_TOOL,
+  V2Answer,
+  V2Plan,
+  V2Step,
+  answerFrom,
+  clearPlan,
+  v2StepOf,
+} from './v2-steps';
 
 /**
  * A local OpenAI-compatible gateway standing in for the LenAI provider. It
@@ -12,6 +21,13 @@ import { AddressInfo } from 'node:net';
  * receives with its credential headers (`calls`). With `pathPrefix` set (e.g.
  * `/v1`), only paths under that prefix are served; any other path answers
  * 404, like a server reached without its version path.
+ *
+ * The structured calls of Questions to Insights v2 (Plan, Write answer) are
+ * recognised by their instructions' first line (helpers/v2-steps.ts) and
+ * answered by `plan` / `answer`, never by `reply` or `hold`; they are
+ * recorded with their `step`. By default the plan is clear and the answer is
+ * the last text `reply` gave (Analyse's final text), so a test that scripts
+ * Analyse's answer sees it as the run's answer.
  */
 
 export interface StubMessage {
@@ -31,6 +47,8 @@ export interface StubRequest {
   reasoningEffort?: string;
   /** The body's `model`, when one was sent. */
   model?: string;
+  /** A structured call of Questions to Insights v2 (Plan, Write answer); absent for any other. */
+  step?: V2Step;
 }
 
 /** Any request the stub received (served or answered 404), oldest first. */
@@ -81,6 +99,12 @@ export interface LlmStub {
    * what the app shows while it still streams. Unset answers at once.
    */
   hold?: (request: StubRequest) => Promise<void> | undefined;
+  /** Plan's output for a v2 run; the default is `clearPlan` of the question. */
+  plan: (request: StubRequest) => V2Plan;
+  /** Write answer's output; the default is `answerFrom` the last text `reply` gave. */
+  answer: (request: StubRequest) => V2Answer;
+  /** The last text `reply` gave a streamed call (Analyse's final text), or `STUB_ANSWER`. */
+  lastText: string;
   close(): Promise<void>;
 }
 
@@ -111,11 +135,21 @@ export function systemTexts(request: StubRequest): string[] {
     .map(messageText);
 }
 
-/** The streamed (chat-turn) requests whose user messages include `question`. */
+/** The text of a request's last user message. */
+export function lastUserText(request: StubRequest): string {
+  const users = request.messages.filter((message) => message.role === 'user');
+  return users.length ? messageText(users[users.length - 1]) : '';
+}
+
+/**
+ * The streamed (chat-turn) requests whose user messages include `question`,
+ * leaving out v2's structured Plan and Write answer calls (`step`).
+ */
 export function turnRequests(stub: LlmStub, question: string): StubRequest[] {
   return stub.requests.filter(
     (request) =>
       request.stream &&
+      request.step === undefined &&
       request.messages.some(
         (message) =>
           message.role === 'user' && messageText(message).includes(question),
@@ -215,7 +249,34 @@ export async function startLlmStub(
     calls: [],
     models: [...(options.models ?? STUB_MODELS)],
     reply: () => ({ text: STUB_ANSWER }),
+    plan: (request) => clearPlan(lastUserText(request)),
+    answer: () => answerFrom(stub.lastText),
+    lastText: STUB_ANSWER,
     close: async () => undefined,
+  };
+  /**
+   * The test's scripted reply. The text that ends a streamed (agent) turn is
+   * remembered for Write answer; a one-shot call (a title, a visual) is not.
+   */
+  const scripted = (request: StubRequest): StubReply => {
+    const reply = stub.reply(request);
+    if ('text' in reply && request.stream) stub.lastText = reply.text;
+    return reply;
+  };
+  /**
+   * A structured step's reply: through the `json` tool when the call offers
+   * it (and has not had its result yet), else as JSON text.
+   */
+  const structured = (request: StubRequest, step: V2Step): StubReply => {
+    const value: Record<string, unknown> = {
+      ...(step === 'plan' ? stub.plan(request) : stub.answer(request)),
+    };
+    const viaTool =
+      request.tools.includes(JSON_TOOL) &&
+      request.messages.at(-1)?.role !== 'tool';
+    return viaTool
+      ? { toolCall: { name: JSON_TOOL, arguments: value } }
+      : { text: JSON.stringify(value) };
   };
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -265,8 +326,15 @@ export async function startLlmStub(
       } catch {
         // An unreadable body is answered like the connection test.
       }
-      // The settings connection test asks for a JSON status object.
-      if (body.response_format) {
+      const messages = body.messages ?? [];
+      const step = v2StepOf(
+        messages
+          .filter((message) => message.role === 'system')
+          .map(messageText),
+      );
+      // The settings connection test asks for a JSON status object; v2's
+      // structured steps may too, but they carry their instructions.
+      if (body.response_format && step === null) {
         stub.probes.push({
           path: req.url,
           reasoningEffort: body.reasoning_effort,
@@ -278,21 +346,26 @@ export async function startLlmStub(
       const request: StubRequest = {
         path: req.url,
         stream: body.stream === true,
-        messages: body.messages ?? [],
+        messages,
         tools: (body.tools ?? []).map((tool) => tool.function?.name ?? ''),
         reasoningEffort: body.reasoning_effort,
         model: body.model,
+        ...(step !== null ? { step } : {}),
       };
       stub.requests.push(request);
+      if (step !== null) {
+        respond(res, request.stream, structured(request, step));
+        return;
+      }
       const held = stub.hold?.(request);
       if (held) {
         void held.then(
-          () => respond(res, request.stream, stub.reply(request)),
+          () => respond(res, request.stream, scripted(request)),
           () => res.destroy(),
         );
         return;
       }
-      respond(res, request.stream, stub.reply(request));
+      respond(res, request.stream, scripted(request));
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

@@ -26,7 +26,16 @@ const ANSWER = 'Brazil scored the most goals in this data.';
 const FOLLOW_UP = 'And the fewest?';
 const FOLLOW_UP_ANSWER = 'Bolivia scored the fewest goals in this data.';
 const SQL = `SELECT stage, COUNT(*) AS matches FROM ${worldCupKey('matches')} GROUP BY stage`;
-const V2_STEPS = ['receive-question', 'load-catalog', 'analyse', 'wrap-up'];
+/** The steps a clear question runs (Clarify, the other way after Plan, is skipped). */
+const V2_STEPS = [
+  'receive-question',
+  'load-catalog',
+  'plan',
+  'analyse',
+  'validate',
+  'write-answer',
+  'wrap-up',
+];
 
 let stub: LlmStub;
 
@@ -49,9 +58,12 @@ function lastUserText(request: StubRequest): string {
   return users.length === 0 ? '' : messageText(users[users.length - 1]);
 }
 
-/** A streamed call of the turn whose latest user message is `text`. */
+/**
+ * A streamed call of the analysis turn whose latest user message is `text`
+ * (not v2's structured Plan or Write answer call).
+ */
 function isTurn(request: StubRequest, text: string): boolean {
-  return request.stream && lastUserText(request) === text;
+  return request.stream && request.step === undefined && lastUserText(request) === text;
 }
 
 /** The model's last message in the request was a tool result. */
@@ -188,7 +200,7 @@ test.describe('Feature: Workflow runs', () => {
       );
       await scenarioStep(
         page,
-        "And I see the stub's answer with its SQL, and its four steps Done",
+        "And I see the stub's answer with its SQL, and every step Done but Clarify",
         async () => {
           await expect(runAnswer(page)).toContainText(ANSWER);
           await runAnswer(page).getByText(/Data used \(1 query\)/).click();
@@ -198,6 +210,7 @@ test.describe('Feature: Workflow runs', () => {
             await expect(nodeStatus(page, id)).toHaveText('Done');
             await expect(runStep(page, id).getByText('Done', { exact: true })).toBeVisible();
           }
+          await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
         },
       );
       await scenarioStep(page, `When I follow up with "${FOLLOW_UP}"`, async () => {

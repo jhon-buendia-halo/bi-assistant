@@ -11,6 +11,7 @@ import {
   WorkflowRunRequest,
 } from '../models/workflow.model';
 import { WorkflowDesigner } from './workflow-designer.service';
+import { GRAPH_RETRY_RUN, GRAPH_WORKFLOW } from './workflow-graph.testing';
 import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
 
 /** A run stream the test drives: each call is recorded with its handlers. */
@@ -602,5 +603,96 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     executeQuestion();
     expect('phases' in designer).toBe(false);
     expect(runs.last.handlers.onWorkflow).toBeUndefined();
+  });
+});
+
+describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
+  let designer: WorkflowDesigner;
+  let runs: FakeRunsApi;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    runs = new FakeRunsApi();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: WorkflowRunsApiService, useValue: runs },
+      ],
+    });
+    designer = TestBed.inject(WorkflowDesigner);
+    http = TestBed.inject(HttpTestingController);
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(GRAPH_WORKFLOW);
+    // No datasets field: the datasets are not read.
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.setInput('question', 'How many matches per stage?');
+    designer.execute();
+  });
+
+  afterEach(() => http.verify());
+
+  it('keeps each attempt of a step live, shows the last and counts them', () => {
+    const h = runs.last.handlers;
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', attempt: 1 });
+    h.onTool!({ name: 'run_readonly_sql', input: 'select 1' });
+    h.onStep!({
+      id: 'analyse',
+      title: 'Analyse',
+      status: 'success',
+      attempt: 1,
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1' }],
+    });
+    h.onStep!({ id: 'validate', title: 'Validate', status: 'success', attempt: 1, output: { ok: false } });
+    h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', attempt: 2 });
+    // A new run of an agent step starts with no live tool calls of its own.
+    expect(designer.toolCalls()).toEqual([]);
+
+    const analyse = designer.runResult()!.steps.filter((s) => s.id === 'analyse');
+    expect(analyse.map((s) => [s.attempt, s.status])).toEqual([
+      [1, 'success'],
+      [2, 'running'],
+    ]);
+    expect(designer.nodeStatuses()['analyse']).toBe('running');
+    expect(designer.nodeAttempts()).toEqual({ analyse: 2, validate: 1 });
+    // The run panel lists each step once, as its last attempt.
+    expect(
+      designer
+        .runPanelSteps()
+        .filter((s) => s.id === 'analyse')
+        .map((s) => [s.attempt, s.attempts]),
+    ).toEqual([[2, 2]]);
+  });
+
+  it('counts the attempts of a stored run and lists each step once', () => {
+    runs.last.handlers.onDone!({
+      id: 'run-1',
+      workflowId: 'qti-v2-turn',
+      workflowName: 'Questions to Insights v2',
+      input: { question: 'Q' },
+      status: 'success',
+      steps: GRAPH_RETRY_RUN.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        status: step.status ?? 'skipped',
+        ...(step.attempt !== undefined ? { attempt: step.attempt } : {}),
+      })),
+      datasets: [],
+      startedAt: '2026-11-13T10:00:00.000Z',
+    });
+    expect(designer.nodeAttempts()).toEqual(
+      jasmine.objectContaining({ analyse: 2, validate: 2, plan: 1 }),
+    );
+    expect(designer.runPanelSteps().map((s) => s.id)).toEqual([
+      'receive-question',
+      'load-catalog',
+      'plan',
+      'clarify',
+      'analyse',
+      'validate',
+      'write-answer',
+      'wrap-up',
+    ]);
   });
 });

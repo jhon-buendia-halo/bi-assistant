@@ -13,6 +13,7 @@ import {
   zoomIn,
   zoomOut,
 } from './workflow-canvas-layout';
+import { GRAPH_WORKFLOW } from './workflow-graph.testing';
 
 type Source = Pick<WorkflowDetail, 'input' | 'steps' | 'agents'>;
 
@@ -384,6 +385,84 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       ['start-end', ''],
     ]);
     expect(layout.nodes[1].subtitle).toBe('');
+  });
+});
+
+describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
+  const layout = workflowCanvasLayout(GRAPH_WORKFLOW);
+  const node = (id: string) => layout.nodes.find((n) => n.id === id)!;
+  const edge = (id: string) => layout.edges.find((e) => e.id === id)!;
+
+  it('every linear edge is `next`', () => {
+    expect(workflowCanvasLayout(V2).edges.every((e) => e.kind === 'next')).toBeTrue();
+  });
+
+  it('puts the main path left to right on one centre line, Clarify below Plan', () => {
+    const main = ['start', 'receive-question', 'load-catalog', 'plan', 'analyse', 'validate', 'write-answer', 'wrap-up', 'end'];
+    const xs = main.map((id) => node(id).x);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+    const cy = node('start').centerY;
+    for (const id of main) expect(node(id).centerY).withContext(id).toBe(cy);
+    const clarify = node('clarify');
+    expect(clarify.y).toBeGreaterThan(node('plan').y + CANVAS.nodeHeight);
+    // Below the sub-nodes hanging under the agents.
+    const subBottom = Math.max(...node('plan').subNodes.map((s) => s.y + s.size));
+    expect(clarify.y).toBeGreaterThan(subBottom);
+    // Between Plan and Analyse.
+    expect(clarify.x + clarify.width / 2).toBeGreaterThan(node('plan').x + node('plan').width);
+    expect(clarify.x + clarify.width / 2).toBeLessThan(node('analyse').x);
+    expect(layout.height).toBeGreaterThan(clarify.y + clarify.height);
+  });
+
+  it('draws one edge per graph edge, each with its kind and label', () => {
+    expect(layout.edges.map((e) => [e.id, e.kind, e.branchLabel])).toEqual([
+      ['start-receive-question', 'next', null],
+      ['receive-question-load-catalog', 'next', null],
+      ['load-catalog-plan', 'next', null],
+      ['plan-clarify', 'branch', 'Needs clarification'],
+      ['plan-analyse', 'branch', 'Clear'],
+      ['analyse-validate', 'next', null],
+      ['validate-analyse', 'loop', 'Retry once'],
+      ['validate-write-answer', 'next', 'Valid or retried'],
+      ['write-answer-wrap-up', 'next', null],
+      ['wrap-up-end', 'next', null],
+      ['clarify-end', 'next', null],
+    ]);
+  });
+
+  it('runs the branch down to Clarify and Clarify on to End', () => {
+    const clarify = node('clarify');
+    const branch = edge('plan-clarify');
+    expect(branch.path.startsWith(`M ${node('plan').x + node('plan').width} ${node('plan').centerY}`)).toBeTrue();
+    expect(branch.path.endsWith(`${clarify.y}`)).toBeTrue();
+    expect(branch.branchLabelY).toBeGreaterThan(node('plan').y + CANVAS.nodeHeight);
+    expect(branch.branchLabelY).toBeLessThan(clarify.y);
+    const toEnd = edge('clarify-end');
+    expect(toEnd.path.startsWith(`M ${clarify.x + clarify.width} ${clarify.centerY}`)).toBeTrue();
+    expect(toEnd.path.endsWith(`${node('end').x} ${node('end').centerY + 20}`)).toBeTrue();
+  });
+
+  it('draws the loop as a curve above the row, from Validate back into Analyse', () => {
+    const loop = edge('validate-analyse');
+    const validate = node('validate');
+    const analyse = node('analyse');
+    expect(loop.path.startsWith(`M ${validate.x + validate.width / 2} ${validate.y}`)).toBeTrue();
+    expect(loop.path).toContain(' C ');
+    expect(loop.path.endsWith(`${analyse.x + analyse.width} ${analyse.y + 18}`)).toBeTrue();
+    expect(loop.branchLabelY).toBeLessThan(validate.y);
+    expect(loop.branchLabelY).toBeGreaterThan(0);
+    expect(loop.label).toBe('');
+  });
+
+  it('labels the fields passed on the main path only', () => {
+    expect(edge('load-catalog-plan').label).toBe('2 fields');
+    expect(edge('plan-analyse').label).toBe('1 field');
+    expect(edge('plan-clarify').label).toBe('');
+    expect(edge('clarify-end').label).toBe('');
+  });
+
+  it("End's subtitle is the main path's last step's output", () => {
+    expect(node('end').subtitle).toBe('answer');
   });
 });
 
