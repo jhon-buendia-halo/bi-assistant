@@ -452,7 +452,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 #### 34. `GET /agents/:key`
 - Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant, assistant-v2 and data-readiness only; false for the System agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */; workflow?: AgentWorkflow /* workflow-backed built-in agents only (today assistant-v2) */; usedInWorkflows: { id: string; name: string }[] /* always present */ }`.
 - `usedInWorkflows` lists the workflows whose steps call the agent ([agents.md](agents.md) 5.12): `assistant-v2` → `[{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]`; every other agent (the assistant, the Data Readiness Agent, every user agent, the System agents) → `[]`. Agents are a library, not workflows (ADR-0042).
-- `AgentWorkflow = { id: string; steps: { id: string; title: string; kind: 'code' | 'agent'; summary: string; input: string[]; output: string[]; agent?: { name: string; tools: string[]; maxSteps: number } /* the agent step only */; exits: { label: string; outcome: 'fails' | 'stops' }[] }[] }`. The steps are in run order, and it is built from the workflow's step catalogue ([agents.md](agents.md) 5.11): for v2, `id` is `qti-v2-turn`, the agent is `Questions to Insights v2` with its five tools (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`) and `maxSteps` 15, and the Analyse step's `exits` are `Model error` (`fails`), `Stop` (`stops`) and `Clarifying question` (`stops`). It is read-only and never stored ([agents-evals](../capabilities/agents-evals/spec.md) R108).
+- `AgentWorkflow = { id: string; steps: { id: string; title: string; kind: 'code' | 'agent'; summary: string; input: string[]; output: string[]; agent?: { name: string; tools: string[]; maxSteps: number } /* agent steps only */; exits: { label: string; outcome: 'fails' | 'stops' }[] }[] }`. The steps are in catalogue order (how they connect is 117's `edges`), and it is built from the workflow's step catalogue ([agents.md](agents.md) 5.11): for v2, `id` is `qti-v2-turn`, its eight steps are Receive question, Load catalog, Plan, Clarify, Analyse, Validate, Write answer and Wrap up, and its three agent steps name `Questions to Insights v2`: Analyse with its five tools (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`) and `maxSteps` 15; Plan and Write answer with no tools and `maxSteps` 1 (one model call). Analyse's `exits` are `Model error` (`fails`), `Stop` (`stops`) and `Clarifying question` (`stops`); Plan's and Write answer's `Model error` and `Stop`. It is read-only and never stored ([agents-evals](../capabilities/agents-evals/spec.md) R108).
 - For a built-in agent, `instructions` is the prompt as served, so it reflects an override (ADR-0026), and `prompt` carries the editable text, the shipped text and the override state ([data-model.md](data-model.md) 3.10.3). For the `assistant`, `editable` and `shipped` exclude the generated `## Tools` section ([agents.md](agents.md) 2.1).
 - A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
@@ -661,12 +661,12 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     usedBy: string[];                 // the ids of the steps that read the field straight from the input (a step whose `input` names it while no earlier step's `output` does), in step order; [] when none does
   };
   ```
-- **The input node covers every step.** Every field a step's input schema requires is a field of the workflow's `input` or an output of an earlier step, with a compatible type; the catalogue refuses (throws when it loads) a workflow that breaks this, and a unit test checks every catalogued workflow (`checkWorkflowContract`, `backend/src/mastra/workflows/workflow-contract.ts`; [agents.md](agents.md) 5.12). A rule field (`maxLength`, `min`, `max`) is sent only where the field has one.
+- **The input node covers every step.** Every field a step's input schema requires is a field of the workflow's `input` or an output of an earlier step (for a workflow with edges, a step on every path from Start to it, 117), with a compatible type; the catalogue refuses (throws when it loads) a workflow that breaks this, and a unit test checks every catalogued workflow (`checkWorkflowContract`, `backend/src/mastra/workflows/workflow-contract.ts`; [agents.md](agents.md) 5.12). A rule field (`maxLength`, `min`, `max`) is sent only where the field has one.
 - Values:
 
   | id | name | kind | agents | stepCount | bar | datasets |
   |---|---|---|---|---|---|---|
-  | `qti-v2-turn` | `Questions to Insights v2` | code | `assistant-v2` | 4 | steps | none |
+  | `qti-v2-turn` | `Questions to Insights v2` | code | `assistant-v2` | 8 | steps | none |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33); v2's starter questions are empty, as in its AgentSummary.
 - **Trigger and input:** `qti-v2-turn` is a run workflow: `trigger: 'run'` and, since 1.23.12, an `input` it runs on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
@@ -678,7 +678,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - **Order:** `qti-v2-turn` only. No agent (System, Official or user) is listed.
 
 #### 117. `GET /workflows/:id`
-- Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[]; contractHash: string }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
+- Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[]; edges: WorkflowEdge[]; contractHash: string }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
   ```ts
   type WorkflowAgentDetail = {
     key: string; name: string;        // as 116's agents entry, same order (step order, each once)
@@ -692,6 +692,12 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     inputSchema: JsonSchema;          // the step's declared input (agents.md 5.12); `input` is its property names, in order
     outputSchema: JsonSchema;         // the step's declared output; `output` is its property names, in order
   };
+  type WorkflowEdge = {
+    from: string;                     // a step id, or 'start'
+    to: string;                       // a step id, or 'end'
+    kind: 'next' | 'branch' | 'loop'; // the plain flow; one path a condition picks; the way back to an earlier step
+    label?: string;                   // what the canvas writes on the edge
+  };
   // JSON Schema draft 2020-12 as Zod 4's z.toJSONSchema writes it, without `$schema`: an object schema
   // whose `properties` each carry `type` (a string, or e.g. ['string', 'null'] for a nullable field),
   // `items` for an array, `description`, and nested `properties`/`required` for an object; `required`
@@ -703,9 +709,26 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   };
   ```
 - `input` is 116's, each field with its rules and `usedBy` (the Start node's Parameters, [ui.md](ui.md) 4.4b).
-- `contractHash`: the workflow's data contract as 12 hex characters: the first 12 of the sha256 of the canonical JSON (keys sorted at every level) of `{ input: [{ name, type, required }] (each input field, in order), steps: [{ id, inputSchema, outputSchema }] (in order) }`. It changes when any step schema, step id or input field's name, type or `required` changes, and only then (not with a label, help text or the workflow's name). Each run stores the hash it started with (121 `contractHash`). For `qti-v2-turn`, Analyse's `inputSchema` has `question` (`type: 'string'`) and `catalog` (an array of entity objects), both required; its `outputSchema`'s `stopped` reads `The turn ended early: the user stopped it or the agent asked a clarifying question.` (hash `b27dee7fd7b1` since that description changed, 2026-11-12).
+- `edges`: how the steps connect, from `start` to `end`: the flow the canvas draws ([ui.md](ui.md) 4.4b). `steps` stays a list in catalogue order; the edges carry the branches and loops. For `qti-v2-turn`, in this order:
+
+  | from | to | kind | label |
+  |---|---|---|---|
+  | `start` | `receive-question` | `next` | |
+  | `receive-question` | `load-catalog` | `next` | |
+  | `load-catalog` | `plan` | `next` | |
+  | `plan` | `clarify` | `branch` | `Needs clarification` |
+  | `plan` | `analyse` | `branch` | `Clear` |
+  | `analyse` | `validate` | `next` | |
+  | `validate` | `analyse` | `loop` | `Retry once` |
+  | `validate` | `write-answer` | `next` | `Valid or retried` |
+  | `write-answer` | `wrap-up` | `next` | |
+  | `wrap-up` | `end` | `next` | |
+  | `clarify` | `end` | `next` | |
+
+  A step on a `loop` edge's way back (from its `to` along `next` edges to its `from`: Analyse and Validate) can run more than once in a run; its step events and stored steps carry `attempt` (3.6).
+- `contractHash`: the workflow's data contract as 12 hex characters: the first 12 of the sha256 of the canonical JSON (keys sorted at every level) of `{ input: [{ name, type, required }] (each input field, in order), steps: [{ id, inputSchema, outputSchema }] (in order), edges: [{ from, to, kind }] (in order; only for a workflow with edges) }`. It changes when any step schema, step id, edge (its ends or kind) or input field's name, type or `required` changes, and only then (not with a label, help text or the workflow's name). Each run stores the hash it started with (121 `contractHash`). For `qti-v2-turn`, Plan's `inputSchema` has `question` (`type: 'string'`) and `catalog` (an array of entity objects), both required; Analyse's has `question`, `catalog` and `plan` (required) and `attempt` and `findings` (a retry's); Write answer's `outputSchema` has `headline`, `answer` and `calls` (hash `7b3f033e8a7c` since the analyst workflow, 2026-11-13).
 - Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`). `agents` is 116's list with each agent's `model`, `systemPrompt` and `toolDetails` read from 34 (the workflow page's tool dialog, [ui.md](ui.md) 4.4b); 116 itself is unchanged.
-- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent` and each step's `inputSchema` and `outputSchema` (34's `workflow` carries no schemas).
+- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on each agent step's `agent` (Plan, Analyse and Write answer) and each step's `inputSchema` and `outputSchema` (34's `workflow` carries no schemas, and no edges).
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a removed one (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `seq-text-demo`, `deep-analysis`), a System agent (`agent:sql-fixer`), or the workflow's own agent (`agent:assistant-v2`).
 
 #### 118. `POST /workflows/:id/runs`
@@ -727,7 +750,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream.
 
 #### 119. `POST /workflows/:id/runs/stream`
-- Body: as 118. Runs the workflow once on `input`, streamed: `qti-v2-turn` streams its step events, its analyse step running one agent turn on a run host through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's for the same input. Capability: [workflows](../capabilities/workflows/spec.md) R14-R17.
+- Body: as 118. Runs the workflow once on `input`, streamed: `qti-v2-turn` streams its step events, the run being one turn on a run host through the chat turn path ([agents.md](agents.md) 5.11, 5.14): Plan and Write answer call the agent's model without tools, and each Analyse attempt runs one agent turn whose model request equals a chat turn's for the same input, plus the catalog and plan blocks. Capability: [workflows](../capabilities/workflows/spec.md) R14-R17.
 - Refusals: 118's, the same body (`message` and `errors[]`), answered as plain JSON (`application/json`) with their real status (Style B) **before** the stream starts: no SSE frame is sent, no run is stored, no step runs.
 - Response `200`, SSE (section 3.6).
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before the `run` event is sent, and updated when it ends (`success`, `failed` or `stopped`, a stop included); a run that throws while it ends is stored `failed` with that error. A run creates the run host `run-<run id>` (in memory, never listed) and its workspace `workspaces/session-run-<run id>/` (a session workspace's layout, [data-model.md](data-model.md) 4.1); after the turn the host's memory thread is deleted and the host leaves memory. The workspace stays with the stored run, so its files download through 123-127, until the run is deleted (122).
@@ -855,7 +878,7 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 
 #### 137. `POST /workflow-runs/:id/node-chats/:stepId/messages/stream`
 - Body: `{ content: string }` (trimmed). Capability: [workflows](../capabilities/workflows/spec.md) R25.
-- Runs one turn of the step's agent about that step's data in the stored run ([agents.md](agents.md) 5.16): the agent's own tools (read-only), the run's `datasets`, the chat's earlier messages, and a context block built server-side from the stored run (never from the client).
+- Runs one turn of the step's agent about that step's data in the stored run ([agents.md](agents.md) 5.16): the agent's own tools (read-only), the run's `datasets`, the chat's earlier messages, and a context block built server-side from the stored run (never from the client). The turn is the agent alone, never a run of the workflow. For `qti-v2-turn` the agent steps are Plan, Analyse and Write answer (each chat is `assistant-v2` with its tools); a step that ran twice (Analyse, after a retry) is chatted about as its last attempt.
 - Refusals (Style B, JSON, before any SSE frame; nothing is stored), in this order: `404 "Run \"<id>\" not found"`; `400 "Message is required"` (missing or blank `content`); `409 "The run is still running"`; `404 "Workflow \"<workflowId>\" not found"` for a run of a workflow the catalogue no longer holds; `400 "Step \"<stepId>\" has no agent to chat with"` (an unknown step or a code step); `400 "Step \"<stepId>\" did not run in this run"` (the run has no such step, or it is `skipped`); `409 "A reply about step \"<stepId>\" is already being written"` while another turn of the same chat runs.
 - Response `200`: SSE with the framing of 3.1 (`data: <json>\n\n`). Events, in order: the agent turn's `reasoning`, `text`, `tool`, `tool-result` and `tool-progress` events (3.1, as the run stream sends them; no `run`, `step`, `workflow`, `panel-item` or `visual-updated`), then exactly one of `done { message: NodeChatMessage }` (the assistant message as stored) or `error { content }` (the turn failed; its message is stored with `error`).
 - Closing the connection stops the turn: nothing more is sent, and the assistant message is stored with what came and `stopped: true`.
@@ -1395,8 +1418,8 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 | `type` | Payload (beside `type`) | Meaning |
 |---|---|---|
 | `run` | `runId: string`, `workflowId: string` | First frame: the run started. |
-| `step` | `WorkflowRunStep`: `id`, `title`, `status: 'running' \| 'success' \| 'failed' \| 'skipped' \| 'stopped'`, `input?`, `inputTruncated?: true`, `output?`, `outputTruncated?: true`, `error?`, `startedAt?`, `endedAt?`, `toolCalls?` (below) | A step of the workflow started (`running`) or ended. A started step carries what it received (`input`, the engine's step-start `payload.payload`; `inputTruncated` instead when it is larger than 20 000 JSON characters) and `startedAt`; an ended one keeps them and adds `endedAt`. `success` carries the step's output (`outputTruncated` instead when it is larger than 20 000 JSON characters); `failed` its error; an agent step fed by an agent turn carries its `toolCalls` so far; `stopped` a step that ended the run early (an agent step stopped by the user or ended on a clarifying question; v2's Analyse after a stop). When the run ends, a step that never started is sent as `skipped`, and one still running as `stopped` (the run stopped) or `failed` (the run failed). Every step event of the run is sent, whatever the workflow's `bar`. |
-| `reasoning`, `text`, `tool`, `tool-result`, `tool-progress`, `visual-updated`, `panel-item`, `workflow`, `readiness-report` | as 3.1 (`content`) | Agent workflows: the agent turn's events, unchanged, interleaved with the `step` events. 3.1's `done { session }` is never sent. |
+| `step` | `WorkflowRunStep`: `id`, `title`, `status: 'running' \| 'success' \| 'failed' \| 'skipped' \| 'stopped'`, `attempt?`, `input?`, `inputTruncated?: true`, `output?`, `outputTruncated?: true`, `error?`, `startedAt?`, `endedAt?`, `toolCalls?` (below) | A step of the workflow started (`running`) or ended. A started step carries what it received (`input`, the engine's step-start `payload.payload`; `inputTruncated` instead when it is larger than 20 000 JSON characters) and `startedAt`; an ended one keeps them and adds `endedAt`. `success` carries the step's output (`outputTruncated` instead when it is larger than 20 000 JSON characters); `failed` its error; an agent step fed by an agent turn carries its `toolCalls` so far; `stopped` a step that ended the run early (an agent step stopped by the user or ended on a clarifying question; v2's Plan or Analyse after a stop; v2's Clarify, which ends the run on the plan's clarifying question). A step inside a loop (117 `edges`; v2's Analyse and Validate) carries `attempt` (1, then 2 on the retry) on every event; a retry starts a new entry rather than replacing the first. When the run ends, a step that never started is sent as `skipped` (with no `attempt`: the branch not taken, or the steps after a stop, a failure or a clarification), and one still running as `stopped` (the run stopped) or `failed` (the run failed). Every step event of the run is sent, whatever the workflow's `bar`; the engine's events of v2's nested workflows (`analysis-path`, `analysis-attempt`, `answer-path`) are not steps and are never sent. |
+| `reasoning`, `text`, `tool`, `tool-result`, `tool-progress`, `visual-updated`, `panel-item`, `workflow`, `readiness-report` | as 3.1 (`content`) | Agent workflows: the agent turn's events, unchanged, interleaved with the `step` events. 3.1's `done { session }` is never sent. For v2, `text` is the answer only, streamed by Write answer: Plan's and Analyse's text never reaches the stream (Analyse's stays in its step output's `text`); their `reasoning`, `tool` and `tool-result` events stream as usual. |
 | `done` | `run: WorkflowRun` | **Terminal, success** (also for a code-only run whose step failed, and for a turn that ended on a clarifying question). |
 | `error` | `content: string` | **Terminal, failure** of an agent turn: the chat stream's message for the same failure (a custom endpoint's R50 text, a provider error, `No API key configured…`). |
 
@@ -1409,12 +1432,12 @@ type WorkflowRun = {
   input: Record<string, string | number | boolean | string[]>;   // the checked input (defaults filled)
   context?: { fromRunId: string };
   status: 'running' | 'success' | 'failed' | 'stopped';   // 'running' only while it runs (121); done.run is never 'running'
-  steps: WorkflowRunStep[];        // status 'success' | 'failed' | 'skipped' | 'stopped' once the run ended
-  output?: Record<string, unknown>;   // success: the last step's output (Wrap up's for v2)
+  steps: WorkflowRunStep[];        // status 'success' | 'failed' | 'skipped' | 'stopped' once the run ended; catalogue order, a retried step's attempts one after the other
+  output?: Record<string, unknown>;   // success: the last step's output (for v2 Wrap up's `{ sqlQueries, failedQueries, rows, answer }`, or Clarify's `{ question, options }`)
   error?: string;                  // failed
   // Questions to Insights v2 runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
-  answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1); absent when it stopped or failed before answering
+  answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text, or the clarifying question with its `clarification` (Clarify's, or Analyse's ask_clarification); absent when it stopped or failed before answering
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;
   agent?: SessionAgentRef;         // as a session's (2.1)
@@ -1433,6 +1456,7 @@ type WorkflowRunStep = {
   id: string;
   title: string;
   status: 'running' | 'success' | 'failed' | 'skipped' | 'stopped';
+  attempt?: number;                  // a step inside a loop (v2's Analyse, Validate): 1, or 2 on the retry; absent on any other step and on a skipped one
   input?: Record<string, unknown>;   // what the step received (the engine's step-start `payload.payload`), when its JSON is at most 20 000 characters
   inputTruncated?: true;             // instead of `input` when it is larger
   output?: Record<string, unknown>;  // at most 20 000 JSON characters
