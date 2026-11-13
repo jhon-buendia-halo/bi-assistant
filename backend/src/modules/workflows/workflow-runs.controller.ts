@@ -91,6 +91,25 @@ export class WorkflowRunsController {
     };
   }
 
+  /**
+   * Answer a run that waits for the user and continue it, streamed (api.md
+   * 138; ADR-0043): the same run's events as 119. Refusals answer their
+   * real status before the stream starts (Style B); closing the connection
+   * stops the run.
+   */
+  @Post(':id/resume/stream')
+  @HttpCode(200)
+  async resume(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Res() res: Response,
+  ): Promise<void> {
+    const prepared = await this.runs.prepareResume(id, body);
+    await streamSse(res, (send, signal) =>
+      this.runs.resume(prepared, send, signal),
+    );
+  }
+
   /** Delete a run with its workspace (api.md 122). */
   @Delete(':id')
   async remove(

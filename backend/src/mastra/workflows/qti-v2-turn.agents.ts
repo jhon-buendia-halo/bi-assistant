@@ -15,7 +15,7 @@ import { resolveAgentModel } from '../model-resolver';
 import {
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_INSTRUCTIONS,
-  planRequest,
+  planMessages,
   writeAnswerRequest,
 } from './qti-v2-turn.prompts';
 import { answerSchema, planSchema } from './qti-v2-turn.schemas';
@@ -24,6 +24,7 @@ import {
   answerOf,
   planOf,
   type AnalyseQuery,
+  type AnsweredClarification,
   type QtiV2Answer,
   type QtiV2Plan,
   type ValidationFinding,
@@ -82,20 +83,15 @@ export async function planWithModel(
     messages: MessageListInput | undefined;
     question: string;
     catalogBlock: string;
+    /** After Clarify: its question and the user's answer (ADR-0043). */
+    answered?: AnsweredClarification;
   },
   options: StepModelOptions,
 ): Promise<{ plan: QtiV2Plan; stopped: boolean }> {
-  const request = planRequest(input.question, input.catalogBlock);
   // The conversation before the question, then the question with the
-  // catalog, so a pick of a clarification is planned with its question.
-  const messages = (
-    Array.isArray(input.messages)
-      ? [
-          ...(input.messages as unknown[]).slice(0, -1),
-          { role: 'user', content: request },
-        ]
-      : request
-  ) as MessageListInput;
+  // catalog (after Clarify: the question, Plan's question and the answer).
+  const planned = planMessages(input);
+  const messages = planned.messages as MessageListInput;
   try {
     const result = await qtiV2PlanAgent.generate(messages, {
       ...callOptions(options),
@@ -118,12 +114,12 @@ export async function planWithModel(
         : new Error(runErrorMessage(reply.error));
     }
     return {
-      plan: planOf(reply.object ?? reply.text, input.question),
+      plan: planOf(reply.object ?? reply.text, planned.fallback),
       stopped: stoppedBy(options),
     };
   } catch (error) {
     if (stoppedBy(options)) {
-      return { plan: planOf(undefined, input.question), stopped: true };
+      return { plan: planOf(undefined, planned.fallback), stopped: true };
     }
     throw error;
   }

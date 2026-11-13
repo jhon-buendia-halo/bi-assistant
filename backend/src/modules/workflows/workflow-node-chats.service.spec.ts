@@ -271,6 +271,24 @@ describe('WorkflowNodeChatsService: refusals before any SSE frame (api.md 137)',
     }
   });
 
+  it('refuses a run that waits for an answer with 409 (api.md 137, 138)', async () => {
+    await ctx.runs.update('r-1', {
+      status: 'suspended',
+      waitingFor: {
+        stepId: 'clarify',
+        title: 'Clarify',
+        question: 'Dominant by what measure?',
+        options: ['Matches won', 'Goals scored'],
+        since: '2026-11-12T10:00:00.000Z',
+        expiresAt: '2026-11-12T10:30:00.000Z',
+      },
+    });
+    expect(await refusal('r-1', 'analyse', { content: 'Why?' })).toEqual({
+      status: 409,
+      message: 'The run is waiting for an answer',
+    });
+  });
+
   it('refuses a running run with 409 and a run of a removed workflow with 404', async () => {
     await ctx.runs.update('r-1', { status: 'running' });
     expect(await refusal('r-1', 'analyse', { content: 'Why?' })).toEqual({

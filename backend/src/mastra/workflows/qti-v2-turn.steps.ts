@@ -16,9 +16,10 @@ import {
   type analyseCallSchema,
   type analyseOutcomeSchema,
   type analyseQuerySchema,
+  type answeredClarificationSchema,
   type catalogEntitySchema,
+  type clarifyingQuestionSchema,
   type entityColumnsSchema,
-  type clarifyOutcomeSchema,
   type turnInputSchema,
   type turnSummarySchema,
   type validateOutcomeSchema,
@@ -39,8 +40,11 @@ export const QTI_V2_TURN_WORKFLOW_ID = 'qti-v2-turn';
 /** How a step can end other than by passing its output on. */
 export interface WorkflowStepExit {
   label: string;
-  /** `fails`: the run stops with an error; `stops`: it ends early. */
-  outcome: 'fails' | 'stops';
+  /**
+   * `fails`: the run stops with an error; `stops`: it ends early; `waits`:
+   * the run is suspended until the user answers (api.md 138).
+   */
+  outcome: 'fails' | 'stops' | 'waits';
 }
 
 /**
@@ -147,8 +151,8 @@ export const QTI_V2_TURN_STEPS: readonly ContractStepEntry[] = [
       title: 'Clarify',
       kind: 'code',
       summary:
-        "Ends the run with the plan's clarifying question and its options. No LLM.",
-      exits: [],
+        "Waits for the user's answer to the plan's clarifying question, then hands it back to Plan. No LLM.",
+      exits: [{ label: 'Waits for an answer', outcome: 'waits' }],
     },
     SCHEMAS.clarify,
   ),
@@ -159,11 +163,11 @@ export const QTI_V2_TURN_STEPS: readonly ContractStepEntry[] = [
       kind: 'agent',
       summary:
         'The agent runs the planned analysis with its tools and the catalog as context. Its text is a note, not the answer.',
-      // A clarifying question ends the run with the question and its
-      // options, as a one-step workflow's does (agents.md 5.11).
+      // A clarifying question makes the run wait for the user's answer;
+      // the agent then goes on with it (agents.md 5.11, api.md 138).
       exits: [
         ...MODEL_EXITS,
-        { label: 'Clarifying question', outcome: 'stops' },
+        { label: 'Clarifying question', outcome: 'waits' },
       ],
     },
     SCHEMAS.analyse,
@@ -210,6 +214,7 @@ export const QTI_V2_TURN_EDGES: readonly WorkflowEdge[] = [
   { from: 'receive-question', to: 'load-catalog', kind: 'next' },
   { from: 'load-catalog', to: 'plan', kind: 'next' },
   { from: 'plan', to: 'clarify', kind: 'branch', label: 'Needs clarification' },
+  { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
   { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
   { from: 'analyse', to: 'validate', kind: 'next' },
   { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
@@ -221,7 +226,6 @@ export const QTI_V2_TURN_EDGES: readonly WorkflowEdge[] = [
   },
   { from: 'write-answer', to: 'wrap-up', kind: 'next' },
   { from: 'wrap-up', to: 'end', kind: 'next' },
-  { from: 'clarify', to: 'end', kind: 'next' },
 ];
 
 /** The most attempts of the analysis loop: the first and one retry. */
@@ -263,17 +267,26 @@ export type ValidateOutcome = z.output<typeof validateOutcomeSchema>;
 /** The answer (AnswerOutput). */
 export type QtiV2Answer = z.output<typeof answerSchema>;
 
-/** What the Clarify step ends the run with. */
-export type ClarifyOutcome = z.output<typeof clarifyOutcomeSchema>;
+/** What a waiting step (Clarify, Analyse) suspends the run with. */
+export type ClarifyingQuestion = z.output<typeof clarifyingQuestionSchema>;
+
+/** A clarifying question with the user's answer to it. */
+export type AnsweredClarification = z.output<
+  typeof answeredClarificationSchema
+>;
 
 /** The Wrap up step's summary: the run's result. */
 export type QtiV2TurnSummary = z.output<typeof turnSummarySchema>;
 
-/** What one analysis attempt of the agent turn gives back. */
+/**
+ * What one analysis attempt of the agent turn gives back; `clarification`
+ * when the agent asked the user a clarifying question (`ask_clarification`):
+ * the Analyse step then waits for the answer (api.md 138).
+ */
 export type AnalyseAttempt = Pick<
   AnalyseOutcome,
   'calls' | 'queries' | 'text' | 'stopped'
->;
+> & { clarification?: ClarifyingQuestion };
 
 /**
  * What the session code (or the eval runner) hands the run, on its
@@ -281,15 +294,21 @@ export type AnalyseAttempt = Pick<
  * turn as today (agents.md 5.11).
  */
 export interface QtiV2TurnRuntime {
-  /** The Plan step's model call; `stopped` when the turn was stopped. */
+  /**
+   * The Plan step's model call; `stopped` when the turn was stopped. After
+   * Clarify, `clarification` holds its question and the user's answer.
+   */
   plan(input: {
     question: string;
     catalog: CatalogEntity[];
     catalogBlock: string;
+    clarification?: AnsweredClarification;
   }): Promise<{ plan: QtiV2Plan; stopped: boolean }>;
-  /** The Clarify step: the turn ends with this clarifying question. */
-  clarify(clarification: ClarifyOutcome): Promise<void>;
-  /** One attempt of the Analyse step: the agent turn with its tools. */
+  /**
+   * One attempt of the Analyse step: the agent turn with its tools. When
+   * the step resumes after the agent's clarifying question, `answered`
+   * holds it with the user's answer: the agent goes on from there.
+   */
   analyse(input: {
     question: string;
     catalog: CatalogEntity[];
@@ -297,6 +316,7 @@ export interface QtiV2TurnRuntime {
     plan: QtiV2Plan;
     attempt: number;
     planBlock: string;
+    answered?: AnsweredClarification;
   }): Promise<AnalyseAttempt>;
   /** The Write answer step's model call; its text is the run's answer. */
   writeAnswer(input: {
@@ -573,6 +593,44 @@ export function validateAttempt(input: {
     ok: ranQuery.passed && noToolError.passed && rowLimit.passed,
     findings: [ranQuery, noToolError, rowLimit, measures],
   };
+}
+
+/**
+ * The plan after the user answered Clarify (agents.md 5.11): Plan never
+ * asks twice, so a plan made with an answer needs no clarification, whatever
+ * the model replied.
+ */
+export function planAfterAnswer(
+  plan: QtiV2Plan,
+  answered: AnsweredClarification | undefined,
+): QtiV2Plan {
+  if (!answered || !plan.needsClarification) return plan;
+  return { ...plan, needsClarification: false, clarification: null };
+}
+
+/**
+ * Whether the plan loop ends after a round (agents.md 5.11): Plan's output
+ * (a plan, needing no clarification or stopped) ends it; Clarify's (the
+ * answer, no plan yet) sends the run back to Plan.
+ */
+export function planLoopDone(outcome: Record<string, unknown>): boolean {
+  return (
+    outcome['plan'] !== undefined && outcome['clarification'] === undefined
+  );
+}
+
+/**
+ * A waiting step's question from its suspend payload (agents.md 5.11): the
+ * question and its options, the engine's own fields (`__workflow_meta`)
+ * dropped; undefined when the payload holds no question.
+ */
+export function clarifyingQuestionOf(
+  payload: unknown,
+): ClarifyingQuestion | undefined {
+  const raw = (payload ?? {}) as Record<string, unknown>;
+  const question = text(raw['question']);
+  if (!question) return undefined;
+  return { question, options: strings(raw['options']) };
 }
 
 /**

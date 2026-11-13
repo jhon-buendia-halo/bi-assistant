@@ -484,6 +484,7 @@ export function engineInputSchema<S extends z.ZodType>(schema: S) {
  * value it bails with) with its output schema after; either failing throws
  * a `ContractViolationError`, so the step fails and later steps do not run.
  * The step gets, and passes on, the parsed values (unknown keys dropped).
+ * A step that suspends (waits for the user) has no output to check.
  */
 export function withContract<P extends { inputData: unknown }, R>(
   title: string,
@@ -498,7 +499,9 @@ export function withContract<P extends { inputData: unknown }, R>(
       params.inputData,
     );
     const bail = (params as { bail?: unknown }).bail;
+    const suspend = (params as { suspend?: unknown }).suspend;
     let bailed = false;
+    let suspended = false;
     const guarded = {
       ...params,
       inputData,
@@ -511,9 +514,19 @@ export function withContract<P extends { inputData: unknown }, R>(
             },
           }
         : {}),
+      // A step that waits for the user (api.md 138) has no output yet: the
+      // engine's suspend result is passed on as is.
+      ...(typeof suspend === 'function'
+        ? {
+            suspend: (...args: unknown[]): unknown => {
+              suspended = true;
+              return (suspend as (...args: unknown[]) => unknown)(...args);
+            },
+          }
+        : {}),
     } as P;
     const result = await execute(guarded);
-    if (bailed) return result;
+    if (bailed || suspended) return result;
     return parseSide(title, 'output', schemas.output, result) as R;
   };
 }

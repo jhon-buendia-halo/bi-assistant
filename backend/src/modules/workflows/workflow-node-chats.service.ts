@@ -110,6 +110,9 @@ export class WorkflowNodeChatsService {
     if (run.status === 'running') {
       throw new ConflictException('The run is still running');
     }
+    if (run.status === 'suspended') {
+      throw new ConflictException('The run is waiting for an answer');
+    }
     const workflow = await this.workflows.definition(run.workflowId);
     const defined = workflow.steps.find((step) => step.id === stepId);
     if (!defined || defined.kind !== 'agent' || !defined.agent) {

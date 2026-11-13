@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) qti-v2-turn's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "563df47a5c6e",
+  "contractHash": "23577e797e19",
   "edges": [
     {
       "from": "start",
@@ -24,6 +24,12 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "kind": "branch",
       "label": "Needs clarification",
       "to": "clarify",
+    },
+    {
+      "from": "clarify",
+      "kind": "loop",
+      "label": "Answered",
+      "to": "plan",
     },
     {
       "from": "plan",
@@ -55,11 +61,6 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
     },
     {
       "from": "wrap-up",
-      "kind": "next",
-      "to": "end",
-    },
-    {
-      "from": "clarify",
       "kind": "next",
       "to": "end",
     },
@@ -299,6 +300,32 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "clarification": {
+            "description": "After Clarify: its question and the answer. Plan plans with them and never asks again.",
+            "properties": {
+              "answer": {
+                "description": "The user's answer.",
+                "type": "string",
+              },
+              "options": {
+                "description": "Its answer options.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "question": {
+                "description": "The clarifying question the run asked.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "options",
+              "answer",
+            ],
+            "type": "object",
+          },
           "columns": {
             "description": "The columns of each entity, for Plan only: at most 40 per entity and 400 in all.",
             "items": {
@@ -487,6 +514,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "The trimmed question.",
             "type": "string",
           },
+          "stopped": {
+            "description": "Set when the turn was stopped while Plan ran: nothing after Plan runs.",
+            "type": "boolean",
+          },
         },
         "required": [
           "question",
@@ -627,6 +658,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "The trimmed question.",
             "type": "string",
           },
+          "stopped": {
+            "description": "Set when the turn was stopped while Plan ran: nothing after Plan runs.",
+            "type": "boolean",
+          },
         },
         "required": [
           "question",
@@ -638,21 +673,134 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "options": {
-            "description": "Its 2-4 answer options.",
+          "catalog": {
+            "description": "The entities of the run's datasets.",
             "items": {
-              "type": "string",
+              "additionalProperties": false,
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "clarification": {
+            "additionalProperties": false,
+            "description": "The clarifying question and the answer Plan plans with.",
+            "properties": {
+              "answer": {
+                "description": "The user's answer.",
+                "type": "string",
+              },
+              "options": {
+                "description": "Its answer options.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "question": {
+                "description": "The clarifying question the run asked.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "options",
+              "answer",
+            ],
+            "type": "object",
+          },
+          "columns": {
+            "description": "The columns of each entity, for Plan only: at most 40 per entity and 400 in all.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columns": {
+                  "description": "Its columns, in dataset order (capped).",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "description": "The column name.",
+                        "type": "string",
+                      },
+                      "type": {
+                        "description": "Its type, as the dataset records it.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+                "more": {
+                  "description": "How many more columns it has that are not listed.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "entity",
+                "columns",
+                "more",
+              ],
+              "type": "object",
             },
             "type": "array",
           },
           "question": {
-            "description": "The clarifying question the run ends with.",
+            "description": "The trimmed question.",
             "type": "string",
           },
         },
         "required": [
           "question",
-          "options",
+          "catalog",
+          "columns",
+          "clarification",
         ],
         "type": "object",
       },
@@ -1037,7 +1185,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "string",
           },
           "stopped": {
-            "description": "The turn ended early: the user stopped it or the agent asked a clarifying question.",
+            "description": "The turn ended early: the user stopped it.",
             "type": "boolean",
           },
           "text": {
@@ -1265,7 +1413,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "string",
           },
           "stopped": {
-            "description": "The turn ended early: the user stopped it or the agent asked a clarifying question.",
+            "description": "The turn ended early: the user stopped it.",
             "type": "boolean",
           },
           "text": {

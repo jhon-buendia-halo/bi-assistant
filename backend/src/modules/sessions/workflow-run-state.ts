@@ -11,7 +11,8 @@ export type WorkflowStepEvent =
 
 /**
  * A workflow run's step event as the engine streams it (`workflow-step-start`,
- * `workflow-step-result`), or undefined for any other event.
+ * `workflow-step-result`, and `workflow-step-suspended`: the step waits for
+ * the user, ADR-0043), or undefined for any other event.
  */
 export function stepEventOf(event: {
   type: string;
@@ -22,6 +23,9 @@ export function stepEventOf(event: {
   if (event.type === 'workflow-step-start') return { kind: 'start', stepId };
   if (event.type === 'workflow-step-result') {
     return { kind: 'end', stepId, status: event.payload?.status ?? '' };
+  }
+  if (event.type === 'workflow-step-suspended') {
+    return { kind: 'end', stepId, status: 'suspended' };
   }
   return undefined;
 }

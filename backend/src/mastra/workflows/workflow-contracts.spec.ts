@@ -62,7 +62,6 @@ const FIXTURES: Record<string, ContractFixture> = {
       context.set(QTI_V2_TURN_RUNTIME_KEY, {
         plan: ({ question }) =>
           Promise.resolve({ plan: planOf({}, question), stopped: false }),
-        clarify: () => Promise.resolve(),
         analyse: () =>
           Promise.resolve({
             calls: [{ tool: 'run_readonly_sql', rowCount: 4, failed: false }],

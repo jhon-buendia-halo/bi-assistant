@@ -73,6 +73,60 @@ export function planRequest(question: string, catalogBlock: string): string {
   return [`Question: ${question}`, '', catalogBlock].join('\n');
 }
 
+/** A message of the Plan step's request. */
+export interface PlanMessage {
+  role: 'user' | 'assistant';
+  content: unknown;
+}
+
+/**
+ * The Plan step's messages (agents.md 5.11): the conversation before the
+ * question, then the question with the catalog (`planRequest`), so a pick
+ * of a clarification is planned with its question. After Clarify
+ * (`answered`), the question, the clarifying question Plan asked and the
+ * user's answer with the catalog: Plan restates the question with the
+ * answer. A bare question with no conversation is the request alone.
+ * `fallback` is the question a reply with no restatement plans.
+ */
+export function planMessages(input: {
+  messages: unknown;
+  question: string;
+  catalogBlock: string;
+  answered?: { question: string; options: readonly string[]; answer: string };
+}): { messages: string | PlanMessage[]; fallback: string } {
+  const before = Array.isArray(input.messages)
+    ? (input.messages as PlanMessage[]).slice(0, -1)
+    : [];
+  const { answered } = input;
+  if (answered) {
+    return {
+      messages: [
+        ...before,
+        { role: 'user', content: input.question },
+        {
+          role: 'assistant',
+          content: [
+            answered.question,
+            ...answered.options.map((option) => `- ${option}`),
+          ].join('\n'),
+        },
+        {
+          role: 'user',
+          content: planRequest(answered.answer, input.catalogBlock),
+        },
+      ],
+      fallback: `${input.question} (${answered.answer})`,
+    };
+  }
+  const request = planRequest(input.question, input.catalogBlock);
+  return {
+    messages: Array.isArray(input.messages)
+      ? [...before, { role: 'user', content: request }]
+      : request,
+    fallback: input.question,
+  };
+}
+
 /** One query as Write answer reads it: why, what came back, the rows. */
 function queryLines(query: AnalyseQuery, index: number): string {
   const facts = query.error

@@ -60,7 +60,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'wrap-up',
     ]);
     // The flow is its edges (api.md 117): a branch after Plan, a loop back
-    // from Validate to Analyse.
+    // from Clarify to Plan once answered, a loop back from Validate to
+    // Analyse.
     expect(CODE_WORKFLOWS[0].edges).toHaveLength(11);
     expect(
       CODE_WORKFLOWS[0].edges.filter((edge) => edge.kind !== 'next'),
@@ -71,6 +72,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         kind: 'branch',
         label: 'Needs clarification',
       },
+      { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
       { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
       { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
     ]);

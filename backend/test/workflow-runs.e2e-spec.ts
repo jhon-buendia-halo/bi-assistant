@@ -55,6 +55,11 @@ interface Frame {
   error?: string;
   startedAt?: string;
   endedAt?: string;
+  /** `input-required` (api.md 119, 138). */
+  stepId?: string;
+  question?: string;
+  options?: string[];
+  expiresAt?: string;
   run?: {
     id: string;
     workflowId: string;
@@ -80,8 +85,8 @@ const V2_STEP_TRAIL = [
   'receive-question:success',
   'load-catalog:running',
   'load-catalog:success',
-  'plan:running',
-  'plan:success',
+  'plan:running:1',
+  'plan:success:1',
   'analyse:running:1',
   'analyse:success:1',
   'validate:running:1',
@@ -350,7 +355,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(stored.steps.map(trail)).toEqual([
       'receive-question:success',
       'load-catalog:success',
-      'plan:success',
+      'plan:success:1',
       'clarify:skipped',
       'analyse:success:1',
       'analyse:success:2',
@@ -573,7 +578,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     }
   });
 
-  describe('a clarifying question (agents.md 2.11, 5.11)', () => {
+  describe('a clarifying question waits for the answer, and the same run goes on (agents.md 5.11; api.md 119, 138; ADR-0043)', () => {
     const ASKED = 'Which team performed best?';
     const CLARIFY = 'Which measure should decide the best team?';
 
@@ -581,75 +586,153 @@ describe('Streamed runs of agent workflows (API)', () => {
       useV2Steps(stub, () => ({ text: STUB_ANSWER }));
     });
 
-    it('stops the run at Clarify when the plan needs clarification; picking an option plans the pick with its question', async () => {
+    /** Answer a waiting run (138) and read its stream. */
+    const resumeStream = async (runId: string, body: object) => {
+      const res = await fetch(
+        `${backend!.url}/workflow-runs/${encodeURIComponent(runId)}/resume/stream`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+      const text = await res.text();
+      return {
+        status: res.status,
+        contentType: res.headers.get('content-type') ?? '',
+        text,
+        frames: res.status === 200 ? framesOf(text) : [],
+      };
+    };
+
+    it('a plan that needs clarification suspends the run at Clarify; 138 continues the same run id with the answer to success', async () => {
       const DOMINANT = 'Which team was the most dominant?';
       useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
+        // Plan asks until it sees the answer.
         plan: (req) =>
-          req.messages.some((m) => messageText(m).includes(DOMINANT)) &&
-          !req.messages.some((m) => messageText(m).includes('Most wins'))
-            ? stubPlan(DOMINANT, {
+          req.messages.some((m) =>
+            messageText(m).includes('Question: Most wins'),
+          )
+            ? stubPlan('Which team won the most matches?')
+            : stubPlan(DOMINANT, {
                 needsClarification: true,
                 clarification: {
                   question: 'Dominant by which measure?',
                   options: ['Most wins', 'Most goals — over all matches'],
                 },
-              })
-            : stubPlan('Which team won the most matches?'),
+              }),
       });
       let runId = '';
       const asked = await recorded(async () => {
         const first = await runStream('qti-v2-turn', {
           input: { question: DOMINANT, datasets: ['World Cup Core'] },
         });
-        expect(first.frames.at(-1)!.type).toBe('done');
-        const run = first.frames.at(-1)!.run! as NonNullable<Frame['run']> & {
-          answer?: { clarification?: unknown };
-        };
-        expect(run.status).toBe('success');
-        expect(run.answer).toMatchObject({
-          role: 'assistant',
-          content: 'Dominant by which measure?',
-          clarification: {
-            question: 'Dominant by which measure?',
-            options: [
-              { label: 'Most wins' },
-              { label: 'Most goals', description: 'over all matches' },
-            ],
-          },
+        expect(first.status).toBe(200);
+        runId = first.frames[0].runId!;
+        // The waiting step, what it waits for, then done: the stream ends.
+        const [step, required, done] = first.frames.slice(-3);
+        expect(step).toMatchObject({
+          type: 'step',
+          id: 'clarify',
+          status: 'suspended',
+          attempt: 1,
         });
-        // Clarify ends the run: nothing after it runs.
+        expect(required).toEqual({
+          type: 'input-required',
+          runId,
+          stepId: 'clarify',
+          title: 'Clarify',
+          question: 'Dominant by which measure?',
+          options: ['Most wins', 'Most goals — over all matches'],
+          expiresAt: expect.any(String) as unknown,
+        });
+        expect(done.type).toBe('done');
+        const run = done.run! as NonNullable<Frame['run']> & {
+          waitingFor?: Record<string, unknown>;
+          finishedAt?: string;
+        };
+        expect(run).toMatchObject({ id: runId, status: 'suspended' });
+        expect(run.waitingFor).toEqual({
+          stepId: 'clarify',
+          title: 'Clarify',
+          question: 'Dominant by which measure?',
+          options: ['Most wins', 'Most goals — over all matches'],
+          since: expect.any(String) as unknown,
+          expiresAt: required.expiresAt,
+        });
+        expect(run.answer).toBeUndefined();
+        expect(run.finishedAt).toBeUndefined();
         expect(run.steps.map(trail)).toEqual([
           'receive-question:success',
           'load-catalog:success',
-          'plan:success',
-          'clarify:stopped',
-          'analyse:skipped',
-          'validate:skipped',
-          'write-answer:skipped',
-          'wrap-up:skipped',
+          'plan:success:1',
+          'clarify:suspended:1',
         ]);
-        expect(run.output).toEqual({
-          question: 'Dominant by which measure?',
-          options: ['Most wins', 'Most goals — over all matches'],
-        });
-        runId = run.id;
       });
-      // Only Plan asked the model: no analysis, no answer written.
+      // Only Plan asked the model.
       expect(asked.map((req) => isPlanRequest(req as StubRequest))).toEqual([
         true,
       ]);
-      // The pick is the next run's question; Plan reads it after the
-      // clarifying question.
+      // Stored and listed as waiting.
+      const stored = (await http().get(`/workflow-runs/${runId}`)).body as {
+        status: string;
+      };
+      expect(stored.status).toBe('suspended');
+      const listed = (await http().get('/workflow-runs')).body as {
+        runs: { id: string; status: string }[];
+      };
+      expect(listed.runs.find((run) => run.id === runId)?.status).toBe(
+        'suspended',
+      );
+
       const sent = await recorded(async () => {
-        const second = await runStream('qti-v2-turn', {
-          input: { question: 'Most wins', datasets: ['World Cup Core'] },
-          context: { fromRunId: runId },
+        const second = await resumeStream(runId, {
+          stepId: 'clarify',
+          answer: 'Most wins',
         });
-        expect(second.frames.at(-1)!.run).toMatchObject({
+        expect(second.status).toBe(200);
+        expect(second.frames[0]).toEqual({
+          type: 'run',
+          runId,
+          workflowId: 'qti-v2-turn',
+        });
+        expect(
+          second.frames
+            .filter((f) => f.type === 'step')
+            .slice(0, 4)
+            .map(trail),
+        ).toEqual([
+          'clarify:running:1',
+          'clarify:success:1',
+          'plan:running:2',
+          'plan:success:2',
+        ]);
+        expect(second.frames.some((f) => f.type === 'input-required')).toBe(
+          false,
+        );
+        const done = second.frames.at(-1)!;
+        expect(done.type).toBe('done');
+        expect(done.run).toMatchObject({
+          id: runId,
           status: 'success',
           answer: { role: 'assistant', content: STUB_ANSWER },
         });
+        expect(done.run).not.toHaveProperty('waitingFor');
+        expect(done.run!.steps.map(trail)).toEqual([
+          'receive-question:success',
+          'load-catalog:success',
+          'plan:success:1',
+          'plan:success:2',
+          'clarify:success:1',
+          'analyse:success:1',
+          'analyse:success:2',
+          'validate:success:1',
+          'validate:success:2',
+          'write-answer:success',
+          'wrap-up:success',
+        ]);
       });
+      // Plan planned again with the question, its question and the answer.
       const planned = stub.requests.find(
         (req, i) =>
           i >= stub.requests.length - sent.length && isPlanRequest(req),
@@ -666,9 +749,18 @@ describe('Streamed runs of agent workflows (API)', () => {
         ['assistant', 'Dominant by which measure?'],
         ['user', 'Question: Most wins'],
       ]);
+      // Resumed once: it no longer waits.
+      const again = await resumeStream(runId, {
+        stepId: 'clarify',
+        answer: 'Most goals',
+      });
+      expect(again.status).toBe(409);
+      expect(JSON.parse(again.text)).toMatchObject({
+        message: `Run "${runId}" is not waiting for an answer`,
+      });
     });
 
-    it('stops the run at Analyse with the question and its options; picking an option follows up with the answer', async () => {
+    it('the agent asks mid-analysis: the run suspends at Analyse; 138 runs the agent again with its question and the answer, to success', async () => {
       const lastUser = (req: StubRequest) =>
         messageText(
           [...req.messages].reverse().find((m) => m.role === 'user')!,
@@ -690,50 +782,49 @@ describe('Streamed runs of agent workflows (API)', () => {
         input: { question: ASKED, datasets: ['World Cup Core'] },
       });
       expect(first.status).toBe(200);
-      const run = first.frames.at(-1)!.run! as NonNullable<Frame['run']> & {
-        answer?: { clarification?: unknown };
-      };
-      expect(first.frames.at(-1)!.type).toBe('done');
-      expect(run.status).toBe('success');
-      expect(run.answer).toMatchObject({
-        role: 'assistant',
-        content: CLARIFY,
-        clarification: {
-          question: CLARIFY,
-          options: [
-            { label: 'Most wins' },
-            { label: 'Most goals', description: 'scored over all matches' },
-          ],
-        },
+      const runId = first.frames[0].runId!;
+      const [step, required, done] = first.frames.slice(-3);
+      expect(step).toMatchObject({
+        type: 'step',
+        id: 'analyse',
+        status: 'suspended',
+        attempt: 1,
       });
-      // Analyse ends the run with the question: no answer is written.
-      expect(run.steps.map(trail)).toEqual([
+      expect(required).toMatchObject({
+        type: 'input-required',
+        runId,
+        stepId: 'analyse',
+        title: 'Analyse',
+        question: CLARIFY,
+        options: ['Most wins', 'Most goals — scored over all matches'],
+      });
+      expect(done.run).toMatchObject({ id: runId, status: 'suspended' });
+      expect(done.run!.steps.map(trail)).toEqual([
         'receive-question:success',
         'load-catalog:success',
-        'plan:success',
-        'clarify:skipped',
-        'analyse:stopped:1',
-        'validate:skipped',
-        'write-answer:skipped',
-        'wrap-up:skipped',
+        'plan:success:1',
+        'analyse:suspended:1',
       ]);
 
-      // The pick is the next run's question, with the clarification as context.
       const sent = await recorded(async () => {
-        const second = await runStream('qti-v2-turn', {
-          input: { question: 'Most wins', datasets: ['World Cup Core'] },
-          context: { fromRunId: run.id },
+        const second = await resumeStream(runId, {
+          stepId: 'analyse',
+          answer: 'Most wins',
         });
-        const done = second.frames.at(-1)!;
-        expect(done.type).toBe('done');
-        expect(done.run).toMatchObject({
+        expect(second.status).toBe(200);
+        const end = second.frames.at(-1)!;
+        expect(end.type).toBe('done');
+        expect(end.run).toMatchObject({
+          id: runId,
           status: 'success',
           answer: { role: 'assistant', content: STUB_ANSWER },
         });
-        expect(done.run!.steps.map(trail)).toEqual([
+        // The resumed attempt is the same attempt 1; the stub's agent never
+        // queries, so Validate retries once.
+        expect(end.run!.steps.map(trail)).toEqual([
           'receive-question:success',
           'load-catalog:success',
-          'plan:success',
+          'plan:success:1',
           'clarify:skipped',
           'analyse:success:1',
           'analyse:success:2',
@@ -743,16 +834,82 @@ describe('Streamed runs of agent workflows (API)', () => {
           'wrap-up:success',
         ]);
       });
-      const turn = sent.find(isAnalyseRequest)!;
-      expect(
-        turn.messages
-          .filter((message) => message.role !== 'system')
-          .map((message) => [message.role, messageText(message)]),
-      ).toEqual([
-        ['user', ASKED],
-        ['assistant', CLARIFY],
-        ['user', 'Most wins'],
-      ]);
+      // Both attempts after the answer go on with it.
+      const turns = sent.filter(isAnalyseRequest);
+      expect(turns).toHaveLength(2);
+      for (const turn of turns) {
+        expect(
+          turn.messages
+            .filter((message) => message.role !== 'system')
+            .map((message) => [message.role, messageText(message)]),
+        ).toEqual([
+          ['user', ASKED],
+          [
+            'assistant',
+            `${CLARIFY}\n- Most wins\n- Most goals — scored over all matches`,
+          ],
+          ['user', 'Most wins'],
+        ]);
+      }
+    });
+
+    it('138 refuses before any stream (Style B): 404, 409, 400 answer, 400 step', async () => {
+      const missing = await resumeStream('no-such-run', {
+        stepId: 'clarify',
+        answer: 'a',
+      });
+      expect(missing.status).toBe(404);
+      expect(missing.contentType).toContain('application/json');
+      expect(JSON.parse(missing.text)).toMatchObject({
+        message: 'Run "no-such-run" not found',
+      });
+
+      const finished = await runStream('qti-v2-turn', {
+        input: { question: 'How many matches?', datasets: ['World Cup Core'] },
+      });
+      const finishedId = finished.frames[0].runId!;
+      const notWaiting = await resumeStream(finishedId, {
+        stepId: 'clarify',
+        answer: 'a',
+      });
+      expect(notWaiting.status).toBe(409);
+      expect(JSON.parse(notWaiting.text)).toMatchObject({
+        message: `Run "${finishedId}" is not waiting for an answer`,
+      });
+
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
+        plan: () =>
+          stubPlan('Which?', {
+            needsClarification: true,
+            clarification: { question: 'Which one?', options: ['A', 'B'] },
+          }),
+      });
+      const waiting = await runStream('qti-v2-turn', {
+        input: { question: 'Which?', datasets: ['World Cup Core'] },
+      });
+      const waitingId = waiting.frames[0].runId!;
+      const blank = await resumeStream(waitingId, {
+        stepId: 'clarify',
+        answer: '   ',
+      });
+      expect(blank.status).toBe(400);
+      expect(blank.contentType).toContain('application/json');
+      expect(JSON.parse(blank.text)).toMatchObject({
+        message: 'Answer is required',
+      });
+      const wrongStep = await resumeStream(waitingId, {
+        stepId: 'analyse',
+        answer: 'A',
+      });
+      expect(wrongStep.status).toBe(400);
+      expect(JSON.parse(wrongStep.text)).toMatchObject({
+        message: 'Step "analyse" is not waiting for an answer',
+      });
+      // The refusals left it waiting.
+      const stored = (await http().get(`/workflow-runs/${waitingId}`)).body as {
+        status: string;
+      };
+      expect(stored.status).toBe('suspended');
     });
   });
 

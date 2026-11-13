@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  GoneException,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,8 +23,10 @@ import {
   validateWorkflowInput,
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
+import { QTI_V2_TURN_WORKFLOW_ID } from '../../mastra/workflows/qti-v2-turn.steps';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import { clarifyingQuestionText } from '../sessions/turn/turn-workflow';
 import type {
   ChatMessage,
   FilePanelItem,
@@ -34,11 +38,15 @@ import {
   SessionsService,
   type RunVisualAction,
   type StreamEvent,
+  type TurnSuspension,
 } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
+import { SuspendedRuns } from './suspended-runs';
 import {
+  RUN_EXPIRED_ERROR,
   RunStepTracker,
+  expiredRunPatch,
   interruptedRunPatch,
   loopStepIds,
   noteToolFrame,
@@ -48,6 +56,7 @@ import {
   type WorkflowRun,
   type WorkflowRunDoc,
   type WorkflowRunSummary,
+  type WorkflowRunWaitingFor,
 } from './workflow-run-steps';
 import { WorkflowsService, type WorkflowDefinition } from './workflows.service';
 
@@ -73,13 +82,55 @@ function visualEventMessage(event: VisualEvent): ChatMessage {
   };
 }
 
-/** One event of the run stream (api.md 119): the turn's events, and the run's own. */
+/**
+ * One event of the run stream (api.md 119, 138): the turn's events, and the
+ * run's own; `input-required` when the run waits for the user's answer.
+ */
 export type RunStreamEvent =
   | StreamEvent
   | { type: 'run'; runId: string; workflowId: string }
   | ({ type: 'step' } & WorkflowRun['steps'][number])
+  | ({ type: 'input-required'; runId: string } & Pick<
+      WorkflowRunWaitingFor,
+      'stepId' | 'title' | 'question' | 'options' | 'expiresAt'
+    >)
   | { type: 'done'; run: WorkflowRun }
   | { type: 'error'; content: string };
+
+/** A run event sink that sends nothing once the request was stopped. */
+function liveEmit(
+  emit: (event: RunStreamEvent) => void,
+  abortSignal?: AbortSignal,
+): (event: RunStreamEvent) => void {
+  return (event) => {
+    if (!abortSignal?.aborted) emit(event);
+  };
+}
+
+/** Where a run's turn reports, for one request (its start or a resume). */
+interface TurnIo {
+  emit: (event: StreamEvent) => void;
+  onStepEvent: (event: Parameters<RunStepTracker['apply']>[0]) => void;
+}
+
+/**
+ * A run between its requests (ADR-0043): what it was prepared from, its
+ * stored start, its step tracker and, once created, its host; while it
+ * waits for the user, the turn's suspension that resumes it.
+ */
+interface HeldRun {
+  prepared: PreparedRun;
+  base: WorkflowRunDoc;
+  tracker: RunStepTracker;
+  hostId?: string;
+  suspension?: TurnSuspension;
+}
+
+/** A resume request that passed every check (api.md 138). */
+export interface PreparedResume {
+  held: HeldRun;
+  answer: string;
+}
 
 /** A run whose request passed every check, ready to start (api.md 119). */
 export interface PreparedRun {
@@ -140,6 +191,14 @@ export interface RunAttachment {
 @Injectable()
 export class WorkflowRunsService implements OnModuleInit {
   private readonly logger = new Logger(WorkflowRunsService.name);
+  /** The runs waiting for the user's answer (api.md 138, ADR-0043). */
+  private readonly waiting = new SuspendedRuns<HeldRun>((id, held) =>
+    this.expire(id, held).catch((failure) =>
+      this.logger.warn(
+        `Could not expire run ${id}: ${runErrorMessage(failure)}`,
+      ),
+    ),
+  );
 
   constructor(
     private readonly workflows: WorkflowsService,
@@ -164,6 +223,18 @@ export class WorkflowRunsService implements OnModuleInit {
         this.mastra.deleteMemoryThread(`${RUN_HOST_ID_PREFIX}${run.id}`),
       );
     }
+    // A run that waited for an answer when the app stopped can't go on: its
+    // turn lived in memory (ADR-0043). It is stopped, `waitingFor` expired,
+    // and the workflow's leftover snapshots are deleted.
+    for (const run of await this.repository.listSuspended()) {
+      await this.repository.update(run.id, expiredRunPatch(run, now));
+      await this.quietly(`delete the memory thread of run ${run.id}`, () =>
+        this.mastra.deleteMemoryThread(`${RUN_HOST_ID_PREFIX}${run.id}`),
+      );
+    }
+    await this.quietly('delete the snapshots of suspended runs', async () => {
+      await this.mastra.discardSuspendedWorkflowRuns(QTI_V2_TURN_WORKFLOW_ID);
+    });
     let hostIds: string[];
     try {
       hostIds = this.sessions.runHostWorkspaceIds();
@@ -299,26 +370,137 @@ export class WorkflowRunsService implements OnModuleInit {
         repeats: repeats.has(step.id),
       })),
     );
-    const live = (event: RunStreamEvent) => {
-      if (!abortSignal?.aborted) emit(event);
-    };
+    const base = await this.start(prepared);
+    const held: HeldRun = { prepared, base, tracker };
+    const live = liveEmit(emit, abortSignal);
+    live({ type: 'run', runId: base.id, workflowId: workflow.id });
+    return this.drive(held, live, abortSignal, async (io) => {
+      const host = await this.sessions.createRunHost({
+        runId: base.id,
+        workflowId: workflow.id,
+        name: workflow.name,
+        ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
+        ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
+        ...(prepared.context
+          ? {
+              context: {
+                question: prepared.context.question,
+                answer: prepared.context.answer,
+              },
+            }
+          : {}),
+      });
+      held.hostId = host.id;
+      return this.sessions.streamRunTurn(
+        host.id,
+        prepared.turn.question,
+        io.emit,
+        abortSignal,
+        prepared.turn.careful,
+        io.onStepEvent,
+      );
+    });
+  }
+
+  /**
+   * Check a resume request before any SSE frame (api.md 138, Style B): 404
+   * `Run "<id>" not found`; 410 when the run waited too long or the app
+   * restarted since (the stored run is then `stopped` with `waitingFor`
+   * marked `expired`); 409 `Run "<id>" is not waiting for an answer`; 400
+   * `Answer is required`; 400 `Step "<stepId>" is not waiting for an
+   * answer`. A run that passes is taken out of the waiting runs, so it is
+   * resumed once.
+   */
+  async prepareResume(id: string, body: unknown): Promise<PreparedResume> {
+    const run = await this.stored(id);
+    if (run.status === 'stopped' && run.waitingFor?.expired) {
+      throw new GoneException(RUN_EXPIRED_ERROR);
+    }
+    if (run.status !== 'suspended' || !run.waitingFor) {
+      throw new ConflictException(`Run "${id}" is not waiting for an answer`);
+    }
+    const request =
+      body && typeof body === 'object'
+        ? (body as { stepId?: unknown; answer?: unknown })
+        : {};
+    const answer =
+      typeof request.answer === 'string' ? request.answer.trim() : '';
+    if (!answer) throw new BadRequestException('Answer is required');
+    const stepId = typeof request.stepId === 'string' ? request.stepId : '';
+    if (stepId !== run.waitingFor.stepId) {
+      throw new BadRequestException(
+        `Step "${stepId}" is not waiting for an answer`,
+      );
+    }
+    const taken = this.waiting.take(id);
+    if (!taken || taken.expired) {
+      await this.expire(id, taken?.value);
+      throw new GoneException(RUN_EXPIRED_ERROR);
+    }
+    return { held: taken.value, answer };
+  }
+
+  /**
+   * Resume a prepared run with the user's answer and report it on `emit`
+   * (api.md 138): `run`, then the same events as 119 for the same run (its
+   * steps keep their ids and attempts), ending in `done { run }` (possibly
+   * `suspended` again) or `error`.
+   */
+  async resume(
+    prepared: PreparedResume,
+    emit: (event: RunStreamEvent) => void,
+    abortSignal?: AbortSignal,
+  ): Promise<WorkflowRun> {
+    const { held, answer } = prepared;
+    const { base, prepared: run } = held;
+    await this.repository.update(base.id, {
+      status: 'running',
+      waitingFor: undefined,
+    });
+    const live = liveEmit(emit, abortSignal);
+    live({ type: 'run', runId: base.id, workflowId: run.workflow.id });
+    const suspension = held.suspension;
+    if (!suspension) throw new Error(`Run "${base.id}" has no turn to resume`);
+    return this.drive(held, live, abortSignal, (io) =>
+      suspension.resume(answer, {
+        emit: io.emit,
+        abortSignal,
+        onStepEvent: io.onStepEvent,
+      }),
+    );
+  }
+
+  /**
+   * Drive a run's turn (its start, or a resume) to its end and report it
+   * (api.md 119, 138): a turn that waits for the user leaves the run
+   * `suspended`, held for `SUSPENDED_RUN_TTL_MS`, and sends the waiting
+   * step's `step`, `input-required` and `done { run }`; any other end is
+   * stored as before. A run that throws while ending is stored `failed`
+   * and the error rethrown.
+   */
+  private async drive(
+    held: HeldRun,
+    live: (event: RunStreamEvent) => void,
+    abortSignal: AbortSignal | undefined,
+    turn: (io: TurnIo) => Promise<TurnSuspension | undefined>,
+  ): Promise<WorkflowRun> {
+    const { prepared, base, tracker } = held;
     const onStep = (event: Parameters<RunStepTracker['apply']>[0]) => {
       const step = tracker.apply(event);
       if (step) live({ type: 'step', ...step });
     };
-    const base = await this.start(prepared);
-    live({ type: 'run', runId: base.id, workflowId: workflow.id });
+    const io: TurnIo = {
+      // The turn's `done` carries the host; the run sends its own. Its tool
+      // events are the running agent step's tool calls too.
+      emit: (event) => {
+        noteToolFrame(tracker, event);
+        if (event.type !== 'done') live(event);
+      },
+      onStepEvent: onStep,
+    };
     let ended: WorkflowRunDoc;
     try {
-      ended = await this.runAgent(
-        prepared,
-        prepared.turn,
-        base,
-        tracker,
-        live,
-        onStep,
-        abortSignal,
-      );
+      ended = await this.runAgent(held, live, abortSignal, () => turn(io));
     } catch (failure) {
       if (!prepared.draft) {
         await this.end(base.id, {
@@ -336,9 +518,21 @@ export class WorkflowRunsService implements OnModuleInit {
       : await this.wire((await this.end(id, patch)) ?? ended);
     if (run.status === 'failed') {
       live({ type: 'error', content: run.error ?? 'The run failed' });
-    } else {
-      live({ type: 'done', run });
+      return run;
     }
+    if (run.status === 'suspended' && run.waitingFor) {
+      const { stepId, title, question, options, expiresAt } = run.waitingFor;
+      live({
+        type: 'input-required',
+        runId: run.id,
+        stepId,
+        title,
+        question,
+        options,
+        expiresAt,
+      });
+    }
+    live({ type: 'done', run });
     return run;
   }
 
@@ -419,6 +613,9 @@ export class WorkflowRunsService implements OnModuleInit {
     if (run.status === 'running') {
       throw new BadRequestException('Stop the run before deleting it');
     }
+    // A run waiting for an answer is dropped with its turn and host.
+    const held = this.waiting.remove(id);
+    if (held) await this.expire(id, held);
     if (run.question !== undefined) {
       await this.sessions.deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${id}`);
     }
@@ -529,7 +726,7 @@ export class WorkflowRunsService implements OnModuleInit {
     if (run.question === undefined) {
       throw new BadRequestException(`Run "${id}" has no answer to visualize`);
     }
-    if (run.status === 'running') {
+    if (run.status === 'running' || run.status === 'suspended') {
       throw new BadRequestException('Wait for the run to finish');
     }
     const outcome = await this.sessions.runVisualAction(
@@ -670,6 +867,17 @@ export class WorkflowRunsService implements OnModuleInit {
         typeof fromRunId === 'string' ? fromRunId : JSON.stringify(fromRunId);
       throw new BadRequestException(`Run "${named}" not found`);
     }
+    // A run that waited for an answer it can no longer take ("Run again
+    // with my answer", api.md 138 410): its question and the clarifying
+    // question it asked are the context, so the new run's question (the
+    // user's answer) is planned with the original question.
+    if (earlier.question && !earlier.answer && earlier.waitingFor) {
+      return {
+        fromRunId: earlier.id,
+        question: earlier.question,
+        answer: clarifyingQuestionText(earlier.waitingFor),
+      };
+    }
     if (!earlier.question || !earlier.answer?.content) {
       throw new BadRequestException(
         `Run "${earlier.id}" has no answer to continue from`,
@@ -689,47 +897,18 @@ export class WorkflowRunsService implements OnModuleInit {
    * workspace kept for the run).
    */
   private async runAgent(
-    prepared: PreparedRun,
-    turn: AgentRunTurn,
-    base: WorkflowRunDoc,
-    tracker: RunStepTracker,
+    held: HeldRun,
     live: (event: RunStreamEvent) => void,
-    onStep: (event: Parameters<RunStepTracker['apply']>[0]) => void,
-    abortSignal?: AbortSignal,
+    abortSignal: AbortSignal | undefined,
+    runTurn: () => Promise<TurnSuspension | undefined>,
   ): Promise<WorkflowRunDoc> {
+    const { prepared, base, tracker } = held;
+    const turn = prepared.turn;
     let status: 'success' | 'failed' | 'stopped' = 'success';
     let error: string | undefined;
-    let hostId: string | undefined;
+    let suspension: TurnSuspension | undefined;
     try {
-      const host = await this.sessions.createRunHost({
-        runId: base.id,
-        workflowId: prepared.workflow.id,
-        name: prepared.workflow.name,
-        ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
-        ...(turn.datasets ? { datasets: turn.datasets } : {}),
-        ...(prepared.context
-          ? {
-              context: {
-                question: prepared.context.question,
-                answer: prepared.context.answer,
-              },
-            }
-          : {}),
-      });
-      hostId = host.id;
-      await this.sessions.streamRunTurn(
-        host.id,
-        turn.question,
-        // The turn's `done` carries the host; the run sends its own. Its
-        // tool events are the running agent step's tool calls too.
-        (event) => {
-          noteToolFrame(tracker, event);
-          if (event.type !== 'done') live(event);
-        },
-        abortSignal,
-        turn.careful,
-        onStep,
-      );
+      suspension = await runTurn();
     } catch (failure) {
       if (!abortSignal?.aborted) {
         status = 'failed';
@@ -737,6 +916,17 @@ export class WorkflowRunsService implements OnModuleInit {
       }
     }
     if (abortSignal?.aborted) status = 'stopped';
+    const hostId = held.hostId;
+    if (suspension && status === 'success' && hostId && !prepared.draft) {
+      return this.suspend(held, hostId, suspension);
+    }
+    // A suspension the run does not keep (a stop, a draft) is dropped.
+    if (suspension) {
+      await this.quietly(`discard the waiting turn of run ${base.id}`, () =>
+        suspension.discard(),
+      );
+    }
+    held.suspension = undefined;
     const ended = tracker.finish(status, error);
     for (const step of ended.changed) live({ type: 'step', ...step });
     const finishedAt = new Date().toISOString();
@@ -776,6 +966,74 @@ export class WorkflowRunsService implements OnModuleInit {
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
       finishedAt,
     };
+  }
+
+  /**
+   * A run whose turn waits for the user (api.md 138, ADR-0043): it is held
+   * in memory (its suspension, host and tracker) until it is resumed or
+   * expires, and stored `suspended` with `waitingFor` and the steps that
+   * ran so far; its host stays in memory.
+   */
+  private async suspend(
+    held: HeldRun,
+    hostId: string,
+    suspension: TurnSuspension,
+  ): Promise<WorkflowRunDoc> {
+    const { prepared, base, tracker } = held;
+    held.suspension = suspension;
+    const since = new Date();
+    const expiresAt = this.waiting.add(base.id, held);
+    const view = await this.sessions.runHostView(hostId);
+    const step = prepared.workflow.steps.find(
+      (candidate) => candidate.id === suspension.stepId,
+    );
+    return {
+      ...base,
+      status: 'suspended',
+      steps: tracker.pause(),
+      waitingFor: {
+        stepId: suspension.stepId,
+        title: step?.title ?? suspension.stepId,
+        question: suspension.question,
+        options: suspension.options,
+        since: since.toISOString(),
+        expiresAt: new Date(expiresAt).toISOString(),
+      },
+      question: prepared.turn.question,
+      datasets: view.datasets,
+      ...(view.agentKey ? { agentKey: view.agentKey } : {}),
+      ...(view.agentId ? { agentId: view.agentId } : {}),
+      ...(view.agentName ? { agentName: view.agentName } : {}),
+      ...(view.workflowState ? { workflowState: view.workflowState } : {}),
+    };
+  }
+
+  /**
+   * A waiting run that can no longer be resumed (ADR-0043: it expired, or
+   * it is no longer held): its turn is dropped (the workflow snapshot
+   * deleted), its host leaves memory, and the stored run, if still
+   * `suspended`, becomes `stopped` with `waitingFor.expired`.
+   */
+  private async expire(id: string, held?: HeldRun): Promise<void> {
+    const suspension = held?.suspension;
+    if (suspension) {
+      await this.quietly(`discard the waiting turn of run ${id}`, () =>
+        suspension.discard(),
+      );
+    }
+    const hostId = held?.hostId;
+    if (hostId) {
+      await this.quietly(`end the host of run ${id}`, async () => {
+        await this.sessions.finishRunHost(hostId);
+      });
+    }
+    const stored = await this.repository.get(id);
+    if (stored?.status === 'suspended') {
+      await this.repository.update(
+        id,
+        expiredRunPatch(stored, new Date().toISOString()),
+      );
+    }
   }
 
   /** Run a clean-up step, logging rather than throwing when it fails. */

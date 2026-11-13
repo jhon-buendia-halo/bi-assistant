@@ -3,6 +3,7 @@
 import type {
   AnalyseAttempt,
   AnalyseQuery,
+  AnsweredClarification,
   TurnCallsOutcome,
 } from '../../../mastra/workflows/qti-v2-turn.steps';
 import {
@@ -122,6 +123,56 @@ export function analyseAttemptOf(
     queries: analyseQueriesOf(data),
     text: text.trim(),
   };
+}
+
+/** A clarification option as one line: its label, then ` — ` and its description. */
+export function clarificationOptionText(option: {
+  label: string;
+  description?: string;
+}): string {
+  return option.description
+    ? `${option.label} — ${option.description}`
+    : option.label;
+}
+
+/** A clarifying question as the assistant asked it: the question, then each option. */
+export function clarifyingQuestionText(asked: {
+  question: string;
+  options: readonly string[];
+}): string {
+  return [asked.question, ...asked.options.map((option) => `- ${option}`)].join(
+    '\n',
+  );
+}
+
+/**
+ * The agent's input once the user answered its clarifying questions this
+ * turn (agents.md 5.11, ADR-0043): the turn's input as messages (a bare
+ * question becomes its user message), then each question the agent asked
+ * with the user's answer, in order. Analyse resumed after the answer, and
+ * any retry after it, run on it without the memory thread, so nothing is
+ * stored twice and no attempt loses an answer.
+ */
+export function answeredTurnInput(
+  input: unknown,
+  question: string,
+  answered: readonly AnsweredClarification[],
+): { role: 'user' | 'assistant'; content: unknown }[] {
+  const before = Array.isArray(input)
+    ? (input as { role: 'user' | 'assistant'; content: unknown }[])
+    : [
+        {
+          role: 'user' as const,
+          content: typeof input === 'string' ? input : question,
+        },
+      ];
+  return [
+    ...before,
+    ...answered.flatMap((asked) => [
+      { role: 'assistant' as const, content: clarifyingQuestionText(asked) },
+      { role: 'user' as const, content: asked.answer },
+    ]),
+  ];
 }
 
 /**

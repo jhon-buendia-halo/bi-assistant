@@ -3,7 +3,10 @@ import {
   ATTEMPT_ROWS_CAP,
   analyseAttemptOf,
   analyseQueriesOf,
+  answeredTurnInput,
   catalogStepId,
+  clarificationOptionText,
+  clarifyingQuestionText,
   turnWorkflowOf,
 } from './turn-workflow';
 
@@ -97,5 +100,61 @@ describe('an analysis attempt from its data records (agents.md 5.11)', () => {
       text: 'A note.',
       stopped: false,
     });
+  });
+});
+
+describe('the turn after a clarifying question (agents.md 5.11, ADR-0043)', () => {
+  const answered = {
+    question: 'Which tournament?',
+    options: ['2018 — Russia', '2022 — Qatar'],
+    answer: '2022 — Qatar',
+  };
+
+  it('writes an option as one line, and the question as the assistant asked it', () => {
+    expect(clarificationOptionText({ label: '2018' })).toBe('2018');
+    expect(
+      clarificationOptionText({ label: '2018', description: 'Russia' }),
+    ).toBe('2018 — Russia');
+    expect(clarifyingQuestionText(answered)).toBe(
+      'Which tournament?\n- 2018 — Russia\n- 2022 — Qatar',
+    );
+  });
+
+  it('hands the agent the turn input, its question and the answer: a bare question becomes its user message', () => {
+    const tail = [
+      {
+        role: 'assistant',
+        content: 'Which tournament?\n- 2018 — Russia\n- 2022 — Qatar',
+      },
+      { role: 'user', content: '2022 — Qatar' },
+    ];
+    expect(answeredTurnInput('Who won?', 'Who won?', [answered])).toEqual([
+      { role: 'user', content: 'Who won?' },
+      ...tail,
+    ]);
+    const transcript = [
+      { role: 'user', content: 'Earlier' },
+      { role: 'assistant', content: 'Reply' },
+      { role: 'user', content: 'Who won?' },
+    ];
+    expect(answeredTurnInput(transcript, 'Who won?', [answered])).toEqual([
+      ...transcript,
+      ...tail,
+    ]);
+  });
+
+  it('carries every answer of the turn, in order', () => {
+    const second = { question: 'Which stage?', options: [], answer: 'Final' };
+    expect(
+      answeredTurnInput('Who won?', 'Who won?', [answered, second]).slice(1),
+    ).toEqual([
+      {
+        role: 'assistant',
+        content: 'Which tournament?\n- 2018 — Russia\n- 2022 — Qatar',
+      },
+      { role: 'user', content: '2022 — Qatar' },
+      { role: 'assistant', content: 'Which stage?' },
+      { role: 'user', content: 'Final' },
+    ]);
   });
 });

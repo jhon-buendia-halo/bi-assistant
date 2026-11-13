@@ -36,6 +36,7 @@ import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { qtiV2TurnWorkflow } from '../workflows/qti-v2-turn.workflow';
 import type { QtiV2Plan } from '../workflows/qti-v2-turn.steps';
+import { endsOnClarifyingQuestion } from './analyst-v2-eval-checks';
 import {
   clarificationAnswer,
   lastUserText,
@@ -236,6 +237,75 @@ describe('the v2 eval target runs the whole qti-v2-turn workflow (agents.md 8.1)
       input: 'Which team was the most dominant?',
       output: [],
     });
+  });
+
+  it('scores a run suspended at Clarify on its question and options, passes the clarification check, and drops the suspended run', async () => {
+    const asked: QtiV2Plan = {
+      ...PLAN,
+      needsClarification: true,
+      clarification: {
+        question: 'Dominant by which measure?',
+        options: ['Matches won', 'Goals scored'],
+      },
+    };
+    const { target, parts, options } = setUp(asked, []);
+    const deleted = jest.fn(() => Promise.resolve());
+    const engine = parts.workflow as unknown as {
+      createRun(): Promise<{ runId?: string }>;
+    };
+    let runId: string | undefined;
+    parts.workflow = {
+      createRun: async () => {
+        const created = await engine.createRun();
+        runId = created.runId;
+        return created as never;
+      },
+      deleteWorkflowRunById: deleted,
+    };
+    const result = (await target.generate(
+      'Which team was the most dominant?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    expect(result['text']).toBe(
+      'Dominant by which measure?\n- Matches won\n- Goals scored',
+    );
+    expect(
+      endsOnClarifyingQuestion().run({
+        answer: result['text'] as string,
+      } as never),
+    ).toBeUndefined();
+    expect(deleted).toHaveBeenCalledWith(runId);
+  });
+
+  it("scores a run suspended at Analyse on the agent's clarifying question: no answer is written", async () => {
+    const asking = agentResult([]);
+    asking.steps[0].toolCalls = [
+      {
+        payload: {
+          toolName: 'ask_clarification',
+          args: {
+            question: 'Which tournament?',
+            options: '2018 — Russia\n2022 — Qatar',
+          } as never,
+        },
+      },
+    ];
+    const { target, parts, options } = setUp(PLAN, [asking]);
+    const result = (await target.generate(
+      'Who scored the most?',
+      options as never,
+    )) as unknown as Record<string, unknown>;
+    expect(parts.writeAnswer).not.toHaveBeenCalled();
+    expect(result['text']).toBe(
+      'Which tournament?\n- 2018 — Russia\n- 2022 — Qatar',
+    );
+    expect(
+      endsOnClarifyingQuestion().run({
+        answer: result['text'] as string,
+      } as never),
+    ).toBeUndefined();
+    // Analyse's tool calls are still scored.
+    expect(result['steps']).toEqual(asking.steps);
   });
 
   it('fails the case when a step fails', async () => {

@@ -96,7 +96,10 @@ jest.mock('../workflows/workflows.service', () => ({
   WorkflowsService: class {},
 }));
 
-import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
+import {
+  streamStubWorkflow,
+  streamTurnWorkflow,
+} from '../../mastra/testing/turn-workflow.stub';
 import {
   QTI_V2_TURN_STEPS,
   planOf,
@@ -296,20 +299,23 @@ function build(options: BuildOptions = {}) {
     'assistant-v2': agentFor('assistant-v2', 'Questions to Insights v2'),
     'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
   };
-  const v2Workflow = qtiV2TurnWorkflow as unknown as {
-    createRun(): Promise<{
-      stream(args: { inputData: unknown; requestContext: unknown }): unknown;
-    }>;
-  };
+  // Suspended v2 runs dropped (their snapshots deleted, ADR-0043).
+  const discards = { count: 0 };
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
     listAgents: () => registry,
     streamWorkflow: jest.fn(
-      async (key: string, inputData: unknown, requestContext: unknown) =>
+      (key: string, inputData: unknown, requestContext: unknown) =>
         key === 'qti-v2-turn'
-          ? (await v2Workflow.createRun()).stream({ inputData, requestContext })
+          ? streamStubWorkflow(
+              qtiV2TurnWorkflow,
+              inputData,
+              requestContext,
+              discards,
+            )
           : streamTurnWorkflow(key, inputData, requestContext),
     ),
+    discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
       Promise.resolve({ id: `session-${id}` }),
     ),
@@ -374,14 +380,15 @@ function build(options: BuildOptions = {}) {
         : Promise.reject(new Error(`Workflow "${id}" not found`)),
     ),
   };
+  const runsRepository = new WorkflowRunsRepository(
+    new SqliteDocStore(new BetterSqlite3(':memory:'), 'workflow_runs'),
+  );
   const runs = new WorkflowRunsService(
     workflows as unknown as WorkflowsService,
     sessions,
     datasetsRepository as never,
     mastra as never,
-    new WorkflowRunsRepository(
-      new SqliteDocStore(new BetterSqlite3(':memory:'), 'workflow_runs'),
-    ),
+    runsRepository,
     new WorkflowNodeChatsRepository(
       new SqliteDocStore(
         new BetterSqlite3(':memory:'),
@@ -403,7 +410,17 @@ function build(options: BuildOptions = {}) {
     sessionStore.set(doc.id, doc);
     return doc;
   };
-  return { sessions, runs, mastra, registry, calls, chat, userAgents };
+  return {
+    sessions,
+    runs,
+    runsRepository,
+    mastra,
+    registry,
+    calls,
+    chat,
+    userAgents,
+    discards,
+  };
 }
 
 type Ctx = ReturnType<typeof build>;
@@ -440,6 +457,18 @@ async function runOf(
     ...extra,
   });
   const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
+  return { events, run };
+}
+
+/** Resume a waiting run with an answer (api.md 138). */
+async function resumeOf(
+  ctx: Ctx,
+  runId: string,
+  body: Record<string, unknown>,
+): Promise<{ events: RunStreamEvent[]; run: WorkflowRun }> {
+  const events: RunStreamEvent[] = [];
+  const prepared = await ctx.runs.prepareResume(runId, body);
+  const run = await ctx.runs.resume(prepared, (e) => events.push(e));
   return { events, run };
 }
 
@@ -767,10 +796,11 @@ describe('the run host (agents.md 5.14)', () => {
       'write-answer:success',
       'wrap-up:success',
     ]);
-    // The loop's steps carry their attempt (api.md 3.6).
+    // The loops' steps carry their attempt (api.md 3.6): Plan (Clarify
+    // loops back to it) and the analysis's.
     expect(
       run.steps.filter((s) => s.attempt !== undefined).map((s) => s.id),
-    ).toEqual(['analyse', 'validate']);
+    ).toEqual(['plan', 'analyse', 'validate']);
     expect(run.output).toMatchObject({
       sqlQueries: 1,
       failedQueries: 0,
@@ -821,6 +851,415 @@ describe('the run host (agents.md 5.14)', () => {
     expect(ctx.calls['data-readiness'][0].input).toEqual([
       { role: 'user', content: 'Assess the readiness of this dataset' },
     ]);
+  });
+});
+
+/** A plan that asks the user first (agents.md 5.11). */
+const ASKING_PLAN = planOf(
+  {
+    needsClarification: true,
+    clarification: {
+      question: 'Dominant by what measure?',
+      options: ['Matches won', 'Goals scored'],
+    },
+  },
+  'Which team was the most dominant?',
+);
+
+/** The agent asks the user mid-analysis (`ask_clarification`). */
+const ASK_CHUNKS = [
+  {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'a0',
+      toolName: 'ask_clarification',
+      args: {
+        question: 'Which tournament?',
+        options: '2018 — Russia\n2022 — Qatar',
+      },
+    },
+  },
+  { type: 'text-delta', payload: { text: 'Never reached.' } },
+];
+
+const stepLine = (s: { id: string; status: string; attempt?: number }) =>
+  `${s.id}:${s.status}${s.attempt ? `#${s.attempt}` : ''}`;
+
+describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
+  it('suspends at Clarify: the waiting step, input-required, then done with the run suspended', async () => {
+    const ctx = build();
+    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const { events, run } = await runOf(ctx, {
+      question: 'Which team was the most dominant?',
+      datasets: ['World Cup'],
+    });
+    const tail = events.slice(-3);
+    expect(tail[0]).toMatchObject({
+      type: 'step',
+      id: 'clarify',
+      status: 'suspended',
+      attempt: 1,
+    });
+    expect(tail[1]).toEqual({
+      type: 'input-required',
+      runId: run.id,
+      stepId: 'clarify',
+      title: 'Clarify',
+      question: 'Dominant by what measure?',
+      options: ['Matches won', 'Goals scored'],
+      expiresAt: expect.any(String) as unknown,
+    });
+    expect(tail[2]).toMatchObject({ type: 'done', run: { id: run.id } });
+    expect(run.status).toBe('suspended');
+    expect(run.waitingFor).toEqual({
+      stepId: 'clarify',
+      title: 'Clarify',
+      question: 'Dominant by what measure?',
+      options: ['Matches won', 'Goals scored'],
+      since: expect.any(String) as unknown,
+      expiresAt: (tail[1] as { expiresAt: string }).expiresAt,
+    });
+    expect(
+      Date.parse(run.waitingFor!.expiresAt) - Date.parse(run.waitingFor!.since),
+    ).toBeGreaterThanOrEqual(30 * 60 * 1000 - 1000);
+    // Only the steps that ran: the rest may still run.
+    expect(run.steps.map(stepLine)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'plan:success#1',
+      'clarify:suspended#1',
+    ]);
+    expect(run.finishedAt).toBeUndefined();
+    expect(run.answer).toBeUndefined();
+    // Stored as such.
+    expect((await ctx.runs.get(run.id)).status).toBe('suspended');
+    expect(await ctx.runsRepository.listSuspended()).toEqual([
+      expect.objectContaining({ id: run.id }),
+    ]);
+    // No agent turn ran: Plan asked first.
+    expect(ctx.calls['assistant-v2']).toHaveLength(0);
+    expect(ctx.discards.count).toBe(0);
+  });
+
+  it('resumes the same run with the answer: Clarify goes back to Plan, which plans with it, then the analysis and the answer', async () => {
+    const ctx = build();
+    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const started = await runOf(ctx, {
+      question: 'Which team was the most dominant?',
+      datasets: ['World Cup'],
+    });
+    const { events, run } = await resumeOf(ctx, started.run.id, {
+      stepId: 'clarify',
+      answer: '  Matches won ',
+    });
+    expect(events[0]).toEqual({
+      type: 'run',
+      runId: started.run.id,
+      workflowId: 'qti-v2-turn',
+    });
+    const steps = events.filter(
+      (e): e is Extract<RunStreamEvent, { type: 'step' }> => e.type === 'step',
+    );
+    expect(steps.map(stepLine)).toEqual([
+      'clarify:running#1',
+      'clarify:success#1',
+      'plan:running#2',
+      'plan:success#2',
+      'analyse:running#1',
+      'analyse:success#1',
+      'validate:running#1',
+      'validate:success#1',
+      'write-answer:running',
+      'write-answer:success',
+      'wrap-up:running',
+      'wrap-up:success',
+    ]);
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    expect(events.some((e) => e.type === 'input-required')).toBe(false);
+    expect(run.id).toBe(started.run.id);
+    expect(run.status).toBe('success');
+    expect(run.waitingFor).toBeUndefined();
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(run.steps.map(stepLine)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'plan:success#1',
+      'plan:success#2',
+      'clarify:success#1',
+      'analyse:success#1',
+      'validate:success#1',
+      'write-answer:success',
+      'wrap-up:success',
+    ]);
+    // Plan planned again with its question and the trimmed answer.
+    expect(ctx.mastra.planV2Turn).toHaveBeenCalledTimes(2);
+    expect(ctx.mastra.planV2Turn.mock.calls[1][0]).toMatchObject({
+      question: 'Which team was the most dominant?',
+      answered: {
+        question: 'Dominant by what measure?',
+        options: ['Matches won', 'Goals scored'],
+        answer: 'Matches won',
+      },
+    });
+    const stored = await ctx.runs.get(run.id);
+    expect(stored.status).toBe('success');
+    expect(stored.waitingFor).toBeUndefined();
+    // The workflow run's snapshot, written while it waited, is dropped.
+    expect(ctx.discards.count).toBe(1);
+    // Resumed once: a second answer is refused.
+    await expect(
+      ctx.runs.prepareResume(run.id, { stepId: 'clarify', answer: 'Again' }),
+    ).rejects.toThrow(`Run "${run.id}" is not waiting for an answer`);
+  });
+
+  it('suspends at Analyse on ask_clarification, and resumes by running the agent again with its question and the answer', async () => {
+    const ctx = build();
+    const agent = ctx.registry['assistant-v2'];
+    const defaultStream = agent.stream.getMockImplementation()!;
+    agent.stream.mockImplementationOnce((input, opts) => {
+      ctx.calls['assistant-v2'].push({ input, options: opts });
+      return Promise.resolve({
+        fullStream: streamOf(ASK_CHUNKS),
+        text: Promise.resolve(''),
+      });
+    });
+    const started = await runOf(ctx, V2_INPUT);
+    expect(started.run.status).toBe('suspended');
+    expect(started.run.waitingFor).toMatchObject({
+      stepId: 'analyse',
+      title: 'Analyse',
+      question: 'Which tournament?',
+      options: ['2018 — Russia', '2022 — Qatar'],
+    });
+    expect(started.run.steps.map(stepLine)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'plan:success#1',
+      'analyse:suspended#1',
+    ]);
+    // The question stopped the agent's stream, not the run.
+    const firstCall = ctx.calls['assistant-v2'][0];
+    expect(firstCall.options.abortSignal?.aborted).toBe(true);
+
+    agent.stream.mockImplementation(defaultStream);
+    const { events, run } = await resumeOf(ctx, started.run.id, {
+      stepId: 'analyse',
+      answer: '2022 — Qatar',
+    });
+    expect(run.status).toBe('success');
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(
+      events
+        .filter((e) => e.type === 'step')
+        .map((e) => stepLine(e as { id: string; status: string })),
+    ).toEqual([
+      'analyse:running#1',
+      'analyse:success#1',
+      'validate:running#1',
+      'validate:success#1',
+      'write-answer:running',
+      'write-answer:success',
+      'wrap-up:running',
+      'wrap-up:success',
+      'clarify:skipped',
+    ]);
+    // The agent runs again (no memory thread) with the conversation so far:
+    // the question, its clarifying question and the user's answer.
+    expect(ctx.calls['assistant-v2']).toHaveLength(2);
+    const second = ctx.calls['assistant-v2'][1];
+    expect(second.options.memory).toBeUndefined();
+    expect(second.input).toEqual([
+      { role: 'user', content: 'Who won?' },
+      {
+        role: 'assistant',
+        content: 'Which tournament?\n- 2018 — Russia\n- 2022 — Qatar',
+      },
+      { role: 'user', content: '2022 — Qatar' },
+    ]);
+    expect(
+      second.options.context.some((block) =>
+        block.content.startsWith('Analysis plan for this turn:'),
+      ),
+    ).toBe(true);
+  });
+
+  it('refuses a resume before any frame: 404, 409, 400 answer, 400 step', async () => {
+    const ctx = build();
+    await expect(
+      ctx.runs.prepareResume('nope', { stepId: 'clarify', answer: 'a' }),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: 'Run "nope" not found',
+    });
+    const done = await runOf(ctx, V2_INPUT);
+    await expect(
+      ctx.runs.prepareResume(done.run.id, { stepId: 'clarify', answer: 'a' }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: `Run "${done.run.id}" is not waiting for an answer`,
+    });
+    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const waiting = await runOf(ctx, V2_INPUT);
+    await expect(
+      ctx.runs.prepareResume(waiting.run.id, {
+        stepId: 'clarify',
+        answer: ' ',
+      }),
+    ).rejects.toMatchObject({ status: 400, message: 'Answer is required' });
+    await expect(
+      ctx.runs.prepareResume(waiting.run.id, {
+        stepId: 'analyse',
+        answer: 'a',
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'Step "analyse" is not waiting for an answer',
+    });
+    // The refusals took nothing: the run still waits.
+    const { run } = await resumeOf(ctx, waiting.run.id, {
+      stepId: 'clarify',
+      answer: 'Matches won',
+    });
+    expect(run.status).toBe('success');
+  });
+
+  it('answers 410 once the run expired: the stored run is stopped with waitingFor expired, its turn dropped', async () => {
+    jest.useFakeTimers({
+      doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+    });
+    try {
+      const ctx = build();
+      ctx.mastra.planV2Turn.mockResolvedValueOnce({
+        plan: ASKING_PLAN,
+        stopped: false,
+      });
+      const waiting = await runOf(ctx, V2_INPUT);
+      jest.advanceTimersByTime(30 * 60 * 1000);
+      await jest.runAllTimersAsync();
+      await expect(
+        ctx.runs.prepareResume(waiting.run.id, {
+          stepId: 'clarify',
+          answer: 'Matches won',
+        }),
+      ).rejects.toMatchObject({
+        status: 410,
+        message:
+          'This run can no longer continue — run it again with your answer',
+      });
+      const stored = await ctx.runs.get(waiting.run.id);
+      expect(stored.status).toBe('stopped');
+      expect(stored.waitingFor).toMatchObject({
+        stepId: 'clarify',
+        expired: true,
+      });
+      expect(stored.steps.find((s) => s.id === 'clarify')?.status).toBe(
+        'stopped',
+      );
+      expect(ctx.discards.count).toBe(1);
+      // Its host left memory with its memory thread.
+      expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(
+        `run-${waiting.run.id}`,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('"Run again with my answer": a run whose context is the expired run plans with its question and clarifying question', async () => {
+    const ctx = build();
+    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const waiting = await runOf(ctx, {
+      question: 'Which team was the most dominant?',
+      datasets: ['World Cup'],
+    });
+    // The app restarted: the waiting run can no longer go on.
+    await ctx.runs.onModuleInit();
+    await expect(
+      ctx.runs.prepareResume(waiting.run.id, {
+        stepId: 'clarify',
+        answer: 'Matches won',
+      }),
+    ).rejects.toMatchObject({ status: 410 });
+    const prepared = await ctx.runs.prepare(V2_WORKFLOW.id, {
+      input: { question: 'Matches won', datasets: ['World Cup'] },
+      context: { fromRunId: waiting.run.id },
+    });
+    expect(prepared.context).toEqual({
+      fromRunId: waiting.run.id,
+      question: 'Which team was the most dominant?',
+      answer: 'Dominant by what measure?\n- Matches won\n- Goals scored',
+    });
+    const rerun = await ctx.runs.stream(prepared, () => undefined);
+    expect(rerun.status).toBe('success');
+    // Plan sees the original question, its clarifying question, the answer.
+    const planned = ctx.mastra.planV2Turn.mock.calls.at(-1)![0] as {
+      messages: unknown;
+      question: string;
+    };
+    expect(planned.question).toBe('Matches won');
+    expect(planned.messages).toEqual([
+      { role: 'user', content: 'Which team was the most dominant?' },
+      {
+        role: 'assistant',
+        content: 'Dominant by what measure?\n- Matches won\n- Goals scored',
+      },
+      { role: 'user', content: 'Matches won' },
+    ]);
+  });
+
+  it('at start-up, a run stored suspended becomes stopped with waitingFor expired, and the leftover snapshots go', async () => {
+    const ctx = build();
+    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const waiting = await runOf(ctx, V2_INPUT);
+    await ctx.runs.onModuleInit();
+    const stored = await ctx.runsRepository.get(waiting.run.id);
+    expect(stored).toMatchObject({
+      status: 'stopped',
+      waitingFor: { stepId: 'clarify', expired: true },
+      finishedAt: expect.any(String) as unknown,
+    });
+    expect(ctx.mastra.discardSuspendedWorkflowRuns).toHaveBeenCalledWith(
+      'qti-v2-turn',
+    );
+    expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(
+      `run-${waiting.run.id}`,
+    );
+  });
+
+  it('a chat session still ends on the question as a clarification card: its workflow run is dropped', async () => {
+    const ctx = build();
+    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const session = ctx.chat('v2');
+    const events = await chatTurn(ctx, session.id, 'Which team?');
+    const done = events.at(-1) as { type: string; session?: SessionDoc };
+    expect(done.type).toBe('done');
+    expect(done.session?.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      content: 'Dominant by what measure?',
+      clarification: {
+        question: 'Dominant by what measure?',
+        options: [{ label: 'Matches won' }, { label: 'Goals scored' }],
+      },
+    });
+    expect(ctx.discards.count).toBe(1);
   });
 });
 

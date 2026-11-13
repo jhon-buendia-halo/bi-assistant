@@ -1,6 +1,7 @@
 import {
   RUN_INTERRUPTED_ERROR,
   RunStepTracker,
+  expiredRunPatch,
   interruptedRunPatch,
   loopStepIds,
   noteToolFrame,
@@ -510,6 +511,131 @@ describe('loopStepIds (api.md 117 edges)', () => {
     ]).toEqual(['analyse', 'validate']);
     expect(loopStepIds(undefined).size).toBe(0);
     expect(loopStepIds([{ from: 'a', to: 'b', kind: 'next' }]).size).toBe(0);
+  });
+
+  it("follows a branch straight back to the loop's source: v2's Plan and Clarify repeat", () => {
+    expect([
+      ...loopStepIds([
+        { from: 'load-catalog', to: 'plan', kind: 'next' },
+        { from: 'plan', to: 'clarify', kind: 'branch' },
+        { from: 'clarify', to: 'plan', kind: 'loop' },
+        { from: 'plan', to: 'analyse', kind: 'branch' },
+        { from: 'analyse', to: 'validate', kind: 'next' },
+        { from: 'validate', to: 'analyse', kind: 'loop' },
+      ]),
+    ]).toEqual(['plan', 'clarify', 'analyse', 'validate']);
+  });
+});
+
+describe('RunStepTracker: a step that waits for the user (api.md 138, ADR-0043)', () => {
+  const STEPS = [
+    { id: 'plan', title: 'Plan', kind: 'agent' as const, repeats: true },
+    { id: 'clarify', title: 'Clarify', kind: 'code' as const, repeats: true },
+    { id: 'analyse', title: 'Analyse', kind: 'agent' as const, repeats: true },
+    { id: 'write', title: 'Write answer', kind: 'agent' as const },
+  ];
+  const suspended = (id: string) => ({
+    type: 'workflow-step-suspended',
+    payload: { id, status: 'suspended', suspendPayload: { question: 'Q?' } },
+  });
+
+  it('marks the waiting step suspended, and pause() lists only the steps that ran', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('plan', { q: 1 }));
+    tracker.apply(result('plan', { plan: {} }));
+    tracker.apply(start('clarify', { plan: {} }));
+    expect(tracker.apply(suspended('clarify'))).toEqual({
+      id: 'clarify',
+      title: 'Clarify',
+      status: 'suspended',
+      attempt: 1,
+      input: { plan: {} },
+      startedAt: expect.any(String) as string,
+    });
+    expect(tracker.pause().map((s) => `${s.id}:${s.status}`)).toEqual([
+      'plan:success',
+      'clarify:suspended',
+    ]);
+  });
+
+  it('a resumed step goes on in the same attempt with its input, start and earlier tool calls; the next Plan is attempt 2', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('plan'));
+    tracker.apply(result('plan', {}));
+    tracker.apply(start('analyse', { n: 1 }));
+    tracker.noteTool('run_readonly_sql', 'before');
+    const waiting = tracker.apply(suspended('analyse'))!;
+    // Resumed: the engine starts the step again.
+    expect(tracker.apply(start('analyse', { n: 1 }))).toMatchObject({
+      status: 'running',
+      attempt: 1,
+      startedAt: waiting.startedAt,
+      input: { n: 1 },
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'before' }],
+    });
+    tracker.noteTool('run_readonly_sql', 'after');
+    expect(tracker.apply(result('analyse', {}))).toMatchObject({
+      status: 'success',
+      attempt: 1,
+      toolCalls: [
+        { tool: 'run_readonly_sql', input: 'before' },
+        { tool: 'run_readonly_sql', input: 'after' },
+      ],
+    });
+    // Clarify goes back to Plan: its next run is a second attempt.
+    tracker.apply(start('plan'));
+    tracker.apply(result('plan', {}));
+    expect(
+      tracker
+        .finish('success')
+        .steps.map((s) => `${s.id}:${s.status}#${s.attempt ?? '-'}`),
+    ).toEqual([
+      'plan:success#1',
+      'plan:success#2',
+      'clarify:skipped#-',
+      'analyse:success#1',
+      'write:skipped#-',
+    ]);
+  });
+});
+
+describe('expiredRunPatch (api.md 138 410, ADR-0043)', () => {
+  it('stops the run, keeps waitingFor marked expired and stops the waiting step', () => {
+    const waitingFor = {
+      stepId: 'clarify',
+      title: 'Clarify',
+      question: 'Q?',
+      options: ['a', 'b'],
+      since: '2026-11-11T10:00:00.000Z',
+      expiresAt: '2026-11-11T10:30:00.000Z',
+    };
+    expect(
+      expiredRunPatch(
+        {
+          ...base,
+          status: 'suspended',
+          waitingFor,
+          steps: [
+            { id: 'plan', title: 'Plan', status: 'success' },
+            { id: 'clarify', title: 'Clarify', status: 'suspended' },
+          ],
+        },
+        '2026-11-11T11:00:00.000Z',
+      ),
+    ).toEqual({
+      status: 'stopped',
+      waitingFor: { ...waitingFor, expired: true },
+      steps: [
+        { id: 'plan', title: 'Plan', status: 'success' },
+        {
+          id: 'clarify',
+          title: 'Clarify',
+          status: 'stopped',
+          endedAt: '2026-11-11T11:00:00.000Z',
+        },
+      ],
+      finishedAt: '2026-11-11T11:00:00.000Z',
+    });
   });
 });
 
