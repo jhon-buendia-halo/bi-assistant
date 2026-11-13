@@ -568,6 +568,36 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.nodeChat()).toEqual({ state: 'ready', runId: 'run-1' });
   });
 
+  it("reads a stored run's contract hash and its contract violations (ui.md 4.4b)", () => {
+    expect(designer.contractViolations()).toEqual({});
+    expect(designer.runContractHash()).toBeNull();
+    designer.run.set(
+      storedRun({
+        status: 'failed',
+        contractHash: '0a1b2c3d4e5f',
+        steps: [
+          {
+            id: 'answer',
+            title: 'Answer',
+            status: 'failed',
+            error: 'Contract violation in Answer (input): question Required',
+          },
+        ],
+      }),
+    );
+    expect(designer.contractViolations()).toEqual({ answer: 'input' });
+    expect(designer.runContractHash()).toBe('0a1b2c3d4e5f');
+    // An old run has no hash; a plain failure is no violation.
+    designer.run.set(
+      storedRun({
+        status: 'failed',
+        steps: [{ id: 'answer', title: 'Answer', status: 'failed', error: 'Boom' }],
+      }),
+    );
+    expect(designer.contractViolations()).toEqual({});
+    expect(designer.runContractHash()).toBeNull();
+  });
+
   it('no longer reads agent phases from the stream (agents have no workflow of their own)', () => {
     executeQuestion();
     expect('phases' in designer).toBe(false);

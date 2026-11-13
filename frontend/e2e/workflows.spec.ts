@@ -724,6 +724,50 @@ test.describe('Feature: Workflows (the designer)', () => {
           }
         },
       );
+      await scenarioStep(page, 'When I double-click "Analyse" again', async () => {
+        await openNode(page, 'analyse', 'Analyse');
+      });
+      await scenarioStep(
+        page,
+        'Then its Receives lists "question" and "catalog" with their types',
+        async () => {
+          const receives = nodeDialog(page)
+            .getByTestId('workflow-step-field-input')
+            .getByTestId('workflow-contract-field');
+          await expect(receives.filter({ hasText: /^question\b/ })).toContainText(
+            /: string$/,
+          );
+          await expect(receives.filter({ hasText: /^catalog\b/ })).toContainText(/: \S+/);
+        },
+      );
+      await scenarioStep(
+        page,
+        'And its Output in Schema mode shows the declared contract',
+        async () => {
+          const output = nodeDialog(page).getByTestId('workflow-ndv-output');
+          await output.getByTestId('workflow-data-mode-schema').click();
+          await expect(output.getByTestId('workflow-data-schema-declared')).toHaveText(
+            'Declared contract',
+          );
+          await expect(
+            output.getByTestId('workflow-data-schema').getByTestId('workflow-contract-field'),
+          ).not.toHaveCount(0);
+        },
+      );
+      await scenarioStep(
+        page,
+        'And its Settings show the contract the run used',
+        async () => {
+          const dialog = nodeDialog(page);
+          await dialog.getByTestId('workflow-ndv-tab-settings').click();
+          await expect(dialog.getByText('Contract', { exact: true })).toBeVisible();
+          await expect(dialog.getByTestId('workflow-ndv-setting-contract')).toHaveText(
+            /^\s*[0-9a-f]{12}\s*$/,
+          );
+          await expect(dialog.getByTestId('workflow-ndv-contract-older')).toHaveCount(0);
+          await closeNode(page);
+        },
+      );
     },
   );
 

@@ -37,7 +37,9 @@ import {
 } from 'lucide-angular';
 import { WorkflowDetail } from '../../models/workflow.model';
 import { WorkflowNodeStatus } from '../../models/workflow-node.model';
+import { ContractSide } from '../../services/workflow-contract';
 import {
+  CanvasEdge,
   CanvasNode,
   CanvasNodeKind,
   CanvasSubNode,
@@ -110,6 +112,12 @@ export class WorkflowCanvas {
   readonly selectedId = input<string | null>(null);
   /** Each node's status in the run shown, by node id (incl. `start` / `end`); Start may be `invalid`. */
   readonly statuses = input<Record<string, WorkflowNodeStatus>>({});
+  /**
+   * The steps that failed on a contract violation, by id, with the side it
+   * broke on: the edge into an input violation, or out of an output one, is
+   * marked.
+   */
+  readonly violations = input<Record<string, ContractSide>>({});
   /** A node chosen by a single click, or null for a click on the background. */
   readonly selectNode = output<string | null>();
   /** Open a node's details: double click or Enter, or a click on an agent's sub-node (its step id). */
@@ -168,6 +176,23 @@ export class WorkflowCanvas {
   /** An edge is done once the node it leaves succeeded. */
   protected done(id: string): boolean {
     return this.status(id) === 'success';
+  }
+
+  /** The edge carries the data that broke a step's contract. */
+  protected violated(edge: CanvasEdge): boolean {
+    const violations = this.violations();
+    return (
+      (Object.hasOwn(violations, edge.to) && violations[edge.to] === 'input') ||
+      (Object.hasOwn(violations, edge.from) &&
+        violations[edge.from] === 'output')
+    );
+  }
+
+  /** The edge label's title and screen-reader text. */
+  protected edgeText(edge: CanvasEdge): string {
+    return this.violated(edge)
+      ? `${edge.passesOn}. Contract violation`
+      : edge.passesOn;
   }
 
   protected subNodeLabel(node: CanvasNode, sub: CanvasSubNode): string {

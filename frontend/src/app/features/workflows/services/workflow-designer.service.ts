@@ -34,6 +34,7 @@ import {
   inputErrorsByField,
   validateRunForm,
 } from './workflow-input-validation';
+import { ContractSide, contractViolationSides } from './workflow-contract';
 import { WorkflowRunsApiService } from './workflow-runs-api.service';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
@@ -248,6 +249,17 @@ export class WorkflowDesigner {
       ? NO_RUN_SUMMARY
       : workflowStateSummary(source, this.nodes());
   });
+
+  /**
+   * The steps of the run shown that failed on a contract violation, by id,
+   * with the side it broke on (ui.md 4.4b); empty with no run.
+   */
+  readonly contractViolations = computed<Record<string, ContractSide>>(() =>
+    contractViolationSides(this.runResult()?.steps),
+  );
+
+  /** The stored run's `contractHash`; null while live, or for an old run. */
+  readonly runContractHash = computed(() => this.run()?.contractHash ?? null);
 
   /** Each node's status in the run shown (Start and End included); empty with no run. */
   readonly nodeStatuses = computed<Record<string, WorkflowNodeStatus>>(() =>

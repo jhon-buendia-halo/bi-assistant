@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -30,6 +31,11 @@ import {
   NodeInspection,
   WorkflowNodeKind,
 } from '../../models/workflow-node.model';
+import {
+  ContractField,
+  contractFields,
+  parseContractViolation,
+} from '../../services/workflow-contract';
 import {
   fieldRulesLabel,
   usedByTitles,
@@ -75,7 +81,12 @@ const FOCUSABLE =
  */
 @Component({
   selector: 'app-workflow-node-dialog',
-  imports: [LucideAngularModule, WorkflowDataView, WorkflowNodeChat],
+  imports: [
+    LucideAngularModule,
+    NgTemplateOutlet,
+    WorkflowDataView,
+    WorkflowNodeChat,
+  ],
   templateUrl: './workflow-node-dialog.html',
   host: {
     '(document:keydown.escape)': 'close.emit()',
@@ -88,6 +99,8 @@ export class WorkflowNodeDialog {
   readonly node = input.required<NodeInspection>();
   readonly workflow = input.required<WorkflowDetail>();
   readonly runId = input<string | null>(null);
+  /** The stored run's `contractHash`; null while live, or for an old run. */
+  readonly runContractHash = input<string | null>(null);
 
   readonly close = output<void>();
   readonly openAgent = output<string>();
@@ -196,11 +209,37 @@ export class WorkflowNodeDialog {
     return runStatusLine({ status });
   });
 
-  /** Names of the last step's output: what the workflow returns. */
-  readonly outputFields = computed(() => {
+  /** The last step's output, typed when declared: what the workflow returns. */
+  readonly outputFields = computed<ContractField[]>(() => {
     const steps = this.workflow().steps;
-    return steps.length ? steps[steps.length - 1].output : [];
+    const last = steps.length ? steps[steps.length - 1] : null;
+    return last ? contractFields(last.outputSchema, last.output) : [];
   });
+
+  /** A step's declared input (Receives), typed; its names when none is declared. */
+  readonly receives = computed<ContractField[]>(() => {
+    const step = this.node().step;
+    return step ? contractFields(step.inputSchema, step.input) : [];
+  });
+  /** A step's declared output (Returns), typed; its names when none is declared. */
+  readonly returns = computed<ContractField[]>(() => {
+    const step = this.node().step;
+    return step ? contractFields(step.outputSchema, step.output) : [];
+  });
+
+  /** The workflow's contract hash; null from an older backend. */
+  readonly contractHash = computed(() => this.workflow().contractHash ?? null);
+  /** The stored run's hash when it differs from the workflow's; else null. */
+  readonly olderContract = computed(() => {
+    const ran = this.runContractHash();
+    const current = this.contractHash();
+    return ran !== null && current !== null && ran !== current ? ran : null;
+  });
+
+  /** The node's error split for display when it is a contract violation. */
+  readonly violation = computed(() =>
+    this.node().tool ? null : parseContractViolation(this.run()?.error),
+  );
 
   readonly toolCalls = computed<NodeToolCallView[]>(
     () => this.run()?.toolCalls ?? [],
@@ -212,6 +251,10 @@ export class WorkflowNodeDialog {
 
   list(names: string[] | undefined): string {
     return names?.length ? names.join(', ') : 'None';
+  }
+
+  fieldNames(fields: ContractField[]): string[] {
+    return fields.map((field) => field.name);
   }
 
   /** A Start input field's rules (`Max 4000 characters`); '' when none. */
