@@ -172,9 +172,20 @@ async function openNode(page: Page, id: string, title: string): Promise<Locator>
   return dialog;
 }
 
-/** Double-click a tool sub-node under an agent step: the tool's dialog opens. */
+/** Open the Tools sub-node's list under an agent step: its tools, the first focused. */
+async function openToolsMenu(page: Page, stepId: string): Promise<Locator> {
+  await page.getByTestId(`workflow-subnode-${stepId}-tools`).click();
+  const menu = page.getByTestId(`workflow-tools-menu-${stepId}`);
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  return menu;
+}
+
+/** Pick a tool from an agent step's Tools list: the tool's dialog opens. */
 async function openTool(page: Page, stepId: string, tool: string): Promise<Locator> {
-  await page.getByTestId(`workflow-subnode-${stepId}-tool-${tool}`).dblclick();
+  const menu = await openToolsMenu(page, stepId);
+  await menu.getByRole('menuitem', { name: tool, exact: true }).click();
+  await expect(menu).toHaveCount(0);
   const dialog = nodeDialog(page);
   await expect(dialog.getByTestId('workflow-ndv-title')).toHaveText(tool);
   return dialog;
@@ -1143,8 +1154,23 @@ test.describe('Feature: Workflows (the designer)', () => {
       await openWorkflows(page);
       await openWorkflow(page, V2_ID, V2);
     });
-    await test.step('When I double-click the "run_readonly_sql" tool under "Analyse"', async () => {
-      await openTool(page, 'analyse', 'run_readonly_sql');
+    await test.step('When I open the Tools sub-node under "Analyse" and pick "run_readonly_sql"', async () => {
+      const tools = page.getByTestId('workflow-subnode-analyse-tools');
+      await expect(tools).toHaveAccessibleName('Tools of Analyse: 5 tools');
+      const menu = await openToolsMenu(page, 'analyse');
+      await expect(menu.getByRole('menuitem')).toHaveText([
+        'list_entities',
+        'describe_entity',
+        'sample_rows',
+        'run_readonly_sql',
+        'ask_clarification',
+      ]);
+      // Keyboard: down to the fourth tool, then Enter.
+      for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
+      await expect(menu.getByRole('menuitem', { name: 'run_readonly_sql' })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(menu).toHaveCount(0);
+      await expect(nodeDialog(page).getByTestId('workflow-ndv-title')).toHaveText('run_readonly_sql');
     });
     await test.step(
       "Then its dialog shows the tool's description and inputs, not the agent's prompt",
@@ -1162,9 +1188,7 @@ test.describe('Feature: Workflows (the designer)', () => {
           'This tool has not run yet. Execute the workflow to see its calls.',
         );
         await closeNode(page);
-        await expect(
-          page.getByTestId('workflow-subnode-analyse-tool-run_readonly_sql'),
-        ).toBeFocused();
+        await expect(page.getByTestId('workflow-subnode-analyse-tools')).toBeFocused();
       },
     );
     await test.step(`When I run it on "${QUESTION}" and open the tool again`, async () => {
@@ -1319,6 +1343,12 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await scan('Questions to Insights v2 page, Analyse dialog');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
+
+  await openToolsMenu(page, 'analyse');
+  await scan('Questions to Insights v2 page, Analyse Tools list');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('workflow-tools-menu-analyse')).toHaveCount(0);
+  await expect(page.getByTestId('workflow-subnode-analyse-tools')).toBeFocused();
 
   await openTool(page, 'analyse', 'run_readonly_sql');
   await scan('Questions to Insights v2 page, run_readonly_sql tool dialog');

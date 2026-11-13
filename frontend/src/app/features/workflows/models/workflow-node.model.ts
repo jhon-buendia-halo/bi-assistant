@@ -18,10 +18,10 @@ export const START_NODE_ID = 'start';
 /** The id of the End (output) node; no step may use it. */
 export const END_NODE_ID = 'end';
 
-/** `tool`: a tool of an agent step, opened from its sub-node on the canvas. */
+/** `tool`: a tool of an agent step, opened from its Tools sub-node's list on the canvas. */
 export type WorkflowNodeKind = 'trigger' | 'code' | 'agent' | 'output' | 'tool';
 
-/** The id of an agent step's tool sub-node, which opens that tool's details. */
+/** The node id of an agent step's tool, picked from its Tools sub-node's list: opens that tool's details. */
 export function toolNodeId(stepId: string, tool: string): string {
   return `${stepId}-tool-${tool}`;
 }

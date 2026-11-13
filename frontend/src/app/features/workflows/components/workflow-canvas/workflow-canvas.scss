@@ -133,21 +133,20 @@
 
 // Start (rounded left), code squares, the wide agent, End (rounded right).
 .canvas-node {
-  border-radius: 14px;
+  border-radius: 10px;
   box-shadow: var(--qti-shadow-card);
 
   &[data-kind="trigger"] {
-    border-radius: 40px 14px 14px 40px;
+    border-radius: 26px 10px 10px 26px;
   }
 
   &[data-kind="output"] {
-    border-radius: 14px 40px 40px 14px;
+    border-radius: 10px 26px 26px 10px;
   }
 
   &[data-kind="agent"] {
     justify-content: flex-start;
-    gap: 10px;
-    padding: 0 14px;
+    padding: 0 6px;
     border-color: var(--qti-span-agent);
   }
 
@@ -179,9 +178,9 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: var(--qti-neutral-soft);
   color: var(--qti-on-neutral-soft);
 
@@ -190,9 +189,11 @@
     color: var(--qti-on-warning-soft);
   }
 
+  // Before the agent's title, inside the node.
   &[data-kind="agent"] {
-    width: 36px;
-    height: 36px;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
     background: var(--qti-surface-muted);
     color: var(--qti-span-agent);
   }
@@ -310,11 +311,23 @@
     color: var(--qti-span-model);
   }
 
-  &[data-kind="more"] {
-    color: var(--qti-fg-muted);
+  &:hover,
+  &[aria-expanded="true"] {
+    border-color: var(--qti-border-selected);
+  }
+}
+
+// The Tools sub-node's list (`.menu` / `.menu-item` from components.css).
+.tools-menu .menu-item {
+  color: var(--qti-fg);
+
+  lucide-angular {
+    color: var(--qti-span-tool);
   }
 
-  &:hover {
-    border-color: var(--qti-border-selected);
+  &:focus-visible {
+    outline: 2px solid var(--qti-focus);
+    outline-offset: -2px;
+    background-color: var(--qti-surface-muted);
   }
 }
