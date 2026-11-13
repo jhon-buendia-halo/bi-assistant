@@ -48,6 +48,9 @@ import {
 
 export type { LiveToolCall, RunStepView, RunView };
 
+/** A step of the run panel: its last attempt, and how many times it ran. */
+export type RunPanelStep = RunStepView & { attempts: number };
+
 /** How often, and how many times, a stopped run is read back until it is stored. */
 const STOPPED_POLL_MS = 300;
 const STOPPED_POLL_TRIES = 10;
@@ -128,8 +131,8 @@ export class WorkflowDesigner {
   /** Live: when the run started and ended, stamped here. */
   private readonly liveStartedAt = signal<string | null>(null);
   private readonly liveFinishedAt = signal<string | null>(null);
-  /** Live: the step events so far, by step id. */
-  readonly liveSteps = signal<Record<string, WorkflowRunStep>>({});
+  /** Live: the step events so far, by step id: one per attempt, in order. */
+  readonly liveSteps = signal<Record<string, WorkflowRunStep[]>>({});
   /** Live: the agent's reasoning so far. */
   readonly reasoning = signal('');
   /** Live: the agent's tool calls so far. */
@@ -178,7 +181,9 @@ export class WorkflowDesigner {
         runId: stored.id,
         input: stored.input ?? null,
         startedAt: stored.startedAt,
-        ...(finishedAt !== null && finishedAt !== undefined ? { finishedAt } : {}),
+        ...(finishedAt !== null && finishedAt !== undefined
+          ? { finishedAt }
+          : {}),
       };
     }
     if (this.runId() === null && !this.running() && !this.stopped()) {
@@ -196,26 +201,37 @@ export class WorkflowDesigner {
     return {
       status,
       ...(failure !== null ? { error: failure } : {}),
-      steps: workflow.steps.map((step) => {
-        const event = Object.hasOwn(live, step.id) ? live[step.id] : null;
-        let stepStatus = event === null ? null : event.status;
-        if (stepStatus === 'running' && status !== 'running') {
-          stepStatus = status === 'stopped' ? 'stopped' : 'failed';
-        }
-        return {
-          id: step.id,
-          title: event?.title ?? step.title,
-          kind: step.kind,
-          status: stepStatus,
-          ...(event?.input !== undefined ? { input: event.input } : {}),
-          ...(event?.inputTruncated ? { inputTruncated: true as const } : {}),
-          ...(event?.output !== undefined ? { output: event.output } : {}),
-          ...(event?.outputTruncated ? { outputTruncated: true as const } : {}),
-          ...(event?.error !== undefined ? { error: event.error } : {}),
-          ...(event?.startedAt !== undefined ? { startedAt: event.startedAt } : {}),
-          ...(event?.endedAt !== undefined ? { endedAt: event.endedAt } : {}),
-          ...(event?.toolCalls !== undefined ? { toolCalls: event.toolCalls } : {}),
-        };
+      steps: workflow.steps.flatMap((step) => {
+        const events: (WorkflowRunStep | null)[] = Object.hasOwn(live, step.id)
+          ? live[step.id]
+          : [null];
+        return events.map((event): RunStepView => {
+          let stepStatus = event === null ? null : event.status;
+          if (stepStatus === 'running' && status !== 'running') {
+            stepStatus = status === 'stopped' ? 'stopped' : 'failed';
+          }
+          return {
+            id: step.id,
+            title: event?.title ?? step.title,
+            kind: step.kind,
+            status: stepStatus,
+            ...(event?.input !== undefined ? { input: event.input } : {}),
+            ...(event?.inputTruncated ? { inputTruncated: true as const } : {}),
+            ...(event?.output !== undefined ? { output: event.output } : {}),
+            ...(event?.outputTruncated
+              ? { outputTruncated: true as const }
+              : {}),
+            ...(event?.error !== undefined ? { error: event.error } : {}),
+            ...(event?.startedAt !== undefined
+              ? { startedAt: event.startedAt }
+              : {}),
+            ...(event?.endedAt !== undefined ? { endedAt: event.endedAt } : {}),
+            ...(event?.toolCalls !== undefined
+              ? { toolCalls: event.toolCalls }
+              : {}),
+            ...(event?.attempt !== undefined ? { attempt: event.attempt } : {}),
+          };
+        });
       }),
       runId: this.runId(),
       input: this.liveInput(),
@@ -224,17 +240,19 @@ export class WorkflowDesigner {
     };
   });
 
-  private readonly inspectionSource = computed<NodeInspectionSource | null>(() => {
-    const workflow = this.workflow();
-    if (workflow === null) return null;
-    return {
-      workflow,
-      run: this.runResult(),
-      liveToolCalls: this.toolCalls(),
-      running: this.running(),
-      inputErrors: this.inputErrors(),
-    };
-  });
+  private readonly inspectionSource = computed<NodeInspectionSource | null>(
+    () => {
+      const workflow = this.workflow();
+      if (workflow === null) return null;
+      return {
+        workflow,
+        run: this.runResult(),
+        liveToolCalls: this.toolCalls(),
+        running: this.running(),
+        inputErrors: this.inputErrors(),
+      };
+    },
+  );
 
   /** Start, every step and End, with what each received and produced in the run shown. */
   readonly nodes = computed<NodeInspection[]>(() => {
@@ -260,6 +278,30 @@ export class WorkflowDesigner {
 
   /** The stored run's `contractHash`; null while live, or for an old run. */
   readonly runContractHash = computed(() => this.run()?.contractHash ?? null);
+
+  /**
+   * The run panel's steps: each step once, as its last attempt, with how
+   * many times it ran; in the order the run shows them.
+   */
+  readonly runPanelSteps = computed<RunPanelStep[]>(() => {
+    const steps = this.runResult()?.steps ?? [];
+    const byId = new Map<string, RunPanelStep>();
+    for (const step of steps) {
+      const seen = byId.get(step.id);
+      byId.set(step.id, { ...step, attempts: (seen?.attempts ?? 0) + 1 });
+    }
+    return [...byId.values()];
+  });
+
+  /** How many times each step ran in the run shown (a loop's retry runs one twice); empty with no run. */
+  readonly nodeAttempts = computed<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const step of this.runResult()?.steps ?? []) {
+      if (step.status === null) continue;
+      out[step.id] = (Object.hasOwn(out, step.id) ? out[step.id] : 0) + 1;
+    }
+    return out;
+  });
 
   /** Each node's status in the run shown (Start and End included); empty with no run. */
   readonly nodeStatuses = computed<Record<string, WorkflowNodeStatus>>(() =>
@@ -622,7 +664,7 @@ export class WorkflowDesigner {
           },
           onStep: (step) => {
             if (!live()) return;
-            this.liveSteps.update((steps) => ({ ...steps, [step.id]: step }));
+            this.applyStep(workflow, step);
           },
           onReasoning: (delta) => {
             if (live()) this.reasoning.update((text) => text + delta);
@@ -685,6 +727,28 @@ export class WorkflowDesigner {
         this.running.set(false);
         this.abort = null;
       });
+  }
+
+  /**
+   * A step event: replaces the event of the same attempt, or adds the next
+   * attempt. An agent step that starts begins with no live tool calls or
+   * reasoning of its own (an earlier agent step's are in its stored event).
+   */
+  private applyStep(workflow: WorkflowDetail, step: WorkflowRunStep): void {
+    const attempt = step.attempt ?? 1;
+    this.liveSteps.update((steps) => {
+      const list = Object.hasOwn(steps, step.id) ? [...steps[step.id]] : [];
+      const at = list.findIndex((e) => (e.attempt ?? 1) === attempt);
+      if (at >= 0) list[at] = step;
+      else list.push(step);
+      list.sort((a, b) => (a.attempt ?? 1) - (b.attempt ?? 1));
+      return { ...steps, [step.id]: list };
+    });
+    const kind = workflow.steps.find((s) => s.id === step.id)?.kind;
+    if (kind === 'agent' && step.status === 'running') {
+      this.toolCalls.set([]);
+      this.reasoning.set('');
+    }
   }
 
   /**

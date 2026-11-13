@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WorkflowDetail } from '../../models/workflow.model';
+import { GRAPH_WORKFLOW } from '../../services/workflow-graph.testing';
 import { WorkflowCanvas } from './workflow-canvas';
 
 const V2: WorkflowDetail = {
@@ -592,5 +593,77 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       ),
     ).toBe('url(#workflow-canvas-arrow-done)');
     expect(subDone()).toEqual(['true', 'true', 'true', 'true']);
+  });
+
+  it('marks every connector of a linear workflow `next`, with no edge labels', () => {
+    expect(
+      Array.from(el.querySelectorAll('path.edge')).map((p) => p.getAttribute('data-kind')),
+    ).toEqual(['next', 'next', 'next', 'next', 'next']);
+    expect(el.querySelector('[data-testid^="workflow-edge-label-"]')).toBeNull();
+  });
+
+  describe('a graph with a branch and a retry loop', () => {
+    beforeEach(() => {
+      fixture.componentRef.setInput('workflow', GRAPH_WORKFLOW);
+      fixture.detectChanges();
+    });
+
+    const kind = (id: string) => q(`workflow-connector-${id}`)?.getAttribute('data-kind');
+
+    it('draws each edge with its kind and labels the branches and the loop', () => {
+      expect(kind('plan-clarify')).toBe('branch');
+      expect(kind('plan-analyse')).toBe('branch');
+      expect(kind('validate-analyse')).toBe('loop');
+      expect(kind('clarify-end')).toBe('next');
+      expect(text(q('workflow-edge-label-plan-clarify'))).toBe('Needs clarification');
+      expect(text(q('workflow-edge-label-plan-analyse'))).toBe('Clear');
+      expect(text(q('workflow-edge-label-validate-analyse'))).toBe('Retry once');
+      expect(q('workflow-edge-label-validate-analyse')?.getAttribute('data-kind')).toBe('loop');
+      expect(text(q('workflow-edge-label-validate-write-answer'))).toBe('Valid or retried');
+      expect(q('workflow-edge-label-analyse-validate')).toBeNull();
+      // Every step is a node, Clarify too.
+      expect(q('workflow-node-clarify')).not.toBeNull();
+    });
+
+    it("mutes the branch the run didn't take, and badges a step that ran twice", () => {
+      fixture.componentRef.setInput('statuses', {
+        start: 'success',
+        'receive-question': 'success',
+        'load-catalog': 'success',
+        plan: 'success',
+        clarify: 'skipped',
+        analyse: 'success',
+        validate: 'success',
+        'write-answer': 'success',
+        'wrap-up': 'success',
+        end: 'success',
+      });
+      fixture.componentRef.setInput('attempts', { analyse: 2, validate: 2, plan: 1 });
+      fixture.detectChanges();
+      expect(q('workflow-node-clarify')?.getAttribute('data-skipped')).toBe('true');
+      expect(q('workflow-node-analyse')?.getAttribute('data-skipped')).toBeNull();
+      expect(q('workflow-connector-plan-clarify')?.getAttribute('data-skipped')).toBe('true');
+      expect(q('workflow-connector-plan-clarify')?.getAttribute('data-done')).toBe('false');
+      expect(q('workflow-connector-clarify-end')?.getAttribute('data-skipped')).toBe('true');
+      expect(q('workflow-edge-label-plan-clarify')?.getAttribute('data-skipped')).toBe('true');
+      expect(q('workflow-connector-plan-analyse')?.getAttribute('data-done')).toBe('true');
+      // The loop was taken: Analyse ran again.
+      expect(q('workflow-connector-validate-analyse')?.getAttribute('data-done')).toBe('true');
+
+      const badge = (id: string) =>
+        q(`workflow-node-${id}`)?.querySelector('[data-testid="workflow-node-attempts"]');
+      expect(text(badge('analyse')!)).toBe('×2');
+      expect(text(badge('validate')!)).toBe('×2');
+      expect(badge('plan')).toBeNull();
+      expect(q('workflow-node-analyse')?.textContent).toContain('ran 2 times');
+    });
+
+    it('leaves the loop undone when the step it goes back to ran once', () => {
+      fixture.componentRef.setInput('statuses', { validate: 'success', analyse: 'success' });
+      fixture.componentRef.setInput('attempts', { analyse: 1, validate: 1 });
+      fixture.detectChanges();
+      expect(q('workflow-connector-validate-analyse')?.getAttribute('data-done')).toBe('false');
+      expect(all('workflow-node-attempts')).toEqual([]);
+    });
   });
 });

@@ -108,6 +108,7 @@ function stepOf(event: StreamFrame): WorkflowRunStep {
     ...(e.startedAt !== undefined ? { startedAt: e.startedAt } : {}),
     ...(e.endedAt !== undefined ? { endedAt: e.endedAt } : {}),
     ...(e.toolCalls !== undefined ? { toolCalls: e.toolCalls } : {}),
+    ...(typeof e.attempt === 'number' ? { attempt: e.attempt } : {}),
   };
 }
 

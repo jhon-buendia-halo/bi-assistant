@@ -65,6 +65,8 @@ export interface NodeRunView {
   durationMs: number | null;
   /** Stored `step.toolCalls`, else the live calls of the running agent step. */
   toolCalls: NodeToolCallView[];
+  /** Which run of a repeated step this is (1, 2, …); absent for a step that ran once. */
+  attempt?: number;
 }
 
 /** What a step can see while it runs, besides its own input. */
@@ -98,8 +100,13 @@ export interface NodeInspection {
   step: WorkflowDetailStep | null;
   /** The step's agent, resolved through `step.agent.key`. */
   agent: WorkflowAgentDetail | null;
-  /** Null when no run is shown, or the node never started. */
+  /** Null when no run is shown, or the node never started; a repeated step's last attempt. */
   run: NodeRunView | null;
+  /**
+   * A step that ran more than once in the run shown (a loop's retry): every
+   * attempt in order, the last one being `run`; absent otherwise.
+   */
+  attempts?: NodeRunView[];
   /** Steps only. */
   context: NodeContext | null;
   /** Tools only (`kind: 'tool'`); their `run` and `context` are null. */

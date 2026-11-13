@@ -118,6 +118,8 @@ export class WorkflowCanvas {
    * marked.
    */
   readonly violations = input<Record<string, ContractSide>>({});
+  /** How many times each step ran in the run shown, for a step that ran more than once (a loop's retry). */
+  readonly attempts = input<Record<string, number>>({});
   /** A node chosen by a single click, or null for a click on the background. */
   readonly selectNode = output<string | null>();
   /** Open a node's details: double click or Enter, or a click on an agent's sub-node (its step id). */
@@ -176,6 +178,31 @@ export class WorkflowCanvas {
   /** An edge is done once the node it leaves succeeded. */
   protected done(id: string): boolean {
     return this.status(id) === 'success';
+  }
+
+  /** A step the run skipped (the branch not taken, or after a failure): drawn muted. */
+  protected skipped(id: string): boolean {
+    return this.status(id) === 'skipped';
+  }
+
+  /** How many times a step ran, when more than once; else null. */
+  protected attemptCount(id: string): number | null {
+    const attempts = this.attempts();
+    return Object.hasOwn(attempts, id) && attempts[id] > 1 ? attempts[id] : null;
+  }
+
+  /** An edge into or out of a skipped step is muted. */
+  protected edgeSkipped(edge: CanvasEdge): boolean {
+    return this.skipped(edge.from) || this.skipped(edge.to);
+  }
+
+  /**
+   * An edge was followed: the node it leaves succeeded and the one it enters
+   * was not skipped; a loop, only once the step it goes back to ran again.
+   */
+  protected edgeDone(edge: CanvasEdge): boolean {
+    if (!this.done(edge.from) || this.edgeSkipped(edge)) return false;
+    return edge.kind !== 'loop' || (this.attemptCount(edge.to) ?? 1) > 1;
   }
 
   /** The edge carries the data that broke a step's contract. */

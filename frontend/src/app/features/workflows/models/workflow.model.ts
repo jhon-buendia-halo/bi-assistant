@@ -159,6 +159,57 @@ export interface WorkflowDetail extends Omit<WorkflowSummary, 'agents'> {
    * fields and every step's schemas); absent from an older backend.
    */
   contractHash?: string;
+  /**
+   * The graph's edges (api.md 117): `next` joins steps in order, `branch`
+   * is one way out of a `.branch()`, `loop` goes back to an earlier step.
+   * Absent from an older backend: the steps then run in list order.
+   */
+  edges?: WorkflowEdge[];
+}
+
+/** One edge of a workflow's graph (api.md 117); `from` / `to` are step ids, `start` or `end`. */
+export interface WorkflowEdge {
+  from: string;
+  to: string;
+  kind: 'next' | 'branch' | 'loop';
+  /** `Needs clarification`, `Clear`, `Retry once`, `Valid or retried`. */
+  label?: string;
+}
+
+/**
+ * The Plan step's output (`qti-v2-turn`, `PlanOutput`): what the analysis
+ * answers, and the question to ask first when it can't start.
+ */
+export interface PlanOutput {
+  question: string;
+  measures: string[];
+  entities: string[];
+  scope: string;
+  assumptions: string[];
+  needsClarification: boolean;
+  clarification: { question: string; options: string[] } | null;
+}
+
+/** One check of the Validate step (`ValidateOutput.findings`). */
+export interface ValidateFinding {
+  check: string;
+  passed: boolean;
+  detail: string;
+}
+
+/** The Validate step's output (`qti-v2-turn`, `ValidateOutput`). */
+export interface ValidateOutput {
+  ok: boolean;
+  /** 1 or 2. */
+  attempt: number;
+  findings: ValidateFinding[];
+}
+
+/** The Write answer step's output (`qti-v2-turn`, `AnswerOutput`). */
+export interface AnswerOutput {
+  headline: string;
+  /** Markdown, starting with the headline. */
+  answer: string;
 }
 
 /** A step's status in a streamed run (api.md 3.6 `step`). */
@@ -229,6 +280,11 @@ export interface WorkflowRunStep {
   endedAt?: string;
   /** Agent steps fed by an agent turn: its tool calls in order, at most 50. */
   toolCalls?: WorkflowRunToolCall[];
+  /**
+   * A step that runs more than once (a loop's retry): 1, 2, …; the stored
+   * run keeps one entry per attempt, in order. Absent means the first.
+   */
+  attempt?: number;
 }
 
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
@@ -302,6 +358,8 @@ export interface RunStepView {
   startedAt?: string;
   endedAt?: string;
   toolCalls?: WorkflowRunToolCall[];
+  /** Which run of a repeated step this entry is; absent means the first. */
+  attempt?: number;
 }
 
 /** The run shown on the workflow page: live while it streams, then as stored. */

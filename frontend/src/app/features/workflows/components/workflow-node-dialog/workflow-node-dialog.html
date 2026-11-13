@@ -36,6 +36,13 @@
     @if (agentLine(); as line) {
       <span class="text-[12px] text-fg-muted">{{ line }}</span>
     }
+    <!-- A step that ran more than once: which attempt Input, Settings and Output show -->
+    <app-workflow-attempt-switcher
+      class="ml-2"
+      [attempts]="attemptNumbers()"
+      [selected]="selectedAttempt()"
+      (selectAttempt)="selectedAttempt.set($event)"
+    />
     <button
       #closeButton
       type="button"
@@ -600,6 +607,7 @@
           }
         </ul>
       } @else if (!tool() && (!run()?.error || run()?.output)) {
+        <app-workflow-step-output-view [output]="run()?.output" />
         <app-workflow-data-view
           [value]="run()?.output"
           [truncated]="run()?.outputTruncated === true"

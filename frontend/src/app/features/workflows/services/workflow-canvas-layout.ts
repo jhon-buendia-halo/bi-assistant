@@ -4,8 +4,13 @@ import {
   WorkflowNodeKind,
   toolNodeId,
 } from '../models/workflow-node.model';
-import { WorkflowDetail, WorkflowDetailStep } from '../models/workflow.model';
+import {
+  WorkflowDetail,
+  WorkflowDetailStep,
+  WorkflowEdge,
+} from '../models/workflow.model';
 import { contractFields, passesOnText } from './workflow-contract';
+import { mainPath, workflowEdges } from './workflow-graph';
 
 /**
  * The workflow page's n8n-style canvas (ui.md 4.4b): Start, one column per
@@ -48,6 +53,24 @@ export const MAX_ZOOM = 1.5;
 const EXIT_GAP = 12;
 /** An edge label sits this far above the centre line. */
 const EDGE_LABEL_RISE = 12;
+/** How high the loop's curve rises above the row, and the room kept above it. */
+const LOOP_RISE = 36;
+const LOOP_ROOM = 56;
+/** Where the loop comes back in: right of the node, below its status badge. */
+const LOOP_ENTRY_X = 18;
+const LOOP_ENTRY_Y = 18;
+/** Between the main row's lowest point and the side row. */
+const SIDE_GAP = 24;
+/** The radius of an edge's rounded corner. */
+const CORNER = 8;
+/** A side node's edge to End rises this far left of End and enters it this far below its centre. */
+const END_RISE_X = 24;
+const END_ENTRY_Y = 20;
+/** A branch label down to a side node: this far below the source's bottom edge. */
+const BRANCH_LABEL_DROP = 50;
+/** An edge label's width, estimated: per character at 11 px, plus padding each side. */
+const LABEL_CHAR = 6;
+const LABEL_PAD = 12;
 /** The ports' places along the agent's bottom edge, as a fraction of its width. */
 const PORT_AT = { model: 0.25, tool: 0.75 } as const;
 
@@ -111,6 +134,8 @@ export interface CanvasEdge {
   id: string;
   from: string;
   to: string;
+  /** `next` in order, `branch` one way out of a branch, `loop` back to an earlier step. */
+  kind: WorkflowEdge['kind'];
   path: string;
   /** What runs along the edge: the source step's output (from Start, the first step's input). */
   fields: string[];
@@ -125,6 +150,11 @@ export interface CanvasEdge {
   /** The label's centre. */
   labelX: number;
   labelY: number;
+  /** The graph edge's own label (`Needs clarification`, `Retry once`); null when it has none. */
+  branchLabel: string | null;
+  /** That label's centre: below the line, on the drop to a side node, or on the loop's curve. */
+  branchLabelX: number;
+  branchLabelY: number;
 }
 
 export interface CanvasSubEdge {
@@ -138,9 +168,9 @@ export interface CanvasSubEdge {
 export interface CanvasLayout {
   width: number;
   height: number;
-  /** Start, the steps in run order, End. */
+  /** Start, the main path's steps left to right, End, then the side steps below. */
   nodes: CanvasNode[];
-  /** One per pair of consecutive nodes, left to right. */
+  /** One per graph edge (api.md 117), in its order; without edges, one per pair of consecutive nodes. */
   edges: CanvasEdge[];
   /** One per sub-node, from its port down to it. */
   subEdges: CanvasSubEdge[];
@@ -220,137 +250,168 @@ function subPath(x1: number, y1: number, x2: number, y2: number): string {
 
 /** The canvas layout of a workflow. A pure function. */
 export function workflowCanvasLayout(
-  w: Pick<WorkflowDetail, 'input' | 'steps' | 'agents'>,
+  w: Pick<WorkflowDetail, 'input' | 'steps' | 'agents'> &
+    Partial<Pick<WorkflowDetail, 'edges'>>,
 ): CanvasLayout {
-  const steps = w.steps;
-  // Room above the main row for the agent steps' exit notes.
+  const graph = workflowEdges(w);
+  const path = mainPath(graph);
+  const onPath = new Set(path);
+  const stepsById = new Map(w.steps.map((step) => [step.id, step]));
+  const numbers = new Map(w.steps.map((step, i) => [step.id, i + 1]));
+  const mainSteps = path.flatMap((id) => {
+    const step = stepsById.get(id);
+    return step ? [step] : [];
+  });
+  const sideSteps = w.steps.filter((step) => !onPath.has(step.id));
+  const graphEdge = (from: string, to: string) =>
+    graph.find((e) => e.from === from && e.to === to && e.kind !== 'loop');
+  const hasLoop = graph.some(
+    (e) => e.kind === 'loop' && onPath.has(e.from) && onPath.has(e.to),
+  );
+
+  // Room above the main row for the agent steps' exit notes, and the loop.
   const agentExits = Math.max(
     0,
-    ...steps.filter((s) => s.kind === 'agent').map((s) => s.exits.length),
+    ...w.steps.filter((s) => s.kind === 'agent').map((s) => s.exits.length),
   );
-  const top =
-    CANVAS.padding +
-    (agentExits > 0 ? agentExits * CANVAS.exitRowHeight + EXIT_GAP : 0);
+  const exitRoom =
+    agentExits > 0 ? agentExits * CANVAS.exitRowHeight + EXIT_GAP : 0;
+  const top = CANVAS.padding + Math.max(exitRoom, hasLoop ? LOOP_ROOM : 0);
   const centerY = top + CANVAS.nodeHeight / 2;
 
   const nodes: CanvasNode[] = [];
-  let x = CANVAS.padding;
+  /** The next column's x; a labelled edge into it widens the gap to fit. */
+  const nextX = (id: string): number => {
+    const prev = nodes.at(-1);
+    if (!prev) return CANVAS.padding;
+    return prev.x + prev.width + columnGap(graphEdge(prev.id, id)?.label);
+  };
   const place = (
     node: Omit<CanvasNode, 'x' | 'y' | 'height' | 'centerY'>,
+    x: number,
   ): void => {
     nodes.push({ ...node, x, y: top, height: CANVAS.nodeHeight, centerY });
-    x += node.width + CANVAS.colGap;
   };
 
-  place({
-    kind: 'trigger',
-    id: START_NODE_ID,
-    width: CANVAS.square,
-    number: null,
-    title: 'Start',
-    subtitle: w.input.map((f) => f.name).join(', '),
-    agentLine: null,
-    step: null,
-    // The input is checked before the run: an invalid one never starts it.
-    exits: w.input.length
-      ? [
-          {
-            text: START_EXIT_TEXT,
-            outcome: 'fails',
-            x: x + CANVAS.square / 2,
-            y: top + CANVAS.nodeHeight + CANVAS.labelHeight,
-          },
-        ]
-      : [],
-    ports: [],
-    subNodes: [],
-  });
-
-  steps.forEach((step, i) => {
-    const isAgent = step.kind === 'agent';
-    const width = isAgent ? CANVAS.agentWidth : CANVAS.square;
-    const centreX = x + width / 2;
-    const exits = step.exits.map((exit, row): CanvasExit => ({
-      text: `${exit.label} → ${EXIT_TEXT[exit.outcome]}`,
-      outcome: exit.outcome,
-      x: centreX,
-      y: isAgent
-        ? top - EXIT_GAP - (step.exits.length - row) * CANVAS.exitRowHeight
-        : top +
-          CANVAS.nodeHeight +
-          CANVAS.labelHeight +
-          row * CANVAS.exitRowHeight,
-    }));
-    const ports: CanvasPort[] =
-      isAgent && step.agent
+  place(
+    {
+      kind: 'trigger',
+      id: START_NODE_ID,
+      width: CANVAS.square,
+      number: null,
+      title: 'Start',
+      subtitle: w.input.map((f) => f.name).join(', '),
+      agentLine: null,
+      step: null,
+      // The input is checked before the run: an invalid one never starts it.
+      exits: w.input.length
         ? [
             {
-              kind: 'model',
-              label: 'Model',
-              x: x + width * PORT_AT.model,
-              y: top + CANVAS.nodeHeight,
-            },
-            {
-              kind: 'tool',
-              label: 'Tools',
-              x: x + width * PORT_AT.tool,
-              y: top + CANVAS.nodeHeight,
+              text: START_EXIT_TEXT,
+              outcome: 'fails',
+              x: CANVAS.padding + CANVAS.square / 2,
+              y: top + CANVAS.nodeHeight + CANVAS.labelHeight,
             },
           ]
-        : [];
-    place({
-      kind: isAgent ? 'agent' : 'code',
-      id: step.id,
-      width,
-      number: i + 1,
-      title: step.title,
-      subtitle: step.id,
-      agentLine: step.agent
-        ? `${step.agent.name} · ≤ ${step.agent.maxSteps} steps`
-        : null,
-      step,
-      exits,
-      ports,
-      subNodes: subNodesOf(w, step, x, top),
-    });
-  });
+        : [],
+      ports: [],
+      subNodes: [],
+    },
+    CANVAS.padding,
+  );
 
-  const last = steps[steps.length - 1];
-  place({
-    kind: 'output',
-    id: END_NODE_ID,
-    width: CANVAS.square,
-    number: null,
-    title: 'End',
-    subtitle: last ? last.output.join(', ') : '',
-    agentLine: null,
-    step: null,
-    exits: [],
-    ports: [],
-    subNodes: [],
-  });
+  for (const step of mainSteps) {
+    const x = nextX(step.id);
+    place(stepNode(w, step, numbers.get(step.id) ?? null, x, top), x);
+  }
 
-  const edges = nodes.slice(1).map((to, i): CanvasEdge => {
-    const from = nodes[i];
-    const fields = from.step ? from.step.output : (to.step?.input ?? []);
+  const last = mainSteps[mainSteps.length - 1];
+  place(
+    {
+      kind: 'output',
+      id: END_NODE_ID,
+      width: CANVAS.square,
+      number: null,
+      title: 'End',
+      subtitle: last ? last.output.join(', ') : '',
+      agentLine: null,
+      step: null,
+      exits: [],
+      ports: [],
+      subNodes: [],
+    },
+    nextX(END_NODE_ID),
+  );
+
+  // Side steps (a branch that ends the run): one row below everything on
+  // the main row, each under the gap after its source.
+  const mainBottom = rowBottom(nodes, top);
+  const sideTop = mainBottom + SIDE_GAP;
+  const sideCenterY = sideTop + CANVAS.nodeHeight / 2;
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  let sideX = CANVAS.padding;
+  for (const step of sideSteps) {
+    const source = graph.find(
+      (e) => e.to === step.id && e.kind !== 'loop' && byId.has(e.from),
+    );
+    const from = source ? byId.get(source.from) : undefined;
+    const width = step.kind === 'agent' ? CANVAS.agentWidth : CANVAS.square;
+    const after = from ? byId.get(path[path.indexOf(from.id) + 1]) : undefined;
+    const gapX = from
+      ? after
+        ? (from.x + from.width + after.x) / 2
+        : from.x + from.width + CANVAS.colGap / 2
+      : sideX + width / 2;
+    const nodeX = Math.max(sideX, gapX - width / 2);
+    const node: CanvasNode = {
+      ...stepNode(w, step, numbers.get(step.id) ?? null, nodeX, sideTop),
+      x: nodeX,
+      y: sideTop,
+      height: CANVAS.nodeHeight,
+      centerY: sideCenterY,
+    };
+    nodes.push(node);
+    byId.set(node.id, node);
+    sideX = nodeX + width + CANVAS.colGap;
+  }
+
+  const end = byId.get(END_NODE_ID)!;
+  const edges = graph.flatMap((g): CanvasEdge[] => {
+    const from = byId.get(g.from);
+    const to = byId.get(g.to);
+    if (!from || !to) return [];
+    const main = onPath.has(g.from) && onPath.has(g.to) && g.kind !== 'loop';
+    const fields =
+      g.kind === 'loop'
+        ? []
+        : from.step
+          ? from.step.output
+          : (to.step?.input ?? []);
     const schema = from.step ? from.step.outputSchema : to.step?.inputSchema;
     const typed = contractFields(schema, fields);
     const byName = new Map(typed.map((field) => [field.name, field]));
-    const x1 = from.x + from.width;
-    const x2 = to.x;
-    return {
-      id: `${from.id}-${to.id}`,
-      from: from.id,
-      to: to.id,
-      path: `M ${x1} ${centerY} L ${x2} ${centerY}`,
-      fields: [...fields],
-      passesOn: passesOnText(
-        fields.map((name) => byName.get(name) ?? contractFields(null, [name])[0]),
-      ),
-      label: fieldsLabel(fields.length),
-      labelX: (x1 + x2) / 2,
-      labelY: centerY - EDGE_LABEL_RISE,
-    };
+    const shape = edgeShape(g, from, to, end);
+    return [
+      {
+        id: `${from.id}-${to.id}`,
+        from: from.id,
+        to: to.id,
+        kind: g.kind,
+        path: shape.path,
+        fields: [...fields],
+        passesOn: passesOnText(
+          fields.map(
+            (name) => byName.get(name) ?? contractFields(null, [name])[0],
+          ),
+        ),
+        label: main ? fieldsLabel(fields.length) : '',
+        labelX: shape.labelX,
+        labelY: shape.labelY,
+        branchLabel: g.label ?? null,
+        branchLabelX: shape.branchLabelX,
+        branchLabelY: shape.branchLabelY,
+      },
+    ];
   });
 
   const subEdges: CanvasSubEdge[] = [];
@@ -375,7 +436,80 @@ export function workflowCanvasLayout(
       n.subNodes.map((s) => s.x + s.size / 2 + CANVAS.subSpacing / 2),
     ),
   );
+  const sideNodes = nodes.filter((n) => n.y !== top);
   const bottom = Math.max(
+    mainBottom,
+    ...sideNodes.map((n) => rowBottom([n], n.y)),
+  );
+
+  return {
+    width: right + CANVAS.padding,
+    height: bottom + CANVAS.padding,
+    nodes,
+    edges,
+    subEdges,
+  };
+}
+
+/** A step's node at column `x` on the row whose top is `top`. */
+function stepNode(
+  w: Pick<WorkflowDetail, 'agents'>,
+  step: WorkflowDetailStep,
+  number: number | null,
+  x: number,
+  top: number,
+): Omit<CanvasNode, 'x' | 'y' | 'height' | 'centerY'> {
+  const isAgent = step.kind === 'agent';
+  const width = isAgent ? CANVAS.agentWidth : CANVAS.square;
+  const centreX = x + width / 2;
+  const exits = step.exits.map((exit, row): CanvasExit => ({
+    text: `${exit.label} → ${EXIT_TEXT[exit.outcome]}`,
+    outcome: exit.outcome,
+    x: centreX,
+    y: isAgent
+      ? top - EXIT_GAP - (step.exits.length - row) * CANVAS.exitRowHeight
+      : top +
+        CANVAS.nodeHeight +
+        CANVAS.labelHeight +
+        row * CANVAS.exitRowHeight,
+  }));
+  const ports: CanvasPort[] =
+    isAgent && step.agent
+      ? [
+          {
+            kind: 'model',
+            label: 'Model',
+            x: x + width * PORT_AT.model,
+            y: top + CANVAS.nodeHeight,
+          },
+          {
+            kind: 'tool',
+            label: 'Tools',
+            x: x + width * PORT_AT.tool,
+            y: top + CANVAS.nodeHeight,
+          },
+        ]
+      : [];
+  return {
+    kind: isAgent ? 'agent' : 'code',
+    id: step.id,
+    width,
+    number,
+    title: step.title,
+    subtitle: step.id,
+    agentLine: step.agent
+      ? `${step.agent.name} · ≤ ${step.agent.maxSteps} steps`
+      : null,
+    step,
+    exits,
+    ports,
+    subNodes: subNodesOf(w, step, x, top),
+  };
+}
+
+/** The lowest point of these nodes: a square's label and exits, sub-nodes and their labels. */
+function rowBottom(nodes: CanvasNode[], top: number): number {
+  return Math.max(
     ...nodes.map((n) =>
       n.kind === 'agent'
         ? top + CANVAS.nodeHeight
@@ -388,13 +522,81 @@ export function workflowCanvasLayout(
       n.subNodes.map((s) => s.y + s.size + CANVAS.subLabelHeight),
     ),
   );
+}
 
+/** The gap between two columns: wider when the edge between them has a label. */
+function columnGap(label: string | undefined): number {
+  if (!label) return CANVAS.colGap;
+  return Math.max(CANVAS.colGap, label.length * LABEL_CHAR + 2 * LABEL_PAD);
+}
+
+interface EdgeShape {
+  path: string;
+  labelX: number;
+  labelY: number;
+  branchLabelX: number;
+  branchLabelY: number;
+}
+
+/**
+ * How an edge runs: straight along the centre line between two main
+ * columns; down from the source's right handle to a side node below; from
+ * a side node along its row and up into End; or, for a loop, a curve above
+ * the row from the later node's top back into the earlier node's right side.
+ */
+function edgeShape(
+  g: WorkflowEdge,
+  from: CanvasNode,
+  to: CanvasNode,
+  end: CanvasNode,
+): EdgeShape {
+  const x1 = from.x + from.width;
+  if (g.kind === 'loop') {
+    const vx = from.x + from.width / 2;
+    const ar = to.x + to.width;
+    const ax = ar + LOOP_ENTRY_X;
+    const apex = from.y - LOOP_RISE;
+    const entry = to.y + LOOP_ENTRY_Y;
+    return {
+      path: `M ${vx} ${from.y} C ${vx} ${apex}, ${ax} ${apex}, ${ax} ${entry} L ${ar} ${entry}`,
+      labelX: (vx + ax) / 2,
+      labelY: apex,
+      branchLabelX: (vx + ax) / 2,
+      // The curve peaks at three quarters of the rise; the label sits on it.
+      branchLabelY: from.y - (LOOP_RISE * 3) / 4 - EDGE_LABEL_RISE,
+    };
+  }
+  if (to.centerY > from.centerY) {
+    // Down to a side node: along the centre line, then down the gap.
+    const gx = to.x + to.width / 2;
+    const r = Math.min(CORNER, Math.max(0, gx - x1));
+    return {
+      path: `M ${x1} ${from.centerY} L ${gx - r} ${from.centerY} Q ${gx} ${from.centerY} ${gx} ${from.centerY + r} L ${gx} ${to.y}`,
+      labelX: gx,
+      labelY: (from.centerY + to.y) / 2,
+      branchLabelX: gx,
+      branchLabelY: from.y + CANVAS.nodeHeight + BRANCH_LABEL_DROP,
+    };
+  }
+  if (from.centerY > to.centerY && to.id === end.id) {
+    // From a side node along its row, then up into End's left side.
+    const gx = end.x - END_RISE_X;
+    const yIn = end.centerY + END_ENTRY_Y;
+    return {
+      path: `M ${x1} ${from.centerY} L ${gx - CORNER} ${from.centerY} Q ${gx} ${from.centerY} ${gx} ${from.centerY - CORNER} L ${gx} ${yIn + CORNER} Q ${gx} ${yIn} ${gx + CORNER} ${yIn} L ${end.x} ${yIn}`,
+      labelX: (x1 + gx) / 2,
+      labelY: from.centerY - EDGE_LABEL_RISE,
+      branchLabelX: (x1 + gx) / 2,
+      branchLabelY: from.centerY + EDGE_LABEL_RISE,
+    };
+  }
+  const x2 = to.x;
   return {
-    width: right + CANVAS.padding,
-    height: bottom + CANVAS.padding,
-    nodes,
-    edges,
-    subEdges,
+    path: `M ${x1} ${from.centerY} L ${x2} ${to.centerY}`,
+    labelX: (x1 + x2) / 2,
+    labelY: from.centerY - EDGE_LABEL_RISE,
+    branchLabelX: (x1 + x2) / 2,
+    branchLabelY: from.centerY + EDGE_LABEL_RISE,
   };
 }
 

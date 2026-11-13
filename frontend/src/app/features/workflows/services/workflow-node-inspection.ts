@@ -18,6 +18,7 @@ import {
   WorkflowInputError,
   WorkflowRunStepStatus,
 } from '../models/workflow.model';
+import { ancestorIds, workflowEdges } from './workflow-graph';
 
 export interface NodeInspectionSource {
   workflow: WorkflowDetail;
@@ -74,6 +75,47 @@ function stepRun(
     ...(rs.endedAt !== undefined ? { endedAt: rs.endedAt } : {}),
     durationMs: durationMs(rs.startedAt, rs.endedAt),
     toolCalls,
+    ...(rs.attempt !== undefined ? { attempt: rs.attempt } : {}),
+  };
+}
+
+/**
+ * A step's run entries in attempt order (a stored run keeps one per
+ * attempt); an entry without `attempt` is the first.
+ */
+function runStepsById(run: RunView | null): Map<string, RunStepView[]> {
+  const byId = new Map<string, RunStepView[]>();
+  for (const step of run?.steps ?? []) {
+    const list = byId.get(step.id) ?? [];
+    list.push(step);
+    byId.set(step.id, list);
+  }
+  for (const list of byId.values()) {
+    list.sort((a, b) => (a.attempt ?? 1) - (b.attempt ?? 1));
+  }
+  return byId;
+}
+
+/** A step's attempts as the dialog shows them: each numbered, the last one shown first. */
+function stepAttempts(
+  entries: RunStepView[],
+  s: NodeInspectionSource,
+  step: WorkflowDetailStep,
+): { run: NodeRunView | null; attempts?: NodeRunView[] } {
+  const last = entries.at(-1);
+  if (entries.length < 2) return { run: stepRun(last, s, step) };
+  const attempts = entries.flatMap((entry, i) => {
+    const view = stepRun(
+      { ...entry, attempt: entry.attempt ?? i + 1 },
+      // Live tool calls belong to the attempt still running: the last.
+      i === entries.length - 1 ? s : { ...s, liveToolCalls: [] },
+      step,
+    );
+    return view ? [view] : [];
+  });
+  return {
+    run: attempts.at(-1) ?? null,
+    ...(attempts.length > 1 ? { attempts } : {}),
   };
 }
 
@@ -81,7 +123,9 @@ function stepRun(
 export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] {
   const { workflow, run } = s;
   const runInput = (run?.input ?? null) as Record<string, unknown> | null;
-  const runSteps = new Map((run?.steps ?? []).map((r) => [r.id, r]));
+  const runSteps = runStepsById(run);
+  const lastOf = (id: string) => runSteps.get(id)?.at(-1);
+  const edges = workflowEdges(workflow);
   const inputErrors = s.inputErrors ?? [];
 
   const start: NodeInspection = {
@@ -105,7 +149,8 @@ export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] 
   };
 
   const steps: NodeInspection[] = workflow.steps.map((step, i) => {
-    const rs = runSteps.get(step.id);
+    const entries = runSteps.get(step.id) ?? [];
+    const before = ancestorIds(edges, step.id);
     const stepAgent = step.agent;
     const agent = stepAgent
       ? ((stepAgent.key !== undefined
@@ -116,11 +161,13 @@ export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] 
       : null;
     const context: NodeContext = {
       workflowInput: runInput,
-      earlierSteps: workflow.steps.slice(0, i).map((e) => ({
-        id: e.id,
-        title: e.title,
-        status: runSteps.get(e.id)?.status ?? null,
-      })),
+      earlierSteps: workflow.steps
+        .filter((e) => before.has(e.id))
+        .map((e) => ({
+          id: e.id,
+          title: e.title,
+          status: lastOf(e.id)?.status ?? null,
+        })),
       agent: stepAgent
         ? {
             key: agent?.key ?? stepAgent.key ?? '',
@@ -138,14 +185,18 @@ export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] 
       summary: step.summary ?? '',
       step,
       agent,
-      run: stepRun(rs, s, step),
+      ...stepAttempts(entries, s, step),
       context,
     };
   });
 
-  const lastRunStep = workflow.steps.length
-    ? runSteps.get(workflow.steps[workflow.steps.length - 1].id)
-    : undefined;
+  // End receives the output of the step that led into it: of the steps
+  // with an edge to End, the one that ran (a branch's other way skipped).
+  const intoEnd = edges
+    .filter((e) => e.to === END_NODE_ID && e.from !== START_NODE_ID)
+    .map((e) => lastOf(e.from));
+  const lastRunStep =
+    intoEnd.find((r) => r?.status === 'success') ?? intoEnd.at(0);
   const endStatus: WorkflowRunStepStatus | null =
     run?.status === 'success'
       ? 'success'
@@ -198,9 +249,11 @@ export function buildToolInspection(
     );
     if (name === undefined) continue;
     const detail = node.agent?.toolDetails?.find((tool) => tool.name === name);
-    const calls = (node.run?.toolCalls ?? []).filter(
-      (call) => call.tool === name,
-    );
+    // Every attempt's calls, in order, when the step ran more than once.
+    const runs = node.attempts ?? (node.run ? [node.run] : []);
+    const calls = runs
+      .flatMap((run) => run.toolCalls)
+      .filter((call) => call.tool === name);
     const durations = calls.flatMap((call) =>
       call.durationMs !== undefined ? [call.durationMs] : [],
     );

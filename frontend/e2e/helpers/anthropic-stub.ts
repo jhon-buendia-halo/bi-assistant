@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
+import { JSON_TOOL, answerFrom, clearPlan, v2StepOf } from './v2-steps';
 
 /**
  * A local Anthropic-compatible model server standing in for a custom endpoint
@@ -13,6 +14,11 @@ import { AddressInfo } from 'node:net';
  *   `output_config.format` (answered as text) or the forced `json` tool
  *   (answered as a `json` tool call);
  * - `GET …/v1/models`, answering `{ data: [{ id, … }] }` from `setModels`.
+ *
+ * Questions to Insights v2's structured calls (Plan, Write answer) are told
+ * apart from the probe by their system prompt's first line
+ * (helpers/v2-steps.ts): Plan gets a clear plan, Write answer an answer whose
+ * Markdown is the last text reply, in the form the call asked for.
  *
  * Every request is recorded with its lower-cased headers, so a test can check
  * the `x-api-key` / `authorization` / `anthropic-version` the backend sent.
@@ -109,6 +115,16 @@ function probeForm(body: any): 'outputFormat' | 'jsonTool' | null {
   return forcedJson || offersJson ? 'jsonTool' : null;
 }
 
+/** The system prompt's texts: a string, or its text blocks in order. */
+function systemTexts(body: any): string[] {
+  const system = body?.system;
+  if (typeof system === 'string') return [system];
+  if (!Array.isArray(system)) return [];
+  return system.flatMap((block: { text?: unknown }) =>
+    typeof block?.text === 'string' ? [block.text] : [],
+  );
+}
+
 /** True when the request's last message sends tool results back. */
 function carriesToolResults(body: any): boolean {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
@@ -119,6 +135,23 @@ function carriesToolResults(body: any): boolean {
       (block: { type?: string }) => block?.type === 'tool_result',
     )
   );
+}
+
+/** The text of the request's last user message. */
+function lastUserText(body: any): string {
+  const messages: { role?: string; content?: unknown }[] = Array.isArray(
+    body?.messages,
+  )
+    ? body.messages
+    : [];
+  const user = [...messages].reverse().find((m) => m.role === 'user');
+  if (typeof user?.content === 'string') return user.content;
+  if (!Array.isArray(user?.content)) return '';
+  return user.content
+    .map((block: { text?: unknown }) =>
+      typeof block?.text === 'string' ? block.text : '',
+    )
+    .join('');
 }
 
 function contentFor(reply: AnthropicStubReply): ContentBlock[] {
@@ -287,11 +320,13 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
         }
       }
       const form = isMessages ? probeForm(body) : null;
+      // v2's Plan and Write answer ask for JSON too, with their instructions.
+      const step = isMessages ? v2StepOf(systemTexts(body)) : null;
       stub.requests.push({
         path,
         headers: lowerCaseHeaders(req.headers),
         body,
-        isProbe: form !== null,
+        isProbe: form !== null && step === null,
       });
       if (override) {
         respondOverride(res, override);
@@ -316,8 +351,18 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
       }
       const stream = body?.stream === true;
       const model = typeof body?.model === 'string' ? body.model : 'stub';
+      const v2 =
+        step === 'plan'
+          ? clearPlan(lastUserText(body))
+          : step === 'answer'
+            ? answerFrom(textReply)
+            : null;
       const content: ContentBlock[] =
-        form === 'jsonTool'
+        v2 !== null
+          ? form === 'jsonTool' && !carriesToolResults(body)
+            ? [toolUse(JSON_TOOL, v2)]
+            : [{ type: 'text', text: JSON.stringify(v2) }]
+          : form === 'jsonTool'
           ? [toolUse('json', PROBE_ANSWER)]
           : form === 'outputFormat'
             ? [{ type: 'text', text: JSON.stringify(PROBE_ANSWER) }]

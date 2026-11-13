@@ -23,6 +23,10 @@
  * Structured-output requests (`responseFormat`) are answered with a minimal
  * JSON value of their schema, `"ok"` for strings (so the connection test's
  * `{status: "ok"}` passes).
+ *
+ * Questions to Insights v2's structured steps are told apart by their system
+ * message's first line (the same lines as helpers/v2-steps.ts): Plan gets a
+ * clear plan, Write answer an answer whose Markdown is COPILOT_STUB_ANSWER.
  */
 'use strict';
 
@@ -43,7 +47,40 @@ const TOOL_AS_TEXT = env.COPILOT_STUB_TOOL_AS_TEXT === '1';
 const LOG = env.COPILOT_STUB_LOG;
 const DELTA_MS = Number(env.COPILOT_STUB_DELTA_MS ?? 40);
 
-/** sessionId → { tools: string[], toolRequested: boolean } */
+/** The first lines of v2's Plan and Write answer instructions (helpers/v2-steps.ts). */
+const V2_PLAN_LINE = 'You plan a data analysis for Questions to Insights v2.';
+const V2_ANSWER_LINE = 'You write the final answer for Questions to Insights v2.';
+
+function firstLine(text) {
+  return (
+    String(text ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? ''
+  );
+}
+
+/** Plan's or Write answer's JSON for a session whose system message starts with its line; else null. */
+function v2Reply(system, prompt) {
+  const line = firstLine(system);
+  if (line === V2_PLAN_LINE) {
+    return JSON.stringify({
+      question: firstLine(prompt).slice(0, 300),
+      measures: ['match count'],
+      entities: ['matches'],
+      scope: 'The picked datasets',
+      assumptions: ['Every match in the data counts once'],
+      needsClarification: false,
+      clarification: null,
+    });
+  }
+  if (line === V2_ANSWER_LINE) {
+    return JSON.stringify({ headline: firstLine(ANSWER), answer: ANSWER });
+  }
+  return null;
+}
+
+/** sessionId → { tools: string[], toolRequested: boolean, system: string } */
 const sessions = new Map();
 /** requestId → sessionId of a tool call waiting for its result */
 const pendingTools = new Map();
@@ -128,6 +165,8 @@ async function onSend(params) {
   const state = sessions.get(sessionId) ?? { tools: [], toolRequested: false };
   await delay(DELTA_MS);
   emit(sessionId, 'assistant.turn_start', { turnId: '0' });
+  const v2 = v2Reply(state.system, params.prompt);
+  if (v2 !== null) return answer(sessionId, v2);
   const schema = params.responseFormat?.jsonSchema?.schema;
   if (schema) return answer(sessionId, JSON.stringify(sample(schema)));
   if (TOOL_CALL && !state.toolRequested && state.tools.includes(TOOL_CALL.name)) {
@@ -178,7 +217,11 @@ function handle(message) {
     case 'session.create': {
       const sessionId = params.sessionId ?? randomUUID();
       const tools = (params.tools ?? []).map((t) => t.name);
-      sessions.set(sessionId, { tools, toolRequested: false });
+      sessions.set(sessionId, {
+        tools,
+        toolRequested: false,
+        system: params.systemMessage?.content ?? '',
+      });
       log({ method, sessionId, model: params.model ?? null, reasoningEffort: params.reasoningEffort ?? null, tools, systemMessageMode: params.systemMessage?.mode ?? null });
       return reply({ sessionId, nativeSessionId: sessionId, startTime: new Date().toISOString(), isRemote: false, mode: 'interactive', capabilities: { ui: {}, extensions: false }, modelState: {} });
     }

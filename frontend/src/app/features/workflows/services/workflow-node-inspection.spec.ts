@@ -9,6 +9,7 @@ import {
   nodeStatuses,
   workflowStateSummary,
 } from './workflow-node-inspection';
+import { GRAPH_RETRY_RUN, GRAPH_WORKFLOW } from './workflow-graph.testing';
 
 const WORKFLOW = {
   id: 'two-steps',
@@ -312,5 +313,54 @@ describe('durationMs and formatDuration', () => {
     expect(formatDuration(59960)).toBe('1 min 0 s');
     expect(formatDuration(64000)).toBe('1 min 4 s');
     expect(formatDuration(3_700_000)).toBe('61 min 40 s');
+  });
+});
+
+describe('buildNodeInspections on a graph with a branch and a retry loop', () => {
+  const graph = (run: RunView | null): NodeInspectionSource => ({
+    workflow: GRAPH_WORKFLOW,
+    run,
+    liveToolCalls: [],
+    running: false,
+  });
+
+  it('shows the last attempt of a repeated step and lists every attempt in order', () => {
+    const n = buildNodeInspections(graph(GRAPH_RETRY_RUN));
+    const analyse = n.find((x) => x.nodeId === 'analyse')!;
+    expect(analyse.run?.attempt).toBe(2);
+    expect(analyse.run?.input).toEqual({ plan: 'second' });
+    expect(analyse.attempts?.map((a) => [a.attempt, a.input, a.durationMs])).toEqual([
+      [1, { plan: 'first' }, 6000],
+      [2, { plan: 'second' }, 9000],
+    ]);
+    expect(analyse.attempts?.[0].toolCalls).toEqual([
+      { tool: 'run_readonly_sql', input: 'select 1', error: 'boom', finished: true },
+    ]);
+    const validate = n.find((x) => x.nodeId === 'validate')!;
+    expect(validate.attempts?.map((a) => a.output?.['ok'])).toEqual([false, true]);
+  });
+
+  it('leaves `attempts` out for a step that ran once', () => {
+    const n = buildNodeInspections(graph(GRAPH_RETRY_RUN));
+    expect(n.find((x) => x.nodeId === 'plan')!.attempts).toBeUndefined();
+    expect(n.find((x) => x.nodeId === 'plan')!.run?.attempt).toBeUndefined();
+  });
+
+  it("lists a step's earlier steps from the edges, not the list order", () => {
+    const n = buildNodeInspections(graph(GRAPH_RETRY_RUN));
+    const earlier = (id: string) =>
+      n.find((x) => x.nodeId === id)!.context!.earlierSteps.map((e) => e.id);
+    expect(earlier('analyse')).toEqual(['receive-question', 'load-catalog', 'plan']);
+    expect(earlier('write-answer')).toEqual([
+      'receive-question', 'load-catalog', 'plan', 'analyse', 'validate',
+    ]);
+    expect(earlier('clarify')).toEqual(['receive-question', 'load-catalog', 'plan']);
+  });
+
+  it('counts a repeated step once in the summary', () => {
+    const s = graph(GRAPH_RETRY_RUN);
+    const n = buildNodeInspections(s);
+    expect(workflowStateSummary(s, n).ran).toBe(9);
+    expect(nodeStatuses(n)['clarify']).toBe('skipped');
   });
 });
