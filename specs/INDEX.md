@@ -433,8 +433,8 @@ specs/capabilities/agents-evals/spec.md:30-30  R6 The System Prompt tab SHALL sh
 specs/capabilities/agents-evals/spec.md:31-31  R7 The Memory tab SHALL show, for an agent with memory: "Recent messages
 specs/capabilities/agents-evals/spec.md:32-32  R8 Requesting an agent that does not exist SHALL fail with `Agent "<key>"
 specs/capabilities/agents-evals/spec.md:33-35  R9 The system SHALL tolerate an agent whose prompt, tools, memory or mode
-specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant and the Data Readiness Agent SHALL have eval sets (
-specs/capabilities/agents-evals/spec.md:37-37  R11 The system SHALL provide three sets, each bound to one sample fixture:
+specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant, Questions to Insights v2 and the Data Readiness Ag
+specs/capabilities/agents-evals/spec.md:37-37  R11 The system SHALL provide the sets below, each bound to one sample fixt
 specs/capabilities/agents-evals/spec.md:38-38  R12 Each set SHALL carry a name, a description of what it covers and what
 specs/capabilities/agents-evals/spec.md:39-39  R13 The Evals tab SHALL open on the list of sets, each showing its name, "
 specs/capabilities/agents-evals/spec.md:40-40  R14 An open set SHALL show "<N> questions in <set name>. Each check must s
@@ -1716,19 +1716,19 @@ specs/system/agents.md:1556-1597  ### 7.2 The `interactive-visuals` skill
 specs/system/agents.md:1599-1625  ### 7.3 Skills: source, layout, loading and validation
 specs/system/agents.md:1627-1698  ### 7.4 Skills per agent
 specs/system/agents.md:1700-1704  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:1706-1815  ## 8. Evals
-specs/system/agents.md:1710-1772  ### 8.1 Case and set format
-specs/system/agents.md:1774-1781  ### 8.2 Data preflight
-specs/system/agents.md:1783-1794  ### 8.3 Executing a case
-specs/system/agents.md:1796-1801  ### 8.4 Runs, regression and report
-specs/system/agents.md:1803-1815  ### 8.5 Other entry points
-specs/system/agents.md:1817-1821  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:1823-1836  ## Open questions and gaps
-specs/system/agents.md:1838-1976  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:1978-2014  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2016-2018  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2020-2097  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2099-2111  ## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
+specs/system/agents.md:1706-1816  ## 8. Evals
+specs/system/agents.md:1710-1773  ### 8.1 Case and set format
+specs/system/agents.md:1775-1782  ### 8.2 Data preflight
+specs/system/agents.md:1784-1795  ### 8.3 Executing a case
+specs/system/agents.md:1797-1802  ### 8.4 Runs, regression and report
+specs/system/agents.md:1804-1816  ### 8.5 Other entry points
+specs/system/agents.md:1818-1822  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:1824-1837  ## Open questions and gaps
+specs/system/agents.md:1839-1977  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:1979-2015  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2017-2019  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2021-2098  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2100-2112  ## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

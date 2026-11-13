@@ -5,6 +5,11 @@ import {
   type EvalTarget,
 } from './assistant.evals';
 import {
+  ANALYST_V2_EVAL_AGENT_KEY,
+  ANALYST_V2_EVAL_SET,
+  analystV2EvalTarget,
+} from './analyst-v2.evals';
+import {
   DATA_READINESS_EVAL_SET,
   dataReadinessEvalTarget,
 } from './data-readiness.evals';
@@ -17,6 +22,7 @@ import {
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...ASSISTANT_EVAL_SETS,
   DATA_READINESS_EVAL_SET,
+  ANALYST_V2_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
@@ -41,6 +47,7 @@ export function hasEvals(agentKey: string): boolean {
 export function evalTargetFor(agentKey: string): EvalTarget {
   if (agentKey === 'assistant') return ASSISTANT_EVAL_TARGET;
   if (agentKey === 'data-readiness') return dataReadinessEvalTarget();
+  if (agentKey === ANALYST_V2_EVAL_AGENT_KEY) return analystV2EvalTarget();
   throw new Error(`Agent "${agentKey}" has no evals to run`);
 }
 
