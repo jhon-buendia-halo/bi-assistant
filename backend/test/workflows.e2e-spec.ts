@@ -308,7 +308,7 @@ describe('The workflow catalogue (API)', () => {
           name: 'Olivia',
           model: null,
           systemPrompt: expect.stringMatching(
-            /^You plan a data analysis for Questions to Insights v2\./,
+            /^You plan a data analysis for Questions to Insights\./,
           ) as string,
           toolDetails: [],
         },
@@ -317,7 +317,7 @@ describe('The workflow catalogue (API)', () => {
           name: 'Jessica',
           model: null,
           systemPrompt: expect.stringMatching(
-            /^You write the final answer for Questions to Insights v2\./,
+            /^You write the final answer for Questions to Insights\./,
           ) as string,
           toolDetails: [],
         },

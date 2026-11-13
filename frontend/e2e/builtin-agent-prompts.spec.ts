@@ -222,7 +222,7 @@ test("I edit Questions to Insights v2's prompt, its runs read it, and Reset rest
 
   // Then a run of Questions to Insights v2 sends the edited prompt.
   const edited = systemTexts(await askInRun(page, QUESTION))[0];
-  expect(edited.startsWith('You are Questions to Insights v2')).toBe(true);
+  expect(edited.startsWith('You are Questions to Insights')).toBe(true);
   expect(edited).toContain(DONE_LINE);
   expect(edited).toContain('\n## Tools\n');
   expect(

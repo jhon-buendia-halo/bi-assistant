@@ -250,7 +250,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
     });
 
     it("Questions to Insights v2's identity, then skills not its own, then tools not its own (BA-320)", async () => {
-      const identity = 'You are Questions to Insights v2';
+      const identity = 'You are Questions to Insights';
       expect(await refusal('assistant-v2', 'Be brief.')).toBe(
         `The Questions to Insights v2 prompt must start with "${identity}"`,
       );
@@ -299,7 +299,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       });
       await service.save('assistant-v2', {
         prompt:
-          'You are Questions to Insights v2. Call [[tool:list_entities]], [[tool:describe_entity]], [[tool:sample_rows]], [[tool:run_readonly_sql]] and [[tool:ask_clarification]]. Load [[skill:curated-knowledge]], [[skill:sql-analysis]] and [[skill:result-validation]].',
+          'You are Questions to Insights. Call [[tool:list_entities]], [[tool:describe_entity]], [[tool:sample_rows]], [[tool:run_readonly_sql]] and [[tool:ask_clarification]]. Load [[skill:curated-knowledge]], [[skill:sql-analysis]] and [[skill:result-validation]].',
       });
       expect(agentPromptOverrideFor('assistant-v2')?.prompt).toContain(
         '[[skill:result-validation]]',

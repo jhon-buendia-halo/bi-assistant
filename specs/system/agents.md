@@ -728,7 +728,7 @@ Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0
 
 **Datasets.** Like the assistant it has no datasets of its own: empty `datasets`. A session takes the datasets the user picked ([api.md](api.md) 3).
 
-**Prompt requirements.** The prompt MUST start with `You are Questions to Insights v2`.
+**Prompt requirements.** The prompt MUST start with `You are Questions to Insights`.
 - **Structure.** The identity paragraph (a business data analyst over the session's datasets and their datasources), then the generated `## Tools` section (one line per tool, `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`, as the assistant's and the Data Readiness Agent's), then `## Working rules`. No `## Workflow` section: its steps live in code (5.11). The served `## Tools` is inserted before the first line that is exactly `## Working rules`; an override without that heading gets it appended after a blank line.
 - **Working rules**, in this order, reusing the assistant's wording where it applies (2.1):
   - *Method*: map the question to entities and columns (`list_entities`, `describe_entity`; `sample_rows` when value formats are unclear); check coverage before a scope-dependent answer; run the analysis with `run_readonly_sql`, aggregations first, chaining as many queries as needed (load `sql-analysis` for ties, ratios, period comparisons, distinct counts and NULLs); validate the result (row counts, NULLs, truncation, totals that reconcile, ties; `result-validation`); answer in the format below.
@@ -2164,12 +2164,12 @@ Scope:
 
 The shipped text is `ASSISTANT_V2_PROMPT`. It is also the editable text and what Reset restores (2.11). Lines are joined with `
 `.
-- A rebuild may tune the wording but must keep the opening phrase `You are Questions to Insights v2`.
+- A rebuild may tune the wording but must keep the opening phrase `You are Questions to Insights`.
 - **What the model receives** is this text, its links resolved to plain mentions, with the generated `## Tools` section inserted before `## Working rules` (2.11). Measured served size: 6,181 characters.
 - The byte-for-byte copies the unit tests compare against are `mastra/agents/__fixtures__/assistant-v2-prompt.shipped.txt` (this text) and `assistant-v2-prompt.full.txt` (as served).
 
 ```
-You are Questions to Insights v2 — a business data analyst working over the
+You are Questions to Insights — a business data analyst working over the
 catalogs, schemas and entities in the user's session datasets. Each dataset
 is bound to a datasource — a Databricks SQL warehouse, a PostgreSQL database
 or a REST API (queried as SQLite) — and the session context tells you which.
@@ -2275,7 +2275,7 @@ The job descriptions of Olivia (`analysis-planner`, Plan) and Jessica (`answer-w
 ### Plan
 
 ```
-You plan a data analysis for Questions to Insights v2.
+You plan a data analysis for Questions to Insights.
 
 You receive a business question, the conversation before it when there is one, and the catalog of the entities (tables) the analysis can read, with the columns of each (name and type). You have no tools, you run no query and you have not seen the data: you decide what the analysis must find, and whether the question can be analysed as asked.
 
@@ -2294,7 +2294,7 @@ Never answer the question and never state a figure: the analysis step runs the q
 ### Write answer
 
 ```
-You write the final answer for Questions to Insights v2.
+You write the final answer for Questions to Insights.
 
 You receive the user's question, the analysis plan, the SQL queries the analysis ran with their result rows, and the validation findings. You have no tools and you run nothing: every figure and fact you write comes from those result rows, never from general knowledge.
 

@@ -366,7 +366,7 @@ Feature: Sessions started from an agent
 
   Scenario: A Answer a Business Question run runs v2 on every question
     When I run "Answer a Business Question" on "World Cup Core" with "How many matches are there?"
-    Then the model received the prompt starting "You are Questions to Insights v2" and not the assistant's
+    Then the model received the prompt starting "You are Questions to Insights" and not the assistant's
     And the model was offered only "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and the skill tools "skill", "skill_search" and "skill_read"
     When I run it again with "And in 2014?"
     Then the model again received v2's prompt and only its own tools
@@ -388,7 +388,7 @@ Feature: Skills the assistant is given
   Scenario: a Answer a Business Question run is offered its built-in skills only, and an old skills folder is ignored
     Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
     When I run "Answer a Business Question" and ask "Who won the 2022 World Cup?"
-    Then the model's system text names "You are Questions to Insights v2", has no "## Skills" section, and its skill catalog lists "curated-knowledge", "sql-analysis" and "result-validation"
+    Then the model's system text names "You are Questions to Insights", has no "## Skills" section, and its skill catalog lists "curated-knowledge", "sql-analysis" and "result-validation"
     And the model is offered the "skill" tool and no "read_file" or "run_skill_script" tool
     And nothing of the "sql-style" skill reaches any model request
 

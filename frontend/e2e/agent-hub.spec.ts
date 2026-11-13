@@ -514,7 +514,7 @@ test("Questions to Insights v2's page shows its prompt, five tools and three ski
     page.getByText('Built-in', { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByTestId('agent-prompt-view')).toContainText(
-    'You are Questions to Insights v2',
+    'You are Questions to Insights',
   );
 
   await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(5\)/);
@@ -563,7 +563,7 @@ test('saving a Questions to Insights v2 prompt that loses its identity line is r
 
   await expect(
     page.getByText(
-      'The Questions to Insights v2 prompt must start with "You are Questions to Insights v2"',
+      'The Questions to Insights v2 prompt must start with "You are Questions to Insights"',
     ),
   ).toBeVisible();
   await expect(page.getByTestId('agent-prompt-modified')).toHaveCount(0);
