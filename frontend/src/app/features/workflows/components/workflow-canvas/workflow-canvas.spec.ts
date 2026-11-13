@@ -1,4 +1,9 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  TestBed,
+  fakeAsync,
+  tick,
+} from '@angular/core/testing';
 import { WorkflowDetail } from '../../models/workflow.model';
 import { GRAPH_WORKFLOW } from '../../services/workflow-graph.testing';
 import { WorkflowCanvas } from './workflow-canvas';
@@ -132,10 +137,19 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       ),
     ).toBe(true);
     expect(nodes.map((n) => parseFloat(n.style.left))).toEqual([
-      40, 208, 376, 544, 844, 1012,
+      20, 116, 212, 308, 472, 568,
     ]);
-    expect(new Set(nodes.map((n) => n.style.top))).toEqual(new Set(['84px']));
-    expect(q('workflow-node-analyse')?.style.width).toBe('220px');
+    // Squares and the taller agent share one centre line.
+    expect(nodes.map((n) => n.style.top)).toEqual([
+      '82px',
+      '82px',
+      '82px',
+      '64px',
+      '82px',
+      '82px',
+    ]);
+    expect(q('workflow-node-analyse')?.style.width).toBe('120px');
+    expect(q('workflow-node-start')?.style.width).toBe('52px');
     expect(
       q('workflow-node-analyse')?.querySelector('.sr-only')?.textContent,
     ).toBe('Step 3:');
@@ -188,7 +202,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     const startExit = q('workflow-node-start')!.querySelector<HTMLElement>(
       '[data-testid="workflow-node-exit"]',
     )!;
-    expect(parseFloat(startExit.style.top)).toBe(88 + 52);
+    expect(parseFloat(startExit.style.top)).toBe(52 + 86);
     expect(
       q('workflow-node-receive-question')!.querySelector(
         '[data-testid="workflow-node-exit"]',
@@ -210,9 +224,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     const subs = Array.from(el.querySelectorAll<HTMLElement>('.sub-node'));
     expect(subs.map((s) => s.getAttribute('data-testid'))).toEqual([
       'workflow-subnode-analyse-model',
-      'workflow-subnode-analyse-tool-list_entities',
-      'workflow-subnode-analyse-tool-describe_entity',
-      'workflow-subnode-analyse-tool-run_readonly_sql',
+      'workflow-subnode-analyse-tools',
     ]);
     expect(
       subs.map((s) => [
@@ -221,45 +233,140 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       ]),
     ).toEqual([
       ['claude-sonnet-5-5', 'model'],
-      ['list_entities', 'tool'],
-      ['describe_entity', 'tool'],
-      ['run_readonly_sql', 'tool'],
+      ['Tools', '3 tools'],
     ]);
-    expect(subs[0].tagName).toBe('BUTTON');
+    expect(subs.map((s) => s.tagName)).toEqual(['BUTTON', 'BUTTON']);
     expect(subs[0].getAttribute('aria-label')).toBe(
       'Model claude-sonnet-5-5 of Analyse',
     );
-    expect(el.querySelectorAll('path.sub-edge').length).toBe(4);
+    expect(subs[0].hasAttribute('aria-haspopup')).toBe(false);
+    expect(subs[1].getAttribute('aria-label')).toBe('Tools of Analyse: 3 tools');
+    expect(subs[1].getAttribute('aria-haspopup')).toBe('menu');
+    expect(subs[1].getAttribute('aria-expanded')).toBe('false');
+    expect(subs[1].getAttribute('title')).toBe(
+      'list_entities, describe_entity, run_readonly_sql',
+    );
+    expect(el.querySelectorAll('path.sub-edge').length).toBe(2);
   });
 
-  it('caps the tools at four and adds "+<n> tools"', () => {
-    const agent = V2.steps[2].agent!;
+  it('an agent without tools hangs only its Model sub-node', () => {
     fixture.componentRef.setInput('workflow', {
       ...V2,
       steps: [
         {
           ...V2.steps[2],
-          agent: { ...agent, tools: ['a', 'b', 'c', 'd', 'e'] },
+          agent: { ...V2.steps[2].agent!, tools: [], maxSteps: 1 },
         },
       ],
     });
     fixture.detectChanges();
-    expect(all('workflow-subnode-analyse-more').map(text)).toEqual([
-      '+1 tools',
-    ]);
-    expect(el.querySelectorAll('.sub-node').length).toBe(6);
-    // "+<n> tools" opens its agent step, a tool its own details.
-    q('workflow-subnode-analyse-more')!.click();
-    q('workflow-subnode-analyse-tool-a')!.click();
-    expect(opened).toEqual(['analyse', 'analyse-tool-a']);
+    expect(
+      Array.from(el.querySelectorAll('.sub-node')).map((s) =>
+        s.getAttribute('data-testid'),
+      ),
+    ).toEqual(['workflow-subnode-analyse-model']);
+    expect(text(q('workflow-node-agent'))).toBe('Questions to Insights v2');
+  });
+
+  describe('the Tools sub-node opens a list of its tools', () => {
+    const tools = () => q('workflow-subnode-analyse-tools')!;
+    const menu = () => q('workflow-tools-menu-analyse');
+    const items = () =>
+      Array.from(menu()?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+    const key = (k: string) => {
+      const event = new KeyboardEvent('keydown', {
+        key: k,
+        bubbles: true,
+        cancelable: true,
+      });
+      (document.activeElement ?? menu()!).dispatchEvent(event);
+      fixture.detectChanges();
+      return event;
+    };
+    const open = (how: 'click' | 'dblclick') => {
+      if (how === 'click') tools().click();
+      else tools().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      fixture.detectChanges();
+      tick();
+    };
+
+    // Focus is shared browser state: start from none.
+    beforeEach(() => (document.activeElement as HTMLElement | null)?.blur());
+
+    it('a click opens it, its first tool focused; picking a tool opens that tool and closes it', fakeAsync(() => {
+      expect(menu()).toBeNull();
+      open('click');
+      expect(menu()?.getAttribute('role')).toBe('menu');
+      expect(menu()?.getAttribute('aria-label')).toBe('Tools of Analyse');
+      expect(tools().getAttribute('aria-expanded')).toBe('true');
+      expect(items().map(text)).toEqual([
+        'list_entities',
+        'describe_entity',
+        'run_readonly_sql',
+      ]);
+      expect(items().map((i) => i.getAttribute('data-testid'))).toEqual([
+        'workflow-tools-menu-item-list_entities',
+        'workflow-tools-menu-item-describe_entity',
+        'workflow-tools-menu-item-run_readonly_sql',
+      ]);
+      expect(document.activeElement).toBe(items()[0]);
+      // Unscaled, outside the zoomed stage.
+      expect(menu()!.closest('.canvas-stage')).toBeNull();
+
+      items()[1].click();
+      fixture.detectChanges();
+      expect(opened).toEqual(['analyse-tool-describe_entity']);
+      expect(menu()).toBeNull();
+      expect(tools().getAttribute('aria-expanded')).toBe('false');
+      expect(selected).toEqual([]);
+    }));
+
+    it('the Model sub-node opens its agent step', () => {
+      q('workflow-subnode-analyse-model')!.click();
+      expect(opened).toEqual(['analyse']);
+      expect(menu()).toBeNull();
+    });
+
+    it('a double click opens it too', fakeAsync(() => {
+      open('dblclick');
+      expect(items().length).toBe(3);
+      expect(opened).toEqual([]);
+    }));
+
+    it('arrow keys, Home and End move through it; Escape closes it and returns the focus', fakeAsync(() => {
+      open('click');
+      key('ArrowDown');
+      expect(document.activeElement).toBe(items()[1]);
+      key('ArrowDown');
+      key('ArrowDown');
+      expect(document.activeElement).toBe(items()[0]);
+      key('ArrowUp');
+      expect(document.activeElement).toBe(items()[2]);
+      key('Home');
+      expect(document.activeElement).toBe(items()[0]);
+      key('End');
+      expect(document.activeElement).toBe(items()[2]);
+      const escape = key('Escape');
+      expect(escape.defaultPrevented).toBe(true);
+      expect(menu()).toBeNull();
+      expect(document.activeElement).toBe(tools());
+      expect(opened).toEqual([]);
+    }));
+
+    it('a press outside it closes it', fakeAsync(() => {
+      open('click');
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      fixture.detectChanges();
+      expect(menu()).toBeNull();
+    }));
   });
 
   it('draws one edge per pair with its field count, the fields for screen readers', () => {
     expect(el.querySelectorAll('svg path.edge').length).toBe(5);
-    const cy = 84 + 44;
+    const cy = 82 + 26;
     expect(
       q('workflow-connector-start-receive-question')?.getAttribute('d'),
-    ).toBe(`M 128 ${cy} L 208 ${cy}`);
+    ).toBe(`M 72 ${cy} L 116 ${cy}`);
     const label = q('workflow-connector-label-analyse-wrap-up')!;
     expect(text(label)).toBe('2 fieldsPasses on: calls, stopped');
     expect(text(label.querySelector('[aria-hidden="true"]'))).toBe('2 fields');
@@ -404,24 +511,6 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(selected).toEqual(['end']);
   });
 
-  it('a click on a tool sub-node opens that tool; the Model and +n tools sub-nodes open their agent step', () => {
-    q('workflow-subnode-analyse-tool-describe_entity')!.click();
-    q('workflow-subnode-analyse-model')!.click();
-    expect(opened).toEqual(['analyse-tool-describe_entity', 'analyse']);
-    expect(selected).toEqual([]);
-  });
-
-  it('a double click on a tool sub-node opens that tool', () => {
-    const tool = q('workflow-subnode-analyse-tool-run_readonly_sql')!;
-    tool.click();
-    tool.click();
-    tool.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    expect(opened).toEqual([
-      'analyse-tool-run_readonly_sql',
-      'analyse-tool-run_readonly_sql',
-    ]);
-  });
-
   function pointer(type: string, x: number, y: number, target: Element): void {
     target.dispatchEvent(
       new PointerEvent(type, {
@@ -456,11 +545,11 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
   it('fits the graph on load', async () => {
     await fixture.whenStable();
     fixture.detectChanges();
-    // 1140 x 404 canvas pixels in a 600 x ~400 viewport.
-    expect(level()).toBe('50%');
+    // 644 x 308 canvas pixels in a 600 x ~400 viewport.
+    expect(level()).toBe('90%');
     expect(
       (el.querySelector('.canvas-stage') as HTMLElement).style.transform,
-    ).toBe('scale(0.5)');
+    ).toBe('scale(0.9)');
     expect(q('workflow-zoom-fit')?.getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -487,7 +576,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     const stage = el.querySelector('.canvas-stage') as HTMLElement;
     expect(stage.style.transform).toBe('scale(1.5)');
     expect((stage.parentElement as HTMLElement).style.width).toBe(
-      `${1140 * 1.5}px`,
+      `${644 * 1.5}px`,
     );
     for (let i = 0; i < 5; i++) click(zoomOut);
     expect(level()).toBe('40%');
@@ -496,7 +585,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(level()).toBe('100%');
 
     const canvas = q('workflow-canvas')!;
-    spyOnProperty(canvas, 'clientWidth').and.returnValue(912);
+    spyOnProperty(canvas, 'clientWidth').and.returnValue(520);
     spyOnProperty(canvas, 'clientHeight').and.returnValue(800);
     click(q('workflow-zoom-fit')!);
     expect(level()).toBe('80%');
@@ -573,7 +662,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
         p.getAttribute('data-done'),
       );
     expect(done('start-receive-question')).toBe('false');
-    expect(subDone()).toEqual(['false', 'false', 'false', 'false']);
+    expect(subDone()).toEqual(['false', 'false']);
 
     fixture.componentRef.setInput('statuses', {
       start: 'success',
@@ -592,7 +681,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
         'marker-end',
       ),
     ).toBe('url(#workflow-canvas-arrow-done)');
-    expect(subDone()).toEqual(['true', 'true', 'true', 'true']);
+    expect(subDone()).toEqual(['true', 'true']);
   });
 
   it('marks every connector of a linear workflow `next`, with no edge labels', () => {

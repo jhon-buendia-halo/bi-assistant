@@ -18,7 +18,6 @@ import {
   CircleAlert,
   CircleX,
   Cpu,
-  Ellipsis,
   Flag,
   LucideAngularModule,
   Loader2,
@@ -36,9 +35,13 @@ import {
   ZoomOut,
 } from 'lucide-angular';
 import { WorkflowDetail } from '../../models/workflow.model';
-import { WorkflowNodeStatus } from '../../models/workflow-node.model';
+import {
+  WorkflowNodeStatus,
+  toolNodeId,
+} from '../../models/workflow-node.model';
 import { ContractSide } from '../../services/workflow-contract';
 import {
+  CANVAS,
   CanvasEdge,
   CanvasNode,
   CanvasNodeKind,
@@ -46,6 +49,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   fitZoom,
+  subLabelWidth,
   workflowCanvasLayout,
   zoomIn,
   zoomOut,
@@ -64,9 +68,25 @@ const NODE_ICONS: Record<CanvasNodeKind, LucideIconData> = {
 
 const SUB_ICONS: Record<CanvasSubNode['kind'], LucideIconData> = {
   model: Cpu,
-  tool: Wrench,
-  more: Ellipsis,
+  tools: Wrench,
 };
+
+/** The Tools sub-node's open list: its step, the tools and where it shows in the host. */
+interface ToolsMenu {
+  stepId: string;
+  stepTitle: string;
+  tools: string[];
+  left: number;
+  top: number;
+  /** Opens above the sub-node when there is no room below it. */
+  above: boolean;
+}
+
+/** A menu row's height and the menu's padding, to decide above or below. */
+const MENU_ROW = 32;
+const MENU_PAD = 10;
+/** Between the sub-node and its menu. */
+const MENU_GAP = 6;
 
 const STATUS_ICONS: Record<WorkflowNodeStatus, LucideIconData> = {
   invalid: CircleAlert,
@@ -90,7 +110,10 @@ const STATUS_ICONS: Record<WorkflowNodeStatus, LucideIconData> = {
   imports: [LucideAngularModule],
   templateUrl: './workflow-canvas.html',
   styleUrl: './workflow-canvas.scss',
-  host: { class: 'relative flex min-h-0 flex-col' },
+  host: {
+    class: 'relative flex min-h-0 flex-col',
+    '(document:pointerdown)': 'onDocumentPointerDown($event)',
+  },
 })
 export class WorkflowCanvas {
   protected readonly CircleX = CircleX;
@@ -100,7 +123,11 @@ export class WorkflowCanvas {
   protected readonly Square = Square;
   protected readonly ZoomIn = ZoomIn;
   protected readonly ZoomOut = ZoomOut;
+  protected readonly Wrench = Wrench;
+  protected readonly subLabelWidth = subLabelWidth;
   protected readonly MIN_ZOOM = MIN_ZOOM;
+  /** A square node's label box. */
+  protected readonly labelWidth = CANVAS.labelWidth;
   protected readonly MAX_ZOOM = MAX_ZOOM;
   protected readonly nodeIcons = NODE_ICONS;
   protected readonly subIcons = SUB_ICONS;
@@ -129,6 +156,13 @@ export class WorkflowCanvas {
 
   private readonly viewport =
     viewChild.required<ElementRef<HTMLElement>>('viewport');
+  private readonly menuEl = viewChild<ElementRef<HTMLElement>>('toolsMenu');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** The Tools sub-node's list, while open. */
+  protected readonly toolsMenu = signal<ToolsMenu | null>(null);
+  /** The Tools sub-node that opened the list: the focus goes back to it. */
+  private menuTrigger: HTMLElement | null = null;
 
   protected readonly layout = computed(() =>
     workflowCanvasLayout(this.workflow()),
@@ -223,13 +257,9 @@ export class WorkflowCanvas {
   }
 
   protected subNodeLabel(node: CanvasNode, sub: CanvasSubNode): string {
-    const what =
-      sub.kind === 'model'
-        ? 'Model'
-        : sub.kind === 'tool'
-          ? 'Tool'
-          : 'More tools:';
-    return `${what} ${sub.label} of ${node.title}`;
+    return sub.kind === 'model'
+      ? `Model ${sub.label} of ${node.title}`
+      : `Tools of ${node.title}: ${sub.subtitle}`;
   }
 
   protected zoomOut(): void {
@@ -251,6 +281,7 @@ export class WorkflowCanvas {
   }
 
   private setZoom(zoom: number): void {
+    this.closeToolsMenu(false);
     this.autoFit.set(false);
     this.zoom.set(zoom);
   }
@@ -263,7 +294,9 @@ export class WorkflowCanvas {
     const el = this.viewport().nativeElement;
     // Hidden (no size yet): keep the zoom until it shows.
     if (!el.clientWidth || !el.clientHeight) return;
-    this.zoom.set(fitZoom(this.layout(), el.clientWidth, el.clientHeight));
+    const zoom = fitZoom(this.layout(), el.clientWidth, el.clientHeight);
+    if (zoom !== this.zoom()) this.closeToolsMenu(false);
+    this.zoom.set(zoom);
   }
 
   protected onNodeClick(id: string): void {
@@ -282,12 +315,105 @@ export class WorkflowCanvas {
   }
 
   /**
-   * A tool sub-node opens that tool's details (its own id); the Model and
-   * `+<n> tools` sub-nodes open their agent step's. Enter and a double click
-   * click the button too.
+   * The Model sub-node opens its agent step's details; the Tools sub-node
+   * opens the list of its tools (a click, Enter or a double click).
    */
-  protected onSubNodeClick(stepId: string, sub: CanvasSubNode): void {
-    this.openNode.emit(sub.kind === 'tool' ? sub.id : stepId);
+  protected onSubNodeClick(
+    node: CanvasNode,
+    sub: CanvasSubNode,
+    event: Event,
+  ): void {
+    if (sub.kind === 'model') {
+      this.openNode.emit(node.id);
+      return;
+    }
+    this.openToolsMenu(node, sub, event.currentTarget as HTMLElement);
+  }
+
+  /** The list under the Tools sub-node (above it near the window's bottom), its first tool focused. */
+  private openToolsMenu(
+    node: CanvasNode,
+    sub: CanvasSubNode,
+    trigger: HTMLElement,
+  ): void {
+    const host = this.host.nativeElement.getBoundingClientRect();
+    const r = trigger.getBoundingClientRect();
+    const height = sub.tools.length * MENU_ROW + MENU_PAD;
+    // It may run past the canvas; above only when it would leave the window.
+    const above =
+      r.bottom + MENU_GAP + height > window.innerHeight &&
+      r.top - MENU_GAP - height >= 0;
+    this.menuTrigger = trigger;
+    this.toolsMenu.set({
+      stepId: node.id,
+      stepTitle: node.title,
+      tools: sub.tools,
+      left: r.left + r.width / 2 - host.left,
+      top: above ? r.top - host.top - MENU_GAP : r.bottom - host.top + MENU_GAP,
+      above,
+    });
+    setTimeout(() => this.menuItems()[0]?.focus());
+  }
+
+  private menuItems(): HTMLElement[] {
+    const menu = this.menuEl()?.nativeElement;
+    return menu
+      ? Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+      : [];
+  }
+
+  /** Close the list; the focus goes back to its Tools sub-node when asked. */
+  protected closeToolsMenu(refocus: boolean): void {
+    if (this.toolsMenu() === null) return;
+    this.toolsMenu.set(null);
+    const trigger = this.menuTrigger;
+    this.menuTrigger = null;
+    if (refocus) trigger?.focus();
+  }
+
+  /** A tool picked from the list opens that tool's details. */
+  protected chooseTool(stepId: string, tool: string): void {
+    this.closeToolsMenu(false);
+    this.openNode.emit(toolNodeId(stepId, tool));
+  }
+
+  /** Arrow keys, Home and End move through the list; Escape and Tab close it. */
+  protected onMenuKeydown(event: KeyboardEvent): void {
+    const items = this.menuItems();
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const move = (i: number) => {
+      event.preventDefault();
+      items[(i + items.length) % items.length]?.focus();
+    };
+    switch (event.key) {
+      case 'ArrowDown':
+        return move(at + 1);
+      case 'ArrowUp':
+        return move(at < 0 ? items.length - 1 : at - 1);
+      case 'Home':
+        return move(0);
+      case 'End':
+        return move(items.length - 1);
+      case 'Escape':
+      case 'Tab':
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeToolsMenu(true);
+    }
+  }
+
+  /** A press outside the list and its sub-node closes it. */
+  protected onDocumentPointerDown(event: Event): void {
+    if (this.toolsMenu() === null) return;
+    const target = event.target as Node | null;
+    if (
+      target &&
+      (this.menuEl()?.nativeElement.contains(target) ||
+        this.menuTrigger?.contains(target))
+    ) {
+      return;
+    }
+    this.closeToolsMenu(false);
   }
 
   protected onPointerDown(event: PointerEvent): void {

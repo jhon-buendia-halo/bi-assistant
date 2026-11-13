@@ -10,6 +10,7 @@
   (pointermove)="onPointerMove($event)"
   (pointerup)="onPointerUp()"
   (pointercancel)="onPointerCancel()"
+  (scroll)="closeToolsMenu(false)"
 >
   <div
     class="canvas-size"
@@ -102,7 +103,7 @@
       @for (edge of l.edges; track edge.id) {
         @if (edge.label) {
           <span
-            class="edge-label absolute -translate-x-1/2 -translate-y-1/2 rounded bg-surface px-1 font-mono text-[11px] leading-4 whitespace-nowrap text-fg-muted"
+            class="edge-label absolute -translate-x-1/2 -translate-y-1/2 rounded bg-surface px-0.5 text-[11px] leading-4 whitespace-nowrap text-fg-muted"
             [attr.data-testid]="'workflow-connector-label-' + edge.id"
             [attr.title]="edgeText(edge)"
             [style.left.px]="edge.labelX"
@@ -114,13 +115,16 @@
         @if (edge.branchLabel) {
           <!-- A branch's condition or the loop's: on its edge, muted with it -->
           <span
-            class="edge-branch-label absolute -translate-x-1/2 -translate-y-1/2 rounded border border-border bg-surface px-1.5 text-[11px] leading-4 font-medium whitespace-nowrap text-fg"
+            class="edge-branch-label absolute -translate-x-1/2 -translate-y-1/2 rounded border border-border bg-surface px-1.5 text-center text-[11px] leading-[14px] font-medium whitespace-nowrap text-fg"
             [attr.data-testid]="'workflow-edge-label-' + edge.from + '-' + edge.to"
             [attr.data-kind]="edge.kind"
             [attr.data-skipped]="edgeSkipped(edge) ? 'true' : null"
             [style.left.px]="edge.branchLabelX"
             [style.top.px]="edge.branchLabelY"
-            >{{ edge.branchLabel }}</span
+            >@for (line of edge.branchLabelLines; track $index) {<span
+                class="block"
+                >{{ $first ? "" : " " }}{{ line }}</span
+              >}</span
           >
         }
       }
@@ -153,35 +157,51 @@
             <span class="sr-only">Step {{ node.number }}:</span>
           }
 
-          <span
-            class="node-icon"
-            [attr.data-kind]="node.kind"
-            aria-hidden="true"
-          >
-            <lucide-angular
-              [img]="nodeIcons[node.kind]"
-              [size]="node.kind === 'agent' ? 18 : 20"
-            />
-          </span>
+          @if (node.kind !== "agent") {
+            <span
+              class="node-icon"
+              [attr.data-kind]="node.kind"
+              aria-hidden="true"
+            >
+              <lucide-angular [img]="nodeIcons[node.kind]" [size]="18" />
+            </span>
+          }
 
           <!-- The agent's text sits inside it; a square's label hangs below it. -->
           <span
             [class]="
               node.kind === 'agent'
                 ? 'flex min-w-0 flex-col gap-px text-left'
-                : 'pointer-events-none absolute top-[calc(100%+8px)] left-1/2 flex w-[150px] -translate-x-1/2 flex-col items-center gap-px text-center'
+                : 'pointer-events-none absolute top-[calc(100%+8px)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-px text-center'
             "
+            [style.width.px]="node.kind === 'agent' ? null : labelWidth"
           >
-            <span
-              class="node-title max-w-full truncate text-[13px] leading-[18px] font-medium text-fg-strong"
-              [attr.data-testid]="
-                node.step !== null ? 'workflow-node-title' : null
-              "
-              >{{ node.title }}</span
-            >
+            @if (node.kind === "agent") {
+              <!-- A small sparkles icon before the title keeps the node narrow. -->
+              <span class="flex min-w-0 items-center gap-1">
+                <span class="node-icon" data-kind="agent" aria-hidden="true">
+                  <lucide-angular [img]="nodeIcons.agent" [size]="11" />
+                </span>
+                <span
+                  class="node-title min-w-0 truncate text-[13px] leading-[18px] font-medium text-fg-strong"
+                  data-testid="workflow-node-title"
+                  >{{ node.title }}</span
+                >
+              </span>
+            } @else {
+              <span
+                class="node-title line-clamp-2 max-w-full text-[13px] leading-[18px] font-medium text-fg-strong"
+                [attr.data-testid]="
+                  node.step !== null ? 'workflow-node-title' : null
+                "
+                >{{ node.title }}</span
+              >
+            }
             @if (node.subtitle) {
               <span
-                class="node-subtitle line-clamp-2 max-w-full text-[11px] leading-[14px] [overflow-wrap:anywhere] text-fg-muted"
+                class="node-subtitle max-w-full text-[11px] leading-[14px] [overflow-wrap:anywhere] text-fg-muted"
+                [class.line-clamp-3]="node.kind !== 'agent'"
+                [class.truncate]="node.kind === 'agent'"
                 [class.font-mono]="node.step !== null"
                 [attr.data-testid]="
                   node.step !== null ? 'workflow-node-id' : null
@@ -191,7 +211,7 @@
             }
             @if (node.agentLine !== null) {
               <span
-                class="line-clamp-2 text-[11px] leading-[14px] text-fg-muted"
+                class="line-clamp-3 text-[11px] leading-[14px] text-fg-muted"
                 data-testid="workflow-node-agent"
                 >{{ node.agentLine }}</span
               >
@@ -200,18 +220,21 @@
 
           @for (exit of node.exits; track exit.text) {
             <span
-              class="pointer-events-none absolute flex h-4 -translate-x-1/2 items-center gap-1 px-1 text-[11px] leading-4 whitespace-nowrap"
+              class="pointer-events-none absolute flex w-max items-start gap-1 px-1 text-left text-[11px] leading-4"
+              [class.-translate-x-1/2]="exit.align === 'center'"
               [class.text-on-danger-soft]="exit.outcome === 'fails'"
               [class.text-fg-muted]="exit.outcome === 'stops'"
               data-testid="workflow-node-exit"
               [style.left.px]="exit.x - node.x"
               [style.top.px]="exit.y - node.y"
+              [style.max-width.px]="exit.width"
             >
               <lucide-angular
+                class="mt-[2.5px] flex-none"
                 [img]="exit.outcome === 'fails' ? CircleX : Square"
                 [size]="11"
                 aria-hidden="true"
-              />{{ exit.text }}
+              /><span>{{ exit.text }}</span>
             </span>
           }
 
@@ -270,27 +293,38 @@
             type="button"
             class="sub-node"
             [attr.data-kind]="sub.kind"
+            [attr.data-step]="node.id"
             [attr.data-testid]="'workflow-subnode-' + sub.id"
             [attr.aria-label]="subNodeLabel(node, sub)"
-            [attr.title]="sub.label"
+            [attr.aria-haspopup]="sub.kind === 'tools' ? 'menu' : null"
+            [attr.aria-expanded]="
+              sub.kind === 'tools' ? toolsMenu()?.stepId === node.id : null
+            "
+            [attr.title]="
+              sub.kind === 'tools' ? sub.tools.join(', ') : sub.label
+            "
             [style.left.px]="sub.x"
             [style.top.px]="sub.y"
             [style.width.px]="sub.size"
             [style.height.px]="sub.size"
-            (click)="onSubNodeClick(node.id, sub)"
+            (click)="onSubNodeClick(node, sub, $event)"
+            (dblclick)="
+              sub.kind === 'tools' && onSubNodeClick(node, sub, $event)
+            "
           >
             <span class="diamond top" aria-hidden="true"></span>
             <lucide-angular
               [img]="subIcons[sub.kind]"
-              [size]="20"
+              [size]="18"
               aria-hidden="true"
             />
             <span
-              class="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 flex w-[116px] -translate-x-1/2 flex-col items-center text-center"
+              class="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 flex -translate-x-1/2 flex-col items-center text-center"
               aria-hidden="true"
+              [style.width.px]="subLabelWidth(sub)"
             >
               <span
-                class="node-title max-w-full truncate text-[12px] leading-4 font-medium text-fg-strong"
+                class="node-title line-clamp-2 max-w-full text-[12px] leading-4 font-medium [overflow-wrap:anywhere] text-fg-strong"
                 >{{ sub.label }}</span
               >
               @if (sub.subtitle) {
@@ -306,6 +340,40 @@
     </div>
   </div>
 </div>
+
+<!-- The Tools sub-node's list: unscaled, anchored to the sub-node -->
+@if (toolsMenu(); as menu) {
+  <div
+    #toolsMenu
+    role="menu"
+    class="tools-menu menu absolute z-30 min-w-[180px] -translate-x-1/2"
+    [class.-translate-y-full]="menu.above"
+    [attr.data-testid]="'workflow-tools-menu-' + menu.stepId"
+    [attr.aria-label]="'Tools of ' + menu.stepTitle"
+    [style.left.px]="menu.left"
+    [style.top.px]="menu.top"
+    (keydown)="onMenuKeydown($event)"
+  >
+    @for (tool of menu.tools; track tool) {
+      <button
+        type="button"
+        role="menuitem"
+        tabindex="-1"
+        class="menu-item"
+        [attr.data-testid]="'workflow-tools-menu-item-' + tool"
+        (click)="chooseTool(menu.stepId, tool)"
+      >
+        <lucide-angular
+          class="flex-none"
+          [img]="Wrench"
+          [size]="14"
+          aria-hidden="true"
+        />
+        <span class="font-mono text-[12px]">{{ tool }}</span>
+      </button>
+    }
+  </div>
+}
 
 <!-- Execute workflow, pinned to the canvas top-right -->
 <div class="absolute top-3 right-3 z-10">

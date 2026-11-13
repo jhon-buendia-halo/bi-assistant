@@ -84,19 +84,25 @@ export class WorkflowDetailPage {
     this.designer.requestRunForm();
   }
 
-  /** The dialog closes; the focus goes back to the node or sub-node it was opened from. */
+  /**
+   * The dialog closes; the focus goes back to the node it was opened from,
+   * or, for a tool, to its agent's Tools sub-node.
+   */
   closeNode(): void {
     const id = this.designer.openNodeId();
     this.designer.closeNode();
     if (id === null) return;
     const key = CSS.escape(id);
-    setTimeout(() =>
-      this.host.nativeElement
-        .querySelector<HTMLElement>(
-          `[data-testid="workflow-node-${key}"], [data-testid="workflow-subnode-${key}"]`,
-        )
-        ?.focus(),
-    );
+    setTimeout(() => {
+      const host = this.host.nativeElement;
+      const node = host.querySelector<HTMLElement>(
+        `[data-testid="workflow-node-${key}"]`,
+      );
+      const tools = Array.from(
+        host.querySelectorAll<HTMLElement>('.sub-node[data-kind="tools"]'),
+      ).find((el) => id.startsWith(`${el.dataset['step']}-tool-`));
+      (node ?? tools)?.focus();
+    });
   }
 
   /** The dialog's agent link: the dialog closes and the agent's page opens. */
