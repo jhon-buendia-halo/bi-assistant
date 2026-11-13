@@ -192,3 +192,31 @@ export function usesStoredValue(value: string): EvalCustomCheck {
           }`,
   };
 }
+
+/**
+ * The run ended on one clarifying question with 2-4 options: the answer is
+ * the question, then one `- <option>` line per option (how the v2 eval
+ * target scores a run that ended on a clarification).
+ */
+export function endsOnClarifyingQuestion(): EvalCustomCheck {
+  return {
+    id: 'ends-on-clarification',
+    description: 'The run ended on one clarifying question with 2-4 options',
+    run: ({ answer }) => {
+      const lines = answer
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const options = lines.filter((line) => line.startsWith('- '));
+      if (!lines[0]?.endsWith('?')) {
+        return 'the answer does not open with a question';
+      }
+      if (options.length < 2 || options.length > 4) {
+        return `the question offers ${options.length} options, not 2-4`;
+      }
+      return lines.length === options.length + 1
+        ? undefined
+        : 'the answer holds more than the question and its options';
+    },
+  };
+}

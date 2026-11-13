@@ -2,6 +2,7 @@ import {
   RUN_INTERRUPTED_ERROR,
   RunStepTracker,
   interruptedRunPatch,
+  loopStepIds,
   noteToolFrame,
   runHostDoc,
   runSummaryOf,
@@ -393,6 +394,122 @@ describe('RunStepTracker: tool calls of an agent step (agents.md 5.14)', () => {
     ]);
     tracker.apply(start('answer', {}));
     expect(tracker.finish('success').steps[1]).not.toHaveProperty('toolCalls');
+  });
+});
+
+describe('RunStepTracker: attempts of a step inside a loop (api.md 3.6 `attempt`)', () => {
+  const LOOP = [
+    { id: 'plan', title: 'Plan', kind: 'agent' as const },
+    { id: 'clarify', title: 'Clarify', kind: 'code' as const },
+    { id: 'analyse', title: 'Analyse', kind: 'agent' as const, repeats: true },
+    { id: 'validate', title: 'Validate', kind: 'code' as const, repeats: true },
+    { id: 'write', title: 'Write answer', kind: 'agent' as const },
+  ];
+
+  it('keeps one entry per attempt, in order, each with its attempt and its own tool calls', () => {
+    const tracker = new RunStepTracker(LOOP, fakeClock().now);
+    tracker.apply(start('plan'));
+    expect(tracker.apply(result('plan', { plan: {} }))).not.toHaveProperty(
+      'attempt',
+    );
+    expect(tracker.apply(start('analyse', { n: 1 }))).toMatchObject({
+      status: 'running',
+      attempt: 1,
+    });
+    tracker.noteTool('run_readonly_sql', 'first');
+    expect(tracker.apply(result('analyse', { calls: [] }))).toMatchObject({
+      status: 'success',
+      attempt: 1,
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'first' }],
+    });
+    tracker.apply(start('validate'));
+    expect(tracker.apply(result('validate', { ok: false }))).toMatchObject({
+      attempt: 1,
+      output: { ok: false },
+    });
+    // The retry: the same steps again, as attempt 2.
+    expect(tracker.apply(start('analyse', { n: 2 }))).toEqual({
+      id: 'analyse',
+      title: 'Analyse',
+      status: 'running',
+      attempt: 2,
+      input: { n: 2 },
+      startedAt: expect.any(String) as string,
+    });
+    tracker.noteTool('sample_rows', 'second');
+    tracker.apply(result('analyse', { calls: [] }));
+    tracker.apply(start('validate'));
+    tracker.apply(result('validate', { ok: true }));
+    tracker.apply(start('write'));
+    tracker.apply(result('write', { answer: 'A.' }));
+    const { steps } = tracker.finish('success');
+    expect(
+      steps.map((step) => [
+        step.id,
+        step.status,
+        step.attempt,
+        step.toolCalls?.map((call) => call.tool),
+      ]),
+    ).toEqual([
+      ['plan', 'success', undefined, undefined],
+      ['clarify', 'skipped', undefined, undefined],
+      ['analyse', 'success', 1, ['run_readonly_sql']],
+      ['analyse', 'success', 2, ['sample_rows']],
+      ['validate', 'success', 1, undefined],
+      ['validate', 'success', 2, undefined],
+      ['write', 'success', undefined, undefined],
+    ]);
+    expect(tracker.lastOutput()).toEqual({ answer: 'A.' });
+  });
+
+  it('ends a running attempt when the run stops, keeping the earlier one', () => {
+    const tracker = new RunStepTracker(LOOP, fakeClock().now);
+    tracker.apply(start('analyse'));
+    tracker.apply(result('analyse', {}));
+    tracker.apply(start('validate'));
+    tracker.apply(result('validate', { ok: false }));
+    tracker.apply(start('analyse'));
+    const { steps, changed } = tracker.finish('stopped');
+    expect(
+      steps
+        .filter((step) => step.id === 'analyse')
+        .map((step) => [step.status, step.attempt]),
+    ).toEqual([
+      ['success', 1],
+      ['stopped', 2],
+    ]);
+    expect(changed.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'plan:skipped',
+      'clarify:skipped',
+      'analyse:stopped',
+      'write:skipped',
+    ]);
+  });
+
+  it('replaces the entry of a step outside a loop that starts again', () => {
+    const tracker = new RunStepTracker(LOOP, fakeClock().now);
+    tracker.apply(start('plan'));
+    tracker.apply(result('plan', {}));
+    tracker.apply(start('plan'));
+    expect(
+      tracker.finish('success').steps.filter((step) => step.id === 'plan'),
+    ).toHaveLength(1);
+  });
+});
+
+describe('loopStepIds (api.md 117 edges)', () => {
+  it("is the steps on a loop edge's way back: from its target to its source", () => {
+    expect([
+      ...loopStepIds([
+        { from: 'start', to: 'plan', kind: 'next' },
+        { from: 'plan', to: 'analyse', kind: 'branch' },
+        { from: 'analyse', to: 'validate', kind: 'next' },
+        { from: 'validate', to: 'analyse', kind: 'loop' },
+        { from: 'validate', to: 'write', kind: 'next' },
+      ]),
+    ]).toEqual(['analyse', 'validate']);
+    expect(loopStepIds(undefined).size).toBe(0);
+    expect(loopStepIds([{ from: 'a', to: 'b', kind: 'next' }]).size).toBe(0);
   });
 });
 

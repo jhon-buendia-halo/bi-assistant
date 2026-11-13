@@ -106,7 +106,7 @@ describe('The workflow catalogue (API)', () => {
         kind: 'code',
         owner: 'Official',
         agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
-        stepCount: 4,
+        stepCount: 8,
         bar: 'steps',
         trigger: 'run',
         input: [
@@ -236,7 +236,7 @@ describe('The workflow catalogue (API)', () => {
         input: Record<string, unknown>[];
         steps: {
           id: string;
-          agent?: { key: string };
+          agent?: { key: string; tools: string[] };
           exits: { label: string; outcome: string }[];
         }[];
         agents: { key: string; name: string; model: string | null }[];
@@ -244,7 +244,11 @@ describe('The workflow catalogue (API)', () => {
       expect(v2.steps.map((step) => step.id)).toEqual([
         'receive-question',
         'load-catalog',
+        'plan',
+        'clarify',
         'analyse',
+        'validate',
+        'write-answer',
         'wrap-up',
       ]);
       // The Start node: each field with its rules and the steps reading it.
@@ -275,9 +279,16 @@ describe('The workflow catalogue (API)', () => {
       expect(v2.steps.flatMap((step) => step.exits)).not.toContainEqual(
         expect.objectContaining({ label: 'Empty question' }),
       );
+      // Plan, Analyse and Write answer call v2; only Analyse with its tools.
       expect(
-        v2.steps.filter((step) => step.agent).map((step) => step.agent?.key),
-      ).toEqual(['assistant-v2']);
+        v2.steps
+          .filter((step) => step.agent)
+          .map((step) => [step.id, step.agent?.key, step.agent?.tools.length]),
+      ).toEqual([
+        ['plan', 'assistant-v2', 0],
+        ['analyse', 'assistant-v2', 5],
+        ['write-answer', 'assistant-v2', 0],
+      ]);
       expect(v2.agents).toEqual([
         {
           key: 'assistant-v2',
@@ -334,8 +345,9 @@ describe('The workflow catalogue (API)', () => {
         properties: {
           question: { type: 'string', description: 'The trimmed question.' },
           catalog: { type: 'array', items: { type: 'object' } },
+          plan: { type: 'object' },
         },
-        required: ['question', 'catalog'],
+        required: ['question', 'catalog', 'plan'],
       });
       expect(analyse.outputSchema.properties).toMatchObject({
         calls: {
@@ -345,10 +357,44 @@ describe('The workflow catalogue (API)', () => {
             required: ['tool', 'failed'],
           },
         },
+        queries: { type: 'array' },
         stopped: { type: 'boolean' },
       });
+      // Write answer's output is the answer (AnswerOutput) and the calls.
+      const written = v2.steps.find((step) => step.id === 'write-answer')!;
+      expect(written.output).toEqual(['headline', 'answer', 'calls']);
+      // The flow is its edges (117): a branch after Plan, a loop back from
+      // Validate to Analyse, End after Wrap up and after Clarify.
+      const { edges } = (await http().get('/workflows/qti-v2-turn').expect(200))
+        .body as {
+        edges: { from: string; to: string; kind: string; label?: string }[];
+      };
+      expect(edges).toEqual([
+        { from: 'start', to: 'receive-question', kind: 'next' },
+        { from: 'receive-question', to: 'load-catalog', kind: 'next' },
+        { from: 'load-catalog', to: 'plan', kind: 'next' },
+        {
+          from: 'plan',
+          to: 'clarify',
+          kind: 'branch',
+          label: 'Needs clarification',
+        },
+        { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
+        { from: 'analyse', to: 'validate', kind: 'next' },
+        { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
+        {
+          from: 'validate',
+          to: 'write-answer',
+          kind: 'next',
+          label: 'Valid or retried',
+        },
+        { from: 'write-answer', to: 'wrap-up', kind: 'next' },
+        { from: 'wrap-up', to: 'end', kind: 'next' },
+        { from: 'clarify', to: 'end', kind: 'next' },
+      ]);
       // 116 is unchanged: the summary carries neither.
       const [summary] = await workflows();
+      expect(summary).not.toHaveProperty('edges');
       expect(summary).not.toHaveProperty('contractHash');
       // The same hash on every read.
       const again = (await http().get('/workflows/qti-v2-turn').expect(200))

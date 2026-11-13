@@ -26,6 +26,7 @@ import { QTI_V2_TURN_STEP_SCHEMAS } from './qti-v2-turn.schemas';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
   QTI_V2_TURN_WORKFLOW_ID,
+  planOf,
   type QtiV2TurnRuntime,
 } from './qti-v2-turn.steps';
 import { qtiV2TurnWorkflow } from './qti-v2-turn.workflow';
@@ -56,11 +57,29 @@ const FIXTURES: Record<string, ContractFixture> = {
     input: { question: 'How many matches?', datasets: ['World Cup'] },
     requestContext: () => {
       const context = new RequestContext();
-      // The stubbed model: one SQL call that returned 4 rows.
+      // The stubbed model: a plan, one SQL call that returned 4 rows, an
+      // answer.
       context.set(QTI_V2_TURN_RUNTIME_KEY, {
+        plan: ({ question }) =>
+          Promise.resolve({ plan: planOf({}, question), stopped: false }),
+        clarify: () => Promise.resolve(),
         analyse: () =>
           Promise.resolve({
             calls: [{ tool: 'run_readonly_sql', rowCount: 4, failed: false }],
+            queries: [
+              {
+                sql: 'SELECT * FROM wc.public.matches LIMIT 4',
+                rows: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }],
+                rowCount: 4,
+                truncated: false,
+              },
+            ],
+            text: '',
+            stopped: false,
+          }),
+        writeAnswer: () =>
+          Promise.resolve({
+            answer: { headline: '4 matches.', answer: '4 matches.' },
             stopped: false,
           }),
       } satisfies QtiV2TurnRuntime);
@@ -81,17 +100,23 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
       });
       const outputs = new Map<string, unknown>();
       for await (const event of output.fullStream) {
+        // A nested workflow's step is `<workflow>.<step>`: the step's id is
+        // the last segment; the nested workflows are not catalogue steps.
+        const id = event.payload?.id?.split('.').at(-1);
         if (
           event.type === 'workflow-step-result' &&
-          event.payload?.id &&
-          event.payload.status === 'success'
+          id &&
+          fixture.schemas[id] &&
+          event.payload?.status === 'success'
         ) {
-          outputs.set(event.payload.id, event.payload.output);
+          outputs.set(id, event.payload.output);
         }
       }
       expect((await output.result).status).toBe('success');
-      expect([...outputs.keys()]).toEqual(source.steps.map((step) => step.id));
-      for (const step of source.steps) {
+      // The clear path: every step but Clarify, whose branch is not taken.
+      const ran = source.steps.filter((step) => step.id !== 'clarify');
+      expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
+      for (const step of ran) {
         const parsed = fixture.schemas[step.id].output.safeParse(
           outputs.get(step.id),
         );
@@ -120,6 +145,7 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
           inputSchema: step.inputSchema,
           outputSchema: step.outputSchema,
         })),
+        edges: source.edges,
       }).toMatchSnapshot();
     },
   );

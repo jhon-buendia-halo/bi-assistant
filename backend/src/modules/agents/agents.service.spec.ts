@@ -188,7 +188,11 @@ describe('AgentsService (built-in and user agents)', () => {
       expect(detail?.workflow?.steps.map((step) => step.title)).toEqual([
         'Receive question',
         'Load catalog',
+        'Plan',
+        'Clarify',
         'Analyse',
+        'Validate',
+        'Write answer',
         'Wrap up',
       ]);
       expect((await v2.service.get('assistant'))?.workflow).toBeUndefined();

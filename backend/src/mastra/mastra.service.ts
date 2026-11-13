@@ -4,6 +4,10 @@ import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
 import {
+  planWithModel,
+  writeAnswerWithModel,
+} from './workflows/qti-v2-turn.agents';
+import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
   initializeSessionWorkspace,
@@ -40,6 +44,26 @@ export class MastraService {
     // Mastra types getAgent to the registered keys for DX; this wrapper is a
     // generic accessor, so widen the arg. Unknown ids throw at runtime.
     return this.mastra.getAgent(id as Parameters<typeof mastra.getAgent>[0]);
+  }
+
+  /**
+   * Questions to Insights v2's Plan step model call (agents.md 5.11): the
+   * agent's model, no tools, the plan read from its reply.
+   */
+  planV2Turn(
+    ...args: Parameters<typeof planWithModel>
+  ): ReturnType<typeof planWithModel> {
+    return planWithModel(...args);
+  }
+
+  /**
+   * Questions to Insights v2's Write answer step model call (agents.md
+   * 5.11): the agent's model, no tools, the answer streamed to `onText`.
+   */
+  writeV2Answer(
+    ...args: Parameters<typeof writeAnswerWithModel>
+  ): ReturnType<typeof writeAnswerWithModel> {
+    return writeAnswerWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

@@ -4,6 +4,7 @@ import { assistantV2Agent } from '../agents/assistant-v2.agent';
 import { ASSISTANT_V2_TOOL_NAMES } from '../agents/assistant-v2-catalog';
 import { entityOrientationLines } from '../context-blocks';
 import type { OptionalAgentTool } from '../agent-tools';
+import { workflowTurnAgent } from './analyst-v2-workflow-target';
 import type {
   AssistantEvalCase,
   AssistantEvalSet,
@@ -13,6 +14,7 @@ import {
   answerNamesAll,
   answerStatesNone,
   answerStatesNumbers,
+  endsOnClarifyingQuestion,
   hasMarkdownTable,
   ranSuccessfulSql,
   usesStoredValue,
@@ -154,11 +156,10 @@ const ANALYST_V2_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Which team was the most dominant?',
     intent:
       'Ambiguous metric and scope: "dominant" could mean results, goals, possession or shots, and the choice changes the analysis. The agent must ask one clarifying question.',
-    scorers: [
-      checks.calledTool('ask_clarification'),
-      checks.didNotCall('run_readonly_sql'),
-      checks.noToolErrors(),
-    ],
+    // The run's Plan step asks it (or Analyse's ask_clarification): either
+    // way the run ends on the question, before any query runs.
+    scorers: [checks.didNotCall('run_readonly_sql'), checks.noToolErrors()],
+    customChecks: [endsOnClarifyingQuestion()],
     judgeRubric:
       'The question ("Which team was the most dominant?") does not say what ' +
       '"dominant" means (results? goals? possession? shots?) nor which ' +
@@ -316,14 +317,21 @@ export function v2OrientationSelection(
 export function analystV2EvalTarget(
   loadAgent: () => Agent = () => assistantV2Agent,
   toolNames: readonly string[] = ASSISTANT_V2_TOOL_NAMES,
+  wholeTurn: (agent: Agent) => Agent = (agent) => workflowTurnAgent(agent),
 ): EvalTarget {
   let agent: Agent | undefined;
+  let run: Agent | undefined;
   const selection = v2OrientationSelection(toolNames);
   return {
     agentKey: ANALYST_V2_EVAL_AGENT_KEY,
     get agent(): Agent {
       agent ??= loadAgent();
       return agent;
+    },
+    // Each case runs the whole workflow, as a run does (agents.md 5.11).
+    get runTarget(): Agent {
+      run ??= wholeTurn((agent ??= loadAgent()));
+      return run;
     },
     sets: [ANALYST_V2_EVAL_SET],
     // The judge checks that every fact rests on a query, so it reads the

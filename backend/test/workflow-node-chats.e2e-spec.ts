@@ -7,6 +7,8 @@
  * }`, and stores the user and assistant messages, which `GET
  * /workflow-runs/:id/node-chats/analyse` answers. The run is never changed;
  * deleting it deletes its chats. Refusals answer JSON before any SSE frame.
+ * Plan and Write answer, v2's other agent steps, take a chat too; a chat's
+ * turn is the step's agent alone, never a run of the workflow.
  *
  * Needs no Postgres: the datasource points at a closed port, and the stub's
  * one tool call (`list_entities`) reads the stored catalog. Set
@@ -26,6 +28,7 @@ import {
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
 import { type Backend, boot, stop } from './backend-process';
+import { isPlanRequest, isWriteAnswerRequest, withV2Steps } from './v2-stub';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-node-chats-'));
 
@@ -93,13 +96,13 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
     stub = await startLlmStub();
     // A chat turn calls `list_entities` once, then answers; the run's own
     // turn answers at once.
-    stub.reply = (req) => {
+    stub.reply = withV2Steps((req) => {
       if (!lastUser(req).startsWith('Chat:')) return { text: STUB_ANSWER };
       const last = req.messages.at(-1);
       return last?.role === 'tool'
         ? { text: CHAT_ANSWER }
         : { toolCall: { name: 'list_entities', arguments: {} } };
-    };
+    });
     backend = await boot(dataDir);
     await http()
       .put('/llm/settings')
@@ -183,6 +186,21 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
         { content: 'Chat: why?' },
         400,
         'Step "ghost" has no agent to chat with',
+      ],
+      // Validate is code; Clarify is code and did not run.
+      [
+        runId,
+        'validate',
+        { content: 'Chat: why?' },
+        400,
+        'Step "validate" has no agent to chat with',
+      ],
+      [
+        runId,
+        'clarify',
+        { content: 'Chat: why?' },
+        400,
+        'Step "clarify" has no agent to chat with',
       ],
     ];
     for (const [id, stepId, body, status, message] of cases) {
@@ -295,6 +313,30 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
       .get(`/workflow-runs/${runId}/node-chats/load-catalog`)
       .expect(200, { messages: [] });
   });
+
+  it.each(['plan', 'write-answer'])(
+    'chats about the %s step with its agent alone, its stored data as context',
+    async (stepId) => {
+      const from = stub.requests.length;
+      const res = await chatStream(runId, stepId, {
+        content: `Chat: what did ${stepId} do?`,
+      });
+      expect(res.status).toBe(200);
+      expect(framesOf(res.text).at(-1)?.message).toMatchObject({
+        role: 'assistant',
+        content: CHAT_ANSWER,
+      });
+      const sent = stub.requests.slice(from);
+      // No Plan or Write answer call: the turn is v2's agent, not a run.
+      expect(sent.some(isPlanRequest)).toBe(false);
+      expect(sent.some(isWriteAnswerRequest)).toBe(false);
+      const title = stepId === 'plan' ? 'Plan' : 'Write answer';
+      const block = systemTexts(sent[0]).find((text) =>
+        text.includes('You are answering questions about one step'),
+      );
+      expect(block).toContain(`step "${title}" (${stepId}) of run ${runId}`);
+    },
+  );
 
   it('replays the earlier messages on the next turn, and deleting the run deletes its chats', async () => {
     const from = stub.requests.length;

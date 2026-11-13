@@ -10,7 +10,10 @@ import {
   type WorkflowBar,
   type WorkflowTrigger,
 } from '../../mastra/workflows/workflow-catalog';
-import type { JsonSchema } from '../../mastra/workflows/workflow-contract';
+import type {
+  JsonSchema,
+  WorkflowEdge,
+} from '../../mastra/workflows/workflow-contract';
 import {
   inputFieldsWithUsage,
   type WorkflowInputFieldDetail,
@@ -88,6 +91,11 @@ export interface WorkflowDetail extends Omit<WorkflowSummary, 'agents'> {
   /** The agents its steps call, in step order, each once, in detail. */
   agents: WorkflowAgentDetail[];
   steps: WorkflowDetailStep[];
+  /**
+   * How the steps connect, from `start` to `end` (api.md 117): the flow the
+   * canvas draws, with its branches and loops.
+   */
+  edges: WorkflowEdge[];
   /** The hash of its data contract (12 hex; agents.md 5.12). */
   contractHash: string;
 }
@@ -98,6 +106,8 @@ export interface WorkflowDetail extends Omit<WorkflowSummary, 'agents'> {
  */
 export interface WorkflowDefinition extends WorkflowSummary {
   steps: AgentWorkflow['steps'];
+  /** How the steps connect (117); absent for a draft run's definition. */
+  edges?: WorkflowEdge[];
   contractHash?: string;
 }
 
@@ -106,6 +116,7 @@ interface CatalogueEntry {
   summary: WorkflowSummary;
   contractHash: string;
   steps(): WorkflowDetailStep[];
+  edges(): WorkflowEdge[];
 }
 
 /**
@@ -140,6 +151,7 @@ export class WorkflowsService {
       ...entry.summary,
       agents,
       steps: entry.steps(),
+      edges: entry.edges(),
       contractHash: entry.contractHash,
     };
   }
@@ -153,6 +165,7 @@ export class WorkflowsService {
     return {
       ...entry.summary,
       steps: entry.steps(),
+      edges: entry.edges(),
       contractHash: entry.contractHash,
     };
   }
@@ -239,6 +252,7 @@ function codeEntry(
       starterQuestions: [...agent.starterQuestions],
     },
     contractHash: source.contractHash,
+    edges: () => source.edges.map((edge) => ({ ...edge })),
     steps: () =>
       withAgentKey(
         agentWorkflow(source.primaryFor)?.steps ?? [],

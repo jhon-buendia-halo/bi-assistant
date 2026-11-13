@@ -1,3 +1,4 @@
+import { AGENT_TURN_STEPS } from '../../mastra/workflows/agent-turn.steps';
 import {
   BadRequestException,
   ConflictException,
@@ -116,7 +117,8 @@ export class WorkflowNodeChatsService {
         `Step "${stepId}" has no agent to chat with`,
       );
     }
-    const step = run.steps.find((candidate) => candidate.id === stepId);
+    // A step that ran more than once is chatted about as its last attempt.
+    const step = run.steps.findLast((candidate) => candidate.id === stepId);
     if (!step || step.status === 'skipped' || step.status === 'running') {
       throw new BadRequestException(`Step "${stepId}" did not run in this run`);
     }
@@ -152,7 +154,7 @@ export class WorkflowNodeChatsService {
   }
 
   private async turn(
-    { run, workflow, step, content }: PreparedNodeChat,
+    { run, step, content }: PreparedNodeChat,
     emit: (event: NodeChatStreamEvent) => void,
     abortSignal?: AbortSignal,
   ): Promise<NodeChatMessage> {
@@ -166,8 +168,10 @@ export class WorkflowNodeChatsService {
       content,
       createdAt: new Date().toISOString(),
     });
+    // The turn is the step's agent alone, on the agent-turn engine
+    // (agents.md 5.16): its one agent step holds the turn's calls.
     const tracker = new RunStepTracker(
-      workflow.steps.map((entry) => ({
+      AGENT_TURN_STEPS.map((entry) => ({
         id: entry.id,
         title: entry.title,
         kind: entry.kind,
@@ -208,7 +212,7 @@ export class WorkflowNodeChatsService {
     }
     const stopped = !!abortSignal?.aborted;
     const answer = hostId ? await this.endHost(hostId, transcript.length) : '';
-    // The turn's calls are its agent step's: the workflow's one agent step.
+    // The turn's calls are its agent step's: the engine's one agent step.
     const calls = tracker
       .finish(stopped ? 'stopped' : error ? 'failed' : 'success', error)
       .steps.flatMap((entry) => entry.toolCalls ?? []);

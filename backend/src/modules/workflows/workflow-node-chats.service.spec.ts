@@ -128,7 +128,9 @@ function build(script: Script = {}) {
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });
-        onStep(stepStart('analyse', ANALYSE_INPUT));
+        // A node chat's turn is the step's agent alone, on agent-turn's one
+        // Answer step (agents.md 5.16), never a run of the whole workflow.
+        onStep(stepStart('answer', ANALYSE_INPUT));
         emit({ type: 'workflow', content: '{}' });
         for (const event of script.events ?? []) emit(event);
         if (script.abort) {
@@ -138,7 +140,7 @@ function build(script: Script = {}) {
         if (script.throws) throw script.throws;
         onStep({
           type: 'workflow-step-result',
-          payload: { id: 'analyse', status: 'success', output: {} },
+          payload: { id: 'answer', status: 'success', output: {} },
         });
         hostMessages.push({
           role: 'assistant',
@@ -237,6 +239,36 @@ describe('WorkflowNodeChatsService: refusals before any SSE frame (api.md 137)',
     });
     expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
     expect(await ctx.chats.get('r-1', 'analyse')).toBeNull();
+  });
+
+  it("accepts v2's agent steps Plan and Write answer, refuses its code steps Clarify and Validate, and reads a retried step's last attempt", async () => {
+    await ctx.runs.update('r-1', {
+      steps: [
+        ...RUN.steps.slice(0, 2),
+        { id: 'plan', title: 'Plan', status: 'success' },
+        { id: 'clarify', title: 'Clarify', status: 'skipped' },
+        { ...RUN.steps[2], attempt: 1, status: 'success' },
+        { ...RUN.steps[2], attempt: 2, status: 'success' },
+        { id: 'validate', title: 'Validate', status: 'success', attempt: 1 },
+        { id: 'validate', title: 'Validate', status: 'success', attempt: 2 },
+        { id: 'write-answer', title: 'Write answer', status: 'success' },
+        RUN.steps[3],
+      ],
+    });
+    for (const stepId of ['plan', 'write-answer']) {
+      await expect(
+        ctx.service.prepare('r-1', stepId, { content: 'Why?' }),
+      ).resolves.toMatchObject({ step: { id: stepId } });
+    }
+    await expect(
+      ctx.service.prepare('r-1', 'analyse', { content: 'Why?' }),
+    ).resolves.toMatchObject({ step: { id: 'analyse', attempt: 2 } });
+    for (const stepId of ['clarify', 'validate']) {
+      expect(await refusal('r-1', stepId, { content: 'Why?' })).toEqual({
+        status: 400,
+        message: `Step "${stepId}" has no agent to chat with`,
+      });
+    }
   });
 
   it('refuses a running run with 409 and a run of a removed workflow with 404', async () => {
