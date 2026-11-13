@@ -223,7 +223,7 @@ function build(
         panelItems: [],
         workflowRef: {
           id: 'qti-v2-turn',
-          name: 'Questions to Insights v2',
+          name: 'Answer a Business Question',
           kind: 'code',
           deleted: false,
         },
@@ -551,7 +551,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     expect(ctx.sessions.createRunHost).toHaveBeenCalledWith({
       runId: run.id,
       workflowId: 'qti-v2-turn',
-      name: 'Questions to Insights v2',
+      name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
     });
     // Careful is no field of v2's input: the turn runs without it.
@@ -623,7 +623,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
       workflowId: 'qti-v2-turn',
-      workflowName: 'Questions to Insights v2',
+      workflowName: 'Answer a Business Question',
       input: {
         question: '  Who won in 2002?  ',
         datasets: ['World Cup Core'],
@@ -845,7 +845,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     expect(ctx.sessions.createRunHost).toHaveBeenLastCalledWith({
       runId: second.run.id,
       workflowId: 'qti-v2-turn',
-      name: 'Questions to Insights v2',
+      name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
       context: {
         question: 'Who won in 2002?',
@@ -1056,7 +1056,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     expect(atTurn).toMatchObject({
       id: run.id,
       workflowId: 'qti-v2-turn',
-      workflowName: 'Questions to Insights v2',
+      workflowName: 'Answer a Business Question',
       input: ASK,
       status: 'running',
       steps: [],
@@ -1449,7 +1449,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       {
         id: v2.run.id,
         workflowId: 'qti-v2-turn',
-        workflowName: 'Questions to Insights v2',
+        workflowName: 'Answer a Business Question',
         status: 'success',
         title: 'Who won in 2002?',
         startedAt: '2026-11-11T12:00:00.000Z',

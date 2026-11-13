@@ -81,7 +81,7 @@ export async function runWorkflow(
 
 /** The one workflow of the catalogue (workflows R1). */
 export const V2_WORKFLOW_ID = 'qti-v2-turn';
-export const V2_WORKFLOW_NAME = 'Questions to Insights v2';
+export const V2_WORKFLOW_NAME = 'Answer a Business Question';
 
 /**
  * Runs Questions to Insights v2 (`qti-v2-turn`) on `question` over the

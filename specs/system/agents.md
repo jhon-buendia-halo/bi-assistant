@@ -1248,7 +1248,7 @@ Composed answer: <guidance>          ← only when composition applies
 </recommended-form>
 ```
 
-### 5.11 Workflow-backed turn: `qti-v2-turn` (Questions to Insights v2)
+### 5.11 Workflow-backed turn: `qti-v2-turn` (Answer a Business Question)
 
 A streamed turn of a session bound to `assistant-v2` (2.11) is one run of a workflow defined in code (ADR-0034), not one agent call. It is the catalogue's one code-defined workflow (5.12); every other session runs a one-step workflow on `agent-turn`, through the same turn path (5.1). Its flow is fixed in code on Mastra's control flow (`.then()`, `.branch()`, `.dountil()`, `.map()`; [api.md](api.md) 117 `edges`) and suspend/resume (ADR-0043), and never comes from a prompt. Each step is deterministic code or one bounded model or agent call. When the run needs the user (Clarify, or the agent's `ask_clarification` in Analyse), the step **suspends** the run: in a run (5.14) the same run continues from that step with the user's answer ([api.md](api.md) 138); in a past chat's turn the question ends the turn as the clarification card (5.1 step 3) and the suspended engine run is dropped.
 
@@ -1319,7 +1319,7 @@ The workflow's edges (`QTI_V2_TURN_EDGES`, [api.md](api.md) 117) say how the ste
 
 A **workflow** is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent ([workflows](../capabilities/workflows/spec.md); ADR-0040, partly superseded by ADR-0042). Workflows are never created, edited or stored by the app. Agents are not workflows (2026-11-12): they are a library that workflow steps call.
 
-**The catalogue.** One code-defined workflow, `qti-v2-turn`, *Questions to Insights v2*, a run workflow (`trigger: 'run'`) whose agent is `assistant-v2` (its `primaryFor` agent) and whose steps and edges are those of 5.11 (`CODE_WORKFLOWS[].edges`). It drives the workflow bar's view from its steps (`bar: 'steps'`). The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or `agent:<user-agent id>`), `seq-text-demo` (5.13) and `deep-analysis` (5.15) are removed from the catalogue and the API. The `agent-turn` Mastra workflow stays as an internal turn only: Try it (agents-evals R60), the eval runner (`createRunHost({ agentKey })`) and stored sessions use it; its `agent:<key>` ids never reach `GET /workflows`. A user agent's only run is its draft preview, Try it.
+**The catalogue.** One code-defined workflow, `qti-v2-turn`, *Answer a Business Question*, a run workflow (`trigger: 'run'`) whose agent is `assistant-v2` (its `primaryFor` agent) and whose steps and edges are those of 5.11 (`CODE_WORKFLOWS[].edges`). It drives the workflow bar's view from its steps (`bar: 'steps'`). The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or `agent:<user-agent id>`), `seq-text-demo` (5.13) and `deep-analysis` (5.15) are removed from the catalogue and the API. The `agent-turn` Mastra workflow stays as an internal turn only: Try it (agents-evals R60), the eval runner (`createRunHost({ agentKey })`) and stored sessions use it; its `agent:<key>` ids never reach `GET /workflows`. A user agent's only run is its draft preview, Try it.
 
 **Triggers.** Every workflow is a run workflow: `trigger: 'run'`, once on a typed input declared in code with its catalogue entry (`input`: fields `{ name, label, type: 'text' | 'textarea' | 'number' | 'boolean' | 'datasets' | 'dataset', required, placeholder?, help?, default?, datasourceKinds?, hidden?, maxLength?, min?, max? }`; [api.md](api.md) 116, 118). No chat starts (ADR-0041). `qti-v2-turn` declares `question` (at most 4000 characters) and `datasets` and runs one turn: Plan, then Clarify or the analysis loop and Write answer (5.11, 5.14).
 
@@ -1353,9 +1353,9 @@ Which agent a stored session's turn ran is unchanged history; no new turn runs o
 
 Removed with ADR-0042: the sequential test workflow (Clean text, Count words, Format result) was a test fixture and no longer exists. Its stored runs stay readable as legacy runs ([workflows](../capabilities/workflows/spec.md) R23). Tests that used it as a cheap no-LLM workflow run `qti-v2-turn` with the stub model instead. The section number is kept so the numbering stays stable.
 
-### 5.14 Runs of Questions to Insights v2
+### 5.14 Runs of Answer a Business Question
 
-A run of Questions to Insights v2 (`qti-v2-turn`, the only workflow since 2026-11-12) is **one turn** of the workflow of 5.11 (ADR-0041; [workflows](../capabilities/workflows/spec.md) R14-R17; [api.md](api.md) 118, 119): Plan, then Clarify or the analysis loop (each Analyse attempt one agent turn) and Write answer. It runs on a **run host** through the turn path of 5.1 unchanged, so each model request equals a chat turn's for the same input: the same agent, input messages, system and context blocks, tools, options and requestContext keys. Only what names the host differs: `session-id` is the host id, `session-workspace-id` and the workspace's `Local filesystem at …` line name the run's workspace, and the memory thread is the host's.
+A run of Answer a Business Question (`qti-v2-turn`, the only workflow since 2026-11-12) is **one turn** of the workflow of 5.11 (ADR-0041; [workflows](../capabilities/workflows/spec.md) R14-R17; [api.md](api.md) 118, 119): Plan, then Clarify or the analysis loop (each Analyse attempt one agent turn) and Write answer. It runs on a **run host** through the turn path of 5.1 unchanged, so each model request equals a chat turn's for the same input: the same agent, input messages, system and context blocks, tools, options and requestContext keys. Only what names the host differs: `session-id` is the host id, `session-workspace-id` and the workspace's `Local filesystem at …` line name the run's workspace, and the memory thread is the host's.
 
 **Inputs** ([api.md](api.md) 116). In code, with the catalogue: `qti-v2-turn` takes `question` and `datasets` and runs as a v2 chat turn (5.11).
 

@@ -137,7 +137,7 @@ const agentConfig = (name: string, datasets: string[]) => ({
 /** The one catalogue workflow, as `GET /workflows` lists it. */
 const QTI_V2_SUMMARY = {
   id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  name: 'Answer a Business Question',
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
@@ -338,7 +338,10 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
   afterEach(() => ctx.db.close());
 
   it.each([
-    ['assistant-v2', [{ id: 'qti-v2-turn', name: 'Questions to Insights v2' }]],
+    [
+      'assistant-v2',
+      [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
+    ],
     ['assistant', []],
     ['data-readiness', []],
     ['sql-fixer', []],
@@ -374,7 +377,11 @@ describe('WorkflowsController (ids contain ":")', () => {
       list: jest.fn().mockResolvedValue([]),
       get: jest.fn((id: string) =>
         id === 'qti-v2-turn'
-          ? Promise.resolve({ id, name: 'Questions to Insights v2', steps: [] })
+          ? Promise.resolve({
+              id,
+              name: 'Answer a Business Question',
+              steps: [],
+            })
           : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
       ),
     };
@@ -395,7 +402,7 @@ describe('WorkflowsController (ids contain ":")', () => {
         .expect(({ body }) =>
           expect(body).toMatchObject({
             id: 'qti-v2-turn',
-            name: 'Questions to Insights v2',
+            name: 'Answer a Business Question',
           }),
         );
       await request(server)

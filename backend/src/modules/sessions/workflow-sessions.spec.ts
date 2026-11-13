@@ -180,7 +180,7 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
         { agentKey: 'assistant-v2', agentName: 'Questions to Insights v2' },
         {
           id: 'qti-v2-turn',
-          name: 'Questions to Insights v2',
+          name: 'Answer a Business Question',
           kind: 'code',
           deleted: false,
         },
@@ -244,7 +244,7 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
         { workflowId: 'removed-workflow', agentKey: 'assistant-v2' },
         {
           id: 'qti-v2-turn',
-          name: 'Questions to Insights v2',
+          name: 'Answer a Business Question',
           kind: 'code',
           deleted: false,
         },

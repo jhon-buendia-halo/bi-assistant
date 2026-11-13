@@ -14,6 +14,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
 
+**Answer a Business Question.** The *code-defined workflow* `qti-v2-turn`, run by the `assistant-v2` agent (Michael); formerly shown as "Questions to Insights v2", which is now only that agent's name. A stored run keeps the name it ran under.
+
 **API style.** Which API a *custom endpoint* speaks: `openai` (shown "OpenAI-compatible"; the base URL includes the version path, e.g. `http://127.0.0.1:8317/v1`, and the key is sent as `Authorization: Bearer`) or `anthropic` (shown "Anthropic-compatible"; the base URL is the server root, e.g. `http://127.0.0.1:8317`, and the key is sent as `x-api-key`). Required for a custom endpoint, ignored for the other providers. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
 
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
@@ -30,7 +32,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
-**Code-defined workflow.** A *workflow* written in code with its own steps, some deterministic and some calling an agent, and shipped with the app; today only *Questions to Insights v2*'s four-step turn (2026-11-12). It drives the *workflow bar* from its steps. See [../system/architecture.md](../system/architecture.md) ADR-0034 and ADR-0040.
+**Code-defined workflow.** A *workflow* written in code with its own steps, some deterministic and some calling an agent, and shipped with the app; today only *Answer a Business Question*'s four-step turn (2026-11-12). It drives the *workflow bar* from its steps. See [../system/architecture.md](../system/architecture.md) ADR-0034 and ADR-0040.
 
 **Concept.** An *ontology item* of kind `concept`: a business term with a name, a definition, optional synonyms and optional **mappings** that say where it lives in the data (an entity, and optionally a column and/or a SQL expression). Rendered to the assistant as a `[term]` line. Replaces the former knowledge entry of kind `term`.
 
@@ -130,7 +132,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, *Questions to Insights v2* and the *Data Readiness Agent*.
 
-**One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: only *Questions to Insights v2* is. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
+**One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: only *Answer a Business Question* is. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
 
 **Ontology.** What a dataset means, written down for the assistant: the *ontology items* (concepts, relations, constraints and instructions) that belong to the dataset, plus the *shared items*. Edited in the dataset's Ontology tab. Only enabled items reach the assistant, within a size budget per turn. Replaces the knowledge library, whose entries became ontology items (ADR-0036). See [dataset-ontology](../capabilities/dataset-ontology/spec.md).
 
@@ -241,7 +243,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Warning.** A fault note from a *result guard*, shown with the data record and returned to the assistant so it re-runs before answering.
 
-**Workflow.** A fixed sequence of steps defined in code, each one deterministic code or a call to an *agent*, run once on a typed input. Since 2026-11-12 the only workflow is *Questions to Insights v2*. Workflows are listed in the Workflows area and never edited in the app; agents are a separate library the steps call. The hierarchy is workflows → agents → skills → tools. See [../system/architecture.md](../system/architecture.md) ADR-0040 and ADR-0042.
+**Workflow.** A fixed sequence of steps defined in code, each one deterministic code or a call to an *agent*, run once on a typed input. Since 2026-11-12 the only workflow is *Answer a Business Question*. Workflows are listed in the Workflows area and never edited in the app; agents are a separate library the steps call. The hierarchy is workflows → agents → skills → tools. See [../system/architecture.md](../system/architecture.md) ADR-0040 and ADR-0042.
 
 **Workflow bar.** The strip pinned under the page header, above the chat, that shows the steps of the process an agent is guiding the user through, the status of each (done, current, waiting for the user, skipped), and what the agent needs now. The agent drives it with `update_workflow`; its steps come from the agent's *workflow section*, or from the agent itself when it has none. See [agent-panel](../capabilities/agent-panel/spec.md) R13 to R20.
 

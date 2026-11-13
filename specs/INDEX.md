@@ -1113,7 +1113,7 @@ specs/capabilities/past-chats/spec.md:20-20  R49 The full transcript SHALL be st
 specs/capabilities/past-chats/spec.md:22-26  ### Which workflow a past chat names
 specs/capabilities/past-chats/spec.md:24-24  R57 Every session SHALL name the workflow it ran (R65) in the page header'
 specs/capabilities/past-chats/spec.md:25-25  R59 When the agent is deleted, its sessions SHALL keep their transcript, m
-specs/capabilities/past-chats/spec.md:26-26  R65 A session bound to Questions to Insights v2 reads its workflow `qti-v2
+specs/capabilities/past-chats/spec.md:26-26  R65 A session bound to Answer a Business Question reads its workflow `qti-
 specs/capabilities/past-chats/spec.md:28-32  ### The Past chats list and the read-only chat
 specs/capabilities/past-chats/spec.md:30-30  R62 While a past chat is open, the page header's session context SHALL end
 specs/capabilities/past-chats/spec.md:31-31  R63 In the **Past chats** tab of the Runs page (app-shell R46) the system
@@ -1352,7 +1352,7 @@ specs/capabilities/visuals/spec.md:430-442  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-67  ## Rules
-specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly one workflow, **Questions to
+specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly one workflow, **Answer a Bus
 specs/capabilities/workflows/spec.md:17-17  R2 The workflow's id SHALL be `qti-v2-turn`. Any other id SHALL NOT resol
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
 specs/capabilities/workflows/spec.md:21-23  R4 Every session SHALL run one workflow. A session created from this vers
@@ -1366,19 +1366,19 @@ specs/capabilities/workflows/spec.md:32-32  R11 Every workflow SHALL have the tr
 specs/capabilities/workflows/spec.md:33-33  R12 A workflow's card SHALL show its kind (R5) and **Run**, which opens it
 specs/capabilities/workflows/spec.md:34-36  R13 After a run, the Run panel SHALL show the **Result** under the form: `
 specs/capabilities/workflows/spec.md:37-37  R14 The workflow SHALL declare its input in code, with the field types `te
-specs/capabilities/workflows/spec.md:38-38  R15 A run of Questions to Insights v2 SHALL run its steps on the run's inp
+specs/capabilities/workflows/spec.md:38-38  R15 A run of Answer a Business Question SHALL run its steps on the run's i
 specs/capabilities/workflows/spec.md:39-39  R16 A streamed run SHALL report, in order: that it started (its run id), e
 specs/capabilities/workflows/spec.md:40-42  R17 A run MAY name one earlier run as its context: that run's question and
 specs/capabilities/workflows/spec.md:43-43  R18 Every run of a workflow on an input, streamed (119) or not (118), SHAL
 specs/capabilities/workflows/spec.md:44-44  R19 The Runs page's **Runs** tab (app-shell R46) SHALL show the run histor
 specs/capabilities/workflows/spec.md:45-47  R20 Deleting a run SHALL remove it, its workspace and its files, its memor
-specs/capabilities/workflows/spec.md:48-48  R21 Questions to Insights v2 SHALL offer **Execute workflow** and the **Ru
+specs/capabilities/workflows/spec.md:48-48  R21 Answer a Business Question SHALL offer **Execute workflow** and the **
 specs/capabilities/workflows/spec.md:49-51  R22 The answer on the Run panel SHALL offer the same rating as a chat answ
 specs/capabilities/workflows/spec.md:52-54  R23 A stored run whose workflow is no longer in the catalogue (the one-ste
 specs/capabilities/workflows/spec.md:55-57  R24 A workflow's input (its Start node) SHALL hold everything its steps ne
 specs/capabilities/workflows/spec.md:58-60  R25 After a run, the user SHALL be able to chat with an **agent step's** a
 specs/capabilities/workflows/spec.md:61-63  R26 Every step's input and output SHALL be validated against its declared
-specs/capabilities/workflows/spec.md:64-66  R27 Questions to Insights v2 SHALL run, fixed in code ([../../system/agent
+specs/capabilities/workflows/spec.md:64-66  R27 Answer a Business Question SHALL run, fixed in code ([../../system/age
 specs/capabilities/workflows/spec.md:67-67  R28 A run that needs the user's answer (Clarify, or Analyse's clarifying q
 specs/capabilities/workflows/spec.md:69-86  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:88-92  ## Contracts
@@ -1697,10 +1697,10 @@ specs/system/agents.md:1182-1196  ### 5.7 Persisting the turn (derived fields)
 specs/system/agents.md:1198-1213  ### 5.8 Careful mode — independent cross-check
 specs/system/agents.md:1215-1222  ### 5.9 Result-set comparison
 specs/system/agents.md:1224-1249  ### 5.10 Chart-form heuristic
-specs/system/agents.md:1251-1316  ### 5.11 Workflow-backed turn: `qti-v2-turn` (Questions to Insights v2)
+specs/system/agents.md:1251-1316  ### 5.11 Workflow-backed turn: `qti-v2-turn` (Answer a Business Question)
 specs/system/agents.md:1318-1350  ### 5.12 Workflows: the catalogue and the ids
 specs/system/agents.md:1352-1354  ### 5.13 Run workflows: `seq-text-demo` (removed 2026-11-12)
-specs/system/agents.md:1356-1382  ### 5.14 Runs of Questions to Insights v2
+specs/system/agents.md:1356-1382  ### 5.14 Runs of Answer a Business Question
 specs/system/agents.md:1384-1386  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
 specs/system/agents.md:1388-1411  ### 5.16 Node chats: chatting with a run step's agent
 specs/system/agents.md:1413-1586  ## 6. Visual designer pipeline

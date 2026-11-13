@@ -136,7 +136,7 @@ User agents (definitions)
 - R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../agent-answers/spec.md](../agent-answers/spec.md)).
 - R51. Saving a draft, publishing, deleting or pinning an agent that does not exist SHALL fail with `Agent "<id>" not found` (an `ok: false` answer); requesting the detail of one SHALL fail with HTTP 404 as in R8.
 - R52. User agents SHALL persist across restarts of the backend.
-- R53. Agents are a library, not workflows (ADR-0042, 2026-11-12): they are configured here (prompt, tools, skills, evals, versions) and the workflow steps of [workflows](../workflows/spec.md) call them. **Start chat** SHALL NOT be offered on any agent or workflow (chats are retired, ADR-0041), and **Run** (running the agent as a one-step workflow) SHALL NOT be offered on any agent: not on a hub card, not in an agent's detail header and not in any tab. The only way to run a user agent is **Try it** on its draft (R60). Only Questions to Insights v2 is a workflow, and it runs from the Workflows page. The agent summary no longer carries a `chatRequirement` ([api.md](../../system/api.md) 33).
+- R53. Agents are a library, not workflows (ADR-0042, 2026-11-12): they are configured here (prompt, tools, skills, evals, versions) and the workflow steps of [workflows](../workflows/spec.md) call them. **Start chat** SHALL NOT be offered on any agent or workflow (chats are retired, ADR-0041), and **Run** (running the agent as a one-step workflow) SHALL NOT be offered on any agent: not on a hub card, not in an agent's detail header and not in any tab. The only way to run a user agent is **Try it** on its draft (R60). Only Answer a Business Question is a workflow, and it runs from the Workflows page. The agent summary no longer carries a `chatRequirement` ([api.md](../../system/api.md) 33).
 
 ### Agent editor
 
@@ -259,8 +259,8 @@ The Job Description tab (the system prompt) of the Official and System agents, e
 - R106. Retired (1.23.8): the four showcase agents were removed from the app.
 - R107. **Questions to Insights v2** (`assistant-v2`; BA-320, [agents.md](../../system/agents.md) 2.11) SHALL be a built-in Official agent next to the assistant: a business data analyst with the tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql` and `ask_clarification`, the on-demand skills `curated-knowledge`, `sql-analysis` and `result-validation`, and the eval set `analyst-v2`. The current assistant is not changed by it.
   - the catalogue SHALL list it with kind `official`, owner `Official` and no datasets ([api.md](../../system/api.md) 33). Its card sits in the Official section, alphabetical by name (R1), so after the assistant;
-  - it is the agent of the workflow `Questions to Insights v2`, which runs from the Workflows page ([workflows](../workflows/spec.md) R12), not from the agent's page (R53); the agent has no datasets of its own, so the dataset picker and the required name stay;
-  - the detail SHALL open on **Job Description** (R91), say **Used in** `Questions to Insights v2` (R109) and show its description `A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.`; the **Tools** tab SHALL list its five tools, the **Memory** tab the assistant's settings (R7: 40 messages, no semantic recall, no working memory, no generated titles), the **Skills** tab its three built-in skills, each `On demand` (R63), and the **Evals** tab no sets;
+  - it is the agent of the workflow `Answer a Business Question`, which runs from the Workflows page ([workflows](../workflows/spec.md) R12), not from the agent's page (R53); the agent has no datasets of its own, so the dataset picker and the required name stay;
+  - the detail SHALL open on **Job Description** (R91), say **Used in** `Answer a Business Question` (R109) and show its description `A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.`; the **Tools** tab SHALL list its five tools, the **Memory** tab the assistant's settings (R7: 40 messages, no semantic recall, no working memory, no generated titles), the **Skills** tab its three built-in skills, each `On demand` (R63), and the **Evals** tab no sets;
   - the **Job Description** tab SHALL be that of an Official agent (R97-R105): `Built-in` and `Modified` chips, the editable text without `## Tools` and **Edit**, **Reset to built-in**, with the hint `Type / to link a tool or a built-in skill. Links here are mentions; Michael keeps every tool.` and the note `The ## Tools list is generated from the tools Michael gets and is inserted before ## Working rules.` Its editor links only its five tools and its three skills; **Save job description** refuses a prompt that does not start with `You are Questions to Insights v2`, a `[[skill:…]]` link to a skill not its own and an unknown tool, with the backend's message ([api.md](../../system/api.md) 103).
 - R108. The Graph tab of a **workflow-backed agent** SHALL open with a drawing of its workflow under the heading **What happens on each message**. Today the only such agent is Questions to Insights v2 (ADR-0034, [agents.md](../../system/agents.md) 5.11).
   - The drawing comes from the agent's `workflow` ([api.md](../../system/api.md) 34), which is built from the workflow defined in code, never from the prompt. It replaces the four-step list of R88.
@@ -277,7 +277,7 @@ The Job Description tab (the system prompt) of the Official and System agents, e
     - Selecting the same card again closes the details card.
   - Under the drawing, the prompt-links graph of R105 SHALL stay, under the heading **Prompt links** and without the four-step list.
   - An agent that is not workflow-backed keeps its Graph tab unchanged.
-- R109. The agent detail's header SHALL carry the line **Used in** under the id, from the agent's `usedInWorkflows` ([api.md](../../system/api.md) 34): one chip per workflow whose steps call the agent, reading the workflow's name. Each chip SHALL be a button that opens that workflow's page ([workflows](../workflows/spec.md) R7), with **Workflows** the current rail item ([app-shell](../app-shell/spec.md) R3). Since 2026-11-12 the only workflow is Questions to Insights v2, so only the agent `Questions to Insights v2` has a chip (`Questions to Insights v2`). When no workflow uses the agent, the line SHALL instead say:
+- R109. The agent detail's header SHALL carry the line **Used in** under the id, from the agent's `usedInWorkflows` ([api.md](../../system/api.md) 34): one chip per workflow whose steps call the agent, reading the workflow's name. Each chip SHALL be a button that opens that workflow's page ([workflows](../workflows/spec.md) R7), with **Workflows** the current rail item ([app-shell](../app-shell/spec.md) R3). Since 2026-11-12 the only workflow is Answer a Business Question (until 2026-11-13 shown as Questions to Insights v2), so only its agent `Questions to Insights v2` (Michael) has a chip (`Answer a Business Question`). When no workflow uses the agent, the line SHALL instead say:
   - a user agent, draft-only or Live: `Not used in any workflow.` (publishing it adds no workflow);
   - a System agent: `Not used in any workflow. The app calls this agent itself.`;
   - any other agent: `Not used in any workflow.`
@@ -600,9 +600,9 @@ Feature: Agent Hub
     When I open "Agents"
     Then no card has "Start chat"
     When I open "Michael"
-    Then I see "Used in" "Questions to Insights v2"
-    When I click the "Questions to Insights v2" chip
-    Then I see the "Questions to Insights v2" workflow page and "Workflows" is the current rail item
+    Then I see "Used in" "Answer a Business Question"
+    When I click the "Answer a Business Question" chip
+    Then I see the "Answer a Business Question" workflow page and "Workflows" is the current rail item
     When I open the "Sarah" agent
     Then I see no "Try it" tab, and "Job Description" is open
 

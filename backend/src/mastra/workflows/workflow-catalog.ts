@@ -17,7 +17,6 @@ import {
 import {
   ASSISTANT_V2_AGENT_KEY,
   ASSISTANT_V2_DESCRIPTION,
-  ASSISTANT_V2_NAME,
 } from '../agents/assistant-v2-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
 import type { AgentWorkflow } from './agent-workflows';
@@ -25,6 +24,7 @@ import {
   QTI_V2_TURN_EDGES,
   QTI_V2_TURN_STEPS,
   QTI_V2_TURN_WORKFLOW_ID,
+  QTI_V2_TURN_WORKFLOW_NAME,
   type ContractStepEntry,
 } from './qti-v2-turn.steps';
 import {
@@ -124,7 +124,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
   assertWorkflowContracts<Omit<CodeWorkflowSource, 'contractHash'>>([
     {
       id: QTI_V2_TURN_WORKFLOW_ID,
-      name: ASSISTANT_V2_NAME,
+      name: QTI_V2_TURN_WORKFLOW_NAME,
       description: ASSISTANT_V2_DESCRIPTION,
       primaryFor: ASSISTANT_V2_AGENT_KEY,
       trigger: 'run',

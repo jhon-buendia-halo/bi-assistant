@@ -18,8 +18,8 @@ const ASSISTANT = 'Emily';
 const ASSISTANT_ROLE = 'Data Analyst';
 /** Questions to Insights v2's persona (agents-evals R107, BA-320). */
 const V2_AGENT = 'Michael';
-/** The workflow it runs keeps its name. */
-const V2 = 'Questions to Insights v2';
+/** The workflow it runs (workflows R1). */
+const V2 = 'Answer a Business Question';
 const READINESS = 'Sarah';
 const V2_KEY = 'assistant-v2';
 const V2_DESCRIPTION =

@@ -43,7 +43,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     ).toEqual([
       {
         id: 'qti-v2-turn',
-        name: 'Questions to Insights v2',
+        name: 'Answer a Business Question',
         primaryFor: 'assistant-v2',
         bar: 'steps',
         trigger: 'run',
@@ -322,7 +322,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   describe('workflowsUsingAgent (api.md 34 usedInWorkflows)', () => {
     it('assistant-v2 is used in Questions to Insights v2', () => {
       expect(workflowsUsingAgent('assistant-v2')).toEqual([
-        { id: 'qti-v2-turn', name: 'Questions to Insights v2' },
+        { id: 'qti-v2-turn', name: 'Answer a Business Question' },
       ]);
     });
 

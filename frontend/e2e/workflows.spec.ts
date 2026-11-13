@@ -19,7 +19,7 @@ import { worldCupKey } from './helpers/world-cup-db';
 
 /** Mirrors the Feature "Workflows" in specs/capabilities/workflows/spec.md. */
 
-const V2 = 'Questions to Insights v2';
+const V2 = 'Answer a Business Question';
 const V2_ID = 'qti-v2-turn';
 /**
  * Its steps in catalogue order: Plan, then a branch (Clarify waits for the answer),
@@ -224,7 +224,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see only "Questions to Insights v2" under Official, and no Mine section',
+        'Then I see only "Answer a Business Question" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -245,7 +245,7 @@ test.describe('Feature: Workflows', () => {
           await expect(section(page, 'mine')).toHaveCount(0);
         },
       );
-      await scenarioStep(page, 'When I open "Questions to Insights v2"', async () => {
+      await scenarioStep(page, 'When I open "Answer a Business Question"', async () => {
         await openWorkflow(page, V2_ID, V2);
       });
       await scenarioStep(
@@ -295,7 +295,7 @@ test.describe('Feature: Workflows', () => {
         await expect(list.locator('[draggable="true"]')).toHaveCount(0);
       },
     );
-    await test.step('When I open "Questions to Insights v2"', async () => {
+    await test.step('When I open "Answer a Business Question"', async () => {
       await openWorkflow(page, V2_ID, V2);
     });
     await test.step(
@@ -320,14 +320,14 @@ test.describe('Feature: Workflows', () => {
       await openWorkflows(page);
     });
     const search = page.getByTestId('workflow-search');
-    await test.step('When I search for "insights"', async () => {
+    await test.step('When I search for "business"', async () => {
       await expect(search).toHaveAttribute(
         'placeholder',
         'Search workflows by name or description',
       );
-      await search.fill('insights');
+      await search.fill('business');
     });
-    await test.step('Then only the "Questions to Insights v2" card is shown', async () => {
+    await test.step('Then only the "Answer a Business Question" card is shown', async () => {
       await expect(page.getByTestId(`workflow-card-${V2_ID}`)).toBeVisible();
       await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(1);
       await expect(section(page, 'mine')).toHaveCount(0);
@@ -349,7 +349,7 @@ function runStep(page: Page, id: string): Locator {
   return page.getByTestId(`workflow-run-step-${id}`);
 }
 
-/** Opens Questions to Insights v2's page from its card's Run. */
+/** Opens Answer a Business Question's page from its card's Run. */
 async function openV2FromRun(page: Page): Promise<void> {
   await page.getByTestId(`workflow-run-open-${V2_ID}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
@@ -357,7 +357,7 @@ async function openV2FromRun(page: Page): Promise<void> {
 
 test.describe('Feature: Workflows (run workflows)', () => {
   test(
-    'I run Questions to Insights v2 on a question from its card',
+    'I run Answer a Business Question on a question from its card',
     { tag: ['@demo', '@story-1.23.9'] },
     async ({ page }) => {
       await scenarioStep(page, 'When I open Workflows', async () => {
@@ -365,7 +365,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Questions to Insights v2" with "8 steps" and no Start chat',
+        'Then I see "Answer a Business Question" with "8 steps" and no Start chat',
         async () => {
           const card = page.getByTestId(`workflow-card-${V2_ID}`);
           await expect(card).toBeVisible();
@@ -453,7 +453,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
     { tag: ['@demo'] },
     async ({ page }) => {
       stub.plan = () => clearPlan(QUESTION);
-      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+      await scenarioStep(page, 'Given I am on the "Answer a Business Question" page', async () => {
         await openWorkflows(page);
         await openV2FromRun(page);
       });
@@ -552,7 +552,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       stub.plan = () => (plans++ === 0 ? clarifyingPlan(question, clarification) : clearPlan(question));
       let runId = '';
 
-      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+      await scenarioStep(page, 'Given I am on the "Answer a Business Question" page', async () => {
         await openWorkflows(page);
         await openV2FromRun(page);
       });
@@ -642,7 +642,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       stub.hold = (request) => (request.stream ? gate : undefined);
       let runId = '';
 
-      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+      await scenarioStep(page, 'Given I am on the "Answer a Business Question" page', async () => {
         await openWorkflows(page);
         await openV2FromRun(page);
       });
@@ -699,7 +699,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
   );
 
   test('A failing step stops the run', async ({ page }) => {
-    await test.step('Given I am on the "Questions to Insights v2" page', async () => {
+    await test.step('Given I am on the "Answer a Business Question" page', async () => {
       await openWorkflows(page);
       await openV2FromRun(page);
     });
@@ -751,7 +751,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
 
       let storedBefore = 0;
 
-      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+      await scenarioStep(page, 'Given I am on the "Answer a Business Question" page', async () => {
         await openWorkflows(page);
         await openV2FromRun(page);
         storedBefore = (await storedRuns(page)).length;
@@ -868,7 +868,7 @@ test.describe('Feature: Workflows (the designer)', () => {
     'A workflow opens as a designer',
     { tag: ['@demo', '@story-1.23.10'] },
     async ({ page }) => {
-      await scenarioStep(page, 'When I open "Questions to Insights v2" from Workflows', async () => {
+      await scenarioStep(page, 'When I open "Answer a Business Question" from Workflows', async () => {
         await openWorkflows(page);
         await openWorkflow(page, V2_ID, V2);
       });
@@ -1076,7 +1076,7 @@ test.describe('Feature: Workflows (the designer)', () => {
     "A run shows each node's data in the Workflow state panel and the node dialog",
     { tag: ['@demo'] },
     async ({ page }) => {
-      await test.step('Given I am on the "Questions to Insights v2" page', async () => {
+      await test.step('Given I am on the "Answer a Business Question" page', async () => {
         await openWorkflows(page);
         await openV2FromRun(page);
       });
@@ -1150,7 +1150,7 @@ test.describe('Feature: Workflows (the designer)', () => {
   );
 
   test("A tool sub-node opens the tool's own details", { tag: ['@demo'] }, async ({ page }) => {
-    await test.step('Given I am on the "Questions to Insights v2" page', async () => {
+    await test.step('Given I am on the "Answer a Business Question" page', async () => {
       await openWorkflows(page);
       await openWorkflow(page, V2_ID, V2);
     });
@@ -1214,7 +1214,7 @@ test.describe('Feature: Workflows (the designer)', () => {
     async ({ page }) => {
       stub.reply = chatOrRun;
 
-      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+      await scenarioStep(page, 'Given I am on the "Answer a Business Question" page', async () => {
         await openWorkflows(page);
         await openV2FromRun(page);
       });
@@ -1337,28 +1337,28 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await openWorkflow(page, V2_ID, V2);
   await expect(drawnSteps(page)).toHaveCount(V2_STEPS.length);
   await expect(page.getByTestId('workflow-panel')).toBeVisible();
-  await scan('Questions to Insights v2 page');
+  await scan('Answer a Business Question page');
 
   await openNode(page, 'analyse', 'Analyse');
-  await scan('Questions to Insights v2 page, Analyse dialog');
+  await scan('Answer a Business Question page, Analyse dialog');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
   await openToolsMenu(page, 'analyse');
-  await scan('Questions to Insights v2 page, Analyse Tools list');
+  await scan('Answer a Business Question page, Analyse Tools list');
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('workflow-tools-menu-analyse')).toHaveCount(0);
   await expect(page.getByTestId('workflow-subnode-analyse-tools')).toBeFocused();
 
   await openTool(page, 'analyse', 'run_readonly_sql');
-  await scan('Questions to Insights v2 page, run_readonly_sql tool dialog');
+  await scan('Answer a Business Question page, run_readonly_sql tool dialog');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
   await page.getByTestId('workflow-state-node-analyse').click();
   await expect(page.getByTestId('workflow-state-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('workflow-state-detail')).toBeVisible();
-  await scan('Questions to Insights v2 page, Workflow state panel on Analyse');
+  await scan('Answer a Business Question page, Workflow state panel on Analyse');
 
   await backToWorkflows(page);
   await openV2FromRun(page);
@@ -1369,21 +1369,21 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(page.getByTestId('workflow-input-error-question')).toBeVisible();
   await expect(page.getByTestId('workflow-input-error-datasets')).toBeVisible();
   await expect(nodeStatus(page, 'start')).toHaveText('Invalid input');
-  await scan('Questions to Insights v2 page, input refused');
+  await scan('Answer a Business Question page, input refused');
 
   await openNode(page, 'start', 'Start');
   await expect(nodeDialog(page).getByTestId('workflow-ndv-input-errors')).toBeVisible();
-  await scan('Questions to Insights v2 page, Start dialog with the refused input');
+  await scan('Answer a Business Question page, Start dialog with the refused input');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
   await runOnQuestion(page, QUESTION);
   await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
   await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
-  await scan('Questions to Insights v2 page after a run');
+  await scan('Answer a Business Question page after a run');
 
   await openNode(page, 'wrap-up', 'Wrap up');
-  await scan('Questions to Insights v2 page, Wrap up dialog after a run');
+  await scan('Answer a Business Question page, Wrap up dialog after a run');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
@@ -1391,13 +1391,13 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(
     (await openNode(page, 'plan', 'Plan')).getByTestId('workflow-plan-view'),
   ).toBeVisible();
-  await scan('Questions to Insights v2 page, Plan dialog after a run');
+  await scan('Answer a Business Question page, Plan dialog after a run');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
   await expect(
     (await openNode(page, 'validate', 'Validate')).getByTestId('workflow-validate-view'),
   ).toBeVisible();
-  await scan('Questions to Insights v2 page, Validate dialog after a run');
+  await scan('Answer a Business Question page, Validate dialog after a run');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
@@ -1409,7 +1409,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await chatDialog.getByTestId('workflow-node-chat-send').click();
   await expect(chatDialog.getByTestId('workflow-node-chat-message')).toHaveCount(2);
   await expect(chatDialog.getByTestId('workflow-node-chat-tool-call')).toHaveCount(1);
-  await scan('Questions to Insights v2 page, Analyse dialog on its Chat tab');
+  await scan('Answer a Business Question page, Analyse dialog on its Chat tab');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
@@ -1418,7 +1418,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(page.getByTestId('workflow-run-status')).toHaveText(/^\s*Run failed: \S/, {
     timeout: FAILED_RUN_TIMEOUT,
   });
-  await scan('Questions to Insights v2 page after a failed run');
+  await scan('Answer a Business Question page after a failed run');
 
   // A run that waits for my answer: the waiting card, the progress and the activity line.
   stub.hold = undefined;
@@ -1430,5 +1430,5 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await page.getByTestId('workflow-run').click();
   await expect(page.getByTestId('workflow-run-input-required')).toBeVisible();
   await expect(page.getByTestId('workflow-run-activity')).toHaveText('Waiting for your answer');
-  await scan('Questions to Insights v2 page, a run waiting for my answer');
+  await scan('Answer a Business Question page, a run waiting for my answer');
 });
