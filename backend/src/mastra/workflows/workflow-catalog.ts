@@ -10,6 +10,8 @@
  * The API's catalogue is built from it by `WorkflowsService`.
  */
 import {
+  ANALYSIS_PLANNER_AGENT_KEY,
+  ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
   DATA_READINESS_MAX_STEPS,
   SYSTEM_AGENT_KEYS,
@@ -95,8 +97,13 @@ export interface CodeWorkflowSource {
   id: string;
   name: string;
   description: string;
-  /** Registry key of the agent its agent step runs. */
+  /** Registry key of the agent its agent steps run, unless `stepAgents` names another. */
   primaryFor: string;
+  /**
+   * The agent steps that run an agent of their own, by step id: registry
+   * keys (agents.md 5.11). Every other agent step runs `primaryFor`.
+   */
+  stepAgents?: Readonly<Record<string, string>>;
   trigger: WorkflowTrigger;
   /** The typed input of a run, in form order. */
   input: readonly WorkflowInputField[];
@@ -133,6 +140,11 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         DATASETS_FIELD,
       ],
       steps: QTI_V2_TURN_STEPS,
+      // Olivia plans and Jessica writes the answer; Michael analyses.
+      stepAgents: {
+        plan: ANALYSIS_PLANNER_AGENT_KEY,
+        'write-answer': ANSWER_WRITER_AGENT_KEY,
+      },
       edges: QTI_V2_TURN_EDGES,
       bar: 'steps',
     },
@@ -183,16 +195,43 @@ export const ASSISTANT_WORKFLOW_ID = 'agent:assistant';
 export const ASSISTANT_WORKFLOW_NAME = 'Assistant';
 
 /**
- * The catalogue workflows whose agent step runs an agent, as an agent's
+ * The catalogue workflows whose agent steps run an agent, as an agent's
  * detail lists them (api.md 34 `usedInWorkflows`): `qti-v2-turn` for
- * `assistant-v2`, none for any other agent.
+ * `assistant-v2`, `analysis-planner` and `answer-writer`, none for any
+ * other agent.
  */
 export function workflowsUsingAgent(
   agentKey: string,
 ): { id: string; name: string }[] {
-  return CODE_WORKFLOWS.filter(
-    (workflow) => workflow.primaryFor === agentKey,
+  return CODE_WORKFLOWS.filter((workflow) =>
+    workflowAgentKeys(workflow).includes(agentKey),
   ).map((workflow) => ({ id: workflow.id, name: workflow.name }));
+}
+
+/**
+ * The registry keys of the agents a code workflow's steps run, in step
+ * order without repeats: its `primaryFor` agent first, then its step agents.
+ */
+export function workflowAgentKeys(
+  workflow: Pick<CodeWorkflowSource, 'primaryFor' | 'steps' | 'stepAgents'>,
+): string[] {
+  const keys = [workflow.primaryFor];
+  for (const step of workflow.steps) {
+    if (step.kind !== 'agent') continue;
+    const key = stepAgentKey(workflow, step.id);
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
+/** The registry key of the agent a code workflow's agent step runs. */
+export function stepAgentKey(
+  workflow: Pick<CodeWorkflowSource, 'primaryFor' | 'stepAgents'>,
+  stepId: string,
+): string {
+  return workflow.stepAgents && Object.hasOwn(workflow.stepAgents, stepId)
+    ? workflow.stepAgents[stepId]
+    : workflow.primaryFor;
 }
 
 /** The agent-turn binding id: `agent:` + a registry key or user-agent id. */
@@ -282,6 +321,8 @@ const CLARIFICATION_TOOL = 'ask_clarification';
  * `agent`, with a `Clarifying question` exit when the agent can ask one.
  */
 export function oneStepWorkflowSteps(agent: {
+  /** The agent's registry key or user-agent id. */
+  key: string;
   name: string;
   /** The agent's job title; '' when it has none. */
   role?: string;
@@ -296,6 +337,7 @@ export function oneStepWorkflowSteps(agent: {
     input: [...step.input],
     output: [...step.output],
     agent: {
+      key: agent.key,
       name: agent.name,
       role: agent.role ?? '',
       tools: [...agent.tools],

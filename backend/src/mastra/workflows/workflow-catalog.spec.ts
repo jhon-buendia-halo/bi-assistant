@@ -360,6 +360,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('gives the step its agent', () => {
       expect(
         oneStepWorkflowSteps({
+          key: 'data-readiness',
           name: 'Sarah',
           role: 'Data Quality Analyst',
           tools: ['assess_data_readiness'],
@@ -374,6 +375,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           input: ['question', 'datasets'],
           output: ['calls', 'stopped'],
           agent: {
+            key: 'data-readiness',
             name: 'Sarah',
             role: 'Data Quality Analyst',
             tools: ['assess_data_readiness'],
@@ -389,7 +391,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
     it('adds the Clarifying question exit when the agent can ask one', () => {
       const [step] = oneStepWorkflowSteps({
-        name: 'Questions to Insights Assistant',
+        key: 'assistant',
+        name: 'Emily',
         tools: ['ask_clarification', 'run_readonly_sql'],
         maxSteps: 15,
       });
@@ -402,7 +405,12 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
 
     it('returns a copy the caller can change safely', () => {
       const tools = ['a'];
-      const [first] = oneStepWorkflowSteps({ name: 'x', tools, maxSteps: 1 });
+      const [first] = oneStepWorkflowSteps({
+        key: 'x',
+        name: 'x',
+        tools,
+        maxSteps: 1,
+      });
       first.input.push('y');
       first.agent!.tools.push('b');
       expect(tools).toEqual(['a']);

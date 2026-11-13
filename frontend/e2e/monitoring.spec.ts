@@ -146,6 +146,11 @@ test.describe('Feature: LLM calls', () => {
         `Then every call listed is a succeeded "${AGENT}" call`,
         async () => {
           await expect(assistantRow(page).first()).toBeVisible();
+          // Plan's and Write answer's calls (their own agents since Olivia
+          // and Jessica, agents.md 5.11) leave the list once the filter applies.
+          await expect(
+            rows(page).filter({ hasText: `${AGENT}: ` }),
+          ).toHaveCount(0);
           const count = await rows(page).count();
           expect(count).toBeGreaterThan(0);
           for (let i = 0; i < count; i += 1) {

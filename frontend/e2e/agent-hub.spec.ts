@@ -161,17 +161,25 @@ test('shows the built-in agents and mine in sections', async ({ page }) => {
   const system = section(page, 'system');
   await expect(cards(system)).toHaveCount(3);
   const showMore = system.getByTestId('agent-show-more-system');
-  await expect(showMore).toHaveText('Show more (2)');
+  await expect(showMore).toHaveText('Show more (4)');
   await expect(showMore).toHaveAttribute('aria-expanded', 'false');
 
-  await button(page, 'Show more (2)').click();
-  await expect(cards(system)).toHaveCount(5);
+  await button(page, 'Show more (4)').click();
+  await expect(cards(system)).toHaveCount(7);
   await expect(system.getByTestId('agent-card-sql-verifier')).toContainText(
     'Rachel',
   );
   await expect(system.getByTestId('agent-role-sql-verifier')).toHaveText(
     'SQL Reviewer',
   );
+  // The agents of the Plan and Write answer steps (agents.md 5.11).
+  for (const [key, name, role] of [
+    ['analysis-planner', 'Olivia', 'Analysis Lead'],
+    ['answer-writer', 'Jessica', 'Insights Writer'],
+  ]) {
+    await expect(system.getByTestId(`agent-card-${key}`)).toContainText(name);
+    await expect(system.getByTestId(`agent-role-${key}`)).toHaveText(role);
+  }
   await expect(showMore).toHaveAttribute('aria-expanded', 'true');
 
   await button(page, 'Show less').click();
@@ -414,8 +422,8 @@ test('the hub has no detectable accessibility violations in either theme', async
 }) => {
   await followOsTheme(page);
   await openHub(page);
-  await button(page, 'Show more (2)').click();
-  await expect(cards(section(page, 'system'))).toHaveCount(5);
+  await button(page, 'Show more (4)').click();
+  await expect(cards(section(page, 'system'))).toHaveCount(7);
 
   await page.addScriptTag({ content: axe.source });
   for (const theme of ['light', 'dark'] as const) {
@@ -690,7 +698,7 @@ test('a user agent is used in no workflow, even once published', async ({
 
 test('a System agent says the app calls it itself', async ({ page }) => {
   await openHub(page);
-  await button(page, 'Show more (2)').click();
+  await button(page, 'Show more (4)').click();
   await openAgent(page, 'sql-fixer', 'David');
   await expect(page.getByTestId('agent-used-in')).toContainText(SYSTEM_EMPTY);
   await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);

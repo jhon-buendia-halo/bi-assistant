@@ -116,27 +116,17 @@ describe('WorkflowNodeDialog', () => {
     );
   });
 
-  it("shows a model-only step's own instructions, not the agent's job description", () => {
+  it('names a one-call step\'s agent without a step limit in its header', () => {
     const analyse = node('analyse');
     open({
       ...analyse,
       step: {
         ...analyse.step!,
-        agent: { ...analyse.step!.agent!, name: 'Michael', tools: [], maxSteps: 1 },
-        instructions: 'You plan a data analysis for Questions to Insights v2.',
+        agent: { ...analyse.step!.agent!, name: 'Olivia', tools: [], maxSteps: 1 },
       },
     });
-    expect(text('workflow-step-field-instructions')).toBe(
-      'You plan a data analysis for Questions to Insights v2.',
-    );
-    expect(text('workflow-step-instructions-note')).toBe(
-      "Michael does this step in one model call, without tools; the job description isn't used here.",
-    );
-    expect(byId('workflow-step-field-system-prompt')).toBeNull();
-    expect(el().textContent).toContain('Step instructions');
-    // One model call: the header names the agent alone, no "≤ 1 steps".
+    expect(el().textContent).toContain('Olivia');
     expect(el().textContent).not.toContain('≤ 1 steps');
-    expect(el().textContent).not.toContain('Job description');
   });
 
   it('notes a shortened system prompt', () => {

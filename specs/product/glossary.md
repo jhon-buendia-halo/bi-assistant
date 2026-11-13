@@ -14,7 +14,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
 
-**Answer a Business Question.** The *code-defined workflow* `qti-v2-turn`, run by the `assistant-v2` agent (Michael); formerly shown as "Questions to Insights v2", which is now only that agent's name. A stored run keeps the name it ran under.
+**Answer a Business Question.** The *code-defined workflow* `qti-v2-turn`, its steps run by three agents: `assistant-v2` (Michael, Analyse), `analysis-planner` (Olivia, Plan) and `answer-writer` (Jessica, Write answer); formerly shown as "Questions to Insights v2", which is now only that agent's name. A stored run keeps the name it ran under.
 
 **API style.** Which API a *custom endpoint* speaks: `openai` (shown "OpenAI-compatible"; the base URL includes the version path, e.g. `http://127.0.0.1:8317/v1`, and the key is sent as `Authorization: Bearer`) or `anthropic` (shown "Anthropic-compatible"; the base URL is the server root, e.g. `http://127.0.0.1:8317`, and the key is sent as `x-api-key`). Required for a custom endpoint, ignored for the other providers. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
 
@@ -209,7 +209,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **SQL verifier.** The agent behind *careful mode*.
 
-**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge). It is read-only, runs inside the app's own flows and cannot start a chat.
+**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent, the eval judge, and Olivia and Jessica, who run Answer a Business Question's Plan and Write answer steps). It is read-only, runs inside the app's own flows and cannot start a chat.
 
 **System logs.** The UI name for *diagnostics*.
 

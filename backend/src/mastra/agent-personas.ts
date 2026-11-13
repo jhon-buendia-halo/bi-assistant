@@ -22,6 +22,8 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
   'sql-verifier': { name: 'Rachel', role: 'SQL Reviewer' },
   'knowledge-bootstrap': { name: 'Kevin', role: 'Knowledge Engineer' },
   'assistant-eval-judge': { name: 'Laura', role: 'QA Evaluator' },
+  'analysis-planner': { name: 'Olivia', role: 'Analysis Lead' },
+  'answer-writer': { name: 'Jessica', role: 'Insights Writer' },
 };
 
 /** The persona of a built-in agent, or undefined for an unknown key. */

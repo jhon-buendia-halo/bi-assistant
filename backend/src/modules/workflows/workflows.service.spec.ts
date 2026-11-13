@@ -110,6 +110,19 @@ function build(
       '',
       'You assess readiness.',
     ),
+    // The agents of v2's Plan and Write answer steps (agents.md 5.11).
+    'analysis-planner': fakeAgent(
+      'Questions to Insights v2: Plan',
+      [],
+      '',
+      'You plan a data analysis.',
+    ),
+    'answer-writer': fakeAgent(
+      'Questions to Insights v2: Write answer',
+      [],
+      '',
+      'You write the final answer.',
+    ),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
   const llm = options.llmView
@@ -141,7 +154,12 @@ const QTI_V2_SUMMARY = {
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
-  agents: [{ key: 'assistant-v2', name: 'Michael' }],
+  // Every agent its steps run: Michael, then Olivia (Plan) and Jessica (Write answer).
+  agents: [
+    { key: 'assistant-v2', name: 'Michael' },
+    { key: 'analysis-planner', name: 'Olivia' },
+    { key: 'answer-writer', name: 'Jessica' },
+  ],
   stepCount: 8,
   bar: 'steps',
   trigger: 'run',
@@ -195,13 +213,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     it("qti-v2-turn's steps are agentWorkflow('assistant-v2')'s, with their declared schemas", async () => {
       ctx = build();
       const detail = await ctx.service.get('qti-v2-turn');
-      // Its agent steps also name their agent's key, and every step carries
-      // its declared input and output schema (api.md 117; agents.md 5.12).
+      // Its agent steps name their own agent's key (Olivia plans, Michael
+      // analyses, Jessica writes), and every step carries its declared input
+      // and output schema (api.md 117; agents.md 5.11, 5.12).
+      expect(
+        detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
+      ).toEqual(['analysis-planner', 'assistant-v2', 'answer-writer']);
       expect(detail.steps).toEqual(
         agentWorkflow('assistant-v2')!.steps.map((step, index) => ({
-          ...(step.agent
-            ? { ...step, agent: { ...step.agent, key: 'assistant-v2' } }
-            : step),
+          ...step,
           inputSchema: QTI_V2_TURN_STEPS[index].inputSchema,
           outputSchema: QTI_V2_TURN_STEPS[index].outputSchema,
         })),
@@ -240,7 +260,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(summary).not.toHaveProperty('contractHash');
     });
 
-    it('details the agent its steps call: its key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {
+    it('details the agents its steps call: their key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {
       ctx = build();
       const detail = await ctx.service.get('qti-v2-turn');
       expect(detail.agents).toEqual([
@@ -268,6 +288,21 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
             },
           ],
         },
+        // Olivia and Jessica: one model call each, on their own job description.
+        {
+          key: 'analysis-planner',
+          name: 'Olivia',
+          model: null,
+          systemPrompt: 'You plan a data analysis.',
+          toolDetails: [],
+        },
+        {
+          key: 'answer-writer',
+          name: 'Jessica',
+          model: null,
+          systemPrompt: 'You write the final answer.',
+          toolDetails: [],
+        },
       ]);
       ctx.db.close();
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
@@ -290,7 +325,11 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     it('lists the summary agents only, without model or prompt (api.md 116 unchanged)', async () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
       const [v2] = await ctx.service.list();
-      expect(v2.agents).toEqual([{ key: 'assistant-v2', name: 'Michael' }]);
+      expect(v2.agents).toEqual([
+        { key: 'assistant-v2', name: 'Michael' },
+        { key: 'analysis-planner', name: 'Olivia' },
+        { key: 'answer-writer', name: 'Jessica' },
+      ]);
     });
 
     it.each([

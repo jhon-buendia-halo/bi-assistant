@@ -131,7 +131,7 @@ User agents (definitions)
 - R45. Publishing SHALL require a name and at least one dataset, else `Select at least one dataset to publish`. Creating a draft SHALL require only a name, else `Agent name is required`. A name already used by another user agent SHALL be refused with `An agent named "<name>" already exists`.
 - R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`. Their **Job Description** alone can be edited, through its own operations (R97-R105; [api.md](../../system/api.md) 103, 104).
 - R47. Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A user agent's pin SHALL be stored with it and a built-in agent's pin in the app settings, so pins survive a restart.
-- R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its `name` (a built-in agent's persona name, R110; a user agent's typed name), its `role` (the job title, `''` when none), its kind (`official` for the assistant, Questions to Insights v2 and the Data Readiness Agent, `system` for the five helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
+- R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its `name` (a built-in agent's persona name, R110; a user agent's typed name), its `role` (the job title, `''` when none), its kind (`official` for the assistant, Questions to Insights v2 and the Data Readiness Agent, `system` for the seven helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
 - R49. Requesting one agent SHALL resolve the key as a built-in agent first, then as a user-agent id. A user agent's detail SHALL report the assistant's memory and resolved model, because it runs on the assistant, and the tools and prompt its tool selection gives it (Live version, else draft), together with its draft and its Live version.
 - R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../agent-answers/spec.md](../agent-answers/spec.md)).
 - R51. Saving a draft, publishing, deleting or pinning an agent that does not exist SHALL fail with `Agent "<id>" not found` (an `ok: false` answer); requesting the detail of one SHALL fail with HTTP 404 as in R8.
@@ -277,11 +277,11 @@ The Job Description tab (the system prompt) of the Official and System agents, e
     - Selecting the same card again closes the details card.
   - Under the drawing, the prompt-links graph of R105 SHALL stay, under the heading **Prompt links** and without the four-step list.
   - An agent that is not workflow-backed keeps its Graph tab unchanged.
-- R109. The agent detail's header SHALL carry the line **Used in** under the id, from the agent's `usedInWorkflows` ([api.md](../../system/api.md) 34): one chip per workflow whose steps call the agent, reading the workflow's name. Each chip SHALL be a button that opens that workflow's page ([workflows](../workflows/spec.md) R7), with **Workflows** the current rail item ([app-shell](../app-shell/spec.md) R3). Since 2026-11-12 the only workflow is Answer a Business Question (until 2026-11-13 shown as Questions to Insights v2), so only its agent `Questions to Insights v2` (Michael) has a chip (`Answer a Business Question`). When no workflow uses the agent, the line SHALL instead say:
+- R109. The agent detail's header SHALL carry the line **Used in** under the id, from the agent's `usedInWorkflows` ([api.md](../../system/api.md) 34): one chip per workflow whose steps call the agent, reading the workflow's name. Each chip SHALL be a button that opens that workflow's page ([workflows](../workflows/spec.md) R7), with **Workflows** the current rail item ([app-shell](../app-shell/spec.md) R3). Since 2026-11-12 the only workflow is Answer a Business Question (until 2026-11-13 shown as Questions to Insights v2), so only the agents its steps run have a chip (`Answer a Business Question`): `Questions to Insights v2` (Michael, Analyse), `Questions to Insights v2: Plan` (Olivia, Plan) and `Questions to Insights v2: Write answer` (Jessica, Write answer). When no workflow uses the agent, the line SHALL instead say:
   - a user agent, draft-only or Live: `Not used in any workflow.` (publishing it adds no workflow);
   - a System agent: `Not used in any workflow. The app calls this agent itself.`;
   - any other agent: `Not used in any workflow.`
-- R110. **Personas.** Every built-in agent SHALL be a persona: a human first name and a job title, from the catalogue in [agents.md](../../system/agents.md) 1.1 (the assistant is Emily, Data Analyst; Questions to Insights v2 is Michael, Insights Analyst; the Data Readiness Agent is Sarah, Data Quality Analyst; and so on). The catalogue (`GET /agents`, `GET /agents/:key`) SHALL report the persona's name as `name` and its job title as `role`; everywhere else (traces, monitoring, workflow steps, chat sessions) the agent keeps its technical name, and the model never sees the persona. The hub sorts built-in agents by persona name (R1). A user agent has the name it was given and an optional job title (R43).
+- R110. **Personas.** Every built-in agent SHALL be a persona: a human first name and a job title, from the catalogue in [agents.md](../../system/agents.md) 1.1 (the assistant is Emily, Data Analyst; Questions to Insights v2 is Michael, Insights Analyst; the Data Readiness Agent is Sarah, Data Quality Analyst; the two System agents of Answer a Business Question's model-only steps are Olivia, Analysis Lead, who plans, and Jessica, Insights Writer, who writes the answer; and so on). The catalogue (`GET /agents`, `GET /agents/:key`) SHALL report the persona's name as `name` and its job title as `role`; everywhere else (traces, monitoring, workflow steps, chat sessions) the agent keeps its technical name, and the model never sees the persona. The hub sorts built-in agents by persona name (R1). A user agent has the name it was given and an optional job title (R43).
 
 ## Edge cases and errors
 
@@ -308,7 +308,7 @@ The Job Description tab (the system prompt) of the Official and System agents, e
 - The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, check result, tool call, regression summary): [../../system/data-model.md](../../system/data-model.md).
-- The nine registered agents, the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
+- The ten registered agents, the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
 - Sample fixtures and their required entities: [../testing-data/spec.md](../testing-data/spec.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
 
@@ -464,9 +464,9 @@ Feature: Agent Hub
     And the Mine section shows "Health plan analyst" with "Owner: You" and the chip "Live"
     And the Mine section shows "Claims triage" with the chip "Draft"
     And the Official section shows 3 cards, in order "Emily", "Michael" and "Sarah", and no "Show more"
-    And the System section shows 3 cards and "Show more (2)"
-    When I click "Show more (2)" in the System section
-    Then the System section shows 5 cards, including "SQL Verifier"
+    And the System section shows 3 cards and "Show more (4)"
+    When I click "Show more (4)" in the System section
+    Then the System section shows 7 cards, including "Rachel" (the SQL Verifier), "Olivia" and "Jessica"
     When I click "Show less" in the System section
     Then the System section shows 3 cards
 
@@ -592,7 +592,7 @@ Feature: Agent Hub
 
   Scenario: The hub has no detectable accessibility violations in either theme
     When I click "Agents"
-    And I click "Show more (2)" in the System section
+    And I click "Show more (4)" in the System section
     Then the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
 
@@ -619,7 +619,7 @@ Feature: Agent Hub
 
   Scenario: A System agent says the app calls it itself
     When I click "Agents"
-    And I click "Show more (2)" in the System section
+    And I click "Show more (4)" in the System section
     And I open "SQL Fixer"
     Then the "Used in" line says "Not used in any workflow. The app calls this agent itself."
     And there is no Try it tab and no "Start chat"

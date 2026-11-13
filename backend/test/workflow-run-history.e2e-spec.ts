@@ -320,7 +320,7 @@ describe('Stored runs: the run history API (API)', () => {
       {
         id: runId,
         workflowId: 'qti-v2-turn',
-        workflowName: 'Questions to Insights v2',
+        workflowName: 'Answer a Business Question',
         status: 'success',
         title: HOLD_QUESTION,
         startedAt: run.startedAt,

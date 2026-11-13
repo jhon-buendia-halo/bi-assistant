@@ -1,7 +1,3 @@
-import {
-  PLAN_INSTRUCTIONS,
-  WRITE_ANSWER_INSTRUCTIONS,
-} from './qti-v2-turn.prompts';
 import { agentWorkflow } from './agent-workflows';
 
 const V2_TOOLS = [
@@ -28,42 +24,36 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     ]);
   });
 
-  it('gives the agent steps their agent: Analyse with its tools, Plan and Write answer one model call without tools', () => {
+  it('gives each agent step its own agent: Michael analyses with his tools, Olivia plans and Jessica writes in one model call without tools', () => {
     const steps = agentWorkflow('assistant-v2')!.steps;
     const agentOf = (id: string) => steps.find((step) => step.id === id)?.agent;
-    // The agent by its persona: Michael, Insights Analyst (agents.md 1.1).
+    // Each agent by its key and persona (agents.md 1.1, 5.11).
     expect(agentOf('analyse')).toEqual({
+      key: 'assistant-v2',
       name: 'Michael',
       role: 'Insights Analyst',
       tools: V2_TOOLS,
       maxSteps: 15,
     });
-    for (const id of ['plan', 'write-answer']) {
-      expect(agentOf(id)).toEqual({
-        name: 'Michael',
-        role: 'Insights Analyst',
-        tools: [],
-        maxSteps: 1,
-      });
-    }
+    expect(agentOf('plan')).toEqual({
+      key: 'analysis-planner',
+      name: 'Olivia',
+      role: 'Analysis Lead',
+      tools: [],
+      maxSteps: 1,
+    });
+    expect(agentOf('write-answer')).toEqual({
+      key: 'answer-writer',
+      name: 'Jessica',
+      role: 'Insights Writer',
+      tools: [],
+      maxSteps: 1,
+    });
     expect(
       steps.filter((step) => step.kind === 'code').map((step) => step.agent),
     ).toEqual([undefined, undefined, undefined, undefined, undefined]);
     // The catalogue's own flag stays out of the API's step.
     expect(steps.every((step) => !('modelOnly' in step))).toBe(true);
-  });
-
-  it("gives Plan and Write answer the instructions their one call runs on, not the agent's job description", () => {
-    const steps = agentWorkflow('assistant-v2')!.steps;
-    const instructionsOf = (id: string) =>
-      steps.find((step) => step.id === id)?.instructions;
-    expect(instructionsOf('plan')).toBe(PLAN_INSTRUCTIONS);
-    expect(instructionsOf('write-answer')).toBe(WRITE_ANSWER_INSTRUCTIONS);
-    // Analyse runs the agent itself, on its job description.
-    expect(instructionsOf('analyse')).toBeUndefined();
-    expect(
-      steps.filter((step) => step.kind === 'code').map((s) => s.instructions),
-    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
   });
 
   it('carries each step’s fields and other exits', () => {

@@ -441,26 +441,7 @@
                 </dd>
               </dl>
 
-              @if (step.agent && step.instructions) {
-                <!-- A model-only step runs on its own instructions, not the agent's job description. -->
-                <h3
-                  class="m-0 mt-5 mb-1 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-                >
-                  Step instructions
-                </h3>
-                <p
-                  class="m-0 mb-2 text-[12px] text-fg-muted"
-                  data-testid="workflow-step-instructions-note"
-                >
-                  {{ step.agent.name }} does this step in one model call,
-                  without tools; the job description isn't used here.
-                </p>
-                <pre
-                  class="m-0 max-h-64 overflow-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-                  data-testid="workflow-step-field-instructions"
-                  tabindex="0"
-                  >{{ step.instructions }}</pre>
-              } @else if (step.agent && node().agent; as agent) {
+              @if (step.agent && node().agent; as agent) {
                 <h3
                   class="m-0 mt-5 mb-1 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
                 >
