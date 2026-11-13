@@ -186,6 +186,8 @@ export class WorkflowCanvas {
     moved: boolean;
   } | null = null;
   private rendered = false;
+  /** The running node last panned to, so each one is panned to once. */
+  private pannedTo: string | null = null;
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -196,6 +198,17 @@ export class WorkflowCanvas {
       const observer = new ResizeObserver(() => this.fitIfAuto());
       observer.observe(this.viewport().nativeElement);
       destroyRef.onDestroy(() => observer.disconnect());
+    });
+    // A run's running node is panned into view when the graph is wider than
+    // the canvas (fit keeps a readable zoom and pans sideways, ui.md 4.4b).
+    effect(() => {
+      const statuses = this.statuses();
+      const running =
+        Object.keys(statuses).find((id) => statuses[id] === 'running') ?? null;
+      untracked(() => {
+        if (running !== null && running !== this.pannedTo) this.panTo(running);
+        this.pannedTo = running;
+      });
     });
     // Another workflow fits again.
     effect(() => {
@@ -287,6 +300,19 @@ export class WorkflowCanvas {
     this.closeToolsMenu(false);
     this.autoFit.set(false);
     this.zoom.set(zoom);
+  }
+
+  /** Scrolls the canvas sideways so the node is centred, when it pans at all. */
+  private panTo(id: string): void {
+    if (!this.rendered) return;
+    const el = this.viewport().nativeElement;
+    const node = this.layout().nodes.find((n) => n.id === id);
+    if (!node || el.scrollWidth <= el.clientWidth) return;
+    const centre = (node.x + node.width / 2) * this.zoom();
+    el.scrollTo?.({
+      left: Math.max(0, centre - el.clientWidth / 2),
+      behavior: 'smooth',
+    });
   }
 
   private fitIfAuto(): void {

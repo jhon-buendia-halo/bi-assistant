@@ -161,7 +161,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(events).toEqual([]);
   });
 
-  it('a Logs row selects its node; the Run toggle folds the panel to its header', () => {
+  it('a Logs row selects its node; the Run toggle folds the Chat, the Logs toggle the Logs', () => {
     open(THREE_STEPS);
     q('workflow-state-node-clean-text')!.click();
     fixture.detectChanges();
@@ -173,6 +173,12 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     fixture.detectChanges();
     expect(designer.stateOpen()).toBe(false);
     expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    expect(q('workflow-run-chat')).toBeNull();
+    // The Logs are under the canvas: folding the Run panel keeps them.
+    expect(q('workflow-state-node-all')).not.toBeNull();
+    q('workflow-logs-toggle')!.click();
+    fixture.detectChanges();
+    expect(q('workflow-logs-toggle')?.getAttribute('aria-expanded')).toBe('false');
     expect(q('workflow-state-node-all')).toBeNull();
     designer.stateOpen.set(true);
   });
@@ -261,13 +267,22 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.inputValues()).toEqual({});
   });
 
-  it('has the Run panel on the right of the canvas and no app right panel to open or make room for', () => {
+  it('has three zones: the canvas, the Logs under it and the Run panel (Chat) on the right, and no app right panel', () => {
     open(THREE_STEPS);
     const dock = q('workflow-run-dock')!;
     expect(dock.tagName.toLowerCase()).toBe('app-workflow-run-dock');
     expect(dock.querySelector('app-workflow-run-chat')).not.toBeNull();
-    expect(dock.querySelector('app-workflow-state-panel')).not.toBeNull();
-    expect(q('workflow-canvas')!.compareDocumentPosition(dock)).toBe(
+    expect(dock.querySelector('app-workflow-state-panel')).toBeNull();
+    const logs = q('workflow-logs-dock')!;
+    expect(logs.querySelector('app-workflow-state-panel')).not.toBeNull();
+    const canvas = el.querySelector('app-workflow-canvas') as HTMLElement;
+    // The canvas and the Logs share one column; the Run panel follows it.
+    expect(logs.parentElement).toBe(canvas.parentElement);
+    expect(canvas.compareDocumentPosition(logs)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(dock.parentElement).toBe(canvas.parentElement!.parentElement);
+    expect(canvas.compareDocumentPosition(dock)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(el.querySelector('header')!.classList).toContain('px-6');

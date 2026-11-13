@@ -34,7 +34,9 @@
         type="button"
         data-testid="workflow-state-toggle"
         [attr.aria-expanded]="designer.stateOpen()"
-        [attr.title]="designer.stateOpen() ? 'Fold Run panel' : 'Unfold Run panel'"
+        [attr.title]="
+          designer.stateOpen() ? 'Fold Run panel' : 'Unfold Run panel'
+        "
         class="inline-flex items-center gap-1.5 rounded-md text-[14px] font-medium text-fg-strong"
         [class]="
           designer.stateOpen()
@@ -127,18 +129,7 @@
   </div>
 
   @if (designer.stateOpen()) {
-    <!-- The Chat above the Logs, each half the column's height -->
-    <div
-      class="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden"
-    >
-      <app-workflow-run-chat class="min-h-0 border-b border-border" />
-      <app-workflow-state-panel
-        class="min-h-0"
-        [nodes]="designer.nodes()"
-        [selectedId]="designer.selectedStepId()"
-        (selectNode)="designer.select($event)"
-        (openNode)="designer.openNode($event)"
-      />
-    </div>
+    <!-- The Chat at full height; the Logs are under the canvas -->
+    <app-workflow-run-chat class="min-h-0 flex-1" />
   }
 </section>

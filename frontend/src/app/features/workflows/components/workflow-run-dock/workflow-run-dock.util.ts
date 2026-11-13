@@ -1,50 +1,84 @@
-/** The Run panel's share of the page width under the header, before any drag. */
-export const DOCK_DEFAULT_RATIO = 0.45;
-/** Its least width; the canvas keeps at least `DOCK_MIN_CANVAS` beside it. */
-export const DOCK_MIN_WIDTH = 420;
-export const DOCK_MIN_CANVAS = 280;
-/** Arrow Left / Right on its left edge. */
+/**
+ * The sizes of the workflow page's two resizable panels (ui.md 4.4b): the
+ * Run panel (the Chat) on the right, sized by its width, and the Logs under
+ * the canvas, sized by their height. Each is kept as a share of the room it
+ * shares with the canvas.
+ */
+export interface DockSize {
+  /** Its least size. */
+  min: number;
+  /** What the canvas side keeps at least. */
+  minOther: number;
+  /** Its share of the room before any drag. */
+  defaultRatio: number;
+  /** Its size before the room is measured. */
+  fallback: number;
+  storageKey: string;
+}
+
+/** The Run panel, beside the canvas and the Logs: a width. */
+export const RUN_DOCK: DockSize = {
+  min: 360,
+  minOther: 480,
+  defaultRatio: 0.32,
+  fallback: 380,
+  storageKey: 'qti.workflow-run-dock.width-ratio',
+};
+
+/** The Logs, under the canvas: a height. */
+export const LOGS_DOCK: DockSize = {
+  min: 160,
+  minOther: 200,
+  defaultRatio: 0.4,
+  fallback: 320,
+  storageKey: 'qti.workflow-logs-dock.ratio',
+};
+
+/** Arrow keys on a panel's edge. */
 export const DOCK_KEY_STEP = 24;
-/** Its width before the page room is measured. */
-export const DOCK_FALLBACK_WIDTH = 520;
 
-const STORAGE_KEY = 'qti.workflow-run-dock.width-ratio';
-
-/** The widths it may take in a room of `room` pixels. */
-export function dockBounds(room: number): { min: number; max: number } {
-  const max = Math.max(DOCK_MIN_WIDTH, room - DOCK_MIN_CANVAS);
-  return { min: Math.min(DOCK_MIN_WIDTH, max), max };
+/** The sizes it may take in a room of `room` pixels. */
+export function dockBounds(
+  room: number,
+  size: DockSize,
+): { min: number; max: number } {
+  const max = Math.max(size.min, room - size.minOther);
+  return { min: Math.min(size.min, max), max };
 }
 
 /**
- * Its width: maximized, all but the canvas's minimum; else its share of the
- * room, within the bounds. A room not yet measured gives the fallback.
+ * Its size: maximized, all but the canvas side's minimum; else its share of
+ * the room, within the bounds. A room not yet measured gives the fallback.
  */
-export function dockWidth(
+export function dockSize(
   room: number,
   ratio: number,
   maximized: boolean,
+  size: DockSize,
 ): number {
-  if (room <= 0) return DOCK_FALLBACK_WIDTH;
-  const { min, max } = dockBounds(room);
+  if (room <= 0) return size.fallback;
+  const { min, max } = dockBounds(room, size);
   if (maximized) return max;
   return Math.round(Math.min(max, Math.max(min, ratio * room)));
 }
 
 /** The kept share, else the default; a broken or out-of-range value is ignored. */
-export function readDockRatio(): number {
+export function readDockRatio(size: DockSize): number {
   try {
-    const value = Number(localStorage.getItem(STORAGE_KEY));
-    return value > 0 && value < 1 ? value : DOCK_DEFAULT_RATIO;
+    const value = Number(localStorage.getItem(size.storageKey));
+    return value > 0 && value < 1 ? value : size.defaultRatio;
   } catch {
-    return DOCK_DEFAULT_RATIO;
+    return size.defaultRatio;
   }
 }
 
-export function writeDockRatio(ratio: number): void {
+export function writeDockRatio(size: DockSize, ratio: number): void {
   try {
-    localStorage.setItem(STORAGE_KEY, String(Math.round(ratio * 1000) / 1000));
+    localStorage.setItem(
+      size.storageKey,
+      String(Math.round(ratio * 1000) / 1000),
+    );
   } catch {
-    // Storage unavailable: the width is kept for this page only.
+    // Storage unavailable: the size is kept for this page only.
   }
 }

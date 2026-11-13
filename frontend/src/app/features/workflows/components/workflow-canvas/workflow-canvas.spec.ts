@@ -555,11 +555,12 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
   it('fits the graph on load', async () => {
     await fixture.whenStable();
     fixture.detectChanges();
-    // 1205 x 372 canvas pixels in a 600 x ~400 viewport.
-    expect(level()).toBe('45%');
+    // 1205 x 372 canvas pixels in a 600 x ~400 viewport: the whole width
+    // would need 45%, so fit keeps 70% (its height shows) and it pans.
+    expect(level()).toBe('70%');
     expect(
       (el.querySelector('.canvas-stage') as HTMLElement).style.transform,
-    ).toBe('scale(0.45)');
+    ).toBe('scale(0.7)');
     expect(q('workflow-zoom-fit')?.getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -595,10 +596,10 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(level()).toBe('100%');
 
     const canvas = q('workflow-canvas')!;
-    spyOnProperty(canvas, 'clientWidth').and.returnValue(700);
+    spyOnProperty(canvas, 'clientWidth').and.returnValue(1000);
     spyOnProperty(canvas, 'clientHeight').and.returnValue(800);
     click(q('workflow-zoom-fit')!);
-    expect(level()).toBe('55%');
+    expect(level()).toBe('80%');
     expect(q('workflow-zoom-fit')?.getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -675,6 +676,27 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(
       q('workflow-node-load-catalog')!.querySelector('.animate-spin'),
     ).not.toBeNull();
+  });
+
+  it('pans the running node into view once, when the graph is wider than the canvas', async () => {
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const canvas = q('workflow-canvas')!;
+    const scrollTo = spyOn(canvas, 'scrollTo');
+    spyOnProperty(canvas, 'scrollWidth').and.returnValue(2000);
+    spyOnProperty(canvas, 'clientWidth').and.returnValue(600);
+    fixture.componentRef.setInput('statuses', { analyse: 'running' });
+    fixture.detectChanges();
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    const { left } = scrollTo.calls.mostRecent().args[0] as ScrollToOptions;
+    expect(left).toBeGreaterThan(0);
+    // The same node still running: no new pan.
+    fixture.componentRef.setInput('statuses', {
+      analyse: 'running',
+      'load-catalog': 'success',
+    });
+    fixture.detectChanges();
+    expect(scrollTo).toHaveBeenCalledTimes(1);
   });
 
   it('marks an edge done once its source succeeded, and the sub-edges once the agent did', () => {

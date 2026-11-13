@@ -8,14 +8,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WorkflowDetail, WorkflowRun } from '../../models/workflow.model';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunDock } from './workflow-run-dock';
-import {
-  DOCK_DEFAULT_RATIO,
-  DOCK_KEY_STEP,
-  DOCK_MIN_CANVAS,
-  DOCK_MIN_WIDTH,
-} from './workflow-run-dock.util';
+import { DOCK_KEY_STEP, RUN_DOCK } from './workflow-run-dock.util';
 
-const RATIO_KEY = 'qti.workflow-run-dock.width-ratio';
+const RATIO_KEY = RUN_DOCK.storageKey;
+const DOCK_DEFAULT_RATIO = RUN_DOCK.defaultRatio;
+const DOCK_MIN_CANVAS = RUN_DOCK.minOther;
+const DOCK_MIN_WIDTH = RUN_DOCK.min;
 const ROOM = 1200;
 const DEFAULT_WIDTH = Math.round(ROOM * DOCK_DEFAULT_RATIO);
 
@@ -135,7 +133,8 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
     expect(text('workflow-state-toggle')).toBe('Run');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(q('workflow-run-chat')).not.toBeNull();
-    expect(q('workflow-state')).not.toBeNull();
+    // The Logs are under the canvas, not in the Run panel.
+    expect(q('workflow-state')).toBeNull();
     expect(handle()).not.toBeNull();
 
     toggle.click();
@@ -155,16 +154,11 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
     expect(q('workflow-run-chat')).not.toBeNull();
   });
 
-  it('holds the Chat above the Logs in its body', () => {
+  it('holds only the Chat in its body, at full height', () => {
     open();
     const dock = q('workflow-run-dock')!;
     expect(dock.querySelector('app-workflow-run-chat')).not.toBeNull();
-    expect(dock.querySelector('app-workflow-state-panel')).not.toBeNull();
-    const chat = dock.querySelector('app-workflow-run-chat')!;
-    const logs = dock.querySelector('app-workflow-state-panel')!;
-    expect(chat.getBoundingClientRect().bottom).toBeLessThanOrEqual(
-      logs.getBoundingClientRect().top + 1,
-    );
+    expect(dock.querySelector('app-workflow-state-panel')).toBeNull();
   });
 
   it('says there is no run yet, with no pill', () => {

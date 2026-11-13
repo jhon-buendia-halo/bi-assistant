@@ -196,7 +196,7 @@ async function closeNode(page: Page): Promise<void> {
   await expect(nodeDialog(page)).toHaveCount(0);
 }
 
-/** The Run panel on the right of the canvas (Chat + Logs), which Execute workflow unfolds. */
+/** The Run panel (the Chat) on the right of the canvas and the Logs, which Execute workflow unfolds. */
 function runDock(page: Page): Locator {
   return page.getByTestId('workflow-run-dock');
 }
@@ -211,9 +211,14 @@ async function expectRunPanel(page: Page): Promise<void> {
   await expect(runDock(page).getByTestId('workflow-run-chat').getByTestId('workflow-run')).toBeVisible();
 }
 
-/** A node's row in the Run panel's Logs: its state is `data-state`. */
+/** The Logs under the canvas. */
+function logsDock(page: Page): Locator {
+  return page.getByTestId('workflow-logs-dock');
+}
+
+/** A node's row in the Logs under the canvas: its state is `data-state`. */
 function logRow(page: Page, id: string): Locator {
-  return page.getByTestId('workflow-run-dock').getByTestId(`workflow-state-node-${id}`);
+  return logsDock(page).getByTestId(`workflow-state-node-${id}`);
 }
 
 /** New question: drops the run shown and the question, keeps the datasets; types `question`. */
@@ -289,14 +294,16 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then the Run panel is on the right of the canvas, there is no Details panel and no chat is started',
+        'Then the Logs are under the canvas, the Run panel is on its right, there is no Details panel and no chat is started',
         async () => {
           await expectRunPanel(page);
           await expect(detailsPanel(page)).toHaveCount(0);
           await expect(page.getByTitle('Expand right panel')).toHaveCount(0);
           const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
           const dockBox = await runDock(page).boundingBox();
+          const logsBox = await logsDock(page).boundingBox();
           expect(dockBox!.x).toBeGreaterThanOrEqual(canvasBox!.x + canvasBox!.width - 1);
+          expect(logsBox!.y).toBeGreaterThanOrEqual(canvasBox!.y + canvasBox!.height - 1);
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -953,15 +960,18 @@ test.describe('Feature: Workflows (the designer)', () => {
       );
       await scenarioStep(
         page,
-        'And there is no Details panel and the Run panel, with Chat and Logs, is on the right of the canvas',
+        'And there is no Details panel, the Logs are under the canvas and the Run panel with the Chat is on its right',
         async () => {
           await expect(detailsPanel(page)).toHaveCount(0);
           await expectRunPanel(page);
           const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
           const dockBox = await runDock(page).boundingBox();
           expect(canvasBox!.x + canvasBox!.width).toBeLessThanOrEqual(dockBox!.x + 1);
+          const logsBox = await logsDock(page).boundingBox();
+          expect(canvasBox!.y + canvasBox!.height).toBeLessThanOrEqual(logsBox!.y + 1);
+          expect(logsBox!.x + logsBox!.width).toBeLessThanOrEqual(dockBox!.x + 1);
           await expect(runDock(page).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
-          await expect(runDock(page).getByRole('heading', { name: 'Logs', exact: true })).toBeVisible();
+          await expect(logsDock(page).getByRole('heading', { name: 'Logs', exact: true })).toBeVisible();
         },
       );
       await scenarioStep(page, 'When I double-click Start', async () => {
@@ -1357,7 +1367,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(section(page, 'official')).toBeVisible();
   await scan('Workflows page');
 
-  // A workflow's page: the canvas and the Run panel (Chat and Logs) on its right.
+  // A workflow's page: the canvas, the Logs under it and the Run panel (Chat) on the right.
   await openWorkflow(page, V2_ID, V2);
   await expect(drawnSteps(page)).toHaveCount(V2_STEPS.length);
   await expect(runDock(page)).toBeVisible();

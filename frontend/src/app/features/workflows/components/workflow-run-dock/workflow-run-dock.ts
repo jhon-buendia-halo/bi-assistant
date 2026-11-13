@@ -22,32 +22,26 @@ import {
 import { formatNodeDuration } from '../workflow-node-dialog/workflow-node-format';
 import { WorkflowRunActivity } from '../workflow-run-activity/workflow-run-activity';
 import { WorkflowRunChat } from '../workflow-run-chat/workflow-run-chat';
-import { WorkflowStatePanel } from '../workflow-state-panel/workflow-state-panel';
 import {
-  DOCK_DEFAULT_RATIO,
   DOCK_KEY_STEP,
+  RUN_DOCK,
   dockBounds,
-  dockWidth,
+  dockSize,
   readDockRatio,
   writeDockRatio,
 } from './workflow-run-dock.util';
 
 /**
- * The Run panel beside the canvas of a workflow's page, on its right (ui.md
- * 4.4b): a header with the run's summary and live activity, then the Chat
- * (question, answer, composer) above the Logs (every node, live, and the
- * selected node's data). It is resizable by dragging its left edge (or the
- * arrow keys on it), maximizable, and folds to a narrow strip; its width is
- * kept as a share of the page. The app's right panel is not used here.
+ * The Run panel on the right of a workflow's page, beside the canvas and the
+ * Logs under it (ui.md 4.4b): a header with the run's summary and live
+ * activity, then the Chat (question, answer, composer) at full height. It is
+ * resizable by dragging its left edge (or the arrow keys on it), maximizable,
+ * and folds to a narrow strip; its width is kept as a share of the page. The
+ * app's right panel is not used here.
  */
 @Component({
   selector: 'app-workflow-run-dock',
-  imports: [
-    LucideAngularModule,
-    WorkflowRunActivity,
-    WorkflowRunChat,
-    WorkflowStatePanel,
-  ],
+  imports: [LucideAngularModule, WorkflowRunActivity, WorkflowRunChat],
   templateUrl: './workflow-run-dock.html',
   styles: `
     :host {
@@ -108,13 +102,13 @@ export class WorkflowRunDock {
   /** The page room the canvas and the dock share, measured. */
   private readonly room = signal(0);
   /** The dock's share of that room's width, as last dragged (kept across pages). */
-  private readonly ratio = signal(readDockRatio());
+  private readonly ratio = signal(readDockRatio(RUN_DOCK));
   protected readonly maximized = signal(false);
   protected readonly resizing = signal(false);
 
-  protected readonly bounds = computed(() => dockBounds(this.room()));
+  protected readonly bounds = computed(() => dockBounds(this.room(), RUN_DOCK));
   protected readonly width = computed(() =>
-    dockWidth(this.room(), this.ratio(), this.maximized()),
+    dockSize(this.room(), this.ratio(), this.maximized(), RUN_DOCK),
   );
 
   constructor() {
@@ -210,7 +204,7 @@ export class WorkflowRunDock {
       handle.removeEventListener('pointerup', up);
       handle.removeEventListener('pointercancel', up);
       this.resizing.set(false);
-      writeDockRatio(this.ratio());
+      writeDockRatio(RUN_DOCK, this.ratio());
     };
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', up);
@@ -237,14 +231,14 @@ export class WorkflowRunDock {
     if (next === null) return;
     event.preventDefault();
     this.setWidth(next);
-    writeDockRatio(this.ratio());
+    writeDockRatio(RUN_DOCK, this.ratio());
   }
 
   /** Double-click on the edge: back to the default share. */
   protected resetWidth(): void {
     this.maximized.set(false);
-    this.ratio.set(DOCK_DEFAULT_RATIO);
-    writeDockRatio(DOCK_DEFAULT_RATIO);
+    this.ratio.set(RUN_DOCK.defaultRatio);
+    writeDockRatio(RUN_DOCK, RUN_DOCK.defaultRatio);
   }
 
   private setWidth(px: number): void {

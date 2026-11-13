@@ -108,7 +108,7 @@ function railItem(page: Page, name: string): Locator {
     .getByRole('button', { name, exact: true });
 }
 
-/** The Run panel on the right of the canvas: Chat (the run form) and Logs. */
+/** The Run panel on the right of the canvas: the Chat (the run form). */
 function runDock(page: Page): Locator {
   return page.getByTestId('workflow-run-dock');
 }
@@ -137,9 +137,9 @@ async function fillRun(page: Page, question: string, dataset?: string): Promise<
   await page.getByTestId('workflow-input-question').fill(question);
 }
 
-/** A node's row in the Run panel's Logs; its state is `data-state`. */
+/** A node's row in the Logs under the canvas; its state is `data-state`. */
 function runStep(page: Page, id: string): Locator {
-  return runDock(page).getByTestId(`workflow-state-node-${id}`);
+  return page.getByTestId('workflow-logs-dock').getByTestId(`workflow-state-node-${id}`);
 }
 
 function nodeStatus(page: Page, id: string): Locator {

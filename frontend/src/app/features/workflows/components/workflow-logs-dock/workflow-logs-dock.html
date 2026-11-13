@@ -1,0 +1,56 @@
+<section aria-label="Logs panel" class="flex h-full min-h-0 flex-col">
+  @if (open()) {
+    <div
+      class="logs-dock-handle"
+      [class.logs-dock-handle-active]="resizing()"
+      role="separator"
+      tabindex="0"
+      aria-label="Resize Logs panel"
+      aria-orientation="horizontal"
+      [attr.aria-valuemin]="bounds().min"
+      [attr.aria-valuemax]="bounds().max"
+      [attr.aria-valuenow]="height()"
+      title="Drag to resize · Double-click to reset"
+      data-testid="workflow-logs-dock-resize"
+      (pointerdown)="startResize($event)"
+      (keydown)="resizeWithKeyboard($event)"
+      (dblclick)="resetHeight()"
+    ></div>
+  }
+
+  <!-- Header: the fold toggle and how far the run got -->
+  <div
+    class="flex shrink-0 items-center gap-3 px-4 py-1.5"
+    [class.border-b]="open()"
+    [class.border-border]="open()"
+  >
+    <h2 class="m-0 text-[12px]">
+      <button
+        type="button"
+        data-testid="workflow-logs-toggle"
+        [attr.aria-expanded]="open()"
+        [attr.title]="open() ? 'Fold Logs' : 'Unfold Logs'"
+        class="inline-flex items-center gap-1.5 text-[12px] font-semibold tracking-wider text-fg-muted uppercase hover:text-fg"
+        (click)="toggle()"
+      >
+        <lucide-angular [img]="open() ? ChevronDown : ChevronRight" [size]="14" />
+        Logs
+      </button>
+    </h2>
+    <span
+      class="text-[12px] text-fg-muted"
+      data-testid="workflow-logs-progress"
+      >{{ progressLine() }}</span
+    >
+  </div>
+
+  @if (open()) {
+    <app-workflow-state-panel
+      class="min-h-0 flex-1"
+      [nodes]="designer.nodes()"
+      [selectedId]="designer.selectedStepId()"
+      (selectNode)="designer.select($event)"
+      (openNode)="designer.openNode($event)"
+    />
+  }
+</section>

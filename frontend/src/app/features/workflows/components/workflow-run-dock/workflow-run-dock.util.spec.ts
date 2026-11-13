@@ -1,79 +1,80 @@
 import {
-  DOCK_DEFAULT_RATIO,
-  DOCK_FALLBACK_WIDTH,
-  DOCK_MIN_CANVAS,
-  DOCK_MIN_WIDTH,
+  LOGS_DOCK,
+  RUN_DOCK,
   dockBounds,
-  dockWidth,
+  dockSize,
   readDockRatio,
   writeDockRatio,
 } from './workflow-run-dock.util';
 
-const KEY = 'qti.workflow-run-dock.width-ratio';
-
 describe('workflow-run-dock.util', () => {
-  beforeEach(() => localStorage.removeItem(KEY));
-  afterEach(() => localStorage.removeItem(KEY));
+  const keys = [RUN_DOCK.storageKey, LOGS_DOCK.storageKey];
+  beforeEach(() => keys.forEach((k) => localStorage.removeItem(k)));
+  afterEach(() => keys.forEach((k) => localStorage.removeItem(k)));
 
   describe('dockBounds', () => {
-    it('keeps the canvas minimum beside the dock in a wide page', () => {
-      expect(dockBounds(1200)).toEqual({
-        min: DOCK_MIN_WIDTH,
-        max: 1200 - DOCK_MIN_CANVAS,
+    it('keeps the canvas side minimum in a roomy page', () => {
+      expect(dockBounds(1200, RUN_DOCK)).toEqual({
+        min: RUN_DOCK.min,
+        max: 1200 - RUN_DOCK.minOther,
+      });
+      expect(dockBounds(800, LOGS_DOCK)).toEqual({
+        min: LOGS_DOCK.min,
+        max: 800 - LOGS_DOCK.minOther,
       });
     });
 
-    it('never goes below the minimum width in a narrow page', () => {
-      expect(dockBounds(500)).toEqual({
-        min: DOCK_MIN_WIDTH,
-        max: DOCK_MIN_WIDTH,
+    it('never goes below the minimum in a small page', () => {
+      expect(dockBounds(500, RUN_DOCK)).toEqual({
+        min: RUN_DOCK.min,
+        max: RUN_DOCK.min,
       });
     });
   });
 
-  describe('dockWidth', () => {
+  describe('dockSize', () => {
     it('falls back before the room is measured', () => {
-      expect(dockWidth(0, 0.5, false)).toBe(DOCK_FALLBACK_WIDTH);
-      expect(dockWidth(0, 0.5, true)).toBe(DOCK_FALLBACK_WIDTH);
+      expect(dockSize(0, 0.5, false, RUN_DOCK)).toBe(RUN_DOCK.fallback);
+      expect(dockSize(0, 0.5, true, LOGS_DOCK)).toBe(LOGS_DOCK.fallback);
     });
 
     it('is the share of the room', () => {
-      expect(dockWidth(1200, 0.5, false)).toBe(600);
+      expect(dockSize(1200, 0.4, false, RUN_DOCK)).toBe(480);
+      expect(dockSize(800, 0.5, false, LOGS_DOCK)).toBe(400);
     });
 
     it('clamps to the minimum and the maximum', () => {
-      expect(dockWidth(1200, 0.05, false)).toBe(DOCK_MIN_WIDTH);
-      expect(dockWidth(1200, 0.99, false)).toBe(1200 - DOCK_MIN_CANVAS);
+      expect(dockSize(1200, 0.05, false, RUN_DOCK)).toBe(RUN_DOCK.min);
+      expect(dockSize(1200, 0.99, false, RUN_DOCK)).toBe(
+        1200 - RUN_DOCK.minOther,
+      );
     });
 
     it('is the maximum when maximized', () => {
-      expect(dockWidth(1200, 0.3, true)).toBe(1200 - DOCK_MIN_CANVAS);
+      expect(dockSize(1200, 0.3, true, RUN_DOCK)).toBe(
+        1200 - RUN_DOCK.minOther,
+      );
     });
   });
 
   describe('readDockRatio / writeDockRatio', () => {
     it('defaults without a kept value', () => {
-      expect(readDockRatio()).toBe(DOCK_DEFAULT_RATIO);
-    });
-
-    it('ignores the former height share', () => {
-      localStorage.setItem('qti.workflow-run-dock.ratio', '0.7');
-      expect(readDockRatio()).toBe(DOCK_DEFAULT_RATIO);
-      localStorage.removeItem('qti.workflow-run-dock.ratio');
+      expect(readDockRatio(RUN_DOCK)).toBe(RUN_DOCK.defaultRatio);
+      expect(readDockRatio(LOGS_DOCK)).toBe(LOGS_DOCK.defaultRatio);
     });
 
     it('ignores out-of-range and broken values', () => {
       for (const bad of ['0', '1', '1.5', '-0.2', 'abc']) {
-        localStorage.setItem(KEY, bad);
-        expect(readDockRatio()).toBe(DOCK_DEFAULT_RATIO);
+        localStorage.setItem(RUN_DOCK.storageKey, bad);
+        expect(readDockRatio(RUN_DOCK)).toBe(RUN_DOCK.defaultRatio);
       }
     });
 
-    it('round-trips a share, rounded to three decimals', () => {
-      writeDockRatio(0.4);
-      expect(readDockRatio()).toBe(0.4);
-      writeDockRatio(0.33333);
-      expect(readDockRatio()).toBe(0.333);
+    it('round-trips a share per panel, rounded to three decimals', () => {
+      writeDockRatio(RUN_DOCK, 0.4);
+      writeDockRatio(LOGS_DOCK, 0.33333);
+      expect(readDockRatio(RUN_DOCK)).toBe(0.4);
+      expect(readDockRatio(LOGS_DOCK)).toBe(0.333);
     });
   });
 });
