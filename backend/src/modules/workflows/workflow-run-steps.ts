@@ -50,6 +50,12 @@ export interface WorkflowRunStep {
   id: string;
   title: string;
   status: WorkflowRunStepStatus;
+  /**
+   * A step inside a loop (v2's Analyse and Validate): which run of it this
+   * is, from 1; a run keeps one entry per attempt. Absent on any other step
+   * and on a loop step that never ran (`skipped`).
+   */
+  attempt?: number;
   /** What the step received, when under `STEP_OUTPUT_CAP` as JSON. */
   input?: Record<string, unknown>;
   /** Set instead of `input` when the input is larger than the cap. */
@@ -323,12 +329,20 @@ function callInput(input: unknown): Pick<WorkflowRunToolCall, 'input'> {
     ? { input: input.slice(0, TOOL_CALL_INPUT_CAP) }
     : {};
 }
-
 /** A tool call as a step holds it: the call, its start, whether it ended. */
 interface TrackedCall {
   call: WorkflowRunToolCall;
   startedAt?: number;
   done: boolean;
+}
+
+/** A step of the workflow, as the tracker reads it. */
+export interface TrackedStepShape {
+  id: string;
+  title: string;
+  kind?: 'code' | 'agent';
+  /** A step inside a loop (agents.md 5.11): it can run more than once. */
+  repeats?: boolean;
 }
 
 /**
@@ -340,17 +354,19 @@ interface TrackedCall {
  * doesn't have, and any other event, change nothing. An agent step that is
  * running also collects its turn's tool calls (`noteTool`,
  * `noteToolResult`).
+ *
+ * A step inside a loop (`repeats`) keeps one entry per attempt: each start
+ * after its last attempt ended begins the next one, and every event of such
+ * a step carries its `attempt` (1, 2, …). Any other step keeps one entry.
  */
 export class RunStepTracker {
-  private readonly states = new Map<string, WorkflowRunStep>();
+  /** Each step's attempts, oldest first. */
+  private readonly states = new Map<string, WorkflowRunStep[]>();
+  /** Tool calls by step id and attempt (`<id>#<attempt>`). */
   private readonly calls = new Map<string, TrackedCall[]>();
 
   constructor(
-    private readonly steps: readonly {
-      id: string;
-      title: string;
-      kind?: 'code' | 'agent';
-    }[],
+    private readonly steps: readonly TrackedStepShape[],
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -359,20 +375,27 @@ export class RunStepTracker {
     const id = event.payload?.id;
     const step = this.steps.find((candidate) => candidate.id === id);
     if (!step) return undefined;
-    const prev = this.states.get(step.id);
+    const attempts = this.states.get(step.id) ?? [];
+    const prev = attempts.at(-1);
     let next: WorkflowRunStep | undefined;
+    let replace = true;
     if (event.type === 'workflow-step-start') {
-      this.calls.delete(step.id);
+      const again = !!step.repeats && !!prev && prev.status !== 'running';
+      const attempt = again ? (prev.attempt ?? 1) + 1 : (prev?.attempt ?? 1);
+      replace = !again;
       next = {
         id: step.id,
         title: step.title,
         status: 'running',
+        ...(step.repeats ? { attempt } : {}),
         ...inputFields(event.payload?.payload),
         startedAt: this.now().toISOString(),
       };
+      this.calls.delete(callKey(next));
     } else if (event.type === 'workflow-step-result') {
       const status = event.payload?.status;
       const fields = outputFields(event.payload?.output);
+      const attempt = step.repeats ? { attempt: prev?.attempt ?? 1 } : {};
       if (status === 'success' || status === 'bailed') {
         const stopped =
           status === 'bailed' || fields.output?.['stopped'] === true;
@@ -380,6 +403,7 @@ export class RunStepTracker {
           id: step.id,
           title: step.title,
           status: stopped ? 'stopped' : 'success',
+          ...attempt,
           ...startedFields(prev),
           ...fields,
           endedAt: this.now().toISOString(),
@@ -390,6 +414,7 @@ export class RunStepTracker {
           id: step.id,
           title: step.title,
           status: 'failed',
+          ...attempt,
           ...startedFields(prev),
           ...(event.payload?.error === undefined
             ? {}
@@ -399,26 +424,31 @@ export class RunStepTracker {
       }
     }
     if (!next) return undefined;
-    this.states.set(step.id, next);
+    this.states.set(
+      step.id,
+      replace && attempts.length
+        ? [...attempts.slice(0, -1), next]
+        : [...attempts, next],
+    );
     return this.view(next);
   }
 
   /**
    * A tool call of the agent turn (api.md 3.1 `tool`): it belongs to the
-   * agent step that is running; none running, or the step holding
-   * `STEP_TOOL_CALL_CAP` calls already, drops it.
+   * agent step that is running (its current attempt); none running, or the
+   * step holding `STEP_TOOL_CALL_CAP` calls already, drops it.
    */
   noteTool(name: string, input?: string): void {
-    const step = this.runningAgentStep();
-    if (!step) return;
-    const calls = this.calls.get(step) ?? [];
+    const key = this.runningAgentStep();
+    if (!key) return;
+    const calls = this.calls.get(key) ?? [];
     if (calls.length >= STEP_TOOL_CALL_CAP) return;
     calls.push({
       call: { tool: name, ...callInput(input) },
       startedAt: this.now().getTime(),
       done: false,
     });
-    this.calls.set(step, calls);
+    this.calls.set(key, calls);
   }
 
   /**
@@ -433,9 +463,9 @@ export class RunStepTracker {
     rowCount?: number;
     error?: string;
   }): void {
-    const step = this.runningAgentStep();
-    if (!step) return;
-    const calls = this.calls.get(step) ?? [];
+    const key = this.runningAgentStep();
+    if (!key) return;
+    const calls = this.calls.get(key) ?? [];
     let tracked = calls.find(
       (candidate) => !candidate.done && candidate.call.tool === result.tool,
     );
@@ -443,7 +473,7 @@ export class RunStepTracker {
       if (calls.length >= STEP_TOOL_CALL_CAP) return;
       tracked = { call: { tool: result.tool }, done: false };
       calls.push(tracked);
-      this.calls.set(step, calls);
+      this.calls.set(key, calls);
     }
     tracked.done = true;
     tracked.call = {
@@ -466,66 +496,111 @@ export class RunStepTracker {
    * running ends `stopped` (the run stopped) or `failed` with `error` (the
    * run failed), keeping its input and start and taking its end; a failed
    * step whose event had no error takes `error`; a step that never started
-   * is `skipped`.
+   * is `skipped` (with no `attempt`). Steps come in catalogue order, a
+   * repeated step's attempts one after the other.
    */
   finish(
     status: Exclude<WorkflowRunStatus, 'running'>,
     error?: string,
   ): { steps: WorkflowRunStep[]; changed: WorkflowRunStep[] } {
     const changed: WorkflowRunStep[] = [];
-    const steps = this.steps.map((step) => {
-      const state = this.states.get(step.id);
-      if (state?.status === 'failed' && state.error === undefined) {
+    const ended = (state: WorkflowRunStep): WorkflowRunStep => {
+      if (state.status === 'failed' && state.error === undefined) {
         const filled = { ...state, error: error ?? 'The step failed' };
-        this.states.set(step.id, filled);
         changed.push(this.view(filled));
-        return this.view(filled);
+        return filled;
       }
-      if (state && state.status !== 'running') return this.view(state);
-      const ended: WorkflowRunStep = state
-        ? {
-            id: step.id,
-            title: step.title,
-            ...(status === 'failed'
-              ? {
-                  status: 'failed' as const,
-                  error: error ?? 'The step failed',
-                }
-              : { status: 'stopped' as const }),
-            ...startedFields(state),
-            endedAt: this.now().toISOString(),
-          }
-        : { id: step.id, title: step.title, status: 'skipped' };
-      changed.push(this.view(ended));
-      return this.view(ended);
+      if (state.status !== 'running') return state;
+      const { input, inputTruncated, startedAt } = startedFields(state);
+      const closed: WorkflowRunStep = {
+        id: state.id,
+        title: state.title,
+        ...(status === 'failed'
+          ? { status: 'failed' as const, error: error ?? 'The step failed' }
+          : { status: 'stopped' as const }),
+        ...(state.attempt !== undefined ? { attempt: state.attempt } : {}),
+        ...(input ? { input } : {}),
+        ...(inputTruncated ? { inputTruncated } : {}),
+        ...(startedAt ? { startedAt } : {}),
+        endedAt: this.now().toISOString(),
+      };
+      changed.push(this.view(closed));
+      return closed;
+    };
+    const steps = this.steps.flatMap((step) => {
+      const attempts = this.states.get(step.id);
+      if (!attempts?.length) {
+        const skipped: WorkflowRunStep = {
+          id: step.id,
+          title: step.title,
+          status: 'skipped',
+        };
+        changed.push({ ...skipped });
+        return [skipped];
+      }
+      const closed = attempts.map(ended);
+      this.states.set(step.id, closed);
+      return closed.map((state) => this.view(state));
     });
     return { steps, changed };
   }
 
-  /** The id of the agent step that is running, if any. */
+  /** The call key of the agent step attempt that is running, if any. */
   private runningAgentStep(): string | undefined {
-    return this.steps.find(
-      (step) =>
-        step.kind === 'agent' && this.states.get(step.id)?.status === 'running',
-    )?.id;
+    for (const step of this.steps) {
+      if (step.kind !== 'agent') continue;
+      const current = this.states.get(step.id)?.at(-1);
+      if (current?.status === 'running') return callKey(current);
+    }
+    return undefined;
   }
 
   /** A copy of a step's state, with its tool calls when it made any. */
   private view(state: WorkflowRunStep): WorkflowRunStep {
-    const calls = this.calls.get(state.id);
+    const calls = this.calls.get(callKey(state));
     return calls?.length
       ? { ...state, toolCalls: calls.map((tracked) => ({ ...tracked.call })) }
       : { ...state };
   }
 
-  /** The output of the last step that ended with one. */
+  /** The output of the last step that ended with one (its last attempt). */
   lastOutput(): Record<string, unknown> | undefined {
     for (const step of [...this.steps].reverse()) {
-      const output = this.states.get(step.id)?.output;
+      const output = this.states.get(step.id)?.at(-1)?.output;
       if (output) return output;
     }
     return undefined;
   }
+}
+
+/** Where a step attempt's tool calls are kept. */
+function callKey(state: Pick<WorkflowRunStep, 'id' | 'attempt'>): string {
+  return `${state.id}#${state.attempt ?? 1}`;
+}
+
+/**
+ * The steps of a workflow inside a loop (agents.md 5.11): for each `loop`
+ * edge, the steps on the `next` edges from its target back to its source,
+ * both included. Such a step can run more than once in a run.
+ */
+export function loopStepIds(
+  edges: readonly { from: string; to: string; kind: string }[] | undefined,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const loop of (edges ?? []).filter((edge) => edge.kind === 'loop')) {
+    const path = [loop.to];
+    let current = loop.to;
+    while (current !== loop.from && path.length <= (edges ?? []).length) {
+      const next = (edges ?? []).find(
+        (edge) => edge.from === current && edge.kind === 'next',
+      );
+      if (!next) break;
+      current = next.to;
+      path.push(current);
+    }
+    if (current === loop.from) path.forEach((id) => ids.add(id));
+  }
+  return ids;
 }
 
 /**

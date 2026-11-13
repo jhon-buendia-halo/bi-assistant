@@ -821,6 +821,12 @@ export interface EvalTarget {
   /** Registry key of the agent. */
   agentKey: string;
   agent: Agent;
+  /**
+   * What a case runs, when not the agent alone: Questions to Insights v2's
+   * cases run its whole `qti-v2-turn` workflow (agents.md 8.1). A run of it
+   * never gets the tool-only synthesis: its answer is its Write answer's.
+   */
+  runTarget?: Agent;
   /** The sets that run on this agent. */
   sets: AssistantEvalSet[];
   /** The orientation system message of a case (Block 1's dataset half, or Block D1). */
@@ -1178,7 +1184,7 @@ function evalRequestContext(
  * earlier steps already captured, the same way production threads a live
  * records array through requestContext during `streamTurn`.
  */
-function captureStepRecords(
+export function captureStepRecords(
   step: unknown,
   turnRecords: ToolDataRecord[],
 ): void {
@@ -1450,7 +1456,7 @@ export async function runAssistantEvalCase(
         },
       ],
       scorers: evalCase.scorers,
-      target: target.agent,
+      target: target.runTarget ?? target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from TurnOptions.agentContext — without this the model
       // used to run out of steps mid-analysis (the AI-SDK default cap is 5)
@@ -1486,7 +1492,7 @@ export async function runAssistantEvalCase(
     // production this path should be rare — the empty-answer failures in the
     // original bug report were caused by the 5-step default, not by the
     // model routinely finishing without prose.
-    if (!answer.trim() && toolCalls.length > 0) {
+    if (!target.runTarget && !answer.trim() && toolCalls.length > 0) {
       answer = await synthesizeToolOnlyTurn(
         target.agent,
         question,

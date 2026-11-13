@@ -114,8 +114,10 @@ export function nodeChatContextBlock(
   stepId: string,
   cap: number = NODE_CHAT_CONTEXT_CAP,
 ): string {
-  const step = run.steps.find((candidate) => candidate.id === stepId);
+  // A step that ran more than once (v2's analysis loop): its last attempt.
+  const step = run.steps.findLast((candidate) => candidate.id === stepId);
   if (!step) throw new Error(`Step "${stepId}" is not in run "${run.id}"`);
+  const attempts = run.steps.filter((candidate) => candidate.id === stepId);
   const calls = step.toolCalls ?? [];
   const parts: Part[] = [
     {
@@ -135,6 +137,11 @@ export function nodeChatContextBlock(
       text: [
         '',
         `## Step "${step.title}": ${step.status}`,
+        ...(attempts.length > 1
+          ? [
+              `This is attempt ${step.attempt ?? attempts.length} of ${attempts.length}: the step ran again after its validation failed.`,
+            ]
+          : []),
         ...(step.error ? [`Error: ${step.error}`] : []),
         ...(step.startedAt
           ? [

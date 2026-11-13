@@ -64,12 +64,14 @@ export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
       summary: step.summary,
       input: [...step.input],
       output: [...step.output],
+      // A model-only step (Plan, Write answer) calls the agent's model
+      // once, without its tools (agents.md 5.11).
       ...(step.kind === 'agent'
         ? {
             agent: {
               name: source.agent.name,
-              tools: [...source.agent.tools],
-              maxSteps: source.agent.maxSteps,
+              tools: step.modelOnly ? [] : [...source.agent.tools],
+              maxSteps: step.modelOnly ? 1 : source.agent.maxSteps,
             },
           }
         : {}),

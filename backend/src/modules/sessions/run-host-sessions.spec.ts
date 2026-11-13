@@ -97,7 +97,10 @@ jest.mock('../workflows/workflows.service', () => ({
 }));
 
 import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
-import { QTI_V2_TURN_STEPS } from '../../mastra/workflows/qti-v2-turn.steps';
+import {
+  QTI_V2_TURN_STEPS,
+  planOf,
+} from '../../mastra/workflows/qti-v2-turn.steps';
 import { qtiV2TurnWorkflow } from '../../mastra/workflows/qti-v2-turn.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import BetterSqlite3 from 'better-sqlite3';
@@ -151,6 +154,7 @@ const V2_WORKFLOW = {
   input: CODE_WORKFLOWS[0].input,
   agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
   steps: QTI_V2_TURN_STEPS,
+  edges: CODE_WORKFLOWS[0].edges,
 };
 
 /** The registry key of the agent each turn calls. */
@@ -198,6 +202,27 @@ interface BuildOptions {
   session?: Partial<SessionDoc>;
 }
 
+/** v2's Analyse turn: one successful query, then its note. */
+const V2_ANALYSE_CHUNKS = [
+  {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'q0',
+      toolName: 'run_readonly_sql',
+      args: { sql: 'SELECT winner FROM matches', rationale: 'Who won.' },
+    },
+  },
+  {
+    type: 'tool-result',
+    payload: {
+      toolCallId: 'q0',
+      toolName: 'run_readonly_sql',
+      result: { columns: ['winner'], rows: [{ winner: 'Brazil' }] },
+    },
+  },
+  { type: 'text-delta', payload: { text: 'A note.' } },
+];
+
 function build(options: BuildOptions = {}) {
   const sessionStore = new Map<string, SessionDoc>();
   const repository = {
@@ -237,26 +262,28 @@ function build(options: BuildOptions = {}) {
         }
         return Promise.resolve({
           fullStream: streamOf(
-            // A tool call, so the assistant's grounding guard stays quiet.
-            options.chunks ?? [
-              {
-                type: 'tool-call',
-                payload: {
-                  toolCallId: 'c0',
-                  toolName: 'list_entities',
-                  args: {},
+            // v2's Analyse runs one successful query, so Validate passes.
+            options.chunks ??
+              (key === 'assistant-v2' ? V2_ANALYSE_CHUNKS : undefined) ?? [
+                // A tool call, so the assistant's grounding guard stays quiet.
+                {
+                  type: 'tool-call',
+                  payload: {
+                    toolCallId: 'c0',
+                    toolName: 'list_entities',
+                    args: {},
+                  },
                 },
-              },
-              {
-                type: 'tool-result',
-                payload: {
-                  toolCallId: 'c0',
-                  toolName: 'list_entities',
-                  result: { entities: [] },
+                {
+                  type: 'tool-result',
+                  payload: {
+                    toolCallId: 'c0',
+                    toolName: 'list_entities',
+                    result: { entities: [] },
+                  },
                 },
-              },
-              { type: 'text-delta', payload: { text: 'Brazil won.' } },
-            ],
+                { type: 'text-delta', payload: { text: 'Brazil won.' } },
+              ],
           ),
           text: Promise.resolve(''),
         });
@@ -288,6 +315,19 @@ function build(options: BuildOptions = {}) {
     ),
     deleteMemoryThread: jest.fn().mockResolvedValue(undefined),
     deleteSessionResources: jest.fn().mockResolvedValue(undefined),
+    // v2's Plan and Write answer model calls (agents.md 5.11).
+    planV2Turn: jest.fn(({ question }: { question: string }) =>
+      Promise.resolve({ plan: planOf({}, question), stopped: false }),
+    ),
+    writeV2Answer: jest.fn(
+      (_input: unknown, opts: { onText?: (delta: string) => void }) => {
+        opts.onText?.('Brazil won.');
+        return Promise.resolve({
+          answer: { headline: 'Brazil won.', answer: 'Brazil won.' },
+          stopped: false,
+        });
+      },
+    ),
   };
   const userAgents = {
     get: jest.fn().mockResolvedValue(null),
@@ -642,9 +682,16 @@ describe('the run host (agents.md 5.14)', () => {
     ).context.map((block) => block.content);
     const at = system.indexOf('NODE CHAT CONTEXT');
     expect(at).toBeGreaterThan(0);
-    // The Analyse step's catalog block still comes last.
-    expect(system.at(-1)).toContain('Catalog loaded for this turn');
-    expect(at).toBe(system.length - 2);
+    // The turn is the step's agent alone (agents.md 5.16): no plan, no
+    // catalog or plan block, no answer step; the context block comes last.
+    expect(at).toBe(system.length - 1);
+    expect(ctx.mastra.planV2Turn).not.toHaveBeenCalled();
+    expect(ctx.mastra.writeV2Answer).not.toHaveBeenCalled();
+    expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
+      'agent-turn',
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('a stopped run aborts the agent stream and is stopped', async () => {
@@ -687,7 +734,7 @@ describe('the run host (agents.md 5.14)', () => {
     expect(crossCheck).not.toHaveBeenCalled();
   });
 
-  it('a v2 run emits a running and an ended step event for each of its four steps', async () => {
+  it('a v2 run emits a running and an ended step event for each step it takes, and skips the branch it does not', async () => {
     const ctx = build();
     const { events, run } = await runOf(ctx, V2_INPUT);
     const steps = events.filter(
@@ -698,18 +745,37 @@ describe('the run host (agents.md 5.14)', () => {
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'plan:running',
+      'plan:success',
       'analyse:running',
       'analyse:success',
+      'validate:running',
+      'validate:success',
+      'write-answer:running',
+      'write-answer:success',
       'wrap-up:running',
       'wrap-up:success',
+      'clarify:skipped',
     ]);
-    expect(run.steps.map((s) => s.status)).toEqual([
-      'success',
-      'success',
-      'success',
-      'success',
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'plan:success',
+      'clarify:skipped',
+      'analyse:success',
+      'validate:success',
+      'write-answer:success',
+      'wrap-up:success',
     ]);
-    expect(run.output).toEqual({ sqlQueries: 0, failedQueries: 0, rows: 0 });
+    // The loop's steps carry their attempt (api.md 3.6).
+    expect(
+      run.steps.filter((s) => s.attempt !== undefined).map((s) => s.id),
+    ).toEqual(['analyse', 'validate']);
+    expect(run.output).toMatchObject({
+      sqlQueries: 1,
+      failedQueries: 0,
+      answer: 'Brazil won.',
+    });
     // v2's bar still moves from its steps, as in a chat.
     expect(events.some((e) => e.type === 'workflow')).toBe(true);
   });

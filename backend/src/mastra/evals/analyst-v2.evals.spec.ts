@@ -143,6 +143,7 @@ describe('analyst-v2 registration', () => {
 });
 
 describe('analyst-v2 eval target', () => {
+  const cases = () => ANALYST_V2_EVAL_SET.cases;
   const input = {
     datasets: ['World Cup'],
     snapshots: [SNAPSHOT],
@@ -156,6 +157,28 @@ describe('analyst-v2 eval target', () => {
     void target.agent;
     void target.agent;
     expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs each case as the whole qti-v2-turn workflow on the agent (agents.md 8.1)', () => {
+    const agent = { id: 'questions-to-insights-v2' } as unknown as Agent;
+    const wholeTurn = jest.fn(() => ({ id: 'whole-turn' }) as unknown as Agent);
+    const target = analystV2EvalTarget(() => agent, undefined, wholeTurn);
+    expect(wholeTurn).not.toHaveBeenCalled();
+    expect(target.runTarget).toEqual({ id: 'whole-turn' });
+    void target.runTarget;
+    expect(wholeTurn).toHaveBeenCalledTimes(1);
+    expect(wholeTurn).toHaveBeenCalledWith(agent);
+    // The agent alone stays the target's agent (the judge and orientation).
+    expect(target.agent).toBe(agent);
+  });
+
+  it('ends the clarify case on a clarifying question, before any query', () => {
+    const clarify = cases().find(
+      (c) => c.id === 'v2-clarify-most-dominant-team',
+    );
+    expect(clarify?.customChecks?.map((check) => check.id)).toEqual([
+      'ends-on-clarification',
+    ]);
   });
 
   it('gives the 3-tool agent the plain orientation and no knowledge block', async () => {

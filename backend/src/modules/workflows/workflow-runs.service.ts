@@ -40,6 +40,7 @@ import { WorkflowRunsRepository } from './repositories/workflow-runs.repository'
 import {
   RunStepTracker,
   interruptedRunPatch,
+  loopStepIds,
   noteToolFrame,
   runAnswerOf,
   runHostDoc,
@@ -288,11 +289,14 @@ export class WorkflowRunsService implements OnModuleInit {
     abortSignal?: AbortSignal,
   ): Promise<WorkflowRun> {
     const { workflow } = prepared;
+    // Steps inside a loop keep one entry per attempt (api.md 3.6).
+    const repeats = loopStepIds(workflow.edges);
     const tracker = new RunStepTracker(
       workflow.steps.map((step) => ({
         id: step.id,
         title: step.title,
         kind: step.kind,
+        repeats: repeats.has(step.id),
       })),
     );
     const live = (event: RunStreamEvent) => {

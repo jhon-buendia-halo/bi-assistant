@@ -142,7 +142,7 @@ const QTI_V2_SUMMARY = {
   kind: 'code',
   owner: 'Official',
   agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
-  stepCount: 4,
+  stepCount: 8,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -209,11 +209,12 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'qti-v2-turn',
-        stepCount: 4,
+        stepCount: 8,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
-      // Analyse receives the question (a string) and the catalog.
+      // Plan receives the question (a string) and the catalog.
+      expect(detail.steps[2]).toMatchObject({ id: 'plan' });
       expect(detail.steps[2].inputSchema).toMatchObject({
         type: 'object',
         properties: {
@@ -222,11 +223,16 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         },
         required: ['question', 'catalog'],
       });
-      // A run needs the hash too: it stores it (data-model 3.16).
+      // The flow is its edges, a copy of the catalogue's (api.md 117).
+      expect(detail.edges).toEqual(CODE_WORKFLOWS[0].edges);
+      expect(detail.edges).not.toBe(CODE_WORKFLOWS[0].edges);
+      // A run needs the hash and the edges too (data-model 3.16; the loop
+      // steps keep one entry per attempt, api.md 3.6).
       await expect(
         ctx.service.definition('qti-v2-turn'),
       ).resolves.toMatchObject({
         contractHash: CODE_WORKFLOWS[0].contractHash,
+        edges: CODE_WORKFLOWS[0].edges,
       });
       // 116 is unchanged: no hash and no schemas on a summary.
       const [summary] = await ctx.service.list();

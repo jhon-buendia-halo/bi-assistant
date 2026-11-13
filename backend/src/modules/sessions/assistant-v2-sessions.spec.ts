@@ -103,6 +103,7 @@ import { SessionsService, type StreamEvent } from './sessions.service';
 import { streamStored } from './testing/stream-stored';
 import type { SessionDoc, SessionView } from './entities/session.entity';
 import { qtiV2TurnWorkflow } from '../../mastra/workflows/qti-v2-turn.workflow';
+import { planOf } from '../../mastra/workflows/qti-v2-turn.steps';
 
 type StubRun = {
   stream(args: { inputData: unknown; requestContext: unknown }): unknown;
@@ -134,6 +135,30 @@ const DATASETS = [
   },
 ];
 
+/** The answer the stubbed Write answer step writes, in two pieces. */
+const WRITTEN = 'The written answer.';
+
+/** An Analyse turn that ran one successful query, then wrote a note. */
+const SQL_CHUNKS = [
+  {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 't1',
+      toolName: 'run_readonly_sql',
+      args: { sql: 'SELECT 1 AS n', rationale: 'Count.' },
+    },
+  },
+  {
+    type: 'tool-result',
+    payload: {
+      toolCallId: 't1',
+      toolName: 'run_readonly_sql',
+      result: { columns: ['n'], rows: [{ n: 1 }], rowCount: 1 },
+    },
+  },
+  { type: 'text-delta', payload: { text: 'Hello.' } },
+];
+
 function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
   const session: SessionDoc = {
     id: 's-1',
@@ -160,6 +185,8 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
     context: { role: string; content: string }[];
     requestContext: { get(key: string): unknown };
   } = { context: [], requestContext: { get: () => undefined } };
+  // Every Analyse attempt's options, in order (a retry streams again).
+  const allStreamOptions: Record<string, unknown>[] = [];
   const v2 = {
     id: 'questions-to-insights-v2',
     name: NAME,
@@ -171,10 +198,9 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
       .fn()
       .mockImplementation((_input: unknown, opts: typeof streamOptions) => {
         streamOptions = opts;
+        allStreamOptions.push(opts);
         return Promise.resolve({
-          fullStream: streamOf(
-            chunks ?? [{ type: 'text-delta', payload: { text: 'Hello.' } }],
-          ),
+          fullStream: streamOf(chunks ?? SQL_CHUNKS),
           text: Promise.resolve(''),
         });
       }),
@@ -198,6 +224,20 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
         (await turnWorkflow.createRun()).stream({ inputData, requestContext }),
     ),
     listAgents: () => registry,
+    // v2's Plan and Write answer model calls (agents.md 5.11).
+    planV2Turn: jest.fn(({ question }: { question: string }) =>
+      Promise.resolve({ plan: planOf({}, question), stopped: false }),
+    ),
+    writeV2Answer: jest.fn(
+      (_input: unknown, opts: { onText?: (delta: string) => void }) => {
+        opts.onText?.('The written ');
+        opts.onText?.('answer.');
+        return Promise.resolve({
+          answer: { headline: WRITTEN, answer: WRITTEN },
+          stopped: false,
+        });
+      },
+    ),
     ensureSessionWorkspace: jest
       .fn()
       .mockImplementation((id: string) =>
@@ -250,6 +290,7 @@ function build(chunks?: unknown[], partial: Partial<SessionDoc> = {}) {
     metrics,
     verifiedQueries,
     streamOptions: () => streamOptions,
+    allStreamOptions,
   };
 }
 
@@ -293,9 +334,17 @@ function workflowMoves(events: StreamEvent[]) {
 const STEPS = [
   { number: 1, title: 'Receive question' },
   { number: 2, title: 'Load catalog' },
-  { number: 3, title: 'Analyse' },
-  { number: 4, title: 'Wrap up' },
+  { number: 3, title: 'Plan' },
+  { number: 4, title: 'Clarify' },
+  { number: 5, title: 'Analyse' },
+  { number: 6, title: 'Validate' },
+  { number: 7, title: 'Write answer' },
+  { number: 8, title: 'Wrap up' },
 ];
+
+/** The plan block the default plan gives Analyse. */
+const planBlockFor = (question: string) =>
+  `Analysis plan for this turn:\n${JSON.stringify(planOf({}, question))}`;
 
 describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', () => {
   it('derives the agent from the registry, with no starters (api.md 2.1)', async () => {
@@ -309,7 +358,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
     });
   });
 
-  it("shows its workflow's four steps before any turn (agent-panel R8a)", async () => {
+  it("shows its workflow's eight steps before any turn (agent-panel R8a)", async () => {
     const ctx = build();
     expect(ctx.service.effectiveWorkflowFor(ctx.session)).toEqual(STEPS);
     expect((await ctx.service.toView(ctx.session)).workflow).toEqual({
@@ -321,7 +370,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
     });
   });
 
-  it('runs v2 with Block 1, the metrics, knowledge and verified-query blocks, in that order, then the catalog (agents.md 2.11, 4.1, 4.2)', async () => {
+  it('runs v2 with Block 1, the metrics, knowledge and verified-query blocks, in that order, then the catalog and the plan (agents.md 2.11, 4.1, 4.2, 5.11)', async () => {
     const ctx = build(undefined, { datasets: ['World Cup', 'Sales'] });
     const used = [
       {
@@ -367,6 +416,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
           '- main.sales.orders (dataset: Sales; ? columns)',
         ].join('\n'),
       },
+      { role: 'system', content: planBlockFor('How many goals per year?') },
     ]);
     // The same services as the assistant's turn, for the session's datasets.
     expect(ctx.metrics.definitionBlock).toHaveBeenCalledWith([
@@ -404,12 +454,145 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
     ctx.verifiedQueries.referenceBlock.mockResolvedValue(undefined);
     await turn(ctx, 'How many matches?');
     const contents = ctx.streamOptions().context.map((block) => block.content);
-    expect(contents).toHaveLength(2);
+    expect(contents).toHaveLength(3);
     expect(contents[0]).toMatch(/^Datasets for this session: World Cup\./);
     expect(contents[1]).toMatch(/^Catalog loaded for this turn:/);
+    expect(contents[2]).toMatch(/^Analysis plan for this turn:/);
   });
 
-  describe('a clarifying question (agents.md 2.11, 5.11)', () => {
+  describe('Plan and Write answer (agents.md 5.11)', () => {
+    it("plans with the turn's input and the catalog, and answers with Write answer's text only", async () => {
+      const ctx = build();
+      const events = await turn(ctx, 'How many?');
+      expect(ctx.mastra.planV2Turn).toHaveBeenCalledWith(
+        {
+          messages: 'How many?',
+          question: 'How many?',
+          catalogBlock: expect.stringMatching(
+            /^Catalog loaded for this turn: 2 entities\./,
+          ) as string,
+        },
+        expect.objectContaining({
+          abortSignal: expect.any(AbortSignal) as AbortSignal,
+          providerOptions: expect.anything() as unknown,
+        }),
+      );
+      // Write answer reads the attempt's query and its rows.
+      expect(ctx.mastra.writeV2Answer).toHaveBeenCalledWith(
+        {
+          question: 'How many?',
+          plan: planOf({}, 'How many?'),
+          queries: [
+            {
+              sql: 'SELECT 1 AS n',
+              rationale: 'Count.',
+              rows: [{ n: 1 }],
+              rowCount: 1,
+              truncated: false,
+            },
+          ],
+          findings: expect.arrayContaining([
+            {
+              check: 'Ran a query',
+              passed: true,
+              detail: expect.any(String) as string,
+            },
+          ]) as unknown,
+        },
+        expect.objectContaining({ onText: expect.any(Function) as unknown }),
+      );
+      // Analyse's own text ("Hello.") is a note: never streamed, never stored.
+      const texts = events.filter((event) => event.type === 'text');
+      expect(texts.map((event) => event.content)).toEqual([
+        'The written ',
+        'answer.',
+      ]);
+      expect(ctx.session.messages.at(-1)).toMatchObject({
+        role: 'assistant',
+        content: WRITTEN,
+        // The turn's SQL stays on the answer.
+        data: [expect.objectContaining({ input: 'SELECT 1 AS n' })],
+      });
+    });
+
+    it('stops at Clarify when the plan needs clarification: the card, done, no analysis', async () => {
+      const ctx = build();
+      ctx.mastra.planV2Turn.mockImplementation(
+        ({ question }: { question: string }) =>
+          Promise.resolve({
+            plan: planOf(
+              {
+                needsClarification: true,
+                clarification: {
+                  question: 'Dominant by which measure?',
+                  options: ['Matches won', 'Goals scored — over all matches'],
+                },
+              },
+              question,
+            ),
+            stopped: false,
+          }),
+      );
+      const events = await turn(ctx, 'Which team was the most dominant?');
+      expect(ctx.v2.stream).not.toHaveBeenCalled();
+      expect(ctx.mastra.writeV2Answer).not.toHaveBeenCalled();
+      expect(ctx.session.messages.at(-1)).not.toHaveProperty('data');
+      expect(ctx.session.messages.at(-1)).toMatchObject({
+        role: 'assistant',
+        content: 'Dominant by which measure?',
+        clarification: {
+          question: 'Dominant by which measure?',
+          options: [
+            { label: 'Matches won' },
+            { label: 'Goals scored', description: 'over all matches' },
+          ],
+        },
+      });
+      // The bar stops at Clarify, the run's last step.
+      expect(workflowMoves(events).at(-1)).toEqual({
+        current: 4,
+        done: [1, 2, 3],
+      });
+      expect(events.at(-1)?.type).toBe('done');
+    });
+
+    it('retries Analyse once, without the memory thread and with the failed checks, when Validate fails', async () => {
+      const ctx = build();
+      ctx.v2.stream.mockImplementationOnce(
+        (_input: unknown, opts: Record<string, unknown>) => {
+          ctx.allStreamOptions.push(opts);
+          return Promise.resolve({
+            fullStream: streamOf([
+              { type: 'text-delta', payload: { text: 'No query.' } },
+            ]),
+            text: Promise.resolve(''),
+          });
+        },
+      );
+      const events = await turn(ctx, 'How many?');
+      expect(ctx.v2.stream).toHaveBeenCalledTimes(2);
+      const [first, second] = ctx.allStreamOptions;
+      expect(first).toHaveProperty('memory');
+      expect(second).not.toHaveProperty('memory');
+      const retry = (second['context'] as { content: string }[]).at(-1);
+      expect(retry?.content).toContain(
+        'Attempt 1 of this analysis failed validation.',
+      );
+      expect(retry?.content).toContain('- Ran a query: No SQL query ran.');
+      // Analyse and Validate ran twice; the bar went through them again.
+      const moves = workflowMoves(events);
+      // The retry makes Analyse current again, after the first attempt's
+      // Analyse and Validate were done.
+      expect(moves).toContainEqual({ current: 5, done: [1, 2, 3, 5, 6] });
+      expect(moves.at(-1)).toEqual({
+        current: 8,
+        done: [1, 2, 3, 5, 6, 7, 8],
+      });
+      expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
+    });
+  });
+
+  describe('a clarifying question from Analyse (agents.md 2.11, 5.11)', () => {
     const ASK = {
       type: 'tool-call',
       payload: {
@@ -441,41 +624,45 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         },
       });
       expect(answer?.content).not.toContain('never streamed');
-      // The run ends at Analyse: Wrap up does not run.
+      // The run ends at Analyse: no answer is written.
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 3,
-        done: [1, 2],
+        current: 5,
+        done: [1, 2, 3],
       });
+      expect(ctx.mastra.writeV2Answer).not.toHaveBeenCalled();
       expect(events.some((event) => event.type === 'done')).toBe(true);
     });
 
-    it("replays the question before the user's pick on the next turn", async () => {
+    it("replays the question before the user's pick on the next turn, Plan included", async () => {
       const ctx = build([ASK]);
       await turn(ctx, 'Which team is the best?');
       ctx.v2.stream.mockImplementation(() =>
         Promise.resolve({
-          fullStream: streamOf([
-            { type: 'text-delta', payload: { text: 'Brazil: 76 wins.' } },
-          ]),
+          fullStream: streamOf(SQL_CHUNKS),
           text: Promise.resolve(''),
         }),
       );
       const events = await turn(ctx, 'Most wins');
-      const calls = ctx.v2.stream.mock.calls as unknown[][];
-      expect(calls.at(-1)?.[0]).toEqual([
+      const replayed = [
         {
           role: 'assistant',
           content: 'Which measure makes a team the best?',
         },
         { role: 'user', content: 'Most wins' },
-      ]);
+      ];
+      const calls = ctx.v2.stream.mock.calls as unknown[][];
+      expect(calls.at(-1)?.[0]).toEqual(replayed);
+      expect(ctx.mastra.planV2Turn).toHaveBeenLastCalledWith(
+        expect.objectContaining({ messages: replayed, question: 'Most wins' }),
+        expect.anything(),
+      );
       expect(ctx.session.messages.at(-1)).toMatchObject({
         role: 'assistant',
-        content: 'Brazil: 76 wins.',
+        content: WRITTEN,
       });
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 4,
-        done: [1, 2, 3, 4],
+        current: 8,
+        done: [1, 2, 3, 5, 6, 7, 8],
       });
     });
   });
@@ -489,33 +676,12 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
     expect(ctx.v2.generate).not.toHaveBeenCalled();
     expect(ctx.assistant.generate).not.toHaveBeenCalled();
     const answer = ctx.session.messages.at(-1);
-    expect(answer).toMatchObject({
-      role: 'assistant',
-      content: 'Brazil won in 2002.',
-    });
+    expect(answer).toMatchObject({ role: 'assistant', content: WRITTEN });
     expect(answer).not.toHaveProperty('crossCheck');
   });
 
   it('keeps a run_readonly_sql call as a data record and shows its step', async () => {
-    const ctx = build([
-      {
-        type: 'tool-call',
-        payload: {
-          toolCallId: 't1',
-          toolName: 'run_readonly_sql',
-          args: { sql: 'SELECT 1 AS n', rationale: 'Count.' },
-        },
-      },
-      {
-        type: 'tool-result',
-        payload: {
-          toolCallId: 't1',
-          toolName: 'run_readonly_sql',
-          result: { columns: ['n'], rows: [{ n: 1 }], rowCount: 1 },
-        },
-      },
-      { type: 'text-delta', payload: { text: 'There is 1.' } },
-    ]);
+    const ctx = build(SQL_CHUNKS);
     const events = await turn(ctx, 'How many?');
     const step = events.find((event) => event.type === 'tool-result');
     expect(JSON.parse(step?.content ?? '{}')).toMatchObject({
@@ -524,7 +690,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
       rowCount: 1,
     });
     const answer = ctx.session.messages.at(-1);
-    expect(answer?.content).toBe('There is 1.');
+    expect(answer?.content).toBe(WRITTEN);
     expect(answer?.data?.[0]).toMatchObject({
       tool: 'run_readonly_sql',
       input: 'SELECT 1 AS n',
@@ -547,29 +713,36 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         { current: 2, done: [1, 2] },
         { current: 3, done: [1, 2] },
         { current: 3, done: [1, 2, 3] },
-        { current: 4, done: [1, 2, 3] },
-        { current: 4, done: [1, 2, 3, 4] },
+        // Clarify (4) is the branch not taken.
+        { current: 5, done: [1, 2, 3] },
+        { current: 5, done: [1, 2, 3, 5] },
+        { current: 6, done: [1, 2, 3, 5] },
+        { current: 6, done: [1, 2, 3, 5, 6] },
+        { current: 7, done: [1, 2, 3, 5, 6] },
+        { current: 7, done: [1, 2, 3, 5, 6, 7] },
+        { current: 8, done: [1, 2, 3, 5, 6, 7] },
+        { current: 8, done: [1, 2, 3, 5, 6, 7, 8] },
       ]);
-      // The answer streams inside Analyse, between its start and end.
+      // The answer streams inside Write answer, between its start and end.
       const types = events.map((event) => event.type);
       const text = types.indexOf('text');
       const moves = events
         .map((event, i) => (event.type === 'workflow' ? i : -1))
         .filter((i) => i >= 0);
-      expect(text).toBeGreaterThan(moves[4]);
-      expect(text).toBeLessThan(moves[5]);
+      expect(text).toBeGreaterThan(moves[10]);
+      expect(text).toBeLessThan(moves[11]);
       expect(types.at(-1)).toBe('done');
       const done = events.at(-1)?.session as SessionView | undefined;
       expect(done?.workflow).toMatchObject({
         source: 'workflow',
-        current: 4,
-        done: [1, 2, 3, 4],
+        current: 8,
+        done: [1, 2, 3, 5, 6, 7, 8],
       });
       expect(ctx.session.workflowState).toMatchObject({
-        current: 4,
-        done: [1, 2, 3, 4],
+        current: 8,
+        done: [1, 2, 3, 5, 6, 7, 8],
       });
-      expect(ctx.session.messages.at(-1)?.content).toBe('Hello.');
+      expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
     });
 
     it('starts over on the next turn', async () => {
@@ -595,18 +768,31 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         turn(ctx, 'How many?', false, undefined, events),
       ).rejects.toThrow('model down');
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 3,
-        done: [1, 2],
-        failed: 3,
+        current: 5,
+        done: [1, 2, 3],
+        failed: 5,
       });
       expect(ctx.session.workflowState).toMatchObject({
-        current: 3,
-        done: [1, 2],
-        failed: 3,
+        current: 5,
+        done: [1, 2, 3],
+        failed: 5,
       });
       expect(events.some((event) => event.type === 'done')).toBe(false);
       // The question was kept; no answer was added.
       expect(ctx.session.messages.map((m) => m.role)).toEqual(['user']);
+    });
+
+    it('marks Write answer failed with its model error', async () => {
+      const ctx = build();
+      ctx.mastra.writeV2Answer.mockRejectedValue(new Error('answer down'));
+      const events: StreamEvent[] = [];
+      await expect(
+        turn(ctx, 'How many?', false, undefined, events),
+      ).rejects.toThrow('answer down');
+      expect(workflowMoves(events).at(-1)).toMatchObject({
+        current: 7,
+        failed: 7,
+      });
     });
 
     it('ends at Analyse when the user stops the turn', async () => {
@@ -626,32 +812,15 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
       );
       const events = await turn(ctx, 'How many?', false, controller.signal);
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 3,
-        done: [1, 2],
+        current: 5,
+        done: [1, 2, 3],
       });
+      expect(ctx.mastra.writeV2Answer).not.toHaveBeenCalled();
       expect(events.some((event) => event.type === 'done')).toBe(false);
     });
 
     it('logs the wrap-up summary of the SQL calls', async () => {
-      const ctx = build([
-        {
-          type: 'tool-call',
-          payload: {
-            toolCallId: 't1',
-            toolName: 'run_readonly_sql',
-            args: { sql: 'SELECT 1 AS n', rationale: 'Count.' },
-          },
-        },
-        {
-          type: 'tool-result',
-          payload: {
-            toolCallId: 't1',
-            toolName: 'run_readonly_sql',
-            result: { columns: ['n'], rows: [{ n: 1 }], rowCount: 1 },
-          },
-        },
-        { type: 'text-delta', payload: { text: 'There is 1.' } },
-      ]);
+      const ctx = build(SQL_CHUNKS);
       const log = jest
         .spyOn(
           (ctx.service as unknown as { logger: { log: () => void } }).logger,
@@ -660,7 +829,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         .mockImplementation(() => undefined);
       await turn(ctx, 'How many?');
       expect(log).toHaveBeenCalledWith(
-        'Questions to Insights v2 turn in session s-1: {"sqlQueries":1,"failedQueries":0,"rows":1}',
+        `Questions to Insights v2 turn in session s-1: {"sqlQueries":1,"failedQueries":0,"rows":1,"answerLength":${WRITTEN.length}}`,
       );
     });
 
@@ -677,6 +846,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         (call) => call[0],
       );
       expect(engines).not.toContain('qti-v2-turn');
+      expect(ctx.mastra.planV2Turn).not.toHaveBeenCalled();
     });
   });
 });

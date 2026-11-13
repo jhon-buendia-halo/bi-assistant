@@ -22,11 +22,16 @@ import {
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
+  QTI_V2_TURN_EDGES,
   QTI_V2_TURN_STEPS,
   QTI_V2_TURN_WORKFLOW_ID,
   type ContractStepEntry,
 } from './qti-v2-turn.steps';
-import { assertWorkflowContracts, contractHash } from './workflow-contract';
+import {
+  assertWorkflowContracts,
+  contractHash,
+  type WorkflowEdge,
+} from './workflow-contract';
 import {
   type WorkflowInputField,
   type WorkflowInputValue,
@@ -97,6 +102,8 @@ export interface CodeWorkflowSource {
   input: readonly WorkflowInputField[];
   /** Each with its declared input and output schema (agents.md 5.12). */
   steps: readonly ContractStepEntry[];
+  /** How the steps connect, from Start to End (api.md 117). */
+  edges: readonly WorkflowEdge[];
   /** `steps` for every code workflow today. */
   bar: WorkflowBar;
   /** The hash of its data contract (api.md 117; `contractHash`). */
@@ -126,6 +133,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         DATASETS_FIELD,
       ],
       steps: QTI_V2_TURN_STEPS,
+      edges: QTI_V2_TURN_EDGES,
       bar: 'steps',
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));

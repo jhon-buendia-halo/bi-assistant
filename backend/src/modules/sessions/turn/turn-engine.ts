@@ -2,12 +2,17 @@
 // the user's question to the persisted answer and the `done` event.
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
-import { parseClarification } from '../../../mastra/tools/clarification.tool';
+import {
+  clarificationOptions,
+  parseClarification,
+} from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import { READINESS_REPORT_EVENT } from '../../../mastra/readiness-tool-services';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
+  QTI_V2_TURN_WORKFLOW_ID,
+  turnSummaryOf,
   type QtiV2TurnInput,
   type QtiV2TurnRuntime,
 } from '../../../mastra/workflows/qti-v2-turn.steps';
@@ -72,8 +77,9 @@ import {
   toolCallInput,
 } from './turn-records';
 import {
+  analyseAttemptOf,
   analyseOutcomeOf,
-  isTurnSummary,
+  catalogStepId,
   turnWorkflowOf,
   type TurnWorkflow,
 } from './turn-workflow';
@@ -172,6 +178,11 @@ export class TurnEngine {
     const calledTools = new Set<string>();
     // The model call's own failure: Mastra reports it as a chunk, not a throw.
     let streamError: unknown;
+    // While v2's Analyse step streams: its text, kept out of the answer.
+    let notes: string | undefined;
+    const workflow = turnWorkflowOf(session);
+    // v2's answer is its Write answer step's only (agents.md 5.11).
+    const v2 = workflow.engineId === QTI_V2_TURN_WORKFLOW_ID;
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -191,7 +202,10 @@ export class TurnEngine {
             if (delta) emit({ type: 'reasoning', content: delta });
           } else if (chunk.type === 'text-delta') {
             const delta = (chunk.payload as { text?: string }).text ?? '';
-            if (delta) {
+            if (delta && notes !== undefined) {
+              // v2's Analyse step: its text is a note, not the answer.
+              notes += delta;
+            } else if (delta) {
               text += delta;
               emit({ type: 'text', content: delta });
             }
@@ -386,29 +400,98 @@ export class TurnEngine {
       // Every streamed turn is one run of the session's workflow (agents.md
       // 5.1, ADR-0040). Its agent step streams the agent through `consume`:
       // v2's Analyse step (5.11, ADR-0034) or a one-step workflow's Answer.
+      // The model error a step reports, in the chat stream's words.
+      const stepError = (error: unknown) =>
+        chatTurnError(error, () => this.deps.llmService.getView());
+      const stepModel = {
+        abortSignal: turn.signal,
+        providerOptions: options.providerOptions as
+          Record<string, unknown> | undefined,
+        requestContext: options.requestContext,
+      };
       await this.runTurnWorkflow(
         session,
-        turnWorkflowOf(session),
+        workflow,
         trimmed,
         emit,
         {
-          analyse: async ({ catalogBlock }) => {
-            await consume(
-              await agent.stream(input, {
-                ...options,
-                context: [
-                  ...options.context,
-                  { role: 'system' as const, content: catalogBlock },
-                ],
-              }),
-            );
+          // v2's steps (agents.md 5.11): Plan and Write answer call the
+          // agent's model without tools; Analyse streams the agent itself.
+          plan: async ({ question, catalogBlock }) => {
+            try {
+              const planned = await this.deps.mastra.planV2Turn(
+                { messages: input, question, catalogBlock },
+                stepModel,
+              );
+              return {
+                plan: planned.plan,
+                stopped: planned.stopped || turn.signal.aborted,
+              };
+            } catch (error) {
+              throw await stepError(error);
+            }
+          },
+          clarify: (asked) => {
+            // The turn ends on the plan's question, as on `ask_clarification`.
+            clarification = {
+              question: asked.question,
+              options: clarificationOptions(asked.options),
+            };
+            return Promise.resolve();
+          },
+          analyse: async ({ catalogBlock, planBlock, attempt }) => {
+            const start = data.length;
+            // A retry runs without the memory thread, so the question is
+            // not stored twice; the plan block carries what it needs.
+            const attemptOptions: typeof options = { ...options };
+            if (attempt > 1) {
+              delete (attemptOptions as { memory?: unknown }).memory;
+            }
+            notes = '';
+            let attemptNotes = '';
+            try {
+              await consume(
+                await agent.stream(input, {
+                  ...attemptOptions,
+                  context: [
+                    ...options.context,
+                    { role: 'system' as const, content: catalogBlock },
+                    { role: 'system' as const, content: planBlock },
+                  ],
+                }),
+              );
+            } finally {
+              attemptNotes = notes ?? '';
+              notes = undefined;
+            }
             // Any model error fails the step (agents.md 5.11).
             if (streamError !== undefined && !turn.signal.aborted) {
-              throw await chatTurnError(streamError, () =>
-                this.deps.llmService.getView(),
-              );
+              throw await stepError(streamError);
             }
-            return analyseOutcomeOf(data, turn.signal.aborted);
+            return analyseAttemptOf(
+              data.slice(start),
+              turn.signal.aborted,
+              attemptNotes,
+            );
+          },
+          writeAnswer: async (written) => {
+            try {
+              const result = await this.deps.mastra.writeV2Answer(written, {
+                ...stepModel,
+                onText: (delta) => {
+                  text += delta;
+                  emit({ type: 'text', content: delta });
+                },
+              });
+              // The stored answer is the step's whole answer.
+              if (result.answer.answer) text = result.answer.answer;
+              return {
+                answer: result.answer,
+                stopped: result.stopped || turn.signal.aborted,
+              };
+            } catch (error) {
+              throw await stepError(error);
+            }
           },
           answer: async () => {
             await consume(await agent.stream(input, options));
@@ -428,10 +511,13 @@ export class TurnEngine {
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
     }
-    if (!turn.signal.aborted && !clarification && !text && stream) {
+    // v2's answer is its Write answer step's text only (agents.md 5.11):
+    // its Analyse stream's text is a note, and no synthesis replaces it.
+    if (!v2 && !turn.signal.aborted && !clarification && !text && stream) {
       text = ((await stream.text) ?? '').trim();
     }
     if (
+      !v2 &&
       !turn.signal.aborted &&
       !clarification &&
       !text.trim() &&
@@ -575,7 +661,10 @@ export class TurnEngine {
       } satisfies AgentTurnRuntime);
     } else {
       requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
+        plan: (input) => captured(() => runtime.plan(input)),
+        clarify: (input) => captured(() => runtime.clarify(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
+        writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
       } satisfies QtiV2TurnRuntime);
     }
     const turnInput: QtiV2TurnInput = {
@@ -588,7 +677,17 @@ export class TurnEngine {
       requestContext,
     );
     let state = session.workflowState;
-    for await (const event of run.fullStream) {
+    for await (const engineEvent of run.fullStream) {
+      // A nested workflow's step is `<workflow>.<step>`: the step's own id.
+      const event = engineEvent.payload?.id
+        ? {
+            ...engineEvent,
+            payload: {
+              ...engineEvent.payload,
+              id: catalogStepId(engineEvent.payload.id),
+            },
+          }
+        : engineEvent;
       if (onStepEvent && stepEventOf(event)) onStepEvent(event);
       if (workflow.bar !== 'steps') continue;
       const stepEvent = stepEventOf(event);
@@ -606,9 +705,12 @@ export class TurnEngine {
         stepError ?? result.error ?? new Error('The turn failed');
       throw failure;
     }
-    if (result.status === 'success' && isTurnSummary(result.result)) {
+    const summary =
+      result.status === 'success' ? turnSummaryOf(result.result) : undefined;
+    if (summary) {
+      const { answer, ...counts } = summary;
       this.deps.logger.log(
-        `Questions to Insights v2 turn in session ${session.id}: ${JSON.stringify(result.result)}`,
+        `Questions to Insights v2 turn in session ${session.id}: ${JSON.stringify({ ...counts, answerLength: answer.length })}`,
       );
     }
   }

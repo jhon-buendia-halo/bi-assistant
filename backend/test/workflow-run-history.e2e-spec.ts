@@ -33,6 +33,7 @@ import {
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
 import { type Backend, boot, stop } from './backend-process';
+import { withV2Steps } from './v2-stub';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-workflow-run-history-'));
 
@@ -255,6 +256,8 @@ describe('Stored runs: the run history API (API)', () => {
 
   beforeAll(async () => {
     stub = await startLlmStub();
+    // v2's Plan and Write answer get a plan and an answer as JSON.
+    stub.reply = withV2Steps(stub.reply);
     backend = await boot(dataDir);
     await configure();
   });

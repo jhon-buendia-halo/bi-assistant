@@ -51,6 +51,29 @@ const run = (overrides: Partial<WorkflowRunDoc> = {}): WorkflowRunDoc => ({
 });
 
 describe('nodeChatContextBlock (agents.md 5.16)', () => {
+  it("is about a retried step's last attempt, and says which attempt it is", () => {
+    const first = run().steps[1];
+    const block = nodeChatContextBlock(
+      run({
+        steps: [
+          { ...first, attempt: 1, toolCalls: [{ tool: 'list_entities' }] },
+          {
+            ...first,
+            attempt: 2,
+            toolCalls: [{ tool: 'run_readonly_sql', input: 'SELECT 2' }],
+          },
+        ],
+      }),
+      'analyse',
+    );
+    expect(block).toContain(
+      'This is attempt 2 of 2: the step ran again after its validation failed.',
+    );
+    expect(block).toContain('SELECT 2');
+    expect(block).not.toContain('list_entities');
+    expect(nodeChatContextBlock(run(), 'analyse')).not.toContain('attempt');
+  });
+
   it('holds the workflow input, the step input, output, status and tool calls, and the final answer', () => {
     const block = nodeChatContextBlock(run(), 'analyse');
     expect(block).toContain('step "Analyse" (analyse) of run r-1');

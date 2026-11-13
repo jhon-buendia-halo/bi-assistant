@@ -7,6 +7,7 @@ import {
   contractHash,
   contractJsonSchema,
   schemaFieldNames,
+  stepsOnEveryPath,
   withContract,
   type ContractWorkflow,
 } from './workflow-contract';
@@ -116,6 +117,94 @@ describe('contractHash', () => {
     expect(contractHash(changedSchema)).not.toBe(hash);
     expect(contractHash(changedId)).not.toBe(hash);
     expect(contractHash(changedField)).not.toBe(hash);
+  });
+
+  it("changes with the edges' flow, not with their labels", () => {
+    const edges: ContractWorkflow['edges'] = [
+      { from: 'start', to: 'a', kind: 'next', label: 'Go' },
+      { from: 'a', to: 'end', kind: 'next' },
+    ];
+    const withEdges = { ...base, edges };
+    expect(contractHash(withEdges)).not.toBe(contractHash(base));
+    expect(
+      contractHash({
+        ...base,
+        edges: [{ ...edges[0], label: 'Start' }, edges[1]],
+      }),
+    ).toBe(contractHash(withEdges));
+    expect(
+      contractHash({
+        ...base,
+        edges: [{ ...edges[0], kind: 'branch' }, edges[1]],
+      }),
+    ).not.toBe(contractHash(withEdges));
+  });
+});
+
+describe('stepsOnEveryPath and the edge-following check (agents.md 5.12)', () => {
+  // start → a → (b | c) → d, with a loop d → b.
+  const steps = [
+    {
+      id: 'a',
+      input: z.object({ question: z.string() }),
+      output: z.object({ question: z.string(), plan: z.string() }),
+    },
+    {
+      id: 'b',
+      input: z.object({ plan: z.string() }),
+      output: z.object({ rows: z.number(), plan: z.string() }),
+    },
+    {
+      id: 'c',
+      input: z.object({ plan: z.string() }),
+      output: z.object({ asked: z.string() }),
+    },
+    {
+      id: 'd',
+      input: z.object({ rows: z.number() }),
+      output: z.object({ done: z.boolean() }),
+    },
+  ];
+  const edges: NonNullable<ContractWorkflow['edges']> = [
+    { from: 'start', to: 'a', kind: 'next' },
+    { from: 'a', to: 'b', kind: 'branch' },
+    { from: 'a', to: 'c', kind: 'branch' },
+    { from: 'b', to: 'd', kind: 'next' },
+    { from: 'd', to: 'b', kind: 'loop' },
+    { from: 'c', to: 'end', kind: 'next' },
+    { from: 'd', to: 'end', kind: 'next' },
+  ];
+
+  it('lists the steps on every path to each step, closest first, loops left out', () => {
+    expect(
+      Object.fromEntries(stepsOnEveryPath(workflow(steps).steps, edges)),
+    ).toEqual({ a: [], b: ['a'], c: ['a'], d: ['b', 'a'] });
+  });
+
+  it('gives a step its inputs from the steps on every path to it, not the list order', () => {
+    // In list order, `c` sits between `b` and `d`, but no path runs b → c.
+    expect(checkWorkflowContract({ ...workflow(steps), edges })).toEqual([]);
+    const fromSideBranch = [
+      ...steps.slice(0, 3),
+      {
+        id: 'd',
+        input: z.object({ asked: z.string() }),
+        output: z.object({ done: z.boolean() }),
+      },
+    ];
+    // `asked` comes from `c`, which is not on the path a → b → d.
+    expect(
+      checkWorkflowContract({ ...workflow(fromSideBranch), edges }),
+    ).toEqual([
+      {
+        stepId: 'd',
+        field: 'asked',
+        problem: 'missing',
+        message: 'not given by the input or an earlier step',
+      },
+    ]);
+    // Without edges the list order decides, and `c` (before `d`) gives it.
+    expect(checkWorkflowContract(workflow(fromSideBranch))).toEqual([]);
   });
 });
 

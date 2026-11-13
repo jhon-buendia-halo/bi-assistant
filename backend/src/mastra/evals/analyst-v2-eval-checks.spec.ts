@@ -3,6 +3,7 @@ import {
   answerNamesAll,
   answerStatesNone,
   answerStatesNumbers,
+  endsOnClarifyingQuestion,
   hasMarkdownTable,
   markdownTableRows,
   numbersInText,
@@ -76,6 +77,36 @@ function sql(
     ...overrides,
   };
 }
+
+describe('endsOnClarifyingQuestion', () => {
+  // The answer the v2 eval target scores when a run ends on a clarification:
+  // the question, then one `- <option>` line per option.
+  const CLARIFICATION = [
+    'What do you mean by "most dominant"?',
+    '- Most matches won — wins across the knockout matches in the data',
+    '- Most goals scored — total goals across 2018 and 2022',
+    '- Best goal difference — goals scored minus conceded',
+  ].join('\n');
+
+  it('passes one question with 2-4 options', () => {
+    expect(run(endsOnClarifyingQuestion(), CLARIFICATION)).toBeUndefined();
+  });
+
+  it('fails an answer, a question without options, or one with more around it', () => {
+    expect(run(endsOnClarifyingQuestion(), TIES_ANSWER)).toBe(
+      'the answer does not open with a question',
+    );
+    expect(run(endsOnClarifyingQuestion(), 'Which measure?\n- Wins')).toBe(
+      'the question offers 1 options, not 2-4',
+    );
+    expect(
+      run(
+        endsOnClarifyingQuestion(),
+        `${CLARIFICATION}\nFrance won 4 matches.`,
+      ),
+    ).toBe('the answer holds more than the question and its options');
+  });
+});
 
 describe('numbersInText', () => {
   it('reads digits, decimals and thousands separators', () => {

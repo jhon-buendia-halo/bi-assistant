@@ -52,11 +52,27 @@ export interface ContractStep {
   outputSchema: JsonSchema;
 }
 
-/** One workflow as the contract sees it: its input fields and its steps. */
+/**
+ * One edge of a workflow's graph (api.md 117): `from` and `to` are step ids,
+ * `start` or `end`. `next` is the plain flow, `branch` one of the paths a
+ * condition picks, `loop` a way back to an earlier step.
+ */
+export interface WorkflowEdge {
+  from: string;
+  to: string;
+  kind: 'next' | 'branch' | 'loop';
+  label?: string;
+}
+
+/**
+ * One workflow as the contract sees it: its input fields, its steps and,
+ * when its flow is not the steps' order, its edges.
+ */
 export interface ContractWorkflow {
   id?: string;
   input: readonly WorkflowInputField[];
   steps: readonly ContractStep[];
+  edges?: readonly WorkflowEdge[];
 }
 
 /** Sorted keys, recursively, so equal contracts serialize equally. */
@@ -79,8 +95,9 @@ function canonical(value: unknown): unknown {
  * The workflow's contract hash (api.md 117): the first 12 hex characters of
  * the sha256 of the canonical JSON (keys sorted) of `{ input, steps }`,
  * where `input` is each input field's `name`, `type` and `required`, and
- * `steps` each step's `id`, `inputSchema` and `outputSchema`, in order.
- * Labels, help texts and the workflow's id are not the contract.
+ * `steps` each step's `id`, `inputSchema` and `outputSchema`, in order;
+ * a workflow with edges adds `edges`, each edge's `from`, `to` and `kind`,
+ * in order. Labels, help texts and the workflow's id are not the contract.
  */
 export function contractHash(workflow: ContractWorkflow): string {
   const contract = {
@@ -94,6 +111,15 @@ export function contractHash(workflow: ContractWorkflow): string {
       inputSchema: step.inputSchema,
       outputSchema: step.outputSchema,
     })),
+    ...(workflow.edges
+      ? {
+          edges: workflow.edges.map(({ from, to, kind }) => ({
+            from,
+            to,
+            kind,
+          })),
+        }
+      : {}),
   };
   return createHash('sha256')
     .update(JSON.stringify(canonical(contract)))
@@ -235,14 +261,76 @@ interface Provider {
   sure: boolean;
 }
 
-/** The provider of `name` for the step at `index`: the closest earlier output, else the input. */
+/** The node every path starts at, and the one it ends at. */
+const START = 'start';
+
+/**
+ * The steps on every path from Start to each step (its dominators, the step
+ * itself left out), closest first, following the `next` and `branch` edges
+ * (a `loop` edge goes back to a step already on the path, so it adds no
+ * step that every path has). A step no path reaches has none.
+ */
+export function stepsOnEveryPath(
+  steps: readonly { id: string }[],
+  edges: readonly WorkflowEdge[],
+): Map<string, string[]> {
+  const forward = edges.filter((edge) => edge.kind !== 'loop');
+  const nodes = [START, ...steps.map((step) => step.id)];
+  const all = new Set(nodes);
+  const dominators = new Map<string, Set<string>>(
+    nodes.map((node) => [node, node === START ? new Set([START]) : all]),
+  );
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of nodes) {
+      if (node === START) continue;
+      const preds = forward
+        .filter((edge) => edge.to === node && dominators.has(edge.from))
+        .map((edge) => dominators.get(edge.from)!);
+      const next = new Set<string>(
+        preds.length
+          ? [...preds[0]].filter((d) => preds.every((set) => set.has(d)))
+          : [],
+      );
+      next.add(node);
+      const before = dominators.get(node)!;
+      if (next.size !== before.size || [...next].some((d) => !before.has(d))) {
+        dominators.set(node, next);
+        changed = true;
+      }
+    }
+  }
+  // A step's dominators form a chain: the closest has the most dominators.
+  const depth = (node: string) => dominators.get(node)!.size;
+  return new Map(
+    steps.map((step) => {
+      const before = [...dominators.get(step.id)!].filter(
+        (d) => d !== step.id && d !== START && all.has(d),
+      );
+      return [step.id, before.sort((a, b) => depth(b) - depth(a))];
+    }),
+  );
+}
+
+/**
+ * The provider of `name` for the step at `index`: the closest earlier
+ * output (the closest step on every path to it, when the workflow has
+ * edges), else the input.
+ */
 function providerOf(
   workflow: ContractWorkflow,
   index: number,
   name: string,
+  paths?: Map<string, string[]>,
 ): Provider | undefined {
-  for (let i = index - 1; i >= 0; i--) {
-    const output = workflow.steps[i].outputSchema;
+  const earlier = paths
+    ? (paths.get(workflow.steps[index].id) ?? []).map((id) =>
+        workflow.steps.find((step) => step.id === id)!,
+      )
+    : workflow.steps.slice(0, index).reverse();
+  for (const step of earlier) {
+    const output = step.outputSchema;
     const schema = output.properties?.[name];
     if (schema) {
       return { schema, sure: (output.required ?? []).includes(name) };
@@ -268,12 +356,17 @@ function providerOf(
  * `unknown` input accepts anything. An optional input is type-checked when
  * given. `missing`: nothing gives it; `type`: `expected <a>, got <b>`;
  * `optional`: an optional output (or an optional input field without a
- * default) feeds a required input. Empty when the contract holds.
+ * default) feeds a required input. Empty when the contract holds. A
+ * workflow with edges follows them, not the list order: a step's earlier
+ * steps are those on every path from Start to it (`stepsOnEveryPath`).
  */
 export function checkWorkflowContract(
   workflow: ContractWorkflow,
 ): ContractProblem[] {
   const problems: ContractProblem[] = [];
+  const paths = workflow.edges
+    ? stepsOnEveryPath(workflow.steps, workflow.edges)
+    : undefined;
   workflow.steps.forEach((step, index) => {
     const push = (
       field: string,
@@ -284,7 +377,7 @@ export function checkWorkflowContract(
     for (const [name, schema] of Object.entries(
       step.inputSchema.properties ?? {},
     )) {
-      const provider = providerOf(workflow, index, name);
+      const provider = providerOf(workflow, index, name, paths);
       const needed = required.includes(name);
       if (!provider) {
         if (needed)

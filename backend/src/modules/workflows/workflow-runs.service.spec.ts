@@ -80,7 +80,16 @@ const stepResult = (id: string, output: unknown): StepEvent => ({
 /** What the Analyse step of `qti-v2-turn` (and agent-turn's Answer) ends with. */
 const ANALYSE_OUTPUT = { calls: [], stopped: false };
 /** What Wrap up ends with: the run's output. */
-const WRAP_UP_OUTPUT = { sqlQueries: 0, failedQueries: 0, rows: 0 };
+const WRAP_UP_OUTPUT = {
+  sqlQueries: 0,
+  failedQueries: 0,
+  rows: 0,
+  answer: 'Brazil won.',
+};
+/** What Plan, Validate and Write answer end with. */
+const PLAN_OUTPUT = { plan: { needsClarification: false } };
+const VALIDATE_OUTPUT = { ok: true, attempt: 1, findings: [] };
+const ANSWER_OUTPUT = { headline: 'Brazil won.', answer: 'Brazil won.' };
 
 /** The steps `qti-v2-turn` reports before its agent step's turn streams. */
 const V2_STEPS_BEFORE: StepEvent[] = [
@@ -91,6 +100,8 @@ const V2_STEPS_BEFORE: StepEvent[] = [
   stepResult('receive-question', { question: 'Who won in 2002?' }),
   stepStart('load-catalog', { question: 'Who won in 2002?' }),
   stepResult('load-catalog', { entities: 1 }),
+  stepStart('plan', { question: 'Who won in 2002?' }),
+  stepResult('plan', PLAN_OUTPUT),
   stepStart('analyse', { question: 'Who won in 2002?' }),
 ];
 
@@ -186,7 +197,11 @@ function build(
         if (script.throws) throw script.throws;
         onStep(stepResult(agentStep, ANALYSE_OUTPUT));
         if (!draftHost) {
-          onStep(stepStart('wrap-up', ANALYSE_OUTPUT));
+          onStep(stepStart('validate', ANALYSE_OUTPUT));
+          onStep(stepResult('validate', VALIDATE_OUTPUT));
+          onStep(stepStart('write-answer', VALIDATE_OUTPUT));
+          onStep(stepResult('write-answer', ANSWER_OUTPUT));
+          onStep(stepStart('wrap-up', ANSWER_OUTPUT));
           onStep(stepResult('wrap-up', WRAP_UP_OUTPUT));
         }
         hostMessages.push({
@@ -561,12 +576,20 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'plan:running',
+      'plan:success',
       'analyse:running',
       'tool',
       'text',
       'analyse:success',
+      'validate:running',
+      'validate:success',
+      'write-answer:running',
+      'write-answer:success',
       'wrap-up:running',
       'wrap-up:success',
+      // The steps the run never took end skipped: the Clarify branch.
+      'clarify:skipped',
       'done',
     ]);
     expect(events[0]).toEqual({
@@ -583,11 +606,13 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
       input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
       startedAt: expect.any(String) as string,
     });
-    expect(events[8]).toEqual({
+    expect(events[10]).toEqual({
       type: 'step',
       id: 'analyse',
       title: 'Analyse',
       status: 'success',
+      // A step inside the analysis loop carries its attempt (api.md 3.6).
+      attempt: 1,
       input: { question: 'Who won in 2002?' },
       output: ANALYSE_OUTPUT,
       startedAt: expect.any(String) as string,
@@ -607,12 +632,17 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success', output: { entities: 1 } },
+        { id: 'plan', status: 'success', output: PLAN_OUTPUT },
+        { id: 'clarify', title: 'Clarify', status: 'skipped' },
         {
           id: 'analyse',
           title: 'Analyse',
           status: 'success',
+          attempt: 1,
           output: ANALYSE_OUTPUT,
         },
+        { id: 'validate', status: 'success', attempt: 1 },
+        { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
         { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
       ],
       output: WRAP_UP_OUTPUT,
@@ -624,8 +654,9 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     });
     expect(run.input).not.toHaveProperty('careful');
     expect(run.finishedAt).toBeDefined();
-    // Every step has its start and end times, the end never before the start.
-    for (const step of run.steps) {
+    // Every step that ran has its start and end times, the end never before
+    // the start; the skipped Clarify has none.
+    for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
         Date.parse(step.startedAt!),
       );
@@ -732,16 +763,24 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
         {
           id: 'analyse',
           status: 'failed',
+          attempt: 1,
           error: 'The endpoint rejected the API key (401)',
         },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
       ],
     });
-    expect(stepTrail(events).slice(-2)).toEqual([
+    expect(stepTrail(events).slice(-5)).toEqual([
+      'clarify:skipped',
       'analyse:failed',
+      'validate:skipped',
+      'write-answer:skipped',
       'wrap-up:skipped',
     ]);
     expect(run.answer).toBeUndefined();
@@ -771,19 +810,25 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'plan:running',
+      'plan:success',
       'analyse:running',
       'text',
     ]);
     expect(run.status).toBe('stopped');
-    expect(run.steps.slice(2)).toEqual([
+    expect(run.steps.slice(3)).toEqual([
+      { id: 'clarify', title: 'Clarify', status: 'skipped' },
       {
         id: 'analyse',
         title: 'Analyse',
         status: 'stopped',
+        attempt: 1,
         input: { question: 'Who won in 2002?' },
         startedAt: expect.any(String) as string,
         endedAt: expect.any(String) as string,
       },
+      { id: 'validate', title: 'Validate', status: 'skipped' },
+      { id: 'write-answer', title: 'Write answer', status: 'skipped' },
       { id: 'wrap-up', title: 'Wrap up', status: 'skipped' },
     ]);
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
@@ -911,8 +956,8 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     expect(atStart[0]).toMatchObject({ id: run.id, status: 'running' });
     const stored = await ctx.repository.get(run.id);
     expect(stored).toMatchObject({ status: 'success', output: WRAP_UP_OUTPUT });
-    // Each stored step keeps what it received and its times.
-    for (const step of stored!.steps) {
+    // Each stored step that ran keeps what it received and its times.
+    for (const step of stored!.steps.filter((s) => s.status !== 'skipped')) {
       expect(step.input).toBeDefined();
       expect(Date.parse(step.startedAt!)).not.toBeNaN();
       expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
@@ -1062,7 +1107,11 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: message },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
       ],
     });
@@ -1117,7 +1166,11 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'success' },
+        { id: 'validate', status: 'success' },
+        { id: 'write-answer', status: 'success' },
         { id: 'wrap-up', status: 'success' },
       ],
       output: WRAP_UP_OUTPUT,
@@ -1157,7 +1210,11 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: 'Model error' },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
       ],
     });
@@ -1175,7 +1232,11 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'stopped' },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
       ],
     });
