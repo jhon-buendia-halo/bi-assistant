@@ -13,9 +13,9 @@
  */
 
 export const V2_PLAN_LINE =
-  'You plan a data analysis for Questions to Insights v2.';
+  'You plan a data analysis for Questions to Insights.';
 export const V2_ANSWER_LINE =
-  'You write the final answer for Questions to Insights v2.';
+  'You write the final answer for Questions to Insights.';
 
 /** Which structured step a model call belongs to. */
 export type V2Step = 'plan' | 'answer';

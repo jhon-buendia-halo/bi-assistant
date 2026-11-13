@@ -36,6 +36,7 @@ import { UserAgentsRepository } from './repositories/user-agents.repository';
 /** The untyped create / save-draft payload, already coerced to strings. */
 export interface AgentConfigInput {
   name?: string;
+  role?: string;
   description?: string;
   instructions?: string;
   datasets?: string[];
@@ -252,6 +253,8 @@ export function normalizeAgentConfig(input: AgentConfigInput): AgentConfig {
       AGENT_LIMITS.starterQuestion,
     ).slice(0, AGENT_LIMITS.starterQuestions),
   };
+  const role = clip(input.role, AGENT_LIMITS.role);
+  if (role) config.role = role;
   const model = clip(input.model, Number.POSITIVE_INFINITY);
   if (model) config.model = model;
   if (
@@ -309,6 +312,7 @@ export function missingDatasets(
 function sameConfig(a: AgentConfig, b: AgentConfig): boolean {
   return (
     a.name === b.name &&
+    (a.role ?? '') === (b.role ?? '') &&
     a.description === b.description &&
     a.instructions === b.instructions &&
     sameList(a.datasets, b.datasets) &&

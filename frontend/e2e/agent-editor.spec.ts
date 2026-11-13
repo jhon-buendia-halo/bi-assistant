@@ -83,7 +83,7 @@ async function openEditor(page: Page, id: string, name: string) {
 
 const nameField = (page: Page) => page.getByLabel('Name', { exact: true });
 const instructionsField = (page: Page) =>
-  page.getByLabel('Instructions', { exact: true });
+  page.getByLabel('Job description', { exact: true });
 const datasetBox = (page: Page, label: string) =>
   page
     .getByRole('group', { name: 'Datasets' })
@@ -345,7 +345,7 @@ test('the editor has no detectable accessibility violations in either theme', as
 // ---------------------------------------------------------------------------
 // Links in the instructions decide the tools and skills (BA-217, BA-216,
 // BA-219, BA-220), the Tools, Graph and LLM Config tabs (BA-221), and the
-// agent page's Try it, System Prompt and Skills tabs (BA-222).
+// agent page's Try it, Job Description and Skills tabs (BA-222).
 // ---------------------------------------------------------------------------
 
 const FISCAL = 'fiscal-calendar';
@@ -357,9 +357,9 @@ const OPTIONAL_TOOLS_OFF = [
   'update_visual',
 ];
 
-/** The agent editor's Instructions field: the Tiptap link editor. */
+/** The agent editor's Job description field: the Tiptap link editor. */
 const instructionsEditor = (page: Page) =>
-  page.getByRole('textbox', { name: 'Instructions', exact: true });
+  page.getByRole('textbox', { name: 'Job description', exact: true });
 const linkMenu = (page: Page) => page.getByRole('listbox');
 
 /** Types `text` at the end of a link editor. */
@@ -699,7 +699,7 @@ test('the LLM Config tab shows whether the key is set and never the key', async 
     },
   });
   expect(response.ok()).toBe(true);
-  await openAgentPage(page, 'assistant', 'Questions to Insights Assistant');
+  await openAgentPage(page, 'assistant', 'Emily');
   await page.getByTestId('agent-tab-model').click();
   await expect(page.getByTestId('llm-API key')).toContainText('Set');
   await expect(page.getByTestId('llm-API key')).not.toContainText('Not set');
@@ -707,7 +707,7 @@ test('the LLM Config tab shows whether the key is set and never the key', async 
   await evidence(page, '1.14.8', 'agent-llm-config-key-set.png');
 });
 
-test('editing the System Prompt in place saves a draft with the link', async ({
+test('editing the Job Description in place saves a draft with the link', async ({
   page,
 }) => {
   await createSkill(page, {
@@ -744,7 +744,7 @@ test('editing the System Prompt in place saves a draft with the link', async ({
     ),
   ).toBeVisible();
   await expect(page.getByTestId('prompt-save')).toBeDisabled();
-  const editor = page.getByRole('textbox', { name: 'Agent instructions' });
+  const editor = page.getByRole('textbox', { name: 'Job description' });
   await linkFromMenu(page, editor, ' /fis', FISCAL);
   await expect(
     page.getByTestId('prompt-links').locator(`[data-link="skill:${FISCAL}"]`),
@@ -762,7 +762,7 @@ test('editing the System Prompt in place saves a draft with the link', async ({
   );
 });
 
-test('a broken link disables Save prompt', async ({ page }) => {
+test('a broken link disables Save job description', async ({ page }) => {
   const id = await createUserAgent(page, {
     name: HISTORIAN,
     instructions: 'Answer in one sentence.',
@@ -772,7 +772,7 @@ test('a broken link disables Save prompt', async ({ page }) => {
   await openAgentPage(page, id, HISTORIAN);
   await page.getByTestId('agent-tab-prompt').click();
   await page.getByTestId('prompt-edit').click();
-  const editor = page.getByRole('textbox', { name: 'Agent instructions' });
+  const editor = page.getByRole('textbox', { name: 'Job description' });
   await typeAtEnd(page, editor, '[[skill:gone]]');
   await expect(page.getByTestId('prompt-link-error')).toHaveText(
     'No skill named gone. Remove the link or create the skill on the Skills tab.',
@@ -787,7 +787,7 @@ test('a broken link disables Save prompt', async ({ page }) => {
   await expect(page.getByTestId('prompt-save')).toBeDisabled();
 });
 
-test('leaving an unsaved System Prompt edit asks first', async ({ page }) => {
+test('leaving an unsaved Job Description edit asks first', async ({ page }) => {
   const id = await createUserAgent(page, {
     name: HISTORIAN,
     instructions: 'Answer in one sentence.',
@@ -797,7 +797,7 @@ test('leaving an unsaved System Prompt edit asks first', async ({ page }) => {
   await openAgentPage(page, id, HISTORIAN);
   await page.getByTestId('agent-tab-prompt').click();
   await page.getByTestId('prompt-edit').click();
-  const editor = page.getByRole('textbox', { name: 'Agent instructions' });
+  const editor = page.getByRole('textbox', { name: 'Job description' });
   await typeAtEnd(page, editor, ' Be brief.');
 
   let message = '';
@@ -901,10 +901,10 @@ test('Try it needs a dataset', async ({ page }) => {
   await expect(page.getByTestId('agent-tryit-edit')).toHaveText('Edit');
 });
 
-test('an Official agent has no Try it tab and opens on System Prompt', async ({
+test('an Official agent has no Try it tab and opens on Job Description', async ({
   page,
 }) => {
-  await openAgentPage(page, 'assistant', 'Questions to Insights Assistant');
+  await openAgentPage(page, 'assistant', 'Emily');
   await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
   await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
   await expect(page.getByTestId('agent-panel-chat')).toHaveCount(0);

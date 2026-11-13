@@ -105,6 +105,7 @@ Navigation
 
 Workflow runs
 - R45. A workflow run's agent turn runs on a temporary host `run-<runId>` (ADR-0041, amending ADR-0038), so its calls carry that id as their thread. Monitoring SHALL treat such a thread like a session: it SHALL read the run `<runId>` from `workflow_runs` and name the thread `<workflow name>: <run title>` (the run's question, else its workflow's name, as the history titles it). The calls table (R3), the Session filter (R6), the call page (R14), the Sessions tab (R28) and the session page (R32) use that name. The call page's Session link for a run SHALL open the run's session page (its execution flow), not a chat, and the session page of a run SHALL show a **Run** chip instead of **Open chat**. A run that was deleted, or an unknown `run-` id, has no name and no link, like a deleted chat. Sessions already listed are unchanged.
+- R46. The Plan and Write answer steps of Answer a Business Question run two registered System agents, so their model calls SHALL appear in the LLM calls list like any agent's, under the agents `Questions to Insights v2: Plan` and `Questions to Insights v2: Write answer` (their technical names, [../../system/agents.md](../../system/agents.md) 2.11). The Agent filter (R6) offers both once such a call exists. Runs stored before this change have no such calls.
 
 ## Edge cases and errors
 

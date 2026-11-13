@@ -6,6 +6,7 @@ import {
 } from '../../mastra/workflows/agent-workflows';
 import {
   CODE_WORKFLOWS,
+  workflowAgentKeys,
   type CodeWorkflowSource,
   type WorkflowBar,
   type WorkflowTrigger,
@@ -214,25 +215,16 @@ export class WorkflowsService {
     );
     return CODE_WORKFLOWS.flatMap((source) => {
       const agent = builtins.get(source.primaryFor);
-      return agent ? [codeEntry(source, agent)] : [];
+      return agent ? [codeEntry(source, agent, builtins)] : [];
     });
   }
-}
-
-/** Steps whose agent steps name `key` as their agent's (api.md 117). */
-function withAgentKey(
-  steps: AgentWorkflow['steps'],
-  key: string,
-): WorkflowDetailStep[] {
-  return steps.map(({ agent, ...step }) =>
-    agent ? { ...step, agent: { ...agent, key } } : step,
-  );
 }
 
 /** A code-defined workflow, run for its `primaryFor` agent. */
 function codeEntry(
   source: CodeWorkflowSource,
   agent: AgentSummary,
+  builtins: ReadonlyMap<string, AgentSummary>,
 ): CatalogueEntry {
   const picksDatasets = runsOnPickedDatasets(source.primaryFor);
   return {
@@ -242,7 +234,11 @@ function codeEntry(
       description: source.description,
       kind: 'code',
       owner: 'Official',
-      agents: [{ key: agent.key, name: agent.name }],
+      // Every agent its steps run, by persona name: Michael, Olivia, Jessica.
+      agents: workflowAgentKeys(source).flatMap((key) => {
+        const used = builtins.get(key);
+        return used ? [{ key, name: used.name }] : [];
+      }),
       stepCount: source.steps.length,
       bar: source.bar,
       trigger: source.trigger,
@@ -254,10 +250,7 @@ function codeEntry(
     contractHash: source.contractHash,
     edges: () => source.edges.map((edge) => ({ ...edge })),
     steps: () =>
-      withAgentKey(
-        agentWorkflow(source.primaryFor)?.steps ?? [],
-        source.primaryFor,
-      ).map((step) => {
+      (agentWorkflow(source.primaryFor)?.steps ?? []).map((step) => {
         const declared = source.steps.find((entry) => entry.id === step.id);
         return declared
           ? {

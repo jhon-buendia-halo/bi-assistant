@@ -341,7 +341,7 @@ flowchart LR
   assistant -.->|"model: async resolveAgentModel()"| resolver
 ```
 
-*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `qti-v2-turn` for a Questions to Insights v2 session, `agent-turn` (one `answer` step) for every other session. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
+*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `qti-v2-turn` for a Answer a Business Question session, `agent-turn` (one `answer` step) for every other session. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
 
 **Frontend**
 

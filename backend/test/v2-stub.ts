@@ -45,8 +45,7 @@ export const isWriteAnswerRequest = (req: Recorded) => stepOf(req) === 'answer';
 export const isAnalyseRequest = (req: Recorded) => {
   const system = req.messages.find((message) => message.role === 'system');
   return (
-    !!system &&
-    messageText(system).startsWith('You are Questions to Insights v2')
+    !!system && messageText(system).startsWith('You are Questions to Insights')
   );
 };
 

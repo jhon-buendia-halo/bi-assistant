@@ -116,7 +116,7 @@ test('a Questions to Insights v2 run is offered its built-in skills only, and an
   // Then the framework's skill catalog lists its three built-in skills and
   // the model is offered the skill tool, but no file or script tool.
   const systems = systemTexts(request).join('\n');
-  expect(systems).toContain('You are Questions to Insights v2');
+  expect(systems).toContain('You are Questions to Insights');
   expect(systems).not.toContain('\n## Skills\n');
   expect(systems).toContain('<available_skills>');
   for (const skill of [

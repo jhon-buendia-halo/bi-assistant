@@ -27,8 +27,17 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   'data-readiness',
 ];
 
+/**
+ * The agents of the two model-only steps of `qti-v2-turn` (agents.md 5.11):
+ * Plan and Write answer. System agents: the workflow calls them.
+ */
+export const ANALYSIS_PLANNER_AGENT_KEY = 'analysis-planner';
+export const ANSWER_WRITER_AGENT_KEY = 'answer-writer';
+
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
+  ANALYSIS_PLANNER_AGENT_KEY,
+  ANSWER_WRITER_AGENT_KEY,
   'visualization',
   'sql-fixer',
   'sql-verifier',

@@ -108,11 +108,16 @@ describe('AgentsService (built-in and user agents)', () => {
     asDemoUser(async () => {
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.key)).toEqual([
+        'sql-fixer',
         'assistant',
         'assistant-eval-judge',
-        'sql-fixer',
       ]);
-      expect(agents[0]).toMatchObject({
+      // Built-ins show their persona: a human name and a job title,
+      // sorted by that name (David, Emily, Laura).
+      expect(agents[1]).toMatchObject({
+        key: 'assistant',
+        name: 'Emily',
+        role: 'Data Analyst',
         kind: 'official',
         owner: 'Official',
         status: 'builtin',
@@ -122,7 +127,13 @@ describe('AgentsService (built-in and user agents)', () => {
         datasets: [],
         starterQuestions: [],
       });
-      expect(agents[2]).toMatchObject({ kind: 'system', owner: 'System' });
+      expect(agents[0]).toMatchObject({
+        key: 'sql-fixer',
+        name: 'David',
+        role: 'SQL Developer',
+        kind: 'system',
+        owner: 'System',
+      });
     }),
   );
 
@@ -134,9 +145,9 @@ describe('AgentsService (built-in and user agents)', () => {
       await ctx.userAgents.setBuiltinPin('strategy', true);
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.key)).toEqual([
+        'sql-fixer',
         'assistant',
         'assistant-eval-judge',
-        'sql-fixer',
       ]);
       expect(agents.find((agent) => agent.key === 'assistant')?.pinned).toBe(
         true,
@@ -243,22 +254,24 @@ describe('AgentsService (built-in and user agents)', () => {
     asDemoUser(async () => {
       const created = await ctx.service.create({
         name: 'Health plan analyst',
+        role: '  Claims Analyst  ',
         description: 'Plans',
         datasets: ['World Cup Core', 'Gone'],
         starterQuestions: ['Who won?'],
       });
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.name)).toEqual([
-        'assistant',
-        'assistant-eval-judge',
+        'David',
+        'Emily',
         'Health plan analyst',
-        'sql-fixer',
+        'Laura',
       ]);
       const user = agents.find((agent) => agent.key === created.id);
       expect(user).toEqual({
         key: created.id,
         id: created.id,
         name: 'Health plan analyst',
+        role: 'Claims Analyst',
         description: 'Plans',
         // No links: only the always-on tools (ADR-0024).
         tools: ['run_readonly_sql'],

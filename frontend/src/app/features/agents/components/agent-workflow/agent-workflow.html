@@ -48,9 +48,18 @@
                 card.step.summary
               }}</span>
               @if (card.step.agent; as agent) {
-                <span class="text-[12px] font-medium text-fg">{{
-                  agent.name
-                }}</span>
+                <span class="flex flex-col">
+                  <span class="text-[12px] font-medium text-fg">{{
+                    agent.name
+                  }}</span>
+                  @if (agent.role) {
+                    <span
+                      class="text-[12px] text-fg-muted"
+                      data-testid="workflow-step-agent-role"
+                      >{{ agent.role }}</span
+                    >
+                  }
+                </span>
                 <span class="flex flex-wrap gap-1">
                   @for (tool of agent.tools; track tool) {
                     <span

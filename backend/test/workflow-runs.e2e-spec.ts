@@ -547,7 +547,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       .map((message) => messageText(message));
     const at = (start: string) =>
       system.findIndex((text) => text.startsWith(start));
-    expect(at('You are Questions to Insights v2')).toBe(0);
+    expect(at('You are Questions to Insights')).toBe(0);
     const orientation = at('Datasets for this session: Analyst Goals.');
     const metrics = at('Governed metric definitions');
     const knowledge = at('Curated dataset knowledge');

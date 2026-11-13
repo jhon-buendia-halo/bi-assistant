@@ -123,16 +123,16 @@ Feature: Agent panel
     And I run that agent on "Go on"
     Then the run holds no panel item and its workflow has the three phases
 
-  Scenario: Questions to Insights v2 shows its code-defined steps advancing
+  Scenario: Answer a Business Question shows its code-defined steps advancing
     When the stub answers by running "run_readonly_sql" and then "There were 64 matches."
-    And I run "Questions to Insights v2" on "How many matches were played in 2018?"
+    And I run "Answer a Business Question" on "How many matches were played in 2018?"
     Then the steps of a clear question, "Receive question", "Load catalog", "Plan", "Analyse", "Validate", "Write answer" and "Wrap up", each report running, then success, in order, and "Clarify" is skipped
     And the model was offered only v2's own tools: "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and the skill tools, never "update_workflow"
     And the run's workflow shows every step done but Clarify
 
   Scenario: A failing step of the v2 workflow is marked failed
     Given the stub fails the model call with an error
-    When I run "Questions to Insights v2" on "How many matches were played in 2018?"
+    When I run "Answer a Business Question" on "How many matches were played in 2018?"
     Then "Receive question" and "Load catalog" succeed, "Analyse" fails and "Wrap up" is skipped
     And the run ends with the turn's error
 ```
@@ -145,7 +145,7 @@ Feature: Agent panel
 4. The shown items, in order, survive reopening the session, and visuals made before this capability appear in the menu.
 5. An agent with a `## Workflow` section shows the workflow bar from its first turn, and each open step says what the user must do (the prompt's default action or the agent's `todo`); an `update_workflow` call moves it live (statuses, `n/m done` and the note in Details), and an agent without a section can create its own steps but cannot rename the prompt's.
 6. The chat's workflow bar (its fold, details and popover scenarios) is retired with the chat composer; a run shows the agent's phases inside its step.
-6a. A Questions to Insights v2 session shows its four code-defined steps before the first turn; a turn moves them to all done live, and a failing step shows as Failed while the turn ends with its error (R8a).
+6a. A Answer a Business Question session shows its four code-defined steps before the first turn; a turn moves them to all done live, and a failing step shows as Failed while the turn ends with its error (R8a).
 7. The assistant's eval sets (`world-cup`, `formula-1`) pass at 100% over 3 runs on the branch.
 
 <!-- sources: backend/src/mastra/tools/panel.tool.ts, workflow.tool.ts, backend/src/mastra/workflow-section.ts, backend/src/mastra/agents/assistant.agent.ts (working rules), backend/src/mastra/tools/tool-services.ts, backend/src/modules/sessions/sessions.service.ts (showPanelItem, effectiveWorkflowFor, panel-item event, runAssistantV2Workflow), workflow-run-state.ts, backend/src/mastra/workflows/qti-v2-turn.workflow.ts, qti-v2-turn.steps.ts, sessions.controller.ts, workspace-files.ts, entities/session.entity.ts, repositories/sessions.repository.ts; frontend/src/app/features/sessions/components/session-panel/*, workflow-bar/*, panel-document-view/*, panel-file-view/*, panel-table-view/*, session-chat/session-chat.ts, services/sessions-api.service.ts, models/session.model.ts; frontend/src/app/app.ts (onPanelItem, loadLatestPanelItem), app.html; frontend/e2e/agent-panel.spec.ts -->

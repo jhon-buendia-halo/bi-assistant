@@ -1,13 +1,10 @@
-import {
-  AgentConfig,
-  AgentStatus,
-  SaveAgentInput,
-} from './agents-api.service';
+import { AgentConfig, AgentStatus, SaveAgentInput } from './agents-api.service';
 import { linkedNames, withLegacyLinks } from './prompt-links';
 
 /** The R43 limits the editor's fields enforce as the user types (R55). */
 export const AGENT_FIELD_LIMITS = {
   name: 64,
+  role: 64,
   description: 280,
   instructions: 4000,
   starterQuestion: 200,
@@ -29,6 +26,8 @@ export const REASONING_EFFORT_CHOICES: {
 /** The agent editor's form, as typed. `''` model or effort = the default. */
 export interface AgentForm {
   name: string;
+  /** The optional job title shown under the name. */
+  role: string;
   description: string;
   instructions: string;
   datasets: string[];
@@ -40,6 +39,7 @@ export interface AgentForm {
 export function emptyAgentForm(): AgentForm {
   return {
     name: '',
+    role: '',
     description: '',
     instructions: '',
     datasets: [],
@@ -53,6 +53,7 @@ export function emptyAgentForm(): AgentForm {
 export function agentFormFromConfig(config: AgentConfig): AgentForm {
   return {
     name: config.name ?? '',
+    role: config.role ?? '',
     description: config.description ?? '',
     instructions: config.instructions ?? '',
     datasets: [...(config.datasets ?? [])],
@@ -70,6 +71,7 @@ export function agentFormFromConfig(config: AgentConfig): AgentForm {
 export function normalizeAgentForm(form: AgentForm): AgentForm {
   return {
     name: form.name.trim(),
+    role: form.role.trim(),
     description: form.description.trim(),
     instructions: form.instructions.trim(),
     datasets: uniqueNonBlank(form.datasets),
@@ -85,6 +87,7 @@ export function agentFormChanged(form: AgentForm, saved: AgentForm): boolean {
   const b = normalizeAgentForm(saved);
   return (
     a.name !== b.name ||
+    a.role !== b.role ||
     a.description !== b.description ||
     a.instructions !== b.instructions ||
     // Ticking order carries no meaning.
@@ -125,6 +128,7 @@ export function agentSaveInput(form: AgentForm): SaveAgentInput {
   const normalized = normalizeAgentForm(form);
   return {
     name: normalized.name,
+    ...(normalized.role ? { role: normalized.role } : {}),
     description: normalized.description,
     instructions: normalized.instructions,
     datasets: normalized.datasets,

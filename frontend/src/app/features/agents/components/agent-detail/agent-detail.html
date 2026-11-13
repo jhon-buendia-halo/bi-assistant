@@ -29,6 +29,14 @@
         >
           {{ agent.name }}
         </h2>
+        @if (agent.role) {
+          <p
+            data-testid="agent-detail-role"
+            class="m-0 text-[13px] leading-5 text-fg-muted"
+          >
+            {{ agent.role }}
+          </p>
+        }
         <div class="flex flex-wrap items-center gap-2">
           <span class="font-mono text-[12px] text-fg-muted">{{
             agent.id

@@ -85,20 +85,11 @@ export function officialGraphInput(
 }
 
 /**
- * Questions to Insights v2 (agents-evals R107): its copy names it without an
- * article. Like the other Official agents, its prompt links its own tools
- * and built-in skills.
- */
-const ASSISTANT_V2_KEY = 'assistant-v2';
-
-/**
- * How the copy of the built-in prompt editor names the agent: `the assistant`,
- * `the Data Readiness Agent`, `Questions to Insights v2`.
+ * How the copy of the built-in prompt editor names the agent: by its
+ * persona's human name, with no article (`Emily`, `Sarah`; agents-evals R107).
  */
 function agentPhrase(agent: { key: string; name: string }): string {
-  if (agent.key === ASSISTANT_KEY) return 'the assistant';
-  if (agent.key === ASSISTANT_V2_KEY) return agent.name;
-  return `the ${agent.name}`;
+  return agent.name;
 }
 
 /** The hint, editor note and reading-state note of an Official agent's prompt. */
@@ -109,7 +100,7 @@ export function officialPromptCopy(agent: { key: string; name: string }): {
 } {
   const who = agentPhrase(agent);
   return {
-    toolbarHint: `Type / to link a tool or a built-in skill. Links here are mentions; ${who} keeps all its tools.`,
+    toolbarHint: `Type / to link a tool or a built-in skill. Links here are mentions; ${who} keeps every tool.`,
     toolsNote: `The ## Tools list is generated from the tools ${who} gets and is inserted before ## Working rules.`,
     generatedToolsNote: `## Tools — generated from the tools ${who} gets`,
   };

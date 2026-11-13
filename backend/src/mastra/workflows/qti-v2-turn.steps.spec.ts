@@ -154,10 +154,10 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
 
   it('opens the Plan and Write answer instructions with their fixed first lines', () => {
     expect(PLAN_FIRST_LINE).toBe(
-      'You plan a data analysis for Questions to Insights v2.',
+      'You plan a data analysis for Questions to Insights.',
     );
     expect(WRITE_ANSWER_FIRST_LINE).toBe(
-      'You write the final answer for Questions to Insights v2.',
+      'You write the final answer for Questions to Insights.',
     );
     expect(PLAN_INSTRUCTIONS.split('\n')[0]).toBe(PLAN_FIRST_LINE);
     // Plan's assumptions are choices; its options rest on the columns.
