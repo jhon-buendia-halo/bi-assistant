@@ -1,0 +1,175 @@
+@if (runId() === null) {
+  <p
+    data-testid="workflow-node-chat-unavailable"
+    class="m-0 text-[13px] text-fg-muted"
+  >
+    {{ availability().state === "running" ? runningText : noRunText }}
+  </p>
+} @else {
+  <div data-testid="workflow-node-chat" class="flex min-h-0 flex-1 flex-col gap-2">
+    <p
+      data-testid="workflow-node-chat-note"
+      class="m-0 text-[12px] text-fg-muted"
+    >
+      {{ note() }}
+    </p>
+
+    <div
+      #list
+      role="log"
+      aria-live="polite"
+      aria-label="Chat with this step's agent"
+      data-testid="workflow-node-chat-messages"
+      tabindex="0"
+      class="flex min-h-[120px] flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-border p-3"
+    >
+      @if (loading()) {
+        <p class="m-0 flex items-center gap-2 text-[13px] text-fg-muted">
+          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          <span>Loading chat…</span>
+        </p>
+      } @else {
+        @for (message of messages(); track message.id) {
+          <article
+            data-testid="workflow-node-chat-message"
+            [attr.data-role]="message.role"
+            [attr.aria-label]="message.role === 'user' ? 'You' : 'Agent'"
+            class="flex flex-col gap-1.5"
+            [class.items-end]="message.role === 'user'"
+          >
+            @if (message.role === "user") {
+              <p
+                class="m-0 max-w-[90%] rounded-lg bg-surface-muted px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg"
+              >{{ message.content }}</p>
+            } @else {
+              @if (toolCalls(message).length) {
+                <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+                  @for (call of toolCalls(message); track $index) {
+                    <ng-container
+                      *ngTemplateOutlet="toolCall; context: { $implicit: call }"
+                    />
+                  }
+                </ul>
+              }
+              @if (message.content) {
+                <div
+                  class="prose-dark text-[13px] text-fg"
+                  [innerHTML]="message.content | markdown"
+                ></div>
+              }
+              @if (message.stopped) {
+                <span class="chip chip-neutral w-fit">Stopped</span>
+              }
+              @if (message.error; as error) {
+                <p class="m-0 text-[12px] text-on-danger-soft">{{ error }}</p>
+              }
+            }
+          </article>
+        } @empty {
+          @if (!streaming()) {
+            <p class="m-0 text-[13px] text-fg-muted">{{ emptyText }}</p>
+          }
+        }
+        @if (streaming()) {
+          <div
+            data-testid="workflow-node-chat-streaming"
+            class="flex flex-col gap-1.5"
+          >
+            @if (liveToolCalls().length) {
+              <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+                @for (call of liveToolCalls(); track $index) {
+                  <ng-container
+                    *ngTemplateOutlet="toolCall; context: { $implicit: call }"
+                  />
+                }
+              </ul>
+            }
+            @if (streamingText()) {
+              <div
+                class="prose-dark text-[13px] text-fg"
+                [innerHTML]="streamingText() | markdown"
+              ></div>
+            } @else {
+              <p class="m-0 flex items-center gap-2 text-[13px] text-fg-muted">
+                <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+                <span>Answering…</span>
+              </p>
+            }
+          </div>
+        }
+      }
+    </div>
+
+    @if (error(); as message) {
+      <p
+        data-testid="workflow-node-chat-error"
+        role="alert"
+        class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+      >
+        {{ message }}
+      </p>
+    }
+
+    <form
+      class="flex shrink-0 flex-col gap-2"
+      (submit)="$event.preventDefault(); send()"
+    >
+      <label for="workflow-node-chat-input" class="sr-only">
+        Ask this step's agent
+      </label>
+      <textarea
+        id="workflow-node-chat-input"
+        data-testid="workflow-node-chat-input"
+        rows="3"
+        placeholder="Ask about this step's data (Enter sends, Shift+Enter adds a line)"
+        [value]="draft()"
+        (input)="onInput($event)"
+        (keydown.enter)="onEnter($event)"
+        class="field min-h-[72px] resize-y"
+      ></textarea>
+      <div class="flex justify-end gap-2">
+        @if (streaming()) {
+          <button
+            type="button"
+            data-testid="workflow-node-chat-stop"
+            class="btn btn-secondary"
+            (click)="stop()"
+          >
+            <lucide-angular [img]="Square" [size]="14" />
+            <span>Stop</span>
+          </button>
+        }
+        <button
+          type="submit"
+          data-testid="workflow-node-chat-send"
+          class="btn btn-primary"
+          [disabled]="!canSend()"
+        >
+          <lucide-angular [img]="Send" [size]="14" />
+          <span>Send</span>
+        </button>
+      </div>
+    </form>
+  </div>
+}
+
+<ng-template #toolCall let-call>
+  <li
+    data-testid="workflow-node-chat-tool-call"
+    class="flex flex-col gap-1 rounded-lg border border-border bg-surface-muted p-2 text-[12px]"
+  >
+    <div>
+      <span class="font-mono text-fg-strong">{{ call.tool }}</span>
+      @if (call.error) {
+        <span class="text-on-danger-soft"> · {{ call.error }}</span>
+      } @else if (callMeta(call); as meta) {
+        <span class="text-fg-muted"> · {{ meta }}</span>
+      }
+    </div>
+    @if (call.input) {
+      <pre
+        class="m-0 overflow-x-auto font-mono text-[12px] break-words whitespace-pre-wrap text-fg"
+      >{{ call.input }}</pre>
+    }
+  </li>
+</ng-template>
