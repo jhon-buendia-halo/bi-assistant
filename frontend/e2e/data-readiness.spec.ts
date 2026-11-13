@@ -451,7 +451,8 @@ test(
           ).toHaveText('Done');
         }
         const logged = await page
-          .getByTestId('workflow-run-dock')
+          // The Logs sit under the canvas since the three-zone page.
+          .getByTestId('workflow-logs-dock')
           .locator('[data-testid^="workflow-state-node-"]')
           .evaluateAll((els) =>
             els.map((e) =>
