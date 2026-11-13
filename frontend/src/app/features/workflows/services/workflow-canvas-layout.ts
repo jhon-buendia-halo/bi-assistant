@@ -125,7 +125,7 @@ export interface CanvasSubNode {
 
 export interface CanvasExit {
   text: string;
-  outcome: 'fails' | 'stops';
+  outcome: 'fails' | 'stops' | 'waits';
   /** The note's horizontal centre (`align: center`) or left edge (`start`), and its top. */
   x: number;
   y: number;
@@ -227,7 +227,11 @@ export interface CanvasBox {
   h: number;
 }
 
-const EXIT_TEXT = { fails: 'fails', stops: 'ends here' } as const;
+const EXIT_TEXT = {
+  fails: 'fails',
+  stops: 'ends here',
+  waits: 'waits for you',
+} as const;
 /** Start's exit note (ui.md 4.4b): the input is checked before anything runs. */
 const START_EXIT_TEXT = 'Invalid input → not started';
 

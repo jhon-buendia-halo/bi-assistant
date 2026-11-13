@@ -77,7 +77,7 @@ export interface AgentWorkflowStep {
   output: string[];
   /** The agent step only. */
   agent?: { name: string; tools: string[]; maxSteps: number };
-  exits: { label: string; outcome: 'fails' | 'stops' }[];
+  exits: { label: string; outcome: 'fails' | 'stops' | 'waits' }[];
 }
 
 /** A workflow-backed agent's turn workflow, its steps in run order. */

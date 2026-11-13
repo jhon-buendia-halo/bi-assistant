@@ -123,6 +123,7 @@ export class WorkflowCanvas {
   protected readonly Play = Play;
   protected readonly RotateCcw = RotateCcw;
   protected readonly Square = Square;
+  protected readonly Hourglass = Hourglass;
   protected readonly ZoomIn = ZoomIn;
   protected readonly ZoomOut = ZoomOut;
   protected readonly Wrench = Wrench;

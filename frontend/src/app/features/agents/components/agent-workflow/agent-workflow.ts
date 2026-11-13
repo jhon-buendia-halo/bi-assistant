@@ -1,5 +1,11 @@
 import { Component, computed, input, signal } from '@angular/core';
-import { CircleX, LucideAngularModule, RefreshCw, Square } from 'lucide-angular';
+import {
+  CircleX,
+  Hourglass,
+  LucideAngularModule,
+  RefreshCw,
+  Square,
+} from 'lucide-angular';
 import { AgentWorkflow } from '../../services/agents-api.service';
 import { WorkflowCard, workflowCards } from '../../services/workflow-flow';
 
@@ -20,6 +26,7 @@ export class AgentWorkflowView {
 
   protected readonly CircleX = CircleX;
   protected readonly Square = Square;
+  protected readonly Hourglass = Hourglass;
   protected readonly RefreshCw = RefreshCw;
 
   protected readonly cards = computed(() => workflowCards(this.workflow()));

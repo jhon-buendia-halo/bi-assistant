@@ -224,6 +224,7 @@
               [class.-translate-x-1/2]="exit.align === 'center'"
               [class.text-on-danger-soft]="exit.outcome === 'fails'"
               [class.text-fg-muted]="exit.outcome === 'stops'"
+              [class.text-on-warning-soft]="exit.outcome === 'waits'"
               data-testid="workflow-node-exit"
               [style.left.px]="exit.x - node.x"
               [style.top.px]="exit.y - node.y"
@@ -231,7 +232,7 @@
             >
               <lucide-angular
                 class="mt-[2.5px] flex-none"
-                [img]="exit.outcome === 'fails' ? CircleX : Square"
+                [img]="exit.outcome === 'fails' ? CircleX : exit.outcome === 'waits' ? Hourglass : Square"
                 [size]="11"
                 aria-hidden="true"
               /><span>{{ exit.text }}</span>

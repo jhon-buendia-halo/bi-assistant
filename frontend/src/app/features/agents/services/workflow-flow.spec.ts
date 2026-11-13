@@ -72,6 +72,24 @@ describe('workflowCards (agents-evals R108)', () => {
     ]);
   });
 
+  it("words an exit that waits for the user's answer", () => {
+    const waiting = {
+      id: 'waits',
+      steps: [
+        {
+          ...WORKFLOW.steps[0],
+          exits: [{ label: 'Clarifying question', outcome: 'waits' as const }],
+        },
+      ],
+    };
+    expect(workflowCards(waiting)[0].exits).toEqual([
+      {
+        text: "Clarifying question → waits for the user's answer",
+        outcome: 'waits',
+      },
+    ]);
+  });
+
   it('returns no cards for a workflow with no steps', () => {
     expect(workflowCards({ id: 'empty', steps: [] })).toEqual([]);
   });

@@ -20,11 +20,11 @@
     {{ waiting().question }}
   </p>
   @if (waiting().options.length > 0) {
-    <div class="flex flex-wrap gap-2" role="group" aria-label="Suggested answers">
+    <div class="flex flex-col items-stretch gap-2" role="group" aria-label="Suggested answers">
       @for (option of waiting().options; track $index) {
         <button
           type="button"
-          class="btn btn-secondary"
+          class="btn btn-secondary h-auto justify-start rounded-xl py-2 text-left leading-snug whitespace-normal break-words"
           [attr.data-testid]="'workflow-run-input-option-' + $index"
           [disabled]="busy()"
           (click)="pick(option)"

@@ -8,12 +8,13 @@ export interface WorkflowCard {
   kindLabel: 'Code' | 'LLM';
   /** The fields passed to the next step; null for the last step. */
   edgeLabel: string | null;
-  exits: { text: string; outcome: 'fails' | 'stops' }[];
+  exits: { text: string; outcome: 'fails' | 'stops' | 'waits' }[];
 }
 
 const OUTCOME_TEXT = {
   fails: 'fails the turn',
   stops: 'ends the turn here',
+  waits: "waits for the user's answer",
 } as const;
 
 /** The cards of a workflow drawing, in run order. A pure function. */

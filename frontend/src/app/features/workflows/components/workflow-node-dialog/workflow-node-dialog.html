@@ -407,7 +407,11 @@
                     <span [class.text-on-danger-soft]="exit.outcome === 'fails'"
                       >{{ exit.label }}
                       {{
-                        exit.outcome === "fails" ? "→ fails" : "→ ends here"
+                        exit.outcome === "fails"
+                          ? "→ fails"
+                          : exit.outcome === "waits"
+                            ? "→ waits for you"
+                            : "→ ends here"
                       }}</span
                     >
                     @if (!last) {
