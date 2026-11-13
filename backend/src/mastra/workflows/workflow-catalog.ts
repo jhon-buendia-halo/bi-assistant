@@ -13,6 +13,7 @@ import {
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
+  DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
@@ -21,6 +22,14 @@ import {
   ASSISTANT_V2_DESCRIPTION,
 } from '../agents/assistant-v2-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
+import {
+  DATA_READINESS_ASSESSMENT_DESCRIPTION,
+  DATA_READINESS_ASSESSMENT_EDGES,
+  DATA_READINESS_ASSESSMENT_STEPS,
+  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
+  DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
+  READINESS_DEFAULT_QUESTION,
+} from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
   QTI_V2_TURN_EDGES,
@@ -146,6 +155,35 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         'write-answer': ANSWER_WRITER_AGENT_KEY,
       },
       edges: QTI_V2_TURN_EDGES,
+      bar: 'steps',
+    },
+    {
+      id: DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
+      name: DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
+      description: DATA_READINESS_ASSESSMENT_DESCRIPTION,
+      // Its Explain report step runs the Data Readiness Agent.
+      primaryFor: DATA_READINESS_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        {
+          name: 'dataset',
+          label: 'Dataset',
+          type: 'dataset',
+          required: true,
+          datasourceKinds: ['postgres', 'databricks'],
+        },
+        {
+          name: 'question',
+          label: 'Question',
+          type: 'textarea',
+          required: false,
+          placeholder: READINESS_DEFAULT_QUESTION,
+          default: READINESS_DEFAULT_QUESTION,
+          maxLength: QUESTION_MAX_LENGTH,
+        },
+      ],
+      steps: DATA_READINESS_ASSESSMENT_STEPS,
+      edges: DATA_READINESS_ASSESSMENT_EDGES,
       bar: 'steps',
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
@@ -291,13 +329,16 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
     return session.workflowId;
   }
   if (session.agentKey) {
+    // A wrapped agent's own turn first: the Data Readiness Agent also runs
+    // a code workflow's step, but its sessions and the eval runner's host
+    // stay on its agent turn (a run host names its workflow itself).
+    if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
+      return agentWorkflowId(session.agentKey);
+    }
     const code = CODE_WORKFLOWS.find(
       (workflow) => workflow.primaryFor === session.agentKey,
     );
     if (code) return code.id;
-    if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
-      return agentWorkflowId(session.agentKey);
-    }
     return ASSISTANT_WORKFLOW_ID;
   }
   if (session.agentId) return agentWorkflowId(session.agentId);

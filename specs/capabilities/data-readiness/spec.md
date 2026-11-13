@@ -28,18 +28,19 @@ Capability-local vocabulary:
 - R1. The Data Readiness Agent SHALL be a built-in agent shown on the Agent Hub in the **Official** section.
   - Registry key `data-readiness`, `Owner: Official`.
   - Description: "Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings."
-  - Since 2026-11-12 (ADR-0042) the agent is a library entry, not a workflow: its card and detail view offer no **Start chat** and no **Run**, it has no workflow (`agent:data-readiness` no longer exists, [workflows](../workflows/spec.md) R2), and its detail says `Not used in any workflow.` (agents-evals R109). The UI generates no new readiness report; reports already stored stay viewable wherever they were (a stored run or past chat, a stored report). The agent's evals still run it.
+  - Since 2026-11-12 (ADR-0042) the agent is a library entry, not a workflow: its card and detail view offer no **Start chat** and no **Run**, and it has no workflow of its own (`agent:data-readiness` no longer exists, [workflows](../workflows/spec.md) R2). Since 2026-11-13 it runs the Explain report step of the **Assess Data Readiness** workflow (R2), so its detail's **Used in** line shows that workflow (agents-evals R109). Reports already stored stay viewable wherever they were (a stored run or past chat, a stored report). The agent's evals still run it on its own agent turn.
   - While no dataset bound to a PostgreSQL or Databricks datasource exists, that Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
   - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5), with no Chat Box, opening on System Prompt:
     - the System Prompt tab shows the prompt as served and allows the built-in prompt edit; an edited prompt SHALL still start with `You are the Data Readiness Agent`;
     - the Skills tab lists the skills `data-readiness` and `readiness-drilldown` as Built-in and On demand;
     - the Tools tab lists its own tools.
-- R2. The Data Readiness Agent's workflow (R1) SHALL run on one dataset from its page (**Execute**, the Run tab; [workflows](../workflows/spec.md) R21), one run per assessment or question ([workflows](../workflows/spec.md) R18-R20).
-  - Its input is `dataset`, a list of the datasets bound to a PostgreSQL or Databricks datasource (required), and `question`, a text area that starts as `Assess the readiness of this dataset` (an empty question means that text). The three starter questions below are example chips under it.
+- R2. Since 2026-11-13 the **Assess Data Readiness** workflow (`data-readiness-assessment`; [workflows](../workflows/spec.md) R1, R29; [agents.md](../../system/agents.md) 5.13) SHALL run an assessment of one dataset from its page (**Execute workflow**, the Run panel; [workflows](../workflows/spec.md) R21), one run per assessment ([workflows](../workflows/spec.md) R18-R20). (From 1.23.16 to 2026-11-12 the agent's own one-step workflow did this; ADR-0042 removed it.)
+  - Its input is `dataset`, a list of the datasets bound to a PostgreSQL or Databricks datasource (required), and `question`, a text area that starts as `Assess the readiness of this dataset` (an empty question means that text). The three starter questions of R2a are example chips under it.
+  - Its code steps profile the dataset's tables, score them with the deterministic engine and store the report with the run's id (R6-R33, R24); its **Explain report** step runs the Data Readiness Agent on the stored report, which reads it with `get_readiness_report` and SHALL NOT run a second assessment (while the step runs, `assess_data_readiness` answers an error naming the stored report).
   - The run host covers that one dataset only, so the agent never asks which dataset.
-  - While no qualifying dataset exists, Execute SHALL be disabled with the title `Add a PostgreSQL or Databricks dataset first`, and a run request SHALL be refused with that text.
-  - The run's answer, its readiness card and its files show in the Run tab (R5; [synthetic-data](../synthetic-data/spec.md) R43). **Follow up** asks a drill-down or synthetic-data question as a further run with this run as its context; **Stop** cancels a running assessment (R33).
-  - Every run SHALL run the Data Readiness Agent, not the assistant. The assistant-only passes SHALL NOT apply ([agent-answers](../agent-answers/spec.md) R61).
+  - A dataset that is not PostgreSQL or Databricks SHALL be refused before the run with `Dataset "<name>" is not a PostgreSQL or Databricks dataset`.
+  - The run's answer, its readiness card and its files show in the Run panel (R5; [synthetic-data](../synthetic-data/spec.md) R43). **Follow up** asks a further question as a new run with this run as its context, which assesses again; **Stop** cancels a running assessment (R33) and stores no report.
+  - The assistant-only passes SHALL NOT apply ([agent-answers](../agent-answers/spec.md) R61).
 - R2a. Until chats are retired (1.23.22), **Start chat** on the workflow (R1) SHALL also still create a session at once, with no form.
   - The session is named "Data Readiness" and bound to the agent. It covers every dataset bound to a PostgreSQL or Databricks datasource, ordered by dataset name.
   - The app SHALL show the toast `Session "Data Readiness" created` and open the session on its welcome block.
@@ -266,18 +267,25 @@ Feature: Data readiness
   Background:
     Given the app runs with the LLM stub as its provider
 
-  Scenario: the Data Readiness Agent is an Official library agent with no workflow
+  Scenario: the Data Readiness Agent is an Official library agent used by Assess Data Readiness
     Given the app runs with the LLM stub as its provider
     When I open "Agents"
     Then the "Official" section shows "Data Readiness Agent" with "Owner: Official" and no "Start chat" or "Run"
     When I open "Workflows"
-    Then I do not see "Data Readiness Agent"
+    Then I see "Assess Data Readiness" and do not see "Data Readiness Agent"
     When I open the "Data Readiness Agent" agent
-    Then its "Used in" line says "Not used in any workflow."
+    Then its "Used in" line shows "Assess Data Readiness"
+
+  Scenario: Assess Data Readiness profiles, scores and explains one dataset
+    Given the World Cup PostgreSQL dataset
+    When I run "Assess Data Readiness" on it with no question
+    Then Resolve dataset, Profile source, Score readiness, Save report, Explain report and Wrap up end successfully, in that order
+    And one readiness report is stored with the run's id
+    And the run's answer explains it and carries its readiness card
 
   Scenario: A table too large to profile is listed as not profiled
     Given a table in the dataset has more than 100,000,000 rows
-    When the dataset is assessed (an evals or API assessment; the UI starts none)
+    When the dataset is assessed (an Assess Data Readiness run, an evals or an API assessment)
     Then the scorecard lists that table as not profiled, with the reason "too-large" and its row count
     And the assessment finishes without waiting on that table's statistics
 

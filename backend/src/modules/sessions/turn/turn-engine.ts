@@ -8,7 +8,16 @@ import {
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
-import { READINESS_REPORT_EVENT } from '../../../mastra/readiness-tool-services';
+import {
+  ASSESSED_REPORT_CONTEXT_KEY,
+  READINESS_REPORT_EVENT,
+} from '../../../mastra/readiness-tool-services';
+import {
+  DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
+  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
+  explainReportBlock,
+  type DataReadinessAssessmentRuntime,
+} from '../../../mastra/workflows/data-readiness-assessment.steps';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
@@ -32,6 +41,7 @@ import { stepEventOf, workflowRunState } from '../workflow-run-state';
 import {
   READINESS_REPORT_TOOLS,
   READINESS_TOOLS,
+  type ReadinessAssessment,
   type ReadinessBridge,
   readinessPanelItem,
   readinessAnswerFallback,
@@ -442,6 +452,12 @@ export class TurnEngine {
         if (!turn.signal.aborted && !attemptStop?.signal.aborted) throw error;
       }
     };
+    // Assess Data Readiness's assessment, once Resolve dataset started it.
+    let assessment: ReadinessAssessment | undefined;
+    const startedAssessment = (): ReadinessAssessment => {
+      if (!assessment) throw new Error('No assessment has been started');
+      return assessment;
+    };
     let ran: TurnRunOutcome;
     try {
       // Every streamed turn is one run of the session's workflow (agents.md
@@ -582,6 +598,91 @@ export class TurnEngine {
               if (failure !== streamError) throw failure;
             }
             return analyseOutcomeOf(data, turn.signal.aborted);
+          },
+          // Assess Data Readiness (agents.md 5.13): the code steps run one
+          // assessment of the run's dataset phase by phase; Explain report
+          // streams the agent over the stored report.
+          resolve: async ({ dataset }) => {
+            const bridge = this.deps.readinessBridge();
+            if (!bridge) throw new Error('Data readiness is not available');
+            assessment = await bridge.startAssessment({
+              sessionId: id,
+              datasetName: dataset,
+            });
+            return {
+              dataset: assessment.dataset,
+              datasourceName: assessment.datasourceName,
+              datasourceKind: assessment.datasourceKind,
+              tableCount: assessment.tableCount,
+            };
+          },
+          profile: async () => {
+            const started = startedAssessment();
+            try {
+              return {
+                ...(await started.profile({ signal: turn.signal })),
+                stopped: false,
+              };
+            } catch (error) {
+              if (!turn.signal.aborted) throw error;
+              return {
+                entityCount: 0,
+                relationshipCount: 0,
+                notProfiledCount: 0,
+                stopped: true,
+              };
+            }
+          },
+          score: () => {
+            const summary = startedAssessment().score();
+            return {
+              overallScore: summary.overallScore,
+              maturity: summary.maturity,
+              findingCount: summary.findingCount,
+              dimensionScores: summary.dimensionScores.map((d) => ({
+                dimension: d.dimension,
+                score: d.score,
+                assessed: d.assessed,
+                findingCount: d.findingCount,
+              })),
+            };
+          },
+          save: async () => {
+            const saved = await startedAssessment().save();
+            // The answer carries the report: its card, and the scorecard
+            // (data-readiness R5).
+            const shown = await this.showReadinessReport(id, saved, emit);
+            if (shown) readinessReport = shown;
+            return { reportId: saved.report.id };
+          },
+          explain: async ({ dataset, reportId }) => {
+            // The run has assessed: the agent reads the stored report and
+            // `assess_data_readiness` refuses (agents.md 3.13, 5.13).
+            options.requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
+            await consume(
+              await agent.stream(input, {
+                ...options,
+                context: [
+                  ...options.context,
+                  {
+                    role: 'system' as const,
+                    content: explainReportBlock({ dataset, reportId }),
+                  },
+                ],
+              }),
+            );
+            if (streamError !== undefined && !turn.signal.aborted) {
+              throw await chatTurnError(streamError, () =>
+                this.deps.llmService.getView(),
+              );
+            }
+            if (!turn.signal.aborted && !clarification && !text && stream) {
+              text = ((await stream.text) ?? '').trim();
+            }
+            return {
+              answer: text.trim(),
+              stopped: turn.signal.aborted || clarification !== null,
+            };
           },
         },
         (event) => onStepEvent?.(event),
@@ -766,7 +867,9 @@ export class TurnEngine {
     workflow: TurnWorkflow,
     question: string,
     emit: (event: StreamEvent) => void,
-    runtime: QtiV2TurnRuntime & AgentTurnRuntime,
+    runtime: QtiV2TurnRuntime &
+      AgentTurnRuntime &
+      DataReadinessAssessmentRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
     // The agent step's own failure, kept so the turn reports it as is.
@@ -780,10 +883,28 @@ export class TurnEngine {
       }
     };
     const requestContext = new RequestContext();
+    const readiness =
+      workflow.engineId === DATA_READINESS_ASSESSMENT_WORKFLOW_ID;
     if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
       } satisfies AgentTurnRuntime);
+    } else if (readiness) {
+      requestContext.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, {
+        resolve: (input) => captured(() => runtime.resolve(input)),
+        profile: () => captured(() => runtime.profile()),
+        // Synchronous: a throw is the step's own, kept as the turn's error.
+        score: () => {
+          try {
+            return runtime.score();
+          } catch (error) {
+            stepError = error;
+            throw error;
+          }
+        },
+        save: () => captured(() => runtime.save()),
+        explain: (input) => captured(() => runtime.explain(input)),
+      } satisfies DataReadinessAssessmentRuntime);
     } else {
       requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
@@ -791,10 +912,11 @@ export class TurnEngine {
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
       } satisfies QtiV2TurnRuntime);
     }
-    const turnInput: QtiV2TurnInput = {
-      question,
-      datasets: session.datasets,
-    };
+    // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
+    const turnInput: QtiV2TurnInput | { question: string; dataset: string } =
+      readiness
+        ? { question, dataset: session.datasets[0] ?? '' }
+        : { question, datasets: session.datasets };
     let state = session.workflowState;
     // Drive one stream of the run (its start, or a resume) to its outcome.
     const drive = async (

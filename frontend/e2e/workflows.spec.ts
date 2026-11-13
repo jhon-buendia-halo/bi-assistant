@@ -42,8 +42,13 @@ const V2_ANALYSIS_STEP_IDS = ['analyse', 'validate', 'write-answer'] as const;
 /** The step titles as the canvas lists them: the main path, then Clarify below it. */
 const V2_STEPS = [...V2_MAIN_STEP_IDS.map(([, title]) => title), 'Clarify'];
 const V2_STEP_COUNT = `${V2_STEP_IDS.length} steps`;
-/** The Official workflows in catalogue order (workflows R1): v2 only. */
-const OFFICIAL = [[V2_ID, V2]] as const;
+const READINESS_ID = 'data-readiness-assessment';
+const READINESS = 'Assess Data Readiness';
+/** The Official workflows in catalogue order (workflows R1). */
+const OFFICIAL = [
+  [V2_ID, V2],
+  [READINESS_ID, READINESS],
+] as const;
 
 const QUESTION = 'How many matches were played in each stage?';
 const ANSWER = 'The stages hold the matches counted by the query.';
@@ -245,7 +250,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see only "Answer a Business Question" under Official, and no Mine section',
+        'Then I see "Answer a Business Question" and "Assess Data Readiness" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -262,7 +267,12 @@ test.describe('Feature: Workflows', () => {
           await expect(official.getByTestId(`workflow-kind-${V2_ID}`)).toHaveText(
             V2_STEP_COUNT,
           );
-          await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(1);
+          await expect(official.getByTestId(`workflow-kind-${READINESS_ID}`)).toHaveText(
+            '6 steps',
+          );
+          await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
+            OFFICIAL.length,
+          );
           await expect(section(page, 'mine')).toHaveCount(0);
         },
       );

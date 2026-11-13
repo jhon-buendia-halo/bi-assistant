@@ -397,6 +397,7 @@ export class SessionsService implements OnModuleInit {
   async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     if (spec.draftAgentId) return this.createDraftRunHost(spec);
     let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
+    let codeWorkflowId: string | undefined;
     let datasets = spec.datasets ?? [];
     if (spec.agentKey !== undefined) {
       const key = spec.agentKey;
@@ -429,6 +430,9 @@ export class SessionsService implements OnModuleInit {
         throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
       }
       binding = { agentKey: primary, agentName: agent.name ?? primary };
+      // The run's own workflow: an agent can run more than one (the Data
+      // Readiness Agent's sessions stay on its agent turn).
+      codeWorkflowId = parsed?.kind === 'code' ? parsed.source.id : undefined;
     }
     const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
     const name = spec.name.slice(0, 64);
@@ -440,7 +444,7 @@ export class SessionsService implements OnModuleInit {
       workspaceId: workspace.id,
       datasets,
       ...binding,
-      workflowId: sessionWorkflowId(binding),
+      workflowId: codeWorkflowId ?? sessionWorkflowId(binding),
       run: true,
       messages: spec.transcript
         ? spec.transcript.map((message) => ({ ...message, at: now }))

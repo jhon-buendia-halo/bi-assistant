@@ -147,7 +147,26 @@ const agentConfig = (name: string, datasets: string[]) => ({
   starterQuestions: [`Ask ${name}`],
 });
 
-/** The one catalogue workflow, as `GET /workflows` lists it. */
+/**
+ * Assess Data Readiness as `GET /workflows` lists it (agents.md 5.13): its
+ * datasets are the qualifying ones of the fixture, so only the fixed fields.
+ */
+const READINESS_SUMMARY = expect.objectContaining({
+  id: 'data-readiness-assessment',
+  name: 'Assess Data Readiness',
+  kind: 'code',
+  owner: 'Official',
+  stepCount: 6,
+  bar: 'steps',
+  trigger: 'run',
+  starterQuestions: [
+    'Assess the readiness of this dataset',
+    'What are the worst data-quality problems?',
+    'Show my past assessments',
+  ],
+}) as unknown;
+
+/** Questions to Insights v2, as `GET /workflows` lists it. */
 const QTI_V2_SUMMARY = {
   id: 'qti-v2-turn',
   name: 'Answer a Business Question',
@@ -190,7 +209,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
 
-  it('lists only Questions to Insights v2: agents, Live user agents included, get no workflow (1.23.35)', async () => {
+  it('lists only the code workflows: agents, Live user agents included, get no workflow (1.23.35)', async () => {
     ctx = build();
     const zeta = await ctx.userAgents.create(
       agentConfig('Zeta', ['World Cup Core']),
@@ -198,13 +217,38 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     await ctx.userAgents.publish(zeta.id);
     await ctx.userAgents.create(agentConfig('Sketch', ['World Cup Core']));
 
-    expect(await ctx.service.list()).toEqual([QTI_V2_SUMMARY]);
+    expect(await ctx.service.list()).toEqual([
+      QTI_V2_SUMMARY,
+      READINESS_SUMMARY,
+    ]);
   });
 
-  it('lists the same one workflow while no dataset qualifies for the Data Readiness Agent', async () => {
+  it('lists Assess Data Readiness on one PostgreSQL or Databricks dataset, its Explain report run by the Data Readiness Agent (agents.md 5.13)', async () => {
+    ctx = build();
+    const [, readiness] = await ctx.service.list();
+    expect(readiness.agents.map((agent) => agent.key)).toEqual([
+      'data-readiness',
+    ]);
+    expect(readiness.input.map((field) => field.name)).toEqual([
+      'dataset',
+      'question',
+    ]);
+    expect(readiness.input[0]).toMatchObject({
+      type: 'dataset',
+      required: true,
+      datasourceKinds: ['postgres', 'databricks'],
+    });
+    expect(readiness.input[1]).toMatchObject({
+      type: 'textarea',
+      required: false,
+      default: 'Assess the readiness of this dataset',
+    });
+  });
+
+  it('lists the same workflows while no dataset qualifies for the Data Readiness Agent', async () => {
     ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     const workflows = await ctx.service.list();
-    expect(workflows).toEqual([QTI_V2_SUMMARY]);
+    expect(workflows).toEqual([QTI_V2_SUMMARY, READINESS_SUMMARY]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
     expect(workflows[0]).not.toHaveProperty('chatRequirement');
   });
@@ -382,7 +426,10 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
       [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
     ],
     ['assistant', []],
-    ['data-readiness', []],
+    [
+      'data-readiness',
+      [{ id: 'data-readiness-assessment', name: 'Assess Data Readiness' }],
+    ],
     ['sql-fixer', []],
   ])('%s is used in %p', async (key, expected) => {
     ctx = build();

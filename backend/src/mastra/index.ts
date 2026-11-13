@@ -17,6 +17,7 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { qtiV2TurnWorkflow } from './workflows/qti-v2-turn.workflow';
+import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -46,6 +47,7 @@ export const mastra = new Mastra({
   workflows: {
     'agent-turn': agentTurnWorkflow,
     'qti-v2-turn': qtiV2TurnWorkflow,
+    'data-readiness-assessment': dataReadinessAssessmentWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

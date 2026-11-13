@@ -15,7 +15,9 @@ export type WorkflowInputFieldType =
   /** A checkbox; absent means false (or its default). */
   | 'boolean'
   /** One or more dataset names. */
-  | 'datasets';
+  | 'datasets'
+  /** Exactly one dataset name. */
+  | 'dataset';
 
 /** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {
@@ -28,7 +30,7 @@ export interface WorkflowInputField {
   help?: string;
   /** The value of a field that is missing or empty. */
   default?: string | number | boolean;
-  /** 'datasets': only datasets bound to these kinds. */
+  /** 'dataset' / 'datasets': only datasets bound to these kinds. */
   datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
   /** Set by the app, never rendered as a control. */
   hidden?: boolean;

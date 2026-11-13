@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { ReadinessProgressListener } from '../../modules/data-readiness/progress';
 import type { ReadinessReport } from '../../modules/data-readiness/engine/types';
 import {
+  ASSESSED_REPORT_CONTEXT_KEY,
+  alreadyAssessed,
   getReadinessToolServices,
   type ReadinessReportList,
   type ReadinessToolReport,
@@ -172,15 +174,22 @@ export const assessDataReadinessTool = createTool({
   description:
     "Run a new data-readiness assessment of one of this session's datasets and store the report. It profiles the dataset's tables and scores them on the DMBOK dimensions with the deterministic engine; it returns the overall score and band, every dimension's score and the most severe findings.",
   inputSchema: z.object({ dataset: datasetInput() }),
-  execute: ({ dataset }, ctx) =>
-    withSession<ReadinessToolReport>(ctx.requestContext, (sessionId) =>
+  execute: ({ dataset }, ctx) => {
+    // The Assess Data Readiness workflow has assessed the dataset already
+    // (agents.md 5.13): its Explain report step never runs a second one.
+    const assessed = ctx.requestContext?.get(ASSESSED_REPORT_CONTEXT_KEY);
+    if (typeof assessed === 'string' && assessed) {
+      return Promise.resolve({ error: alreadyAssessed(assessed) });
+    }
+    return withSession<ReadinessToolReport>(ctx.requestContext, (sessionId) =>
       getReadinessToolServices().assessReadiness({
         sessionId,
         datasetName: optional(dataset),
         signal: ctx.abortSignal,
         onProgress: progressListener(ctx.writer),
       }),
-    ),
+    );
+  },
   toModelOutput: toModelJson,
 });
 

@@ -115,6 +115,7 @@
             (optionPicked)="designer.followUp($event)"
             (generateVisual)="generateVisual()"
             (viewVisual)="viewVisual($event)"
+            (openScorecard)="openScorecard($event)"
           />
           @if (designer.run(); as stored) {
             @for (event of stored.events ?? []; track event.at) {
@@ -131,6 +132,38 @@
             }
           }
         </div>
+        @if (shownScorecard(); as readiness) {
+          <!-- Data Readiness: the report's scorecard, with Past assessments -->
+          <section
+            class="mt-4 rounded-lg border border-border"
+            data-testid="workflow-run-scorecard"
+            aria-label="Readiness scorecard"
+          >
+            <div class="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+              <h3 class="m-0 text-[12px] font-medium text-fg-muted">Scorecard</h3>
+              <button
+                type="button"
+                data-testid="workflow-run-scorecard-close"
+                class="btn btn-ghost btn-icon"
+                aria-label="Close scorecard"
+                title="Close scorecard"
+                (click)="closeScorecard()"
+              >
+                <lucide-angular [img]="X" [size]="14" />
+              </button>
+            </div>
+            <app-panel-readiness-view #scorecard [item]="readiness">
+              @if (scorecard.report(); as shown) {
+                <app-readiness-history
+                  readinessHistory
+                  [datasourceId]="shown.datasourceId"
+                  [currentReportId]="scorecard.shownReportId()"
+                  (openReport)="scorecard.showReport($event.id)"
+                />
+              }
+            </app-panel-readiness-view>
+          </section>
+        }
       }
 
       @if (runOutput().length > 0) {
@@ -294,6 +327,39 @@
                       }
                     </ul>
                   }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("dataset") {
+                <div class="flex flex-col gap-1">
+                  <label
+                    [for]="inputId(field.name)"
+                    class="text-[12px] font-medium text-fg-muted"
+                    >{{ field.label }}</label
+                  >
+                  <select
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    [value]="designer.inputValue(field.name)"
+                    (change)="onInput(field.name, $event)"
+                    class="field"
+                  >
+                    <option value="">Select a dataset</option>
+                    @for (dataset of datasetChoices(field); track dataset.name) {
+                      <option [value]="dataset.name">{{ dataset.name }}</option>
+                    }
+                  </select>
                   @if (fieldError(field.name); as message) {
                     <p
                       [id]="errorId(field.name)"

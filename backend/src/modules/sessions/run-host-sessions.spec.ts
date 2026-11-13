@@ -105,7 +105,11 @@ import {
   planOf,
 } from '../../mastra/workflows/qti-v2-turn.steps';
 import { qtiV2TurnWorkflow } from '../../mastra/workflows/qti-v2-turn.workflow';
+import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-readiness-assessment.steps';
+import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
+import type { ReadinessReport } from '../data-readiness/engine/types';
+import { BadGatewayException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
@@ -160,6 +164,51 @@ const V2_WORKFLOW = {
   edges: CODE_WORKFLOWS[0].edges,
 };
 
+/** The workflow detail the fake catalogue answers for Assess Data Readiness. */
+const READINESS_WORKFLOW = {
+  id: 'data-readiness-assessment',
+  name: 'Assess Data Readiness',
+  input: CODE_WORKFLOWS[1].input,
+  agents: [{ key: 'data-readiness', name: 'Data Readiness Agent' }],
+  steps: DATA_READINESS_ASSESSMENT_STEPS,
+  edges: CODE_WORKFLOWS[1].edges,
+};
+
+/** The report the fake engine scores for World Cup. */
+const READINESS_REPORT: ReadinessReport = {
+  id: 'r-wc',
+  datasourceId: 'ds-pg',
+  datasourceName: 'World Cup DB',
+  datasourceKind: 'postgres',
+  generatedAt: '2026-11-13T10:00:00.000Z',
+  entityCount: 1,
+  overallScore: 84,
+  maturity: 'Managed',
+  dimensionScores: [
+    {
+      dimension: 'completeness',
+      score: 90,
+      findingCount: 1,
+      maxSeverity: 'low',
+      assessed: true,
+      totalChecks: 4,
+    },
+  ],
+  findings: [
+    {
+      dimension: 'completeness',
+      level: 'entity',
+      namespace: 'public',
+      entity: 'matches',
+      field: 'winner',
+      severity: 'low',
+      measured: 0.02,
+      description: '2% of winner is null',
+      recommendation: 'Fill it',
+    },
+  ],
+};
+
 /** The registry key of the agent each turn calls. */
 const AGENT_KEYS: Record<Workflow, string> = {
   assistant: 'assistant',
@@ -203,6 +252,8 @@ interface BuildOptions {
   holdUntilAbort?: boolean;
   /** The chat session's earlier transcript and stored fields. */
   session?: Partial<SessionDoc>;
+  /** The data-readiness service, for Assess Data Readiness runs. */
+  readiness?: object;
 }
 
 /** v2's Analyse turn: one successful query, then its note. */
@@ -313,7 +364,13 @@ function build(options: BuildOptions = {}) {
               requestContext,
               discards,
             )
-          : streamTurnWorkflow(key, inputData, requestContext),
+          : key === 'data-readiness-assessment'
+            ? streamStubWorkflow(
+                dataReadinessAssessmentWorkflow,
+                inputData,
+                requestContext,
+              )
+            : streamTurnWorkflow(key, inputData, requestContext),
     ),
     discardSuspendedWorkflowRuns: jest.fn().mockResolvedValue(0),
     ensureSessionWorkspace: jest.fn((id: string) =>
@@ -372,12 +429,15 @@ function build(options: BuildOptions = {}) {
       contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
     } as never,
     userAgents as never,
+    options.readiness as never,
   );
   const workflows = {
     definition: jest.fn((id: string) =>
       id === V2_WORKFLOW.id
         ? Promise.resolve(V2_WORKFLOW)
-        : Promise.reject(new Error(`Workflow "${id}" not found`)),
+        : id === READINESS_WORKFLOW.id
+          ? Promise.resolve(READINESS_WORKFLOW)
+          : Promise.reject(new Error(`Workflow "${id}" not found`)),
     ),
   };
   const runsRepository = new WorkflowRunsRepository(
@@ -851,6 +911,141 @@ describe('the run host (agents.md 5.14)', () => {
     expect(ctx.calls['data-readiness'][0].input).toEqual([
       { role: 'user', content: 'Assess the readiness of this dataset' },
     ]);
+  });
+});
+
+describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () => {
+  /** The data-readiness service: its phases, and the calls the tools make. */
+  function readinessService() {
+    return {
+      prepare: jest.fn((input: { runId?: string }) =>
+        Promise.resolve({
+          datasource: { id: 'ds-pg', name: 'World Cup DB' },
+          kind: 'postgres',
+          ...(input.runId ? { runId: input.runId } : {}),
+        }),
+      ),
+      profileSource: jest.fn().mockResolvedValue({
+        sourceId: 'ds-pg',
+        sourceType: 'postgres',
+        entities: [{ namespace: 'public', name: 'matches' }],
+        relationships: [],
+      }),
+      scoreProfile: jest.fn(() => ({ ...READINESS_REPORT })),
+      saveReport: jest.fn((report: ReadinessReport) => Promise.resolve(report)),
+      get: jest.fn().mockResolvedValue(READINESS_REPORT),
+      list: jest.fn().mockResolvedValue({ reports: [] }),
+      assess: jest.fn(),
+    };
+  }
+
+  /** The agent reads the stored report, then explains it. */
+  const EXPLAIN_CHUNKS = [
+    {
+      type: 'tool-call',
+      payload: {
+        toolCallId: 'g0',
+        toolName: 'get_readiness_report',
+        args: { reportId: 'r-wc' },
+      },
+    },
+    {
+      type: 'tool-result',
+      payload: {
+        toolCallId: 'g0',
+        toolName: 'get_readiness_report',
+        result: { report: READINESS_REPORT, summary: { reportId: 'r-wc' } },
+      },
+    },
+    { type: 'text-delta', payload: { text: 'World Cup is Managed (84).' } },
+  ];
+
+  async function readinessRun(
+    ctx: Ctx,
+    input: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) {
+    await ctx.sessions.onModuleInit();
+    const events: RunStreamEvent[] = [];
+    const prepared = await ctx.runs.prepare(READINESS_WORKFLOW.id, { input });
+    const run = await ctx.runs.stream(prepared, (e) => events.push(e), signal);
+    return { events, run };
+  }
+
+  it('profiles, scores and stores in code, then the agent explains the stored report once', async () => {
+    const readiness = readinessService();
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
+    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
+
+    expect(run.status).toBe('success');
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
+      'resolve-dataset:success',
+      'profile-source:success',
+      'score-readiness:success',
+      'save-report:success',
+      'explain-report:success',
+      'wrap-up:success',
+    ]);
+    // One assessment of the run's dataset, recorded with the run; the
+    // agent never runs a second one.
+    expect(readiness.prepare).toHaveBeenCalledWith({
+      datasourceId: 'ds-pg',
+      entities: ['wc.public.matches'],
+      runId: run.id,
+    });
+    expect(readiness.saveReport).toHaveBeenCalledTimes(1);
+    expect(readiness.assess).not.toHaveBeenCalled();
+    // The agent answers the default question, told to read the stored
+    // report, with assess_data_readiness refusing (agents.md 3.13).
+    expect(ctx.calls['data-readiness']).toHaveLength(1);
+    const [call] = ctx.calls['data-readiness'];
+    expect(call.input).toEqual([
+      { role: 'user', content: 'Assess the readiness of this dataset' },
+    ]);
+    expect(call.options.context.at(-1)?.content).toContain(
+      'stored readiness report r-wc',
+    );
+    expect(
+      call.options.requestContext.values.get('readiness-assessed-report'),
+    ).toBe('r-wc');
+    // The answer carries the report: its card and scorecard (R5).
+    expect(events.filter((e) => e.type === 'readiness-report')).not.toEqual([]);
+    expect(run.answer).toMatchObject({
+      content: 'World Cup is Managed (84).',
+      readinessReport: { reportId: 'r-wc' },
+    });
+    expect(run.output).toMatchObject({
+      reportId: 'r-wc',
+      overallScore: 84,
+      maturity: 'Managed',
+      findingCount: 1,
+      answer: 'World Cup is Managed (84).',
+    });
+  });
+
+  it('fails at Profile source with the datasource named when it cannot be reached, storing nothing', async () => {
+    const readiness = readinessService();
+    readiness.profileSource.mockRejectedValue(
+      new BadGatewayException('connect ECONNREFUSED'),
+    );
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
+    const { run } = await readinessRun(ctx, { dataset: 'World Cup' });
+    expect(run.status).toBe('failed');
+    expect(run.error).toContain(
+      'Could not reach "World Cup DB": connect ECONNREFUSED',
+    );
+    expect(readiness.saveReport).not.toHaveBeenCalled();
+    expect(ctx.calls['data-readiness']).toEqual([]);
+  });
+
+  it('refuses a dataset that is not PostgreSQL or Databricks before the run', async () => {
+    const ctx = build({ readiness: readinessService() });
+    await ctx.sessions.onModuleInit();
+    await expect(
+      ctx.runs.prepare(READINESS_WORKFLOW.id, {
+        input: { dataset: 'Orders API' },
+      }),
+    ).rejects.toThrow('is not a PostgreSQL or Databricks dataset');
   });
 });
 

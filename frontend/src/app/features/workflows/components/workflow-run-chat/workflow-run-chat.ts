@@ -4,6 +4,7 @@ import {
   computed,
   effect,
   inject,
+  signal,
   untracked,
   viewChild,
 } from '@angular/core';
@@ -19,9 +20,20 @@ import {
   Square,
   SquarePen,
   Wrench,
+  X,
 } from 'lucide-angular';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
-import { VisualEvent } from '../../../sessions/models/session.model';
+import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
+import {
+  ReadinessPanelItem,
+  ReadinessReportRef,
+  VisualEvent,
+} from '../../../sessions/models/session.model';
+import { PanelReadinessView } from '../../../sessions/components/panel-readiness-view/panel-readiness-view';
+import {
+  readinessPanelItemId,
+  readinessPanelTitle,
+} from '../../../sessions/models/readiness.model';
 import { RunVisual } from '../../../runs/components/run-visual/run-visual';
 import { RunVisualsState } from '../../../runs/services/run-visuals-state';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
@@ -53,6 +65,8 @@ const FORM_CONTROLS =
     AnswerView,
     LucideAngularModule,
     MarkdownPipe,
+    PanelReadinessView,
+    ReadinessHistory,
     RunVisual,
     WorkflowRunInputRequired,
   ],
@@ -126,6 +140,7 @@ export class WorkflowRunChat {
   protected readonly Square = Square;
   protected readonly SquarePen = SquarePen;
   protected readonly Wrench = Wrench;
+  protected readonly X = X;
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
@@ -247,6 +262,52 @@ export class WorkflowRunChat {
     if (run !== null) this.visuals.view(run, event);
   }
 
+  /**
+   * The scorecard opened from the run's readiness card (data-readiness R5),
+   * kept with the run it belongs to: a new run shows none.
+   */
+  private readonly scorecard = signal<{
+    runId: string | null;
+    item: ReadinessPanelItem;
+  } | null>(null);
+  protected readonly shownScorecard = computed(() => {
+    const open = this.scorecard();
+    return open !== null && open.runId === this.designer.runId()
+      ? open.item
+      : null;
+  });
+
+  /**
+   * Open scorecard: the run's saved panel item for the report, else the same
+   * item the orchestrator writes; always a fresh object, so a scorecard
+   * showing a past assessment comes back to this one.
+   */
+  protected openScorecard(ref: ReadinessReportRef): void {
+    const id = readinessPanelItemId(ref.reportId);
+    const saved = this.designer
+      .run()
+      ?.panelItems?.find(
+        (item): item is ReadinessPanelItem =>
+          item.kind === 'readiness' && item.id === id,
+      );
+    this.scorecard.set({
+      runId: this.designer.runId(),
+      item: saved
+        ? { ...saved }
+        : {
+            id,
+            kind: 'readiness',
+            title: readinessPanelTitle(ref.datasourceName),
+            shownAt: ref.generatedAt,
+            reportId: ref.reportId,
+          },
+    });
+  }
+
+  protected closeScorecard(): void {
+    this.scorecard.set(null);
+  }
+
   /** The agent step running now, while the run streams: its live block shows. */
   protected readonly liveAgentStep = computed(
     () =>
@@ -267,7 +328,8 @@ export class WorkflowRunChat {
   protected readonly emptyHint = computed(() => {
     const workflow = this.designer.workflow();
     const datasets = workflow?.input.some(
-      (field) => !field.hidden && field.type === 'datasets',
+      (field) =>
+        !field.hidden && (field.type === 'datasets' || field.type === 'dataset'),
     );
     if (this.designer.questionField() === null) {
       return 'Fill in the input below and press Execute.';
@@ -329,8 +391,9 @@ export class WorkflowRunChat {
   }
 
   protected onInput(name: string, event: Event): void {
-    const value = (event.target as HTMLInputElement | HTMLTextAreaElement)
-      .value;
+    const value = (
+      event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    ).value;
     this.designer.setInput(name, value);
   }
 
@@ -338,7 +401,7 @@ export class WorkflowRunChat {
     this.designer.setInput(name, (event.target as HTMLInputElement).checked);
   }
 
-  /** The datasets a `datasets` field offers: its kinds only, when it names some. */
+  /** The datasets a `dataset` or `datasets` field offers: its kinds only, when it names some. */
   protected datasetChoices(field: WorkflowInputField): Dataset[] {
     const kinds = field.datasourceKinds;
     const all = this.designer.datasets();

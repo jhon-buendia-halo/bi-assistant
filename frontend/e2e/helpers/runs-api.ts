@@ -4,9 +4,10 @@ import { apiBaseOf } from './api';
 
 /**
  * Runs a workflow through the streamed run API (`POST /workflows/:id/runs/stream`,
- * api.md 119) and reads the whole stream. The catalogue holds one workflow,
- * Questions to Insights v2, whose Analyse step runs one agent turn through the
- * turn path: the specs that check what reaches the model send a run.
+ * api.md 119) and reads the whole stream. The catalogue holds two workflows;
+ * the helpers here send Questions to Insights v2, whose Analyse step runs one
+ * agent turn through the turn path: the specs that check what reaches the
+ * model send a run.
  */
 
 export interface RunEvent {
@@ -79,7 +80,7 @@ export async function runWorkflow(
   };
 }
 
-/** The one workflow of the catalogue (workflows R1). */
+/** The catalogue's first workflow, the one these helpers run (workflows R1). */
 export const V2_WORKFLOW_ID = 'qti-v2-turn';
 export const V2_WORKFLOW_NAME = 'Answer a Business Question';
 

@@ -31,7 +31,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds one code workflow: Questions to Insights v2, run for assistant-v2 (1.23.35)', () => {
+  it('holds two code workflows: Questions to Insights v2 and Assess Data Readiness (agents.md 5.13)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -45,6 +45,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         id: 'qti-v2-turn',
         name: 'Answer a Business Question',
         primaryFor: 'assistant-v2',
+        bar: 'steps',
+        trigger: 'run',
+      },
+      {
+        id: 'data-readiness-assessment',
+        name: 'Assess Data Readiness',
+        primaryFor: 'data-readiness',
         bar: 'steps',
         trigger: 'run',
       },
@@ -201,9 +208,17 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       }
     });
 
-    it('never wraps a code workflow’s primaryFor agent, nor a System agent', () => {
+    it('wraps no code workflow’s primaryFor agent but the Data Readiness Agent, and no System agent', () => {
+      // The Data Readiness Agent runs Assess Data Readiness's Explain report
+      // step and keeps its own agent turn for its sessions and its evals.
       for (const source of CODE_WORKFLOWS) {
-        expect(WRAPPED_AGENT_KEYS).not.toContain(source.primaryFor);
+        expect({
+          key: source.primaryFor,
+          wrapped: WRAPPED_AGENT_KEYS.includes(source.primaryFor),
+        }).toEqual({
+          key: source.primaryFor,
+          wrapped: source.primaryFor === 'data-readiness',
+        });
       }
       for (const key of SYSTEM_AGENT_KEYS) {
         expect(WRAPPED_AGENT_KEYS).not.toContain(key);
@@ -314,6 +329,16 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         'agent:assistant',
       ],
       ['an unknown agentKey', { agentKey: 'benchmarking' }, 'agent:assistant'],
+      [
+        "the Data Readiness Agent's agentKey: its agent turn, not Assess Data Readiness",
+        { agentKey: 'data-readiness' },
+        'agent:data-readiness',
+      ],
+      [
+        'a stored Assess Data Readiness id',
+        { workflowId: 'data-readiness-assessment', agentKey: 'data-readiness' },
+        'data-readiness-assessment',
+      ],
     ])('derives from %s', (_label, session, expected) => {
       expect(sessionWorkflowId(session)).toBe(expected);
     });
@@ -326,16 +351,18 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ]);
     });
 
-    it.each([
-      'assistant',
-      'data-readiness',
-      'rfp',
-      'sql-fixer',
-      'visualization',
-      'u-1',
-    ])('%s is used in none: agents are a library', (key) => {
-      expect(workflowsUsingAgent(key)).toEqual([]);
+    it('data-readiness is used in Assess Data Readiness', () => {
+      expect(workflowsUsingAgent('data-readiness')).toEqual([
+        { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
+      ]);
     });
+
+    it.each(['assistant', 'rfp', 'sql-fixer', 'visualization', 'u-1'])(
+      '%s is used in none: agents are a library',
+      (key) => {
+        expect(workflowsUsingAgent(key)).toEqual([]);
+      },
+    );
   });
 
   describe('the one-step workflow (agent-turn)', () => {

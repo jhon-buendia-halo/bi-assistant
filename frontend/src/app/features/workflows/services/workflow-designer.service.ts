@@ -425,7 +425,9 @@ export class WorkflowDesigner {
         }
         if (
           workflow.input.some(
-            (field) => !field.hidden && field.type === 'datasets',
+            (field) =>
+              !field.hidden &&
+              (field.type === 'datasets' || field.type === 'dataset'),
           )
         ) {
           this.loadDatasets();

@@ -30,6 +30,13 @@ import {
   type QtiV2TurnRuntime,
 } from './qti-v2-turn.steps';
 import { qtiV2TurnWorkflow } from './qti-v2-turn.workflow';
+import { DATA_READINESS_ASSESSMENT_STEP_SCHEMAS } from './data-readiness-assessment.schemas';
+import {
+  DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
+  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
+  type DataReadinessAssessmentRuntime,
+} from './data-readiness-assessment.steps';
+import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
 interface StubRun {
@@ -82,6 +89,50 @@ const FIXTURES: Record<string, ContractFixture> = {
             stopped: false,
           }),
       } satisfies QtiV2TurnRuntime);
+      return context;
+    },
+  },
+  [DATA_READINESS_ASSESSMENT_WORKFLOW_ID]: {
+    workflow:
+      dataReadinessAssessmentWorkflow as unknown as ContractFixture['workflow'],
+    schemas: DATA_READINESS_ASSESSMENT_STEP_SCHEMAS,
+    input: { question: '', dataset: 'World Cup' },
+    requestContext: () => {
+      const context = new RequestContext();
+      // The stubbed assessment: a profiled, scored and stored report, and
+      // the agent's explanation.
+      context.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, {
+        resolve: ({ dataset }) =>
+          Promise.resolve({
+            dataset,
+            datasourceName: 'World Cup DB',
+            datasourceKind: 'postgres',
+            tableCount: 2,
+          }),
+        profile: () =>
+          Promise.resolve({
+            entityCount: 2,
+            relationshipCount: 1,
+            notProfiledCount: 0,
+            stopped: false,
+          }),
+        score: () => ({
+          overallScore: 84,
+          maturity: 'Managed',
+          findingCount: 1,
+          dimensionScores: [
+            {
+              dimension: 'completeness',
+              score: 90,
+              assessed: true,
+              findingCount: 1,
+            },
+          ],
+        }),
+        save: () => Promise.resolve({ reportId: 'r-1' }),
+        explain: () =>
+          Promise.resolve({ answer: 'Managed (84).', stopped: false }),
+      } satisfies DataReadinessAssessmentRuntime);
       return context;
     },
   },

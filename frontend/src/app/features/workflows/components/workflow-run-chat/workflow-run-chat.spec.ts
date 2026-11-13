@@ -14,6 +14,10 @@ import {
   RunStreamHandlers,
   WorkflowRunsApiService,
 } from '../../services/workflow-runs-api.service';
+import {
+  sampleReadinessPanelItem,
+  sampleReadinessReport,
+} from '../../../sessions/models/readiness.testing';
 import { WorkflowRunChat } from './workflow-run-chat';
 
 const STEP = (id: string, title: string, input: string[], output: string[]) => ({
@@ -379,7 +383,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
 
     function openAssistant(workflow: WorkflowDetail = ASSISTANT): void {
       open(workflow, () => {
-        if (workflow.input.some((f) => f.type === 'datasets')) {
+        if (workflow.input.some((f) => f.type === 'datasets' || f.type === 'dataset')) {
           http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: DATASETS });
         }
       });
@@ -519,6 +523,120 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
           b.querySelector('span')?.textContent?.trim(),
         ),
       ).toEqual(['World Cup Core']);
+    });
+
+    it('a dataset field is a list of the datasets of its kinds, and sends the pick as a string', () => {
+      openAssistant({
+        ...ASSISTANT,
+        input: [
+          {
+            name: 'dataset',
+            label: 'Dataset',
+            type: 'dataset',
+            required: true,
+            datasourceKinds: ['postgres', 'databricks'],
+          },
+        ],
+      });
+      const select = q('workflow-input-dataset') as HTMLSelectElement;
+      expect(select.tagName).toBe('SELECT');
+      expect(Array.from(select.options).map((o) => o.textContent?.trim())).toEqual([
+        'Select a dataset',
+        'World Cup Core',
+      ]);
+      click('workflow-run');
+      expect(runs.calls.length).toBe(0);
+      expect(text('workflow-input-error-dataset')).toBe('Dataset is required');
+      select.value = 'World Cup Core';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      click('workflow-run');
+      expect(runs.last.body).toEqual({ input: { dataset: 'World Cup Core' } });
+    });
+
+    describe('a Data Readiness run (data-readiness R5)', () => {
+      const REPORT = sampleReadinessReport({ id: 'r1', datasourceName: 'World Cup DB' });
+      const READINESS: WorkflowDetail = {
+        ...ASSISTANT,
+        id: 'data-readiness-assessment',
+        name: 'Assess Data Readiness',
+        input: [
+          {
+            name: 'dataset',
+            label: 'Dataset',
+            type: 'dataset',
+            required: true,
+            datasourceKinds: ['postgres', 'databricks'],
+          },
+        ],
+      };
+
+      function readinessRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+        return assistantRun({
+          workflowId: 'data-readiness-assessment',
+          workflowName: 'Assess Data Readiness',
+          input: { dataset: 'World Cup Core' },
+          answer: {
+            role: 'assistant',
+            content: 'The dataset scored 82.',
+            at: 'x',
+            readinessReport: {
+              reportId: 'r1',
+              datasourceName: 'World Cup DB',
+              overallScore: 82,
+              maturity: 'Managed',
+              generatedAt: REPORT.generatedAt,
+            },
+          },
+          panelItems: [sampleReadinessPanelItem('r1')],
+          ...overrides,
+        });
+      }
+
+      function finishRun(run: WorkflowRun): void {
+        const select = q('workflow-input-dataset') as HTMLSelectElement;
+        select.value = 'World Cup Core';
+        select.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        if (q('workflow-run') !== null) click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: run.id, workflowId: run.workflowId });
+        h.onDone!(run);
+        fixture.detectChanges();
+      }
+
+      it('Open scorecard on the readiness card shows the scorecard under the answer, and Close hides it', () => {
+        openAssistant(READINESS);
+        finishRun(readinessRun());
+        expect(q('workflow-run-scorecard')).toBeNull();
+        click('readiness-open-scorecard');
+        http
+          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
+          .flush(REPORT);
+        fixture.detectChanges();
+        const scorecard = q('workflow-run-scorecard')!;
+        expect(scorecard.getAttribute('aria-label')).toBe('Readiness scorecard');
+        expect(
+          scorecard.querySelector('[data-testid="readiness-scorecard"]')?.textContent,
+        ).toContain('World Cup DB');
+        expect(scorecard.textContent).toContain('Past assessments');
+        click('workflow-run-scorecard-close');
+        expect(q('workflow-run-scorecard')).toBeNull();
+      });
+
+      it('a new run closes the scorecard of the earlier one', () => {
+        openAssistant(READINESS);
+        finishRun(readinessRun());
+        click('readiness-open-scorecard');
+        http
+          .expectOne((r) => r.url.endsWith('/data-readiness/assessments/r1'))
+          .flush(REPORT);
+        fixture.detectChanges();
+        expect(q('workflow-run-scorecard')).not.toBeNull();
+        designer.runId.set('run-2');
+        fixture.detectChanges();
+        expect(q('workflow-run-scorecard')).toBeNull();
+      });
     });
 
     it('example chips fill the question and do not run', () => {

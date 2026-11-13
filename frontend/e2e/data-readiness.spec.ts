@@ -6,17 +6,31 @@ import { test, expect } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings } from './helpers/agents-api';
 import { WORLD_CUP_DATASOURCE, openSessions } from './helpers/app-actions';
-import { LlmStub, startLlmStub } from './helpers/llm-stub';
+import {
+  LlmStub,
+  StubReply,
+  StubRequest,
+  messageText,
+  startLlmStub,
+  systemTexts,
+} from './helpers/llm-stub';
 import { seedPastChat } from './helpers/past-chats';
-import { railItem } from './helpers/run-ui';
+import {
+  openRunTab,
+  openWorkflowPage,
+  railItem,
+  runAnswer,
+} from './helpers/run-ui';
+import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DB, worldCupKey } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Data readiness" in
- * specs/capabilities/data-readiness/spec.md. Since workflows are v2 only the
- * Data Readiness Agent is a library agent with no workflow: nothing in the UI
- * runs it, so no new readiness report is produced from the UI. Its page
- * (prompt, Used in) is covered by `agent-hub.spec.ts`.
+ * specs/capabilities/data-readiness/spec.md. The Data Readiness Agent is a
+ * library agent (no chat); the Assess Data Readiness workflow
+ * (`data-readiness-assessment`) runs it from the Workflows page, covered by
+ * the `@demo` scenario below. Its page (prompt, Used in) is covered by
+ * `agent-hub.spec.ts`.
  *
  * Stored reports stay viewable: the scorecard scenarios make a report with
  * `POST /data-readiness/assessments` (api.md 108; the deterministic engine
@@ -336,7 +350,7 @@ test.afterEach(async () => {
 
 // ------------------------------------------------------------ scenarios
 
-test('the Data Readiness Agent is an Official library agent with no workflow', async ({
+test('the Data Readiness Agent is an Official library agent used by Assess Data Readiness', async ({
   page,
 }) => {
   // Given I open Agents.
@@ -359,7 +373,7 @@ test('the Data Readiness Agent is an Official library agent with no workflow', a
   // The agent card never starts a chat, and chats cannot start at all.
   await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
 
-  // When I open Workflows, then no workflow runs the agent.
+  // When I open Workflows, then no one-step agent workflow exists for it.
   await railItem(page, 'Workflows').click();
   await expect(
     page.getByRole('heading', { name: 'Workflows', exact: true }),
@@ -368,6 +382,124 @@ test('the Data Readiness Agent is an Official library agent with no workflow', a
   await expect(page.getByTestId(`workflow-agent:${AGENT_KEY}`)).toHaveCount(0);
   expect(stub.requests, 'nothing reached the model').toHaveLength(0);
 });
+
+/** The Explain report step's turn: read the stored report, then answer. */
+function readReportThenAnswer(request: StubRequest): StubReply {
+  const tool = request.tools.find((name) => name.endsWith('get_readiness_report'));
+  if (tool === undefined) return { text: ASSESS_ANSWER };
+  if (request.messages.at(-1)?.role === 'tool') return { text: ASSESS_ANSWER };
+  const text = [
+    ...systemTexts(request),
+    ...request.messages.map(messageText),
+  ].join('\n');
+  const reportId = /readiness report ([\w-]+)/.exec(text)?.[1] ?? '';
+  return { toolCall: { name: tool, arguments: { reportId } } };
+}
+
+test(
+  'Assess Data Readiness profiles, scores and explains one dataset @demo',
+  async ({ page }) => {
+    let datasourceId = '';
+    stub.reply = readReportThenAnswer;
+    const steps = [
+      'resolve-dataset',
+      'profile-source',
+      'score-readiness',
+      'save-report',
+      'explain-report',
+      'wrap-up',
+    ];
+
+    await scenarioStep(page, `Given the "${DATASET}" dataset exists`, async () => {
+      datasourceId = await seedWorldCup(page);
+    });
+    await scenarioStep(
+      page,
+      'When I open "Assess Data Readiness" from Workflows and click Execute',
+      async () => {
+        await openWorkflowPage(
+          page,
+          'data-readiness-assessment',
+          'Assess Data Readiness',
+        );
+        await openRunTab(page);
+      },
+    );
+    await scenarioStep(
+      page,
+      `And I pick "${DATASET}", leave the question empty and click Execute`,
+      async () => {
+        await page
+          .getByTestId('workflow-input-dataset')
+          .selectOption({ label: DATASET });
+        await page.getByTestId('workflow-run').click();
+      },
+    );
+    await scenarioStep(
+      page,
+      'Then its six steps end successfully, in that order',
+      async () => {
+        await expect(page.getByTestId('workflow-run-status')).toHaveText(
+          'Run succeeded',
+          { timeout: 60_000 },
+        );
+        for (const id of steps) {
+          await expect(
+            page
+              .getByTestId(`workflow-node-${id}`)
+              .getByTestId('workflow-node-status'),
+          ).toHaveText('Done');
+        }
+        const logged = await page
+          .getByTestId('workflow-run-dock')
+          .locator('[data-testid^="workflow-state-node-"]')
+          .evaluateAll((els) =>
+            els.map((e) =>
+              (e.getAttribute('data-testid') ?? '').replace(
+                'workflow-state-node-',
+                '',
+              ),
+            ),
+          );
+        expect(logged.filter((id) => steps.includes(id))).toEqual(steps);
+      },
+    );
+    await scenarioStep(
+      page,
+      'And one readiness report is stored with the run\'s id',
+      async () => {
+        const reports = await listReports(page, datasourceId);
+        expect(reports).toHaveLength(1);
+        const report = await getReport(page, reports[0].id);
+        expect(report.runId, 'the report keeps its run id').toBeTruthy();
+      },
+    );
+    await scenarioStep(
+      page,
+      'And the answer shows the agent explanation and a readiness card',
+      async () => {
+        await expect(runAnswer(page)).toContainText(ASSESS_ANSWER);
+        const card = runAnswer(page).getByTestId('readiness-card');
+        await expect(card).toBeVisible();
+        await expect(card).toContainText(WORLD_CUP_DATASOURCE);
+        await expect(card.getByTestId('readiness-card-score')).toContainText(/\d+\/100/);
+      },
+    );
+    await scenarioStep(
+      page,
+      'When I click Open scorecard, then the scorecard shows under the answer, and Close hides it',
+      async () => {
+        await runAnswer(page).getByTestId('readiness-open-scorecard').click();
+        const panel = page.getByTestId('workflow-run-scorecard');
+        await expect(panel.getByTestId('readiness-scorecard')).toContainText(
+          WORLD_CUP_DATASOURCE,
+        );
+        await panel.getByTestId('workflow-run-scorecard-close').click();
+        await expect(panel).toHaveCount(0);
+      },
+    );
+  },
+);
 
 test('A table too large to profile is listed as not profiled', async ({
   launchApp,
