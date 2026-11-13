@@ -173,13 +173,15 @@ const QTI_V2_SUMMARY = {
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
-  // Every agent its steps run: Michael, then Olivia (Plan) and Jessica (Write answer).
+  // Every agent its steps run: Michael, then Olivia (Plan), Sarah (Check
+  // data quality) and Jessica (Write answer).
   agents: [
     { key: 'assistant-v2', name: 'Michael' },
     { key: 'analysis-planner', name: 'Olivia' },
+    { key: 'data-readiness', name: 'Sarah' },
     { key: 'answer-writer', name: 'Jessica' },
   ],
-  stepCount: 8,
+  stepCount: 9,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -198,6 +200,15 @@ const QTI_V2_SUMMARY = {
       type: 'datasets',
       required: true,
       usedBy: ['receive-question'],
+    },
+    {
+      // Picks the branch to Check data quality; no step reads it.
+      name: 'checkDataQuality',
+      label: 'Check data quality: Sarah reviews the tables the analysis used',
+      type: 'boolean',
+      required: false,
+      default: false,
+      usedBy: [],
     },
   ],
   datasets: [],
@@ -262,7 +273,12 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       // and output schema (api.md 117; agents.md 5.11, 5.12).
       expect(
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
-      ).toEqual(['analysis-planner', 'assistant-v2', 'answer-writer']);
+      ).toEqual([
+        'analysis-planner',
+        'assistant-v2',
+        'data-readiness',
+        'answer-writer',
+      ]);
       expect(detail.steps).toEqual(
         agentWorkflow('assistant-v2')!.steps.map((step, index) => ({
           ...step,
@@ -273,7 +289,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'qti-v2-turn',
-        stepCount: 8,
+        stepCount: 9,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
@@ -340,6 +356,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           systemPrompt: 'You plan a data analysis.',
           toolDetails: [],
         },
+        // Sarah checks data quality in one model call: none of her tools
+        // here, though she has some.
+        {
+          key: 'data-readiness',
+          name: 'Sarah',
+          model: null,
+          systemPrompt: 'You assess readiness.',
+          toolDetails: [],
+        },
         {
           key: 'answer-writer',
           name: 'Jessica',
@@ -372,6 +397,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(v2.agents).toEqual([
         { key: 'assistant-v2', name: 'Michael' },
         { key: 'analysis-planner', name: 'Olivia' },
+        { key: 'data-readiness', name: 'Sarah' },
         { key: 'answer-writer', name: 'Jessica' },
       ]);
     });
@@ -428,7 +454,10 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
     ['assistant', []],
     [
       'data-readiness',
-      [{ id: 'data-readiness-assessment', name: 'Assess Data Readiness' }],
+      [
+        { id: 'qti-v2-turn', name: 'Answer a Business Question' },
+        { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
+      ],
     ],
     ['sql-fixer', []],
   ])('%s is used in %p', async (key, expected) => {

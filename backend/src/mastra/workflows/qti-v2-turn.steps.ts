@@ -19,6 +19,7 @@ import {
   type answeredClarificationSchema,
   type catalogEntitySchema,
   type clarifyingQuestionSchema,
+  type dataQualitySummarySchema,
   type entityColumnsSchema,
   type turnInputSchema,
   type turnSummarySchema,
@@ -192,6 +193,18 @@ export const QTI_V2_TURN_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: 'check-data-quality',
+      title: 'Check data quality',
+      kind: 'agent',
+      summary:
+        "Optional (Check data quality): the deterministic engine assesses the tables the queries read, then Sarah's model picks the findings that affect this answer. No tools. They reach Write answer as findings.",
+      exits: [{ label: 'Stop', outcome: 'stops' }],
+      modelOnly: true,
+    },
+    SCHEMAS['check-data-quality'],
+  ),
+  contractStepEntry(
+    {
       id: 'write-answer',
       title: 'Write answer',
       kind: 'agent',
@@ -231,6 +244,13 @@ export const QTI_V2_TURN_EDGES: readonly WorkflowEdge[] = [
     kind: 'next',
     label: 'Valid or retried',
   },
+  {
+    from: 'validate',
+    to: 'check-data-quality',
+    kind: 'branch',
+    label: 'Check data quality',
+  },
+  { from: 'check-data-quality', to: 'write-answer', kind: 'next' },
   { from: 'write-answer', to: 'wrap-up', kind: 'next' },
   { from: 'wrap-up', to: 'end', kind: 'next' },
 ];
@@ -285,6 +305,24 @@ export type AnsweredClarification = z.output<
 /** The Wrap up step's summary: the run's result. */
 export type QtiV2TurnSummary = z.output<typeof turnSummarySchema>;
 
+/** What Check data quality measured (its output's `dataQuality`). */
+export type DataQualitySummary = z.output<typeof dataQualitySummarySchema>;
+
+/** One table the queries read, with the dataset it belongs to. */
+export interface QualityTable {
+  /** The entity key, `catalog.schema.table`. */
+  entity: string;
+  dataset: string;
+  datasourceKind: string | null;
+}
+
+/** What the run's Check data quality call gives back. */
+export interface DataQualityOutcome {
+  findings: ValidationFinding[];
+  dataQuality: DataQualitySummary;
+  stopped: boolean;
+}
+
 /**
  * What one analysis attempt of the agent turn gives back; `clarification`
  * when the agent asked the user a clarifying question (`ask_clarification`):
@@ -325,6 +363,21 @@ export interface QtiV2TurnRuntime {
     planBlock: string;
     answered?: AnsweredClarification;
   }): Promise<AnalyseAttempt>;
+  /**
+   * Whether the run checks data quality (its input's `checkDataQuality`):
+   * the condition of the branch to Check data quality. Absent means no.
+   */
+  checksDataQuality?: boolean;
+  /**
+   * Check data quality (optional step): the engine assesses the tables the
+   * queries read and Sarah picks the findings that affect the answer. It
+   * never fails the run: a check that cannot run says so in its findings.
+   */
+  checkDataQuality?(input: {
+    question: string;
+    queries: AnalyseQuery[];
+    tables: QualityTable[];
+  }): Promise<DataQualityOutcome>;
   /** The Write answer step's model call; its text is the run's answer. */
   writeAnswer(input: {
     question: string;
@@ -670,6 +723,107 @@ export function wrapUp(
       .filter((call) => !call.failed)
       .reduce((sum, call) => sum + (call.rowCount ?? 0), 0),
     answer,
+  };
+}
+
+/** The `check` of every Check data quality finding. */
+export const DATA_QUALITY_CHECK = 'Data quality';
+
+/** The datasource kinds the readiness engine can assess. */
+const QUALITY_KINDS: readonly string[] = ['postgres', 'databricks'];
+
+/**
+ * The catalog's tables the queries read, in catalog order: every
+ * `catalog.schema.table` name in their SQL (as the dataset tools write
+ * them) that names a catalog entity, ignoring case.
+ */
+export function queriedTables(
+  queries: readonly AnalyseQuery[],
+  catalog: readonly CatalogEntity[],
+): QualityTable[] {
+  const named = new Set<string>();
+  for (const query of queries) {
+    for (const match of query.sql.matchAll(
+      /\b([a-zA-Z0-9_]+\.[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+)\b/g,
+    )) {
+      named.add(match[1].toLowerCase());
+    }
+  }
+  const seen = new Set<string>();
+  const tables: QualityTable[] = [];
+  for (const entry of catalog) {
+    const key = entry.entity.toLowerCase();
+    if (!named.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    tables.push({
+      entity: entry.entity,
+      dataset: entry.dataset,
+      datasourceKind: entry.datasourceKind,
+    });
+  }
+  return tables;
+}
+
+/** Whether the readiness engine can assess a table's datasource. */
+export function assessable(table: QualityTable): boolean {
+  return QUALITY_KINDS.includes(table.datasourceKind ?? '');
+}
+
+/** One engine finding as Check data quality hands it to Sarah. */
+export interface QualityEngineFinding {
+  severity: string;
+  dimension: string;
+  /** `namespace.entity`, or the source for a source-level finding. */
+  entity: string;
+  field?: string;
+  description: string;
+}
+
+/**
+ * Check data quality's findings for Write answer (agents.md 5.11): one per
+ * engine finding Sarah picked (`issues`, by its number from 1), with what
+ * the engine measured and her sentence on the answer; else one passed
+ * finding saying what was checked. Unknown or repeated numbers are dropped.
+ */
+export function dataQualityFindings(input: {
+  tables: readonly string[];
+  findings: readonly QualityEngineFinding[];
+  issues: readonly { finding: number; impact: string }[];
+}): ValidationFinding[] {
+  const picked = new Set<number>();
+  const out: ValidationFinding[] = [];
+  for (const issue of input.issues) {
+    const finding = input.findings[issue.finding - 1];
+    if (!finding || picked.has(issue.finding)) continue;
+    picked.add(issue.finding);
+    const where = finding.field
+      ? `${finding.entity}.${finding.field}`
+      : finding.entity;
+    out.push({
+      check: `${DATA_QUALITY_CHECK}: ${where} (${finding.dimension}, ${finding.severity})`,
+      passed: false,
+      detail: `${finding.description} ${issue.impact.trim()}`.trim(),
+    });
+  }
+  if (out.length > 0) return out;
+  const scope = input.tables.join(', ') || 'no table';
+  return [
+    {
+      check: DATA_QUALITY_CHECK,
+      passed: true,
+      detail: input.findings.length
+        ? `${input.findings.length} data-quality findings on ${scope}; none affects this answer.`
+        : `No data-quality findings on ${scope}.`,
+    },
+  ];
+}
+
+/** The finding of a Check data quality that could not run. */
+export function dataQualityFailure(reason: string): ValidationFinding {
+  return {
+    check: DATA_QUALITY_CHECK,
+    passed: false,
+    detail: `The data quality of the tables used could not be checked: ${reason}`,
   };
 }
 

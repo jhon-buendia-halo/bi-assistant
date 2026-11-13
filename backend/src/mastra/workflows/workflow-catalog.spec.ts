@@ -63,13 +63,14 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'clarify',
       'analyse',
       'validate',
+      'check-data-quality',
       'write-answer',
       'wrap-up',
     ]);
     // The flow is its edges (api.md 117): a branch after Plan, a loop back
     // from Clarify to Plan once answered, a loop back from Validate to
-    // Analyse.
-    expect(CODE_WORKFLOWS[0].edges).toHaveLength(11);
+    // Analyse, and the optional branch to Check data quality.
+    expect(CODE_WORKFLOWS[0].edges).toHaveLength(13);
     expect(
       CODE_WORKFLOWS[0].edges.filter((edge) => edge.kind !== 'next'),
     ).toEqual([
@@ -82,6 +83,12 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
       { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
       { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
+      {
+        from: 'validate',
+        to: 'check-data-quality',
+        kind: 'branch',
+        label: 'Check data quality',
+      },
     ]);
     expect(CODE_WORKFLOWS[0].description).toBe(
       'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.',
@@ -96,6 +103,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         maxLength: 4000,
       },
       { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
+      {
+        name: 'checkDataQuality',
+        label: 'Check data quality: Sarah reviews the tables the analysis used',
+        type: 'boolean',
+        required: false,
+        default: false,
+      },
     ]);
   });
 
@@ -351,8 +365,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ]);
     });
 
-    it('data-readiness is used in Assess Data Readiness', () => {
+    it('data-readiness is used in Answer a Business Question (Check data quality) and Assess Data Readiness', () => {
       expect(workflowsUsingAgent('data-readiness')).toEqual([
+        { id: 'qti-v2-turn', name: 'Answer a Business Question' },
         { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
       ]);
     });

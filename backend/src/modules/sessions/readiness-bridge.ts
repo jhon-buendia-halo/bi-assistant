@@ -385,14 +385,27 @@ export class ReadinessBridge implements ReadinessToolServices {
   async startAssessment(input: {
     sessionId: string;
     datasetName?: string;
+    /**
+     * Only these of the dataset's tables (Answer a Business Question's
+     * Check data quality: the tables its queries read), ignoring case;
+     * all of them when absent.
+     */
+    tables?: readonly string[];
   }): Promise<ReadinessAssessment> {
     const dataset = await this.resolveDataset(
       input.sessionId,
       input.datasetName,
     );
+    const wanted = input.tables?.map((table) => table.toLowerCase());
+    const tables = wanted
+      ? dataset.tables.filter((table) => wanted.includes(table.toLowerCase()))
+      : dataset.tables;
+    if (wanted && tables.length === 0) {
+      throw new Error(`None of those tables is in dataset "${dataset.name}".`);
+    }
     const prepared = await this.deps.readiness.prepare({
       datasourceId: dataset.datasourceId,
-      entities: dataset.tables,
+      entities: tables,
       ...origin(input.sessionId),
     });
     const readiness = this.deps.readiness;
@@ -402,7 +415,7 @@ export class ReadinessBridge implements ReadinessToolServices {
       dataset: dataset.name,
       datasourceName: prepared.datasource.name,
       datasourceKind: prepared.kind,
-      tableCount: dataset.tables.length,
+      tableCount: tables.length,
       profile: async (options = {}) => {
         try {
           profile = await readiness.profileSource(prepared, options);

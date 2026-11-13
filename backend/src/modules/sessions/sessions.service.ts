@@ -159,6 +159,8 @@ export interface RunHostSpec {
   transcript?: { role: 'user' | 'assistant'; content: string }[];
   /** A system block every turn of the host gets (agents.md 5.16). */
   contextBlock?: string;
+  /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
+  checkDataQuality?: true;
   /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
@@ -455,6 +457,7 @@ export class SessionsService implements OnModuleInit {
             ]
           : [],
       ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
+      ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,

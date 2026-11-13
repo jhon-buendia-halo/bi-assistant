@@ -18,7 +18,15 @@ export const V2_ANSWER_LINE =
   'You write the final answer for Questions to Insights.';
 
 /** Which structured step a model call belongs to. */
-export type V2Step = 'plan' | 'answer';
+export type V2Step = 'plan' | 'answer' | 'quality';
+
+/**
+ * The first line of Check data quality's request to Sarah (the Data
+ * Readiness Agent): her system prompt is the agent's own, so the call is
+ * recognised by its last user message, before any system-prompt routing.
+ */
+export const V2_QUALITY_LINE =
+  'Check the data quality behind an answer from Questions to Insights.';
 
 /** Plan's output (`PlanOutput`). */
 export interface V2Plan {
@@ -54,7 +62,11 @@ function firstLine(text: string): string {
  * with; null for any other call. Each system text is checked, since a
  * provider may put a schema prompt in a system message of its own.
  */
-export function v2StepOf(systemTexts: string[]): V2Step | null {
+export function v2StepOf(
+  systemTexts: string[],
+  lastUserText = '',
+): V2Step | null {
+  if (firstLine(lastUserText) === V2_QUALITY_LINE) return 'quality';
   for (const text of systemTexts) {
     const line = firstLine(text);
     if (line === V2_PLAN_LINE) return 'plan';
@@ -91,4 +103,24 @@ export function clarifyingPlan(
 /** An answer whose Markdown is `text`, its first line the headline. */
 export function answerFrom(text: string): V2Answer {
   return { headline: firstLine(text), answer: text };
+}
+
+/**
+ * Sarah's reply to Check data quality: the first listed engine finding
+ * (`1. [severity] ...` under `Engine findings:`) when there is one, else none.
+ */
+export function dataQualityReply(request: string): {
+  issues: { finding: number; impact: string }[];
+} {
+  const listed = request.split('Engine findings:')[1] ?? '';
+  return /^1\. \[/m.test(listed)
+    ? {
+        issues: [
+          {
+            finding: 1,
+            impact: 'This finding could limit how far the answer can be trusted.',
+          },
+        ],
+      }
+    : { issues: [] };
 }

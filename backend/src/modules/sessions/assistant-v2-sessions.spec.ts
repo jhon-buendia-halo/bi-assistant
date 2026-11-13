@@ -338,8 +338,9 @@ const STEPS = [
   { number: 4, title: 'Clarify' },
   { number: 5, title: 'Analyse' },
   { number: 6, title: 'Validate' },
-  { number: 7, title: 'Write answer' },
-  { number: 8, title: 'Wrap up' },
+  { number: 7, title: 'Check data quality' },
+  { number: 8, title: 'Write answer' },
+  { number: 9, title: 'Wrap up' },
 ];
 
 /** The plan block the default plan gives Analyse. */
@@ -358,7 +359,7 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
     });
   });
 
-  it("shows its workflow's eight steps before any turn (agent-panel R8a)", async () => {
+  it("shows its workflow's nine steps before any turn (agent-panel R8a)", async () => {
     const ctx = build();
     expect(ctx.service.effectiveWorkflowFor(ctx.session)).toEqual(STEPS);
     expect((await ctx.service.toView(ctx.session)).workflow).toEqual({
@@ -585,8 +586,8 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
       // Analyse and Validate were done.
       expect(moves).toContainEqual({ current: 5, done: [1, 2, 3, 5, 6] });
       expect(moves.at(-1)).toEqual({
-        current: 8,
-        done: [1, 2, 3, 5, 6, 7, 8],
+        current: 9,
+        done: [1, 2, 3, 5, 6, 8, 9],
       });
       expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
     });
@@ -661,8 +662,8 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         content: WRITTEN,
       });
       expect(workflowMoves(events).at(-1)).toEqual({
-        current: 8,
-        done: [1, 2, 3, 5, 6, 7, 8],
+        current: 9,
+        done: [1, 2, 3, 5, 6, 8, 9],
       });
     });
   });
@@ -718,10 +719,11 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         { current: 5, done: [1, 2, 3, 5] },
         { current: 6, done: [1, 2, 3, 5] },
         { current: 6, done: [1, 2, 3, 5, 6] },
-        { current: 7, done: [1, 2, 3, 5, 6] },
-        { current: 7, done: [1, 2, 3, 5, 6, 7] },
-        { current: 8, done: [1, 2, 3, 5, 6, 7] },
-        { current: 8, done: [1, 2, 3, 5, 6, 7, 8] },
+        // Check data quality (7) is not asked for in a chat.
+        { current: 8, done: [1, 2, 3, 5, 6] },
+        { current: 8, done: [1, 2, 3, 5, 6, 8] },
+        { current: 9, done: [1, 2, 3, 5, 6, 8] },
+        { current: 9, done: [1, 2, 3, 5, 6, 8, 9] },
       ]);
       // The answer streams inside Write answer, between its start and end.
       const types = events.map((event) => event.type);
@@ -735,12 +737,12 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
       const done = events.at(-1)?.session as SessionView | undefined;
       expect(done?.workflow).toMatchObject({
         source: 'workflow',
-        current: 8,
-        done: [1, 2, 3, 5, 6, 7, 8],
+        current: 9,
+        done: [1, 2, 3, 5, 6, 8, 9],
       });
       expect(ctx.session.workflowState).toMatchObject({
-        current: 8,
-        done: [1, 2, 3, 5, 6, 7, 8],
+        current: 9,
+        done: [1, 2, 3, 5, 6, 8, 9],
       });
       expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
     });
@@ -790,8 +792,8 @@ describe('SessionsService sessions bound to Questions to Insights v2 (BA-320)', 
         turn(ctx, 'How many?', false, undefined, events),
       ).rejects.toThrow('answer down');
       expect(workflowMoves(events).at(-1)).toMatchObject({
-        current: 7,
-        failed: 7,
+        current: 8,
+        failed: 8,
       });
     });
 

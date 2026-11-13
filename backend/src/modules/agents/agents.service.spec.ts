@@ -209,6 +209,7 @@ describe('AgentsService (built-in and user agents)', () => {
         'Clarify',
         'Analyse',
         'Validate',
+        'Check data quality',
         'Write answer',
         'Wrap up',
       ]);

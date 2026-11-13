@@ -845,6 +845,8 @@ describe('the run host (agents.md 5.14)', () => {
       'wrap-up:running',
       'wrap-up:success',
       'clarify:skipped',
+      // Not asked for (agents.md 5.11).
+      'check-data-quality:skipped',
     ]);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
       'receive-question:success',
@@ -853,6 +855,7 @@ describe('the run host (agents.md 5.14)', () => {
       'clarify:skipped',
       'analyse:success',
       'validate:success',
+      'check-data-quality:skipped',
       'write-answer:success',
       'wrap-up:success',
     ]);
@@ -914,31 +917,142 @@ describe('the run host (agents.md 5.14)', () => {
   });
 });
 
-describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () => {
-  /** The data-readiness service: its phases, and the calls the tools make. */
-  function readinessService() {
-    return {
-      prepare: jest.fn((input: { runId?: string }) =>
-        Promise.resolve({
-          datasource: { id: 'ds-pg', name: 'World Cup DB' },
-          kind: 'postgres',
-          ...(input.runId ? { runId: input.runId } : {}),
-        }),
-      ),
-      profileSource: jest.fn().mockResolvedValue({
-        sourceId: 'ds-pg',
-        sourceType: 'postgres',
-        entities: [{ namespace: 'public', name: 'matches' }],
-        relationships: [],
+/** The data-readiness service: its phases, and the calls the tools make. */
+function readinessService() {
+  return {
+    prepare: jest.fn((input: { runId?: string }) =>
+      Promise.resolve({
+        datasource: { id: 'ds-pg', name: 'World Cup DB' },
+        kind: 'postgres',
+        ...(input.runId ? { runId: input.runId } : {}),
       }),
-      scoreProfile: jest.fn(() => ({ ...READINESS_REPORT })),
-      saveReport: jest.fn((report: ReadinessReport) => Promise.resolve(report)),
-      get: jest.fn().mockResolvedValue(READINESS_REPORT),
-      list: jest.fn().mockResolvedValue({ reports: [] }),
-      assess: jest.fn(),
-    };
-  }
+    ),
+    profileSource: jest.fn().mockResolvedValue({
+      sourceId: 'ds-pg',
+      sourceType: 'postgres',
+      entities: [{ namespace: 'public', name: 'matches' }],
+      relationships: [],
+    }),
+    scoreProfile: jest.fn(() => ({ ...READINESS_REPORT })),
+    saveReport: jest.fn((report: ReadinessReport) => Promise.resolve(report)),
+    get: jest.fn().mockResolvedValue(READINESS_REPORT),
+    list: jest.fn().mockResolvedValue({ reports: [] }),
+    assess: jest.fn(),
+  };
+}
 
+describe('a v2 run that checks data quality (agents.md 5.11)', () => {
+  /** v2's Analyse turn: one query on a fully named table. */
+  const QUALIFIED_ANALYSE_CHUNKS = [
+    {
+      type: 'tool-call',
+      payload: {
+        toolCallId: 'q0',
+        toolName: 'run_readonly_sql',
+        args: {
+          sql: 'SELECT winner, count(*) FROM wc.public.matches GROUP BY winner',
+          rationale: 'Wins per team.',
+        },
+      },
+    },
+    {
+      type: 'tool-result',
+      payload: {
+        toolCallId: 'q0',
+        toolName: 'run_readonly_sql',
+        result: { columns: ['winner'], rows: [{ winner: 'Brazil' }] },
+      },
+    },
+    { type: 'text-delta', payload: { text: 'A note.' } },
+  ];
+
+  it('assesses the tables the queries read, lets Sarah pick what affects the answer, and hands it to Write answer with the report card', async () => {
+    const readiness = readinessService();
+    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+    await ctx.sessions.onModuleInit();
+    const checkV2DataQuality = jest.fn().mockResolvedValue({
+      issues: [{ finding: 1, impact: 'Some wins may be missing.' }],
+      stopped: false,
+    });
+    (ctx.mastra as Record<string, unknown>)['checkV2DataQuality'] =
+      checkV2DataQuality;
+    const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
+
+    expect(run.status).toBe('success');
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
+      'check-data-quality:success',
+    );
+    // Only the table the SQL read, recorded with the run.
+    expect(readiness.prepare).toHaveBeenCalledWith({
+      datasourceId: 'ds-pg',
+      entities: ['wc.public.matches'],
+      runId: run.id,
+    });
+    expect(readiness.saveReport).toHaveBeenCalledTimes(1);
+    // Sarah reads the SQL and the engine's findings, numbered.
+    expect(checkV2DataQuality).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: ['SELECT winner, count(*) FROM wc.public.matches GROUP BY winner'],
+        tables: ['wc.public.matches'],
+        findings: [
+          expect.objectContaining({
+            entity: 'public.matches',
+            field: 'winner',
+            severity: 'low',
+          }),
+        ],
+      }),
+      expect.anything(),
+    );
+    // Jessica gets the issue as a finding, after Validate's.
+    const written = ctx.mastra.writeV2Answer.mock.calls[0][0] as {
+      findings: { check: string; passed: boolean; detail: string }[];
+    };
+    expect(written.findings.at(-1)).toEqual({
+      check: 'Data quality: public.matches.winner (completeness, low)',
+      passed: false,
+      detail: '2% of winner is null Some wins may be missing.',
+    });
+    // The answer carries the scoped report's card.
+    expect(run.answer).toMatchObject({
+      readinessReport: { reportId: 'r-wc' },
+    });
+  });
+
+  it('skips Check data quality when the run does not ask for it', async () => {
+    const readiness = readinessService();
+    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+    await ctx.sessions.onModuleInit();
+    const { run } = await runOf(ctx, V2_INPUT);
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
+      'check-data-quality:skipped',
+    );
+    expect(readiness.prepare).not.toHaveBeenCalled();
+    expect(run.answer?.readinessReport).toBeUndefined();
+  });
+
+  it('writes the answer anyway when the check cannot run, saying so in a finding', async () => {
+    const readiness = readinessService();
+    readiness.profileSource.mockRejectedValue(
+      new BadGatewayException('connect ECONNREFUSED'),
+    );
+    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+    await ctx.sessions.onModuleInit();
+    const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
+    expect(run.status).toBe('success');
+    const written = ctx.mastra.writeV2Answer.mock.calls[0][0] as {
+      findings: { check: string; passed: boolean; detail: string }[];
+    };
+    expect(written.findings.at(-1)).toEqual({
+      check: 'Data quality',
+      passed: false,
+      detail:
+        'The data quality of the tables used could not be checked: Could not reach "World Cup DB": connect ECONNREFUSED',
+    });
+  });
+});
+
+describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () => {
   /** The agent reads the stored report, then explains it. */
   const EXPLAIN_CHUNKS = [
     {
@@ -1174,6 +1288,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'write-answer:success',
       'wrap-up:running',
       'wrap-up:success',
+      'check-data-quality:skipped',
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'done' });
     expect(events.some((e) => e.type === 'input-required')).toBe(false);
@@ -1189,6 +1304,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'clarify:success#1',
       'analyse:success#1',
       'validate:success#1',
+      'check-data-quality:skipped',
       'write-answer:success',
       'wrap-up:success',
     ]);
@@ -1263,6 +1379,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:running',
       'wrap-up:success',
       'clarify:skipped',
+      'check-data-quality:skipped',
     ]);
     // The agent runs again (no memory thread) with the conversation so far:
     // the question, its clarifying question and the user's answer.

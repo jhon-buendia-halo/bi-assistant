@@ -734,7 +734,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) qti-v2-turn's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "23577e797e19",
+  "contractHash": "09570fe7e004",
   "edges": [
     {
       "from": "start",
@@ -787,6 +787,17 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "to": "write-answer",
     },
     {
+      "from": "validate",
+      "kind": "branch",
+      "label": "Check data quality",
+      "to": "check-data-quality",
+    },
+    {
+      "from": "check-data-quality",
+      "kind": "next",
+      "to": "write-answer",
+    },
+    {
       "from": "write-answer",
       "kind": "next",
       "to": "wrap-up",
@@ -807,6 +818,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "name": "datasets",
       "required": true,
       "type": "datasets",
+    },
+    {
+      "name": "checkDataQuality",
+      "required": false,
+      "type": "boolean",
     },
   ],
   "steps": [
@@ -2416,6 +2432,491 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "plan",
           "calls",
           "queries",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "check-data-quality",
+      "inputSchema": {
+        "properties": {
+          "calls": {
+            "description": "The last attempt's tool calls, for Wrap up.",
+            "items": {
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findings": {
+            "description": "The last attempt's validation findings.",
+            "items": {
+              "properties": {
+                "check": {
+                  "description": "What was checked.",
+                  "type": "string",
+                },
+                "detail": {
+                  "description": "What the check found.",
+                  "type": "string",
+                },
+                "passed": {
+                  "description": "Whether the check passed.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "check",
+                "passed",
+                "detail",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "queries": {
+            "description": "The SQL queries of the last attempt, with their rows.",
+            "items": {
+              "properties": {
+                "error": {
+                  "description": "Why it failed.",
+                  "type": "string",
+                },
+                "rationale": {
+                  "description": "Why the agent ran it.",
+                  "type": "string",
+                },
+                "rowCount": {
+                  "description": "Rows it returned.",
+                  "type": "number",
+                },
+                "rows": {
+                  "description": "Its result rows, at most 50.",
+                  "items": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "sql": {
+                  "description": "The statement that ran.",
+                  "type": "string",
+                },
+                "truncated": {
+                  "description": "The result was cut at its row limit or when stored.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "sql",
+                "rows",
+                "rowCount",
+                "truncated",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "plan",
+          "queries",
+          "findings",
+          "calls",
+          "catalog",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "calls": {
+            "description": "The last attempt's tool calls, for Wrap up.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "dataQuality": {
+            "additionalProperties": false,
+            "description": "What the check measured.",
+            "properties": {
+              "error": {
+                "description": "Why the check could not run; the answer is still written.",
+                "type": "string",
+              },
+              "findingCount": {
+                "description": "Engine findings on those tables, of any severity.",
+                "type": "number",
+              },
+              "issues": {
+                "description": "Of those, the ones Sarah judged to affect this answer.",
+                "type": "number",
+              },
+              "reportIds": {
+                "description": "The readiness reports stored for them, one per datasource.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "skipped": {
+                "description": "Tables read that could not be assessed (not PostgreSQL or Databricks).",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "tables": {
+                "description": "The tables the queries read that were assessed.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "tables",
+              "reportIds",
+              "findingCount",
+              "issues",
+              "skipped",
+            ],
+            "type": "object",
+          },
+          "findings": {
+            "description": "The last attempt's validation findings.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "check": {
+                  "description": "What was checked.",
+                  "type": "string",
+                },
+                "detail": {
+                  "description": "What the check found.",
+                  "type": "string",
+                },
+                "passed": {
+                  "description": "Whether the check passed.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "check",
+                "passed",
+                "detail",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "additionalProperties": false,
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "queries": {
+            "description": "The SQL queries of the last attempt, with their rows.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "description": "Why it failed.",
+                  "type": "string",
+                },
+                "rationale": {
+                  "description": "Why the agent ran it.",
+                  "type": "string",
+                },
+                "rowCount": {
+                  "description": "Rows it returned.",
+                  "type": "number",
+                },
+                "rows": {
+                  "description": "Its result rows, at most 50.",
+                  "items": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "sql": {
+                  "description": "The statement that ran.",
+                  "type": "string",
+                },
+                "truncated": {
+                  "description": "The result was cut at its row limit or when stored.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "sql",
+                "rows",
+                "rowCount",
+                "truncated",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "plan",
+          "queries",
+          "findings",
+          "calls",
+          "dataQuality",
         ],
         "type": "object",
       },

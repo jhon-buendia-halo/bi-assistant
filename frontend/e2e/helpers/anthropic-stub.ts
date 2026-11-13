@@ -1,6 +1,12 @@
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
-import { JSON_TOOL, answerFrom, clearPlan, v2StepOf } from './v2-steps';
+import {
+  JSON_TOOL,
+  answerFrom,
+  clearPlan,
+  dataQualityReply,
+  v2StepOf,
+} from './v2-steps';
 
 /**
  * A local Anthropic-compatible model server standing in for a custom endpoint
@@ -321,7 +327,7 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
       }
       const form = isMessages ? probeForm(body) : null;
       // v2's Plan and Write answer ask for JSON too, with their instructions.
-      const step = isMessages ? v2StepOf(systemTexts(body)) : null;
+      const step = isMessages ? v2StepOf(systemTexts(body), lastUserText(body)) : null;
       stub.requests.push({
         path,
         headers: lowerCaseHeaders(req.headers),
@@ -356,7 +362,9 @@ export async function startAnthropicStub(): Promise<AnthropicStub> {
           ? clearPlan(lastUserText(body))
           : step === 'answer'
             ? answerFrom(textReply)
-            : null;
+            : step === 'quality'
+              ? dataQualityReply(lastUserText(body))
+              : null;
       const content: ContentBlock[] =
         v2 !== null
           ? form === 'jsonTool' && !carriesToolResults(body)

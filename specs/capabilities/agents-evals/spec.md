@@ -1163,7 +1163,7 @@ Feature: Built-in agent prompts
   Scenario: Questions to Insights v2's Graph tab draws what happens on each message
     When I open the "Michael" agent
     And I open the Graph tab
-    Then I see "What happens on each message" with its eight steps from "Receive question" to "Wrap up", numbered 1 to 8
+    Then I see "What happens on each message" with its nine steps from "Receive question" to "Wrap up", numbered 1 to 9
     And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and "≤ 15 steps"
     And the code steps are marked "Code"
     And the arrow from "Load catalog" to "Plan" reads "question, catalog"

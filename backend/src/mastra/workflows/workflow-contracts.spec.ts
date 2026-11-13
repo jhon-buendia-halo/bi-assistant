@@ -83,6 +83,27 @@ const FIXTURES: Record<string, ContractFixture> = {
             text: '',
             stopped: false,
           }),
+        // The run asks for the data-quality check, so every step but
+        // Clarify runs: Sarah finds one issue on the table it read.
+        checksDataQuality: true,
+        checkDataQuality: () =>
+          Promise.resolve({
+            findings: [
+              {
+                check: 'Data quality: public.matches.id (uniqueness, medium)',
+                passed: false,
+                detail: 'id has 2 duplicates. Matches may be counted twice.',
+              },
+            ],
+            dataQuality: {
+              tables: ['wc.public.matches'],
+              reportIds: ['r-1'],
+              findingCount: 1,
+              issues: 1,
+              skipped: [],
+            },
+            stopped: false,
+          }),
         writeAnswer: () =>
           Promise.resolve({
             answer: { headline: '4 matches.', answer: '4 matches.' },

@@ -12,11 +12,21 @@ import type { MessageListInput } from '@mastra/core/agent/message-list';
 import type { RequestContext } from '@mastra/core/request-context';
 import { analysisPlannerAgent } from '../agents/analysis-planner.agent';
 import { answerWriterAgent } from '../agents/answer-writer.agent';
-import { planMessages, writeAnswerRequest } from './qti-v2-turn.prompts';
-import { answerSchema, planSchema } from './qti-v2-turn.schemas';
+import { dataReadinessStepAgent } from '../agents/data-readiness.agent';
+import {
+  dataQualityRequest,
+  planMessages,
+  writeAnswerRequest,
+} from './qti-v2-turn.prompts';
+import {
+  answerSchema,
+  dataQualityReplySchema,
+  planSchema,
+} from './qti-v2-turn.schemas';
 import { runErrorMessage } from './workflow-run';
 import {
   answerOf,
+  jsonObjectOf,
   planOf,
   type AnalyseQuery,
   type AnsweredClarification,
@@ -104,6 +114,61 @@ export async function planWithModel(
     if (stoppedBy(options)) {
       return { plan: planOf(undefined, planned.fallback), stopped: true };
     }
+    throw error;
+  }
+}
+
+/** Sarah's reply read as issues: the well-formed ones, in order. */
+function issuesOf(reply: unknown): { finding: number; impact: string }[] {
+  const parsed = dataQualityReplySchema.safeParse(jsonObjectOf(reply));
+  return parsed.success
+    ? parsed.data.issues.filter(
+        (issue) => Number.isInteger(issue.finding) && issue.impact.trim(),
+      )
+    : [];
+}
+
+/**
+ * The Check data quality step's model call (agents.md 5.11): Sarah, the
+ * Data Readiness Agent, with her own instructions, no tools and one model
+ * call, picks the engine findings that affect the answer. A reply that is
+ * no JSON object picks none. A stopped turn picks nothing.
+ */
+export async function checkDataQualityWithModel(
+  input: Parameters<typeof dataQualityRequest>[0],
+  options: StepModelOptions,
+): Promise<{
+  issues: { finding: number; impact: string }[];
+  stopped: boolean;
+}> {
+  try {
+    const result = await dataReadinessStepAgent.generate(
+      dataQualityRequest(input),
+      {
+        ...callOptions(options),
+        structuredOutput: {
+          schema: dataQualityReplySchema,
+          jsonPromptInjection: 'inline',
+          errorStrategy: 'warn',
+        },
+      },
+    );
+    const reply = result as {
+      object?: unknown;
+      text?: string;
+      error?: unknown;
+    };
+    if (reply.error !== undefined && !stoppedBy(options)) {
+      throw reply.error instanceof Error
+        ? reply.error
+        : new Error(runErrorMessage(reply.error));
+    }
+    return {
+      issues: stoppedBy(options) ? [] : issuesOf(reply.object ?? reply.text),
+      stopped: stoppedBy(options),
+    };
+  } catch (error) {
+    if (stoppedBy(options)) return { issues: [], stopped: true };
     throw error;
   }
 }

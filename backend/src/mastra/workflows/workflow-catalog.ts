@@ -94,6 +94,19 @@ const CAREFUL_FIELD: WorkflowInputField = {
 };
 
 /**
+ * Answer a Business Question's optional data-quality check (agents.md
+ * 5.11): the branch to Check data quality, where Sarah reviews the tables
+ * the analysis read. Off unless ticked.
+ */
+const CHECK_DATA_QUALITY_FIELD: WorkflowInputField = {
+  name: 'checkDataQuality',
+  label: 'Check data quality: Sarah reviews the tables the analysis used',
+  type: 'boolean',
+  required: false,
+  default: false,
+};
+
+/**
  * The input of a draft run (Try it, api.md R12): the question, and careful
  * mode; its datasets are the draft's.
  */
@@ -147,11 +160,14 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       input: [
         { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
         DATASETS_FIELD,
+        CHECK_DATA_QUALITY_FIELD,
       ],
       steps: QTI_V2_TURN_STEPS,
-      // Olivia plans and Jessica writes the answer; Michael analyses.
+      // Olivia plans and Jessica writes the answer; Michael analyses; Sarah
+      // checks the data quality when the run asks for it.
       stepAgents: {
         plan: ANALYSIS_PLANNER_AGENT_KEY,
+        'check-data-quality': DATA_READINESS_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,
       },
       edges: QTI_V2_TURN_EDGES,
@@ -196,6 +212,8 @@ export interface AgentRunTurn {
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
+  /** Answer a Business Question's `checkDataQuality`: Check data quality runs. */
+  checkDataQuality?: true;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -211,6 +229,9 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     question: text(values['question']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
+    ...(values['checkDataQuality'] === true
+      ? { checkDataQuality: true as const }
+      : {}),
   };
 }
 

@@ -155,19 +155,36 @@ const FAILED_ATTEMPT: AnalyseAttempt = {
   stopped: false,
 };
 
+/** The runtime's step calls (its flags left out). */
+type TurnCalls = Required<Omit<QtiV2TurnRuntime, 'checksDataQuality'>>;
+
 /** A runtime whose model steps are mocks, each answering as scripted. */
 type ScriptedTurn = {
-  [K in keyof QtiV2TurnRuntime]: jest.Mock<
-    ReturnType<QtiV2TurnRuntime[K]>,
-    Parameters<QtiV2TurnRuntime[K]>
+  [K in keyof TurnCalls]: jest.Mock<
+    ReturnType<TurnCalls[K]>,
+    Parameters<TurnCalls[K]>
   >;
-};
+} & { checksDataQuality?: boolean };
 
 /** A runtime whose model steps answer as scripted. */
 function runtime(overrides: Partial<QtiV2TurnRuntime> = {}): ScriptedTurn {
   return {
     plan: jest.fn(() => Promise.resolve({ plan: PLAN, stopped: false })),
     analyse: jest.fn(() => Promise.resolve(GOOD_ATTEMPT)),
+    // Called only when the run asks for it (`checksDataQuality`).
+    checkDataQuality: jest.fn(() =>
+      Promise.resolve({
+        findings: [],
+        dataQuality: {
+          tables: [],
+          reportIds: [],
+          findingCount: 0,
+          issues: 0,
+          skipped: [],
+        },
+        stopped: false,
+      }),
+    ),
     writeAnswer: jest.fn(() =>
       Promise.resolve({
         answer: {
@@ -236,7 +253,7 @@ const CLEAR_PLAN_ROUND = [
 ];
 
 describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
-  it('builds the eight catalogue steps, in order, with their titles', () => {
+  it('builds the nine catalogue steps, in order, with their titles', () => {
     expect(workflow.id).toBe(QTI_V2_TURN_WORKFLOW_ID);
     expect(leafSteps(workflow).map((s) => [s.id, s.description])).toEqual([
       ['receive-question', 'Receive question'],
@@ -245,6 +262,7 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
       ['clarify', 'Clarify'],
       ['analyse', 'Analyse'],
       ['validate', 'Validate'],
+      ['check-data-quality', 'Check data quality'],
       ['write-answer', 'Write answer'],
       ['wrap-up', 'Wrap up'],
     ]);
@@ -363,6 +381,10 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
           'queries',
         ],
       ],
+      'check-data-quality': [
+        ['question', 'plan', 'queries', 'findings', 'calls', 'catalog'],
+        ['question', 'plan', 'queries', 'findings', 'calls', 'dataQuality'],
+      ],
       'write-answer': [
         ['question', 'plan', 'queries', 'findings', 'calls'],
         ['headline', 'answer', 'calls'],
@@ -404,6 +426,9 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
       'analysis-path.analysis-attempt.validate:success',
       'analysis-path.analysis-attempt:success',
       'analysis-path.answer-path:running',
+      // No data-quality check asked: its branch is not taken.
+      'analysis-path.answer-path.quality-outcome:running',
+      'analysis-path.answer-path.quality-outcome:success',
       'analysis-path.answer-path.write-answer:running',
       'analysis-path.answer-path.write-answer:success',
       'analysis-path.answer-path.wrap-up:running',
@@ -411,6 +436,7 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
       'analysis-path.answer-path:success',
       'analysis-path:success',
     ]);
+    expect(turn.checkDataQuality).not.toHaveBeenCalled();
     const catalogBlock = [
       'Catalog loaded for this turn: 2 entities.',
       '- wc.public.matches (dataset: World Cup; 2 columns)',
@@ -462,6 +488,93 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
           },
         },
       },
+    });
+  });
+
+  describe('the optional data-quality check (agents.md 5.11)', () => {
+    const QUALITY_FINDING = {
+      check: 'Data quality: public.matches.winner (completeness, high)',
+      passed: false,
+      detail: '62% of winner is null. The count of wins may be low.',
+    };
+    const MEASURED = {
+      tables: ['wc.public.matches'],
+      reportIds: ['r-1'],
+      findingCount: 3,
+      issues: 1,
+      skipped: [],
+    };
+
+    it('runs Check data quality when the run asks for it, on the tables the queries read, and hands its findings to Write answer', async () => {
+      const turn = runtime({
+        checksDataQuality: true,
+        checkDataQuality: jest.fn(() =>
+          Promise.resolve({
+            findings: [QUALITY_FINDING],
+            dataQuality: MEASURED,
+            stopped: false,
+          }),
+        ),
+      });
+      const { events, outputs } = await run('How many matches?', turn);
+      expect(events).toEqual(
+        expect.arrayContaining([
+          'analysis-path.answer-path.check-data-quality:running',
+          'analysis-path.answer-path.check-data-quality:success',
+        ]),
+      );
+      expect(
+        events.indexOf('analysis-path.answer-path.check-data-quality:success'),
+      ).toBeLessThan(
+        events.indexOf('analysis-path.answer-path.write-answer:running'),
+      );
+      // Only the catalog's tables the SQL names (wc.public.teams is not).
+      expect(turn.checkDataQuality).toHaveBeenCalledWith({
+        question: 'How many matches?',
+        queries: GOOD_ATTEMPT.queries,
+        tables: [
+          {
+            entity: 'wc.public.matches',
+            dataset: 'World Cup',
+            datasourceKind: 'postgres',
+          },
+        ],
+      });
+      expect(
+        outputs.get('analysis-path.answer-path.check-data-quality'),
+      ).toMatchObject({ dataQuality: MEASURED });
+      const written = turn.writeAnswer.mock.calls[0][0];
+      // Validate's findings first, then the data-quality one.
+      expect(written.findings.at(-1)).toEqual(QUALITY_FINDING);
+      expect(written.findings[0]).toMatchObject({ check: 'Ran a query' });
+    });
+
+    it('leaves the findings as they were when the turn is stopped during the check', async () => {
+      const turn = runtime({
+        checksDataQuality: true,
+        checkDataQuality: jest.fn(() =>
+          Promise.resolve({
+            findings: [QUALITY_FINDING],
+            dataQuality: MEASURED,
+            stopped: true,
+          }),
+        ),
+      });
+      await run('How many matches?', turn);
+      const written = turn.writeAnswer.mock.calls[0][0];
+      expect(written.findings).not.toContainEqual(QUALITY_FINDING);
+    });
+
+    it('fails Check data quality when the run asks for it but its runtime has no check', async () => {
+      const turn = runtime({
+        checksDataQuality: true,
+        checkDataQuality: undefined,
+      });
+      const { result } = await run('How many matches?', turn);
+      expect(result.status).toBe('failed');
+      expect(String(result.error)).toContain(
+        'The Check data quality step has no check to run',
+      );
     });
   });
 

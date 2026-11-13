@@ -7,6 +7,7 @@ import {
   V2Step,
   answerFrom,
   clearPlan,
+  dataQualityReply,
   v2StepOf,
 } from './v2-steps';
 
@@ -269,7 +270,11 @@ export async function startLlmStub(
    */
   const structured = (request: StubRequest, step: V2Step): StubReply => {
     const value: Record<string, unknown> = {
-      ...(step === 'plan' ? stub.plan(request) : stub.answer(request)),
+      ...(step === 'plan'
+        ? stub.plan(request)
+        : step === 'quality'
+          ? dataQualityReply(lastUserText(request))
+          : stub.answer(request)),
     };
     const viaTool =
       request.tools.includes(JSON_TOOL) &&
@@ -331,6 +336,10 @@ export async function startLlmStub(
         messages
           .filter((message) => message.role === 'system')
           .map(messageText),
+        messages
+          .filter((message) => message.role === 'user')
+          .map(messageText)
+          .at(-1) ?? '',
       );
       // The settings connection test asks for a JSON status object; v2's
       // structured steps may too, but they carry their instructions.

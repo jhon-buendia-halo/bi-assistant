@@ -382,6 +382,7 @@ export class WorkflowRunsService implements OnModuleInit {
         name: workflow.name,
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
+        ...(prepared.turn.checkDataQuality ? { checkDataQuality: true } : {}),
         ...(prepared.context
           ? {
               context: {

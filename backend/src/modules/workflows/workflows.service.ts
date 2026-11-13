@@ -145,13 +145,22 @@ export class WorkflowsService {
    */
   async get(id: string): Promise<WorkflowDetail> {
     const entry = await this.find(id);
+    const steps = entry.steps();
+    // An agent this workflow only calls without tools (a model-only step:
+    // Plan, Write answer, Check data quality) shows none of its tools here.
+    const toolless = (key: string) =>
+      steps
+        .filter((step) => step.agent?.key === key)
+        .every((step) => step.agent?.tools.length === 0);
     const agents = await Promise.all(
-      entry.summary.agents.map((agent) => this.agentDetail(agent)),
+      entry.summary.agents.map((agent) =>
+        this.agentDetail(agent, toolless(agent.key)),
+      ),
     );
     return {
       ...entry.summary,
       agents,
-      steps: entry.steps(),
+      steps,
       edges: entry.edges(),
       contractHash: entry.contractHash,
     };
@@ -176,10 +185,13 @@ export class WorkflowsService {
    * `<provider>/<model>` (null when none is set, never the environment's
    * fallback), its prompt, shortened to `SYSTEM_PROMPT_CAP`, and its tools.
    */
-  private async agentDetail(agent: {
-    key: string;
-    name: string;
-  }): Promise<WorkflowAgentDetail> {
+  private async agentDetail(
+    agent: {
+      key: string;
+      name: string;
+    },
+    toolless = false,
+  ): Promise<WorkflowAgentDetail> {
     const detail = await this.agents.get(agent.key);
     const llm = detail?.llm;
     const prompt = detail?.instructions ?? '';
@@ -191,11 +203,13 @@ export class WorkflowsService {
       ...(prompt.length > SYSTEM_PROMPT_CAP
         ? { systemPromptTruncated: true as const }
         : {}),
-      toolDetails: (detail?.toolDetails ?? []).map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputs: [...tool.inputs],
-      })),
+      toolDetails: (toolless ? [] : (detail?.toolDetails ?? [])).map(
+        (tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputs: [...tool.inputs],
+        }),
+      ),
     };
   }
 

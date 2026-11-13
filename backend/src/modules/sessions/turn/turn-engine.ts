@@ -20,14 +20,20 @@ import {
 } from '../../../mastra/workflows/data-readiness-assessment.steps';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
+  DATA_QUALITY_CHECK,
   QTI_V2_TURN_RUNTIME_KEY,
   QTI_V2_TURN_WORKFLOW_ID,
+  assessable,
   clarifyingQuestionOf,
+  dataQualityFailure,
+  dataQualityFindings,
   turnSummaryOf,
   type AnsweredClarification,
+  type QualityEngineFinding,
   type QtiV2TurnInput,
   type QtiV2TurnRuntime,
 } from '../../../mastra/workflows/qti-v2-turn.steps';
+import { DATA_QUALITY_FINDINGS_CAP } from '../../../mastra/workflows/qti-v2-turn.prompts';
 import {
   AGENT_TURN_RUNTIME_KEY,
   AGENT_TURN_WORKFLOW_ID,
@@ -48,6 +54,7 @@ import {
   readinessReportIdOf,
   readinessReportOf,
   readinessReportRef,
+  topFindings,
 } from '../readiness-bridge';
 import {
   SYNTHETIC_DATA_TOOLS,
@@ -568,6 +575,111 @@ export class TurnEngine {
                 : {}),
             };
           },
+          // v2's optional Check data quality (agents.md 5.11): the engine
+          // assesses the tables the queries read, one assessment per
+          // dataset, stored and shown as the answer's readiness card; then
+          // Sarah's model picks the findings that affect the answer. A
+          // check that cannot run becomes a finding, never a failed run.
+          checkDataQuality: async ({ question, queries, tables }) => {
+            const assessed = tables.filter(assessable);
+            const skipped = tables
+              .filter((table) => !assessable(table))
+              .map((table) => table.entity);
+            const measured = {
+              tables: assessed.map((table) => table.entity),
+              reportIds: [] as string[],
+              findingCount: 0,
+              issues: 0,
+              skipped,
+            };
+            const stop = () => ({
+              findings: [],
+              dataQuality: measured,
+              stopped: true,
+            });
+            if (assessed.length === 0) {
+              return {
+                findings: [
+                  {
+                    check: DATA_QUALITY_CHECK,
+                    passed: true,
+                    detail: tables.length
+                      ? `No table the queries read can be assessed: only PostgreSQL and Databricks tables can (${skipped.join(', ')}).`
+                      : 'The queries read no table of the catalog.',
+                  },
+                ],
+                dataQuality: measured,
+                stopped: false,
+              };
+            }
+            const engineFindings: QualityEngineFinding[] = [];
+            try {
+              const bridge = this.deps.readinessBridge();
+              if (!bridge) throw new Error('data readiness is not available');
+              const byDataset = new Map<string, string[]>();
+              for (const table of assessed) {
+                byDataset.set(table.dataset, [
+                  ...(byDataset.get(table.dataset) ?? []),
+                  table.entity,
+                ]);
+              }
+              for (const [dataset, entities] of byDataset) {
+                const assessment = await bridge.startAssessment({
+                  sessionId: id,
+                  datasetName: dataset,
+                  tables: entities,
+                });
+                await assessment.profile({ signal: turn.signal });
+                if (turn.signal.aborted) return stop();
+                assessment.score();
+                const saved = await assessment.save();
+                measured.reportIds.push(saved.report.id);
+                measured.findingCount += saved.report.findings.length;
+                const shown = await this.showReadinessReport(id, saved, emit);
+                if (shown && !readinessReport) readinessReport = shown;
+                engineFindings.push(
+                  ...topFindings(saved.report.findings).map((finding) => ({
+                    severity: finding.severity,
+                    dimension: finding.dimension,
+                    entity: finding.namespace
+                      ? `${finding.namespace}.${finding.entity ?? ''}`
+                      : (finding.entity ?? saved.report.datasourceName),
+                    ...(finding.field ? { field: finding.field } : {}),
+                    description: finding.description,
+                  })),
+                );
+              }
+              const shown = engineFindings.slice(0, DATA_QUALITY_FINDINGS_CAP);
+              const reply = shown.length
+                ? await this.deps.mastra.checkV2DataQuality(
+                    {
+                      question,
+                      sql: queries.map((query) => query.sql),
+                      tables: measured.tables,
+                      findings: shown,
+                    },
+                    stepModel,
+                  )
+                : { issues: [], stopped: false };
+              if (reply.stopped || turn.signal.aborted) return stop();
+              const findings = dataQualityFindings({
+                tables: measured.tables,
+                findings: shown,
+                issues: reply.issues,
+              });
+              measured.issues = findings.filter((f) => !f.passed).length;
+              return { findings, dataQuality: measured, stopped: false };
+            } catch (error) {
+              if (turn.signal.aborted) return stop();
+              const reason =
+                error instanceof Error ? error.message : String(error);
+              return {
+                findings: [dataQualityFailure(reason)],
+                dataQuality: { ...measured, error: reason },
+                stopped: false,
+              };
+            }
+          },
           writeAnswer: async (written) => {
             try {
               const result = await this.deps.mastra.writeV2Answer(written, {
@@ -868,6 +980,7 @@ export class TurnEngine {
     question: string,
     emit: (event: StreamEvent) => void,
     runtime: QtiV2TurnRuntime &
+      Required<Pick<QtiV2TurnRuntime, 'checkDataQuality'>> &
       AgentTurnRuntime &
       DataReadinessAssessmentRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
@@ -909,6 +1022,10 @@ export class TurnEngine {
       requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
+        // Only a run host whose input ticked it (agents.md 5.11).
+        checksDataQuality: session.checkDataQuality === true,
+        checkDataQuality: (input) =>
+          captured(() => runtime.checkDataQuality(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
       } satisfies QtiV2TurnRuntime);
     }

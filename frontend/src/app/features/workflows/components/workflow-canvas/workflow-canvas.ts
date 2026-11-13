@@ -166,6 +166,8 @@ export class WorkflowCanvas {
   protected readonly toolsMenu = signal<ToolsMenu | null>(null);
   /** The Tools sub-node that opened the list: the focus goes back to it. */
   private menuTrigger: HTMLElement | null = null;
+  /** Where the canvas was scrolled when the Tools list opened. */
+  private menuScroll: { left: number; top: number } | null = null;
 
   protected readonly layout = computed(() =>
     workflowCanvasLayout(this.workflow()),
@@ -373,6 +375,8 @@ export class WorkflowCanvas {
       r.bottom + MENU_GAP + height > window.innerHeight &&
       r.top - MENU_GAP - height >= 0;
     this.menuTrigger = trigger;
+    const viewport = this.viewport().nativeElement;
+    this.menuScroll = { left: viewport.scrollLeft, top: viewport.scrollTop };
     this.toolsMenu.set({
       stepId: node.id,
       stepTitle: node.title,
@@ -392,9 +396,23 @@ export class WorkflowCanvas {
   }
 
   /** Close the list; the focus goes back to its Tools sub-node when asked. */
+  /**
+   * The canvas scrolled: the open Tools list no longer sits under its
+   * sub-node, so it closes. A scroll event that reports the position the
+   * list opened at (a scroll that brought the sub-node into view just before
+   * the click, its event arriving after it) leaves the list open.
+   */
+  protected onViewportScroll(): void {
+    const at = this.menuScroll;
+    const el = this.viewport().nativeElement;
+    if (at && el.scrollLeft === at.left && el.scrollTop === at.top) return;
+    this.closeToolsMenu(false);
+  }
+
   protected closeToolsMenu(refocus: boolean): void {
     if (this.toolsMenu() === null) return;
     this.toolsMenu.set(null);
+    this.menuScroll = null;
     const trigger = this.menuTrigger;
     this.menuTrigger = null;
     if (refocus) trigger?.focus();

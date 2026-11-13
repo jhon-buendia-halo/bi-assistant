@@ -5,10 +5,15 @@ jest.mock('../tool-services', () => ({
 
 import { checkWorkflowContract } from './workflow-contract';
 import {
+  DATA_QUALITY_CHECK,
   QTI_V2_TURN_EDGES,
   QTI_V2_TURN_STEPS,
   analysisLoopDone,
   answerOf,
+  assessable,
+  dataQualityFailure,
+  dataQualityFindings,
+  queriedTables,
   catalogBlock,
   clarifyingQuestionOf,
   loadCatalog,
@@ -55,7 +60,7 @@ const query = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery => ({
 });
 
 describe('qti-v2-turn steps (agents.md 5.11)', () => {
-  it('lists the eight steps with their ids, titles and kinds, Clarify after Plan', () => {
+  it('lists the nine steps with their ids, titles and kinds, Clarify after Plan and Check data quality after Validate', () => {
     expect(
       QTI_V2_TURN_STEPS.map(({ id, title, kind }) => ({ id, title, kind })),
     ).toEqual([
@@ -65,12 +70,13 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
       { id: 'clarify', title: 'Clarify', kind: 'code' },
       { id: 'analyse', title: 'Analyse', kind: 'agent' },
       { id: 'validate', title: 'Validate', kind: 'code' },
+      { id: 'check-data-quality', title: 'Check data quality', kind: 'agent' },
       { id: 'write-answer', title: 'Write answer', kind: 'agent' },
       { id: 'wrap-up', title: 'Wrap up', kind: 'code' },
     ]);
     expect(
       QTI_V2_TURN_STEPS.filter((step) => step.modelOnly).map((s) => s.id),
-    ).toEqual(['plan', 'write-answer']);
+    ).toEqual(['plan', 'check-data-quality', 'write-answer']);
   });
 
   it('connects them with the edges of api.md 117: Clarify loops back to Plan once answered', () => {
@@ -88,9 +94,139 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
       'analyse->validate next',
       'validate->analyse loop "Retry once"',
       'validate->write-answer next "Valid or retried"',
+      'validate->check-data-quality branch "Check data quality"',
+      'check-data-quality->write-answer next',
       'write-answer->wrap-up next',
       'wrap-up->end next',
     ]);
+  });
+
+  describe('the optional data-quality check (agents.md 5.11)', () => {
+    const CATALOG = [
+      {
+        entity: 'wc.public.matches',
+        dataset: 'World Cup',
+        datasourceId: 'ds-pg',
+        datasourceKind: 'postgres',
+        columnCount: 5,
+      },
+      {
+        entity: 'wc.public.teams',
+        dataset: 'World Cup',
+        datasourceId: 'ds-pg',
+        datasourceKind: 'postgres',
+        columnCount: 3,
+      },
+      {
+        entity: 'api.orders.items',
+        dataset: 'Orders API',
+        datasourceId: 'ds-rest',
+        datasourceKind: 'rest',
+        columnCount: 4,
+      },
+    ];
+    const query = (sql: string) => ({
+      sql,
+      rows: [],
+      rowCount: 0,
+      truncated: false,
+    });
+
+    it('finds the catalog tables the SQL names, ignoring case, in catalog order, once each', () => {
+      const tables = queriedTables(
+        [
+          query(
+            'SELECT * FROM WC.Public.Teams t JOIN wc.public.matches m ON 1=1',
+          ),
+          query('SELECT count(*) FROM wc.public.matches'),
+          query('SELECT * FROM api.orders.items'),
+          query('SELECT * FROM other.schema.unknown'),
+        ],
+        CATALOG,
+      );
+      expect(tables.map((t) => t.entity)).toEqual([
+        'wc.public.matches',
+        'wc.public.teams',
+        'api.orders.items',
+      ]);
+      // Only PostgreSQL and Databricks tables can be assessed.
+      expect(tables.filter(assessable).map((t) => t.entity)).toEqual([
+        'wc.public.matches',
+        'wc.public.teams',
+      ]);
+    });
+
+    it('turns each finding Sarah picked into a failed finding with the engine’s words and her impact', () => {
+      const findings = dataQualityFindings({
+        tables: ['wc.public.matches'],
+        findings: [
+          {
+            severity: 'high',
+            dimension: 'completeness',
+            entity: 'public.matches',
+            field: 'winner',
+            description: '62% of winner is null.',
+          },
+          {
+            severity: 'low',
+            dimension: 'consistency',
+            entity: 'public.matches',
+            field: 'stage',
+            description: 'stage differs by case.',
+          },
+        ],
+        // A repeated and an unknown number are dropped.
+        issues: [
+          { finding: 1, impact: 'The count of wins may be low.' },
+          { finding: 1, impact: 'Again.' },
+          { finding: 9, impact: 'Unknown.' },
+        ],
+      });
+      expect(findings).toEqual([
+        {
+          check: `${DATA_QUALITY_CHECK}: public.matches.winner (completeness, high)`,
+          passed: false,
+          detail: '62% of winner is null. The count of wins may be low.',
+        },
+      ]);
+    });
+
+    it('says what was checked when no finding affects the answer, or none exists', () => {
+      expect(
+        dataQualityFindings({
+          tables: ['wc.public.matches'],
+          findings: [
+            {
+              severity: 'low',
+              dimension: 'consistency',
+              entity: 'public.matches',
+              description: 'x',
+            },
+          ],
+          issues: [],
+        }),
+      ).toEqual([
+        {
+          check: DATA_QUALITY_CHECK,
+          passed: true,
+          detail:
+            '1 data-quality findings on wc.public.matches; none affects this answer.',
+        },
+      ]);
+      expect(
+        dataQualityFindings({
+          tables: ['wc.public.matches'],
+          findings: [],
+          issues: [],
+        })[0].detail,
+      ).toBe('No data-quality findings on wc.public.matches.');
+      expect(dataQualityFailure('connect ECONNREFUSED')).toEqual({
+        check: DATA_QUALITY_CHECK,
+        passed: false,
+        detail:
+          'The data quality of the tables used could not be checked: connect ECONNREFUSED',
+      });
+    });
   });
 
   it('never lets an answered plan ask again (planAfterAnswer)', () => {
