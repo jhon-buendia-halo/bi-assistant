@@ -49,6 +49,7 @@ import {
   CanvasSubNode,
   MAX_ZOOM,
   MIN_ZOOM,
+  agentLineParts,
   fitZoom,
   subLabelWidth,
   workflowCanvasLayout,
@@ -128,6 +129,7 @@ export class WorkflowCanvas {
   protected readonly ZoomOut = ZoomOut;
   protected readonly Wrench = Wrench;
   protected readonly subLabelWidth = subLabelWidth;
+  protected readonly agentLineParts = agentLineParts;
   protected readonly MIN_ZOOM = MIN_ZOOM;
   /** A square node's label box. */
   protected readonly labelWidth = CANVAS.labelWidth;

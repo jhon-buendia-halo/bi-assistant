@@ -133,20 +133,22 @@
 
 // Start (rounded left), code squares, the wide agent, End (rounded right).
 .canvas-node {
-  border-radius: 10px;
+  border-radius: 14px;
   box-shadow: var(--qti-shadow-card);
 
   &[data-kind="trigger"] {
-    border-radius: 26px 10px 10px 26px;
+    border-radius: 40px 14px 14px 40px;
   }
 
   &[data-kind="output"] {
-    border-radius: 10px 26px 26px 10px;
+    border-radius: 14px 40px 40px 14px;
   }
 
+  // Its icon tile, then its title, step id and agent line.
   &[data-kind="agent"] {
     justify-content: flex-start;
-    padding: 0 6px;
+    gap: 10px;
+    padding: 0 12px;
     border-color: var(--qti-span-agent);
   }
 
@@ -182,9 +184,9 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   background: var(--qti-neutral-soft);
   color: var(--qti-on-neutral-soft);
 
@@ -193,11 +195,10 @@
     color: var(--qti-on-warning-soft);
   }
 
-  // Before the agent's title, inside the node.
+  // Left of the agent's text, inside the node.
   &[data-kind="agent"] {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 36px;
+    height: 36px;
     background: var(--qti-surface-muted);
     color: var(--qti-span-agent);
   }

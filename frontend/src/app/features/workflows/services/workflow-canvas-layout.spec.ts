@@ -10,6 +10,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   ZOOM_LEVELS,
+  agentLineParts,
   canvasBoxes,
   fitZoom,
   workflowCanvasLayout,
@@ -141,9 +142,24 @@ const REAL_V2: WorkflowDetail = {
   }),
 };
 
-/** The same, once Clarify suspends the run and goes back to Plan when answered. */
+/**
+ * The same, once Clarify suspends the run and goes back to Plan when
+ * answered: Analyse's clarifying question and Clarify itself wait for the user.
+ */
 const REAL_V2_CLARIFY_LOOP: WorkflowDetail = {
   ...REAL_V2,
+  steps: REAL_V2.steps.map((step): WorkflowDetailStep => {
+    if (step.id === 'clarify') {
+      return { ...step, exits: [{ label: 'Waits for an answer', outcome: 'waits' }] };
+    }
+    if (step.id === 'analyse') {
+      return {
+        ...step,
+        exits: [...MODEL_EXITS, { label: 'Clarifying question', outcome: 'waits' }],
+      };
+    }
+    return step;
+  }),
   edges: REAL_V2.edges!
     .filter((e) => !(e.from === 'clarify' && e.to === 'end'))
     .concat([{ from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' }]),
@@ -171,21 +187,20 @@ function overlapping(layout: CanvasLayout): string[] {
 describe('workflowCanvasLayout (ui.md 4.4b)', () => {
   it('keeps the contract constants', () => {
     expect(CANVAS).toEqual({
-      padding: 20,
-      square: 52,
-      agentWidth: 120,
+      padding: 40,
+      square: 88,
+      agentWidth: 220,
       nodeHeight: 88,
-      colGap: 44,
-      labelWidth: 92,
-      labelHeight: 86,
+      colGap: 80,
+      labelWidth: 150,
       exitRowHeight: 16,
-      exitWidth: 136,
-      subSize: 40,
-      subTop: 44,
-      subLabelWidth: 88,
-      toolsLabelWidth: 52,
+      exitWidth: 220,
+      subSize: 52,
+      subTop: 56,
+      subLabelWidth: 120,
+      toolsLabelWidth: 80,
       subLabelHeight: 52,
-      sideGap: 28,
+      sideGap: 40,
     });
     expect([...ZOOM_LEVELS]).toEqual([0.5, 0.75, 1, 1.25, 1.5]);
     expect(MIN_ZOOM).toBe(0.4);
@@ -201,21 +216,39 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(
       layout.nodes.map((n) => [n.kind, n.id, n.x, n.y, n.width, n.height]),
     ).toEqual([
-      ['trigger', 'start', 20, 20, 52, 52],
-      ['code', 'clean', 116, 20, 52, 52],
-      ['output', 'end', 212, 20, 52, 52],
+      // The gaps fit their field counts (`1 field`, `2 fields`) with 16 px each side.
+      ['trigger', 'start', 40, 40, 88, 88],
+      ['code', 'clean', 215, 40, 88, 88],
+      ['output', 'end', 396, 40, 88, 88],
     ]);
-    expect(layout.nodes.map((n) => n.centerY)).toEqual([46, 46, 46]);
+    expect(layout.nodes.map((n) => n.centerY)).toEqual([84, 84, 84]);
     expect(layout.nodes.map((n) => n.number)).toEqual([null, 1, null]);
     expect(layout.nodes.map((n) => [n.title, n.subtitle])).toEqual([
       ['Start', 'text'],
       ['Title clean', 'clean'],
       ['End', 'text, words'],
     ]);
-    // End's label box runs 20 px past it, into the padding.
-    expect(layout.width).toBe(212 + 26 + 46 + 4);
-    // Start's exit note row sits under its label.
-    expect(layout.height).toBe(20 + 52 + 86 + 16 + 20);
+    // One title line and one subtitle line under each square; none for an agent.
+    expect(layout.nodes.map((n) => n.labelHeight)).toEqual([41, 41, 41]);
+    expect(layout.width).toBe(396 + 88 + 40);
+    // Start's exit note row sits right under its label.
+    expect(layout.height).toBe(40 + 88 + 41 + 4 + 16 + 40);
+  });
+
+  it("a square's label grows with its text: two title lines, up to three subtitle lines", () => {
+    const layout = workflowCanvasLayout({
+      input: [],
+      agents: [],
+      steps: [
+        {
+          ...code('a-rather-long-step-identifier-that-wraps', [], ['x']),
+          title: 'A long title that takes two lines',
+        },
+      ],
+    });
+    // 8 + 2 × 18 + 1 + 2 × 14 (the step id is monospace).
+    expect(layout.nodes[1].labelHeight).toBe(73);
+    expect(overlapping(layout)).toEqual([]);
   });
 
   it('three code steps: no room above the row, each step one square column', () => {
@@ -228,8 +261,8 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
         code('c', ['n'], ['result']),
       ],
     });
-    expect(layout.nodes.map((n) => n.x)).toEqual([20, 116, 212, 308, 404]);
-    expect(new Set(layout.nodes.map((n) => n.y))).toEqual(new Set([20]));
+    expect(layout.nodes.map((n) => n.x)).toEqual([40, 215, 390, 565, 740]);
+    expect(new Set(layout.nodes.map((n) => n.y))).toEqual(new Set([40]));
     expect(
       layout.nodes.every(
         (n) => n.ports.length === 0 && n.subNodes.length === 0,
@@ -248,44 +281,45 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       {
         text: 'Invalid input → not started',
         outcome: 'fails',
-        x: 20,
-        y: 20 + 52 + 86,
+        x: 40,
+        // Right under Start's 41 px label.
+        y: 40 + 88 + 41 + 4,
         align: 'start',
-        width: 184,
+        width: 300,
         lines: 1,
       },
     ]);
-    // A code step's exit sits under its label, centred on the node.
+    // A code step's exit sits right under its label, centred on the node.
     expect(layout.nodes[2].exits).toEqual([
       {
         text: 'Too long → fails',
         outcome: 'fails',
-        x: 212 + 26,
-        y: 20 + 52 + 86,
+        x: 390 + 44,
+        y: 40 + 88 + 41 + 4,
         align: 'center',
-        width: 92,
-        // Wider than the label box: two rows.
-        lines: 2,
+        width: 150,
+        lines: 1,
       },
     ]);
-    expect(layout.height).toBe(20 + 52 + 86 + 2 * 16 + 20);
+    expect(layout.height).toBe(40 + 88 + 41 + 4 + 16 + 40);
     expect(overlapping(layout)).toEqual([]);
   });
 
   it('four steps (Questions to Insights v2): the agent is a wide node, exits above it', () => {
     const layout = workflowCanvasLayout(V2);
     // Two agent exit rows and their gap above the agent; the squares share its centre line.
-    const cy = 20 + 2 * 16 + 12 + 44;
+    const cy = 40 + 2 * 16 + 12 + 44;
     expect(
       layout.nodes.map((n) => [n.id, n.kind, n.x, n.y, n.width, n.height]),
     ).toEqual([
-      ['start', 'trigger', 20, cy - 26, 52, 52],
-      ['receive-question', 'code', 116, cy - 26, 52, 52],
-      ['load-catalog', 'code', 212, cy - 26, 52, 52],
-      ['analyse', 'agent', 308, cy - 44, 120, 88],
-      ['wrap-up', 'code', 472, cy - 26, 52, 52],
-      ['end', 'output', 568, cy - 26, 52, 52],
+      ['start', 'trigger', 40, cy - 44, 88, 88],
+      ['receive-question', 'code', 221, cy - 44, 88, 88],
+      ['load-catalog', 'code', 402, cy - 44, 88, 88],
+      ['analyse', 'agent', 583, cy - 44, 220, 88],
+      ['wrap-up', 'code', 896, cy - 44, 88, 88],
+      ['end', 'output', 1077, cy - 44, 88, 88],
     ]);
+    expect(layout.nodes[3].labelHeight).toBe(0);
     expect(new Set(layout.nodes.map((n) => n.centerY))).toEqual(new Set([cy]));
 
     const analyse = layout.nodes[3];
@@ -294,38 +328,44 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       {
         text: 'Model error → fails',
         outcome: 'fails',
-        x: 368,
+        x: 693,
         y: cy - 44 - 12 - 32,
         align: 'center',
-        width: 136,
+        width: 220,
         lines: 1,
       },
       {
         text: 'Stop → ends here',
         outcome: 'stops',
-        x: 368,
+        x: 693,
         y: cy - 44 - 12 - 16,
         align: 'center',
-        width: 136,
+        width: 220,
         lines: 1,
       },
     ]);
     expect(analyse.ports).toEqual([
-      { kind: 'model', label: 'Model', x: 308 + 24, y: cy + 44 },
-      { kind: 'tool', label: 'Tools', x: 308 + 102, y: cy + 44 },
+      { kind: 'model', label: 'Model', x: 583 + 55, y: cy + 44 },
+      { kind: 'tool', label: 'Tools', x: 583 + 165, y: cy + 44 },
     ]);
     expect(layout.nodes[0].subtitle).toBe('question, datasets');
     expect(layout.nodes[5].subtitle).toBe('sqlQueries, failedQueries, rows');
-    expect(layout.width).toBe(568 + 26 + 46 + 4);
+    // Two subtitle lines under End.
+    expect(layout.nodes[5].labelHeight).toBe(8 + 18 + 1 + 2 * 14);
+    // Start's note runs under the next label, whose title takes two lines
+    // (`Title receive-question`): it goes below that label.
+    expect(layout.nodes[1].labelHeight).toBe(8 + 2 * 18 + 1 + 14);
+    expect(layout.nodes[0].exits[0].y).toBe(cy - 44 + 88 + 59 + 4);
+    expect(layout.width).toBe(1077 + 88 + 40);
     // Down to the sub-node labels.
-    expect(layout.height).toBe(cy + 44 + 44 + 40 + 52 + 20);
+    expect(layout.height).toBe(cy + 44 + 56 + 52 + 52 + 40);
     expect(overlapping(layout)).toEqual([]);
   });
 
   it('hangs the model and one Tools sub-node under the agent, each under its port', () => {
     const layout = workflowCanvasLayout(V2);
     const analyse = layout.nodes[3];
-    const subTop = analyse.y + 88 + 44;
+    const subTop = analyse.y + 88 + 56;
     expect(analyse.subNodes).toEqual([
       {
         id: 'analyse-model',
@@ -333,9 +373,9 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
         label: 'claude-sonnet-5-5',
         subtitle: 'model',
         tools: [],
-        x: 332 - 20,
+        x: 638 - 26,
         y: subTop,
-        size: 40,
+        size: 52,
       },
       {
         id: 'analyse-tools',
@@ -343,9 +383,9 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
         label: 'Tools',
         subtitle: '3 tools',
         tools: ['list_entities', 'describe_entity', 'run_readonly_sql'],
-        x: 410 - 20,
+        x: 748 - 26,
         y: subTop,
-        size: 40,
+        size: 52,
       },
     ]);
     expect(layout.subEdges.map((e) => [e.id, e.nodeId, e.subNodeId])).toEqual([
@@ -355,9 +395,9 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     const mid = (analyse.y + 88 + subTop) / 2;
     // Straight down from each port to its sub-node.
     expect(layout.subEdges[0].path).toBe(
-      `M 332 ${analyse.y + 88} C 332 ${mid}, 332 ${mid}, 332 ${subTop}`,
+      `M 638 ${analyse.y + 88} C 638 ${mid}, 638 ${mid}, 638 ${subTop}`,
     );
-    expect(layout.subEdges[1].path.startsWith(`M 410 ${analyse.y + 88} `)).toBe(
+    expect(layout.subEdges[1].path.startsWith(`M 748 ${analyse.y + 88} `)).toBe(
       true,
     );
   });
@@ -404,6 +444,15 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       steps: [agentStep('analyse', [], 2)],
     });
     expect(many.nodes[1].agentLine).toBe('Questions to Insights v2 · ≤ 2 steps');
+    // Drawn as the name, then the limit kept on one line.
+    expect(agentLineParts(many.nodes[1].agentLine!)).toEqual({
+      name: 'Questions to Insights v2',
+      limit: '· ≤ 2 steps',
+    });
+    expect(agentLineParts('Questions to Insights v2')).toEqual({
+      name: 'Questions to Insights v2',
+      limit: '',
+    });
   });
 
   it('a model it cannot resolve reads "No model set"', () => {
@@ -458,12 +507,12 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       'failedQueries',
       'rows',
     ]);
-    expect(layout.edges[0].path).toBe(`M 72 ${cy} L 116 ${cy}`);
+    expect(layout.edges[0].path).toBe(`M 128 ${cy} L 221 ${cy}`);
     expect([layout.edges[0].labelX, layout.edges[0].labelY]).toEqual([
-      94,
+      174.5,
       cy - 12,
     ]);
-    expect(layout.edges[3].path).toBe(`M 428 ${cy} L 472 ${cy}`);
+    expect(layout.edges[3].path).toBe(`M 803 ${cy} L 896 ${cy}`);
 
     const one = workflowCanvasLayout({
       input: [],
@@ -528,15 +577,32 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
     ]);
   });
 
-  it('wraps a wide main-path label onto two lines and widens its gap to fit', () => {
+  it('keeps every label on one line and widens a main-path gap to fit its label', () => {
     const valid = edge('validate-write-answer');
-    expect(valid.branchLabelLines).toEqual(['Valid or', 'retried']);
+    expect(valid.branchLabelLines).toEqual(['Valid or retried']);
     expect(edge('plan-analyse').branchLabelLines).toEqual(['Clear']);
-    // Off the main path a label stays on one line.
     expect(edge('plan-clarify').branchLabelLines).toEqual(['Needs clarification']);
+    // `Valid or retried` (102 px) with 16 px each side.
     const gap = node('write-answer').x - (node('validate').x + node('validate').width);
-    expect(gap).toBeGreaterThan(CANVAS.colGap);
-    expect(node('analyse').x - (node('plan').x + node('plan').width)).toBe(CANVAS.colGap);
+    expect(gap).toBe(134);
+    const box = canvasBoxes(layout).find(
+      (b) => b.owner === 'validate-write-answer' && b.part === 'branch-label',
+    )!;
+    expect(box.x).toBeGreaterThanOrEqual(node('validate').x + node('validate').width + 16);
+    expect(box.x + box.w).toBeLessThanOrEqual(node('write-answer').x - 16);
+  });
+
+  it("puts Plan's `Clear` right of the drop to Clarify, never on it", () => {
+    const clear = canvasBoxes(layout).find(
+      (b) => b.owner === 'plan-analyse' && b.part === 'branch-label',
+    )!;
+    const clarify = node('clarify');
+    const gx = clarify.x + clarify.width / 2;
+    expect(clear.x).toBe(gx + 6);
+    // The gap holds it right of the drop, clear of Analyse.
+    expect(clear.x + clear.w).toBeLessThanOrEqual(node('analyse').x - 16);
+    // The drop runs down the middle of the gap.
+    expect(gx).toBe((node('plan').x + node('plan').width + node('analyse').x) / 2);
   });
 
   it('runs the branch down to Clarify, its label beside the drop, and Clarify on to End', () => {
@@ -577,7 +643,7 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
   });
 });
 
-describe('Questions to Insights v2 as the API returns it (compact canvas)', () => {
+describe('Questions to Insights v2 as the API returns it (roomy canvas)', () => {
   for (const [name, w] of [
     ['Clarify ends the run', REAL_V2],
     ['Clarify goes back to Plan', REAL_V2_CLARIFY_LOOP],
@@ -586,10 +652,12 @@ describe('Questions to Insights v2 as the API returns it (compact canvas)', () =
       const layout = workflowCanvasLayout(w);
       const node = (id: string) => layout.nodes.find((n) => n.id === id)!;
 
-      it('fits beside the open right panel at 55% at 1440 × 900, and at 75% or more at 1920 × 1080', () => {
+      it('readability wins over fitting: 40% at 1440 × 900 (pans sideways, its full height shows), 50% at 1920 × 1080', () => {
         // The canvas viewport measured with the Run panel open.
-        expect(fitZoom(layout, 602, 300)).toBeGreaterThanOrEqual(0.55);
-        expect(fitZoom(layout, 1082, 472)).toBeGreaterThanOrEqual(0.75);
+        expect(fitZoom(layout, 602, 300)).toBe(MIN_ZOOM);
+        // At the minimum zoom the whole height shows, down to the Clarify row.
+        expect(layout.height * MIN_ZOOM).toBeLessThanOrEqual(300);
+        expect(fitZoom(layout, 1082, 472)).toBe(0.5);
       });
 
       it('overlaps nothing: nodes, labels, exit notes, ports, sub-nodes, edge labels and the Clarify row', () => {
@@ -631,17 +699,37 @@ describe('Questions to Insights v2 as the API returns it (compact canvas)', () =
         expect(node('plan').agentLine).toBe('Questions to Insights v2');
         expect(node('write-answer').agentLine).toBe('Questions to Insights v2');
         expect(node('analyse').agentLine).toBe('Questions to Insights v2 · ≤ 15 steps');
-        // The long exit wraps; the others take one row.
-        expect(node('analyse').exits.map((e) => e.lines)).toEqual([1, 1, 2]);
+        // As wide as the agent: every exit note takes one row.
+        expect(node('analyse').exits.map((e) => e.lines)).toEqual([1, 1, 1]);
       });
 
-      it('no sub-node pushes a later column right', () => {
+      it('no sub-node pushes a later column right: only labels set the gaps', () => {
         const validate = node('validate');
         const writeAnswer = node('write-answer');
-        const fromValidate = writeAnswer.x - (validate.x + validate.width);
         const plan = node('plan');
-        expect(node('analyse').x - (plan.x + plan.width)).toBe(CANVAS.colGap);
-        expect(fromValidate).toBeLessThan(CANVAS.colGap * 2);
+        // `Clear` right of the drop to Clarify: 2 × (6 + 41.5 + 16).
+        expect(node('analyse').x - (plan.x + plan.width)).toBe(127);
+        // `Valid or retried` on one line, 16 px each side.
+        expect(writeAnswer.x - (validate.x + validate.width)).toBe(134);
+        expect(node('validate').x - (node('analyse').x + node('analyse').width)).toBe(93);
+      });
+
+      it('edge labels sit on no line and no node', () => {
+        const clarify = node('clarify');
+        const gx = clarify.x + clarify.width / 2;
+        const plan = node('plan');
+        const labels = canvasBoxes(layout).filter(
+          (b) => b.part === 'edge-label' || b.part === 'branch-label',
+        );
+        for (const b of labels) {
+          // Not across the drop to Clarify.
+          const onDrop =
+            b.x < gx && gx < b.x + b.w && b.y + b.h > plan.centerY && b.y < clarify.y;
+          expect(onDrop).withContext(b.owner).toBeFalse();
+          // Labels under the centre line start below it; above it, end above it.
+          const cy = plan.centerY;
+          expect(b.y < cy && cy < b.y + b.h).withContext(`${b.owner} ${b.part}`).toBeFalse();
+        }
       });
     });
   }
@@ -658,6 +746,31 @@ describe('Questions to Insights v2 as the API returns it (compact canvas)', () =
       expect(clarify.x + clarify.width / 2).toBeLessThan(node('analyse').x);
       expect(edge('clarify-end')).toBeUndefined();
       expect(node('end').subtitle).toBe('sqlQueries, failedQueries, rows, answer');
+    });
+
+    it("puts Clarify's exit note right under its own label, and the canvas below it", () => {
+      const clarify = node('clarify');
+      expect(clarify.labelHeight).toBe(41);
+      expect(clarify.exits).toEqual([
+        {
+          text: 'Waits for an answer → waits for you',
+          outcome: 'waits',
+          x: clarify.x + 44,
+          y: clarify.y + 88 + 41 + 4,
+          align: 'center',
+          width: 150,
+          lines: 2,
+        },
+      ]);
+      expect(layout.height).toBe(clarify.y + 88 + 41 + 4 + 2 * 16 + 40);
+    });
+
+    it("Analyse's clarifying question waits for the user, on one row", () => {
+      expect(node('analyse').exits.map((e) => [e.text, e.outcome, e.lines])).toEqual([
+        ['Model error → fails', 'fails', 1],
+        ['Stop → ends here', 'stops', 1],
+        ['Clarifying question → waits for you', 'waits', 1],
+      ]);
     });
 
     it('draws the way back as a short line up beside the drop, into Plan\'s right side', () => {
@@ -702,8 +815,8 @@ describe('canvas zoom', () => {
     expect(fitZoom(layout, 0, 0)).toBe(0.4);
   });
 
-  it('a four-step chain fits a 600 px wide canvas at 90%', () => {
-    expect(fitZoom(workflowCanvasLayout(V2), 600, 400)).toBe(0.9);
+  it('a four-step chain (1205 px wide) fits a 600 px wide canvas at 45%', () => {
+    expect(fitZoom(workflowCanvasLayout(V2), 600, 400)).toBe(0.45);
   });
 
   it('zoom in and out step through the levels and stop at the ends', () => {
