@@ -615,12 +615,18 @@ export class WorkflowRunsService implements OnModuleInit {
     };
   }
 
-  /** Store a run as it starts: `running`, with its input (data-model 3.16). */
+  /**
+   * Store a run as it starts: `running`, with its input and the workflow's
+   * contract hash at that moment (data-model 3.16).
+   */
   private async start(prepared: PreparedRun): Promise<WorkflowRunDoc> {
     const base: WorkflowRunDoc = {
       id: randomUUID(),
       workflowId: prepared.workflow.id,
       workflowName: prepared.workflow.name,
+      ...(prepared.workflow.contractHash
+        ? { contractHash: prepared.workflow.contractHash }
+        : {}),
       input: prepared.values,
       ...(prepared.context
         ? { context: { fromRunId: prepared.context.fromRunId } }

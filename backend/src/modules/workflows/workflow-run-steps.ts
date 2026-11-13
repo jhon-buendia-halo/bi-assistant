@@ -81,6 +81,11 @@ export interface WorkflowRun {
   id: string;
   workflowId: string;
   workflowName: string;
+  /**
+   * The workflow's contract hash when the run started (api.md 117;
+   * agents.md 5.12). Absent on runs stored before it, and on draft runs.
+   */
+  contractHash?: string;
   input: WorkflowInputValues;
   context?: { fromRunId: string };
   status: WorkflowRunStatus;

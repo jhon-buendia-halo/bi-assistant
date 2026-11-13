@@ -334,6 +334,44 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(stored).toEqual(run);
   });
 
+  it("a v2 run stores the workflow's contractHash (117), and every step's output keeps its declared contract", async () => {
+    const detail = (await http().get('/workflows/qti-v2-turn').expect(200))
+      .body as {
+      contractHash: string;
+      steps: {
+        id: string;
+        outputSchema: { properties: object; required: string[] };
+      }[];
+    };
+    const run = (
+      await http()
+        .post('/workflows/qti-v2-turn/runs')
+        .send({
+          input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
+        })
+        .expect(200)
+    ).body as {
+      id: string;
+      contractHash?: string;
+      steps: { id: string; status: string; output?: Record<string, unknown> }[];
+    };
+    expect(run.contractHash).toBe(detail.contractHash);
+    const stored = (await http().get(`/workflow-runs/${run.id}`).expect(200))
+      .body as { contractHash?: string };
+    expect(stored.contractHash).toBe(detail.contractHash);
+    // Every step ran and passed on exactly the fields its schema requires.
+    for (const step of run.steps) {
+      const declared = detail.steps.find((entry) => entry.id === step.id)!;
+      expect({ id: step.id, status: step.status }).toEqual({
+        id: step.id,
+        status: 'success',
+      });
+      expect(Object.keys(step.output ?? {})).toEqual(
+        expect.arrayContaining(declared.outputSchema.required),
+      );
+    }
+  });
+
   it('asks the model with the input last and the agent tools, the same each time', async () => {
     /** The last user message of a request, as the provider read it. */
     const lastUser = (req: ReturnType<typeof asSent>) =>

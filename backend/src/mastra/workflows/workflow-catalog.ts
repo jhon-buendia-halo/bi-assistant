@@ -24,10 +24,10 @@ import type { AgentWorkflow } from './agent-workflows';
 import {
   QTI_V2_TURN_STEPS,
   QTI_V2_TURN_WORKFLOW_ID,
-  type WorkflowStepEntry,
+  type ContractStepEntry,
 } from './qti-v2-turn.steps';
+import { assertWorkflowContracts, contractHash } from './workflow-contract';
 import {
-  assertWorkflowInputCoverage,
   type WorkflowInputField,
   type WorkflowInputValue,
   type WorkflowInputValues,
@@ -95,21 +95,26 @@ export interface CodeWorkflowSource {
   trigger: WorkflowTrigger;
   /** The typed input of a run, in form order. */
   input: readonly WorkflowInputField[];
-  steps: readonly WorkflowStepEntry[];
+  /** Each with its declared input and output schema (agents.md 5.12). */
+  steps: readonly ContractStepEntry[];
   /** `steps` for every code workflow today. */
   bar: WorkflowBar;
+  /** The hash of its data contract (api.md 117; `contractHash`). */
+  contractHash: string;
 }
 
 /** The longest question a run takes, in characters (trimmed). */
 export const QUESTION_MAX_LENGTH = 4000;
 
 /**
- * The workflows defined in code, in catalogue order. Built through the
- * input-coverage check: a workflow whose steps read a field that neither
- * its input nor an earlier step gives throws here, so it never loads.
+ * The workflows defined in code, in catalogue order, each with its contract
+ * hash. Built through the contract check (workflows R26): a workflow with a
+ * step input that neither its input nor an earlier step gives, or gives
+ * with an incompatible type or maybe not at all, throws here, so it never
+ * loads.
  */
 export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
-  assertWorkflowInputCoverage<CodeWorkflowSource>([
+  assertWorkflowContracts<Omit<CodeWorkflowSource, 'contractHash'>>([
     {
       id: QTI_V2_TURN_WORKFLOW_ID,
       name: ASSISTANT_V2_NAME,
@@ -123,7 +128,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       steps: QTI_V2_TURN_STEPS,
       bar: 'steps',
     },
-  ]);
+  ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
 export interface AgentRunTurn {

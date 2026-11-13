@@ -1,52 +1,13 @@
 import { CODE_WORKFLOWS } from './workflow-catalog';
 import {
-  assertWorkflowInputCoverage,
-  checkWorkflowInputCoverage,
   inputFieldsWithUsage,
   validateWorkflowInput,
   type InputWorkflowShape,
   type WorkflowInputField,
 } from './workflow-input';
 
-/** A workflow whose steps read two fields nothing gives them. */
-const BROKEN: InputWorkflowShape = {
-  id: 'broken',
-  input: [
-    { name: 'question', label: 'Question', type: 'text', required: true },
-  ],
-  steps: [
-    { id: 'a', input: ['question', 'datasets'], output: ['x'] },
-    // `z` is only given by a later step.
-    { id: 'b', input: ['x', 'z'], output: [] },
-    { id: 'c', input: ['question'], output: ['z'] },
-  ],
-};
-
-describe('the input node covers every step (workflows R14)', () => {
-  it.each(CODE_WORKFLOWS.map((workflow) => [workflow.id, workflow]))(
-    'catalogued workflow %s leaves no step input uncovered',
-    (_id, workflow) => {
-      expect(checkWorkflowInputCoverage(workflow)).toEqual([]);
-    },
-  );
-
-  it('names each step input that neither the input nor an earlier step gives', () => {
-    expect(checkWorkflowInputCoverage(BROKEN)).toEqual([
-      { stepId: 'a', field: 'datasets' },
-      { stepId: 'b', field: 'z' },
-    ]);
-  });
-
-  it('refuses a broken workflow when the catalogue is built', () => {
-    expect(() => assertWorkflowInputCoverage([BROKEN])).toThrow(
-      'Workflow "broken" has step inputs that neither its input nor an earlier step gives: a.datasets, b.z',
-    );
-  });
-
-  it('passes a covered catalogue through unchanged', () => {
-    expect(assertWorkflowInputCoverage(CODE_WORKFLOWS)).toBe(CODE_WORKFLOWS);
-  });
-});
+// That the input node covers every step (workflows R14) is now part of the
+// data contract's check: workflow-contract.spec.ts (`missing`).
 
 describe('usedBy: the steps that read a field from the input (api.md 116)', () => {
   it("qti-v2-turn's question and datasets are read by Receive question only", () => {

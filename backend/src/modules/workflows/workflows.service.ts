@@ -10,6 +10,7 @@ import {
   type WorkflowBar,
   type WorkflowTrigger,
 } from '../../mastra/workflows/workflow-catalog';
+import type { JsonSchema } from '../../mastra/workflows/workflow-contract';
 import {
   inputFieldsWithUsage,
   type WorkflowInputFieldDetail,
@@ -71,9 +72,15 @@ export interface WorkflowAgentDetail {
   toolDetails: AgentToolDetail[];
 }
 
-/** A workflow step as the detail shows it: an agent step names its key. */
+/**
+ * A workflow step as the detail shows it (api.md 117): an agent step names
+ * its key; a catalogued step carries its declared input and output schema
+ * (agents.md 5.12), from which `input` and `output` are derived.
+ */
 export type WorkflowDetailStep = Omit<AgentWorkflowStep, 'agent'> & {
   agent?: NonNullable<AgentWorkflowStep['agent']> & { key: string };
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
 };
 
 /** One workflow in detail (api.md 117): an `AgentWorkflow` too. */
@@ -81,16 +88,23 @@ export interface WorkflowDetail extends Omit<WorkflowSummary, 'agents'> {
   /** The agents its steps call, in step order, each once, in detail. */
   agents: WorkflowAgentDetail[];
   steps: WorkflowDetailStep[];
+  /** The hash of its data contract (12 hex; agents.md 5.12). */
+  contractHash: string;
 }
 
-/** A workflow as a run needs it: its summary and its steps. */
+/**
+ * A workflow as a run needs it: its summary, its steps and, for a
+ * catalogued workflow, its contract hash (a draft run's has none).
+ */
 export interface WorkflowDefinition extends WorkflowSummary {
   steps: AgentWorkflow['steps'];
+  contractHash?: string;
 }
 
-/** A catalogue entry: its summary, and its steps built on request. */
+/** A catalogue entry: its summary, its contract hash, its steps built on request. */
 interface CatalogueEntry {
   summary: WorkflowSummary;
+  contractHash: string;
   steps(): WorkflowDetailStep[];
 }
 
@@ -122,7 +136,12 @@ export class WorkflowsService {
     const agents = await Promise.all(
       entry.summary.agents.map((agent) => this.agentDetail(agent)),
     );
-    return { ...entry.summary, agents, steps: entry.steps() };
+    return {
+      ...entry.summary,
+      agents,
+      steps: entry.steps(),
+      contractHash: entry.contractHash,
+    };
   }
 
   /**
@@ -131,7 +150,11 @@ export class WorkflowsService {
    */
   async definition(id: string): Promise<WorkflowDefinition> {
     const entry = await this.find(id);
-    return { ...entry.summary, steps: entry.steps() };
+    return {
+      ...entry.summary,
+      steps: entry.steps(),
+      contractHash: entry.contractHash,
+    };
   }
 
   /**
@@ -215,10 +238,20 @@ function codeEntry(
       missingDatasets: [...agent.missingDatasets],
       starterQuestions: [...agent.starterQuestions],
     },
+    contractHash: source.contractHash,
     steps: () =>
       withAgentKey(
         agentWorkflow(source.primaryFor)?.steps ?? [],
         source.primaryFor,
-      ),
+      ).map((step) => {
+        const declared = source.steps.find((entry) => entry.id === step.id);
+        return declared
+          ? {
+              ...step,
+              inputSchema: structuredClone(declared.inputSchema),
+              outputSchema: structuredClone(declared.outputSchema),
+            }
+          : step;
+      }),
   };
 }

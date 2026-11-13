@@ -661,7 +661,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     usedBy: string[];                 // the ids of the steps that read the field straight from the input (a step whose `input` names it while no earlier step's `output` does), in step order; [] when none does
   };
   ```
-- **The input node covers every step.** Every name a step's `input` lists is a field of the workflow's `input` or an `output` of an earlier step; the catalogue refuses (throws when it loads) a workflow that breaks this, and a unit test checks every catalogued workflow (`checkWorkflowInputCoverage`, `backend/src/mastra/workflows/workflow-input.ts`). A rule field (`maxLength`, `min`, `max`) is sent only where the field has one.
+- **The input node covers every step.** Every field a step's input schema requires is a field of the workflow's `input` or an output of an earlier step, with a compatible type; the catalogue refuses (throws when it loads) a workflow that breaks this, and a unit test checks every catalogued workflow (`checkWorkflowContract`, `backend/src/mastra/workflows/workflow-contract.ts`; [agents.md](agents.md) 5.12). A rule field (`maxLength`, `min`, `max`) is sent only where the field has one.
 - Values:
 
   | id | name | kind | agents | stepCount | bar | datasets |
@@ -678,7 +678,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - **Order:** `qti-v2-turn` only. No agent (System, Official or user) is listed.
 
 #### 117. `GET /workflows/:id`
-- Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[] }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
+- Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[]; contractHash: string }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
   ```ts
   type WorkflowAgentDetail = {
     key: string; name: string;        // as 116's agents entry, same order (step order, each once)
@@ -689,11 +689,23 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   };
   type WorkflowDetailStep = Omit<AgentWorkflowStep, 'agent'> & {
     agent?: { key: string; name: string; tools: string[]; maxSteps: number };   // `key`: the agent's registry key or user-agent id
+    inputSchema: JsonSchema;          // the step's declared input (agents.md 5.12); `input` is its property names, in order
+    outputSchema: JsonSchema;         // the step's declared output; `output` is its property names, in order
+  };
+  // JSON Schema draft 2020-12 as Zod 4's z.toJSONSchema writes it, without `$schema`: an object schema
+  // whose `properties` each carry `type` (a string, or e.g. ['string', 'null'] for a nullable field),
+  // `items` for an array, `description`, and nested `properties`/`required` for an object; `required`
+  // lists the required properties. The input side has no `additionalProperties`; the output side has
+  // `additionalProperties: false` (a step passes on only its declared fields).
+  type JsonSchema = {
+    type?: string | string[]; properties?: Record<string, JsonSchema>; required?: string[];
+    items?: JsonSchema; description?: string; anyOf?: JsonSchema[]; additionalProperties?: boolean | JsonSchema;
   };
   ```
 - `input` is 116's, each field with its rules and `usedBy` (the Start node's Parameters, [ui.md](ui.md) 4.4b).
+- `contractHash`: the workflow's data contract as 12 hex characters: the first 12 of the sha256 of the canonical JSON (keys sorted at every level) of `{ input: [{ name, type, required }] (each input field, in order), steps: [{ id, inputSchema, outputSchema }] (in order) }`. It changes when any step schema, step id or input field's name, type or `required` changes, and only then (not with a label, help text or the workflow's name). Each run stores the hash it started with (121 `contractHash`). For `qti-v2-turn`, Analyse's `inputSchema` has `question` (`type: 'string'`) and `catalog` (an array of entity objects), both required.
 - Each agent step's `agent` also names its agent's `key`: the agent the code workflow runs for (`assistant-v2` for `qti-v2-turn`). `agents` is 116's list with each agent's `model`, `systemPrompt` and `toolDetails` read from 34 (the workflow page's tool dialog, [ui.md](ui.md) 4.4b); 116 itself is unchanged.
-- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent`.
+- For `qti-v2-turn`, `steps` equals `agentWorkflow('assistant-v2').steps`, the `workflow` of 34, with `key` on its agent step's `agent` and each step's `inputSchema` and `outputSchema` (34's `workflow` carries no schemas).
 - Errors (Style B): `404 "Workflow \"<id>\" not found"` for any id 116 does not list: unknown, a removed one (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `seq-text-demo`, `deep-analysis`), a System agent (`agent:sql-fixer`), or the workflow's own agent (`agent:assistant-v2`).
 
 #### 118. `POST /workflows/:id/runs`
@@ -1393,6 +1405,7 @@ type WorkflowRun = {
   id: string;                      // the run id; the host is `run-<id>`, the workspace `session-run-<id>`
   workflowId: string;
   workflowName: string;            // the workflow's name when the run started
+  contractHash?: string;           // 117's contractHash when the run started; absent on runs stored before 2026-11-13 and on draft runs (R12)
   input: Record<string, string | number | boolean | string[]>;   // the checked input (defaults filled)
   context?: { fromRunId: string };
   status: 'running' | 'success' | 'failed' | 'stopped';   // 'running' only while it runs (121); done.run is never 'running'
@@ -1424,7 +1437,7 @@ type WorkflowRunStep = {
   inputTruncated?: true;             // instead of `input` when it is larger
   output?: Record<string, unknown>;  // at most 20 000 JSON characters
   outputTruncated?: true;
-  error?: string;
+  error?: string;                    // failed; a contract violation reads `Contract violation in <title>[ (input)]: <path> <message>` (below)
   startedAt?: string;                // ISO; absent for a skipped step
   endedAt?: string;                  // ISO; absent while running and for a skipped step
   toolCalls?: WorkflowRunToolCall[]; // agent steps fed by an agent turn: their calls in order, at most 50; absent when none
@@ -1440,6 +1453,8 @@ type WorkflowRunToolCall = {
 ```
 
 `panelItems`, `workflow` and `agent` are derived on every read (121) and never stored; the stored run is [data-model.md](data-model.md) 3.16. Runs stored before the step `input`, times and `toolCalls` existed lack them. A step's tool calls come from the turn's `tool` and `tool-result` events: each call belongs to the agent step running when its `tool` event arrives, and a result ends the first unfinished call of the same tool; a result without a call is kept as a call with no `durationMs`. A deep analysis's agent steps have no `toolCalls` (their calls are not turn events).
+
+**Contract violations** ([agents.md](agents.md) 5.12; workflows R26). A step whose input or output breaks its declared schema (117's `inputSchema` / `outputSchema`) fails with the error `Contract violation in <Step title>: <path> <message>` for its output and `Contract violation in <Step title> (input): <path> <message>` for its input, checked before it runs. `<path>` is always one word: the first failing field, dotted with indices (`calls[2].rowCount`), or `(root)` when the whole value is wrong; `<message>` is Zod 4's (`Invalid input: expected number, received string`). Only the first problem is named. The failing step's `step` event is `failed` with that `error`, the later steps are `skipped`, the run is stored `failed` with the same `error`, and the stream ends with `error { content }` carrying it. Example: `Contract violation in Analyse: calls[2].rowCount Invalid input: expected number, received string`; `Contract violation in Receive question (input): datasets Invalid input: expected array, received string`; `Contract violation in Analyse: (root) Invalid input: expected object, received string`.
 
 **Stop.** The client aborts the fetch; the server aborts the agent turn (a readiness assessment is cancelled, ADR-0033) and sends nothing more, as 3.1. The run is stored as `stopped`, with the partial answer the host persisted, if any.
 
