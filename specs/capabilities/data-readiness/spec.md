@@ -248,7 +248,7 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 
 See [ui.md](../../system/ui.md).
 
-- **Agent Hub** (section 4.4): the Data Readiness Agent card in the Official section, with no Start chat.
+- **Agent Hub** (section 4.4): the Data Readiness Agent card in the Data Foundations section (owner Official), with no Start chat.
 - **Workflows** (sections 4.4a and 4.4b): the `Data Readiness Agent` workflow card and page, whose Start chat and Execute are disabled, titled with the requirement, while no PostgreSQL or Databricks dataset exists. The page's Run tab: the `dataset` list, the question with its example chips, the running tool row's progress, the answer with its readiness card, the scorecard under it, and the run's files.
 - **Agent detail** (section 4.5): the Official agent's tabs (no Chat Box) and **Used in** `Data Readiness Agent`; the System Prompt tab is editable.
 - **Session chat** (section 4.12): the agent chip; each tool call shown as a step; the readiness card on the answer.

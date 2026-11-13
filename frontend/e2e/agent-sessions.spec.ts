@@ -112,8 +112,8 @@ test('only Questions to Insights v2 can be run, and no agent page offers a chat'
   // And no agent card offers a chat.
   await openHub(page);
   await expect(page.getByTestId(`agent-card-${historianId}`)).toBeVisible();
-  const system = page.getByTestId('agent-section-system');
-  await system.getByTestId('agent-show-more-system').click();
+  // Every card shows: the hub has no Show more (agents-evals R3).
+  await expect(page.getByTestId('agent-card-sql-fixer')).toBeVisible();
   await expect(
     page.getByRole('button', { name: /^Start chat with / }),
   ).toHaveCount(0);

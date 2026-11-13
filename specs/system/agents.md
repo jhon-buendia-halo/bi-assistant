@@ -26,18 +26,20 @@ An **agent** is a named, stateless-by-default LLM wrapper with:
 
 **Personas.** Every built-in agent is also a **user persona**: a human first name and a job title, so the Agents catalogue reads as a team. The table lives in code, `backend/src/mastra/agent-personas.ts`, by registry key:
 
-| Registry key | Persona | Job title |
-|---|---|---|
-| `assistant` | Emily | Data Analyst |
-| `assistant-v2` | Michael | Insights Analyst |
-| `data-readiness` | Sarah | Data Quality Analyst |
-| `visualization` | Ryan | Visualization Designer |
-| `sql-fixer` | David | SQL Developer |
-| `sql-verifier` | Rachel | SQL Reviewer |
-| `knowledge-bootstrap` | Kevin | Knowledge Engineer |
-| `assistant-eval-judge` | Laura | QA Evaluator |
-| `analysis-planner` | Olivia | Analysis Lead |
-| `answer-writer` | Jessica | Insights Writer |
+| Registry key | Persona | Job title | Domain |
+|---|---|---|---|
+| `assistant` | Emily | Data Analyst | `analysis` |
+| `assistant-v2` | Michael | Insights Analyst | `analysis` |
+| `data-readiness` | Sarah | Data Quality Analyst | `data-foundations` |
+| `visualization` | Ryan | Visualization Designer | `storytelling` |
+| `sql-fixer` | David | SQL Developer | `sql` |
+| `sql-verifier` | Rachel | SQL Reviewer | `sql` |
+| `knowledge-bootstrap` | Kevin | Knowledge Engineer | `data-foundations` |
+| `assistant-eval-judge` | Laura | QA Evaluator | `quality` |
+| `analysis-planner` | Olivia | Analysis Lead | `analysis` |
+| `answer-writer` | Jessica | Insights Writer | `storytelling` |
+
+Each persona also carries a **domain**, the specialty that groups the agent in the Agent Hub. The six ids, in the order the hub shows them: `data-foundations` (Data Foundations), `analysis` (Analysis), `sql` (SQL Engineering), `storytelling` (Storytelling), `quality` (Quality & Evals) and `general` (General). `general` is the default (`DEFAULT_AGENT_DOMAIN`) and belongs to no built-in agent: it is where user agents with no domain chosen sit. The ids and the check `isAgentDomain` live in `agent-personas.ts` (`AGENT_DOMAINS`, `AgentDomain`).
 
 The persona is presentation only. The Mastra agent keeps its technical name (for example `Data Readiness Agent`) in traces, monitoring, workflow steps and chat sessions, and the model never sees the persona. Only the agent catalogue (`GET /agents`, `GET /agents/:key`, [api.md](api.md) 33, 34) reports it: `name` is the persona's name and `role` its job title; the catalogue sorts by that `name`. The persona name also names the agent in the messages of the job-description editor (agents-evals R101, R102, R107). A user agent has no persona: its `name` is what the user typed and its optional `role` is the job title it was given (data-model.md 3.10). In the app a system prompt is called a **job description**; the `prompt` and `instructions` fields, the prompt endpoints and `agent_prompt_overrides` keep their names.
 

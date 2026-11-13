@@ -62,9 +62,6 @@ async function openAgent(page: Page, key: string, name: string) {
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
-  if (!['assistant', V2_KEY].includes(key)) {
-    await page.getByTestId('agent-show-more-system').click();
-  }
   await page.getByTestId(`agent-${key}`).click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 }

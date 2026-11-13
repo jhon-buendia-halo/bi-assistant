@@ -243,6 +243,7 @@ function toInput(dto: SaveAgentDto): AgentConfigInput {
   return {
     name: text(dto?.name),
     role: text(dto?.role),
+    domain: text(dto?.domain),
     description: text(dto?.description),
     instructions: text(dto?.instructions),
     datasets: strings(dto?.datasets),

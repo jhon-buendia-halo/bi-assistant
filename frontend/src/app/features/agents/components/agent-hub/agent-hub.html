@@ -47,23 +47,38 @@
     />
   </div>
 
-  <!-- Filters -->
-  <div
-    role="group"
-    aria-label="Filter agents"
-    class="mt-3 flex flex-wrap items-center gap-2"
-  >
-    @for (item of filters; track item.id) {
-      <button
-        type="button"
-        (click)="filter.set(item.id)"
-        [attr.aria-pressed]="filter() === item.id"
-        class="filter-pill"
-        [class.filter-pill-active]="filter() === item.id"
-      >
-        {{ item.label }}
-      </button>
-    }
+  <!-- Filters: All, Pinned and the domains; the owner menu on the right -->
+  <div class="mt-3 flex items-start gap-3">
+    <div
+      role="group"
+      aria-label="Filter agents"
+      class="flex flex-wrap items-center gap-2"
+    >
+      @for (item of filters(); track item.id) {
+        <button
+          type="button"
+          [attr.data-testid]="'agent-filter-' + item.id"
+          (click)="filter.set(item.id)"
+          [attr.aria-pressed]="filter() === item.id"
+          class="filter-pill"
+          [class.filter-pill-active]="filter() === item.id"
+        >
+          {{ item.label }}
+        </button>
+      }
+    </div>
+    <select
+      data-testid="agent-owner-filter"
+      aria-label="Filter by owner"
+      (change)="onOwner($event)"
+      class="field ml-auto w-auto shrink-0 rounded-full py-1"
+    >
+      @for (item of owners; track item.id) {
+        <option [value]="item.id" [selected]="owner() === item.id">
+          {{ item.label }}
+        </option>
+      }
+    </select>
   </div>
 
   @if (loading()) {
@@ -93,7 +108,7 @@
             {{ section.label }}
           </h3>
           <div class="mt-3 grid grid-cols-3 gap-3">
-            @for (agent of section.shown; track agent.key) {
+            @for (agent of section.agents; track agent.key) {
               <app-agent-card
                 [agent]="agent"
                 (open)="openAgent.emit(agent)"
@@ -101,25 +116,6 @@
               />
             }
           </div>
-          @if (section.hidden > 0) {
-            <button
-              type="button"
-              [attr.data-testid]="'agent-show-more-' + section.id"
-              [attr.aria-expanded]="section.expanded"
-              (click)="toggleSection(section.id)"
-              class="btn btn-ghost mt-3 px-2 py-1 text-[12px]"
-            >
-              <lucide-angular
-                [img]="section.expanded ? ChevronUp : ChevronDown"
-                [size]="14"
-              />
-              <span>{{
-                section.expanded
-                  ? "Show less"
-                  : "Show more (" + section.hidden + ")"
-              }}</span>
-            </button>
-          }
         </section>
       }
     </div>

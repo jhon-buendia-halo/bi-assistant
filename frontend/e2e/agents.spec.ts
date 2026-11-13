@@ -40,15 +40,14 @@ test('opens an agent from the Agents list and switches between its tabs', async 
     .getByRole('button', { name: 'Agents' })
     .click();
 
-  // The hub lists the harness registry in sections; the System section
-  // shows its first row of 3 until "Show more" (R3).
+  // The hub lists the harness registry in domain sections, every card
+  // shown (R1, R3).
   const assistantRow = page.getByTestId('agent-assistant');
   await expect(
-    page.getByTestId('agent-section-official').getByTestId('agent-assistant'),
+    page.getByTestId('agent-section-analysis').getByTestId('agent-assistant'),
   ).toContainText('Emily');
-  await page.getByTestId('agent-show-more-system').click();
   await expect(
-    page.getByTestId('agent-section-system').getByTestId('agent-sql-fixer'),
+    page.getByTestId('agent-section-sql').getByTestId('agent-sql-fixer'),
   ).toBeVisible();
 
   await assistantRow.click();
@@ -104,11 +103,10 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await page.getByTestId('eval-set-world-cup').click();
   await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(0);
 
-  // Back returns to the hub, with the System section collapsed again.
+  // Back returns to the hub.
   await page.getByRole('button', { name: 'All agents' }).click();
-  await page.getByTestId('agent-show-more-system').click();
   await expect(
-    page.getByTestId('agent-section-system').getByTestId('agent-sql-verifier'),
+    page.getByTestId('agent-section-sql').getByTestId('agent-sql-verifier'),
   ).toBeVisible();
   await stub.close();
 });
@@ -118,7 +116,6 @@ test('shows the stateless, no-tool agents accurately', async ({ page }) => {
     .getByRole('complementary', { name: 'Navigation rail' })
     .getByRole('button', { name: 'Agents' })
     .click();
-  await page.getByTestId('agent-show-more-system').click();
   await page.getByTestId('agent-sql-fixer').click();
 
   await page.getByTestId('agent-tab-tools').click();

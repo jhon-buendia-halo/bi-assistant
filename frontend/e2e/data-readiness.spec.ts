@@ -345,9 +345,9 @@ test('the Data Readiness Agent is an Official library agent with no workflow', a
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
 
-  // Then the Data Readiness Agent is listed under Official.
-  const official = page.getByTestId('agent-section-official');
-  const card = official.getByTestId(`agent-card-${AGENT_KEY}`);
+  // Then the Data Readiness Agent is listed under Data Foundations, Official.
+  const foundations = page.getByTestId('agent-section-data-foundations');
+  const card = foundations.getByTestId(`agent-card-${AGENT_KEY}`);
   await expect(card).toBeVisible();
   // Its card shows its persona: Sarah, Data Quality Analyst.
   await expect(card.getByTestId(`agent-${AGENT_KEY}`)).toContainText('Sarah');

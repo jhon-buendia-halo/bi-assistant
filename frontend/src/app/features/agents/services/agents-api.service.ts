@@ -8,6 +8,15 @@ export type AgentKind = 'official' | 'system' | 'user';
 export type AgentStatus = 'builtin' | 'draft' | 'live';
 export type AgentOwner = 'Official' | 'System' | 'You';
 
+/** The specialty the hub groups an agent under (api.md 33, agents.md 1.2). */
+export type AgentDomain =
+  | 'data-foundations'
+  | 'analysis'
+  | 'sql'
+  | 'storytelling'
+  | 'quality'
+  | 'general';
+
 /** The tools an agent's author can switch on or off (agents-evals R55). */
 export type AgentToolId = 'sample_rows' | 'ask_clarification' | 'visuals';
 
@@ -16,6 +25,8 @@ export interface AgentConfig {
   name: string;
   /** Optional job title shown under the name (api.md 41). */
   role?: string;
+  /** The hub section the agent shows in; absent = General (api.md 41). */
+  domain?: AgentDomain;
   description: string;
   instructions: string;
   datasets: string[];
@@ -36,6 +47,8 @@ export interface Agent {
   name: string;
   /** The persona's job title; empty when a user agent has none. */
   role?: string;
+  /** The specialty the hub groups the agent under; absent reads as General. */
+  domain?: AgentDomain;
   description: string;
   tools: string[];
   kind?: AgentKind;

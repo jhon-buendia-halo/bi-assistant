@@ -34,10 +34,21 @@ const V2_TOOLS = [
 /** Its built-in skills, on demand (agents.md 7.4), sorted by name. */
 const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 /**
- * The Official cards in hub order, alphabetical by persona name ("Emily",
- * "Michael", "Sarah"; agents-evals R1, R107).
+ * The Official cards in hub order under the Official owner: Data Foundations
+ * ("Sarah") before Analysis ("Emily", "Michael"; agents-evals R1, R107).
  */
-const OFFICIAL_KEYS = ['assistant', V2_KEY, 'data-readiness'];
+const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY];
+/** The hub's sections under All, in domain order (agents-evals R1). */
+const DOMAIN_SECTIONS = [
+  'data-foundations',
+  'analysis',
+  'sql',
+  'storytelling',
+  'quality',
+  'general',
+];
+/** The Analysis section: Official by name, then System (R1). */
+const ANALYSIS_KEYS = ['assistant', V2_KEY, 'analysis-planner'];
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -118,72 +129,112 @@ function button(page: Page, name: string): Locator {
   return page.getByRole('button', { name, exact: true });
 }
 
-test('shows the built-in agents and mine in sections', async ({ page }) => {
+test('shows the built-in agents and mine in sections by domain', async ({
+  page,
+}) => {
   await openHub(page);
 
-  await expect(section(page, 'system')).toBeVisible();
-  expect(await sectionIds(page)).toEqual(['official', 'mine', 'system']);
+  await expect(section(page, 'general')).toBeVisible();
+  expect(await sectionIds(page)).toEqual(DOMAIN_SECTIONS);
   await expect(section(page, 'pinned')).toHaveCount(0);
   await expect(button(page, 'New agent')).toBeEnabled();
+  // Every card shows: no section hides a row behind Show more (R3).
+  await expect(page.getByText(/^Show more/)).toHaveCount(0);
+  await expect(cards(page)).toHaveCount(12);
 
-  const official = section(page, 'official');
+  const analysis = section(page, 'analysis');
   await expect(
-    official.getByRole('heading', { name: 'Official' }),
+    analysis.getByRole('heading', { name: 'Analysis', exact: true }),
   ).toBeVisible();
-  await expect(official.getByTestId('agent-card-assistant')).toContainText(
+  expect(await cardKeys(analysis)).toEqual(ANALYSIS_KEYS);
+  await expect(analysis.getByTestId('agent-card-assistant')).toContainText(
     ASSISTANT,
   );
-  await expect(official.getByTestId('agent-role-assistant')).toHaveText(
+  await expect(analysis.getByTestId('agent-role-assistant')).toHaveText(
     ASSISTANT_ROLE,
   );
-  await expect(official.getByTestId('agent-card-assistant')).toContainText(
+  await expect(analysis.getByTestId('agent-card-assistant')).toContainText(
     'Owner: Official',
   );
-  await expect(cards(official)).toHaveCount(OFFICIAL_KEYS.length);
-  expect(await cardKeys(official)).toEqual(OFFICIAL_KEYS);
-  await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
-
-  const mine = section(page, 'mine');
-  await expect(mine.getByTestId(`agent-card-${healthId}`)).toContainText(
-    HEALTH,
-  );
-  await expect(mine.getByTestId(`agent-card-${healthId}`)).toContainText(
-    'Owner: You',
-  );
-  await expect(mine.getByTestId(`agent-status-${healthId}`)).toHaveText('Live');
-  await expect(mine.getByTestId(`agent-card-${claimsId}`)).toContainText(
-    CLAIMS,
-  );
-  await expect(mine.getByTestId(`agent-status-${claimsId}`)).toHaveText(
-    'Draft',
+  await expect(analysis.getByTestId('agent-domain-assistant')).toHaveAttribute(
+    'data-domain',
+    'analysis',
   );
 
-  const system = section(page, 'system');
-  await expect(cards(system)).toHaveCount(3);
-  const showMore = system.getByTestId('agent-show-more-system');
-  await expect(showMore).toHaveText('Show more (4)');
-  await expect(showMore).toHaveAttribute('aria-expanded', 'false');
-
-  await button(page, 'Show more (4)').click();
-  await expect(cards(system)).toHaveCount(7);
-  await expect(system.getByTestId('agent-card-sql-verifier')).toContainText(
-    'Rachel',
-  );
-  await expect(system.getByTestId('agent-role-sql-verifier')).toHaveText(
-    'SQL Reviewer',
-  );
+  for (const [id, heading, keys] of [
+    ['data-foundations', 'Data Foundations', ['data-readiness', 'knowledge-bootstrap']],
+    ['sql', 'SQL Engineering', ['sql-fixer', 'sql-verifier']],
+    ['storytelling', 'Storytelling', ['answer-writer', 'visualization']],
+    ['quality', 'Quality & Evals', ['assistant-eval-judge']],
+  ] as const) {
+    await expect(
+      section(page, id).getByRole('heading', { name: heading, exact: true }),
+    ).toBeVisible();
+    expect(await cardKeys(section(page, id))).toEqual([...keys]);
+  }
+  await expect(
+    section(page, 'sql').getByTestId('agent-card-sql-verifier'),
+  ).toContainText('Rachel');
+  await expect(
+    section(page, 'sql').getByTestId('agent-role-sql-verifier'),
+  ).toHaveText('SQL Reviewer');
+  await expect(
+    section(page, 'sql').getByTestId('agent-card-sql-verifier'),
+  ).toContainText('Owner: System');
   // The agents of the Plan and Write answer steps (agents.md 5.11).
   for (const [key, name, role] of [
     ['analysis-planner', 'Olivia', 'Analysis Lead'],
     ['answer-writer', 'Jessica', 'Insights Writer'],
   ]) {
-    await expect(system.getByTestId(`agent-card-${key}`)).toContainText(name);
-    await expect(system.getByTestId(`agent-role-${key}`)).toHaveText(role);
+    await expect(page.getByTestId(`agent-card-${key}`)).toContainText(name);
+    await expect(page.getByTestId(`agent-role-${key}`)).toHaveText(role);
   }
-  await expect(showMore).toHaveAttribute('aria-expanded', 'true');
 
-  await button(page, 'Show less').click();
-  await expect(cards(system)).toHaveCount(3);
+  // User agents with no domain chosen are General.
+  const general = section(page, 'general');
+  expect(await cardKeys(general)).toEqual([claimsId, healthId]);
+  await expect(general.getByTestId(`agent-card-${healthId}`)).toContainText(
+    HEALTH,
+  );
+  await expect(general.getByTestId(`agent-card-${healthId}`)).toContainText(
+    'Owner: You',
+  );
+  await expect(general.getByTestId(`agent-status-${healthId}`)).toHaveText(
+    'Live',
+  );
+  await expect(general.getByTestId(`agent-status-${claimsId}`)).toHaveText(
+    'Draft',
+  );
+});
+
+test('a user agent moves to the section of the domain chosen in the editor', async ({
+  page,
+}) => {
+  await openHub(page);
+  await openAgent(page, claimsId, CLAIMS);
+  await page.getByTestId('agent-edit').click();
+  const domain = page.getByLabel('Domain', { exact: true });
+  await expect(domain).toHaveValue('general');
+  await domain.selectOption({ label: 'SQL Engineering' });
+  await page.getByTestId('agent-save').click();
+  // Saved: nothing left to save.
+  await expect(page.getByTestId('agent-save')).toBeDisabled();
+
+  await openHub(page);
+  await expect(
+    section(page, 'sql').getByTestId(`agent-card-${claimsId}`),
+  ).toBeVisible();
+  await expect(page.getByTestId(`agent-domain-${claimsId}`)).toHaveAttribute(
+    'data-domain',
+    'sql',
+  );
+  // Mine before System within a domain (R1).
+  expect(await cardKeys(section(page, 'sql'))).toEqual([
+    claimsId,
+    'sql-fixer',
+    'sql-verifier',
+  ]);
+  expect(await cardKeys(section(page, 'general'))).toEqual([healthId]);
 });
 
 test('search narrows the agents by name or description', async ({ page }) => {
@@ -202,31 +253,56 @@ test('search narrows the agents by name or description', async ({ page }) => {
   await expect(cards(page)).toHaveCount(0);
 });
 
-test('filters limit the hub to one kind of agent', async ({ page }) => {
+test('pills and the owner menu limit the hub', async ({ page }) => {
   await openHub(page);
 
-  await filter(page, 'Mine').click();
-  await expect(filter(page, 'Mine')).toHaveAttribute('aria-pressed', 'true');
+  // All, Pinned, then the domains that have agents, in domain order (R2).
+  await expect(
+    page.getByRole('group', { name: 'Filter agents' }).getByRole('button'),
+  ).toHaveText([
+    'All',
+    'Pinned',
+    'Data Foundations',
+    'Analysis',
+    'SQL Engineering',
+    'Storytelling',
+    'Quality & Evals',
+    'General',
+  ]);
+
+  const owner = page.getByLabel('Filter by owner', { exact: true });
+  await owner.selectOption({ label: 'Mine' });
   await expect(cards(page)).toHaveCount(2);
   expect(await cardKeys(page)).toEqual([claimsId, healthId]);
-  expect(await sectionIds(page)).toEqual(['mine']);
+  expect(await sectionIds(page)).toEqual(['general']);
 
-  await filter(page, 'Official').click();
+  await owner.selectOption({ label: 'Official' });
   // The assistant, Questions to Insights v2 and the Data Readiness Agent
-  // are Official; every card shows, alphabetical by persona name
-  // (R1-R3, R107).
-  await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
+  // are Official, each in its domain (R1, R107).
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
   expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
-  await expect(page.getByTestId('agent-show-more-official')).toHaveCount(0);
-  expect(await sectionIds(page)).toEqual(['official']);
+  expect(await sectionIds(page)).toEqual(['data-foundations', 'analysis']);
+
+  await filter(page, 'Analysis').click();
+  await expect(filter(page, 'Analysis')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(await sectionIds(page)).toEqual(['analysis']);
+  expect(await cardKeys(page)).toEqual(['assistant', V2_KEY]);
+
+  await filter(page, 'SQL Engineering').click();
+  await expect(page.getByText('No agents match these filters.')).toBeVisible();
+  await expect(cards(page)).toHaveCount(0);
 
   await filter(page, 'Pinned').click();
   await expect(page.getByText('No pinned agents yet.')).toBeVisible();
   await expect(cards(page)).toHaveCount(0);
 
+  await owner.selectOption({ label: 'Any owner' });
   await filter(page, 'All').click();
-  await expect(section(page, 'system')).toBeVisible();
+  await expect(cards(page)).toHaveCount(12);
+  await expect.poll(() => sectionIds(page)).toEqual(DOMAIN_SECTIONS);
 });
 
 test('pinned agents come first in their own section and survive a restart', async ({
@@ -243,11 +319,11 @@ test('pinned agents come first in their own section and survive a restart', asyn
   const assistantToggle = button(page, `Unpin ${ASSISTANT}`);
   await expect(assistantToggle).toHaveText('Pinned');
   await expect(assistantToggle).toHaveAttribute('aria-pressed', 'true');
-  expect((await cardKeys(section(page, 'official')))[0]).toBe('assistant');
+  expect((await cardKeys(section(page, 'analysis')))[0]).toBe('assistant');
 
   const healthToggle = button(page, `Unpin ${HEALTH}`);
   await expect(healthToggle).toHaveText('Pinned');
-  await expect(cards(section(page, 'mine')).first()).toHaveAttribute(
+  await expect(cards(section(page, 'general')).first()).toHaveAttribute(
     'data-testid',
     `agent-card-${healthId}`,
   );
@@ -282,7 +358,7 @@ test('pinned agents come first in their own section and survive a restart', asyn
 
   await filter(page, 'All').click();
   await expect(
-    section(page, 'mine').getByRole('button', {
+    section(page, 'general').getByRole('button', {
       name: `Pin ${HEALTH}`,
       exact: true,
     }),
@@ -356,7 +432,7 @@ test('publishing a draft makes it Live', async ({ page }) => {
 
   await button(page, 'All agents').click();
   await expect(
-    section(page, 'mine').getByTestId(`agent-status-${claimsId}`),
+    section(page, 'general').getByTestId(`agent-status-${claimsId}`),
   ).toHaveText('Live');
 });
 
@@ -422,8 +498,7 @@ test('the hub has no detectable accessibility violations in either theme', async
 }) => {
   await followOsTheme(page);
   await openHub(page);
-  await button(page, 'Show more (4)').click();
-  await expect(cards(section(page, 'system'))).toHaveCount(7);
+  await expect(cards(page)).toHaveCount(12);
 
   await page.addScriptTag({ content: axe.source });
   for (const theme of ['light', 'dark'] as const) {
@@ -439,33 +514,36 @@ test('the hub has no detectable accessibility violations in either theme', async
 });
 
 test(
-  'The Official section holds only agents that can chat',
+  'The Official owner holds only agents that can chat',
   { tag: ['@demo', '@story-1.23.8'] },
   async ({ page }) => {
     await scenarioStep(page, 'When I open "Agents"', async () => {
       await openHub(page);
     });
-    const official = section(page, 'official');
     await scenarioStep(
       page,
-      'Then the Official section shows "Emily", "Michael" and "Sarah"',
+      'And I choose "Official" in "Filter by owner"',
       async () => {
-        await expect(
-          official.getByTestId('agent-card-assistant'),
-        ).toBeVisible();
-        expect(await cardKeys(official)).toEqual(OFFICIAL_KEYS);
+        await page
+          .getByLabel('Filter by owner', { exact: true })
+          .selectOption({ label: 'Official' });
+      },
+    );
+    await scenarioStep(
+      page,
+      'Then I see "Emily", "Michael" and "Sarah", and no other agent',
+      async () => {
+        await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
+        expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
         for (const [key, name] of [
           ['assistant', ASSISTANT],
           [V2_KEY, V2_AGENT],
           ['data-readiness', READINESS],
         ]) {
-          const card = official.getByTestId(`agent-card-${key}`);
+          const card = page.getByTestId(`agent-card-${key}`);
           await expect(card).toContainText(name);
           await expect(card).toContainText('Owner: Official');
         }
-        await expect(page.getByTestId('agent-show-more-official')).toHaveCount(
-          0,
-        );
       },
     );
     await scenarioStep(
@@ -490,12 +568,12 @@ test(
 
 test('Questions to Insights v2 is an Official card', async ({ page }) => {
   await openHub(page);
-  const official = section(page, 'official');
-  const card = official.getByTestId(`agent-card-${V2_KEY}`);
+  const analysis = section(page, 'analysis');
+  const card = analysis.getByTestId(`agent-card-${V2_KEY}`);
   await expect(card).toContainText(V2_AGENT);
   await expect(card).toContainText('Owner: Official');
   // Right after "Emily" (R1, R107).
-  const keys = await cardKeys(official);
+  const keys = await cardKeys(analysis);
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
 });
 
@@ -698,7 +776,6 @@ test('a user agent is used in no workflow, even once published', async ({
 
 test('a System agent says the app calls it itself', async ({ page }) => {
   await openHub(page);
-  await button(page, 'Show more (4)').click();
   await openAgent(page, 'sql-fixer', 'David');
   await expect(page.getByTestId('agent-used-in')).toContainText(SYSTEM_EMPTY);
   await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);

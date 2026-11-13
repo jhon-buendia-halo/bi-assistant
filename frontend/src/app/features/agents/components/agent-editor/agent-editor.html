@@ -114,6 +114,27 @@
       </div>
 
       <div class="flex flex-col gap-1.5">
+        <label for="agent-editor-domain" class="field-label">Domain</label>
+        <select
+          id="agent-editor-domain"
+          (change)="onDomain($event)"
+          class="field"
+        >
+          @for (domain of domains; track domain.id) {
+            <option
+              [value]="domain.id"
+              [selected]="editor.form().domain === domain.id"
+            >
+              {{ domain.label }}
+            </option>
+          }
+        </select>
+        <p class="text-[12px] text-fg-muted">
+          The Agents screen groups agents by domain.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
         <label for="agent-editor-description" class="field-label"
           >Description</label
         >

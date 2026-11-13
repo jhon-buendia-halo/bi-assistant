@@ -101,6 +101,17 @@ describe('normalizeAgentConfig', () => {
     expect(config).not.toHaveProperty('tools');
     expect(config).not.toHaveProperty('skills');
   });
+
+  it('keeps a known domain and stores General, an unknown one or none as no domain', () => {
+    expect(normalizeAgentConfig({ name: 'A', domain: 'sql' }).domain).toBe(
+      'sql',
+    );
+    for (const domain of ['general', 'finance', '', undefined]) {
+      expect(normalizeAgentConfig({ name: 'A', domain })).not.toHaveProperty(
+        'domain',
+      );
+    }
+  });
 });
 
 describe('hasUnpublishedChanges / missingDatasets', () => {
@@ -115,6 +126,15 @@ describe('hasUnpublishedChanges / missingDatasets', () => {
     expect(
       hasUnpublishedChanges({
         draft: { ...draft, instructions: 'new' },
+        live: draft,
+      }),
+    ).toBe(true);
+  });
+
+  it('is true when only the domain changed', () => {
+    expect(
+      hasUnpublishedChanges({
+        draft: { ...draft, domain: 'analysis' },
         live: draft,
       }),
     ).toBe(true);
