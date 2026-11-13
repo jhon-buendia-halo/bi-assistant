@@ -86,7 +86,8 @@ export function officialGraphInput(
 
 /**
  * Questions to Insights v2 (agents-evals R107): its copy names it without an
- * article, and its prompt links tools only (it has no skills).
+ * article. Like the other Official agents, its prompt links its own tools
+ * and built-in skills.
  */
 const ASSISTANT_V2_KEY = 'assistant-v2';
 
@@ -107,10 +108,8 @@ export function officialPromptCopy(agent: { key: string; name: string }): {
   generatedToolsNote: string;
 } {
   const who = agentPhrase(agent);
-  const links =
-    agent.key === ASSISTANT_V2_KEY ? 'a tool' : 'a tool or a built-in skill';
   return {
-    toolbarHint: `Type / to link ${links}. Links here are mentions; ${who} keeps all its tools.`,
+    toolbarHint: `Type / to link a tool or a built-in skill. Links here are mentions; ${who} keeps all its tools.`,
     toolsNote: `The ## Tools list is generated from the tools ${who} gets and is inserted before ## Working rules.`,
     generatedToolsNote: `## Tools — generated from the tools ${who} gets`,
   };

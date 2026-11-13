@@ -157,7 +157,17 @@ test("a Questions to Insights v2 run can't write: the read-only guard rejects a 
 test('a Questions to Insights v2 run runs v2 on every question', async ({
   page,
 }) => {
-  const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+  // Its five tools and the framework's skill tools (agents.md 2.11, 3.9).
+  const V2_TOOLS = [
+    'list_entities',
+    'describe_entity',
+    'sample_rows',
+    'run_readonly_sql',
+    'ask_clarification',
+    'skill',
+    'skill_search',
+    'skill_read',
+  ];
 
   for (const question of ['How many matches are there?', 'And in 2014?']) {
     const result = await runWorkflow(page, 'qti-v2-turn', {
@@ -166,7 +176,7 @@ test('a Questions to Insights v2 run runs v2 on every question', async ({
     });
     expect(result.status, result.body).toBe(200);
     expect(result.text).toContain(STUB_ANSWER);
-    // The run ran v2 (R61): its prompt and only its three data tools.
+    // The run ran v2 (R61): its prompt and only its own tools.
     const request = firstTurnRequest(question);
     expect(systemTexts(request)[0]).toContain('You are Questions to Insights v2');
     expect(systemTexts(request).join('\n')).not.toContain(BASE_PROMPT_START);

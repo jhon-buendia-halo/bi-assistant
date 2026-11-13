@@ -257,7 +257,17 @@ test("a v2 run's workflow never appears among its panel items", async ({
 // ------------------------------------------- Questions to Insights v2 (R8a)
 
 const V2_STEPS = ['receive-question', 'load-catalog', 'analyse', 'wrap-up'];
-const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+// Its five tools and the framework's skill tools (agents.md 2.11, 3.9).
+const V2_TOOLS = [
+  'list_entities',
+  'describe_entity',
+  'sample_rows',
+  'run_readonly_sql',
+  'ask_clarification',
+  'skill',
+  'skill_search',
+  'skill_read',
+];
 const V2_QUESTION = 'How many matches were played in 2018?';
 const V2_ANSWER = 'There were 64 matches.';
 
@@ -290,7 +300,7 @@ test('Questions to Insights v2 shows its code-defined steps advancing', async ({
   expect(startOrder).toEqual(V2_STEPS);
   expect(result.text).toContain(V2_ANSWER);
 
-  // The run ran v2 with its three tools, never update_workflow (R8a), and
+  // The run ran v2 with its own tools, never update_workflow (R8a), and
   // the SQL ran for real.
   const request = turnRequests(stub, V2_QUESTION)[0];
   expect([...request.tools].sort()).toEqual([...V2_TOOLS].sort());

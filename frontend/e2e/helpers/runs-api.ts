@@ -86,8 +86,9 @@ export const V2_WORKFLOW_NAME = 'Questions to Insights v2';
 /**
  * Runs Questions to Insights v2 (`qti-v2-turn`) on `question` over the
  * datasets (the World Cup one by default). Its Analyse step is one agent turn
- * of `assistant-v2`, offered only `list_entities`, `describe_entity` and
- * `run_readonly_sql` (no skills, no visual or clarification tools).
+ * of `assistant-v2`, offered `list_entities`, `describe_entity`,
+ * `sample_rows`, `run_readonly_sql`, `ask_clarification` and its on-demand
+ * skills (no visual, panel or workflow tools).
  */
 export async function runQuestion(
   page: Page,

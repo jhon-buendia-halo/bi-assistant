@@ -116,7 +116,7 @@ describe('official-links (agents-evals R99, R105)', () => {
     ).toBe('## Tools — generated from the tools the Report Builder gets');
   });
 
-  it('names Questions to Insights v2 without an article and offers tools only (R107)', () => {
+  it('names Questions to Insights v2 without an article and offers its tools and skills (R107)', () => {
     expect(
       officialPromptCopy({
         key: 'assistant-v2',
@@ -124,7 +124,7 @@ describe('official-links (agents-evals R99, R105)', () => {
       }),
     ).toEqual({
       toolbarHint:
-        'Type / to link a tool. Links here are mentions; Questions to Insights v2 keeps all its tools.',
+        'Type / to link a tool or a built-in skill. Links here are mentions; Questions to Insights v2 keeps all its tools.',
       toolsNote:
         'The ## Tools list is generated from the tools Questions to Insights v2 gets and is inserted before ## Working rules.',
       generatedToolsNote:

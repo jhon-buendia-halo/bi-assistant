@@ -26,7 +26,13 @@ import {
 const ASSISTANT = 'Questions to Insights Assistant';
 const V2_KEY = 'assistant-v2';
 const V2 = 'Questions to Insights v2';
-const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+const V2_TOOLS = [
+  'list_entities',
+  'describe_entity',
+  'sample_rows',
+  'run_readonly_sql',
+  'ask_clarification',
+];
 const QUESTION = 'Who won in 2022?';
 const DONE_LINE = 'Always end an answer with the word Done.';
 const BANNER =
@@ -351,7 +357,7 @@ test(
     );
     await scenarioStep(
       page,
-      'And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "run_readonly_sql" and "≤ 15 steps"',
+      'And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and "≤ 15 steps"',
       async () => {
         const analyse = workflowStep(page, 'analyse');
         await expect(analyse.getByTestId('workflow-step-kind')).toHaveText('LLM');
@@ -389,12 +395,13 @@ test(
     );
     await scenarioStep(
       page,
-      'And I see "Stop → ends the turn here" and "Model error → fails the turn"',
+      'And I see "Model error → fails the turn", "Stop → ends the turn here" and "Clarifying question → ends the turn here"',
       async () => {
         // "Receive question" has no exit: the input is checked before the run.
         await expect(page.getByTestId('workflow-step-exit')).toHaveText([
           'Model error → fails the turn',
           'Stop → ends the turn here',
+          'Clarifying question → ends the turn here',
         ]);
       },
     );
