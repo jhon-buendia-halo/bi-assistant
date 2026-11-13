@@ -1,4 +1,10 @@
 import { Component, computed, input, signal } from '@angular/core';
+import { JsonSchema } from '../../models/workflow.model';
+import {
+  ContractFieldRow,
+  contractFields,
+  flattenContractFields,
+} from '../../services/workflow-contract';
 import {
   DataMode,
   JsonToken,
@@ -28,7 +34,11 @@ function flatten(nodes: SchemaNode[], depth = 0): SchemaRow[] {
   ]);
 }
 
-/** A value as JSON, a table or an inferred schema, with a mode switch. */
+/**
+ * A value as JSON, a table or a schema, with a mode switch. Schema shows the
+ * node's declared contract when it has one, else the schema inferred from
+ * the value (ui.md 4.4b).
+ */
 @Component({
   selector: 'app-workflow-data-view',
   templateUrl: './workflow-data-view.html',
@@ -39,6 +49,8 @@ export class WorkflowDataView {
   readonly truncated = input(false);
   readonly modes = input<DataMode[]>(['json', 'table', 'schema']);
   readonly emptyText = input('');
+  /** The node's declared contract for this side; null when it has none (Start, End, an older backend). */
+  readonly contract = input<JsonSchema | null | undefined>(null);
 
   private readonly chosen = signal<DataMode | null>(null);
 
@@ -58,6 +70,11 @@ export class WorkflowDataView {
     this.hasValue() ? jsonTokens(this.value()) : [],
   );
   readonly schema = computed(() => flatten(schemaOf(this.value())));
+  /** The declared contract's fields, nested ones indented; null when none is declared. */
+  readonly declared = computed<ContractFieldRow[] | null>(() => {
+    const fields = contractFields(this.contract());
+    return fields.length ? flattenContractFields(fields) : null;
+  });
 
   /** The modes the switch offers: Table only when the value has rows. */
   readonly available = computed(() =>

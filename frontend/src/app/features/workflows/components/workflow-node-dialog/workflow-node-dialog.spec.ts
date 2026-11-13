@@ -5,8 +5,12 @@ import { NodeChatAvailability } from '../../models/workflow.model';
 import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
 import { WorkflowNodeDialog } from './workflow-node-dialog';
 import {
+  FIXTURE_CONTRACT_ANALYSE,
+  FIXTURE_CONTRACT_WORKFLOW,
+  FIXTURE_INPUT_VIOLATION,
   FIXTURE_NODES,
   FIXTURE_NODES_NOT_RUN,
+  FIXTURE_OUTPUT_VIOLATION,
   FIXTURE_TOOL,
   FIXTURE_TOOL_NOT_RUN,
   FIXTURE_WORKFLOW,
@@ -20,6 +24,13 @@ describe('WorkflowNodeDialog', () => {
   const text = (id: string) =>
     byId(id)?.textContent?.replace(/\s+/g, ' ').trim();
   const node = (id: string) => FIXTURE_NODES.find((n) => n.nodeId === id)!;
+  /** The declared fields listed under a test id, as their text reads. */
+  const fields = (id: string) =>
+    Array.from(
+      byId(id)?.querySelectorAll<HTMLElement>(
+        '[data-testid="workflow-contract-field"]',
+      ) ?? [],
+    ).map((li) => li.textContent?.replace(/\s+/g, ' ').trim());
 
   function open(n: NodeInspection, runId: string | null = 'run_8f21c4') {
     fixture = TestBed.createComponent(WorkflowNodeDialog);
@@ -66,8 +77,9 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-step-field-exits')).toBe(
       'Model error → fails · Stop → ends here',
     );
-    expect(text('workflow-step-field-input')).toBe('question, catalog');
-    expect(text('workflow-step-field-output')).toBe('calls, stopped');
+    // No declared schema (an older backend): the names, untyped.
+    expect(fields('workflow-step-field-input')).toEqual(['question', 'catalog']);
+    expect(fields('workflow-step-field-output')).toEqual(['calls', 'stopped']);
     expect(text('workflow-step-field-system-prompt')).toBe(
       'You are a data analyst.',
     );
@@ -338,6 +350,147 @@ describe('WorkflowNodeDialog', () => {
     expect(byId('workflow-ndv-output')?.textContent).toContain(
       'California leads.',
     );
+  });
+
+  describe('declared contracts (ui.md 4.4b)', () => {
+    function openContract(
+      n: NodeInspection,
+      runContractHash: string | null = '3f9a1c0b7d2e',
+    ) {
+      fixture = TestBed.createComponent(WorkflowNodeDialog);
+      fixture.componentRef.setInput('node', n);
+      fixture.componentRef.setInput('workflow', FIXTURE_CONTRACT_WORKFLOW);
+      fixture.componentRef.setInput('runId', 'run_8f21c4');
+      fixture.componentRef.setInput('runContractHash', runContractHash);
+      fixture.detectChanges();
+    }
+    const settings = () => {
+      byId('workflow-ndv-tab-settings')?.click();
+      fixture.detectChanges();
+    };
+
+    it('lists Receives and Returns with their types and required markers', () => {
+      openContract(FIXTURE_CONTRACT_ANALYSE);
+      expect(fields('workflow-step-field-input')).toEqual([
+        'question* (required): string',
+        'catalog* (required): object[]',
+      ]);
+      expect(fields('workflow-step-field-output')).toEqual([
+        'calls* (required): number',
+        'stopped: boolean',
+      ]);
+      const receives = byId('workflow-step-field-input')!.querySelectorAll(
+        '[data-testid="workflow-contract-field"]',
+      );
+      expect(receives[0].getAttribute('data-required')).toBe('true');
+      expect(receives[0].getAttribute('title')).toBe('What the user asked.');
+      expect(receives[1].getAttribute('title')).toBeNull();
+      const returns = byId('workflow-step-field-output')!.querySelectorAll(
+        '[data-testid="workflow-contract-field"]',
+      );
+      expect(returns[1].getAttribute('data-required')).toBe('false');
+      // The marker is read as "required", not as an asterisk.
+      expect(
+        receives[0].querySelector('[aria-hidden="true"]')?.textContent,
+      ).toBe('*');
+    });
+
+    it("types the End node's Receives from the last step's declared output", () => {
+      openContract({ ...node('end') });
+      expect(fields('workflow-end-field-input')).toEqual([
+        'calls* (required): number',
+        'stopped: boolean',
+      ]);
+    });
+
+    it("shows the declared contract in the Output's Schema mode", () => {
+      openContract(FIXTURE_CONTRACT_ANALYSE);
+      const output = byId('workflow-ndv-output')!;
+      output
+        .querySelector<HTMLElement>('[data-testid="workflow-data-mode-schema"]')
+        ?.click();
+      fixture.detectChanges();
+      expect(
+        output
+          .querySelector('[data-testid="workflow-data-schema-declared"]')
+          ?.textContent?.trim(),
+      ).toBe('Declared contract');
+      expect(
+        output.querySelector('[data-testid="workflow-data-schema"]')?.textContent,
+      ).toContain('How many tool calls ran.');
+    });
+
+    it('Settings shows the contract hash, with no note when the run used it', () => {
+      openContract(FIXTURE_CONTRACT_ANALYSE);
+      settings();
+      expect(text('workflow-ndv-setting-contract')).toBe('3f9a1c0b7d2e');
+      expect(byId('workflow-ndv-params')?.textContent).toContain('Contract');
+      expect(byId('workflow-ndv-contract-older')).toBeNull();
+    });
+
+    it('Settings says when the stored run used an earlier contract', () => {
+      openContract(FIXTURE_CONTRACT_ANALYSE, '0a1b2c3d4e5f');
+      settings();
+      expect(text('workflow-ndv-setting-contract')).toBe('3f9a1c0b7d2e');
+      expect(text('workflow-ndv-contract-older')).toBe(
+        'This run used an earlier contract (0a1b2c3d4e5f).',
+      );
+    });
+
+    it('Settings has no note for an old run without a hash, nor a hash row without a contract', () => {
+      openContract(FIXTURE_CONTRACT_ANALYSE, null);
+      settings();
+      expect(byId('workflow-ndv-contract-older')).toBeNull();
+
+      open(node('analyse'));
+      settings();
+      expect(byId('workflow-ndv-setting-contract')).toBeNull();
+    });
+
+    it("a tool's Settings shows the contract hash too", () => {
+      fixture = TestBed.createComponent(WorkflowNodeDialog);
+      fixture.componentRef.setInput('node', FIXTURE_TOOL);
+      fixture.componentRef.setInput('workflow', FIXTURE_CONTRACT_WORKFLOW);
+      fixture.componentRef.setInput('runContractHash', '0a1b2c3d4e5f');
+      fixture.detectChanges();
+      settings();
+      expect(text('workflow-ndv-setting-calls')).toBe('1');
+      expect(text('workflow-ndv-setting-contract')).toBe('3f9a1c0b7d2e');
+      expect(text('workflow-ndv-contract-older')).toBe(
+        'This run used an earlier contract (0a1b2c3d4e5f).',
+      );
+    });
+
+    it('shows an input contract violation with its field path highlighted', () => {
+      openContract(FIXTURE_INPUT_VIOLATION);
+      expect(text('workflow-ndv-output-status')).toBe('Failed');
+      expect(text('workflow-ndv-output-error')).toBe(
+        'Contract violation in Analyse (input): question Required',
+      );
+      expect(text('workflow-ndv-contract-violation')).toBe(
+        'Contract violation in Analyse (input): question Required',
+      );
+      const path = byId('workflow-ndv-contract-violation-path')!;
+      expect(path.tagName).toBe('CODE');
+      expect(path.textContent).toBe('question');
+    });
+
+    it('shows an output contract violation with its field path highlighted', () => {
+      openContract(FIXTURE_OUTPUT_VIOLATION);
+      expect(text('workflow-ndv-contract-violation-path')).toBe('calls');
+      expect(text('workflow-ndv-output-error')).toBe(
+        'Contract violation in Analyse: calls Expected number, received string',
+      );
+    });
+
+    it('shows any other step error as plain text', () => {
+      openContract({
+        ...FIXTURE_CONTRACT_ANALYSE,
+        run: { ...FIXTURE_CONTRACT_ANALYSE.run!, status: 'failed', error: 'Boom' },
+      });
+      expect(text('workflow-ndv-output-error')).toBe('Boom');
+      expect(byId('workflow-ndv-contract-violation')).toBeNull();
+    });
   });
 
   it('shows the End node of a failed run with its error', () => {

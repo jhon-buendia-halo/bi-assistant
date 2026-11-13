@@ -5,6 +5,7 @@ import {
   toolNodeId,
 } from '../models/workflow-node.model';
 import { WorkflowDetail, WorkflowDetailStep } from '../models/workflow.model';
+import { contractFields, passesOnText } from './workflow-contract';
 
 /**
  * The workflow page's n8n-style canvas (ui.md 4.4b): Start, one column per
@@ -113,6 +114,12 @@ export interface CanvasEdge {
   path: string;
   /** What runs along the edge: the source step's output (from Start, the first step's input). */
   fields: string[];
+  /**
+   * Its title and screen-reader text: `Passes on: question (string), …`,
+   * typed from the source step's declared output (from Start, the first
+   * step's declared input); names only when none is declared.
+   */
+  passesOn: string;
   /** `1 field` | `<n> fields` | `` when nothing is passed. */
   label: string;
   /** The label's centre. */
@@ -326,6 +333,9 @@ export function workflowCanvasLayout(
   const edges = nodes.slice(1).map((to, i): CanvasEdge => {
     const from = nodes[i];
     const fields = from.step ? from.step.output : (to.step?.input ?? []);
+    const schema = from.step ? from.step.outputSchema : to.step?.inputSchema;
+    const typed = contractFields(schema, fields);
+    const byName = new Map(typed.map((field) => [field.name, field]));
     const x1 = from.x + from.width;
     const x2 = to.x;
     return {
@@ -334,6 +344,9 @@ export function workflowCanvasLayout(
       to: to.id,
       path: `M ${x1} ${centerY} L ${x2} ${centerY}`,
       fields: [...fields],
+      passesOn: passesOnText(
+        fields.map((name) => byName.get(name) ?? contractFields(null, [name])[0]),
+      ),
       label: fieldsLabel(fields.length),
       labelX: (x1 + x2) / 2,
       labelY: centerY - EDGE_LABEL_RISE,

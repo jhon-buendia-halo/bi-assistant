@@ -37,7 +37,8 @@
   overflow: visible;
 }
 
-// Edges: neutral until the node they leave succeeded, then green.
+// Edges: neutral until the node they leave succeeded, then green; red when
+// the data along them broke a step's declared contract.
 .edge,
 .sub-edge {
   fill: none;
@@ -47,6 +48,11 @@
   &.done {
     stroke: var(--qti-on-success-soft);
   }
+}
+
+.edge.violation {
+  stroke: var(--qti-on-danger-soft);
+  stroke-dasharray: 6 3;
 }
 
 .sub-edge {
@@ -59,6 +65,10 @@
 
   &.done {
     fill: var(--qti-on-success-soft);
+  }
+
+  &.violation {
+    fill: var(--qti-on-danger-soft);
   }
 }
 

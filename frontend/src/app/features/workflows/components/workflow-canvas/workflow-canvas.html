@@ -54,18 +54,33 @@
           >
             <path class="edge-arrow done" d="M 0 0 L 10 5 L 0 10 z" />
           </marker>
+          <marker
+            id="workflow-canvas-arrow-violation"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path class="edge-arrow violation" d="M 0 0 L 10 5 L 0 10 z" />
+          </marker>
         </defs>
         @for (edge of l.edges; track edge.id) {
           <path
             class="edge"
             [class.done]="done(edge.from)"
+            [class.violation]="violated(edge)"
             [attr.d]="edge.path"
             [attr.data-testid]="'workflow-connector-' + edge.id"
             [attr.data-done]="done(edge.from) ? 'true' : 'false'"
+            [attr.data-violation]="violated(edge) ? 'true' : null"
             [attr.marker-end]="
-              done(edge.from)
-                ? 'url(#workflow-canvas-arrow-done)'
-                : 'url(#workflow-canvas-arrow)'
+              violated(edge)
+                ? 'url(#workflow-canvas-arrow-violation)'
+                : done(edge.from)
+                  ? 'url(#workflow-canvas-arrow-done)'
+                  : 'url(#workflow-canvas-arrow)'
             "
           />
         }
@@ -85,13 +100,11 @@
           <span
             class="edge-label absolute -translate-x-1/2 -translate-y-1/2 rounded bg-surface px-1 font-mono text-[11px] leading-4 whitespace-nowrap text-fg-muted"
             [attr.data-testid]="'workflow-connector-label-' + edge.id"
-            [attr.title]="'Passes on: ' + edge.fields.join(', ')"
+            [attr.title]="edgeText(edge)"
             [style.left.px]="edge.labelX"
             [style.top.px]="edge.labelY"
             ><span aria-hidden="true">{{ edge.label }}</span
-            ><span class="sr-only"
-              >Passes on: {{ edge.fields.join(", ") }}</span
-            ></span
+            ><span class="sr-only">{{ edgeText(edge) }}</span></span
           >
         }
       }

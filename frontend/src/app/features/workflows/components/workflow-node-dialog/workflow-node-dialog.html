@@ -80,6 +80,7 @@
           [value]="run()?.input"
           [truncated]="run()?.inputTruncated === true"
           [emptyText]="inputEmpty()"
+          [contract]="node().step?.inputSchema"
         />
       }
     </section>
@@ -140,6 +141,7 @@
             {{ (tool.ran ? runId() : null) ?? "Not run yet" }}
           </dd>
         </dl>
+        <ng-container *ngTemplateOutlet="contractSettings" />
       } @else if (activeTab() === "settings") {
         <dl
           class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
@@ -160,6 +162,7 @@
             {{ runId() ?? "Not run yet" }}
           </dd>
         </dl>
+        <ng-container *ngTemplateOutlet="contractSettings" />
       } @else if (activeTab() === "parameters") {
         @switch (node().kind) {
           @case ("trigger") {
@@ -182,7 +185,7 @@
                 class="m-0 font-mono text-[12px] text-fg"
                 data-testid="workflow-panel-output"
               >
-                {{ list(outputFields()) }}
+                {{ list(fieldNames(outputFields())) }}
               </dd>
             </dl>
 
@@ -261,8 +264,13 @@
               class="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
             >
               <dt class="text-fg-muted">Receives</dt>
-              <dd class="m-0 font-mono text-[12px] text-fg">
-                {{ list(outputFields()) }}
+              <dd
+                class="m-0 font-mono text-[12px] text-fg"
+                data-testid="workflow-end-field-input"
+              >
+                <ng-container
+                  *ngTemplateOutlet="contractList; context: { $implicit: outputFields() }"
+                />
               </dd>
             </dl>
           }
@@ -407,14 +415,18 @@
                   class="m-0 font-mono text-[12px] text-fg"
                   data-testid="workflow-step-field-input"
                 >
-                  {{ list(step.input) }}
+                  <ng-container
+                    *ngTemplateOutlet="contractList; context: { $implicit: receives() }"
+                  />
                 </dd>
                 <dt class="text-fg-muted">Returns</dt>
                 <dd
                   class="m-0 font-mono text-[12px] text-fg"
                   data-testid="workflow-step-field-output"
                 >
-                  {{ list(step.output) }}
+                  <ng-container
+                    *ngTemplateOutlet="contractList; context: { $implicit: returns() }"
+                  />
                 </dd>
               </dl>
 
@@ -551,10 +563,22 @@
 
       @if (run()?.error; as error) {
         <p
-          class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+          class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] break-words text-on-danger-soft"
           data-testid="workflow-ndv-output-error"
         >
-          {{ error }}
+          @if (violation(); as v) {
+            <!-- A broken declared contract: the field path stands out (ui.md 4.4b). -->
+            <span data-testid="workflow-ndv-contract-violation"
+              >{{ v.prefix
+              }}<code
+                class="rounded bg-surface px-1 font-mono text-[12px] font-semibold"
+                data-testid="workflow-ndv-contract-violation-path"
+                >{{ v.path }}</code
+              ><span> {{ v.message }}</span></span
+            >
+          } @else {
+            {{ error }}
+          }
         </p>
       }
 
@@ -580,8 +604,59 @@
           [value]="run()?.output"
           [truncated]="run()?.outputTruncated === true"
           [emptyText]="outputEmpty()"
+          [contract]="node().step?.outputSchema"
         />
       }
     </section>
   </div>
 </section>
+
+<!-- A step's declared fields: `name*: type`, the description as a tooltip. -->
+<ng-template #contractList let-fields>
+  <ul class="m-0 flex list-none flex-wrap gap-1.5 p-0">
+    @for (field of fields; track field.name) {
+      <li
+        class="rounded border border-border bg-surface-muted px-1.5 leading-5"
+        data-testid="workflow-contract-field"
+        [attr.data-required]="field.required ? 'true' : 'false'"
+        [attr.title]="field.description"
+        >{{ field.name
+        }}@if (field.required) {<span
+            class="text-on-danger-soft"
+            aria-hidden="true"
+            >*</span
+          ><span class="sr-only"> (required)</span>}@if (field.type) {<span
+            class="text-fg-muted"
+            >: {{ field.type }}</span
+          >}</li
+      >
+    } @empty {
+      <li class="font-sans text-[13px]">None</li>
+    }
+  </ul>
+</ng-template>
+
+<!-- Settings: the workflow's contract hash, and whether the run used an earlier one. -->
+<ng-template #contractSettings>
+  @if (contractHash(); as hash) {
+    <dl
+      class="m-0 mt-2 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]"
+    >
+      <dt class="text-fg-muted">Contract</dt>
+      <dd
+        class="m-0 font-mono text-[12px] break-all text-fg"
+        data-testid="workflow-ndv-setting-contract"
+      >
+        {{ hash }}
+      </dd>
+    </dl>
+    @if (olderContract(); as older) {
+      <p
+        class="m-0 mt-2 rounded-lg bg-warning-soft px-3 py-2 text-[13px] text-on-warning-soft"
+        data-testid="workflow-ndv-contract-older"
+      >
+        This run used an earlier contract ({{ older }}).
+      </p>
+    }
+  }
+</ng-template>

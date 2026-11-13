@@ -58,6 +58,43 @@
       }
     }
     @case ("schema") {
+      @if (declared(); as rows) {
+        <p
+          class="m-0 mb-1.5 text-[12px] text-fg-muted"
+          data-testid="workflow-data-schema-declared"
+        >
+          Declared contract
+        </p>
+        <ul
+          class="m-0 list-none overflow-auto rounded-lg border border-border bg-surface-muted p-2 font-mono text-[12px]"
+          data-testid="workflow-data-schema"
+        >
+          @for (row of rows; track $index) {
+            <li
+              class="flex items-baseline gap-2 py-0.5"
+              data-testid="workflow-contract-field"
+              [attr.data-required]="row.required ? 'true' : 'false'"
+              [attr.title]="row.description"
+              [style.padding-left.rem]="row.depth * 1"
+            >
+              <span class="text-(--qti-context-skills)"
+                >{{ row.name
+                }}@if (row.required) {<span
+                    class="text-on-danger-soft"
+                    aria-hidden="true"
+                    >*</span
+                  ><span class="sr-only"> (required)</span>}</span
+              >
+              <span class="text-fg-muted">{{ row.type }}</span>
+              @if (row.description) {
+                <span class="truncate font-sans text-fg-muted">{{
+                  row.description
+                }}</span>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
       <ul
         class="m-0 list-none overflow-auto rounded-lg border border-border bg-surface-muted p-2 font-mono text-[12px]"
         data-testid="workflow-data-schema"
@@ -72,6 +109,7 @@
           </li>
         }
       </ul>
+      }
     }
     @default {
       <pre

@@ -203,6 +203,75 @@ export const FIXTURE_TOOL_NOT_RUN: NodeInspection = buildToolInspection(
   'analyse-tool-run_readonly_sql',
 )!;
 
+/**
+ * The same workflow with declared contracts (api.md 117): Analyse's input
+ * and output schemas and the workflow's contract hash.
+ */
+export const FIXTURE_CONTRACT_WORKFLOW: WorkflowDetail = {
+  ...FIXTURE_WORKFLOW,
+  contractHash: '3f9a1c0b7d2e',
+  steps: [
+    FIXTURE_WORKFLOW.steps[0],
+    {
+      ...FIXTURE_WORKFLOW.steps[1],
+      inputSchema: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: 'What the user asked.' },
+          catalog: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { entity: { type: 'string' } },
+              required: ['entity'],
+            },
+          },
+        },
+        required: ['question', 'catalog'],
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          calls: { type: 'number', description: 'How many tool calls ran.' },
+          stopped: { type: 'boolean' },
+        },
+        required: ['calls'],
+      },
+    },
+  ],
+};
+
+/** The Analyse node of FIXTURE_CONTRACT_WORKFLOW, after a successful run. */
+export const FIXTURE_CONTRACT_ANALYSE: NodeInspection = {
+  ...FIXTURE_NODES[2],
+  step: FIXTURE_CONTRACT_WORKFLOW.steps[1],
+};
+
+/** Analyse failed on its declared input: the run stopped before it ran. */
+export const FIXTURE_INPUT_VIOLATION: NodeInspection = {
+  ...FIXTURE_CONTRACT_ANALYSE,
+  run: {
+    status: 'failed',
+    input: { catalog: [] },
+    error: 'Contract violation in Analyse (input): question Required',
+    durationMs: 1,
+    toolCalls: [],
+  },
+};
+
+/** Analyse returned data its declared output does not allow. */
+export const FIXTURE_OUTPUT_VIOLATION: NodeInspection = {
+  ...FIXTURE_CONTRACT_ANALYSE,
+  run: {
+    status: 'failed',
+    input: { question: 'Top 5 states?', catalog: [] },
+    error:
+      'Contract violation in Analyse: calls Expected number, received string',
+    durationMs: 900,
+    toolCalls: [],
+  },
+};
+
 export const FIXTURE_SUMMARY: WorkflowStateSummary = {
   status: 'success',
   ran: 4,

@@ -120,9 +120,31 @@ export interface WorkflowAgentToolDetail {
   inputs: string[];
 }
 
+/**
+ * A JSON Schema as `GET /workflows/:id` sends a step's declared contract
+ * (api.md 117 `inputSchema` / `outputSchema`): an object schema whose
+ * `properties` carry `type`, `items` and `description`, plus `required`.
+ * Only the keywords the page reads are typed; others pass through.
+ */
+export interface JsonSchema {
+  type?: string | string[];
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema;
+  description?: string;
+  enum?: unknown[];
+  anyOf?: JsonSchema[];
+  oneOf?: JsonSchema[];
+  [keyword: string]: unknown;
+}
+
 /** One step of a workflow detail: an agent step also names its agent's key (api.md 117). */
 export type WorkflowDetailStep = Omit<AgentWorkflow['steps'][number], 'agent'> & {
   agent?: NonNullable<AgentWorkflow['steps'][number]['agent']> & { key?: string };
+  /** The step's declared input contract; absent from an older backend. */
+  inputSchema?: JsonSchema;
+  /** The step's declared output contract; absent from an older backend. */
+  outputSchema?: JsonSchema;
 };
 
 /**
@@ -132,6 +154,11 @@ export type WorkflowDetailStep = Omit<AgentWorkflow['steps'][number], 'agent'> &
 export interface WorkflowDetail extends Omit<WorkflowSummary, 'agents'> {
   agents: WorkflowAgentDetail[];
   steps: WorkflowDetailStep[];
+  /**
+   * The first 12 hex of the sha256 of the workflow's contract (its input
+   * fields and every step's schemas); absent from an older backend.
+   */
+  contractHash?: string;
 }
 
 /** A step's status in a streamed run (api.md 3.6 `step`). */
@@ -239,6 +266,8 @@ export interface WorkflowRun {
   /** The cards of the visual actions taken after the run (api.md 130-134). */
   events?: ChatMessage[];
   workflow?: WorkflowView;
+  /** The workflow's `contractHash` when the run started; old runs lack it. */
+  contractHash?: string;
   startedAt: string;
   finishedAt?: string;
   createdAt?: string;

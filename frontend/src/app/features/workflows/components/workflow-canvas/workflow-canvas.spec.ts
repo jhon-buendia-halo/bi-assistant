@@ -278,6 +278,97 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     ).toBe('true');
   });
 
+  describe('declared contracts (ui.md 4.4b)', () => {
+    const typed: WorkflowDetail = {
+      ...V2,
+      contractHash: '3f9a1c0b7d2e',
+      steps: V2.steps.map((step) =>
+        step.id === 'receive-question'
+          ? {
+              ...step,
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  question: { type: 'string' },
+                  datasets: { type: 'array', items: { type: 'string' } },
+                },
+                required: ['question', 'datasets'],
+              },
+            }
+          : step.id === 'analyse'
+            ? {
+                ...step,
+                outputSchema: {
+                  type: 'object',
+                  properties: {
+                    calls: { type: 'array', items: { type: 'object' } },
+                    stopped: { type: 'boolean' },
+                  },
+                  required: ['calls', 'stopped'],
+                },
+              }
+            : step,
+      ),
+    };
+    const label = (id: string) => q(`workflow-connector-label-${id}`)!;
+    const violation = (id: string) =>
+      q(`workflow-connector-${id}`)?.getAttribute('data-violation') ?? null;
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('workflow', typed);
+      fixture.detectChanges();
+    });
+
+    it("types each edge's fields from the declared schema", () => {
+      expect(text(label('start-receive-question').querySelector('.sr-only'))).toBe(
+        'Passes on: question (string), datasets (string[])',
+      );
+      expect(label('analyse-wrap-up').getAttribute('title')).toBe(
+        'Passes on: calls (object[]), stopped (boolean)',
+      );
+      // A step with no declared output keeps the names alone.
+      expect(label('wrap-up-end').getAttribute('title')).toBe(
+        'Passes on: sqlQueries, failedQueries, rows',
+      );
+    });
+
+    it('marks the edge into a step that broke its input contract', () => {
+      fixture.componentRef.setInput('statuses', {
+        start: 'success',
+        'receive-question': 'success',
+        'load-catalog': 'success',
+        analyse: 'failed',
+      });
+      fixture.componentRef.setInput('violations', { analyse: 'input' });
+      fixture.detectChanges();
+      expect(violation('load-catalog-analyse')).toBe('true');
+      expect(violation('analyse-wrap-up')).toBeNull();
+      expect(violation('receive-question-load-catalog')).toBeNull();
+      expect(
+        q('workflow-connector-load-catalog-analyse')?.getAttribute('marker-end'),
+      ).toBe('url(#workflow-canvas-arrow-violation)');
+      expect(
+        q('workflow-connector-load-catalog-analyse')?.classList.contains(
+          'violation',
+        ),
+      ).toBeTrue();
+      expect(label('load-catalog-analyse').getAttribute('title')).toBe(
+        'Passes on: question, catalog. Contract violation',
+      );
+    });
+
+    it('marks the edge out of a step that broke its output contract', () => {
+      fixture.componentRef.setInput('violations', { analyse: 'output' });
+      fixture.detectChanges();
+      expect(violation('analyse-wrap-up')).toBe('true');
+      expect(violation('load-catalog-analyse')).toBeNull();
+      expect(
+        text(label('analyse-wrap-up').querySelector('.sr-only')),
+      ).toBe('Passes on: calls (object[]), stopped (boolean). Contract violation');
+      expect(el.querySelectorAll('[data-violation="true"]').length).toBe(1);
+    });
+  });
+
   it('a click selects a node; the selected node is pressed', () => {
     q('workflow-node-analyse')!.click();
     q('workflow-node-start')!.click();
