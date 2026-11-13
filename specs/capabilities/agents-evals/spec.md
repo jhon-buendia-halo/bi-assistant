@@ -1154,11 +1154,11 @@ Feature: Built-in agent prompts
   Scenario: Questions to Insights v2's Graph tab draws what happens on each message
     When I open the "Questions to Insights v2" agent
     And I open the Graph tab
-    Then I see "What happens on each message" with the steps "Receive question", "Load catalog", "Analyse" and "Wrap up", numbered 1 to 4
+    Then I see "What happens on each message" with its eight steps from "Receive question" to "Wrap up", numbered 1 to 8
     And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and "≤ 15 steps"
-    And the other three steps are marked "Code"
-    And the arrow from "Load catalog" to "Analyse" reads "question, catalog"
-    And I see "Model error → fails the turn", "Stop → ends the turn here" and "Clarifying question → ends the turn here"
+    And the code steps are marked "Code"
+    And the arrow from "Load catalog" to "Plan" reads "question, catalog"
+    And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", and "Analyse" also "Clarifying question → ends the turn here"
     When I click the "Load catalog" step
     Then the step details show Input "question, datasets" and Output "question, catalog"
     And I see "Prompt links" with the agent's tools

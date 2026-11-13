@@ -321,7 +321,19 @@ export function workflowCanvasLayout(
   );
 
   for (const step of mainSteps) {
-    const x = nextX(step.id);
+    let x = nextX(step.id);
+    const node = stepNode(w, step, numbers.get(step.id) ?? null, x, top);
+    if (node.subNodes.length) {
+      // Its sub-nodes start at its left edge: keep them clear of the slots
+      // of an earlier agent's sub-nodes, which may run past later columns.
+      const taken = Math.max(
+        0,
+        ...nodes.flatMap((n) =>
+          n.subNodes.map((s) => s.x + s.size / 2 + CANVAS.subSpacing / 2),
+        ),
+      );
+      x = Math.max(x, taken);
+    }
     place(stepNode(w, step, numbers.get(step.id) ?? null, x, top), x);
   }
 

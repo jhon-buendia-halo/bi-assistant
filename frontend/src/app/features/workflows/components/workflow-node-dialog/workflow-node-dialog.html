@@ -607,7 +607,10 @@
           }
         </ul>
       } @else if (!tool() && (!run()?.error || run()?.output)) {
-        <app-workflow-step-output-view [output]="run()?.output" />
+        <app-workflow-step-output-view
+          [output]="run()?.output"
+          [inputFields]="node().step?.input ?? []"
+        />
         <app-workflow-data-view
           [value]="run()?.output"
           [truncated]="run()?.outputTruncated === true"

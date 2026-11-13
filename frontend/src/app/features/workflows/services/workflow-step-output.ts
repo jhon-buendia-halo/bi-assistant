@@ -9,7 +9,8 @@ import {
  * (Questions to Insights v2: Plan's `PlanOutput`, Validate's
  * `ValidateOutput`), so the node dialog can show it as a panel above the
  * raw data. By shape, not by step id; the shape may sit under its own key
- * (`{ plan: … }`). Null when the output is not that shape.
+ * (`{ plan: … }`), and the passed-on fields beside it are ignored. Null when
+ * the output is not that shape.
  */
 
 type Output = Record<string, unknown> | null | undefined;
@@ -73,10 +74,18 @@ function asValidate(value: unknown): ValidateOutput | null {
   };
 }
 
-/** The output as a plan, itself or under `plan`; null otherwise. */
-export function planOutputOf(output: Output): PlanOutput | null {
+/**
+ * The output as a plan, itself or under `plan`; null otherwise. A step that
+ * received the plan (`receivedPlan`: `plan` is among its input fields) only
+ * passes it on, so its output is never read as one: Analyse and Validate
+ * carry the plan along, only Plan made it.
+ */
+export function planOutputOf(
+  output: Output,
+  receivedPlan = false,
+): PlanOutput | null {
   if (!output) return null;
-  return asPlan(output) ?? asPlan(output['plan']);
+  return asPlan(output) ?? (receivedPlan ? null : asPlan(output['plan']));
 }
 
 /** The output as a validation, itself or under `validation`; null otherwise. */

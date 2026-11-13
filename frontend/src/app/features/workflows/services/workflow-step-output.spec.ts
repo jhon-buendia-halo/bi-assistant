@@ -7,6 +7,11 @@ describe('planOutputOf', () => {
     expect(planOutputOf({ plan: { ...GRAPH_PLAN } })).toEqual(GRAPH_PLAN);
   });
 
+  it('ignores a plan the step received and passes on', () => {
+    expect(planOutputOf({ stopped: false, plan: { ...GRAPH_PLAN } }, true)).toBeNull();
+    expect(planOutputOf({ ...GRAPH_PLAN }, true)).toEqual(GRAPH_PLAN);
+  });
+
   it('keeps a clarification with its options', () => {
     const plan = planOutputOf({
       ...GRAPH_PLAN,
@@ -24,6 +29,12 @@ describe('planOutputOf', () => {
 });
 
 describe('validateOutputOf', () => {
+  it('reads a validation beside the fields it passes on', () => {
+    expect(
+      validateOutputOf({ ...GRAPH_VALIDATE_FAILED, question: 'Q', plan: { ...GRAPH_PLAN }, queries: [] }),
+    ).toEqual(GRAPH_VALIDATE_FAILED);
+  });
+
   it('reads a validation with its findings', () => {
     expect(validateOutputOf({ ...GRAPH_VALIDATE_FAILED })).toEqual(GRAPH_VALIDATE_FAILED);
     expect(validateOutputOf({ validation: { ...GRAPH_VALIDATE_FAILED } })).toEqual(GRAPH_VALIDATE_FAILED);
