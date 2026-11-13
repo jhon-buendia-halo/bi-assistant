@@ -22,7 +22,7 @@ import { worldCupKey } from './helpers/world-cup-db';
 const V2 = 'Questions to Insights v2';
 const V2_ID = 'qti-v2-turn';
 /**
- * Its steps in catalogue order: Plan, then a branch (Clarify ends the run),
+ * Its steps in catalogue order: Plan, then a branch (Clarify waits for the answer),
  * then Analyse and Validate (retried once), Write answer and Wrap up.
  */
 const V2_STEP_IDS = [
@@ -528,7 +528,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
   );
 
   test(
-    'A question that needs clarification stops at Clarify',
+    'A question that needs clarification waits for my answer and continues the same run',
     { tag: ['@demo'] },
     async ({ page }) => {
       const question = 'How did the team do?';
@@ -536,7 +536,10 @@ test.describe('Feature: Workflows (run workflows)', () => {
         question: 'Which team do you mean?',
         options: ['Brazil', 'Germany'],
       };
-      stub.plan = () => clarifyingPlan(question, clarification);
+      // Plan asks the first time; after the answer it plans clearly.
+      let plans = 0;
+      stub.plan = () => (plans++ === 0 ? clarifyingPlan(question, clarification) : clearPlan(question));
+      let runId = '';
 
       await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
         await openWorkflows(page);
@@ -552,49 +555,135 @@ test.describe('Feature: Workflows (run workflows)', () => {
       );
       await scenarioStep(
         page,
-        'Then "Clarify" is "Stopped", the run ended on its question, and "Analyse", "Validate" and "Write answer" are "Skipped"',
+        'Then a card "Waiting for your answer" shows the question and its options, and the run is "Waiting for you"',
         async () => {
-          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-          for (const id of ['receive-question', 'load-catalog', 'plan']) {
-            await expect(nodeStatus(page, id)).toHaveText('Done');
-          }
-          // A clarifying question ends the run there (workflows R27).
-          await expect(nodeStatus(page, 'clarify')).toHaveText('Stopped');
-          await expect(runStep(page, 'clarify').getByText('Stopped', { exact: true })).toBeVisible();
-          for (const id of V2_ANALYSIS_STEP_IDS) {
-            await expect(nodeStatus(page, id)).toHaveText('Skipped');
-            await expect(page.getByTestId(`workflow-node-${id}`)).toHaveAttribute('data-skipped', 'true');
-            await expect(runStep(page, id).getByText('Skipped', { exact: true })).toBeVisible();
-          }
-          await expect(page.getByTestId('workflow-connector-plan-clarify')).toHaveAttribute('data-done', 'true');
-          await expect(page.getByTestId('workflow-connector-plan-analyse')).toHaveAttribute(
-            'data-skipped',
-            'true',
-          );
-          // The analysis never called the model.
+          const card = page.getByTestId('workflow-run-input-required');
+          await expect(card).toBeVisible();
+          await expect(card.getByRole('heading', { name: 'Waiting for your answer' })).toBeVisible();
+          await expect(card.getByTestId('workflow-run-input-step')).toHaveText('Clarify');
+          await expect(card.getByTestId('workflow-run-input-question')).toHaveText(clarification.question);
+          await expect(card.getByTestId('workflow-run-input-option-0')).toHaveText(clarification.options[0]);
+          await expect(card.getByTestId('workflow-run-input-option-1')).toHaveText(clarification.options[1]);
+          await expect(card).toBeFocused();
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Waiting for you');
+          await expect(page.getByTestId('workflow-run-progress-clarify')).toHaveAttribute('data-state', 'waiting');
+          await expect(page.getByTestId('workflow-run-activity')).toHaveText('Waiting for your answer');
+          // The agent has not been called: the run stopped at the question.
           expect(turnRequests(stub, question)).toEqual([]);
+          const runs = (await storedRuns(page)) as { id: string; status: string }[];
+          expect(runs.map((run) => run.status)).toEqual(['suspended']);
+          runId = runs[0].id;
+          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
         },
       );
-      await scenarioStep(page, 'And I see the clarifying question with its options to pick', async () => {
-        const answer = page.getByTestId('run-answer');
-        await expect(answer).toContainText(clarification.question);
-        for (const option of clarification.options) {
-          await expect(answer.getByRole('button', { name: new RegExp(option) })).toBeEnabled();
+      await scenarioStep(page, `When I pick "${clarification.options[0]}"`, async () => {
+        await page.getByTestId('workflow-run-input-option-0').click();
+      });
+      await scenarioStep(
+        page,
+        'Then the same run continues through Analyse, Validate and Write answer and succeeds',
+        async () => {
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          await expect(page.getByTestId('workflow-run-input-required')).toHaveCount(0);
+          for (const id of ['plan', 'analyse', 'validate', 'write-answer', 'wrap-up']) {
+            await expect(nodeStatus(page, id)).toHaveText('Done');
+            await expect(page.getByTestId(`workflow-run-progress-${id}`)).toHaveAttribute('data-state', 'done');
+          }
+          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          const runs = (await storedRuns(page)) as { id: string; status: string }[];
+          expect(runs.map((run) => [run.id, run.status])).toEqual([[runId, 'success']]);
+          await expect(page.getByTestId('run-answer')).toBeVisible();
+        },
+      );
+    },
+  );
+
+  test(
+    'The agent asks mid-analysis and continues after my answer',
+    { tag: ['@demo'] },
+    async ({ page }) => {
+      const question = 'How did the team do?';
+      const ask = {
+        question: 'Which stage do you want to look at?',
+        options: ['Group stage', 'Final'],
+      };
+      // Analyse asks on its first turn, and answers once the run resumes.
+      let asked = false;
+      stub.reply = (request) => {
+        if (!asked && request.stream && request.messages.at(-1)?.role !== 'tool') {
+          asked = true;
+          return {
+            toolCall: {
+              name:
+                request.tools.find((tool) => tool.endsWith('ask_clarification')) ??
+                'ask_clarification',
+              arguments: { question: ask.question, options: ask.options.join('\n') },
+            },
+          };
         }
+        return queryThenAnswer(request);
+      };
+      // Hold Analyse's first turn open to see the progress while the run streams.
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
       });
-      await scenarioStep(page, 'When I double-click "Plan"', async () => {
-        await openNode(page, 'plan', 'Plan');
+      stub.hold = (request) => (request.stream ? gate : undefined);
+      let runId = '';
+
+      await scenarioStep(page, 'Given I am on the "Questions to Insights v2" page', async () => {
+        await openWorkflows(page);
+        await openV2FromRun(page);
       });
-      await scenarioStep(page, 'Then its Output shows the clarification it asks for', async () => {
-        const view = nodeDialog(page).getByTestId('workflow-plan-view');
-        await expect(view.getByTestId('workflow-plan-clarification-question')).toHaveText(
-          clarification.question,
-        );
-        await expect(view.getByTestId('workflow-plan-clarification-option')).toHaveText(
-          clarification.options,
-        );
-        await closeNode(page);
+      await scenarioStep(page, `When I run it on "${question}"`, async () => {
+        await page.getByTestId('workflow-execute').click();
+        await runOnQuestion(page, question);
       });
+      await scenarioStep(page, 'Then the progress shows "Analyse" as the current step', async () => {
+        const current = page.getByTestId('workflow-run-progress').locator('[aria-current="step"]');
+        await expect(current).toHaveCount(1);
+        await expect(current).toHaveAttribute('data-testid', 'workflow-run-progress-analyse');
+        await expect(page.getByTestId('workflow-run-progress-plan')).toHaveAttribute('data-state', 'done');
+        await expect(page.getByTestId('workflow-run-activity')).toHaveText(/^Analys/);
+        release();
+      });
+      await scenarioStep(
+        page,
+        'And a card "Waiting for your answer" asks the agent\'s question with its options',
+        async () => {
+          const card = page.getByTestId('workflow-run-input-required');
+          await expect(card).toBeVisible();
+          await expect(card.getByTestId('workflow-run-input-step')).toHaveText('Analyse');
+          await expect(card.getByTestId('workflow-run-input-question')).toHaveText(ask.question);
+          await expect(card.getByTestId('workflow-run-input-option-0')).toHaveText(ask.options[0]);
+          await expect(page.getByTestId('workflow-run-progress-analyse')).toHaveAttribute('data-state', 'waiting');
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Waiting for you');
+          const runs = (await storedRuns(page)) as { id: string; status: string }[];
+          expect(runs.map((run) => run.status)).toEqual(['suspended']);
+          runId = runs[0].id;
+        },
+      );
+      await scenarioStep(page, 'When I type my answer and press "Continue"', async () => {
+        const answer = page.getByTestId('workflow-run-input-answer');
+        await expect(page.getByTestId('workflow-run-input-continue')).toBeDisabled();
+        await answer.fill('The final');
+        await page.getByTestId('workflow-run-input-continue').click();
+      });
+      await scenarioStep(
+        page,
+        'Then the same run continues, Analyse answers and the run succeeds',
+        async () => {
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          await expect(page.getByTestId('workflow-run-input-required')).toHaveCount(0);
+          await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
+          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          for (const id of ['analyse', 'validate', 'write-answer']) {
+            await expect(nodeStatus(page, id)).toHaveText('Done');
+          }
+          const runs = (await storedRuns(page)) as { id: string; status: string }[];
+          expect(runs.map((run) => [run.id, run.status])).toEqual([[runId, 'success']]);
+        },
+      );
     },
   );
 
@@ -1300,4 +1389,16 @@ test('the Workflows pages have no detectable accessibility violations in either 
     timeout: FAILED_RUN_TIMEOUT,
   });
   await scan('Questions to Insights v2 page after a failed run');
+
+  // A run that waits for my answer: the waiting card, the progress and the activity line.
+  stub.hold = undefined;
+  stub.plan = () =>
+    clarifyingPlan(QUESTION, {
+      question: 'Which stage do you mean?',
+      options: ['Group stage', 'Final'],
+    });
+  await page.getByTestId('workflow-run').click();
+  await expect(page.getByTestId('workflow-run-input-required')).toBeVisible();
+  await expect(page.getByTestId('workflow-run-activity')).toHaveText('Waiting for your answer');
+  await scan('Questions to Insights v2 page, a run waiting for my answer');
 });

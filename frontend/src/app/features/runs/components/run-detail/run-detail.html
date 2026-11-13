@@ -43,7 +43,17 @@
           class="text-[13px] font-medium text-fg-strong"
           >{{ status() }}</span
         >
-        @if (state.canRunAgain()) {
+        @if (run.status === 'suspended' && state.canRunAgain()) {
+          <button
+            type="button"
+            data-testid="run-answer-in-workflow"
+            (click)="state.answerInWorkflow(run)"
+            class="btn btn-primary ml-auto"
+          >
+            <lucide-angular [img]="MessageSquareReply" [size]="14" />
+            <span>Answer in the workflow</span>
+          </button>
+        } @else if (state.canRunAgain()) {
           <!-- Only while the run's workflow is still in the catalogue -->
           <button
             type="button"

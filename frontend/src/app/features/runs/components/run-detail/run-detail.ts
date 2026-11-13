@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Loader2,
   LucideAngularModule,
+  MessageSquareReply,
   RotateCcw,
   TriangleAlert,
   Workflow,
@@ -56,6 +57,7 @@ export class RunDetail {
 
   protected readonly ArrowLeft = ArrowLeft;
   protected readonly Loader2 = Loader2;
+  protected readonly MessageSquareReply = MessageSquareReply;
   protected readonly RotateCcw = RotateCcw;
   protected readonly TriangleAlert = TriangleAlert;
   protected readonly Workflow = Workflow;

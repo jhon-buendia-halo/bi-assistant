@@ -218,7 +218,9 @@ export type WorkflowRunStepStatus =
   | 'success'
   | 'failed'
   | 'skipped'
-  | 'stopped';
+  | 'stopped'
+  /** Waiting for the user's answer (`input-required`). */
+  | 'suspended';
 
 /** One tool call of an agent step, from the turn's `tool` / `tool-result` events (api.md 3.6). */
 export interface WorkflowRunToolCall {
@@ -287,6 +289,28 @@ export interface WorkflowRunStep {
   attempt?: number;
 }
 
+/** What a suspended run waits for (api.md 3.6 `waitingFor`). */
+export interface WorkflowWaitingFor {
+  stepId: string;
+  title: string;
+  question: string;
+  options: string[];
+  since?: string;
+  expiresAt: string;
+  /** The run can no longer continue (30 minutes passed, or the app restarted). */
+  expired?: true;
+}
+
+/** The `input-required` event of a run stream (api.md 3.6). */
+export interface WorkflowInputRequired {
+  runId: string;
+  stepId: string;
+  title: string;
+  question: string;
+  options: string[];
+  expiresAt: string;
+}
+
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
 export interface WorkflowRunRequest {
   input: Record<string, WorkflowInputValue>;
@@ -304,7 +328,9 @@ export interface WorkflowRun {
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
   context?: { fromRunId: string };
-  status: 'running' | 'success' | 'failed' | 'stopped';
+  status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
+  /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
+  waitingFor?: WorkflowWaitingFor;
   steps: WorkflowRunStep[];
   output?: Record<string, unknown>;
   error?: string;
@@ -365,6 +391,8 @@ export interface RunStepView {
 /** The run shown on the workflow page: live while it streams, then as stored. */
 export interface RunView {
   status: WorkflowRun['status'];
+  /** A suspended or expired run: what it waits on. */
+  waitingFor?: WorkflowWaitingFor;
   error?: string;
   steps: RunStepView[];
   output?: Record<string, unknown>;

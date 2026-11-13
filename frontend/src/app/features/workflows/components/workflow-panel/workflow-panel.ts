@@ -24,6 +24,13 @@ import { RunVisualsState } from '../../../runs/services/run-visuals-state';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
+import { WorkflowRunActivity } from '../workflow-run-activity/workflow-run-activity';
+import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
+import { WorkflowRunProgress } from '../workflow-run-progress/workflow-run-progress';
+import {
+  activityLine,
+  progressSteps,
+} from '../../services/workflow-run-progress';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import {
   RunOutputEntry,
@@ -45,7 +52,15 @@ const FORM_CONTROLS =
  */
 @Component({
   selector: 'app-workflow-panel',
-  imports: [AnswerView, LucideAngularModule, MarkdownPipe, RunVisual],
+  imports: [
+    AnswerView,
+    LucideAngularModule,
+    MarkdownPipe,
+    RunVisual,
+    WorkflowRunActivity,
+    WorkflowRunInputRequired,
+    WorkflowRunProgress,
+  ],
   templateUrl: './workflow-panel.html',
   host: { class: 'flex min-h-0 flex-col', 'data-testid': 'workflow-panel' },
 })
@@ -133,6 +148,23 @@ export class WorkflowPanel {
   }
 
   protected readonly stepStatusLabel = runStepStatusLabel;
+
+  /** The run progress: empty with no run shown. */
+  protected readonly progress = computed(() => {
+    const workflow = this.designer.workflow();
+    const result = this.designer.runResult();
+    return workflow === null || result === null
+      ? []
+      : progressSteps(workflow, result);
+  });
+
+  /** The live activity line under it; null once the run ended. */
+  protected readonly activity = computed(() => {
+    const result = this.designer.runResult();
+    return result === null
+      ? null
+      : activityLine(this.progress(), result.status, this.designer.toolCalls());
+  });
 
   protected readonly runStatus = computed(() => {
     const result = this.designer.runResult();

@@ -17,6 +17,7 @@ import {
   WorkflowRun,
   WorkflowRunRequest,
   WorkflowRunStep,
+  WorkflowWaitingFor,
 } from '../models/workflow.model';
 import {
   NodeInspection,
@@ -35,7 +36,7 @@ import {
   validateRunForm,
 } from './workflow-input-validation';
 import { ContractSide, contractViolationSides } from './workflow-contract';
-import { WorkflowRunsApiService } from './workflow-runs-api.service';
+import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
   RunFormValues,
@@ -143,9 +144,15 @@ export class WorkflowDesigner {
   private readonly streamError = signal<string | null>(null);
   /** The user stopped the run shown. */
   private readonly stopped = signal(false);
+  /** What the streaming run waits on (`input-required`), until it resumes. */
+  private readonly liveWaiting = signal<WorkflowWaitingFor | null>(null);
+  /** The server refused to resume (not a failed run): shown on the waiting card. */
+  readonly resumeError = signal<string | null>(null);
 
   /** Run again: the values the next loaded workflow's form opens with. */
   private prefill: RunFormValues | null = null;
+  /** A stored run to show once the workflow has loaded ("Answer in the workflow"). */
+  private pendingRun: WorkflowRun | null = null;
 
   private loadSubscription: Subscription | null = null;
   private datasetsSubscription: Subscription | null = null;
@@ -161,6 +168,20 @@ export class WorkflowDesigner {
     return workflow === null ? null : questionFieldName(workflow.input);
   });
 
+  /**
+   * The question the run shown waits on, or (`expired`) waited on and can no
+   * longer continue; null otherwise.
+   */
+  readonly waitingFor = computed<WorkflowWaitingFor | null>(() => {
+    const stored = this.run();
+    if (stored !== null) {
+      const waiting = stored.waitingFor ?? null;
+      if (waiting === null) return null;
+      return stored.status === 'suspended' || waiting.expired ? waiting : null;
+    }
+    return this.stopped() ? null : this.liveWaiting();
+  });
+
   /** The run shown; null before the first Execute and after a refusal. */
   readonly runResult = computed<RunView | null>(() => {
     const workflow = this.workflow();
@@ -171,6 +192,9 @@ export class WorkflowDesigner {
       const finishedAt = stored.finishedAt ?? this.liveFinishedAt();
       return {
         status: stored.status,
+        ...(stored.waitingFor !== undefined
+          ? { waitingFor: stored.waitingFor }
+          : {}),
         ...(stored.error !== undefined ? { error: stored.error } : {}),
         steps: stored.steps.map((step) => ({
           ...step,
@@ -191,15 +215,21 @@ export class WorkflowDesigner {
     }
     const live = this.liveSteps();
     const failure = this.streamError();
+    const waiting = this.waitingFor();
     const status: RunView['status'] = this.stopped()
       ? 'stopped'
       : failure !== null
         ? 'failed'
-        : 'running';
+        : waiting !== null
+          ? 'suspended'
+          : 'running';
     const startedAt = this.liveStartedAt();
     const finishedAt = this.liveFinishedAt();
     return {
       status,
+      ...(status === 'suspended' && waiting !== null
+        ? { waitingFor: waiting }
+        : {}),
       ...(failure !== null ? { error: failure } : {}),
       steps: workflow.steps.flatMap((step) => {
         const events: (WorkflowRunStep | null)[] = Object.hasOwn(live, step.id)
@@ -207,7 +237,11 @@ export class WorkflowDesigner {
           : [null];
         return events.map((event): RunStepView => {
           let stepStatus = event === null ? null : event.status;
-          if (stepStatus === 'running' && status !== 'running') {
+          if (
+            stepStatus === 'running' &&
+            status !== 'running' &&
+            status !== 'suspended'
+          ) {
             stepStatus = status === 'stopped' ? 'stopped' : 'failed';
           }
           return {
@@ -364,6 +398,11 @@ export class WorkflowDesigner {
     this.prefill = input as RunFormValues;
   }
 
+  /** "Answer in the workflow": the next workflow opened shows this stored run. */
+  showRunOnLoad(run: WorkflowRun): void {
+    this.pendingRun = run;
+  }
+
   /** Open a workflow: everything of the previous one is discarded. */
   load(id: string): void {
     this.clear();
@@ -373,6 +412,11 @@ export class WorkflowDesigner {
         this.workflow.set(workflow);
         this.inputValues.set(initialInputValues(workflow.input));
         this.loading.set(false);
+        if (this.pendingRun !== null) {
+          const pending = this.pendingRun;
+          this.pendingRun = null;
+          if (pending.workflowId === workflow.id) this.showStored(pending);
+        }
         if (this.prefill !== null) {
           const input = this.prefill;
           this.prefill = null;
@@ -633,6 +677,93 @@ export class WorkflowDesigner {
     this.streamingText.set('');
     this.streamError.set(null);
     this.stopped.set(false);
+    this.liveWaiting.set(null);
+    this.resumeError.set(null);
+  }
+
+  /**
+   * Answer the question a suspended run waits on (api.md 138): the SAME run
+   * continues (same `runId`, its steps and attempts), its live progress
+   * appended to what it had. A refusal before the stream leaves the run as
+   * it was: an expired one reads as stopped, any other shows on the card.
+   */
+  resume(answer: string): void {
+    const workflow = this.workflow();
+    const stored = this.run();
+    const waiting = this.waitingFor();
+    const text = answer.trim();
+    if (workflow === null || stored === null || waiting === null) return;
+    if (this.running() || !text) return;
+    if (stored.status !== 'suspended' || waiting.expired) return;
+    this.cancelStream();
+    const generation = this.generation;
+    const live = () => generation === this.generation;
+    const grouped: Record<string, WorkflowRunStep[]> = {};
+    for (const step of stored.steps) {
+      (grouped[step.id] ??= []).push(step);
+    }
+    this.resumeError.set(null);
+    this.liveWaiting.set(null);
+    this.liveSteps.set(grouped);
+    this.runId.set(stored.id);
+    this.liveInput.set(stored.input ?? null);
+    this.liveStartedAt.set(stored.startedAt);
+    this.liveFinishedAt.set(null);
+    this.streamError.set(null);
+    this.stopped.set(false);
+    this.reasoning.set('');
+    this.toolCalls.set([]);
+    this.streamingText.set('');
+    this.run.set(null);
+    this.running.set(true);
+    const controller = new AbortController();
+    this.abort = controller;
+    const base = this.streamHandlers(workflow, live);
+    let refused: number | null = null;
+    void this.runsApi
+      .resumeRun(
+        stored.id,
+        waiting.stepId,
+        text,
+        {
+          ...base,
+          onRefused: (status) => {
+            refused = status;
+          },
+          onError: (message, errors) => {
+            if (!live()) return;
+            if (refused === null) {
+              base.onError?.(message, errors);
+              return;
+            }
+            this.running.set(false);
+            if (refused === 410) {
+              this.showStored({
+                ...stored,
+                status: 'stopped',
+                waitingFor: { ...waiting, expired: true },
+              });
+            } else {
+              this.showStored(stored);
+              this.resumeError.set(message);
+            }
+          },
+        },
+        controller.signal,
+      )
+      .finally(() => {
+        if (!live()) return;
+        this.running.set(false);
+        this.abort = null;
+      });
+  }
+
+  /**
+   * An expired run: start a new one with the user's answer as a follow-up on
+   * it (`context.fromRunId`).
+   */
+  rerunWithAnswer(answer: string): void {
+    this.followUp(answer);
   }
 
   private start(
@@ -657,69 +788,7 @@ export class WorkflowDesigner {
       .streamRun(
         workflow.id,
         request,
-        {
-          onRun: ({ runId }) => {
-            if (!live()) return;
-            this.runId.set(runId);
-          },
-          onStep: (step) => {
-            if (!live()) return;
-            this.applyStep(workflow, step);
-          },
-          onReasoning: (delta) => {
-            if (live()) this.reasoning.update((text) => text + delta);
-          },
-          onText: (delta) => {
-            if (live()) this.streamingText.update((text) => text + delta);
-          },
-          onTool: (call) => {
-            if (!live()) return;
-            this.toolCalls.update((calls) => [
-              ...calls,
-              { ...call, finished: false },
-            ]);
-          },
-          onToolResult: (summary) => {
-            if (!live()) return;
-            this.updateOpenCall(summary.tool, (call) => ({
-              ...call,
-              finished: true,
-              ...(summary.rowCount !== undefined
-                ? { rowCount: summary.rowCount }
-                : {}),
-              ...(summary.error ? { error: summary.error } : {}),
-            }));
-          },
-          onToolProgress: (progress) => {
-            if (!live()) return;
-            this.updateOpenCall(progress.tool, (call) => ({
-              ...call,
-              progress: progress.message,
-            }));
-          },
-          onDone: (run) => {
-            if (!live()) return;
-            this.runId.set(run.id);
-            this.liveFinishedAt.set(new Date().toISOString());
-            this.running.set(false);
-            this.showStored(run);
-          },
-          onError: (message, errors) => {
-            if (!live()) return;
-            if (this.runId() === null) {
-              // Refused (or unreachable) before the run started: no result.
-              this.runError.set(
-                errors ? this.unshownError(workflow, errors) : message,
-              );
-              if (errors) this.refuse(errors);
-              this.resetRun();
-            } else {
-              this.streamError.set(message);
-              this.liveFinishedAt.set(new Date().toISOString());
-            }
-            this.running.set(false);
-          },
-        },
+        this.streamHandlers(workflow, live),
         controller.signal,
       )
       .finally(() => {
@@ -727,6 +796,88 @@ export class WorkflowDesigner {
         this.running.set(false);
         this.abort = null;
       });
+  }
+
+  /** The run stream's handlers, shared by a run and its resume; `live` is false once superseded. */
+  private streamHandlers(
+    workflow: WorkflowDetail,
+    live: () => boolean,
+  ): RunStreamHandlers {
+    return {
+      onRun: ({ runId }) => {
+        if (!live()) return;
+        this.runId.set(runId);
+      },
+      onStep: (step) => {
+        if (!live()) return;
+        this.applyStep(workflow, step);
+      },
+      onInputRequired: (event) => {
+        if (!live()) return;
+        this.liveWaiting.set({
+          stepId: event.stepId,
+          title: event.title,
+          question: event.question,
+          options: event.options,
+          expiresAt: event.expiresAt,
+        });
+      },
+      onReasoning: (delta) => {
+        if (live()) this.reasoning.update((text) => text + delta);
+      },
+      onText: (delta) => {
+        if (live()) this.streamingText.update((text) => text + delta);
+      },
+      onTool: (call) => {
+        if (!live()) return;
+        this.toolCalls.update((calls) => [
+          ...calls,
+          { ...call, finished: false },
+        ]);
+      },
+      onToolResult: (summary) => {
+        if (!live()) return;
+        this.updateOpenCall(summary.tool, (call) => ({
+          ...call,
+          finished: true,
+          ...(summary.rowCount !== undefined
+            ? { rowCount: summary.rowCount }
+            : {}),
+          ...(summary.error ? { error: summary.error } : {}),
+        }));
+      },
+      onToolProgress: (progress) => {
+        if (!live()) return;
+        this.updateOpenCall(progress.tool, (call) => ({
+          ...call,
+          progress: progress.message,
+        }));
+      },
+      onDone: (run) => {
+        if (!live()) return;
+        this.runId.set(run.id);
+        if (run.status !== 'suspended') {
+          this.liveFinishedAt.set(new Date().toISOString());
+        }
+        this.running.set(false);
+        this.showStored(run);
+      },
+      onError: (message, errors) => {
+        if (!live()) return;
+        if (this.runId() === null) {
+          // Refused (or unreachable) before the run started: no result.
+          this.runError.set(
+            errors ? this.unshownError(workflow, errors) : message,
+          );
+          if (errors) this.refuse(errors);
+          this.resetRun();
+        } else {
+          this.streamError.set(message);
+          this.liveFinishedAt.set(new Date().toISOString());
+        }
+        this.running.set(false);
+      },
+    };
   }
 
   /**
