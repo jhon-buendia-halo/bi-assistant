@@ -11,37 +11,36 @@ import { mainPath, workflowEdges } from './workflow-graph';
  * The workflow page's n8n-style canvas (ui.md 4.4b): Start, one column per
  * step and End, left to right on one shared centre line. An agent step is a
  * wide node with a Model and a Tools port on its bottom edge, joined by dashed
- * lines to round sub-nodes below it: its model and one Tools sub-node. Sized
- * so Questions to Insights v2 fits beside the open right panel at 1440 px
- * (55%). Everything here is a pure function of the workflow, in canvas pixels
- * at 100%.
+ * lines to round sub-nodes below it: its model and one Tools sub-node. Roomy
+ * rather than packed: readability wins over fitting, so a wide workflow may
+ * need a little panning at the minimum zoom. Everything here is a pure
+ * function of the workflow, in canvas pixels at 100%.
  */
 export const CANVAS = {
   /** Around the whole graph. */
-  padding: 20,
+  padding: 40,
   /** Start, a code step and End are squares of this side. */
-  square: 52,
-  agentWidth: 120,
+  square: 88,
+  agentWidth: 220,
   /** An agent step's height; squares share its centre line. */
   nodeHeight: 88,
-  /** Between two columns, where the edge and its label run (wider for a wider label). */
-  colGap: 44,
-  /** The title and subtitle under a square node: their box. */
-  labelWidth: 92,
-  labelHeight: 86,
+  /** Between two columns, where the edge and its labels run (wider for a wider label). */
+  colGap: 80,
+  /** The title and subtitle under a square node: their width (their height follows the text). */
+  labelWidth: 150,
   exitRowHeight: 16,
-  /** An agent's exit note wraps past this width. */
-  exitWidth: 136,
+  /** An agent's exit note wraps past this width (the agent's own). */
+  exitWidth: 220,
   /** A sub-node's diameter. */
-  subSize: 40,
+  subSize: 52,
   /** From the agent's bottom edge to the top of its sub-nodes. */
-  subTop: 44,
+  subTop: 56,
   /** The label and subtitle under a sub-node: their box (the Model's; the Tools' is narrower). */
-  subLabelWidth: 88,
-  toolsLabelWidth: 52,
+  subLabelWidth: 120,
+  toolsLabelWidth: 80,
   subLabelHeight: 52,
-  /** Between the main row's lowest point and the side row. */
-  sideGap: 28,
+  /** Between the main row's lowest point and the side row, where the side edges' labels sit. */
+  sideGap: 40,
 } as const;
 
 /** The zoom levels zoom in / out step through; fit may land between them. */
@@ -51,6 +50,8 @@ export const MAX_ZOOM = 1.5;
 
 /** Between an agent's exit notes and its top edge (room for the status badge). */
 const EXIT_GAP = 12;
+/** Between a square's label and the exit notes under it. */
+const EXIT_LABEL_GAP = 4;
 /** An exit note's width, estimated: per character at 11 px, plus its icon and padding. */
 const EXIT_CHAR = 5.4;
 const EXIT_EXTRA = 23;
@@ -75,26 +76,36 @@ const RETURN_ENTRY_Y = 16;
 const CORNER = 8;
 /** A side node's edge to End enters it this far below its centre. */
 const END_ENTRY_Y = 12;
-/** A side edge's label: this far beside its vertical line. */
+/**
+ * A side edge's label: this far beside its vertical line. A main-path label
+ * in a gap a side edge drops from sits this far right of the drop too.
+ */
 const SIDE_LABEL_OFFSET = 6;
 /** A branch label (11 px medium) per character, and its padding and border. */
 const LABEL_CHAR = 5.5;
 const LABEL_PAD = 14;
-/** A main-path branch label wider than this wraps onto two lines. */
-const BRANCH_WRAP = 64;
-/** A field count label (11 px) per character, its padding, and the room around it. */
-const FIELDS_CHAR = 4.7;
-const FIELDS_PAD = 4;
-const FIELDS_MARGIN = 2;
+/** A field count label (11 px mono) per character, and its padding. */
+const FIELDS_CHAR = 6.6;
+const FIELDS_PAD = 8;
+/** The room an edge label keeps from the nodes (and their handles) each side. */
+const LABEL_MARGIN = 16;
 /** A port's label (11 px) per character. */
 const PORT_CHAR = 5.5;
 /** A square's label starts this far under it; a sub-node's this far. */
 const SQUARE_LABEL_TOP = 8;
 const SUB_LABEL_TOP = 6;
+/** A square's title (13 px medium, at most 2 lines) and subtitle (11 px, at most 3): per character and line height. */
+const TITLE_CHAR = 7.2;
+const TITLE_LINE = 18;
+const SUBTITLE_CHAR = 6;
+const SUBTITLE_MONO_CHAR = 6.6;
+const SUBTITLE_LINE = 14;
+/** Between a square's title and subtitle (`gap-px`). */
+const LABEL_ROW_GAP = 1;
 /** Between two agents' sub-node labels. */
 const SUB_LABEL_GAP = 4;
 /** The ports' places along the agent's bottom edge, as a fraction of its width. */
-const PORT_AT = { model: 0.2, tool: 0.85 } as const;
+const PORT_AT = { model: 0.25, tool: 0.75 } as const;
 
 /** A tool is reached through its agent's Tools sub-node, never a node of its own. */
 export type CanvasNodeKind = Exclude<WorkflowNodeKind, 'tool'>;
@@ -151,6 +162,8 @@ export interface CanvasNode {
   title: string;
   /** The step id; Start: the input field names; End: the last step's output names. */
   subtitle: string;
+  /** A square's label under it (title and subtitle), estimated from their text: its height; 0 for an agent. */
+  labelHeight: number;
   /** An agent step's agent name, then ` · ≤ <n> steps` when it may take more than one; else null. */
   agentLine: string | null;
   step: WorkflowDetailStep | null;
@@ -182,9 +195,13 @@ export interface CanvasEdge {
   labelY: number;
   /** The graph edge's own label (`Needs clarification`, `Clear`, `Retry once`, `Valid or retried`); null when it has none. */
   branchLabel: string | null;
-  /** That label as drawn: one line, or two when a main-path label is wide. */
+  /** That label as drawn: one line (its gap widens to fit it); empty without one. */
   branchLabelLines: string[];
-  /** That label's centre: below the line, beside the drop to a side node, or on the loop's curve. */
+  /**
+   * That label's centre: below the line (right of the drop when a side edge
+   * drops from the same gap), beside the drop to a side node, or on the
+   * loop's curve.
+   */
   branchLabelX: number;
   branchLabelY: number;
 }
@@ -266,6 +283,18 @@ function agentLine(step: WorkflowDetailStep): string | null {
     : agent.name;
 }
 
+/**
+ * The agent line as drawn: the agent's name, then (after a space the line
+ * may break at) its step limit `· ≤ <n> steps`, kept on one line; `limit`
+ * is '' without one.
+ */
+export function agentLineParts(line: string): { name: string; limit: string } {
+  const at = line.lastIndexOf(' · ≤ ');
+  return at === -1
+    ? { name: line, limit: '' }
+    : { name: line.slice(0, at), limit: line.slice(at + 1) };
+}
+
 /** How many lines an exit note takes at `width`. */
 function exitLines(text: string, width: number): number {
   return Math.max(1, Math.ceil((text.length * EXIT_CHAR + EXIT_EXTRA) / width));
@@ -287,22 +316,43 @@ function branchLabelWidth(lines: string[]): number {
   return Math.max(0, ...lines.map((l) => l.length * LABEL_CHAR)) + LABEL_PAD;
 }
 
-/** A main-path branch label: one line, or two near-even lines when it is wide. */
-function wrapLabel(label: string): string[] {
-  if (branchLabelWidth([label]) <= BRANCH_WRAP || !label.includes(' ')) {
-    return [label];
-  }
-  let best: string[] = [label];
-  let widest = Infinity;
-  for (let i = label.indexOf(' '); i !== -1; i = label.indexOf(' ', i + 1)) {
-    const lines = [label.slice(0, i), label.slice(i + 1)];
-    const w = Math.max(...lines.map((l) => l.length));
-    if (w < widest) {
-      widest = w;
-      best = lines;
+/** How many lines `text` wraps onto at `width`, word by word (a long word breaks anywhere). */
+function textLines(text: string, charWidth: number, width: number): number {
+  if (!text) return 0;
+  const perLine = Math.max(1, Math.floor(width / charWidth));
+  let lines = 1;
+  let used = 0;
+  for (const word of text.split(' ')) {
+    const need = used ? used + 1 + word.length : word.length;
+    if (need <= perLine) {
+      used = need;
+    } else if (used) {
+      lines += Math.ceil(word.length / perLine);
+      used = word.length % perLine || perLine;
+    } else {
+      lines += Math.ceil(word.length / perLine) - 1;
+      used = word.length % perLine || perLine;
     }
   }
-  return best;
+  return lines;
+}
+
+/** The height of a square's label (title, then subtitle), from its top edge under the square. */
+function squareLabelHeight(
+  title: string,
+  subtitle: string,
+  mono: boolean,
+): number {
+  const titleLines = Math.min(2, Math.max(1, textLines(title, TITLE_CHAR, CANVAS.labelWidth)));
+  const subLines = Math.min(
+    3,
+    textLines(subtitle, mono ? SUBTITLE_MONO_CHAR : SUBTITLE_CHAR, CANVAS.labelWidth),
+  );
+  return (
+    SQUARE_LABEL_TOP +
+    titleLines * TITLE_LINE +
+    (subLines ? LABEL_ROW_GAP + subLines * SUBTITLE_LINE : 0)
+  );
 }
 
 /** The sub-nodes under an agent at `x` whose bottom edge is `bottom`: each under its port. */
@@ -381,6 +431,13 @@ export function workflowCanvasLayout(
   const hasLoop = graph.some(
     (e) => e.kind === 'loop' && onPath.has(e.from) && onPath.has(e.to),
   );
+  // The main nodes a side step hangs from: a side edge drops down the gap after each.
+  const sideIds = new Set(sideSteps.map((s) => s.id));
+  const dropsFrom = new Set(
+    graph
+      .filter((e) => e.kind !== 'loop' && sideIds.has(e.to) && onPath.has(e.from))
+      .map((e) => e.from),
+  );
 
   // Room above the main row for the agent steps' exit notes, and the loop.
   const exitRoom = Math.max(
@@ -407,7 +464,11 @@ export function workflowCanvasLayout(
     return (
       prev.x +
       prev.width +
-      columnGap(fieldsLabel(fields), edge?.label ? wrapLabel(edge.label) : [])
+      columnGap(
+        fieldsLabel(fields),
+        edge?.label ? [edge.label] : [],
+        dropsFrom.has(prev.id),
+      )
     );
   };
 
@@ -460,12 +521,30 @@ export function workflowCanvasLayout(
     ),
   );
 
+  // Start's exit note runs right, under the next column's label: when that
+  // label (or its exit notes) reaches lower, the note goes below them.
+  const [start, next] = nodes;
+  if (start.exits.length && next && next.kind !== 'agent') {
+    const exit = start.exits[0];
+    const nextLeft = next.x + next.width / 2 - CANVAS.labelWidth / 2;
+    if (exit.x + exitBoxWidth(exit) > nextLeft) {
+      const below = Math.max(
+        exit.y,
+        next.y + next.height + next.labelHeight + EXIT_LABEL_GAP,
+        ...next.exits.map((e) => e.y + e.lines * CANVAS.exitRowHeight + EXIT_LABEL_GAP),
+      );
+      start.exits = [{ ...exit, y: below }];
+    }
+  }
+
   // Side steps (a branch off the main path): one row below everything on
   // the main row, each under the gap after its source.
   const mainBottom = rowBottom(nodes);
   const sideTop = mainBottom + CANVAS.sideGap;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   let sideX = CANVAS.padding;
+  /** Where a side edge drops from a main node's gap: the x of its line. */
+  const dropAt = new Map<string, number>();
   for (const step of sideSteps) {
     const source = graph.find(
       (e) => e.to === step.id && e.kind !== 'loop' && byId.has(e.from),
@@ -489,6 +568,7 @@ export function workflowCanvasLayout(
     );
     nodes.push(node);
     byId.set(node.id, node);
+    if (from && !dropAt.has(from.id)) dropAt.set(from.id, nodeX + width / 2);
     sideX = nodeX + width + CANVAS.colGap;
   }
 
@@ -507,8 +587,8 @@ export function workflowCanvasLayout(
     const schema = from.step ? from.step.outputSchema : to.step?.inputSchema;
     const typed = contractFields(schema, fields);
     const byName = new Map(typed.map((field) => [field.name, field]));
-    const lines = g.label ? (main ? wrapLabel(g.label) : [g.label]) : [];
-    const shape = edgeShape(g, from, to, end, lines);
+    const lines = g.label ? [g.label] : [];
+    const shape = edgeShape(g, from, to, end, lines, main ? dropAt.get(from.id) : undefined);
     return [
       {
         id: `${from.id}-${to.id}`,
@@ -588,6 +668,7 @@ function squareNode(
   const y = centerY - CANVAS.square / 2;
   // As wide as two columns' labels.
   const width = 2 * CANVAS.labelWidth;
+  const labelHeight = squareLabelHeight(base.title, base.subtitle, false);
   return {
     ...base,
     x,
@@ -596,16 +677,17 @@ function squareNode(
     height: CANVAS.square,
     centerY,
     number: null,
+    labelHeight,
     agentLine: null,
     step: null,
-    // Start is the first column: its note starts at its left edge.
+    // Start is the first column: its note starts at its left edge, right under its label.
     exits: exitNote
       ? [
           {
             text: exitNote,
             outcome: 'fails',
             x,
-            y: y + CANVAS.square + CANVAS.labelHeight,
+            y: y + CANVAS.square + labelHeight + EXIT_LABEL_GAP,
             align: 'start',
             width,
             lines: exitLines(exitNote, width),
@@ -631,6 +713,7 @@ function stepNode(
   const top = centerY - height / 2;
   const bottom = top + height;
   const centreX = x + width / 2;
+  const labelHeight = isAgent ? 0 : squareLabelHeight(step.title, step.id, true);
   const exits: CanvasExit[] = [];
   if (isAgent) {
     // Stacked upwards from just above the node, the first exit on top.
@@ -650,6 +733,7 @@ function stepNode(
       });
     }
   } else {
+    // Right under its own label, one after another.
     let above = 0;
     for (const exit of step.exits) {
       const text = exitText(exit);
@@ -658,7 +742,7 @@ function stepNode(
         text,
         outcome: exit.outcome,
         x: centreX,
-        y: bottom + CANVAS.labelHeight + above * CANVAS.exitRowHeight,
+        y: bottom + labelHeight + EXIT_LABEL_GAP + above * CANVAS.exitRowHeight,
         align: 'center',
         width: CANVAS.labelWidth,
         lines,
@@ -694,6 +778,7 @@ function stepNode(
     number,
     title: step.title,
     subtitle: step.id,
+    labelHeight,
     agentLine: agentLine(step),
     step,
     exits,
@@ -706,12 +791,10 @@ function stepNode(
 function rowBottom(nodes: CanvasNode[]): number {
   return Math.max(
     ...nodes.map((n) =>
-      n.kind === 'agent'
-        ? n.y + n.height
-        : n.y +
-          n.height +
-          CANVAS.labelHeight +
-          n.exits.reduce((sum, e) => sum + e.lines, 0) * CANVAS.exitRowHeight,
+      Math.max(
+        n.y + n.height + n.labelHeight,
+        ...n.exits.map((e) => e.y + e.lines * CANVAS.exitRowHeight),
+      ),
     ),
     ...nodes.flatMap((n) =>
       n.subNodes.map((s) => s.y + s.size + CANVAS.subLabelHeight),
@@ -719,13 +802,19 @@ function rowBottom(nodes: CanvasNode[]): number {
   );
 }
 
-/** The gap between two columns: wider when the edge's labels need it. */
-function columnGap(fields: string, branch: string[]): number {
-  return Math.max(
+/**
+ * The gap between two columns: wider when the edge's labels need it. When a
+ * side edge drops down its middle, the branch label sits right of the drop,
+ * so the right half holds it.
+ */
+function columnGap(fields: string, branch: string[], drop: boolean): number {
+  const branchW = branch.length ? branchLabelWidth(branch) : 0;
+  return Math.ceil(Math.max(
     CANVAS.colGap,
-    fieldsLabelWidth(fields) + FIELDS_MARGIN,
-    branch.length ? branchLabelWidth(branch) + FIELDS_MARGIN : 0,
-  );
+    fields ? fieldsLabelWidth(fields) + 2 * LABEL_MARGIN : 0,
+    branchW ? branchW + 2 * LABEL_MARGIN : 0,
+    drop && branchW ? 2 * (SIDE_LABEL_OFFSET + branchW + LABEL_MARGIN) : 0,
+  ));
 }
 
 /**
@@ -746,7 +835,7 @@ export function canvasBoxes(
         x: n.x + n.width / 2 - CANVAS.labelWidth / 2,
         y: n.y + n.height + SQUARE_LABEL_TOP,
         w: CANVAS.labelWidth,
-        h: CANVAS.labelHeight - SQUARE_LABEL_TOP,
+        h: n.labelHeight - SQUARE_LABEL_TOP,
       });
     }
     for (const exit of n.exits) {
@@ -820,6 +909,8 @@ function edgeShape(
   to: CanvasNode,
   end: CanvasNode,
   lines: string[],
+  /** The x of a side edge dropping down the same gap, when one does. */
+  dropX?: number,
 ): EdgeShape {
   const x1 = from.x + from.width;
   const labelW = lines.length ? branchLabelWidth(lines) : 0;
@@ -884,7 +975,11 @@ function edgeShape(
     path: `M ${x1} ${from.centerY} L ${x2} ${to.centerY}`,
     labelX: (x1 + x2) / 2,
     labelY: from.centerY - EDGE_LABEL_RISE,
-    branchLabelX: (x1 + x2) / 2,
+    // Right of a drop down the same gap, never on it.
+    branchLabelX:
+      dropX === undefined
+        ? (x1 + x2) / 2
+        : dropX + SIDE_LABEL_OFFSET + labelW / 2,
     branchLabelY: from.centerY + BRANCH_LABEL_DROP + labelH / 2,
   };
 }

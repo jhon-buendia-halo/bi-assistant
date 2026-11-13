@@ -137,19 +137,23 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       ),
     ).toBe(true);
     expect(nodes.map((n) => parseFloat(n.style.left))).toEqual([
-      20, 116, 212, 308, 472, 568,
+      40, 221, 402, 583, 896, 1077,
     ]);
-    // Squares and the taller agent share one centre line.
+    // Squares and the agent are as tall, on one centre line.
     expect(nodes.map((n) => n.style.top)).toEqual([
-      '82px',
-      '82px',
-      '82px',
-      '64px',
-      '82px',
-      '82px',
+      '84px',
+      '84px',
+      '84px',
+      '84px',
+      '84px',
+      '84px',
     ]);
-    expect(q('workflow-node-analyse')?.style.width).toBe('120px');
-    expect(q('workflow-node-start')?.style.width).toBe('52px');
+    expect(q('workflow-node-analyse')?.style.width).toBe('220px');
+    expect(q('workflow-node-start')?.style.width).toBe('88px');
+    // Every node has its icon tile, the agent's beside its text.
+    expect(nodes.map((n) => n.querySelectorAll('.node-icon').length)).toEqual([
+      1, 1, 1, 1, 1, 1,
+    ]);
     expect(
       q('workflow-node-analyse')?.querySelector('.sr-only')?.textContent,
     ).toBe('Step 3:');
@@ -177,6 +181,10 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(text(q('workflow-node-agent'))).toBe(
       'Questions to Insights v2 · ≤ 15 steps',
     );
+    // The step limit never splits across lines.
+    const limit = q('workflow-node-agent')!.querySelector('span');
+    expect(limit?.textContent).toBe('· ≤ 15 steps');
+    expect(getComputedStyle(limit!).whiteSpace).toBe('nowrap');
     const label = (id: string) =>
       ['.node-title', '.node-subtitle'].map((c) =>
         text(q(id)!.querySelector(c)),
@@ -202,7 +210,8 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     const startExit = q('workflow-node-start')!.querySelector<HTMLElement>(
       '[data-testid="workflow-node-exit"]',
     )!;
-    expect(parseFloat(startExit.style.top)).toBe(52 + 86);
+    // Right under Start's label (one title and one subtitle line).
+    expect(parseFloat(startExit.style.top)).toBe(88 + 41 + 4);
     expect(
       q('workflow-node-receive-question')!.querySelector(
         '[data-testid="workflow-node-exit"]',
@@ -363,10 +372,10 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
 
   it('draws one edge per pair with its field count, the fields for screen readers', () => {
     expect(el.querySelectorAll('svg path.edge').length).toBe(5);
-    const cy = 82 + 26;
+    const cy = 84 + 44;
     expect(
       q('workflow-connector-start-receive-question')?.getAttribute('d'),
-    ).toBe(`M 72 ${cy} L 116 ${cy}`);
+    ).toBe(`M 128 ${cy} L 221 ${cy}`);
     const label = q('workflow-connector-label-analyse-wrap-up')!;
     expect(text(label)).toBe('2 fieldsPasses on: calls, stopped');
     expect(text(label.querySelector('[aria-hidden="true"]'))).toBe('2 fields');
@@ -545,11 +554,11 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
   it('fits the graph on load', async () => {
     await fixture.whenStable();
     fixture.detectChanges();
-    // 644 x 308 canvas pixels in a 600 x ~400 viewport.
-    expect(level()).toBe('90%');
+    // 1205 x 372 canvas pixels in a 600 x ~400 viewport.
+    expect(level()).toBe('45%');
     expect(
       (el.querySelector('.canvas-stage') as HTMLElement).style.transform,
-    ).toBe('scale(0.9)');
+    ).toBe('scale(0.45)');
     expect(q('workflow-zoom-fit')?.getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -576,7 +585,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     const stage = el.querySelector('.canvas-stage') as HTMLElement;
     expect(stage.style.transform).toBe('scale(1.5)');
     expect((stage.parentElement as HTMLElement).style.width).toBe(
-      `${644 * 1.5}px`,
+      `${1205 * 1.5}px`,
     );
     for (let i = 0; i < 5; i++) click(zoomOut);
     expect(level()).toBe('40%');
@@ -585,10 +594,10 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(level()).toBe('100%');
 
     const canvas = q('workflow-canvas')!;
-    spyOnProperty(canvas, 'clientWidth').and.returnValue(520);
+    spyOnProperty(canvas, 'clientWidth').and.returnValue(700);
     spyOnProperty(canvas, 'clientHeight').and.returnValue(800);
     click(q('workflow-zoom-fit')!);
-    expect(level()).toBe('80%');
+    expect(level()).toBe('55%');
     expect(q('workflow-zoom-fit')?.getAttribute('aria-pressed')).toBe('true');
   });
 

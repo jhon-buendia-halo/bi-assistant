@@ -103,7 +103,7 @@
       @for (edge of l.edges; track edge.id) {
         @if (edge.label) {
           <span
-            class="edge-label absolute -translate-x-1/2 -translate-y-1/2 rounded bg-surface px-0.5 text-[11px] leading-4 whitespace-nowrap text-fg-muted"
+            class="edge-label absolute -translate-x-1/2 -translate-y-1/2 rounded bg-surface px-1 font-mono text-[11px] leading-4 whitespace-nowrap text-fg-muted"
             [attr.data-testid]="'workflow-connector-label-' + edge.id"
             [attr.title]="edgeText(edge)"
             [style.left.px]="edge.labelX"
@@ -157,37 +157,32 @@
             <span class="sr-only">Step {{ node.number }}:</span>
           }
 
-          @if (node.kind !== "agent") {
-            <span
-              class="node-icon"
-              [attr.data-kind]="node.kind"
-              aria-hidden="true"
-            >
-              <lucide-angular [img]="nodeIcons[node.kind]" [size]="18" />
-            </span>
-          }
+          <span
+            class="node-icon"
+            [attr.data-kind]="node.kind"
+            aria-hidden="true"
+          >
+            <lucide-angular
+              [img]="nodeIcons[node.kind]"
+              [size]="node.kind === 'agent' ? 18 : 20"
+            />
+          </span>
 
-          <!-- The agent's text sits inside it; a square's label hangs below it. -->
+          <!-- The agent's text sits inside it, beside its icon tile; a square's label hangs below it. -->
           <span
             [class]="
               node.kind === 'agent'
-                ? 'flex min-w-0 flex-col gap-px text-left'
+                ? 'flex min-w-0 flex-1 flex-col gap-px text-left'
                 : 'pointer-events-none absolute top-[calc(100%+8px)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-px text-center'
             "
             [style.width.px]="node.kind === 'agent' ? null : labelWidth"
           >
             @if (node.kind === "agent") {
-              <!-- A small sparkles icon before the title keeps the node narrow. -->
-              <span class="flex min-w-0 items-center gap-1">
-                <span class="node-icon" data-kind="agent" aria-hidden="true">
-                  <lucide-angular [img]="nodeIcons.agent" [size]="11" />
-                </span>
-                <span
-                  class="node-title min-w-0 truncate text-[13px] leading-[18px] font-medium text-fg-strong"
-                  data-testid="workflow-node-title"
-                  >{{ node.title }}</span
-                >
-              </span>
+              <span
+                class="node-title max-w-full truncate text-[13px] leading-[18px] font-medium text-fg-strong"
+                data-testid="workflow-node-title"
+                >{{ node.title }}</span
+              >
             } @else {
               <span
                 class="node-title line-clamp-2 max-w-full text-[13px] leading-[18px] font-medium text-fg-strong"
@@ -210,10 +205,15 @@
               >
             }
             @if (node.agentLine !== null) {
+              <!-- The step limit never splits: `· ≤ 15 steps` stays on one line. -->
+              @let line = agentLineParts(node.agentLine);
               <span
-                class="line-clamp-3 text-[11px] leading-[14px] text-fg-muted"
+                class="line-clamp-2 text-[11px] leading-[14px] text-fg-muted"
                 data-testid="workflow-node-agent"
-                >{{ node.agentLine }}</span
+                >{{ line.limit ? line.name + " " : line.name
+                }}@if (line.limit) {<span class="whitespace-nowrap">{{
+                    line.limit
+                  }}</span>}</span
               >
             }
           </span>
@@ -316,7 +316,7 @@
             <span class="diamond top" aria-hidden="true"></span>
             <lucide-angular
               [img]="subIcons[sub.kind]"
-              [size]="18"
+              [size]="20"
               aria-hidden="true"
             />
             <span
