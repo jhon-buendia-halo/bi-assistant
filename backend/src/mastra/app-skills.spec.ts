@@ -408,15 +408,22 @@ describe('skill folders', () => {
 
   it('takes agents and loading mode from the two tables only', () => {
     const skills = loadAppSkills(skillsRoot());
+    // Shared by the assistant and Questions to Insights v2 (agents.md 7.4).
     expect(skills.get('curated-knowledge')).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant'],
+      agents: ['assistant', 'assistant-v2'],
     });
-    expect(skills.get('deep-analysis')).toMatchObject({
+    for (const name of ['sql-analysis', 'result-validation']) {
+      expect(skills.get(name)).toMatchObject({
+        loading: 'on-demand',
+        agents: ['assistant-v2'],
+      });
+    }
+    expect(skills.get('interactive-visuals')).toMatchObject({
       loading: 'harness',
-      agents: ['assistant'],
+      agents: ['visualization'],
     });
-    expect(Object.keys(skills.get('deep-analysis')!).sort()).toEqual([
+    expect(Object.keys(skills.get('interactive-visuals')!).sort()).toEqual([
       'agents',
       'description',
       'dir',
@@ -445,20 +452,17 @@ describe('skill folders', () => {
         expect([...fresh.appSkills().keys()].sort()).toEqual([
           'curated-knowledge',
           'data-readiness',
-          'deep-analysis',
           'interactive-visuals',
           'readiness-drilldown',
-          'rfp-carriers',
-          'rfp-client-renewal',
-          'rfp-current-program',
-          'rfp-market-scope',
-          'rfp-package',
-          'rfp-requirements',
-          'rfp-timeline',
+          'result-validation',
+          'sql-analysis',
         ]);
         expect(
           fresh.catalogSkills('assistant').map((skill) => skill.name),
         ).toEqual(['curated-knowledge']);
+        expect(
+          fresh.catalogSkills('assistant-v2').map((skill) => skill.name),
+        ).toEqual(['curated-knowledge', 'result-validation', 'sql-analysis']);
       });
     } finally {
       if (saved === undefined) delete process.env.APP_DATA_DIR;

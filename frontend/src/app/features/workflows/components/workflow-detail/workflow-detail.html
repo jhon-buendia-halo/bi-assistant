@@ -1,5 +1,5 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="workflow-detail-page">
-  <!-- Header: breadcrumb, name, id and kind, and the primary action -->
+  <!-- Header: breadcrumb, name, id, kind and missing datasets (Execute is on the canvas) -->
   <header
     class="shrink-0 border-b border-border py-3 pl-6"
     [class.pr-6]="panelOpen()"
@@ -26,7 +26,6 @@
 
     @if (designer.workflow(); as w) {
       <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <!-- The name keeps at least 200 px; below that the action wraps under it. -->
         <div class="flex min-w-[200px] flex-1 flex-col gap-1">
           <h1
             data-testid="workflow-detail-name"
@@ -42,9 +41,7 @@
             >
             <span
               data-testid="workflow-detail-kind"
-              class="chip"
-              [class.chip-info]="w.kind === 'code'"
-              [class.chip-neutral]="w.kind !== 'code'"
+              class="chip chip-info"
               >{{ kindLabel() }}</span
             >
             @if (missing()) {
@@ -54,17 +51,6 @@
               </span>
             }
           </div>
-        </div>
-        <div class="ml-auto flex max-w-full shrink-0 items-center gap-3">
-          <button
-            type="button"
-            data-testid="workflow-execute"
-            (click)="execute()"
-            class="btn btn-primary shrink-0"
-          >
-            <lucide-angular [img]="Rocket" [size]="14" />
-            <span>Execute</span>
-          </button>
         </div>
       </div>
     }
@@ -82,12 +68,43 @@
       {{ err }}
     </p>
   } @else if (designer.workflow(); as w) {
-    <app-workflow-canvas
-      class="flex-1"
-      [workflow]="w"
-      [selectedId]="designer.selectedStepId()"
-      [statuses]="designer.stepStatuses()"
-      (selectStep)="onSelectStep($event)"
-    />
+    <!-- The canvas takes the room left; the Workflow state panel under it
+         keeps a bounded height and scrolls inside; on a short window the
+         page scrolls rather than squeezing the canvas. -->
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <app-workflow-canvas
+        class="min-h-[300px] flex-1"
+        [workflow]="w"
+        [selectedId]="designer.selectedStepId()"
+        [statuses]="designer.nodeStatuses()"
+        [violations]="designer.contractViolations()"
+        [attempts]="designer.nodeAttempts()"
+        (selectNode)="designer.select($event)"
+        (openNode)="designer.openNode($event)"
+        (execute)="execute()"
+      />
+      <app-workflow-state-panel
+        class="flex shrink-0 flex-col"
+        [nodes]="designer.nodes()"
+        [summary]="designer.stateSummary()"
+        [selectedId]="designer.selectedStepId()"
+        [open]="designer.stateOpen()"
+        (selectNode)="designer.select($event)"
+        (openNode)="designer.openNode($event)"
+        (openChange)="designer.stateOpen.set($event)"
+      />
+    </div>
+    @if (designer.openInspection(); as node) {
+      <app-workflow-node-dialog
+        [node]="node"
+        [workflow]="w"
+        [runId]="designer.runId()"
+        [runContractHash]="designer.runContractHash()"
+        [chat]="designer.nodeChat()"
+        (close)="closeNode()"
+        (openAgent)="onOpenAgent($event)"
+        (openStep)="designer.openNode($event)"
+      />
+    }
   }
 </div>

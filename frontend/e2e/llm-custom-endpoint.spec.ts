@@ -3,7 +3,7 @@ import { AddressInfo } from 'node:net';
 import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { apiBase, seedWorldCupDataset } from './helpers/agents-api';
-import { runAssistantOk } from './helpers/runs-api';
+import { runQuestionOk } from './helpers/runs-api';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -184,13 +184,13 @@ test.describe('OpenAI-compatible', () => {
     );
   });
 
-  test('a run of the Assistant runs on the custom endpoint', async ({ page }) => {
+  test('a run of Questions to Insights v2 runs on the custom endpoint', async ({ page }) => {
     await seedWorldCupDataset(page);
     await saveCustomSettings(page, endpoint, MODEL);
     await page.reload();
 
     const question = 'How many matches were played in 2022?';
-    const result = await runAssistantOk(page, question);
+    const result = await runQuestionOk(page, question);
     expect(turnRequests(stub, question).length).toBeGreaterThan(0);
     const [turn] = turnRequests(stub, question);
     expect(turn.path).toBe('/v1/chat/completions');
@@ -405,7 +405,7 @@ test.describe('Anthropic-compatible', () => {
     // A run goes to <root>/v1/messages with the saved model and key.
     stub.reply(ANSWER);
     const question = 'How many matches were played in 2022?';
-    const result = await runAssistantOk(page, question);
+    const result = await runQuestionOk(page, question);
     expect(result.text).toContain(ANSWER);
 
     const turns = requestsTo('messages').filter((request) => !request.isProbe);

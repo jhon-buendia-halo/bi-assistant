@@ -6,9 +6,11 @@ jest.mock('@mastra/evals/checks', () => ({
 jest.mock('../agents/assistant.agent', () => ({
   assistantAgent: { id: 'assistant' },
 }));
-jest.mock('../agents/rfp.agent', () => ({ rfpAgent: { id: 'rfp-builder' } }));
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessAgent: { id: 'data-readiness' },
+}));
+jest.mock('../agents/assistant-v2.agent', () => ({
+  assistantV2Agent: { id: 'questions-to-insights-v2' },
 }));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
@@ -789,8 +791,6 @@ describe('data-readiness eval set', () => {
   });
 
   it('evalTargetFor gives the data-readiness target', () => {
-    expect(evalTargetFor('data-readiness', 'run-1').agentKey).toBe(
-      'data-readiness',
-    );
+    expect(evalTargetFor('data-readiness').agentKey).toBe('data-readiness');
   });
 });

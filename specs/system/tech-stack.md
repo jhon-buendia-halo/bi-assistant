@@ -67,15 +67,14 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | exceljs | 4.4.0 | Streaming `.xlsx` writer (`stream.xlsx.WorkbookWriter`) for the synthetic data, profile and sample exports (ADR-0039 amendment). |
 | fflate | 0.8.3 | Dependency-free streamed zip (`Zip`) for the CSV exports (ADR-0039 amendment). |
 | `@databricks/sql` | 2.1.0 | Databricks datasource connector. |
-| marked | 18.0.13 | Markdown to HTML for the analysis section of visual documents. Its lexer also feeds the Intellify RFP API's PDF renderer. |
-| `@nestjs/swagger` | 11.x, pinned (the line matching Nest 11) | The Intellify RFP API only (ADR-0027): decorators on its DTOs and controllers and `SwaggerModule.createDocument`, served as `GET /openapi.json`. Pure JavaScript. |
-| `pdfkit` | 0.17.x, pinned (`@types/pdfkit` as a dev dependency) | The Intellify RFP API only: renders the RFP document to PDF (`intellify-api/package/pdf.ts`) with the built-in Helvetica, no font files. Pure JavaScript, so packaging is unaffected. |
+| marked | 18.0.13 | Markdown to HTML for the analysis section of visual documents. Its lexer also feeds the panel-item PDF renderer (`common/markdown-pdf.ts`). |
+| `pdfkit` | 0.17.x, pinned (`@types/pdfkit` as a dev dependency) | Renders panel items to PDF (`common/markdown-pdf.ts`) with the built-in Helvetica, no font files. Pure JavaScript, so packaging is unaffected. |
 | sanitize-html | 2.17.7 | Sanitises that HTML (and other generated markup) on the server. |
 | Node built-ins | | `node:util` `parseArgs` (CLI), `node:net`, `node:fs`, `node:crypto` (API-key encryption in `infrastructure/crypto`, keyed by `APP_SECRET`), `node:http` (World Cup test REST API). |
 | Jest | ^30.0.0 (`ts-jest` ^29.2.5, `@types/jest` ^30.0.0) | Backend unit tests and the API-level e2e specs. |
 | supertest | ^7.0.0 | HTTP assertions in backend e2e specs. |
 | ESLint 9 + `typescript-eslint` ^8.20.0 + Prettier ^3.4.2 | | Lint and format (the `lint` script runs with `--fix`). |
-| `@nestjs/cli` | ^11.0.0 | `nest build` / `nest start`. `nest-cli.json` copies non-TS assets: `mastra/skills/**/*`, `modules/testing-data/fixtures/**/*.sql*` and `intellify-api/db/migrations/**/*.sql`. |
+| `@nestjs/cli` | ^11.0.0 | `nest build` / `nest start`. `nest-cli.json` copies non-TS assets: `mastra/skills/**/*` and `modules/testing-data/fixtures/**/*.sql*`. |
 
 The LLM providers (OpenAI-compatible endpoints including LenAI, Anthropic) are reached through Mastra's model router; there is no direct provider SDK dependency. See [agents.md](agents.md) for model resolution.
 
@@ -150,7 +149,6 @@ backend/src/
 ├── infrastructure/      technical concerns: database, messaging, cache, external-services
 ├── config/              typed configuration (app.config.ts, database.config.ts)
 ├── mastra/              agent harness (see below)
-├── intellify-api/       the Intellify RFP API, a second Nest application (ADR-0027; see below)
 ├── app.module.ts
 ├── app-bootstrap.ts     createApp(), shared by main.ts and the CLI
 ├── main.ts              Electron path: PORT env, CORS on
@@ -164,28 +162,12 @@ Rules:
 - `infrastructure/` is technical concerns. Feature modules depend on infrastructure, never the reverse.
 - `config/` is typed configuration files.
 
-Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `deep-analysis`, `developer-settings`, `ontology`, `llm`, `metrics`, `sessions`, `synthetic-data`, `testing-data`, `verified-queries`.
+Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `developer-settings`, `ontology`, `llm`, `metrics`, `sessions`, `synthetic-data`, `testing-data`, `verified-queries`.
 
 The `synthetic-data` module (ADR-0039) holds `synthetic-data.module.ts`, `.controller.ts`, `.service.ts`, `profile-cache.ts`, `types.ts` and `limits.ts`, a `profile/` folder (the pure sampled-profile builder: classification, shapes, statistics) a `generator/` folder (pure, seeded: `prng`, `plan`, `order`, `generate`, `words`, `values/*`), `script.ts` (the script header, order and batching), a `dialects/` folder (the `DialectWriter` interface, `postgres.writer.ts`, `databricks.writer.ts`) and an `exports/` folder (`csv.ts`, `zip.ts`, `xlsx.ts`, writers that consume the same generator stream, so all formats carry the same values). The row sampler is an additive `sampleTable` method on the PostgreSQL and Databricks profilers, with its interface in `datasources/connectors/sampling.ts`.
 
 The `sessions` module keeps sessions, run hosts, panel items and visuals in `sessions.service.ts`. The turn engine (agents.md 5.1) is in its `turn/` folder: `turn-engine.ts` (`TurnEngine`: the streamed turn `streamTurn` with its stream consumer, `runTurnWorkflow`, the grounding guard and the non-streamed `generateTurn`), `turn-options.ts` (`TurnOptions`: `agentContext`, `agentOptions` per agent and `agentInput`, so everything that reaches the model), `sql-checks.ts` (`SqlChecks`: SQL repair, careful mode's cross-check and the Verified badge), `session-datasets.ts` (`SessionDatasets`: datasets bound to their datasource), and the pure `stream-events.ts`, `turn-records.ts` and `turn-workflow.ts`. These are plain classes, not Nest providers: `SessionsService` builds them in its constructor from its own injected services and passes its session reads and writes (`get`, `updateDoc`, `toView`), so the module's providers and every caller of `SessionsService` are unchanged, and `turn/` imports nothing from `modules/workflows/`.
 
-The Intellify RFP API (ADR-0027, planned in BA-226/BA-227) is its own module tree, `backend/src/intellify-api/`, compiled by the same `nest build`. It imports nothing from `modules/` or `mastra/`, and the app reaches it only over HTTP; the one in-process link is the `IntellifyApiInfo` value (`{ url, apiKey }`) the Testing Data loader reads. Layout:
-
-```
-backend/src/intellify-api/
-├── intellify-api.module.ts   IntellifyApiModule: DbModule, ApiKeyGuard (APP_GUARD), controllers
-├── bootstrap.ts              createIntellifyApi({ port, host, db, apiKeys }), the embedded start from createApp()
-├── main.ts                   standalone entry (npm run intellify-api), configured by environment only
-├── config.ts                 INTELLIFY_* configuration
-├── api-key.guard.ts          X-API-Key check (constant-time); @Public() for /health and /openapi.json
-├── http-error.filter.ts      the API's error shape
-├── openapi.ts                the OpenAPI document served at GET /openapi.json
-├── db/                       db.service.ts (pg pool, READ ONLY reads, transactional writes, migrate()), migrations/NNN_<name>.sql
-├── intellify/                read endpoints over schema intellify (controllers, services, queries)
-├── rfp/                      RFP records in schema rfp (controller, service, repository, dto/)
-└── package/                  the RFP package: document.ts (Markdown), pdf.ts (pdfkit), exhibits.ts (CSV), package.service.ts (zip)
-```
 
 
 - `app-bootstrap.ts` creates the app, with the `cors` option the entry point passes. `infrastructure/` has `crypto`, `database` and `developer-settings` (the developer-settings file reader, free of Nest imports so entry points can use it before bootstrap). `common/` holds `super-admin.ts`, the `SUPER_ADMIN` constant (id `local`), the one caller of every request ([data-model.md](data-model.md)).
@@ -200,8 +182,8 @@ Agent harness: `backend/src/mastra/` — `index.ts` builds the standalone Mastra
 |---|---|---|---|
 | Frontend unit | `frontend/src/**/*.spec.ts`, beside the source | `ng test` (Karma + Jasmine, Chrome) | 8 specs today: app shell, system logs panel, log runs, metrics and sessions API services, ontology panel, visual panel, session chat. |
 | Backend unit | `backend/src/**/*.spec.ts`, beside the source | Jest (`rootDir: src`, `ts-jest`, node env) | The bulk of the tests (33 specs). |
-| Backend API-level e2e | `backend/test/*.e2e-spec.ts`, config `test/jest-e2e.json` | Jest | `answer-guards.e2e-spec.ts` runs the result guards against the seeded World Cup Postgres and **skips** (visibly) when the fixture is unreachable. `intellify-api.e2e-spec.ts` (planned, BA-226/BA-227) starts the Intellify RFP API with `createIntellifyApi` on a free port against the Intellify sample database and covers the API Feature of the [rfp](../capabilities/rfp/spec.md) capability (the key check, paged collections and the OpenAPI document, records and the package, read routes that cannot write); it skips visibly when the sample database is unreachable. Fixture connection helpers are in `test/world-cup.ts` (`WORLD_CUP_DB_HOST` default `localhost`, `WORLD_CUP_DB_PORT` default `55432`). `app.e2e-spec.ts` is a smoke test that boots the built backend and expects `GET /sessions` to answer 200 (it replaced the Nest scaffold); the full `AppModule` cannot load under Jest because Mastra and the Databricks driver are ESM, so specs that need Nest import focused feature modules and default-import supertest. `response-status.e2e-spec.ts` (the POST routes [api.md](api.md) 1.4 answers with 200: both streams, even when they carry an `error` event, the developer endpoint test and the testing-data load). `test/backend-process.ts` waits for `GET /sessions` to answer 200 and has `bootFailure()` for startup errors. |
-| Product e2e | `frontend/e2e/*.spec.ts` | Playwright: project `web` (default, Chromium against the npm CLI) and project `desktop` (the real Electron app) | One spec file per Gherkin Feature: `agents`, `chat-and-visuals`, `diagnostics`, `layout-accessibility`, `world-cup-workflow` and the others named in the capability specs; `rfp-builder.spec.ts` (planned, BA-229) for the RFP builder Feature, run with `INTELLIFY_API_PORT=0` so the embedded API takes a free port. Spec files in parallel on `web` (3 workers locally, 1 on CI, `E2E_WORKERS` overrides; delivery.md 13), tests within a file in order (`fullyParallel: false`); `desktop` stays at 1 worker (its backend owns port 3000). 60 s test timeout, 10 s expect timeout, traces/screenshots/video kept on failure, HTML report; one CI retry. |
+| Backend API-level e2e | `backend/test/*.e2e-spec.ts`, config `test/jest-e2e.json` | Jest | `answer-guards.e2e-spec.ts` runs the result guards against the seeded World Cup Postgres and **skips** (visibly) when the fixture is unreachable. Fixture connection helpers are in `test/world-cup.ts` (`WORLD_CUP_DB_HOST` default `localhost`, `WORLD_CUP_DB_PORT` default `55432`). `app.e2e-spec.ts` is a smoke test that boots the built backend and expects `GET /sessions` to answer 200 (it replaced the Nest scaffold); the full `AppModule` cannot load under Jest because Mastra and the Databricks driver are ESM, so specs that need Nest import focused feature modules and default-import supertest. `response-status.e2e-spec.ts` (the POST routes [api.md](api.md) 1.4 answers with 200: both streams, even when they carry an `error` event, the developer endpoint test and the testing-data load). `test/backend-process.ts` waits for `GET /sessions` to answer 200 and has `bootFailure()` for startup errors. |
+| Product e2e | `frontend/e2e/*.spec.ts` | Playwright: project `web` (default, Chromium against the npm CLI) and project `desktop` (the real Electron app) | One spec file per Gherkin Feature: `agents`, `chat-and-visuals`, `diagnostics`, `layout-accessibility`, `world-cup-workflow` and the others named in the capability specs Spec files in parallel on `web` (3 workers locally, 1 on CI, `E2E_WORKERS` overrides; delivery.md 13), tests within a file in order (`fullyParallel: false`); `desktop` stays at 1 worker (its backend owns port 3000). 60 s test timeout, 10 s expect timeout, traces/screenshots/video kept on failure, HTML report; one CI retry. |
 
 Playwright specifics:
 

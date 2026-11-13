@@ -86,13 +86,6 @@ export interface ChatMessage {
   /** Curated knowledge snippets this answer's context carried. */
   knowledge?: KnowledgeUse[];
   /**
-   * Present when a deep-analysis job produced a report. The content is the
-   * report's executive summary; the full markdown is downloadable.
-   */
-  report?: AnalysisReport;
-  /** Present when the RFP Builder exported an RFP package this turn. */
-  rfpPackage?: RfpPackage;
-  /**
    * The last readiness report this turn produced (Data Readiness Agent
    * sessions; data-model 3.4.1). Drives the readiness card.
    */
@@ -107,16 +100,6 @@ export interface ChatMessage {
   error?: boolean;
 }
 
-/** A stored RFP package (data-model 3.4.1); `rfp-package` stream payload. */
-export interface RfpPackage {
-  rfpId: string;
-  title: string;
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** True for a draft exported by `export_rfp_draft` (stored under `rfp/<rfpId>/draft/`). */
-  draft?: true;
-}
-
 /** `ChatMessage.readinessReport` (data-model 3.4.1): a reference, not the report. */
 export interface ReadinessReportRef {
   reportId: string;
@@ -124,31 +107,6 @@ export interface ReadinessReportRef {
   overallScore: number;
   maturity: ReadinessMaturity;
   generatedAt: string;
-}
-
-export interface AnalysisReport {
-  jobId: string;
-  title: string;
-  /** Workspace-relative path of the stored markdown report. */
-  path: string;
-  angles: number;
-}
-
-/** Deep-analysis job lifecycle, as reported by polling. */
-export type DeepAnalysisStatus =
-  'planning' | 'investigating' | 'writing' | 'done' | 'error';
-
-export interface DeepAnalysisResult {
-  ok: boolean;
-  message: string;
-  jobId?: string;
-  status?: DeepAnalysisStatus;
-  /** Human-readable line for the pending card. */
-  progress?: string;
-  step?: number;
-  steps?: number;
-  title?: string;
-  error?: string;
 }
 
 export type MessageFeedback = 'up' | 'down';
@@ -324,7 +282,7 @@ export interface Session {
   agentId?: string;
   /** The agent's name as last seen for this session. */
   agentName?: string;
-  /** Set when the session is bound to a built-in agent (e.g. `rfp`). */
+  /** Set when the session is bound to a built-in agent (e.g. `assistant`). */
   agentKey?: string;
   /** Present when `agentId` or `agentKey` is. */
   agent?: SessionAgent;

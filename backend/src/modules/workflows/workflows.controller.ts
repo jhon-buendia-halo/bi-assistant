@@ -8,7 +8,6 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import type { WorkflowRunResult } from '../../mastra/workflows/workflow-run';
 import type { WorkflowRun } from './workflow-run-steps';
 import { WorkflowRunsService, type PreparedRun } from './workflow-runs.service';
 import {
@@ -18,13 +17,17 @@ import {
 } from './workflows.service';
 
 /**
- * Answer a prepared run as the SSE stream of api.md 3.6: the chat stream's
- * framing, and closing the connection stops the run. Used by 119 and R12.
+ * Answer as an SSE stream with the chat stream's framing (api.md 3.1):
+ * `work` sends its events through `send`, and closing the connection aborts
+ * its signal. A throw before the connection closed is sent as `error {
+ * content }`. Used by 119, 137 and R12.
  */
-export async function streamPrepared(
-  runs: WorkflowRunsService,
-  prepared: PreparedRun,
+export async function streamSse(
   res: Response,
+  work: (
+    send: (data: unknown) => void,
+    signal: AbortSignal,
+  ) => Promise<unknown>,
 ): Promise<void> {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache');
@@ -36,7 +39,7 @@ export async function streamPrepared(
   const abort = () => controller.abort();
   res.once('close', abort);
   try {
-    await runs.stream(prepared, send, controller.signal);
+    await work(send, controller.signal);
   } catch (err) {
     if (!controller.signal.aborted) {
       const message = err instanceof Error ? err.message : String(err);
@@ -48,11 +51,24 @@ export async function streamPrepared(
 }
 
 /**
+ * Answer a prepared run as the SSE stream of api.md 3.6: the chat stream's
+ * framing, and closing the connection stops the run. Used by 119 and R12.
+ */
+export function streamPrepared(
+  runs: WorkflowRunsService,
+  prepared: PreparedRun,
+  res: Response,
+): Promise<void> {
+  return streamSse(res, (send, signal) => runs.stream(prepared, send, signal));
+}
+
+/**
  * The workflow catalogue (api.md 2.6.2; capability workflows). Workflows
  * are defined in code, so there is no write route (workflows R3); a
- * workflow with input fields can be run (118) and run streamed (119).
- * Ids contain `:` (`agent:rfp`); clients send them URL-encoded and NestJS
- * decodes `:id`.
+ * workflow with input fields can be run (118) and run streamed (119). The
+ * catalogue holds only `qti-v2-turn` (1.23.35); any other id, such as a
+ * former `agent:assistant`, answers 404. Clients send ids URL-encoded and
+ * NestJS decodes `:id`.
  */
 @Controller('workflows')
 export class WorkflowsController {
@@ -78,10 +94,7 @@ export class WorkflowsController {
    */
   @Post(':id/runs')
   @HttpCode(200)
-  run(
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ): Promise<(WorkflowRunResult & { runId: string }) | WorkflowRun> {
+  run(@Param('id') id: string, @Body() body: unknown): Promise<WorkflowRun> {
     return this.runs.run(id, body);
   }
 

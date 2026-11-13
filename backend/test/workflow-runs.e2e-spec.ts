@@ -1,17 +1,22 @@
 /**
- * API-level proof of streamed runs of agent workflows (ADR-0041; api.md 119;
- * agents.md 5.14; workflows R14-R16): `POST /workflows/:id/runs/stream`
- * runs one agent turn on a run host through the turn engine, so a run asks
- * the model for its input with the agent's tools (the Assistant, Questions
- * to Insights v2, the Data Readiness Agent and the RFP Builder, recorded by
- * the stub model), streams `run`, `step`, the turn's events and
- * `done { run }`, refuses a bad request with its real status before any
- * stream, and stops when the connection closes. The sequential test workflow
- * still runs through `POST /workflows/:id/runs` (118).
+ * API-level proof of streamed runs (ADR-0041; api.md 118, 119; agents.md
+ * 5.14; workflows R14-R16) of Questions to Insights v2 (`qti-v2-turn`), the
+ * one catalogue workflow since 1.23.35: `POST /workflows/:id/runs/stream`
+ * runs its steps (Plan, then Clarify or the analysis loop and Write answer),
+ * its Analyse step's turn on a run host through the turn engine, so a run
+ * asks the stub model for its input with the agent's tools, streams `run`,
+ * each `step` with what it received, its output, its times and, in the loop,
+ * its attempt, the turn's events and `done { run }`, refuses a bad request
+ * (and every removed workflow) with its real status before any stream, and
+ * stops when the connection closes. `POST /workflows/:id/runs` (118)
+ * answers the stored run.
  *
  * Needs no Postgres: the datasources point at closed ports, and the stub
- * model never calls a tool. Set `WORKFLOW_RUNS_TRANSCRIPT=<file>` to write
- * the SSE transcript of one Assistant run and one v2 run there.
+ * model never calls a tool, so Validate always finds no query and the
+ * analysis runs twice (attempts 1 and 2). The stub routes Plan and Write
+ * answer by their instructions' first lines (`useV2Steps`). Set
+ * `WORKFLOW_RUNS_TRANSCRIPT=<file>` to write
+ * the SSE transcript of one v2 run there.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,6 +30,12 @@ import {
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
 import { type Backend, boot, stop } from './backend-process';
+import {
+  isAnalyseRequest,
+  isPlanRequest,
+  stubPlan,
+  useV2Steps,
+} from './v2-stub';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-workflow-runs-'));
 
@@ -38,19 +49,63 @@ interface Frame {
   id?: string;
   title?: string;
   status?: string;
+  attempt?: number;
+  input?: Record<string, unknown>;
   output?: Record<string, unknown>;
   error?: string;
+  startedAt?: string;
+  endedAt?: string;
+  /** `input-required` (api.md 119, 138). */
+  stepId?: string;
+  question?: string;
+  options?: string[];
+  expiresAt?: string;
   run?: {
     id: string;
     workflowId: string;
     status: string;
-    steps: { id: string; status: string }[];
+    steps: {
+      id: string;
+      status: string;
+      attempt?: number;
+      input?: Record<string, unknown>;
+      startedAt?: string;
+      endedAt?: string;
+    }[];
     question?: string;
     answer?: { role: string; content: string };
     datasets: string[];
     output?: Record<string, unknown>;
   };
 }
+
+/** What a v2 run on the stub model streams: the analysis runs twice. */
+const V2_STEP_TRAIL = [
+  'receive-question:running',
+  'receive-question:success',
+  'load-catalog:running',
+  'load-catalog:success',
+  'plan:running:1',
+  'plan:success:1',
+  'analyse:running:1',
+  'analyse:success:1',
+  'validate:running:1',
+  'validate:success:1',
+  'analyse:running:2',
+  'analyse:success:2',
+  'validate:running:2',
+  'validate:success:2',
+  'write-answer:running',
+  'write-answer:success',
+  'wrap-up:running',
+  'wrap-up:success',
+  // The branch not taken, once the run ended.
+  'clarify:skipped',
+];
+
+/** A step frame or stored step as `id:status[:attempt]`. */
+const trail = (step: { id?: string; status?: string; attempt?: number }) =>
+  `${step.id}:${step.status}${step.attempt ? `:${step.attempt}` : ''}`;
 
 /** The frames of an SSE body (api.md 3.1 framing). */
 function framesOf(text: string): Frame[] {
@@ -130,7 +185,8 @@ describe('Streamed runs of agent workflows (API)', () => {
 
   beforeAll(async () => {
     stub = await startLlmStub();
-    backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
+    useV2Steps(stub, stub.reply);
+    backend = await boot(dataDir);
     const saved = (
       await http().put('/llm/settings').send({
         provider: 'lenai',
@@ -170,15 +226,15 @@ describe('Streamed runs of agent workflows (API)', () => {
       config: {
         baseUrl: 'http://127.0.0.1:1',
         auth: { type: 'none' },
-        endpoints: [{ name: 'rfps', path: '/v1/rfps' }],
+        endpoints: [{ name: 'orders', path: '/v1/orders' }],
       },
     });
     await save('/datasets', {
-      name: 'Intellify RFP API',
-      tables: ['rest.api.rfps'],
+      name: 'Orders API',
+      tables: ['rest.api.orders'],
       entities: [
         {
-          key: 'rest.api.rfps',
+          key: 'rest.api.orders',
           columns: [{ name: 'id', type: 'text', nullable: false }],
         },
       ],
@@ -195,35 +251,58 @@ describe('Streamed runs of agent workflows (API)', () => {
     if (file && transcript.length) writeFileSync(file, transcript.join('\n'));
   });
 
-  it('streams an Assistant run: run, the Answer step, the answer, then done with the run', async () => {
-    const question = 'Who won the 2002 World Cup?';
-    const res = await runStream('agent:assistant', {
+  it('streams a v2 run: run, its steps each running then done (the analysis twice), the answer, then done with the run', async () => {
+    const question = 'How many matches were played?';
+    const res = await runStream('qti-v2-turn', {
       input: { question, datasets: ['World Cup Core'] },
     });
     expect(res.status).toBe(200);
-    transcript.push(
-      `# POST /workflows/agent%3Aassistant/runs/stream  {"input":{"question":"${question}","datasets":["World Cup Core"]}}`,
-      res.text,
-    );
     const types = res.frames.map((frame) => frame.type);
     expect(types[0]).toBe('run');
     expect(types.at(-1)).toBe('done');
-    expect(res.frames[0]).toMatchObject({ workflowId: 'agent:assistant' });
-    const steps = res.frames.filter((frame) => frame.type === 'step');
-    expect(steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'answer:running',
-      'answer:success',
-    ]);
     expect(types).toContain('text');
+    expect(res.frames[0]).toMatchObject({ workflowId: 'qti-v2-turn' });
+    transcript.push(
+      `# POST /workflows/qti-v2-turn/runs/stream  {"input":{"question":"${question}","datasets":["World Cup Core"]}}`,
+      res.text,
+    );
+    const steps = res.frames.filter((frame) => frame.type === 'step');
+    expect(steps.map(trail)).toEqual(V2_STEP_TRAIL);
+    // Each step frame carries what the step received (Mastra's step-start
+    // `payload.payload`): the first the turn's input, the agent step what
+    // the catalogue step passed on.
+    expect(steps[0].input).toMatchObject({
+      question,
+      datasets: ['World Cup Core'],
+    });
+    // The retry got the first attempt's findings.
+    const retry = steps.find(
+      (step) => step.id === 'analyse' && step.attempt === 2,
+    )!;
+    expect(retry.input).toMatchObject({
+      attempt: 1,
+      findings: expect.arrayContaining([
+        expect.objectContaining({ check: 'Ran a query', passed: false }),
+      ]) as unknown,
+    });
+    for (const step of steps.filter((s) => s.status !== 'skipped')) {
+      expect(step.input).toBeDefined();
+      expect(step.startedAt).toEqual(expect.any(String));
+    }
     const run = res.frames.at(-1)!.run!;
     expect(run).toMatchObject({
       id: res.frames[0].runId,
-      workflowId: 'agent:assistant',
+      workflowId: 'qti-v2-turn',
       status: 'success',
       question,
       datasets: ['World Cup Core'],
       answer: { role: 'assistant', content: STUB_ANSWER },
-      steps: [{ id: 'answer', status: 'success' }],
+      output: {
+        sqlQueries: 0,
+        failedQueries: 0,
+        rows: 0,
+        answer: STUB_ANSWER,
+      },
     });
     // The run is never listed with the sessions.
     const sessions = (
@@ -234,100 +313,166 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(sessions.some((session) => session.id.includes(run.id))).toBe(false);
   });
 
-  it('streams a v2 run: four steps, each running then done', async () => {
-    const question = 'How many matches were played?';
+  it('each step frame and the stored run carry what the step received, its output and its times', async () => {
+    const question = 'Who won the 2002 World Cup?';
     const res = await runStream('qti-v2-turn', {
       input: { question, datasets: ['World Cup Core'] },
     });
-    transcript.push(
-      `# POST /workflows/qti-v2-turn/runs/stream  {"input":{"question":"${question}","datasets":["World Cup Core"]}}`,
-      res.text,
+    const steps = res.frames.filter(
+      (frame) => frame.type === 'step' && frame.status !== 'skipped',
     );
-    const steps = res.frames.filter((frame) => frame.type === 'step');
-    expect(steps.map((step) => `${step.id}:${step.status}`)).toEqual([
-      'receive-question:running',
+    // A running frame carries the input and the start; its ended frame the
+    // same input and start, its output and its end.
+    for (let i = 0; i < steps.length; i += 2) {
+      const [started, ended] = [steps[i], steps[i + 1]];
+      expect(started).toMatchObject({
+        status: 'running',
+        startedAt: expect.any(String) as string,
+      });
+      expect(started.input).toBeDefined();
+      expect(started).not.toHaveProperty('endedAt');
+      expect(ended).toMatchObject({
+        id: started.id,
+        status: 'success',
+        input: started.input,
+        startedAt: started.startedAt,
+        endedAt: expect.any(String) as string,
+      });
+      expect(ended.output).toBeDefined();
+    }
+    // The first step received the run's input.
+    expect(steps[0]).toMatchObject({
+      id: 'receive-question',
+      input: { question, datasets: ['World Cup Core'] },
+    });
+    const done = res.frames.at(-1)!;
+    expect(done.type).toBe('done');
+    const stored = (
+      await http().get(`/workflow-runs/${done.run!.id}`).expect(200)
+    ).body as NonNullable<Frame['run']>;
+    expect(stored.steps).toEqual(done.run!.steps);
+    // Catalogue order, a retried step's attempts one after the other.
+    expect(stored.steps.map(trail)).toEqual([
       'receive-question:success',
-      'load-catalog:running',
       'load-catalog:success',
-      'analyse:running',
-      'analyse:success',
-      'wrap-up:running',
+      'plan:success:1',
+      'clarify:skipped',
+      'analyse:success:1',
+      'analyse:success:2',
+      'validate:success:1',
+      'validate:success:2',
+      'write-answer:success',
       'wrap-up:success',
     ]);
-    const run = res.frames.at(-1)!.run!;
+    stored.steps
+      .filter((step) => step.status !== 'skipped')
+      .forEach((step) => {
+        const frames = steps.filter(
+          (frame) => frame.id === step.id && frame.attempt === step.attempt,
+        );
+        expect(step).toMatchObject({
+          input: frames[0].input,
+          startedAt: frames[0].startedAt,
+          endedAt: frames[1].endedAt,
+        });
+        expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
+          Date.parse(step.startedAt!),
+        );
+      });
+  });
+
+  it('POST /workflows/qti-v2-turn/runs (118) answers the stored run', async () => {
+    const res = await http()
+      .post('/workflows/qti-v2-turn/runs')
+      .send({
+        input: { question: 'Who won in 1998?', datasets: ['World Cup Core'] },
+      })
+      .expect(200);
+    const run = res.body as NonNullable<Frame['run']>;
     expect(run).toMatchObject({
       workflowId: 'qti-v2-turn',
       status: 'success',
+      question: 'Who won in 1998?',
       answer: { content: STUB_ANSWER },
-      output: { sqlQueries: 0, failedQueries: 0, rows: 0 },
     });
+    const stored = (await http().get(`/workflow-runs/${run.id}`).expect(200))
+      .body as unknown;
+    expect(stored).toEqual(run);
   });
 
-  describe("a run's model request, per agent (the turn path a chat once shared)", () => {
+  it("a v2 run stores the workflow's contractHash (117), and every step's output keeps its declared contract", async () => {
+    const detail = (await http().get('/workflows/qti-v2-turn').expect(200))
+      .body as {
+      contractHash: string;
+      steps: {
+        id: string;
+        outputSchema: { properties: object; required: string[] };
+      }[];
+    };
+    const run = (
+      await http()
+        .post('/workflows/qti-v2-turn/runs')
+        .send({
+          input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
+        })
+        .expect(200)
+    ).body as {
+      id: string;
+      contractHash?: string;
+      steps: { id: string; status: string; output?: Record<string, unknown> }[];
+    };
+    expect(run.contractHash).toBe(detail.contractHash);
+    const stored = (await http().get(`/workflow-runs/${run.id}`).expect(200))
+      .body as { contractHash?: string };
+    expect(stored.contractHash).toBe(detail.contractHash);
+    // Every step on the path ran and passed on exactly the fields its schema
+    // requires; Clarify, the branch not taken, was skipped.
+    expect(
+      run.steps.filter((step) => step.status === 'skipped').map((s) => s.id),
+    ).toEqual(['clarify']);
+    for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
+      const declared = detail.steps.find((entry) => entry.id === step.id)!;
+      expect({ id: step.id, status: step.status }).toEqual({
+        id: step.id,
+        status: 'success',
+      });
+      expect(Object.keys(step.output ?? {})).toEqual(
+        expect.arrayContaining(declared.outputSchema.required),
+      );
+    }
+  });
+
+  it('asks the model with the input last and the agent tools, the same each time', async () => {
     /** The last user message of a request, as the provider read it. */
     const lastUser = (req: ReturnType<typeof asSent>) =>
       messageText([...req.messages].reverse().find((m) => m.role === 'user')!);
-
-    it.each([
-      [
-        'the Assistant',
-        'agent:assistant',
-        'Which team scored most in 2014?',
-        {
-          question: 'Which team scored most in 2014?',
-          datasets: ['World Cup Core'],
-        },
-      ],
-      [
-        'Questions to Insights v2',
-        'qti-v2-turn',
-        'Which stadium hosted the final?',
-        {
-          question: 'Which stadium hosted the final?',
-          datasets: ['World Cup Core'],
-        },
-      ],
-      [
-        'the Data Readiness Agent',
-        'agent:data-readiness',
-        'What are the worst data-quality problems?',
-        {
-          dataset: 'World Cup Core',
-          question: 'What are the worst data-quality problems?',
-        },
-      ],
-      [
-        'the RFP Builder',
-        'agent:rfp',
-        'Start an RFP for Acme, plan year 2027',
-        { message: 'Start an RFP for Acme, plan year 2027' },
-      ],
-    ])(
-      '%s asks the model once with the input last and its tools',
-      async (_name, id, question, input) => {
-        const run = await recorded(() => runStream(id, { input }));
-        expect(run.length).toBeGreaterThan(0);
-        expect(lastUser(run[0])).toContain(question);
-        expect(run[0].tools?.length ?? 0).toBeGreaterThan(0);
-        // Two runs of the same input send the model the same request.
-        const again = await recorded(() => runStream(id, { input }));
-        expect(again).toEqual(run);
-      },
-    );
+    const question = 'Which stadium hosted the final?';
+    const input = { question, datasets: ['World Cup Core'] };
+    const run = await recorded(() => runStream('qti-v2-turn', { input }));
+    // Plan, Analyse twice, Write answer: Plan and Write answer without tools.
+    expect(run.length).toBe(4);
+    const analyse = run.filter((req) => req.tools && req.tools.length > 0);
+    expect(analyse).toHaveLength(2);
+    expect(lastUser(analyse[0])).toContain(question);
+    expect(run[0].tools ?? []).toEqual([]);
+    expect(run[3].tools ?? []).toEqual([]);
+    // Two runs of the same input send the model the same request.
+    const again = await recorded(() => runStream('qti-v2-turn', { input }));
+    expect(again).toEqual(run);
   });
 
   it("a follow-up run sends the earlier run's question and answer first", async () => {
-    const first = await runStream('agent:assistant', {
+    const first = await runStream('qti-v2-turn', {
       input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
     });
     const runId = first.frames[0].runId!;
     const sent = await recorded(() =>
-      runStream('agent:assistant', {
+      runStream('qti-v2-turn', {
         input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
         context: { fromRunId: runId },
       }),
     );
-    const turn = sent.find((req) => req.stream)!;
+    const turn = sent.find(isAnalyseRequest)!;
     const dialogue = turn.messages
       .filter((message) => message.role !== 'system')
       .map((message) => [message.role, messageText(message)]);
@@ -336,6 +481,470 @@ describe('Streamed runs of agent workflows (API)', () => {
       ['assistant', STUB_ANSWER],
       ['user', 'And in 2006?'],
     ]);
+  });
+
+  it('a v2 run sends the analyst its five tools, its skills and the orientation, metrics, knowledge and catalog blocks, in order', async () => {
+    // A dataset of its own, so no other test's requests change.
+    const datasourceId = (
+      (await http().get('/datasets').expect(200)).body as {
+        datasets: { name: string; datasourceId?: string }[];
+      }
+    ).datasets.find((d) => d.name === 'World Cup Core')!.datasourceId!;
+    await save('/datasets', {
+      name: 'Analyst Goals',
+      tables: ['world_cup.world_cup.goals'],
+      entities: [
+        {
+          key: 'world_cup.world_cup.goals',
+          columns: [{ name: 'goal_id', type: 'integer', nullable: false }],
+        },
+      ],
+      datasourceId,
+      datasourceKind: 'postgres',
+    });
+    await save('/metrics', {
+      name: 'goals_total',
+      label: 'Total goals',
+      entity: 'world_cup.world_cup.goals',
+      expression: 'COUNT(goal_id)',
+      datasourceId,
+    });
+    await http()
+      .post('/datasets/Analyst%20Goals/ontology')
+      .send({
+        kind: 'instruction',
+        name: 'Own goals',
+        description: 'Own goals count for the team that benefited.',
+      })
+      .expect(201);
+    const question = 'How many goals were scored in total?';
+    const sent = await recorded(() =>
+      runStream('qti-v2-turn', {
+        input: { question, datasets: ['Analyst Goals'] },
+      }),
+    );
+    const turn = sent.find(isAnalyseRequest)!;
+    const dump = process.env['V2_REQUEST_DUMP'];
+    if (dump) writeFileSync(dump, JSON.stringify(turn, null, 2));
+    expect(turn.tools).toEqual(
+      expect.arrayContaining([
+        'list_entities',
+        'describe_entity',
+        'sample_rows',
+        'run_readonly_sql',
+        'ask_clarification',
+      ]),
+    );
+    for (const absent of [
+      'create_visual',
+      'show_in_panel',
+      'update_workflow',
+    ]) {
+      expect(turn.tools).not.toContain(absent);
+    }
+    const system = turn.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => messageText(message));
+    const at = (start: string) =>
+      system.findIndex((text) => text.startsWith(start));
+    expect(at('You are Questions to Insights v2')).toBe(0);
+    const orientation = at('Datasets for this session: Analyst Goals.');
+    const metrics = at('Governed metric definitions');
+    const knowledge = at('Curated dataset knowledge');
+    const catalog = at('Catalog loaded for this turn: 1 entity.');
+    const plan = at('Analysis plan for this turn:');
+    expect(orientation).toBeGreaterThan(0);
+    expect(system[orientation]).toContain(
+      'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+    );
+    expect(system[metrics]).toContain(
+      'Total goals (goals_total) on world_cup.world_cup.goals: COUNT(goal_id)',
+    );
+    expect(system[knowledge]).toContain('[instruction] Own goals:');
+    // The per-turn blocks keep the assistant's order, the catalog last.
+    expect(orientation).toBeLessThan(metrics);
+    expect(metrics).toBeLessThan(knowledge);
+    expect(knowledge).toBeLessThan(catalog);
+    // Then the plan (agents.md 5.11).
+    expect(plan).toBe(catalog + 1);
+    // Its on-demand skills reach the model through the framework's catalog.
+    const all = system.join('\n');
+    for (const skill of [
+      'curated-knowledge',
+      'sql-analysis',
+      'result-validation',
+    ]) {
+      expect(all).toContain(skill);
+    }
+  });
+
+  describe('a clarifying question waits for the answer, and the same run goes on (agents.md 5.11; api.md 119, 138; ADR-0043)', () => {
+    const ASKED = 'Which team performed best?';
+    const CLARIFY = 'Which measure should decide the best team?';
+
+    afterEach(() => {
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }));
+    });
+
+    /** Answer a waiting run (138) and read its stream. */
+    const resumeStream = async (runId: string, body: object) => {
+      const res = await fetch(
+        `${backend!.url}/workflow-runs/${encodeURIComponent(runId)}/resume/stream`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+      const text = await res.text();
+      return {
+        status: res.status,
+        contentType: res.headers.get('content-type') ?? '',
+        text,
+        frames: res.status === 200 ? framesOf(text) : [],
+      };
+    };
+
+    it('a plan that needs clarification suspends the run at Clarify; 138 continues the same run id with the answer to success', async () => {
+      const DOMINANT = 'Which team was the most dominant?';
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
+        // Plan asks until it sees the answer.
+        plan: (req) =>
+          req.messages.some((m) =>
+            messageText(m).includes('Question: Most wins'),
+          )
+            ? stubPlan('Which team won the most matches?')
+            : stubPlan(DOMINANT, {
+                needsClarification: true,
+                clarification: {
+                  question: 'Dominant by which measure?',
+                  options: ['Most wins', 'Most goals — over all matches'],
+                },
+              }),
+      });
+      let runId = '';
+      const asked = await recorded(async () => {
+        const first = await runStream('qti-v2-turn', {
+          input: { question: DOMINANT, datasets: ['World Cup Core'] },
+        });
+        expect(first.status).toBe(200);
+        runId = first.frames[0].runId!;
+        // The waiting step, what it waits for, then done: the stream ends.
+        const [step, required, done] = first.frames.slice(-3);
+        expect(step).toMatchObject({
+          type: 'step',
+          id: 'clarify',
+          status: 'suspended',
+          attempt: 1,
+        });
+        expect(required).toEqual({
+          type: 'input-required',
+          runId,
+          stepId: 'clarify',
+          title: 'Clarify',
+          question: 'Dominant by which measure?',
+          options: ['Most wins', 'Most goals — over all matches'],
+          expiresAt: expect.any(String) as unknown,
+        });
+        expect(done.type).toBe('done');
+        const run = done.run! as NonNullable<Frame['run']> & {
+          waitingFor?: Record<string, unknown>;
+          finishedAt?: string;
+        };
+        expect(run).toMatchObject({ id: runId, status: 'suspended' });
+        expect(run.waitingFor).toEqual({
+          stepId: 'clarify',
+          title: 'Clarify',
+          question: 'Dominant by which measure?',
+          options: ['Most wins', 'Most goals — over all matches'],
+          since: expect.any(String) as unknown,
+          expiresAt: required.expiresAt,
+        });
+        expect(run.answer).toBeUndefined();
+        expect(run.finishedAt).toBeUndefined();
+        expect(run.steps.map(trail)).toEqual([
+          'receive-question:success',
+          'load-catalog:success',
+          'plan:success:1',
+          'clarify:suspended:1',
+        ]);
+      });
+      // Only Plan asked the model.
+      expect(asked.map((req) => isPlanRequest(req as StubRequest))).toEqual([
+        true,
+      ]);
+      // Stored and listed as waiting.
+      const stored = (await http().get(`/workflow-runs/${runId}`)).body as {
+        status: string;
+      };
+      expect(stored.status).toBe('suspended');
+      const listed = (await http().get('/workflow-runs')).body as {
+        runs: { id: string; status: string }[];
+      };
+      expect(listed.runs.find((run) => run.id === runId)?.status).toBe(
+        'suspended',
+      );
+
+      const sent = await recorded(async () => {
+        const second = await resumeStream(runId, {
+          stepId: 'clarify',
+          answer: 'Most wins',
+        });
+        expect(second.status).toBe(200);
+        expect(second.frames[0]).toEqual({
+          type: 'run',
+          runId,
+          workflowId: 'qti-v2-turn',
+        });
+        expect(
+          second.frames
+            .filter((f) => f.type === 'step')
+            .slice(0, 4)
+            .map(trail),
+        ).toEqual([
+          'clarify:running:1',
+          'clarify:success:1',
+          'plan:running:2',
+          'plan:success:2',
+        ]);
+        expect(second.frames.some((f) => f.type === 'input-required')).toBe(
+          false,
+        );
+        const done = second.frames.at(-1)!;
+        expect(done.type).toBe('done');
+        expect(done.run).toMatchObject({
+          id: runId,
+          status: 'success',
+          answer: { role: 'assistant', content: STUB_ANSWER },
+        });
+        expect(done.run).not.toHaveProperty('waitingFor');
+        expect(done.run!.steps.map(trail)).toEqual([
+          'receive-question:success',
+          'load-catalog:success',
+          'plan:success:1',
+          'plan:success:2',
+          'clarify:success:1',
+          'analyse:success:1',
+          'analyse:success:2',
+          'validate:success:1',
+          'validate:success:2',
+          'write-answer:success',
+          'wrap-up:success',
+        ]);
+      });
+      // Plan planned again with the question, its question and the answer.
+      const planned = stub.requests.find(
+        (req, i) =>
+          i >= stub.requests.length - sent.length && isPlanRequest(req),
+      )!;
+      expect(
+        planned.messages
+          .filter((message) => message.role !== 'system')
+          .map((message) => [
+            message.role,
+            messageText(message).split('\n')[0],
+          ]),
+      ).toEqual([
+        ['user', DOMINANT],
+        ['assistant', 'Dominant by which measure?'],
+        ['user', 'Question: Most wins'],
+      ]);
+      // Resumed once: it no longer waits.
+      const again = await resumeStream(runId, {
+        stepId: 'clarify',
+        answer: 'Most goals',
+      });
+      expect(again.status).toBe(409);
+      expect(JSON.parse(again.text)).toMatchObject({
+        message: `Run "${runId}" is not waiting for an answer`,
+      });
+    });
+
+    it('the agent asks mid-analysis: the run suspends at Analyse; 138 runs the agent again with its question and the answer, to success', async () => {
+      const lastUser = (req: StubRequest) =>
+        messageText(
+          [...req.messages].reverse().find((m) => m.role === 'user')!,
+        );
+      useV2Steps(stub, (req) =>
+        req.stream && lastUser(req) === ASKED
+          ? {
+              toolCall: {
+                name: 'ask_clarification',
+                arguments: {
+                  question: CLARIFY,
+                  options: 'Most wins\nMost goals — scored over all matches',
+                },
+              },
+            }
+          : { text: STUB_ANSWER },
+      );
+      const first = await runStream('qti-v2-turn', {
+        input: { question: ASKED, datasets: ['World Cup Core'] },
+      });
+      expect(first.status).toBe(200);
+      const runId = first.frames[0].runId!;
+      const [step, required, done] = first.frames.slice(-3);
+      expect(step).toMatchObject({
+        type: 'step',
+        id: 'analyse',
+        status: 'suspended',
+        attempt: 1,
+      });
+      expect(required).toMatchObject({
+        type: 'input-required',
+        runId,
+        stepId: 'analyse',
+        title: 'Analyse',
+        question: CLARIFY,
+        options: ['Most wins', 'Most goals — scored over all matches'],
+      });
+      expect(done.run).toMatchObject({ id: runId, status: 'suspended' });
+      expect(done.run!.steps.map(trail)).toEqual([
+        'receive-question:success',
+        'load-catalog:success',
+        'plan:success:1',
+        'analyse:suspended:1',
+      ]);
+
+      const sent = await recorded(async () => {
+        const second = await resumeStream(runId, {
+          stepId: 'analyse',
+          answer: 'Most wins',
+        });
+        expect(second.status).toBe(200);
+        const end = second.frames.at(-1)!;
+        expect(end.type).toBe('done');
+        expect(end.run).toMatchObject({
+          id: runId,
+          status: 'success',
+          answer: { role: 'assistant', content: STUB_ANSWER },
+        });
+        // The resumed attempt is the same attempt 1; the stub's agent never
+        // queries, so Validate retries once.
+        expect(end.run!.steps.map(trail)).toEqual([
+          'receive-question:success',
+          'load-catalog:success',
+          'plan:success:1',
+          'clarify:skipped',
+          'analyse:success:1',
+          'analyse:success:2',
+          'validate:success:1',
+          'validate:success:2',
+          'write-answer:success',
+          'wrap-up:success',
+        ]);
+      });
+      // Both attempts after the answer go on with it.
+      const turns = sent.filter(isAnalyseRequest);
+      expect(turns).toHaveLength(2);
+      for (const turn of turns) {
+        expect(
+          turn.messages
+            .filter((message) => message.role !== 'system')
+            .map((message) => [message.role, messageText(message)]),
+        ).toEqual([
+          ['user', ASKED],
+          [
+            'assistant',
+            `${CLARIFY}\n- Most wins\n- Most goals — scored over all matches`,
+          ],
+          ['user', 'Most wins'],
+        ]);
+      }
+    });
+
+    it('138 refuses before any stream (Style B): 404, 409, 400 answer, 400 step', async () => {
+      const missing = await resumeStream('no-such-run', {
+        stepId: 'clarify',
+        answer: 'a',
+      });
+      expect(missing.status).toBe(404);
+      expect(missing.contentType).toContain('application/json');
+      expect(JSON.parse(missing.text)).toMatchObject({
+        message: 'Run "no-such-run" not found',
+      });
+
+      const finished = await runStream('qti-v2-turn', {
+        input: { question: 'How many matches?', datasets: ['World Cup Core'] },
+      });
+      const finishedId = finished.frames[0].runId!;
+      const notWaiting = await resumeStream(finishedId, {
+        stepId: 'clarify',
+        answer: 'a',
+      });
+      expect(notWaiting.status).toBe(409);
+      expect(JSON.parse(notWaiting.text)).toMatchObject({
+        message: `Run "${finishedId}" is not waiting for an answer`,
+      });
+
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }), {
+        plan: () =>
+          stubPlan('Which?', {
+            needsClarification: true,
+            clarification: { question: 'Which one?', options: ['A', 'B'] },
+          }),
+      });
+      const waiting = await runStream('qti-v2-turn', {
+        input: { question: 'Which?', datasets: ['World Cup Core'] },
+      });
+      const waitingId = waiting.frames[0].runId!;
+      const blank = await resumeStream(waitingId, {
+        stepId: 'clarify',
+        answer: '   ',
+      });
+      expect(blank.status).toBe(400);
+      expect(blank.contentType).toContain('application/json');
+      expect(JSON.parse(blank.text)).toMatchObject({
+        message: 'Answer is required',
+      });
+      const wrongStep = await resumeStream(waitingId, {
+        stepId: 'analyse',
+        answer: 'A',
+      });
+      expect(wrongStep.status).toBe(400);
+      expect(JSON.parse(wrongStep.text)).toMatchObject({
+        message: 'Step "analyse" is not waiting for an answer',
+      });
+      // The refusals left it waiting.
+      const stored = (await http().get(`/workflow-runs/${waitingId}`)).body as {
+        status: string;
+      };
+      expect(stored.status).toBe('suspended');
+    });
+  });
+
+  it("streams only Write answer's text as the run's answer, never Analyse's", async () => {
+    useV2Steps(stub, () => ({ text: 'An analysis note.' }), {
+      answer: () => 'Written: 64 matches.\n\nHow I got this: one count.',
+    });
+    try {
+      const res = await runStream('qti-v2-turn', {
+        input: {
+          question: 'How many matches in all?',
+          datasets: ['World Cup Core'],
+        },
+      });
+      const text = res.frames
+        .filter((frame) => frame.type === 'text')
+        .map((frame) => frame.content)
+        .join('');
+      expect(text).toBe('Written: 64 matches.\n\nHow I got this: one count.');
+      const run = res.frames.at(-1)!.run!;
+      expect(run.answer?.content).toBe(
+        'Written: 64 matches.\n\nHow I got this: one count.',
+      );
+      // Analyse's text stays in its step output, as its note.
+      const analyse = run.steps.find((step) => step.id === 'analyse') as {
+        output?: { text?: string };
+      };
+      expect(analyse.output?.text).toBe('An analysis note.');
+      const written = run.steps.find((step) => step.id === 'write-answer') as {
+        output?: { headline?: string };
+      };
+      expect(written.output?.headline).toBe('Written: 64 matches.');
+    } finally {
+      useV2Steps(stub, () => ({ text: STUB_ANSWER }));
+    }
   });
 
   it('closing the connection stops the run: no terminal event, and it has no answer to continue from', async () => {
@@ -347,7 +956,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         : undefined;
     const controller = new AbortController();
     const res = await fetch(
-      `${backend!.url}/workflows/agent%3Aassistant/runs/stream`,
+      `${backend!.url}/workflows/qti-v2-turn/runs/stream`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -382,7 +991,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     let refusal: { status: number; message?: string } = { status: 0 };
     for (let i = 0; i < 40; i++) {
       const answer = await http()
-        .post('/workflows/agent%3Aassistant/runs/stream')
+        .post('/workflows/qti-v2-turn/runs/stream')
         .send({
           input: { question: 'Next', datasets: ['World Cup Core'] },
           context: { fromRunId: runId },
@@ -401,15 +1010,16 @@ describe('Streamed runs of agent workflows (API)', () => {
   });
 
   describe('refusals before any stream (Style B)', () => {
+    const ASK = { question: 'Hi', datasets: ['World Cup Core'] };
     it.each([
       [
-        'agent:assistant',
+        'qti-v2-turn',
         { input: { datasets: ['World Cup Core'] } },
         400,
         'Question is required',
       ],
       [
-        'agent:assistant',
+        'qti-v2-turn',
         { input: { question: 'Hi' } },
         400,
         'Select at least one dataset',
@@ -421,21 +1031,44 @@ describe('Streamed runs of agent workflows (API)', () => {
         'Dataset "Nope" not found',
       ],
       [
-        'agent:data-readiness',
-        { input: { dataset: 'Intellify RFP API' } },
-        400,
-        'Dataset "Intellify RFP API" is not a PostgreSQL or Databricks dataset',
-      ],
-      [
-        'agent:assistant',
-        {
-          input: { question: 'Hi', datasets: ['World Cup Core'] },
-          context: { fromRunId: 'nope' },
-        },
+        'qti-v2-turn',
+        { input: ASK, context: { fromRunId: 'nope' } },
         400,
         'Run "nope" not found',
       ],
       ['nope', { input: {} }, 404, 'Workflow "nope" not found'],
+      // The workflows removed in 1.23.35 are unknown.
+      [
+        'agent:assistant',
+        { input: ASK },
+        404,
+        'Workflow "agent:assistant" not found',
+      ],
+      [
+        'agent:data-readiness',
+        { input: { dataset: 'World Cup Core' } },
+        404,
+        'Workflow "agent:data-readiness" not found',
+      ],
+      [
+        'seq-text-demo',
+        { input: { text: 'Hello' } },
+        404,
+        'Workflow "seq-text-demo" not found',
+      ],
+      [
+        'deep-analysis',
+        { input: ASK },
+        404,
+        'Workflow "deep-analysis" not found',
+      ],
+      // The RFP Builder was removed: its workflow is unknown.
+      [
+        'agent:rfp',
+        { input: { message: 'Start', rfpId: 'rfp-1' } },
+        404,
+        'Workflow "agent:rfp" not found',
+      ],
     ])('%s %p answers %d %p', async (id, body, status, message) => {
       const before = stub.requests.length;
       const res = await runStream(id, body);
@@ -446,31 +1079,38 @@ describe('Streamed runs of agent workflows (API)', () => {
       expect(stub.requests.length).toBe(before);
     });
 
-    it("refuses the RFP Builder with its run requirement while the sample isn't loaded", async () => {
-      const removed = (
-        await http().delete(
-          `/datasets/${encodeURIComponent('Intellify RFP API')}`,
-        )
-      ).body as { ok: boolean };
-      expect(removed).toMatchObject({ ok: true });
-      const res = await runStream('agent:rfp', { input: { message: 'Start' } });
-      expect(res.status).toBe(400);
-      expect((JSON.parse(res.text) as { message: string }).message).toBe(
-        'Load the "Intellify RFP API" sample in Settings → Testing Data first',
+    it('a blank question and no datasets answer one JSON 400 with both errors, before any SSE frame; nothing is stored', async () => {
+      const history = async () =>
+        (
+          (await http().get('/workflow-runs').expect(200)).body as {
+            runs: { id: string }[];
+          }
+        ).runs.map((run) => run.id);
+      const stored = await history();
+      const before = stub.requests.length;
+      const res = await fetch(
+        `${backend!.url}/workflows/qti-v2-turn/runs/stream`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: { question: '   ', datasets: [] } }),
+        },
       );
-    });
-  });
-
-  it('the sequential test workflow still runs through POST /runs (118)', async () => {
-    const res = await http()
-      .post('/workflows/seq-text-demo/runs')
-      .send({ input: { text: '  Hello   workflow   world  ' } })
-      .expect(200);
-    expect(res.body).toMatchObject({
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      output: { summary: '3 words, 20 characters: "Hello workflow world"' },
-      runId: expect.any(String) as string,
+      expect(res.status).toBe(400);
+      expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+      const text = await res.text();
+      expect(text).not.toContain('data:');
+      expect(JSON.parse(text)).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Question is required',
+        errors: [
+          { field: 'question', message: 'Question is required' },
+          { field: 'datasets', message: 'Select at least one dataset' },
+        ],
+      });
+      expect(stub.requests.length).toBe(before);
+      expect(await history()).toEqual(stored);
     });
   });
 });

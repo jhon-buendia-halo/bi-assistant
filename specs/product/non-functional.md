@@ -29,7 +29,7 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 - N9. Default data directory: on desktop, the operating system's per-user application data folder. On Windows it SHALL be the local, non-roaming profile folder, because roaming profiles are often synced or locked. Existing data SHALL be moved there once; if the move fails, the app SHALL keep using the roaming folder and log a diagnostic, and SHALL NOT lose data. In web mode, `~/.questions-to-insights`, overridable with `--data-dir` or the `QTI_DATA_DIR` or `APP_DATA_DIR` environment variables.
 - N10. A rename of a stored collection or field SHALL come with a migration that keeps old data readable. Existing migrations: `projects` to `sessions`, `sandbox_selections` to `datasets`, session field `sandboxes` to `datasets`, source field `sourceProjectId` to `sourceSessionId`, workspace folders `project-<id>` to `session-<id>`, a single anonymous Databricks connection to a named datasource, and the desktop user-data folder rename from "Questions to Insights" to "Halo BI Assistant". The session list order (by last update) SHALL NOT change because of a migration.
 - N11. UI layout preferences (right-panel width) SHALL be kept in browser local storage, not on the backend.
-- N12. Deep analysis jobs and in-flight eval runs are held in memory; a restart forgets running jobs. Completed eval runs are persisted. Reports are stored in the session workspace.
+- N12. In-flight eval runs are held in memory; a restart forgets running jobs. Completed eval runs are persisted.
 - N13. The app SHALL work offline except for LLM calls and datasource queries.
 
 ## 3. Security
@@ -40,7 +40,6 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 - N15. On desktop the app secret SHALL be 32 random bytes (hex), created on first launch and stored in `.app-secret` in the data directory with owner-only permissions (mode 0600). The `APP_SECRET` environment variable, when set, SHALL win. The web command SHALL create and read the same file in its own data directory, and so SHALL a backend started on its own without `APP_SECRET`. No fixed, known secret SHALL ever encrypt a key.
 - N16. If the app secret file cannot be written, the app SHALL log a diagnostic and use a new secret each launch, which makes previously encrypted keys unreadable. The user SHALL back up the data directory together with `.app-secret`.
 - N16a. A key encrypted under the former fixed development secret (used before BA-106 when no `APP_SECRET` was set) SHALL be re-encrypted with the current secret at startup. A key that cannot be read SHALL be reported as needing re-entry, never as an unexplained error.
-- N16b. The Intellify RFP API key is a service secret and the whole access boundary of that API ([../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)): it SHALL come from `INTELLIFY_API_KEY` when set, else from `.intellify-api-key` in the data directory (32 random bytes, hex, created on first start with owner-only permissions, mode 0600, like the app secret), and it SHALL reach the app's tools only as the stored, masked credential of the REST datasource that registers the API (N17).
 - N17. API responses SHALL NEVER contain a stored API key, database password, Databricks token or REST credential in plain text. They SHALL show the mask `••••••••`. When the UI sends the mask back, the system SHALL keep the stored secret.
 - N18. The LLM settings view SHALL show only a masked form of the key.
 - N70. The API key of a custom endpoint SHALL be optional. When one is given it SHALL be encrypted (N14) and masked (N17, N18) like any other key; when none is given and none is stored, the app SHALL call the endpoint with no credential (no `Authorization` or `x-api-key` header). A key typed only to list an endpoint's models or test the connection SHALL NOT be stored. Switching the provider away from custom SHALL treat the key as for any other provider change.
@@ -53,7 +52,6 @@ The app has one built-in user, the super admin, and no sign-in ([glossary.md](gl
 
 - N67. The app SHALL NOT authenticate or authorise requests: there are no accounts, sessions, cookies, roles or permission checks, and every request runs as the super admin. The security boundary is the machine and its network: anyone who can reach the backend's port has full access to the app and its data, including the stored LLM key and the developer settings. The web command binds `127.0.0.1` by default for that reason; the desktop backend listens on all interfaces by the user's choice, and `--host 0.0.0.0` on the web command does the same, so on those the network is the only control. Exposing either to a network the user does not trust is the user's decision and risk.
 - N68. The LLM API key SHALL be returned only masked by every API response, to every caller (N18).
-- N69. The Intellify RFP API ([../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)) keeps its own `X-API-Key` (N16b): it is a separate service, not covered by N67.
 
 ### Read-only access to data
 
@@ -178,17 +176,13 @@ All values are the ones in the code today.
 
 | Item | Value |
 |---|---|
-| Deep analysis angles | 5 at most |
-| Deep analysis findings per angle | 12,000 characters |
-| Deep analysis jobs per session at once | 1 |
-| Deep analysis jobs retained for polling | 50 |
 | Eval runs per agent at once | 1 |
 | Eval result-set comparison rows | 500 |
 | Ontology bootstrap drafts | 15 at most |
 | Metric name length | 64 characters |
 | Metric candidates offered | 12 |
 
-- N40. The UI SHALL stay responsive during long jobs. Chat turns stream; deep analysis and eval runs are started, then polled.
+- N40. The UI SHALL stay responsive during long jobs. Run turns stream; eval runs are started, then polled.
 - N41. Closing the connection during a streamed turn SHALL abort that turn.
 
 ## 6. Reliability
@@ -220,10 +214,10 @@ Open question (gap): in web mode there is no desktop bridge. Diagnostics hold on
 
 - N58. The application shell SHALL have no automatically detectable accessibility violations (checked with axe in the end-to-end suite).
 - N59. Landmark regions SHALL have labels ("Navigation rail", "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation", "Details panel"). The page SHALL have one level-one heading (the "Agentic Hub" banner).
-- N60. Icon-only buttons SHALL have an accessible name or title (the rail buttons, collapse and expand right panel, open system logs, session options, careful mode, deep analysis).
+- N60. Icon-only buttons SHALL have an accessible name or title (the rail buttons, collapse and expand right panel, open system logs, session options, careful mode).
 - N61. The right-panel divider SHALL be a keyboard-operable separator named "Resize right panel", with its current width exposed. Arrow keys SHALL change it by 24 px, Home SHALL set the minimum (360 px), End SHALL set the maximum (960 px, less room kept for the main content, at least 240 px), and a double-click SHALL reset it to 572 px. The width SHALL be remembered.
 - N62. Toggle controls SHALL expose their state (careful mode uses `aria-pressed`).
-- N63. Status that appears without a user action (deep analysis progress) SHALL have a labelled region.
+- N63. Status that appears without a user action (a run's progress) SHALL have a labelled region.
 
 - N64. The app SHALL offer a light and a dark theme, following the operating system by default (decided 2026-10-09 for epic BA-141). Text colours SHALL meet WCAG AA contrast (4.5:1) against their surfaces in both themes, and the axe check SHALL pass in both.
 

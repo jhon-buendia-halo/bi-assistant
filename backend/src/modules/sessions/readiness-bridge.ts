@@ -240,6 +240,11 @@ export function readinessOrientationLine(row: {
   return `- ${row.name} — ${row.kindLabel} datasource "${row.datasourceName}"${id}, ${row.entityCount} entities${example}`;
 }
 
+/** Today as `YYYY-MM-DD` (UTC), for Block D1. */
+export function isoToday(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
 /** Block D1 (agents.md 4.1): the session's datasets and today; no score. */
 export function readinessOrientationBlock(
   rows: readonly ReadinessOrientationRow[],

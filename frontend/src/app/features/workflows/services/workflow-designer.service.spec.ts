@@ -10,8 +10,8 @@ import {
   WorkflowRun,
   WorkflowRunRequest,
 } from '../models/workflow.model';
-import { ToastService } from '../../../core/toast/toast.service';
 import { WorkflowDesigner } from './workflow-designer.service';
+import { GRAPH_RETRY_RUN, GRAPH_WORKFLOW } from './workflow-graph.testing';
 import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
 
 /** A run stream the test drives: each call is recorded with its handlers. */
@@ -37,27 +37,46 @@ class FakeRunsApi {
     });
   }
 
+  resumes: {
+    runId: string;
+    stepId: string;
+    answer: string;
+    handlers: RunStreamHandlers;
+    end: () => void;
+  }[] = [];
+
+  resumeRun(
+    runId: string,
+    stepId: string,
+    answer: string,
+    handlers: RunStreamHandlers,
+  ): Promise<void> {
+    return new Promise<void>((end) => {
+      this.resumes.push({ runId, stepId, answer, handlers, end });
+    });
+  }
+
   get last() {
     return this.calls[this.calls.length - 1];
   }
 }
 
+/** A one-agent-step code workflow over picked datasets, with a checkbox. */
 const ASSISTANT: WorkflowDetail = {
-  id: 'agent:assistant',
-  name: 'Assistant',
+  id: 'qti-v2-turn',
+  name: 'Questions to Insights v2',
   description: 'Answers questions over the datasets you pick.',
-  kind: 'agent',
+  kind: 'code',
   owner: 'Official',
-  agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
+  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
   stepCount: 1,
-  bar: 'agent',
   trigger: 'run',
   input: [
     { name: 'question', label: 'Question', type: 'textarea', required: true },
     { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
     {
-      name: 'careful',
-      label: 'Careful: cross-check the result with an independent query',
+      name: 'verbose',
+      label: 'Verbose',
       type: 'boolean',
       required: false,
       default: false,
@@ -72,6 +91,12 @@ const ASSISTANT: WorkflowDetail = {
       title: 'Answer',
       kind: 'agent',
       summary: 'The agent answers.',
+      agent: {
+        key: 'assistant-v2',
+        name: 'Questions to Insights v2',
+        tools: ['list_entities', 'run_readonly_sql'],
+        maxSteps: 8,
+      },
       input: ['question', 'datasets'],
       output: ['calls', 'stopped'],
       exits: [],
@@ -82,9 +107,9 @@ const ASSISTANT: WorkflowDetail = {
 function storedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
     id: 'run-1',
-    workflowId: 'agent:assistant',
-    workflowName: 'Assistant',
-    input: { question: 'Which team scored the most goals?', datasets: ['World Cup Core'], careful: false },
+    workflowId: 'qti-v2-turn',
+    workflowName: 'Questions to Insights v2',
+    input: { question: 'Which team scored the most goals?', datasets: ['World Cup Core'], verbose: false },
     status: 'success',
     steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { stopped: false } }],
     question: 'Which team scored the most goals?',
@@ -112,7 +137,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer = TestBed.inject(WorkflowDesigner);
     http = TestBed.inject(HttpTestingController);
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
     http
       .expectOne((r) => r.url.endsWith('/datasets'))
       .flush({ datasets: [{ name: 'World Cup Core', tables: ['a', 'b'], datasourceKind: 'postgres' }] });
@@ -126,59 +151,193 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.execute();
   }
 
-  it('opens the Run tab with an earlier run\'s input after Run again (plan 1.24.11)', () => {
+  it('asks for the run form with an earlier run\'s input after Run again (plan 1.24.11)', () => {
     designer.prefillRunAgain({
       question: 'Which team scored the most goals?',
       datasets: ['World Cup Core'],
-      careful: true,
+      verbose: true,
     });
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(designer.tab()).toBe('run');
+    expect(designer.runFormRequest()).toBe(1);
     expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
     expect(designer.picked('datasets')).toEqual(['World Cup Core']);
-    expect(designer.checked('careful')).toBeTrue();
+    expect(designer.checked('verbose')).toBeTrue();
     // A second open starts from the defaults again.
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(designer.tab()).toBe('workflow');
+    expect(designer.runFormRequest()).toBe(0);
   });
 
   it('starts the form from the defaults and loads the datasets to pick from', () => {
-    expect(designer.inputValues()).toEqual({ careful: false });
+    expect(designer.inputValues()).toEqual({ verbose: false });
     expect(designer.datasets().map((d) => d.name)).toEqual(['World Cup Core']);
-    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
+  });
+
+  it('selects any node, opens and closes its dialog, and keeps Start, steps and End as nodes', () => {
+    expect(designer.nodes().map((n) => n.nodeId)).toEqual(['start', 'answer', 'end']);
+    expect(designer.openInspection()).toBeNull();
+    designer.select('start');
+    expect(designer.selectedStepId()).toBe('start');
+    expect(designer.openNodeId()).toBeNull();
+    designer.openNode('answer');
+    expect(designer.selectedStepId()).toBe('answer');
+    expect(designer.openInspection()?.title).toBe('Answer');
+    designer.closeNode();
+    expect(designer.openInspection()).toBeNull();
+    expect(designer.selectedStepId()).toBe('answer');
+    designer.openNode('end');
+    designer.clear();
+    expect(designer.openNodeId()).toBeNull();
+    expect(designer.selectedStepId()).toBeNull();
+  });
+
+  it("opens a tool sub-node as that tool, with its calls in the run shown; its agent step stays selected", () => {
+    designer.openNode('answer-tool-run_readonly_sql');
+    expect(designer.openNodeId()).toBe('answer-tool-run_readonly_sql');
+    expect(designer.selectedStepId()).toBe('answer');
+    const tool = designer.openInspection()!;
+    expect(tool.kind).toBe('tool');
+    expect(tool.title).toBe('run_readonly_sql');
+    expect(tool.tool?.calls).toEqual([]);
+    // Tools are not nodes of the state panel.
+    expect(designer.nodes().map((n) => n.nodeId)).toEqual(['start', 'answer', 'end']);
+
+    executeQuestion();
+    runs.last.handlers.onStep!({
+      id: 'answer',
+      title: 'Answer',
+      status: 'success',
+      toolCalls: [
+        { tool: 'list_entities', durationMs: 3 },
+        { tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 1, durationMs: 40 },
+      ],
+    });
+    expect(designer.openInspection()?.tool?.calls.map((c) => c.input)).toEqual(['SELECT 1']);
+    designer.closeNode();
+    // Model and "+n tools" open the step itself; an unknown tool opens nothing.
+    designer.openNode('answer-tool-nope');
+    expect(designer.openInspection()).toBeNull();
+  });
+
+  it('Execute workflow only asks for the run form: nothing runs', () => {
+    designer.requestRunForm();
+    designer.requestRunForm();
+    expect(designer.runFormRequest()).toBe(2);
+    expect(runs.calls.length).toBe(0);
+    expect(designer.running()).toBe(false);
+  });
+
+  it('the state panel starts expanded and has no run before the first Execute', () => {
+    expect(designer.stateOpen()).toBe(true);
+    expect(designer.stateSummary()).toEqual({
+      status: null,
+      ran: 0,
+      total: 3,
+      durationMs: null,
+      runId: null,
+      invalidFields: 0,
+    });
+    expect(designer.nodeStatuses()).toEqual({});
+  });
+
+  it("fills each step's input, times and tool calls live, with the run's id, input and start", () => {
+    executeQuestion();
+    const h = runs.last.handlers;
+    expect(designer.liveInput()).toEqual({
+      question: 'Which team scored the most goals?',
+      datasets: ['World Cup Core'],
+      verbose: false,
+    });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onStep!({
+      id: 'answer',
+      title: 'Answer',
+      status: 'success',
+      input: { question: 'Which team scored the most goals?' },
+      inputTruncated: true,
+      output: { stopped: false },
+      startedAt: '2026-11-11T10:00:00.000Z',
+      endedAt: '2026-11-11T10:00:02.500Z',
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 1, durationMs: 40 }],
+    });
+    const result = designer.runResult()!;
+    expect(result.runId).toBe('run-1');
+    expect(result.input).toEqual(designer.liveInput());
+    expect(result.startedAt).toEqual(jasmine.any(String));
+    expect(result.finishedAt).toBeUndefined();
+    expect(result.steps[0]).toEqual(
+      jasmine.objectContaining({
+        input: { question: 'Which team scored the most goals?' },
+        inputTruncated: true,
+        startedAt: '2026-11-11T10:00:00.000Z',
+        endedAt: '2026-11-11T10:00:02.500Z',
+        toolCalls: [{ tool: 'run_readonly_sql', input: 'SELECT 1', rowCount: 1, durationMs: 40 }],
+      }),
+    );
+    const answer = designer.nodes()[1];
+    expect(answer.run?.durationMs).toBe(2500);
+    expect(answer.run?.toolCalls.map((c) => c.tool)).toEqual(['run_readonly_sql']);
+    expect(designer.nodes()[0].run?.input).toEqual(designer.liveInput()!);
+    expect(designer.stateSummary()).toEqual(
+      jasmine.objectContaining({ status: 'running', ran: 2, total: 3, runId: 'run-1' }),
+    );
+  });
+
+  it("shows a stored run's id, input and times, and its steps' recorded data", () => {
+    executeQuestion();
+    runs.last.handlers.onDone!(
+      storedRun({
+        finishedAt: '2026-11-11T10:00:13.900Z',
+        steps: [
+          {
+            id: 'answer',
+            title: 'Answer',
+            status: 'success',
+            input: { question: 'Which team scored the most goals?' },
+            output: { stopped: false },
+            startedAt: '2026-11-11T10:00:00.000Z',
+            endedAt: '2026-11-11T10:00:13.900Z',
+          },
+        ],
+      }),
+    );
+    const result = designer.runResult()!;
+    expect(result.runId).toBe('run-1');
+    expect(result.input).toEqual(storedRun().input);
+    expect(result.startedAt).toBe('2026-11-11T10:00:00.000Z');
+    expect(result.finishedAt).toBe('2026-11-11T10:00:13.900Z');
+    expect(result.steps[0].input).toEqual({ question: 'Which team scored the most goals?' });
+    expect(designer.stateSummary()).toEqual({
+      status: 'success',
+      ran: 3,
+      total: 3,
+      durationMs: 13900,
+      runId: 'run-1',
+      invalidFields: 0,
+    });
+    expect(designer.nodeStatuses()).toEqual({
+      start: 'success',
+      answer: 'success',
+      end: 'success',
+    });
+    designer.openNode('end');
+    expect(designer.openInspection()?.run?.input).toEqual({ stopped: false });
   });
 
   it("sends the form's typed input to the workflow's stream", () => {
     executeQuestion();
-    expect(runs.last.workflowId).toBe('agent:assistant');
+    expect(runs.last.workflowId).toBe('qti-v2-turn');
     expect(runs.last.body).toEqual({
       input: {
         question: 'Which team scored the most goals?',
         datasets: ['World Cup Core'],
-        careful: false,
+        verbose: false,
       },
     });
     expect(designer.running()).toBe(true);
-  });
-
-  it('keeps the agent phases of the run for the phases bar, live and as stored (plan 1.24.5)', () => {
-    executeQuestion();
-    expect(designer.phases()).toBeNull();
-    const view = {
-      phases: [{ number: 1, title: 'Understand' }],
-      current: 1,
-      done: [],
-      skipped: [],
-      source: 'workflow' as const,
-    };
-    runs.last.handlers.onWorkflow!(view);
-    expect(designer.phases()).toEqual(view);
-    runs.last.handlers.onDone!({ ...storedRun(), workflow: { ...view, current: null, done: [1] } });
-    expect(designer.phases()?.done).toEqual([1]);
   });
 
   it('shows the steps progress live, the tool calls and the answer forming, then the stored run', () => {
@@ -187,9 +346,9 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()?.status).toBe('running');
     expect(designer.runResult()?.steps.map((s) => s.status)).toEqual([null]);
 
-    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
-    expect(designer.stepStatuses()).toEqual({ answer: 'running' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'running' });
     h.onReasoning!('Looking at goals');
     h.onTool!({ name: 'run_readonly_sql', input: 'SELECT team FROM goals' });
     expect(designer.toolCalls()).toEqual([
@@ -212,7 +371,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(result.steps).toEqual([
       { id: 'answer', title: 'Answer', kind: 'agent', status: 'success', output: { stopped: false } },
     ]);
-    expect(designer.stepStatuses()).toEqual({ answer: 'success' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'success', end: 'success' });
     expect(designer.canFollowUp()).toBe(true);
   });
 
@@ -243,30 +402,79 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   });
 
   it('a refusal shows the message under Execute and no result', () => {
-    designer.execute();
-    runs.last.handlers.onError!('Question is required');
-    expect(designer.runError()).toBe('Question is required');
+    executeQuestion();
+    runs.last.handlers.onError!('Dataset "World Cup Core" not found');
+    expect(designer.runError()).toBe('Dataset "World Cup Core" not found');
     expect(designer.runResult()).toBeNull();
     expect(designer.running()).toBe(false);
+  });
+
+  it('an invalid form is refused before any request: each field has its error, Start is invalid', () => {
+    designer.setInput('question', '   ');
+    const focus = designer.invalidFocusRequest();
+    designer.execute();
+    expect(runs.calls.length).toBe(0);
+    expect(designer.running()).toBe(false);
+    expect(designer.fieldErrors()).toEqual({
+      question: 'Question is required',
+      datasets: 'Select at least one dataset',
+    });
+    expect(designer.runError()).toBeNull();
+    expect(designer.runResult()).toBeNull();
+    expect(designer.nodeStatuses()).toEqual({ start: 'invalid' });
+    expect(designer.stateSummary().invalidFields).toBe(2);
+    expect(designer.invalidFocusRequest()).toBe(focus + 1);
+
+    designer.setInput('question', 'Which team?');
+    expect(designer.fieldErrors()).toEqual({ datasets: 'Select at least one dataset' });
+    expect(designer.stateSummary().invalidFields).toBe(1);
+    designer.toggleDataset('datasets', 'World Cup Core');
+    expect(designer.fieldErrors()).toEqual({});
+    expect(designer.nodeStatuses()).toEqual({});
+
+    designer.execute();
+    expect(runs.calls.length).toBe(1);
+  });
+
+  it("maps a refusal's field errors onto the fields; a non-field error stays under Execute", () => {
+    executeQuestion();
+    runs.last.handlers.onError!('Question must be at most 4000 characters', [
+      { field: 'question', message: 'Question must be at most 4000 characters' },
+      { field: null, message: 'Run "old" not found' },
+    ]);
+    expect(designer.fieldErrors()).toEqual({
+      question: 'Question must be at most 4000 characters',
+    });
+    expect(designer.runError()).toBe('Run "old" not found');
+    expect(designer.nodeStatuses()).toEqual({ start: 'invalid' });
+    expect(designer.runResult()).toBeNull();
+
+    designer.execute();
+    expect(runs.calls.length).toBe(2);
+    runs.last.handlers.onError!('Question is required', [
+      { field: 'question', message: 'Question is required' },
+    ]);
+    expect(designer.runError()).toBeNull();
   });
 
   it('an error after the run started fails the run with it, and the running step', () => {
     executeQuestion();
     const h = runs.last.handlers;
-    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     h.onError!('The endpoint rejected the API key (401)');
     expect(designer.runError()).toBeNull();
     const result = designer.runResult()!;
     expect(result.status).toBe('failed');
     expect(result.error).toBe('The endpoint rejected the API key (401)');
-    expect(designer.stepStatuses()).toEqual({ answer: 'failed' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'failed', end: 'skipped' });
+    expect(designer.runResult()?.finishedAt).toEqual(jasmine.any(String));
   });
 
   it('Stop aborts the stream, shows the run stopped, then reads back the stored run with its partial answer', fakeAsync(() => {
     executeQuestion();
     const h = runs.last.handlers;
-    h.onRun!({ runId: 'run-1', workflowId: 'agent:assistant' });
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     runs.getRun.and.returnValues(
       of(storedRun({ status: 'running', answer: undefined })),
@@ -283,7 +491,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(runs.last.signal?.aborted).toBe(true);
     expect(designer.running()).toBe(false);
     expect(designer.runResult()?.status).toBe('stopped');
-    expect(designer.stepStatuses()).toEqual({ answer: 'stopped' });
+    expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'stopped', end: 'stopped' });
     // Events of the stopped stream are ignored.
     h.onText!('late');
     expect(designer.streamingText()).toBe('');
@@ -303,7 +511,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.followUp(designer.followUpText());
     expect(runs.calls.length).toBe(2);
     expect(runs.last.body).toEqual({
-      input: { question: 'And the fewest?', datasets: ['World Cup Core'], careful: false },
+      input: { question: 'And the fewest?', datasets: ['World Cup Core'], verbose: false },
       context: { fromRunId: 'run-1' },
     });
     expect(designer.inputValue('question')).toBe('And the fewest?');
@@ -334,7 +542,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     );
     designer.followUp('Highest win rate');
     expect(runs.last.body).toEqual({
-      input: { question: 'Highest win rate', datasets: ['World Cup Core'], careful: false },
+      input: { question: 'Highest win rate', datasets: ['World Cup Core'], verbose: false },
       context: { fromRunId: 'run-1' },
     });
   });
@@ -347,342 +555,313 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()).toBeNull();
     expect(designer.running()).toBe(false);
   });
-});
 
-const RFP: WorkflowDetail = {
-  ...ASSISTANT,
-  id: 'agent:rfp',
-  name: 'RFP Builder',
-  description: 'Walks a consultant through a carrier RFP.',
-  agents: [{ key: 'rfp', name: 'RFP Builder' }],
-  input: [
-    {
-      name: 'message',
-      label: 'Message',
-      type: 'textarea',
-      required: true,
-      placeholder: 'Name the client and plan year, or state your decision',
-    },
-    { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
-  ],
-  datasets: ['Intellify RFP API'],
-  starterQuestions: ['Start an RFP for a client'],
-};
-
-const START = 'Start an RFP for Orchard Manufacturing, plan year 2027';
-const PROPOSAL = 'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?';
-
-function rfpRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-  return storedRun({
-    workflowId: 'agent:rfp',
-    workflowName: 'RFP Builder',
-    input: { message: START },
-    question: START,
-    answer: { role: 'assistant', content: PROPOSAL, at: '2026-11-11T10:00:01.000Z' },
-    datasets: ['Intellify RFP API'],
-    rfpId: 'rfp-1',
-    ...overrides,
-  });
-}
-
-describe('WorkflowDesigner, the RFP Builder one exchange per run (plan 4.3; rfp R7, R9)', () => {
-  let designer: WorkflowDesigner;
-  let runs: FakeRunsApi & {
-    downloadRfpPackage: jasmine.Spy;
-    panelItemFile: jasmine.Spy;
-  };
-  let http: HttpTestingController;
-  let toast: jasmine.SpyObj<ToastService>;
-
-  beforeEach(() => {
-    runs = Object.assign(new FakeRunsApi(), {
-      downloadRfpPackage: jasmine
-        .createSpy('downloadRfpPackage')
-        .and.returnValue(of(new Blob(['zip']))),
-      panelItemFile: jasmine.createSpy('panelItemFile').and.returnValue(
-        of({ item: { id: 'p1' }, contentType: 'text/markdown', text: '# DRAFT — Orchard' }),
-      ),
-    });
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
-    TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: WorkflowRunsApiService, useValue: runs },
-        { provide: ToastService, useValue: toast },
-      ],
-    });
-    designer = TestBed.inject(WorkflowDesigner);
-    http = TestBed.inject(HttpTestingController);
-    designer.load(RFP.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/agent%3Arfp')).flush(RFP);
+  it('an old stored run that still carries an rfpId is shown as a plain run', () => {
+    executeQuestion();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    runs.last.handlers.onDone!({ ...storedRun(), rfpId: 'rfp-1' } as WorkflowRun);
+    expect(designer.run()?.answer?.content).toBe('Brazil scored the most.');
+    expect(designer.canFollowUp()).toBe(true);
   });
 
-  afterEach(() => http.verify());
+  it("offers a step's chat only once the run shown ended and is stored", () => {
+    expect(designer.nodeChat()).toEqual({ state: 'no-run' });
+    executeQuestion();
+    expect(designer.nodeChat()).toEqual({ state: 'running' });
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    expect(designer.nodeChat()).toEqual({ state: 'running' });
+    runs.last.handlers.onDone!(storedRun());
+    expect(designer.nodeChat()).toEqual({ state: 'ready', runId: 'run-1' });
 
-  function firstExchange(run: WorkflowRun = rfpRun()): void {
-    designer.setInput('message', START);
-    designer.execute();
-    runs.last.handlers.onRun!({ runId: run.id, workflowId: 'agent:rfp' });
-    runs.last.handlers.onDone!(run);
-  }
+    // A run of another workflow (not this page's, so not resolved here): no chat.
+    designer.run.set(storedRun({ workflowId: 'removed-workflow' }));
+    expect(designer.nodeChat()).toEqual({ state: 'hidden' });
 
-  it('runs from its page, with the message only (rfpId is hidden)', () => {
-    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
-    designer.setInput('message', START);
-    designer.execute();
-    expect(runs.last.body).toEqual({ input: { message: START } });
+    designer.clear();
+    expect(designer.nodeChat()).toEqual({ state: 'hidden' });
   });
 
-  it('offers Continue, not Follow up, under a run that worked on an RFP', () => {
-    firstExchange();
-    expect(designer.canContinue()).toBe(true);
-    expect(designer.canFollowUp()).toBe(false);
+  it('a run that failed after it started is stored, so its steps can be chatted about', () => {
+    executeQuestion();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    runs.last.handlers.onError!('Model down');
+    expect(designer.nodeChat()).toEqual({ state: 'ready', runId: 'run-1' });
   });
 
-  it('a run that only proposed (no RFP yet) is continued by its context alone; a failed run not at all', () => {
-    firstExchange(rfpRun({ rfpId: undefined }));
-    expect(designer.canContinue()).toBe(true);
-    designer.continueRun();
-    designer.setInput('message', 'yes');
-    designer.execute();
-    expect(runs.last.body).toEqual({
-      input: { message: 'yes' },
-      context: { fromRunId: 'run-1' },
-    });
-    firstExchange(rfpRun({ id: 'run-2', status: 'failed', error: 'boom' }));
-    expect(designer.canContinue()).toBe(false);
-  });
-
-  it('Continue clears the message; Execute then sends the RFP and this run as the context', () => {
-    firstExchange();
-    designer.continueRun();
-    expect(designer.inputValue('message')).toBe('');
-    expect(designer.pendingContinue()).toEqual({
-      id: 'run-1',
-      question: START,
-      rfpId: 'rfp-1',
-    });
-    expect(runs.calls.length).toBe(1);
-
-    designer.setInput('message', 'yes');
-    designer.execute();
-    expect(runs.last.body).toEqual({
-      input: { message: 'yes', rfpId: 'rfp-1' },
-      context: { fromRunId: 'run-1' },
-    });
-    expect(designer.contextRun()).toEqual({ id: 'run-1', question: START });
-    runs.last.handlers.onRun!({ runId: 'run-2', workflowId: 'agent:rfp' });
-    expect(designer.pendingContinue()).toBeNull();
-  });
-
-  it('a refused Continue keeps the pending Continue; cancelling it starts fresh', () => {
-    firstExchange();
-    designer.continueRun();
-    designer.execute();
-    runs.last.handlers.onError!('Message is required');
-    expect(designer.runError()).toBe('Message is required');
-    expect(designer.pendingContinue()?.id).toBe('run-1');
-    designer.cancelContinue();
-    designer.setInput('message', 'Start an RFP for another client');
-    designer.execute();
-    expect(runs.last.body).toEqual({
-      input: { message: 'Start an RFP for another client' },
-    });
-  });
-
-  it('a clarification pick keeps working on the same RFP', () => {
-    firstExchange(
-      rfpRun({
-        answer: {
-          role: 'assistant',
-          content: 'Which client do you mean?',
-          at: 'x',
-          clarification: {
-            question: 'Which client do you mean?',
-            options: [{ label: 'Orchard Manufacturing' }, { label: 'Orchard Foods' }],
-          },
-        },
-      }),
-    );
-    designer.followUp('Orchard Manufacturing');
-    expect(runs.last.body).toEqual({
-      input: { message: 'Orchard Manufacturing', rfpId: 'rfp-1' },
-      context: { fromRunId: 'run-1' },
-    });
-  });
-
-  it("shows the stages live from the agent's workflow events, then as stored", () => {
-    designer.setInput('message', START);
-    designer.execute();
-    expect(designer.phases()).toBeNull();
-    runs.last.handlers.onWorkflow!({
-      phases: [
-        { number: 1, title: 'Client and renewal' },
-        { number: 2, title: 'Current program' },
-      ],
-      current: 1,
-      done: [],
-      source: 'prompt',
-      skipped: [],
-    });
-    expect(designer.phases()?.current).toBe(1);
-    runs.last.handlers.onDone!(
-      rfpRun({
-        workflow: {
-          phases: [
-            { number: 1, title: 'Client and renewal' },
-            { number: 2, title: 'Current program' },
-          ],
-          current: 2,
-          done: [1],
-          source: 'prompt',
-          skipped: [],
-        },
-      }),
-    );
-    expect(designer.phases()?.done).toEqual([1]);
-    expect(designer.phases()?.current).toBe(2);
-  });
-
-  it('reads the RFP document the run showed in the panel', () => {
-    firstExchange(
-      rfpRun({
-        panelItems: [
-          {
-            id: 'p1',
-            kind: 'file',
-            title: 'rfp.md',
-            path: 'rfp/rfp-1/draft/rfp.md',
-            bytes: 10,
-            shownAt: '2026-11-11T10:00:02.000Z',
-          },
-        ],
-      }),
-    );
-    expect(runs.panelItemFile).toHaveBeenCalledWith('run-1', 'p1');
-    expect(designer.rfpDocument()).toEqual({
-      title: 'rfp.md',
-      text: '# DRAFT — Orchard',
-    });
-  });
-
-  it("downloads the package from the run's route, named as the server names it, with a toast", () => {
-    firstExchange();
-    const click = spyOn(HTMLAnchorElement.prototype, 'click');
-    const pkg = {
-      rfpId: 'rfp-1',
-      title: 'Orchard Manufacturing — 2027 benefits RFP',
-      files: [],
-      exportedAt: 'x',
-      draft: true as const,
-    };
-    designer.downloadRfpPackage(pkg);
-    expect(runs.downloadRfpPackage).toHaveBeenCalledWith('run-1', 'rfp-1', undefined, true);
-    expect(click).toHaveBeenCalledTimes(1);
-    const link = click.calls.mostRecent().object as HTMLAnchorElement;
-    expect(link.download).toBe('rfp-orchard-manufacturing-2027-benefits-rfp-draft.zip');
-    expect(toast.success).toHaveBeenCalledWith('RFP package downloaded');
-    expect(designer.rfpDownloading()).toBeNull();
-  });
-});
-
-describe('WorkflowDesigner, a deep-analysis run (plan 1.25.3)', () => {
-  const REPORT_PATH = 'reports/denial-drivers.md';
-  const DEEP: WorkflowDetail = {
-    ...ASSISTANT,
-    id: 'deep-analysis',
-    name: 'Deep analysis',
-    kind: 'code',
-    stepCount: 4,
-    bar: 'steps',
-    trigger: 'run',
-    input: ASSISTANT.input.slice(0, 2),
-    steps: ['plan', 'investigate', 'write', 'assemble'].map((id) => ({
-      id,
-      title: id,
-      kind: id === 'assemble' ? ('code' as const) : ('agent' as const),
-      summary: id,
-      input: [],
-      output: [],
-      exits: [],
-    })),
-  };
-  const report = { jobId: 'run-1', title: 'Denial drivers', path: REPORT_PATH, angles: 3 };
-  let designer: WorkflowDesigner;
-  let runs: FakeRunsApi & { downloadPanelItem: jasmine.Spy };
-  let http: HttpTestingController;
-  let toast: jasmine.SpyObj<ToastService>;
-
-  beforeEach(() => {
-    runs = Object.assign(new FakeRunsApi(), {
-      downloadPanelItem: jasmine
-        .createSpy('downloadPanelItem')
-        .and.returnValue(of(new Blob(['# Denial drivers']))),
-    });
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
-    TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: WorkflowRunsApiService, useValue: runs },
-        { provide: ToastService, useValue: toast },
-      ],
-    });
-    designer = TestBed.inject(WorkflowDesigner);
-    http = TestBed.inject(HttpTestingController);
-    designer.load(DEEP.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/deep-analysis')).flush(DEEP);
-    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-  });
-
-  afterEach(() => http.verify());
-
-  function finish(): void {
-    designer.setInput('question', 'Why are denials rising?');
-    designer.toggleDataset('datasets', 'World Cup Core');
-    designer.execute();
-    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'deep-analysis' });
-    runs.last.handlers.onDone!(
+  it("reads a stored run's contract hash and its contract violations (ui.md 4.4b)", () => {
+    expect(designer.contractViolations()).toEqual({});
+    expect(designer.runContractHash()).toBeNull();
+    designer.run.set(
       storedRun({
-        workflowId: 'deep-analysis',
-        workflowName: 'Deep analysis',
-        steps: DEEP.steps.map((step) => ({ id: step.id, title: step.title, status: 'success' })),
-        answer: {
-          role: 'assistant',
-          content: 'Denials rose to 12.4%.',
-          at: '2026-11-11T10:00:01.000Z',
-          report,
-        },
-        panelItems: [
+        status: 'failed',
+        contractHash: '0a1b2c3d4e5f',
+        steps: [
           {
-            id: 'deep-analysis-report',
-            kind: 'file',
-            title: 'Denial drivers',
-            shownAt: 'x',
-            path: REPORT_PATH,
-            bytes: 2048,
+            id: 'answer',
+            title: 'Answer',
+            status: 'failed',
+            error: 'Contract violation in Answer (input): question Required',
           },
         ],
       }),
     );
-  }
-
-  it("downloads the report from the run's file route, named as the file, with a toast", () => {
-    finish();
-    const click = spyOn(HTMLAnchorElement.prototype, 'click');
-    designer.downloadReport(report);
-    expect(runs.downloadPanelItem).toHaveBeenCalledWith('run-1', 'deep-analysis-report');
-    const link = click.calls.mostRecent().object as HTMLAnchorElement;
-    expect(link.download).toBe('denial-drivers.md');
-    expect(toast.success).toHaveBeenCalledWith('Report downloaded');
-    expect(designer.reportDownloading()).toBeFalse();
+    expect(designer.contractViolations()).toEqual({ answer: 'input' });
+    expect(designer.runContractHash()).toBe('0a1b2c3d4e5f');
+    // An old run has no hash; a plain failure is no violation.
+    designer.run.set(
+      storedRun({
+        status: 'failed',
+        steps: [{ id: 'answer', title: 'Answer', status: 'failed', error: 'Boom' }],
+      }),
+    );
+    expect(designer.contractViolations()).toEqual({});
+    expect(designer.runContractHash()).toBeNull();
   });
 
-  it('says the download failed when the run has no file at the report path', () => {
-    finish();
-    designer.downloadReport({ ...report, path: 'reports/other.md' });
-    expect(runs.downloadPanelItem).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith('Report download failed');
+  it('no longer reads agent phases from the stream (agents have no workflow of their own)', () => {
+    executeQuestion();
+    expect('phases' in designer).toBe(false);
+    expect(runs.last.handlers.onWorkflow).toBeUndefined();
+  });
+});
+
+describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
+  let designer: WorkflowDesigner;
+  let runs: FakeRunsApi;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    runs = new FakeRunsApi();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: WorkflowRunsApiService, useValue: runs },
+      ],
+    });
+    designer = TestBed.inject(WorkflowDesigner);
+    http = TestBed.inject(HttpTestingController);
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(GRAPH_WORKFLOW);
+    // No datasets field: the datasets are not read.
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.setInput('question', 'How many matches per stage?');
+    designer.execute();
+  });
+
+  afterEach(() => http.verify());
+
+  it('keeps each attempt of a step live, shows the last and counts them', () => {
+    const h = runs.last.handlers;
+    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', attempt: 1 });
+    h.onTool!({ name: 'run_readonly_sql', input: 'select 1' });
+    h.onStep!({
+      id: 'analyse',
+      title: 'Analyse',
+      status: 'success',
+      attempt: 1,
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1' }],
+    });
+    h.onStep!({ id: 'validate', title: 'Validate', status: 'success', attempt: 1, output: { ok: false } });
+    h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', attempt: 2 });
+    // A new run of an agent step starts with no live tool calls of its own.
+    expect(designer.toolCalls()).toEqual([]);
+
+    const analyse = designer.runResult()!.steps.filter((s) => s.id === 'analyse');
+    expect(analyse.map((s) => [s.attempt, s.status])).toEqual([
+      [1, 'success'],
+      [2, 'running'],
+    ]);
+    expect(designer.nodeStatuses()['analyse']).toBe('running');
+    expect(designer.nodeAttempts()).toEqual({ analyse: 2, validate: 1 });
+    // The run panel lists each step once, as its last attempt.
+    expect(
+      designer
+        .runPanelSteps()
+        .filter((s) => s.id === 'analyse')
+        .map((s) => [s.attempt, s.attempts]),
+    ).toEqual([[2, 2]]);
+  });
+
+  it('counts the attempts of a stored run and lists each step once', () => {
+    runs.last.handlers.onDone!({
+      id: 'run-1',
+      workflowId: 'qti-v2-turn',
+      workflowName: 'Questions to Insights v2',
+      input: { question: 'Q' },
+      status: 'success',
+      steps: GRAPH_RETRY_RUN.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        status: step.status ?? 'skipped',
+        ...(step.attempt !== undefined ? { attempt: step.attempt } : {}),
+      })),
+      datasets: [],
+      startedAt: '2026-11-13T10:00:00.000Z',
+    });
+    expect(designer.nodeAttempts()).toEqual(
+      jasmine.objectContaining({ analyse: 2, validate: 2, plan: 1 }),
+    );
+    expect(designer.runPanelSteps().map((s) => s.id)).toEqual([
+      'receive-question',
+      'load-catalog',
+      'plan',
+      'clarify',
+      'analyse',
+      'validate',
+      'write-answer',
+      'wrap-up',
+    ]);
+  });
+});
+
+describe('WorkflowDesigner, a run that waits for an answer (api.md 138)', () => {
+  let designer: WorkflowDesigner;
+  let runs: FakeRunsApi;
+  let http: HttpTestingController;
+
+  const WAITING = {
+    stepId: 'clarify',
+    title: 'Clarify',
+    question: 'Which World Cup do you mean?',
+    options: ['2018', '2022'],
+    expiresAt: '2026-11-11T10:30:00.000Z',
+  };
+
+  function suspendedRun(): WorkflowRun {
+    return storedRun({
+      status: 'suspended',
+      waitingFor: { ...WAITING, since: '2026-11-11T10:00:02.000Z' },
+      steps: [
+        { id: 'plan', title: 'Plan', status: 'success', startedAt: '2026-11-11T10:00:01.000Z' },
+        { id: 'clarify', title: 'Clarify', status: 'suspended' },
+      ],
+      answer: undefined,
+    });
+  }
+
+  beforeEach(() => {
+    runs = new FakeRunsApi();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: WorkflowRunsApiService, useValue: runs },
+      ],
+    });
+    designer = TestBed.inject(WorkflowDesigner);
+    http = TestBed.inject(HttpTestingController);
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+  });
+
+  afterEach(() => http.verify());
+
+  it('shows the waiting question while the stream suspends, then as stored', () => {
+    designer.setInput('question', 'Q');
+    designer.execute();
+    runs.last.handlers.onRun?.({ runId: 'run-1', workflowId: GRAPH_WORKFLOW.id });
+    runs.last.handlers.onStep?.({ id: 'clarify', title: 'Clarify', status: 'suspended' });
+    runs.last.handlers.onInputRequired?.({ runId: 'run-1', ...WAITING });
+    expect(designer.waitingFor()?.question).toBe(WAITING.question);
+    expect(designer.runResult()?.status).toBe('suspended');
+    runs.last.handlers.onDone?.(suspendedRun());
+    expect(designer.running()).toBeFalse();
+    expect(designer.waitingFor()?.options).toEqual(['2018', '2022']);
+    expect(designer.runResult()?.status).toBe('suspended');
+  });
+
+  it('resumes the same run: runId unchanged, the events appended to the steps it had', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    expect(designer.waitingFor()).not.toBeNull();
+    designer.resume('  2022 ');
+    expect(runs.resumes.length).toBe(1);
+    expect(runs.resumes[0]).toEqual(
+      jasmine.objectContaining({ runId: 'run-1', stepId: 'clarify', answer: '2022' }),
+    );
+    expect(designer.running()).toBeTrue();
+    expect(designer.waitingFor()).toBeNull();
+    expect(designer.runId()).toBe('run-1');
+    const handlers = runs.resumes[0].handlers;
+    handlers.onStep?.({ id: 'clarify', title: 'Clarify', status: 'success' });
+    handlers.onStep?.({ id: 'plan', title: 'Plan', status: 'running', attempt: 2 });
+    const steps = designer.runResult()?.steps ?? [];
+    expect(designer.runResult()?.status).toBe('running');
+    expect(steps.filter((s) => s.id === 'plan').map((s) => s.status)).toEqual(['success', 'running']);
+    expect(steps.find((s) => s.id === 'clarify')?.status).toBe('success');
+    handlers.onDone?.(storedRun({ status: 'success' }));
+    expect(designer.runId()).toBe('run-1');
+    expect(designer.waitingFor()).toBeNull();
+    expect(designer.runResult()?.status).toBe('success');
+  });
+
+  it('can suspend again after a resume', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    const handlers = runs.resumes[0].handlers;
+    handlers.onInputRequired?.({ runId: 'run-1', ...WAITING, stepId: 'analyse', title: 'Analyse' });
+    expect(designer.waitingFor()?.stepId).toBe('analyse');
+    expect(designer.runResult()?.status).toBe('suspended');
+  });
+
+  it('ignores a blank answer and a run that is not waiting', () => {
+    designer.showRunOnLoad(storedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    expect(runs.resumes.length).toBe(0);
+  });
+
+  it('keeps the run waiting and shows the message when the server refuses (409)', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    runs.resumes[0].handlers.onRefused?.(409);
+    runs.resumes[0].handlers.onError?.('Run "run-1" is not waiting for an answer');
+    expect(designer.running()).toBeFalse();
+    expect(designer.waitingFor()?.expired).toBeUndefined();
+    expect(designer.resumeError()).toBe('Run "run-1" is not waiting for an answer');
+    expect(designer.runResult()?.status).toBe('suspended');
+  });
+
+  it('reads an expired run (410) as stopped, with the card expired', () => {
+    designer.showRunOnLoad(suspendedRun());
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    designer.resume('2022');
+    runs.resumes[0].handlers.onRefused?.(410);
+    runs.resumes[0].handlers.onError?.('This run can no longer continue — run it again with your answer');
+    expect(designer.waitingFor()?.expired).toBeTrue();
+    expect(designer.runResult()?.status).toBe('stopped');
+    expect(designer.resumeError()).toBeNull();
+  });
+
+  it('runs again with the answer as a follow-up on the expired run', () => {
+    const stopped = storedRun({
+      status: 'stopped',
+      waitingFor: { ...WAITING, expired: true },
+      answer: undefined,
+    });
+    designer.showRunOnLoad(stopped);
+    designer.load(GRAPH_WORKFLOW.id);
+    http.expectOne((r) => r.url.endsWith(`/workflows/${GRAPH_WORKFLOW.id}`)).flush(GRAPH_WORKFLOW);
+    http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
+    expect(designer.waitingFor()?.expired).toBeTrue();
+    designer.rerunWithAnswer('2022');
+    expect(runs.calls.length).toBe(1);
+    expect(runs.last.body.context).toEqual({ fromRunId: 'run-1' });
+    expect(runs.last.body.input['question']).toBe('2022');
   });
 });

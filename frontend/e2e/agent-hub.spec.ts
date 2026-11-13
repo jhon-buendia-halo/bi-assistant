@@ -18,14 +18,22 @@ const ASSISTANT = 'Questions to Insights Assistant';
 const V2 = 'Questions to Insights v2';
 const V2_KEY = 'assistant-v2';
 const V2_DESCRIPTION =
-  'A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.';
-const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+  'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
+const V2_TOOLS = [
+  'list_entities',
+  'describe_entity',
+  'sample_rows',
+  'run_readonly_sql',
+  'ask_clarification',
+];
+/** Its built-in skills, on demand (agents.md 7.4), sorted by name. */
+const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 /**
  * The Official cards in hub order, alphabetical by name ("Data Readiness
- * Agent", "Questions to Insights Assistant", "Questions to Insights v2",
- * "RFP Builder"; agents-evals R1, R107).
+ * Agent", "Questions to Insights Assistant", "Questions to Insights v2";
+ * agents-evals R1, R107).
  */
-const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY, 'rfp'];
+const OFFICIAL_KEYS = ['data-readiness', 'assistant', V2_KEY];
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -186,8 +194,8 @@ test('filters limit the hub to one kind of agent', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['mine']);
 
   await filter(page, 'Official').click();
-  // The assistant, Questions to Insights v2, the RFP Builder, the Data
-  // Readiness Agent are Official; every card shows, alphabetical by name
+  // The assistant, Questions to Insights v2 and the Data Readiness Agent
+  // are Official; every card shows, alphabetical by name
   // (R1-R3, R107).
   await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
@@ -422,7 +430,7 @@ test(
     const official = section(page, 'official');
     await scenarioStep(
       page,
-      'Then the Official section shows "Questions to Insights Assistant", "Questions to Insights v2", "Data Readiness Agent" and "RFP Builder"',
+      'Then the Official section shows "Questions to Insights Assistant", "Questions to Insights v2" and "Data Readiness Agent"',
       async () => {
         await expect(
           official.getByTestId('agent-card-assistant'),
@@ -432,7 +440,6 @@ test(
           ['assistant', ASSISTANT],
           [V2_KEY, V2],
           ['data-readiness', 'Data Readiness Agent'],
-          ['rfp', 'RFP Builder'],
         ]) {
           const card = official.getByTestId(`agent-card-${key}`);
           await expect(card).toContainText(name);
@@ -474,7 +481,7 @@ test('Questions to Insights v2 is an Official card', async ({ page }) => {
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
 });
 
-test("Questions to Insights v2's page shows its prompt, three tools and no skills", async ({
+test("Questions to Insights v2's page shows its prompt, five tools and three skills", async ({
   page,
 }) => {
   await openHub(page);
@@ -492,7 +499,7 @@ test("Questions to Insights v2's page shows its prompt, three tools and no skill
     'You are Questions to Insights v2',
   );
 
-  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(3\)/);
+  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(5\)/);
   await page.getByTestId('agent-tab-tools').click();
   for (const tool of V2_TOOLS) {
     await expect(
@@ -504,8 +511,13 @@ test("Questions to Insights v2's page shows its prompt, three tools and no skill
   ).toHaveCount(0);
 
   await page.getByTestId('agent-tab-skills').click();
-  await expect(page.getByTestId('agent-tab-skills')).toHaveText(/Skills \(0\)/);
-  await expect(page.getByText('This agent has no skills.')).toBeVisible();
+  await expect(page.getByTestId('agent-tab-skills')).toHaveText(/Skills \(3\)/);
+  for (const skill of V2_SKILLS) {
+    await expect(page.getByTestId(`agent-skill-${skill}`)).toContainText(
+      'On demand',
+    );
+  }
+  await expect(page.getByText('This agent has no skills.')).toHaveCount(0);
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(page.getByText('Recent messages replayed')).toBeVisible();
@@ -551,8 +563,8 @@ function railItem(page: Page, name: string): Locator {
     .getByRole('button', { name, exact: true });
 }
 
-const DRAFT_EMPTY =
-  'Not used in any workflow yet. Publish it to get its one-step workflow.';
+/** The Used in text of a user agent, or an Official agent no workflow uses. */
+const NOT_USED = 'Not used in any workflow.';
 const SYSTEM_EMPTY =
   'Not used in any workflow. The app calls this agent itself.';
 
@@ -603,15 +615,15 @@ test(
     );
     await scenarioStep(
       page,
-      'When I open the "RFP Builder" agent',
+      'When I open the "Data Readiness Agent" agent',
       async () => {
         await openHub(page);
-        await openAgent(page, 'rfp', 'RFP Builder');
+        await openAgent(page, 'data-readiness', 'Data Readiness Agent');
       },
     );
     await scenarioStep(
       page,
-      'Then I see no "Chat Box" tab, and "System Prompt" is open',
+      'Then I see no "Chat Box" tab, "System Prompt" is open, and it is used in no workflow',
       async () => {
         await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
         await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
@@ -619,22 +631,27 @@ test(
           0,
         );
         await expect(page.getByTestId('agent-prompt-view')).toContainText(
-          'You are the RFP Builder',
+          'You are the Data Readiness Agent',
         );
-        await expect(page.getByTestId('agent-used-in-agent:rfp')).toHaveText(
-          'RFP Builder',
-        );
+        // Its one-step workflow is gone: it can no longer be run.
+        await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
+        await expect(
+          page.getByTestId('agent-used-in').getByRole('button'),
+        ).toHaveCount(0);
+        await expect(
+          page.getByTestId('agent-used-in-agent:data-readiness'),
+        ).toHaveCount(0);
       },
     );
   },
 );
 
-test('a draft-only agent is used in no workflow until it is published', async ({
+test('a user agent is used in no workflow, even once published', async ({
   page,
 }) => {
   await openHub(page);
   await openAgent(page, claimsId, CLAIMS);
-  await expect(page.getByTestId('agent-used-in')).toContainText(DRAFT_EMPTY);
+  await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
   await expect(
     page.getByTestId('agent-used-in').getByRole('button'),
   ).toHaveCount(0);
@@ -651,14 +668,14 @@ test('a draft-only agent is used in no workflow until it is published', async ({
   await openAgent(page, claimsId, CLAIMS);
   await button(page, 'Publish').click();
   await expect(page.getByText(`Agent "${CLAIMS}" is Live`)).toBeVisible();
-  const chip = page.getByTestId(`agent-used-in-agent:${claimsId}`);
-  await expect(chip).toHaveText(CLAIMS);
-  await expect(page.getByTestId('agent-used-in')).not.toContainText(
-    DRAFT_EMPTY,
-  );
-
-  await chip.click();
-  await expect(page.getByTestId('workflow-detail-name')).toHaveText(CLAIMS);
+  // Agents are a library: publishing gives it no workflow.
+  await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
+  await expect(
+    page.getByTestId(`agent-used-in-agent:${claimsId}`),
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId('agent-used-in').getByRole('button'),
+  ).toHaveCount(0);
 });
 
 test('a System agent says the app calls it itself', async ({ page }) => {
@@ -697,6 +714,6 @@ test('the agent detail has no detectable accessibility violations in either them
 
   await button(page, 'All agents').click();
   await openAgent(page, claimsId, CLAIMS);
-  await expect(page.getByTestId('agent-used-in')).toContainText(DRAFT_EMPTY);
+  await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
   await scan('draft user agent');
 });

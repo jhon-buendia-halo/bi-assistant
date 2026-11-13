@@ -109,16 +109,11 @@ export interface ChatMessage {
    */
   knowledge?: KnowledgeUse[];
   /**
-   * Present when a deep-analysis job produced a report. The message content is
-   * the report's executive summary; the full markdown lives in the workspace.
+   * Present when a deep-analysis job produced a report: stored data only,
+   * deep analysis was removed in 1.23.35. The message content is the
+   * report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
-  /**
-   * Present when this turn's `export_rfp_package` or `export_rfp_draft` call stored an RFP package
-   * in the session workspace (`rfp/<rfpId>/`; data-model 3.4.1). RFP Builder
-   * sessions only.
-   */
-  rfpPackage?: RfpPackageRef;
   /**
    * The last report this turn's `assess_data_readiness` or
    * `get_readiness_report` returned (data-model 3.4.1); drives the readiness
@@ -134,17 +129,6 @@ export interface ReadinessReportRef {
   overallScore: number;
   maturity: Maturity;
   generatedAt: string;
-}
-
-/** An RFP package stored in the session workspace (data-model 3.4.1). */
-export interface RfpPackageRef {
-  rfpId: string;
-  title: string;
-  /** Paths relative to `rfp/<rfpId>/`, e.g. `exhibits/exhibit-a-census.csv`. */
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** Present (true) for a draft exported by `export_rfp_draft`, stored under `rfp/<rfpId>/draft/`. */
-  draft?: true;
 }
 
 export interface AnalysisReport {
@@ -321,8 +305,8 @@ export interface SessionDoc {
   /** The agent's Live name, re-stamped by each turn that applies it (R59). */
   agentName?: string;
   /**
-   * The registry key of the built-in agent the session is bound to (today
-   * only `rfp`; ADR-0028). Every turn runs that agent; never set with
+   * The registry key of the built-in agent the session is bound to
+   * (`assistant-v2`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
    * `agentId`.
    */
   agentKey?: string;
@@ -332,8 +316,6 @@ export interface SessionDoc {
    * derived at read time from `agentKey` / `agentId` (agents.md 5.12).
    */
   workflowId?: string;
-  /** `agentKey: 'rfp'` only: the active RFP, stamped from `turn-rfp`. */
-  rfpId?: string;
   /** An agent editor's preview, held in memory only (agents-evals R60). */
   preview?: boolean;
   /**
@@ -341,6 +323,12 @@ export interface SessionDoc {
    * its agent turn on (ADR-0041; agents.md 5.14). Never stored or listed.
    */
   run?: boolean;
+  /**
+   * A run host's extra system block, put after the agent's own context on
+   * every turn: a node chat's context block (agents.md 5.16). In memory
+   * only, like the host.
+   */
+  contextBlock?: string;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */

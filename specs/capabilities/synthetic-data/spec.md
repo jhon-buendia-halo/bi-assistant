@@ -359,14 +359,6 @@ Feature: Synthetic data
     And every foreign-key constraint exists
     And generating again with seed 1 gives the same SHA-256
 
-  @story-1.22.4
-  Scenario: Generate a synthetic script from the Data Readiness Agent
-    Given I started a chat with the Data Readiness Agent on the "World Cup Core" dataset
-    When I ask "Give me 50 synthetic rows per table"
-    Then the agent calls "generate_synthetic_data" with 50 rows per table
-    And the panel shows "Synthetic data — World Cup Core (seed 1)" with the file "world-cup-core-synthetic-postgresql-seed1.sql"
-    And "Download file" downloads that .sql script, which starts with "-- Synthetic data for dataset "
-
   Scenario: Download the synthetic data as CSV and Excel
     Given I profiled the "World Cup" dataset
     When I choose the format "CSV (zip)" and click "Generate .zip"

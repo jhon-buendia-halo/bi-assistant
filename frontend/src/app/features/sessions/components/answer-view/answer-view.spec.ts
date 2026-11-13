@@ -1,13 +1,12 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
-  AnalysisReport,
   ChatMessage,
   MessageFeedback,
   ReadinessReportRef,
   VisualEvent,
 } from '../../models/session.model';
-import { AnswerView, RfpDownloadRequest } from './answer-view';
+import { AnswerView } from './answer-view';
 
 /**
  * The answer view renders one assistant answer (1.23.13). These specs moved
@@ -423,102 +422,34 @@ describe('AnswerView', () => {
   });
 
   describe('the cards', () => {
-    const report: AnalysisReport = {
-      jobId: 'job-1',
-      title: 'Denial drivers deep dive',
-      path: 'reports/job-1.md',
-      angles: 4,
-    };
-
-    it('renders a report card and emits its download', () => {
-      const el = render(
-        {
-          role: 'assistant',
-          content: 'Denials rose to **12.4%**, driven by payer A.',
-          at: '2026-01-01T00:00:02.000Z',
-          report,
+    it('renders an old message that carries a deep-analysis report as a plain answer', () => {
+      const el = render({
+        role: 'assistant',
+        content: 'Denials rose to **12.4%**, driven by payer A.',
+        at: '2026-01-01T00:00:02.000Z',
+        report: {
+          jobId: 'job-1',
+          title: 'Denial drivers deep dive',
+          path: 'reports/job-1.md',
+          angles: 4,
         },
-        { anchorId: 'msg-3' },
-      );
-      const downloads: AnalysisReport[] = [];
-      fixture.componentInstance.downloadReport.subscribe((r) =>
-        downloads.push(r),
-      );
-
-      expect(el.textContent).toContain('Denial drivers deep dive');
-      expect(el.textContent).toContain('4 angles investigated');
+      } as ChatMessage);
       expect(el.querySelector('.prose-dark')?.innerHTML).toContain(
         '<strong>12.4%</strong>',
       );
-      expect(el.querySelector('#msg-3')).toBeTruthy();
-      button(el, '[aria-label="Download report"]').click();
-      expect(downloads).toEqual([report]);
+      expect(el.textContent).not.toContain('angles investigated');
+      expect(el.querySelector('[aria-label="Download report"]')).toBeNull();
     });
 
-    it('disables the report download while it runs', () => {
-      const el = render(
-        { role: 'assistant', content: '', at: 'x', report },
-        { reportDownloading: true },
-      );
-      expect(button(el, '[aria-label="Download report"]').disabled).toBeTrue();
-    });
-
-    it('renders the RFP package card and emits each download', () => {
-      const pkg = {
-        rfpId: 'rfp-1',
-        title: 'Acme RFP',
-        files: [
-          { name: 'rfp.md', bytes: 10 },
-          { name: 'rfp.pdf', bytes: 20 },
-          { name: 'manifest.json', bytes: 5 },
-        ],
-        exportedAt: '2026-01-01T00:00:02.000Z',
-      };
+    it('renders an old message that carries an RFP package as plain text', () => {
       const el = render({
         role: 'assistant',
-        content: 'Package ready.',
-        at: '2026-01-01T00:00:02.000Z',
-        rfpPackage: pkg,
-      });
-      const requests: RfpDownloadRequest[] = [];
-      fixture.componentInstance.downloadRfp.subscribe((r) => requests.push(r));
-      const card = el.querySelector('[data-testid="rfp-package-card"]')!;
-      expect(card.textContent).toContain('RFP package · 3 files');
-      expect(card.querySelectorAll('[data-testid="rfp-package-file"]').length).toBe(2);
-
-      button(el, '[data-testid="rfp-package-download"]').click();
-      button(el, '[data-testid="rfp-package-download-pdf"]').click();
-      el.querySelectorAll<HTMLButtonElement>(
-        '[data-testid="rfp-package-file"]',
-      )[0].click();
-      expect(requests).toEqual([
-        { pkg },
-        { pkg, file: 'rfp.pdf' },
-        { pkg, file: 'rfp.md' },
-      ]);
-    });
-
-    it('disables every RFP download while one runs', () => {
-      const el = render(
-        {
-          role: 'assistant',
-          content: '',
-          at: 'x',
-          rfpPackage: {
-            rfpId: 'rfp-1',
-            title: 'Acme RFP',
-            files: [{ name: 'rfp.md', bytes: 10 }],
-            exportedAt: 'x',
-          },
-        },
-        { rfpDownloading: 'rfp-1/rfp.md' },
-      );
-      expect(
-        button(el, '[data-testid="rfp-package-download"]').disabled,
-      ).toBeTrue();
-      expect(
-        el.querySelector('[data-testid="rfp-package-download-pdf"]'),
-      ).toBeNull();
+        content: 'The package is ready.',
+        at: 'x',
+        rfpPackage: { rfpId: 'rfp-1', title: 'Acme', files: [] },
+      } as ChatMessage);
+      expect(el.textContent).toContain('The package is ready.');
+      expect(el.querySelector('[data-testid="rfp-package-card"]')).toBeNull();
     });
 
     it('renders a visual event card and emits View', () => {

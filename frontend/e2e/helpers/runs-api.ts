@@ -4,9 +4,9 @@ import { apiBaseOf } from './api';
 
 /**
  * Runs a workflow through the streamed run API (`POST /workflows/:id/runs/stream`,
- * api.md 119) and reads the whole stream. An agent workflow runs one agent turn
- * through the chat turn path, so its model request equals a chat turn's for the
- * same input: the specs that check what reaches the model send a run, not a chat.
+ * api.md 119) and reads the whole stream. The catalogue holds one workflow,
+ * Questions to Insights v2, whose Analyse step runs one agent turn through the
+ * turn path: the specs that check what reaches the model send a run.
  */
 
 export interface RunEvent {
@@ -79,31 +79,40 @@ export async function runWorkflow(
   };
 }
 
-/** Runs the Assistant on `question` over the datasets (the World Cup one by default). */
-export async function runAssistant(
+/** The one workflow of the catalogue (workflows R1). */
+export const V2_WORKFLOW_ID = 'qti-v2-turn';
+export const V2_WORKFLOW_NAME = 'Questions to Insights v2';
+
+/**
+ * Runs Questions to Insights v2 (`qti-v2-turn`) on `question` over the
+ * datasets (the World Cup one by default). Its Analyse step is one agent turn
+ * of `assistant-v2`, offered `list_entities`, `describe_entity`,
+ * `sample_rows`, `run_readonly_sql`, `ask_clarification` and its on-demand
+ * skills (no visual, panel or workflow tools).
+ */
+export async function runQuestion(
   page: Page,
   question: string,
-  options: { datasets?: string[]; careful?: boolean; fromRunId?: string } = {},
+  options: { datasets?: string[]; fromRunId?: string } = {},
 ): Promise<RunResult> {
   return runWorkflow(
     page,
-    'agent:assistant',
+    V2_WORKFLOW_ID,
     {
       question,
       datasets: options.datasets ?? [WORLD_CUP_DATASET],
-      ...(options.careful ? { careful: true } : {}),
     },
     options.fromRunId ? { fromRunId: options.fromRunId } : undefined,
   );
 }
 
-/** `runAssistant`, expecting a run that ended in `done`. */
-export async function runAssistantOk(
+/** `runQuestion`, expecting a run that ended in `done`. */
+export async function runQuestionOk(
   page: Page,
   question: string,
-  options: { datasets?: string[]; careful?: boolean; fromRunId?: string } = {},
+  options: { datasets?: string[]; fromRunId?: string } = {},
 ): Promise<RunResult> {
-  const result = await runAssistant(page, question, options);
+  const result = await runQuestion(page, question, options);
   expect(result.status, result.body).toBe(200);
   expect(result.error, result.body).toBeUndefined();
   expect(result.run, result.body).toBeDefined();

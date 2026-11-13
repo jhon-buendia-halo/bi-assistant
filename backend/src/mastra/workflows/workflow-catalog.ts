@@ -1,16 +1,17 @@
 /**
  * The workflow catalogue (ADR-0040; agents.md 5.12): the workflows defined in
- * code, the built-in agents that get a one-step workflow, workflow ids and
- * the rule that derives a session's workflow from its stored agent binding.
- * Plain data and pure functions, no framework import, so the sessions and
- * agents services and Jest can read it without loading Mastra. The API's
- * catalogue (names, datasets, requirements) is built from it by
- * `WorkflowsService`.
+ * code (only Questions to Insights v2, `qti-v2-turn`, since 1.23.35), and the
+ * turn routing of the agent-turn engine: the `agent:<key>` ids a run host, a
+ * draft run or a stored session is bound to, and the rule that derives a
+ * session's workflow from its stored agent binding. An `agent:` id names the
+ * engine an agent turn runs on, never a catalogue workflow: `GET /workflows`
+ * lists none. Plain data and pure functions, no framework import, so the
+ * sessions and agents services and Jest can read it without loading Mastra.
+ * The API's catalogue is built from it by `WorkflowsService`.
  */
 import {
   ASSISTANT_MAX_STEPS,
   DATA_READINESS_MAX_STEPS,
-  RFP_MAX_STEPS,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
@@ -19,21 +20,33 @@ import {
   ASSISTANT_V2_NAME,
 } from '../agents/assistant-v2-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
-import {
-  DEEP_ANALYSIS_AGENT_KEY,
-  DEEP_ANALYSIS_STEPS,
-  DEEP_ANALYSIS_WORKFLOW_ID,
-} from './deep-analysis.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
+  QTI_V2_TURN_EDGES,
   QTI_V2_TURN_STEPS,
   QTI_V2_TURN_WORKFLOW_ID,
-  type WorkflowStepEntry,
+  type ContractStepEntry,
 } from './qti-v2-turn.steps';
 import {
-  SEQ_TEXT_DEMO_STEPS,
-  SEQ_TEXT_DEMO_WORKFLOW_ID,
-} from './seq-text-demo.steps';
+  assertWorkflowContracts,
+  contractHash,
+  type WorkflowEdge,
+} from './workflow-contract';
+import {
+  type WorkflowInputField,
+  type WorkflowInputValue,
+  type WorkflowInputValues,
+} from './workflow-input';
+
+export type {
+  InputDatasourceKind,
+  InputDataset,
+  WorkflowInputField,
+  WorkflowInputFieldDetail,
+  WorkflowInputFieldType,
+  WorkflowInputValue,
+  WorkflowInputValues,
+} from './workflow-input';
 
 /** What drives a chat's workflow bar: the workflow's steps, or the agent's own phases. */
 export type WorkflowBar = 'steps' | 'agent';
@@ -45,43 +58,8 @@ export type WorkflowBar = 'steps' | 'agent';
  */
 export type WorkflowTrigger = 'run';
 
-/** The type of one input field (plan 4.1). */
-export type WorkflowInputFieldType =
-  | 'text'
-  | 'textarea'
-  | 'number'
-  /** A checkbox; absent means false (or the field's default). */
-  | 'boolean'
-  /** One or more dataset names. */
-  | 'datasets'
-  /** Exactly one dataset name. */
-  | 'dataset';
-
-/** The datasource kinds a `dataset` or `datasets` field can be limited to. */
-export type InputDatasourceKind = 'postgres' | 'databricks' | 'rest';
-
-/** One field of a workflow's input, defined in code (api.md 116). */
-export interface WorkflowInputField {
-  name: string;
-  label: string;
-  type: WorkflowInputFieldType;
-  required: boolean;
-  placeholder?: string;
-  /** One line under the control. */
-  help?: string;
-  /** The value of a field that is missing or empty. */
-  default?: string | number | boolean;
-  /** `dataset` / `datasets`: only datasets bound to these kinds. */
-  datasourceKinds?: InputDatasourceKind[];
-  /** Set by the app (the RFP Builder's Continue), never rendered as a control. */
-  hidden?: boolean;
-}
-
-/** The placeholder of an agent workflow's question. */
+/** The placeholder of a run's question. */
 const QUESTION_PLACEHOLDER = 'Ask a question about your data';
-/** What a Data Readiness run asks when its question is left empty. */
-export const READINESS_DEFAULT_QUESTION =
-  'Assess the readiness of this dataset';
 
 const QUESTION_FIELD: WorkflowInputField = {
   name: 'question',
@@ -104,76 +82,12 @@ const CAREFUL_FIELD: WorkflowInputField = {
   default: false,
 };
 
-/** The input of each wrapped built-in agent's one-step workflow (plan 4.2). */
-const BUILTIN_AGENT_INPUTS: Readonly<
-  Record<string, readonly WorkflowInputField[]>
-> = {
-  assistant: [QUESTION_FIELD, DATASETS_FIELD, CAREFUL_FIELD],
-  'data-readiness': [
-    {
-      name: 'dataset',
-      label: 'Dataset',
-      type: 'dataset',
-      required: true,
-      datasourceKinds: ['postgres', 'databricks'],
-    },
-    {
-      name: 'question',
-      label: 'Question',
-      type: 'textarea',
-      required: false,
-      placeholder: READINESS_DEFAULT_QUESTION,
-      default: READINESS_DEFAULT_QUESTION,
-    },
-  ],
-  rfp: [
-    {
-      name: 'message',
-      label: 'Message',
-      type: 'textarea',
-      required: true,
-      placeholder: 'Name the client and plan year, or state your decision',
-    },
-    {
-      name: 'rfpId',
-      label: 'RFP',
-      type: 'text',
-      required: false,
-      hidden: true,
-    },
-  ],
-};
-
-/** A user agent's one-step workflow: its datasets are the agent's (plan 4.2). */
-const USER_AGENT_INPUT: readonly WorkflowInputField[] = [
-  QUESTION_FIELD,
-  CAREFUL_FIELD,
-];
-
-/** Copies of fields, so a caller can change them safely. */
-function copyFields(
-  fields: readonly WorkflowInputField[],
-): WorkflowInputField[] {
-  return fields.map((field) => ({
-    ...field,
-    ...(field.datasourceKinds
-      ? { datasourceKinds: [...field.datasourceKinds] }
-      : {}),
-  }));
-}
-
 /**
- * The input of an agent's one-step workflow (plan 4.2): a wrapped built-in
- * agent's own fields, else a user agent's (question and careful).
+ * The input of a draft run (Try it, api.md R12): the question, and careful
+ * mode; its datasets are the draft's.
  */
-export function oneStepWorkflowInput(
-  agentKeyOrId: string,
-): WorkflowInputField[] {
-  return copyFields(
-    Object.hasOwn(BUILTIN_AGENT_INPUTS, agentKeyOrId)
-      ? BUILTIN_AGENT_INPUTS[agentKeyOrId]
-      : USER_AGENT_INPUT,
-  );
+export function draftRunInput(): WorkflowInputField[] {
+  return [{ ...QUESTION_FIELD }, { ...CAREFUL_FIELD }];
 }
 
 /** One workflow defined in code. */
@@ -181,225 +95,57 @@ export interface CodeWorkflowSource {
   id: string;
   name: string;
   description: string;
-  /**
-   * Registry key of the agent its agent step runs: that agent gets no
-   * one-step workflow. A run workflow may call no agent.
-   */
-  primaryFor?: string;
-  /**
-   * Registry key of the agent a run workflow's agent steps call without
-   * being that agent's workflow (deep analysis calls the assistant, which
-   * keeps its own one-step workflow).
-   */
-  calls?: string;
+  /** Registry key of the agent its agent step runs. */
+  primaryFor: string;
   trigger: WorkflowTrigger;
-  /** The typed input of a run workflow, in form order. */
-  input?: readonly WorkflowInputField[];
-  steps: readonly WorkflowStepEntry[];
+  /** The typed input of a run, in form order. */
+  input: readonly WorkflowInputField[];
+  /** Each with its declared input and output schema (agents.md 5.12). */
+  steps: readonly ContractStepEntry[];
+  /** How the steps connect, from Start to End (api.md 117). */
+  edges: readonly WorkflowEdge[];
   /** `steps` for every code workflow today. */
   bar: WorkflowBar;
+  /** The hash of its data contract (api.md 117; `contractHash`). */
+  contractHash: string;
 }
 
-/** The workflows defined in code, in catalogue order. */
-export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] = [
-  {
-    id: QTI_V2_TURN_WORKFLOW_ID,
-    name: ASSISTANT_V2_NAME,
-    description: ASSISTANT_V2_DESCRIPTION,
-    primaryFor: ASSISTANT_V2_AGENT_KEY,
-    trigger: 'run',
-    input: [QUESTION_FIELD, DATASETS_FIELD],
-    steps: QTI_V2_TURN_STEPS,
-    bar: 'steps',
-  },
-  {
-    id: SEQ_TEXT_DEMO_WORKFLOW_ID,
-    name: 'Sequential test workflow',
-    description:
-      'A three-step example: cleans a text, counts its words and characters, and formats the result. No LLM.',
-    trigger: 'run',
-    input: [
-      {
-        name: 'text',
-        label: 'Text',
-        type: 'textarea',
-        required: true,
-        placeholder: 'Paste or type any text',
-      },
-    ],
-    steps: SEQ_TEXT_DEMO_STEPS,
-    bar: 'steps',
-  },
-  {
-    id: DEEP_ANALYSIS_WORKFLOW_ID,
-    name: 'Deep analysis',
-    description:
-      'Investigates a broad question from several angles with SQL and writes a downloadable report: executive summary, findings, anomalies and recommendations. Takes a few minutes.',
-    calls: DEEP_ANALYSIS_AGENT_KEY,
-    trigger: 'run',
-    input: [QUESTION_FIELD, DATASETS_FIELD],
-    steps: DEEP_ANALYSIS_STEPS,
-    bar: 'steps',
-  },
-];
-
-/** Every one-step workflow (`agent:*`) runs on its input. */
-export const ONE_STEP_WORKFLOW_TRIGGER: WorkflowTrigger = 'run';
-
-/** One value of a run's input. */
-export type WorkflowInputValue = string | number | boolean | string[];
-
-/** A run's input values, by field name. */
-export type WorkflowInputValues = Record<string, WorkflowInputValue>;
-
-/** A dataset a `dataset` or `datasets` field is checked against. */
-export interface InputDataset {
-  name: string;
-  datasourceKind?: string;
-}
-
-/** How a refusal names a datasource kind. */
-const KIND_LABELS: Record<InputDatasourceKind, string> = {
-  postgres: 'PostgreSQL',
-  databricks: 'Databricks',
-  rest: 'REST',
-};
-
-/** `A`, `A or B`, `A, B or C`. */
-function orList(items: readonly string[]): string {
-  if (items.length <= 1) return items.join('');
-  return `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`;
-}
-
-type FieldCheck =
-  { ok: true; value?: WorkflowInputValue } | { ok: false; error: string };
-
-/** One dataset name checked against the store and the field's kinds. */
-function datasetError(
-  field: WorkflowInputField,
-  name: string,
-  datasets: readonly InputDataset[],
-): string | undefined {
-  const found = datasets.find((dataset) => dataset.name === name);
-  if (!found) return `Dataset "${name}" not found`;
-  const kinds = field.datasourceKinds;
-  if (
-    kinds?.length &&
-    !kinds.includes(found.datasourceKind as InputDatasourceKind)
-  ) {
-    return `Dataset "${name}" is not a ${orList(kinds.map((kind) => KIND_LABELS[kind]))} dataset`;
-  }
-  return undefined;
-}
-
-/** A field that is missing or empty: its default, a refusal, or nothing. */
-function missingField(field: WorkflowInputField): FieldCheck {
-  if (field.default !== undefined) return { ok: true, value: field.default };
-  if (field.type === 'boolean') return { ok: true, value: false };
-  if (!field.required) return { ok: true };
-  return {
-    ok: false,
-    error:
-      field.type === 'datasets'
-        ? 'Select at least one dataset'
-        : `${field.label} is required`,
-  };
-}
-
-/** One field's value checked against its type (plan 4.1). */
-function checkField(
-  field: WorkflowInputField,
-  value: unknown,
-  datasets: readonly InputDataset[],
-): FieldCheck {
-  if (field.type === 'boolean') {
-    if (value === undefined || value === null || value === '') {
-      return missingField(field);
-    }
-    return typeof value === 'boolean'
-      ? { ok: true, value }
-      : { ok: false, error: `${field.label} must be true or false` };
-  }
-  if (field.type === 'datasets') {
-    const names = Array.isArray(value)
-      ? [
-          ...new Set(
-            value
-              .filter((name): name is string => typeof name === 'string')
-              .map((name) => name.trim())
-              .filter(Boolean),
-          ),
-        ]
-      : [];
-    if (!names.length) return missingField(field);
-    for (const name of names) {
-      const error = datasetError(field, name, datasets);
-      if (error) return { ok: false, error };
-    }
-    return { ok: true, value: names };
-  }
-  const usable =
-    (typeof value === 'string' && value !== '') || typeof value === 'number';
-  if (!usable) return missingField(field);
-  if (field.type === 'number') {
-    const typed = typeof value === 'string' ? value.trim() : '';
-    const number =
-      typeof value === 'number' ? value : typed ? Number(typed) : NaN;
-    return Number.isFinite(number)
-      ? { ok: true, value: number }
-      : { ok: false, error: `${field.label} must be a number` };
-  }
-  if (field.type === 'dataset') {
-    const name = String(value).trim();
-    if (!name) return missingField(field);
-    const error = datasetError(field, name, datasets);
-    return error ? { ok: false, error } : { ok: true, value: name };
-  }
-  return { ok: true, value: String(value) };
-}
+/** The longest question a run takes, in characters (trimmed). */
+export const QUESTION_MAX_LENGTH = 4000;
 
 /**
- * A run's input checked against the workflow's fields (api.md 118, 119;
- * plan 4.1), in field order, the first refusal winning: the declared fields
- * only, a number field as a number, a boolean as a boolean, datasets as
- * trimmed names in order without repeats. A field that is missing or empty
- * takes its `default` (a boolean `false`); a required one without a default
- * is refused with `<label> is required` (`Select at least one dataset` for
- * `datasets`). `<label> must be a number`, `<label> must be true or false`,
- * `Dataset "<name>" not found` and `Dataset "<name>" is not a <kinds>
- * dataset` refuse a value of the wrong kind. A whitespace-only text passes:
- * the run decides what it means. An optional field that is missing or empty
- * and has no default is left out.
+ * The workflows defined in code, in catalogue order, each with its contract
+ * hash. Built through the contract check (workflows R26): a workflow with a
+ * step input that neither its input nor an earlier step gives, or gives
+ * with an incompatible type or maybe not at all, throws here, so it never
+ * loads.
  */
-export function parseWorkflowInput(
-  fields: readonly WorkflowInputField[],
-  raw: unknown,
-  datasets: readonly InputDataset[] = [],
-): { ok: true; values: WorkflowInputValues } | { ok: false; error: string } {
-  const body =
-    raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const values: WorkflowInputValues = {};
-  for (const field of fields) {
-    const value = Object.hasOwn(body, field.name)
-      ? body[field.name]
-      : undefined;
-    const checked = checkField(field, value, datasets);
-    if (!checked.ok) return checked;
-    if (checked.value !== undefined) values[field.name] = checked.value;
-  }
-  return { ok: true, values };
-}
+export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
+  assertWorkflowContracts<Omit<CodeWorkflowSource, 'contractHash'>>([
+    {
+      id: QTI_V2_TURN_WORKFLOW_ID,
+      name: ASSISTANT_V2_NAME,
+      description: ASSISTANT_V2_DESCRIPTION,
+      primaryFor: ASSISTANT_V2_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        DATASETS_FIELD,
+      ],
+      steps: QTI_V2_TURN_STEPS,
+      edges: QTI_V2_TURN_EDGES,
+      bar: 'steps',
+    },
+  ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
 export interface AgentRunTurn {
-  /** The user message: `question`, or the RFP Builder's `message`, trimmed. */
+  /** The user message: `question`, trimmed. */
   question: string;
   /** `datasets`, or the readiness run's one `dataset`; absent otherwise. */
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
-  /** The RFP the run continues (the RFP Builder's hidden field). */
-  rfpId?: string;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -411,33 +157,45 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     : text(values['dataset'])
       ? [text(values['dataset'])]
       : undefined;
-  const rfpId = text(values['rfpId']);
   return {
-    question: text(values['question']) || text(values['message']),
+    question: text(values['question']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
-    ...(rfpId ? { rfpId } : {}),
   };
 }
 
-/** The built-in agents that get a one-step workflow. */
+/**
+ * The built-in agents whose turns run on the agent-turn engine: a stored
+ * session of theirs, and the eval runner's direct host (agents.md 5.14).
+ * They have no catalogue workflow since 1.23.35.
+ */
 export const WRAPPED_AGENT_KEYS: readonly string[] = [
   'assistant',
-  'rfp',
   'data-readiness',
 ];
 
-/** The prefix of a one-step workflow's id. */
+/** The prefix of an agent-turn binding's id. */
 export const AGENT_WORKFLOW_PREFIX = 'agent:';
 
-/** The plain assistant's one-step workflow: what a session with no agent runs. */
+/** The plain assistant's agent-turn binding: what a session with no agent runs. */
 export const ASSISTANT_WORKFLOW_ID = 'agent:assistant';
-/** Its name and description: the picker's, so the Sessions chip keeps reading `Assistant`. */
+/** Its name, so an old session's chip keeps reading `Assistant`. */
 export const ASSISTANT_WORKFLOW_NAME = 'Assistant';
-export const ASSISTANT_WORKFLOW_DESCRIPTION =
-  'Answers questions over the datasets you pick.';
 
-/** The id of an agent's one-step workflow: `agent:` + its registry key or user-agent id. */
+/**
+ * The catalogue workflows whose agent step runs an agent, as an agent's
+ * detail lists them (api.md 34 `usedInWorkflows`): `qti-v2-turn` for
+ * `assistant-v2`, none for any other agent.
+ */
+export function workflowsUsingAgent(
+  agentKey: string,
+): { id: string; name: string }[] {
+  return CODE_WORKFLOWS.filter(
+    (workflow) => workflow.primaryFor === agentKey,
+  ).map((workflow) => ({ id: workflow.id, name: workflow.name }));
+}
+
+/** The agent-turn binding id: `agent:` + a registry key or user-agent id. */
 export function agentWorkflowId(agentKeyOrId: string): string {
   return `${AGENT_WORKFLOW_PREFIX}${agentKeyOrId}`;
 }
@@ -448,10 +206,12 @@ export type ParsedWorkflowId =
   | { kind: 'user-agent'; agentId: string };
 
 /**
- * What a workflow id names. Undefined for an unknown id, a System agent's
- * key and the `primaryFor` agent of a code workflow (it runs that workflow,
- * never a one-step one). Any other `agent:` id names a user agent: the
- * caller checks it exists and is Live.
+ * What a session's workflow id names: a code workflow, or the agent-turn
+ * binding of a wrapped built-in agent or a user agent. Undefined for an
+ * unknown id (a removed workflow such as `seq-text-demo` or
+ * `deep-analysis`), a System agent's key and the `primaryFor` agent of a
+ * code workflow (it runs that workflow). Any other `agent:` id names a user
+ * agent. Only `GET /workflows` says what the catalogue holds.
  */
 export function parseWorkflowId(id: string): ParsedWorkflowId | undefined {
   const source = CODE_WORKFLOWS.find((workflow) => workflow.id === id);
@@ -506,36 +266,10 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
 }
 
 /**
- * The ids of the workflows whose steps call an agent, in catalogue order: a
- * built-in agent's code workflows and its one-step workflow; a user agent's
- * one-step workflow while it is Live. System agents are used in none.
- */
-export function workflowsUsingAgent(
-  agentKey: string,
-  opts: { userAgentLive?: boolean; builtin: boolean },
-): string[] {
-  if (!opts.builtin) {
-    return opts.userAgentLive ? [agentWorkflowId(agentKey)] : [];
-  }
-  const wrapped = WRAPPED_AGENT_KEYS.includes(agentKey)
-    ? agentWorkflowId(agentKey)
-    : undefined;
-  const code = CODE_WORKFLOWS.filter(
-    (workflow) =>
-      workflow.primaryFor === agentKey || workflow.calls === agentKey,
-  ).map((workflow) => workflow.id);
-  // The assistant's workflow leads the catalogue; the other one-step
-  // workflows follow the code-defined ones.
-  if (wrapped === ASSISTANT_WORKFLOW_ID) return [wrapped, ...code];
-  return wrapped ? [...code, wrapped] : code;
-}
-
-/**
- * The tool-loop budget of a one-step workflow's agent: 10 for the Data
- * Readiness Agent, 15 for the assistant, the RFP Builder and user agents.
+ * The tool-loop budget of an agent-turn binding's agent: 10 for the Data
+ * Readiness Agent, 15 for the assistant and user agents.
  */
 export function wrappedAgentMaxSteps(agentKeyOrId: string): number {
-  if (agentKeyOrId === 'rfp') return RFP_MAX_STEPS;
   if (agentKeyOrId === 'data-readiness') return DATA_READINESS_MAX_STEPS;
   return ASSISTANT_MAX_STEPS;
 }

@@ -54,7 +54,7 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
   };
 
   beforeAll(async () => {
-    backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
+    backend = await boot(dataDir);
     await created('/datasets', {
       name: 'World Cup Core',
       tables: ['world_cup.world_cup.matches'],
@@ -152,7 +152,7 @@ describe('Opening a data dir from the multi-user version (M14)', () => {
     );
     db.close();
 
-    backend = await boot(dataDir, { env: { INTELLIFY_API: 'off' } });
+    backend = await boot(dataDir);
   });
 
   afterAll(async () => {

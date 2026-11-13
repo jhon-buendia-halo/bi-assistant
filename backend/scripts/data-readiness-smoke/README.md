@@ -13,10 +13,10 @@ PG_PORT=55471 APP_PORT=3311 scripts/data-readiness-smoke/run.sh
 
 - `run.sh` makes one temp dir, installs `embedded-postgres` and `pg` there (not
   in `package.json`), starts Postgres on `PG_PORT`, loads `seed.sql`, starts
-  `node dist/cli.js --no-open` on `APP_PORT` with `INTELLIFY_API_PORT=0`, runs
+  `node dist/cli.js --no-open` on `APP_PORT`, runs
   `smoke.mjs`, then stops both by PID and deletes the temp dir.
-- Pick ports that are free; it refuses busy ones. Avoid 55432, 3000, 3100 and
-  4200 (the compose Postgres, the default app, the Intellify API and `ng serve`).
+- Pick ports that are free; it refuses busy ones. Avoid 55432, 3000 and 4200
+  (the compose Postgres, the default app and `ng serve`).
 - Set `OUT_DIR=<dir>` to keep the three reports as `reports.json` (evidence).
 - Exit code 0 means every check passed.
 

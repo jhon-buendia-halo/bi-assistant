@@ -49,12 +49,6 @@ export interface SampleFixture {
    * `api.<schema>.<table>`.
    */
   datasourceKind?: 'postgres' | 'rest';
-  /**
-   * A `'rest'` sample whose API this app runs itself (the embedded Intellify
-   * RFP API, ADR-0027): loading it takes no connection and the loader reads
-   * the API's URL and key in-process instead.
-   */
-  selfRegistering?: boolean;
 }
 
 const WORLD_CUP: SampleFixture = {
@@ -276,46 +270,6 @@ const WORLD_CUP_REST: SampleFixture = {
   requiredTables: WORLD_CUP.requiredTables,
 };
 
-/**
- * The Intellify sample through the embedded Intellify RFP API: the RFP Builder
- * agent's datasource. Its tables are the API's collection endpoints, keyed
- * `api.intellify.<name>` (hyphens become underscores). Self-registering: the
- * loader reads the API's URL and key in-process; `defaults` are placeholders.
- */
-const INTELLIFY_API: SampleFixture = {
-  id: 'intellify-api',
-  name: 'Intellify RFP API',
-  description:
-    'The Intellify sample through the Intellify RFP API (the embedded service ' +
-    "on INTELLIFY_API_PORT, default 3100): the RFP Builder agent's " +
-    'datasource, and its collection endpoints as tables.',
-  datasourceKind: 'rest',
-  selfRegistering: true,
-  schema: 'intellify',
-  defaults: {
-    host: '127.0.0.1',
-    port: 3100,
-    database: '',
-    user: '',
-    password: '',
-    ssl: false,
-  },
-  datasourceName: 'Intellify RFP API',
-  datasetName: 'Intellify RFP API',
-  requiredTables: [
-    'clients',
-    'products',
-    'funding_types',
-    'plan_types',
-    'carriers',
-    'plan_designs',
-    'policies',
-    'financials',
-    'census',
-    'rfps',
-  ],
-};
-
 const US_HEALTH: SampleFixture = {
   id: 'us-health',
   name: 'US Health',
@@ -392,7 +346,6 @@ export const SAMPLE_FIXTURES: SampleFixture[] = [
   INTELLIFY,
   US_HEALTH,
   WORLD_CUP_REST,
-  INTELLIFY_API,
 ];
 
 export function findFixture(id: string): SampleFixture | undefined {

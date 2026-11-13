@@ -466,6 +466,18 @@ Stories 1.23.28–1.23.33 make the development workflow faster and cheaper, and 
 #### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
 - **Scope:** [the speed-up contract](docs/plans/m1-23-dev-speedup.md), plan 1.23.33.
 - **Acceptance:** `app.ts` under ~500 lines and `app.html` under ~400; no visible or test-id change; the frontend unit suite and the full web Playwright suite pass.
+
+#### 1.23.34 — Remove the RFP Builder and the Intellify RFP API  `✅ Done`
+- **Intent:** the RFP Builder agent and the embedded Intellify RFP API it relied on are gone from the app, and the rest of the product behaves as before.
+- **Scope:** the contract is in the removal plan: the `rfp` agent and its workflow `agent:rfp` (`GET /agents/rfp` answers `Agent "rfp" not found`, saved pins and overrides are ignored), its tools, seven stage skills, prompts and eval set; endpoints 105 and 127 and the `rfp-package` stream event; `rfpId` and `rfpPackage` on the wire; the run "Continue" feature; the Testing Data fixture `intellify-api`; the embedded Intellify RFP API (`backend/src/intellify-api/`, its env variables, key file, CLI flags `--intellify-api-port` / `--no-intellify-api` and npm script); the `intellify-api` skill; the matching specs, scripts and tests. ADR-0027 and ADR-0028 are marked Superseded.
+- **Out of scope:** stored data (sessions, runs and messages that carry `agentKey: "rfp"`, `rfpId` or `rfpPackage` are left in place and ignored, with no migration); the Postgres `rfp` schema; the `intellify` Postgres sample fixture, which stays; every other agent, workflow and feature.
+- **Notes:** requested 2026-11-12. Precedent: 1.23.8, Remove the showcase agents.
+
+#### 1.23.35 — Only the Questions to Insights v2 workflow; agents are a library  `✅ Done`
+- **Intent:** the Workflows area lists one workflow, Questions to Insights v2, and agents are no longer workflows: they are configured in the Agents area and cannot be run from there.
+- **Scope:** the workflow catalogue is `[qti-v2-turn]` (`GET /workflows`, `GET /workflows/:id`); the one-step workflows `agent:<key or id>`, the Sequential test workflow (`seq-text-demo`) and Deep analysis (`deep-analysis`, its module, routes, UI entry point, capability spec and E2E) are removed and their ids answer `Workflow "<id>" not found`; `usedInWorkflows` lists `qti-v2-turn` for `assistant-v2` and nothing for any other agent; the Agents area has no Run on an agent page; the Data Readiness Agent stays in the library and the UI generates no new report; tests that used the test workflow move to `qti-v2-turn` with the stub model; ADR-0042 (ADR-0040 partly superseded) and the specs.
+- **Out of scope:** stored data (runs and sessions of removed workflows stay in place, read-only: they list and open as plain runs with no Run again or follow-up, no migration); **Try it** on user agents stays; the agent turn engine and the eval runner for `assistant` and `data-readiness` stay; every other agent and feature.
+- **Notes:** requested 2026-11-12. Stacked on 1.23.34 (branch `chore/workflows-v2-only`). Precedent: 1.23.34, Remove the RFP Builder.
 ---
 
 ## Release 2 — Multi-user  (no target date yet)

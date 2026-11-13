@@ -63,15 +63,8 @@
         } @else {
           <app-answer-view
             [message]="message"
-            [anchorId]="'msg-' + i"
-            [reportDownloading]="
-              !!message.report && reportDownloading() === message.report.jobId
-            "
-            [rfpDownloading]="rfpDownloading()"
             (viewVisual)="viewVisual.emit($event)"
             (openScorecard)="openScorecard($event)"
-            (downloadReport)="downloadReport($event)"
-            (downloadRfp)="downloadRfpPackage($event.pkg, $event.file)"
           />
         }
       }

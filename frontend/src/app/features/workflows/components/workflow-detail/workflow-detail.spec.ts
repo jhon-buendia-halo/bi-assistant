@@ -3,9 +3,10 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { WorkflowDetail } from '../../models/workflow.model';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
+import { FIXTURE_WORKFLOW } from '../workflow-node-dialog/workflow-node.testing';
 import { WorkflowDetailPage } from './workflow-detail';
 
 const STEP = (id: string, title: string) => ({
@@ -18,15 +19,14 @@ const STEP = (id: string, title: string) => ({
   exits: [],
 });
 
-const SEQ: WorkflowDetail = {
-  id: 'seq-text-demo',
-  name: 'Sequential test workflow',
+const THREE_STEPS: WorkflowDetail = {
+  id: 'three-steps',
+  name: 'Three steps',
   description: 'A three-step example.',
   kind: 'code',
   owner: 'Official',
   agents: [],
   stepCount: 3,
-  bar: 'steps',
   trigger: 'run',
   input: [
     { name: 'text', label: 'Text', type: 'textarea', required: true },
@@ -42,7 +42,7 @@ const SEQ: WorkflowDetail = {
 };
 
 const V2: WorkflowDetail = {
-  ...SEQ,
+  ...THREE_STEPS,
   id: 'qti-v2-turn',
   name: 'Questions to Insights v2',
   trigger: 'run',
@@ -89,19 +89,19 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   const text = (testId: string) => q(testId)?.textContent?.trim() ?? '';
 
   it('shows the breadcrumb, the name as h1, the id and kind, and the canvas', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     const nav = el.querySelector('nav[aria-label="Breadcrumb"]')!;
     expect(nav.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      'Workflows / Sequential test workflow',
+      'Workflows / Three steps',
     );
     expect(nav.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
-      'Sequential test workflow',
+      'Three steps',
     );
     q('workflow-breadcrumb')!.click();
     expect(events).toEqual(['back']);
     expect(q('workflow-detail-name')?.tagName).toBe('H1');
-    expect(text('workflow-detail-name')).toBe('Sequential test workflow');
-    expect(text('workflow-detail-id')).toBe('seq-text-demo');
+    expect(text('workflow-detail-name')).toBe('Three steps');
+    expect(text('workflow-detail-id')).toBe('three-steps');
     expect(text('workflow-detail-kind')).toBe('3 steps');
     expect(q('workflow-canvas')).not.toBeNull();
     expect(
@@ -111,16 +111,20 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     ).toEqual(['Clean text', 'Count words', 'Format result']);
   });
 
-  it('a workflow has Execute, which asks for the panel on Run; no Start chat', () => {
-    open(SEQ);
+  it('Execute workflow on the canvas opens the panel and asks for its run form; it never runs', () => {
+    open(THREE_STEPS);
     expect(q('workflow-start-chat')).toBeNull();
-    expect(text('workflow-execute')).toBe('Execute');
+    expect(text('workflow-execute')).toBe('Execute workflow');
+    expect(el.querySelector('header [data-testid="workflow-execute"]')).toBeNull();
+    designer.setInput('text', 'a b');
     q('workflow-execute')!.click();
-    expect(designer.tab()).toBe('run');
+    expect(designer.runFormRequest()).toBe(1);
     expect(events).toEqual(['openPanel']);
+    expect(designer.running()).toBe(false);
+    expect(designer.runResult()).toBeNull();
   });
 
-  it('an agent workflow with an input has Execute and no Start chat (workflows R21)', () => {
+  it('Questions to Insights v2 with its input has Execute and no Start chat (workflows R21)', () => {
     open({
       ...V2,
       input: [
@@ -129,44 +133,22 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       ],
     });
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(text('workflow-execute')).toBe('Execute');
+    expect(text('workflow-execute')).toBe('Execute workflow');
     expect(q('workflow-start-chat')).toBeNull();
     q('workflow-execute')!.click();
-    expect(designer.tab()).toBe('run');
+    expect(designer.runFormRequest()).toBe(1);
     expect(events).toEqual(['openPanel']);
   });
 
-  it('the Data Readiness Agent has Execute and the Run tab (every agent workflow runs from its page)', () => {
-    open({
-      ...V2,
-      id: 'agent:data-readiness',
-      input: [{ name: 'question', label: 'Question', type: 'textarea', required: false }],
-    });
-    expect(text('workflow-execute')).toBe('Execute');
-    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
-  });
-
-  it('the RFP Builder has Execute: one exchange per run (plan 4.3)', () => {
-    open({
-      ...V2,
-      id: 'agent:rfp',
-      input: [
-        { name: 'message', label: 'Message', type: 'textarea', required: true },
-        { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
-      ],
-    });
-    expect(text('workflow-execute')).toBe('Execute');
-    expect(designer.tabs().map((t) => t.id)).toEqual(['workflow', 'step', 'run', 'code']);
-  });
-
-  it('a node selects its step and asks for the panel on Step; the background clears it', () => {
-    open(SEQ);
+  it('a node selects it on the canvas and in the Workflow state panel; the background clears it', () => {
+    open(THREE_STEPS);
     q('workflow-node-count-words')!.click();
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('count-words');
-    expect(designer.tab()).toBe('step');
-    expect(events).toEqual(['openPanel']);
+    expect(events).toEqual([]);
     expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('true');
+    expect(q('workflow-state-node-count-words')?.getAttribute('aria-pressed')).toBe('true');
+    expect(q('workflow-ndv')).toBeNull();
 
     const canvas = q('workflow-canvas')!;
     canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
@@ -174,18 +156,69 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBeNull();
     expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('false');
-    expect(events).toEqual(['openPanel']);
+    expect(q('workflow-state-node-all')?.getAttribute('aria-pressed')).toBe('true');
+    expect(events).toEqual([]);
+  });
+
+  it('a state panel row selects its node; the toggle collapses the panel', () => {
+    open(THREE_STEPS);
+    q('workflow-state-node-clean-text')!.click();
+    fixture.detectChanges();
+    expect(designer.selectedStepId()).toBe('clean-text');
+    expect(q('workflow-node-clean-text')?.getAttribute('aria-pressed')).toBe('true');
+    expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    q('workflow-state-toggle')!.click();
+    fixture.detectChanges();
+    expect(designer.stateOpen()).toBe(false);
+    expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    designer.stateOpen.set(true);
+  });
+
+  it('a double click opens the node dialog; Close returns the focus to the node', fakeAsync(() => {
+    open(THREE_STEPS);
+    q('workflow-node-count-words')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    fixture.detectChanges();
+    expect(designer.openNodeId()).toBe('count-words');
+    expect(q('workflow-ndv')?.getAttribute('role')).toBe('dialog');
+    expect(text('workflow-ndv-title')).toBe('Count words');
+    q('workflow-ndv-close')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(q('workflow-ndv')).toBeNull();
+    expect(designer.openNodeId()).toBeNull();
+    expect(document.activeElement).toBe(q('workflow-node-count-words'));
+  }));
+
+  it('Start opens its dialog; an agent link there closes it and asks for the agent page (R8)', () => {
+    const agentKeys: string[] = [];
+    fixture = TestBed.createComponent(WorkflowDetailPage);
+    fixture.componentRef.setInput('workflowId', FIXTURE_WORKFLOW.id);
+    fixture.componentInstance.openAgent.subscribe((key) => agentKeys.push(key));
+    fixture.detectChanges();
+    el = fixture.nativeElement as HTMLElement;
+    http
+      .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(FIXTURE_WORKFLOW.id)}`))
+      .flush(FIXTURE_WORKFLOW);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    fixture.detectChanges();
+    q('workflow-node-start')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    fixture.detectChanges();
+    expect(text('workflow-ndv-title')).toBe('Start');
+    q('workflow-agent-qti')!.click();
+    fixture.detectChanges();
+    expect(agentKeys).toEqual(['qti']);
+    expect(q('workflow-ndv')).toBeNull();
   });
 
   it('shows the run status on the canvas nodes while a run is shown', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     designer.run.set({
       id: 'run-1',
-      workflowId: 'seq-text-demo',
-      workflowName: 'Sequential test workflow',
+      workflowId: 'three-steps',
+      workflowName: 'Three steps',
       input: { text: 'a' },
       status: 'success',
-      steps: SEQ.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' as const })),
+      steps: THREE_STEPS.steps.map((s) => ({ id: s.id, title: s.title, status: 'success' as const })),
       datasets: [],
       startedAt: '2026-11-11T10:00:00.000Z',
     });
@@ -194,7 +227,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       Array.from(el.querySelectorAll('[data-testid="workflow-node-status"]')).map((n) =>
         n.textContent?.trim(),
       ),
-    ).toEqual(['Done', 'Done', 'Done']);
+    ).toEqual(['Done', 'Done', 'Done', 'Done', 'Done']);
+    expect(text('workflow-state-progress')).toBe('5 of 5 nodes ran');
+    expect(text('workflow-state-run-id')).toBe('run-1');
   });
 
   it("shows the server's error, and leaving the page discards the workflow and its run", () => {
@@ -213,18 +248,18 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(el.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('nope');
 
     fixture.destroy();
-    open(SEQ);
-    designer.select('clean-text');
+    open(THREE_STEPS);
+    designer.openNode('clean-text');
     designer.setInput('text', 'x');
     fixture.destroy();
     expect(designer.workflow()).toBeNull();
     expect(designer.selectedStepId()).toBeNull();
+    expect(designer.openNodeId()).toBeNull();
     expect(designer.inputValues()).toEqual({});
-    expect(designer.tab()).toBe('workflow');
   });
 
   it('leaves room for the Expand button when the right panel is closed', () => {
-    open(SEQ);
+    open(THREE_STEPS);
     const header = el.querySelector('header')!;
     expect(header.classList).toContain('pr-6');
     fixture.componentRef.setInput('panelOpen', false);

@@ -50,9 +50,6 @@ jest.mock('../datasets/repositories/datasets.repository', () => ({
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
-jest.mock('../rfp-packages/rfp-packages.service', () => ({
-  RfpPackagesService: class {},
-}));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
@@ -82,7 +79,7 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { isoToday } from '../../mastra/rfp-context';
+import { isoToday } from './readiness-bridge';
 import { getReadinessToolServices } from '../../mastra/readiness-tool-services';
 import { getSyntheticDataToolServices } from '../../mastra/synthetic-data-tool-services';
 import type {
@@ -130,10 +127,10 @@ const DATASETS = [
     tables: ['main.sales.orders'],
   },
   {
-    name: 'Intellify RFP API',
+    name: 'Orders API',
     datasourceId: 'ds-rest',
     datasourceKind: 'rest',
-    tables: ['api.intellify.clients'],
+    tables: ['api.orders.orders'],
   },
 ];
 
@@ -271,7 +268,6 @@ function build(options: BuildOptions = {}) {
     metrics as never,
     knowledge as never,
     userAgents as never,
-    undefined,
     readiness as never,
     options.synthetic as never,
   );
@@ -372,8 +368,6 @@ describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', 
     expect(context.get('session-workspace-id')).toBe('session-s-1');
     expect(context.get('turn-data-records')).toEqual([]);
     expect(context.get('knowledge-used')).toBeUndefined();
-    expect(context.get('rfp-created-by')).toBeUndefined();
-    expect(context.get('turn-rfp')).toBeUndefined();
     expect(ctx.metrics.definitionBlock).not.toHaveBeenCalled();
     expect(ctx.knowledge.contextFor).not.toHaveBeenCalled();
     expect(ctx.verifiedQueries.referenceBlock).not.toHaveBeenCalled();

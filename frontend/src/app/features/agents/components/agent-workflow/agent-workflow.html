@@ -79,10 +79,11 @@
                     class="flex items-center gap-1.5 text-[12px]"
                     [class.text-on-danger-soft]="exit.outcome === 'fails'"
                     [class.text-fg-muted]="exit.outcome === 'stops'"
+              [class.text-on-warning-soft]="exit.outcome === 'waits'"
                     data-testid="workflow-step-exit"
                   >
                     <lucide-angular
-                      [img]="exit.outcome === 'fails' ? CircleX : Square"
+                      [img]="exit.outcome === 'fails' ? CircleX : exit.outcome === 'waits' ? Hourglass : Square"
                       [size]="12"
                       aria-hidden="true"
                     />{{ exit.text }}

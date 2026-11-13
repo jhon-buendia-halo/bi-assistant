@@ -1,6 +1,11 @@
 // The workflow a session's turn runs (agents.md 5.11, 5.12; ADR-0034,
 // ADR-0040), as pure functions of the session.
-import type { AnalyseOutcome } from '../../../mastra/workflows/qti-v2-turn.steps';
+import type {
+  AnalyseAttempt,
+  AnalyseQuery,
+  AnsweredClarification,
+  TurnCallsOutcome,
+} from '../../../mastra/workflows/qti-v2-turn.steps';
 import {
   AGENT_TURN_STEPS,
   AGENT_TURN_WORKFLOW_ID,
@@ -25,12 +30,14 @@ export interface TurnWorkflow {
 
 /**
  * The workflow a session's turn runs: its code-defined workflow, else its
- * one-step workflow on the `agent-turn` engine.
+ * one-step workflow on the `agent-turn` engine. A node chat's turn (a host
+ * with a `contextBlock`, agents.md 5.16) is its step's agent alone, on the
+ * `agent-turn` engine, never a run of the whole workflow.
  */
 export function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
   const id = sessionWorkflowId(session);
   const parsed = parseWorkflowId(id);
-  if (parsed?.kind === 'code') {
+  if (parsed?.kind === 'code' && !session.contextBlock) {
     return {
       id,
       engineId: parsed.source.id,
@@ -58,7 +65,7 @@ export function workflowSourceOf(session: SessionDoc): 'prompt' | 'workflow' {
 export function analyseOutcomeOf(
   data: readonly ToolDataRecord[],
   stopped: boolean,
-): AnalyseOutcome {
+): TurnCallsOutcome {
   return {
     calls: data.map((record) => ({
       tool: record.tool,
@@ -77,4 +84,103 @@ export function isTurnSummary(value: unknown): value is Record<string, number> {
     'sqlQueries' in value &&
     'rows' in value
   );
+}
+
+/** The most result rows of one query an analysis attempt passes on. */
+export const ATTEMPT_ROWS_CAP = 50;
+
+/**
+ * An analysis attempt's SQL queries from its data records (agents.md
+ * 5.11): each `run_readonly_sql` record's statement, rationale, rows (at
+ * most `ATTEMPT_ROWS_CAP`), row count, truncation and error, in order.
+ */
+export function analyseQueriesOf(
+  data: readonly ToolDataRecord[],
+): AnalyseQuery[] {
+  return data
+    .filter((record) => record.tool === 'run_readonly_sql')
+    .map((record) => {
+      const rows = record.rows ?? [];
+      return {
+        sql: record.input ?? '',
+        ...(record.rationale ? { rationale: record.rationale } : {}),
+        rows: rows.slice(0, ATTEMPT_ROWS_CAP),
+        rowCount: record.rowCount ?? rows.length,
+        truncated: record.truncated === true,
+        ...(record.error ? { error: record.error } : {}),
+      };
+    });
+}
+
+/** One analysis attempt (agents.md 5.11): its calls, queries, notes and stop. */
+export function analyseAttemptOf(
+  data: readonly ToolDataRecord[],
+  stopped: boolean,
+  text: string,
+): AnalyseAttempt {
+  return {
+    ...analyseOutcomeOf(data, stopped),
+    queries: analyseQueriesOf(data),
+    text: text.trim(),
+  };
+}
+
+/** A clarification option as one line: its label, then ` — ` and its description. */
+export function clarificationOptionText(option: {
+  label: string;
+  description?: string;
+}): string {
+  return option.description
+    ? `${option.label} — ${option.description}`
+    : option.label;
+}
+
+/** A clarifying question as the assistant asked it: the question, then each option. */
+export function clarifyingQuestionText(asked: {
+  question: string;
+  options: readonly string[];
+}): string {
+  return [asked.question, ...asked.options.map((option) => `- ${option}`)].join(
+    '\n',
+  );
+}
+
+/**
+ * The agent's input once the user answered its clarifying questions this
+ * turn (agents.md 5.11, ADR-0043): the turn's input as messages (a bare
+ * question becomes its user message), then each question the agent asked
+ * with the user's answer, in order. Analyse resumed after the answer, and
+ * any retry after it, run on it without the memory thread, so nothing is
+ * stored twice and no attempt loses an answer.
+ */
+export function answeredTurnInput(
+  input: unknown,
+  question: string,
+  answered: readonly AnsweredClarification[],
+): { role: 'user' | 'assistant'; content: unknown }[] {
+  const before = Array.isArray(input)
+    ? (input as { role: 'user' | 'assistant'; content: unknown }[])
+    : [
+        {
+          role: 'user' as const,
+          content: typeof input === 'string' ? input : question,
+        },
+      ];
+  return [
+    ...before,
+    ...answered.flatMap((asked) => [
+      { role: 'assistant' as const, content: clarifyingQuestionText(asked) },
+      { role: 'user' as const, content: asked.answer },
+    ]),
+  ];
+}
+
+/**
+ * The catalogue step a run's step event names (agents.md 5.11): the engine
+ * reports a nested workflow's step as `<workflow>.<child>.<step>`, so the
+ * last segment is the step's id.
+ */
+export function catalogStepId(engineId: string): string {
+  const dot = engineId.lastIndexOf('.');
+  return dot < 0 ? engineId : engineId.slice(dot + 1);
 }

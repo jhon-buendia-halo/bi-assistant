@@ -5,20 +5,24 @@ import {
   type EvalTarget,
 } from './assistant.evals';
 import {
+  ANALYST_V2_EVAL_AGENT_KEY,
+  ANALYST_V2_EVAL_SET,
+  analystV2EvalTarget,
+} from './analyst-v2.evals';
+import {
   DATA_READINESS_EVAL_SET,
   dataReadinessEvalTarget,
 } from './data-readiness.evals';
-import { RFP_EVAL_SET, rfpEvalTarget } from './rfp.evals';
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
- * assistant's, then the RFP Builder's, then the Data Readiness Agent's. A set runs on the agent its
+ * assistant's, then the Data Readiness Agent's. A set runs on the agent its
  * `agentKey` names, the `assistant` when it names none.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...ASSISTANT_EVAL_SETS,
-  RFP_EVAL_SET,
   DATA_READINESS_EVAL_SET,
+  ANALYST_V2_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
@@ -37,14 +41,13 @@ export function hasEvals(agentKey: string): boolean {
 }
 
 /**
- * The eval target of one run of `agentKey`'s sets. `runId` tags what the run
- * creates (the RFP Builder's drafts, `eval:<runId>`). Throws for an agent
+ * The eval target of one run of `agentKey`'s sets. Throws for an agent
  * without evals: `Agent "<key>" has no evals to run`.
  */
-export function evalTargetFor(agentKey: string, runId: string): EvalTarget {
+export function evalTargetFor(agentKey: string): EvalTarget {
   if (agentKey === 'assistant') return ASSISTANT_EVAL_TARGET;
-  if (agentKey === 'rfp') return rfpEvalTarget(runId);
   if (agentKey === 'data-readiness') return dataReadinessEvalTarget();
+  if (agentKey === ANALYST_V2_EVAL_AGENT_KEY) return analystV2EvalTarget();
   throw new Error(`Agent "${agentKey}" has no evals to run`);
 }
 

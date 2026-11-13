@@ -15,9 +15,7 @@ export type WorkflowInputFieldType =
   /** A checkbox; absent means false (or its default). */
   | 'boolean'
   /** One or more dataset names. */
-  | 'datasets'
-  /** Exactly one dataset name. */
-  | 'dataset';
+  | 'datasets';
 
 /** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {
@@ -30,10 +28,30 @@ export interface WorkflowInputField {
   help?: string;
   /** The value of a field that is missing or empty. */
   default?: string | number | boolean;
-  /** 'dataset' / 'datasets': only datasets bound to these kinds. */
+  /** 'datasets': only datasets bound to these kinds. */
   datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
-  /** Set by the app (the RFP Builder's Continue), never rendered as a control. */
+  /** Set by the app, never rendered as a control. */
   hidden?: boolean;
+  /**
+   * The ids of the steps that read this field straight from the workflow
+   * input, in step order (api.md 116, 117).
+   */
+  usedBy?: string[];
+  /** 'text' / 'textarea': the longest value accepted, trimmed. */
+  maxLength?: number;
+  /** 'number': the smallest value accepted. */
+  min?: number;
+  /** 'number': the largest value accepted. */
+  max?: number;
+}
+
+/**
+ * One refusal of a run's input (api.md 118, 119 `errors[]`); `field` is null
+ * for an error that is not about one field (`context.fromRunId`).
+ */
+export interface WorkflowInputError {
+  field: string | null;
+  message: string;
 }
 
 /** One value of a run's input (api.md 118). */
@@ -45,24 +63,24 @@ export type WorkflowInputValue = string | number | boolean | string[];
  * (backend/src/modules/workflows/workflows.service.ts).
  */
 export interface WorkflowSummary {
-  /** `qti-v2-turn` | `agent:<registry key>` | `agent:<user-agent id>`. */
+  /**
+   * `qti-v2-turn`, the catalogue's only workflow. Agents are a library and
+   * have no workflow of their own.
+   */
   id: string;
   name: string;
   description: string;
-  /** Defined in code, or the one-step workflow of an agent. */
-  kind: 'code' | 'agent';
-  /** `You` for a user agent's workflow. */
-  owner: 'Official' | 'You';
+  /** Defined in code. */
+  kind: 'code';
+  owner: 'Official';
   /** The agents its steps call, in step order, each once. */
   agents: { key: string; name: string }[];
   stepCount: number;
-  /** What drives a chat's workflow bar: these steps, or the agent's own phases. */
-  bar: 'steps' | 'agent';
   /** Every workflow runs once on a typed input (api.md 118). */
   trigger: 'run';
   /** The typed input of a run workflow, in form order. */
   input: WorkflowInputField[];
-  /** The datasets the workflow's agent declares; empty when the run picks them. */
+  /** Empty: the run picks its datasets. */
   datasets: string[];
   /** Named datasets that don't exist. */
   missingDatasets: string[];
@@ -71,12 +89,127 @@ export interface WorkflowSummary {
   runRequirement?: string;
 }
 
+/** How a workflow starts, as its Start node says it (workflows R7). */
+export const TRIGGER_LABELS: Record<WorkflowSummary['trigger'], string> = {
+  run: 'Runs on an input',
+};
+
+/**
+ * An agent a workflow's steps call, as `GET /workflows/:id` details it
+ * (api.md 117). `model` and `systemPrompt` are optional here so a fixture
+ * built from the list shape still type-checks; the backend always sends them.
+ */
+export interface WorkflowAgentDetail {
+  key: string;
+  name: string;
+  /** `<provider>/<model>` of the agent's LLM; null when no LLM is set. */
+  model?: string | null;
+  /** The agent's base prompt (api.md 34 `instructions`); each run adds its own context. */
+  systemPrompt?: string;
+  /** The prompt was longer than 20 000 characters and was shortened. */
+  systemPromptTruncated?: true;
+  /** The agent's tools, as `GET /agents/:key` lists them (api.md 34). */
+  toolDetails?: WorkflowAgentToolDetail[];
+}
+
+/** One tool of a workflow's agent (api.md 117 `agents[].toolDetails`). */
+export interface WorkflowAgentToolDetail {
+  name: string;
+  description: string;
+  /** Top-level input parameter names. */
+  inputs: string[];
+}
+
+/**
+ * A JSON Schema as `GET /workflows/:id` sends a step's declared contract
+ * (api.md 117 `inputSchema` / `outputSchema`): an object schema whose
+ * `properties` carry `type`, `items` and `description`, plus `required`.
+ * Only the keywords the page reads are typed; others pass through.
+ */
+export interface JsonSchema {
+  type?: string | string[];
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema;
+  description?: string;
+  enum?: unknown[];
+  anyOf?: JsonSchema[];
+  oneOf?: JsonSchema[];
+  [keyword: string]: unknown;
+}
+
+/** One step of a workflow detail: an agent step also names its agent's key (api.md 117). */
+export type WorkflowDetailStep = Omit<AgentWorkflow['steps'][number], 'agent'> & {
+  agent?: NonNullable<AgentWorkflow['steps'][number]['agent']> & { key?: string };
+  /** The step's declared input contract; absent from an older backend. */
+  inputSchema?: JsonSchema;
+  /** The step's declared output contract; absent from an older backend. */
+  outputSchema?: JsonSchema;
+};
+
 /**
  * One workflow with its steps (api.md 117). Structurally an `AgentWorkflow`,
  * so the 1.23.1 drawing takes it unchanged.
  */
-export interface WorkflowDetail extends WorkflowSummary {
-  steps: AgentWorkflow['steps'];
+export interface WorkflowDetail extends Omit<WorkflowSummary, 'agents'> {
+  agents: WorkflowAgentDetail[];
+  steps: WorkflowDetailStep[];
+  /**
+   * The first 12 hex of the sha256 of the workflow's contract (its input
+   * fields and every step's schemas); absent from an older backend.
+   */
+  contractHash?: string;
+  /**
+   * The graph's edges (api.md 117): `next` joins steps in order, `branch`
+   * is one way out of a `.branch()`, `loop` goes back to an earlier step.
+   * Absent from an older backend: the steps then run in list order.
+   */
+  edges?: WorkflowEdge[];
+}
+
+/** One edge of a workflow's graph (api.md 117); `from` / `to` are step ids, `start` or `end`. */
+export interface WorkflowEdge {
+  from: string;
+  to: string;
+  kind: 'next' | 'branch' | 'loop';
+  /** `Needs clarification`, `Clear`, `Retry once`, `Valid or retried`. */
+  label?: string;
+}
+
+/**
+ * The Plan step's output (`qti-v2-turn`, `PlanOutput`): what the analysis
+ * answers, and the question to ask first when it can't start.
+ */
+export interface PlanOutput {
+  question: string;
+  measures: string[];
+  entities: string[];
+  scope: string;
+  assumptions: string[];
+  needsClarification: boolean;
+  clarification: { question: string; options: string[] } | null;
+}
+
+/** One check of the Validate step (`ValidateOutput.findings`). */
+export interface ValidateFinding {
+  check: string;
+  passed: boolean;
+  detail: string;
+}
+
+/** The Validate step's output (`qti-v2-turn`, `ValidateOutput`). */
+export interface ValidateOutput {
+  ok: boolean;
+  /** 1 or 2. */
+  attempt: number;
+  findings: ValidateFinding[];
+}
+
+/** The Write answer step's output (`qti-v2-turn`, `AnswerOutput`). */
+export interface AnswerOutput {
+  headline: string;
+  /** Markdown, starting with the headline. */
+  answer: string;
 }
 
 /** A step's status in a streamed run (api.md 3.6 `step`). */
@@ -85,16 +218,97 @@ export type WorkflowRunStepStatus =
   | 'success'
   | 'failed'
   | 'skipped'
-  | 'stopped';
+  | 'stopped'
+  /** Waiting for the user's answer (`input-required`). */
+  | 'suspended';
 
-/** One `step` event of the run stream, or a step of a stored run (api.md 3.6). */
+/** One tool call of an agent step, from the turn's `tool` / `tool-result` events (api.md 3.6). */
+export interface WorkflowRunToolCall {
+  tool: string;
+  /** What the tool ran (the SQL), at most 2 000 characters. */
+  input?: string;
+  rowCount?: number;
+  error?: string;
+  /** From the `tool` event to its `tool-result`; absent when no result came. */
+  durationMs?: number;
+}
+
+/**
+ * One message of a chat with an agent step about its run data (api.md 136,
+ * 137), stored with the run, per step.
+ */
+export interface NodeChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** An assistant message: the read-only tool calls of its turn, in order. */
+  toolCalls?: WorkflowRunToolCall[];
+  /** The turn was stopped; `content` is the partial answer. */
+  stopped?: true;
+  /** The turn failed after it started. */
+  error?: string;
+  createdAt: string;
+}
+
+/**
+ * Whether the node dialog of an agent step offers its Chat tab: `hidden`
+ * when the run shown has no workflow in the catalogue, `no-run` before a
+ * stored run is shown, `running` while it streams, `ready` once it ended.
+ */
+export type NodeChatAvailability =
+  | { state: 'hidden' }
+  | { state: 'no-run' }
+  | { state: 'running' }
+  | { state: 'ready'; runId: string };
+
+/**
+ * One `step` event of the run stream, or a step of a stored run (api.md 3.6).
+ * Runs stored before the n8n-style page lack `input`, the timestamps and
+ * `toolCalls`.
+ */
 export interface WorkflowRunStep {
   id: string;
   title: string;
   status: WorkflowRunStepStatus;
+  /** What the step received, capped like `output`. */
+  input?: Record<string, unknown>;
+  inputTruncated?: true;
   output?: Record<string, unknown>;
   outputTruncated?: true;
   error?: string;
+  /** ISO time the step started. */
+  startedAt?: string;
+  /** ISO time the step ended. */
+  endedAt?: string;
+  /** Agent steps fed by an agent turn: its tool calls in order, at most 50. */
+  toolCalls?: WorkflowRunToolCall[];
+  /**
+   * A step that runs more than once (a loop's retry): 1, 2, …; the stored
+   * run keeps one entry per attempt, in order. Absent means the first.
+   */
+  attempt?: number;
+}
+
+/** What a suspended run waits for (api.md 3.6 `waitingFor`). */
+export interface WorkflowWaitingFor {
+  stepId: string;
+  title: string;
+  question: string;
+  options: string[];
+  since?: string;
+  expiresAt: string;
+  /** The run can no longer continue (30 minutes passed, or the app restarted). */
+  expired?: true;
+}
+
+/** The `input-required` event of a run stream (api.md 3.6). */
+export interface WorkflowInputRequired {
+  runId: string;
+  stepId: string;
+  title: string;
+  question: string;
+  options: string[];
+  expiresAt: string;
 }
 
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
@@ -105,7 +319,8 @@ export interface WorkflowRunRequest {
 
 /**
  * A stored run (api.md 3.6 `WorkflowRun`, 121), as `done.run` carries it.
- * Copied from api.md, not from the backend.
+ * Copied from api.md, not from the backend. Runs stored by a workflow that
+ * is no longer in the catalogue keep their shape and read as plain runs.
  */
 export interface WorkflowRun {
   id: string;
@@ -113,29 +328,82 @@ export interface WorkflowRun {
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
   context?: { fromRunId: string };
-  status: 'running' | 'success' | 'failed' | 'stopped';
+  status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
+  /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
+  waitingFor?: WorkflowWaitingFor;
   steps: WorkflowRunStep[];
   output?: Record<string, unknown>;
   error?: string;
-  /** Agent workflows: the user message the agent received. */
+  /** A run with an agent step: the user message the agent received. */
   question?: string;
-  /** Agent workflows: the persisted answer; absent when it stopped or failed first. */
+  /** A run with an agent step: the persisted answer; absent when it stopped or failed first. */
   answer?: ChatMessage;
   datasets: string[];
   agentKey?: string;
   agentId?: string;
   agentName?: string;
   agent?: SessionAgent;
-  rfpId?: string;
   panelItems?: PanelItem[];
   visualizations?: SessionVisualization[];
   /** The cards of the visual actions taken after the run (api.md 130-134). */
   events?: ChatMessage[];
   workflow?: WorkflowView;
+  /** The workflow's `contractHash` when the run started; old runs lack it. */
+  contractHash?: string;
   startedAt: string;
   finishedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** A tool call of the run's agent turn, as it streams (api.md 3.1). */
+export interface LiveToolCall {
+  name: string;
+  rationale?: string;
+  input?: string;
+  rowCount?: number;
+  error?: string;
+  /** The latest `tool-progress` message of a long-running tool. */
+  progress?: string;
+  /** Its `tool-result` arrived. */
+  finished: boolean;
+}
+
+/** One step of the run shown, in the workflow's order. */
+export interface RunStepView {
+  id: string;
+  title: string;
+  kind: 'code' | 'agent';
+  /** Null for a step that has not started yet. */
+  status: WorkflowRunStepStatus | null;
+  input?: Record<string, unknown>;
+  inputTruncated?: true;
+  output?: Record<string, unknown>;
+  outputTruncated?: true;
+  error?: string;
+  startedAt?: string;
+  endedAt?: string;
+  toolCalls?: WorkflowRunToolCall[];
+  /** Which run of a repeated step this entry is; absent means the first. */
+  attempt?: number;
+}
+
+/** The run shown on the workflow page: live while it streams, then as stored. */
+export interface RunView {
+  status: WorkflowRun['status'];
+  /** A suspended or expired run: what it waits on. */
+  waitingFor?: WorkflowWaitingFor;
+  error?: string;
+  steps: RunStepView[];
+  output?: Record<string, unknown>;
+  /** The agent step's answer (absent while streaming, or when none came). */
+  answer?: ChatMessage;
+  /** Null until the stream's `run` event arrives. */
+  runId?: string | null;
+  /** The input the run was started with; null when unknown. */
+  input?: Record<string, WorkflowInputValue> | null;
+  startedAt?: string;
+  finishedAt?: string;
 }
 
 /** One row of the run history (api.md 120 `WorkflowRunSummary`). */

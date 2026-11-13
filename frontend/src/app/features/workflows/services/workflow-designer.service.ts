@@ -5,96 +5,73 @@ import {
   DatasetsApiService,
 } from '../../datasets/services/datasets-api.service';
 import { ToastService } from '../../../core/toast/toast.service';
+import { MessageFeedback } from '../../sessions/models/session.model';
 import {
-  AnalysisReport,
-  ChatMessage,
-  MessageFeedback,
-  RfpPackage,
-  WorkflowView,
-} from '../../sessions/models/session.model';
-import { saveFile } from '../../synthetic-data/services/synthetic-data-api.service';
-import {
+  LiveToolCall,
+  NodeChatAvailability,
+  RunStepView,
+  RunView,
   WorkflowDetail,
+  WorkflowInputError,
   WorkflowInputValue,
   WorkflowRun,
   WorkflowRunRequest,
   WorkflowRunStep,
-  WorkflowRunStepStatus,
+  WorkflowWaitingFor,
 } from '../models/workflow.model';
-import { WorkflowRunsApiService } from './workflow-runs-api.service';
+import {
+  NodeInspection,
+  WorkflowNodeStatus,
+  WorkflowStateSummary,
+} from '../models/workflow-node.model';
+import {
+  NodeInspectionSource,
+  buildNodeInspections,
+  buildToolInspection,
+  nodeStatuses,
+  workflowStateSummary,
+} from './workflow-node-inspection';
+import {
+  inputErrorsByField,
+  validateRunForm,
+} from './workflow-input-validation';
+import { ContractSide, contractViolationSides } from './workflow-contract';
+import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
-  RFP_ID_FIELD,
   RunFormValues,
-  canRunFromPage,
-  continueRequest,
   followUpRequest,
   initialInputValues,
   questionFieldName,
-  rfpDocumentItem,
-  rfpPackageFilename,
   runAgainValues,
   runInput,
 } from './workflows.util';
 
-/** The right panel's tabs on a workflow's page (ui.md 4.4b). */
-export type WorkflowPanelTab = 'workflow' | 'step' | 'run' | 'code';
+export type { LiveToolCall, RunStepView, RunView };
 
-export const WORKFLOW_PANEL_TABS: readonly {
-  id: WorkflowPanelTab;
-  label: string;
-}[] = [
-  { id: 'workflow', label: 'Workflow' },
-  { id: 'step', label: 'Step' },
-  { id: 'run', label: 'Run' },
-  { id: 'code', label: 'Code' },
-];
-
-/** A tool call of the run's agent turn, as it streams (api.md 3.1). */
-export interface LiveToolCall {
-  name: string;
-  rationale?: string;
-  input?: string;
-  rowCount?: number;
-  error?: string;
-  /** The latest `tool-progress` message of a long-running tool. */
-  progress?: string;
-  /** Its `tool-result` arrived. */
-  finished: boolean;
-}
-
-/** One step of the run shown, in the workflow's order. */
-export interface RunStepView {
-  id: string;
-  title: string;
-  kind: 'code' | 'agent';
-  /** Null for a step that has not started yet. */
-  status: WorkflowRunStepStatus | null;
-  output?: Record<string, unknown>;
-  outputTruncated?: true;
-  error?: string;
-}
-
-/** The run shown in the Run tab: live while it streams, then as stored. */
-export interface RunView {
-  status: WorkflowRun['status'];
-  error?: string;
-  steps: RunStepView[];
-  output?: Record<string, unknown>;
-  /** Agent workflows: the answer (absent while streaming, or when none came). */
-  answer?: ChatMessage;
-}
+/** A step of the run panel: its last attempt, and how many times it ran. */
+export type RunPanelStep = RunStepView & { attempts: number };
 
 /** How often, and how many times, a stopped run is read back until it is stored. */
 const STOPPED_POLL_MS = 300;
 const STOPPED_POLL_TRIES = 10;
 
+const NO_RUN_SUMMARY: WorkflowStateSummary = {
+  status: null,
+  ran: 0,
+  total: 0,
+  durationMs: null,
+  runId: null,
+  invalidFields: 0,
+};
+
 /**
  * The state of the workflow designer, shared by the page in the content area
- * (header and canvas) and its right panel (workflows R7, R12, R13, R21): the
- * open workflow, the selected step, the panel's tab, the run form, and the
- * run shown, streamed live (api.md 119, 3.6) and then as stored. Leaving the
- * page discards the form and the run shown (the run itself stays stored).
+ * (header, canvas, Workflow state panel, node dialog) and its right panel,
+ * the Run form (workflows R7, R12, R13, R21): the open workflow, the selected
+ * and the open node, the run form, and the run shown, streamed live (api.md
+ * 119, 3.6) and then as stored. Leaving the page discards the form and the
+ * run shown (the run itself stays stored).
  */
 @Injectable({ providedIn: 'root' })
 export class WorkflowDesigner {
@@ -107,11 +84,22 @@ export class WorkflowDesigner {
   readonly error = signal<string | null>(null);
   readonly workflow = signal<WorkflowDetail | null>(null);
 
+  /** The selected node: a step id, `start` or `end`; null for none. */
   readonly selectedStepId = signal<string | null>(null);
-  readonly tab = signal<WorkflowPanelTab>('workflow');
+  /** The node whose dialog is open; null when none is. */
+  readonly openNodeId = signal<string | null>(null);
+  /** Whether the Workflow state panel under the canvas is expanded. */
+  readonly stateOpen = signal(true);
+  /**
+   * Bumped by Execute workflow on the canvas: the right panel focuses the run
+   * form. Execute workflow itself never runs.
+   */
+  readonly runFormRequest = signal(0);
 
   /** The datasets a `datasets` or `dataset` field picks from. */
   readonly datasets = signal<Dataset[]>([]);
+  /** The datasets list answered; until then a picked dataset is not checked. */
+  private readonly datasetsLoaded = signal(false);
   /** The run form's values, by field name. */
   readonly inputValues = signal<RunFormValues>({});
   /** The follow-up field under an answer. */
@@ -120,6 +108,15 @@ export class WorkflowDesigner {
   readonly running = signal(false);
   /** The server's refusal of the last Execute (before anything ran), or `Backend unreachable`. */
   readonly runError = signal<string | null>(null);
+  /**
+   * The errors that refused the last Execute, by the run form or the server
+   * (api.md 119 `errors[]`; ui.md 4.4b); empty when it was not refused.
+   */
+  readonly inputErrors = signal<WorkflowInputError[]>([]);
+  /** Each field's message, shown under its control. */
+  readonly fieldErrors = computed(() => inputErrorsByField(this.inputErrors()));
+  /** Bumped by a refusal with field errors: the run form focuses the first one. */
+  readonly invalidFocusRequest = signal(0);
 
   /** The run streaming or shown: its id once the stream said it started. */
   readonly runId = signal<string | null>(null);
@@ -129,78 +126,60 @@ export class WorkflowDesigner {
   readonly ratingPending = signal(false);
   /** The earlier run this one follows up (its context), if any. */
   readonly contextRun = signal<{ id: string; question: string } | null>(null);
-  /**
-   * The RFP Builder's Continue (plan 4.3): the run the next Execute continues,
-   * with its RFP when it has one; cleared once that run starts, or by
-   * starting fresh.
-   */
-  readonly pendingContinue = signal<{
-    id: string;
-    question: string;
-    rfpId?: string;
-  } | null>(null);
-  /** The RFP document the run shown put in the panel (rfp R9, R16), once read. */
-  readonly rfpDocument = signal<{ title: string; text: string } | null>(null);
-  /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
-  readonly rfpDownloading = signal<string | null>(null);
-  /** The deep-analysis report of the run shown is being downloaded (plan 1.25.3). */
-  readonly reportDownloading = signal(false);
 
-  /** Live: the step events so far, by step id. */
-  readonly liveSteps = signal<Record<string, WorkflowRunStep>>({});
+  /** The input of the run started here (Execute, Follow up, Continue); null before one. */
+  readonly liveInput = signal<Record<string, WorkflowInputValue> | null>(null);
+  /** Live: when the run started and ended, stamped here. */
+  private readonly liveStartedAt = signal<string | null>(null);
+  private readonly liveFinishedAt = signal<string | null>(null);
+  /** Live: the step events so far, by step id: one per attempt, in order. */
+  readonly liveSteps = signal<Record<string, WorkflowRunStep[]>>({});
   /** Live: the agent's reasoning so far. */
   readonly reasoning = signal('');
   /** Live: the agent's tool calls so far. */
   readonly toolCalls = signal<LiveToolCall[]>([]);
   /** Live: the answer text so far (not authoritative; `done.run` replaces it). */
   readonly streamingText = signal('');
-  /** Live: the agent's phases (`workflow` event; the RFP Builder's stages), for the phases bar. */
-  private readonly livePhases = signal<WorkflowView | null>(null);
-  /** The agent's phases bar: live while it streams, then as stored. */
-  readonly phases = computed<WorkflowView | null>(() => {
-    // A code workflow's steps already drive the canvas: no phases list inside them.
-    if (this.workflow()?.bar === 'steps') return null;
-    return this.run()?.workflow ?? this.livePhases();
-  });
   /** The run started, then the stream failed (`error` event, a dropped stream). */
   private readonly streamError = signal<string | null>(null);
   /** The user stopped the run shown. */
   private readonly stopped = signal(false);
+  /** What the streaming run waits on (`input-required`), until it resumes. */
+  private readonly liveWaiting = signal<WorkflowWaitingFor | null>(null);
+  /** The server refused to resume (not a failed run): shown on the waiting card. */
+  readonly resumeError = signal<string | null>(null);
 
   /** Run again: the values the next loaded workflow's form opens with. */
   private prefill: RunFormValues | null = null;
+  /** A stored run to show once the workflow has loaded ("Answer in the workflow"). */
+  private pendingRun: WorkflowRun | null = null;
 
   private loadSubscription: Subscription | null = null;
   private datasetsSubscription: Subscription | null = null;
-  private documentSubscription: Subscription | null = null;
-  private downloadSubscription: Subscription | null = null;
   private stoppedSubscription: Subscription | null = null;
   private stoppedTimer: ReturnType<typeof setTimeout> | null = null;
   private abort: AbortController | null = null;
   /** Each run started bumps it; events of an older run are ignored. */
   private generation = 0;
 
-  /** The tabs this workflow has: Run only when it runs from its page (R21). */
-  readonly tabs = computed(() => {
-    const workflow = this.workflow();
-    return WORKFLOW_PANEL_TABS.filter(
-      (tab) =>
-        tab.id !== 'run' || (workflow !== null && canRunFromPage(workflow)),
-    );
-  });
-
-  readonly selectedStep = computed(() => {
-    const workflow = this.workflow();
-    const id = this.selectedStepId();
-    if (workflow === null || id === null) return null;
-    const index = workflow.steps.findIndex((step) => step.id === id);
-    return index < 0 ? null : { step: workflow.steps[index], number: index + 1 };
-  });
-
   /** The field a follow-up's question goes into; null when it has none. */
   readonly questionField = computed(() => {
     const workflow = this.workflow();
     return workflow === null ? null : questionFieldName(workflow.input);
+  });
+
+  /**
+   * The question the run shown waits on, or (`expired`) waited on and can no
+   * longer continue; null otherwise.
+   */
+  readonly waitingFor = computed<WorkflowWaitingFor | null>(() => {
+    const stored = this.run();
+    if (stored !== null) {
+      const waiting = stored.waitingFor ?? null;
+      if (waiting === null) return null;
+      return stored.status === 'suspended' || waiting.expired ? waiting : null;
+    }
+    return this.stopped() ? null : this.liveWaiting();
   });
 
   /** The run shown; null before the first Execute and after a refusal. */
@@ -210,8 +189,12 @@ export class WorkflowDesigner {
     const kinds = new Map(workflow.steps.map((step) => [step.id, step.kind]));
     const stored = this.run();
     if (stored !== null) {
+      const finishedAt = stored.finishedAt ?? this.liveFinishedAt();
       return {
         status: stored.status,
+        ...(stored.waitingFor !== undefined
+          ? { waitingFor: stored.waitingFor }
+          : {}),
         ...(stored.error !== undefined ? { error: stored.error } : {}),
         steps: stored.steps.map((step) => ({
           ...step,
@@ -219,6 +202,12 @@ export class WorkflowDesigner {
         })),
         ...(stored.output !== undefined ? { output: stored.output } : {}),
         ...(stored.answer !== undefined ? { answer: stored.answer } : {}),
+        runId: stored.id,
+        input: stored.input ?? null,
+        startedAt: stored.startedAt,
+        ...(finishedAt !== null && finishedAt !== undefined
+          ? { finishedAt }
+          : {}),
       };
     }
     if (this.runId() === null && !this.running() && !this.stopped()) {
@@ -226,57 +215,170 @@ export class WorkflowDesigner {
     }
     const live = this.liveSteps();
     const failure = this.streamError();
+    const waiting = this.waitingFor();
     const status: RunView['status'] = this.stopped()
       ? 'stopped'
       : failure !== null
         ? 'failed'
-        : 'running';
+        : waiting !== null
+          ? 'suspended'
+          : 'running';
+    const startedAt = this.liveStartedAt();
+    const finishedAt = this.liveFinishedAt();
     return {
       status,
+      ...(status === 'suspended' && waiting !== null
+        ? { waitingFor: waiting }
+        : {}),
       ...(failure !== null ? { error: failure } : {}),
-      steps: workflow.steps.map((step) => {
-        const event = Object.hasOwn(live, step.id) ? live[step.id] : null;
-        let stepStatus = event === null ? null : event.status;
-        if (stepStatus === 'running' && status !== 'running') {
-          stepStatus = status === 'stopped' ? 'stopped' : 'failed';
-        }
-        return {
-          id: step.id,
-          title: event?.title ?? step.title,
-          kind: step.kind,
-          status: stepStatus,
-          ...(event?.output !== undefined ? { output: event.output } : {}),
-          ...(event?.outputTruncated ? { outputTruncated: true as const } : {}),
-          ...(event?.error !== undefined ? { error: event.error } : {}),
-        };
+      steps: workflow.steps.flatMap((step) => {
+        const events: (WorkflowRunStep | null)[] = Object.hasOwn(live, step.id)
+          ? live[step.id]
+          : [null];
+        return events.map((event): RunStepView => {
+          let stepStatus = event === null ? null : event.status;
+          if (
+            stepStatus === 'running' &&
+            status !== 'running' &&
+            status !== 'suspended'
+          ) {
+            stepStatus = status === 'stopped' ? 'stopped' : 'failed';
+          }
+          return {
+            id: step.id,
+            title: event?.title ?? step.title,
+            kind: step.kind,
+            status: stepStatus,
+            ...(event?.input !== undefined ? { input: event.input } : {}),
+            ...(event?.inputTruncated ? { inputTruncated: true as const } : {}),
+            ...(event?.output !== undefined ? { output: event.output } : {}),
+            ...(event?.outputTruncated
+              ? { outputTruncated: true as const }
+              : {}),
+            ...(event?.error !== undefined ? { error: event.error } : {}),
+            ...(event?.startedAt !== undefined
+              ? { startedAt: event.startedAt }
+              : {}),
+            ...(event?.endedAt !== undefined ? { endedAt: event.endedAt } : {}),
+            ...(event?.toolCalls !== undefined
+              ? { toolCalls: event.toolCalls }
+              : {}),
+            ...(event?.attempt !== undefined ? { attempt: event.attempt } : {}),
+          };
+        });
       }),
+      runId: this.runId(),
+      input: this.liveInput(),
+      ...(startedAt !== null ? { startedAt } : {}),
+      ...(finishedAt !== null ? { finishedAt } : {}),
     };
   });
 
-  /** Each step's status in the run shown, by step id; empty with no run. */
-  readonly stepStatuses = computed<Record<string, WorkflowRunStepStatus>>(() => {
-    const statuses: Record<string, WorkflowRunStepStatus> = {};
-    for (const step of this.runResult()?.steps ?? []) {
-      if (step.status !== null) statuses[step.id] = step.status;
-    }
-    return statuses;
+  private readonly inspectionSource = computed<NodeInspectionSource | null>(
+    () => {
+      const workflow = this.workflow();
+      if (workflow === null) return null;
+      return {
+        workflow,
+        run: this.runResult(),
+        liveToolCalls: this.toolCalls(),
+        running: this.running(),
+        inputErrors: this.inputErrors(),
+      };
+    },
+  );
+
+  /** Start, every step and End, with what each received and produced in the run shown. */
+  readonly nodes = computed<NodeInspection[]>(() => {
+    const source = this.inspectionSource();
+    return source === null ? [] : buildNodeInspections(source);
+  });
+
+  /** The Workflow state panel's summary row. */
+  readonly stateSummary = computed<WorkflowStateSummary>(() => {
+    const source = this.inspectionSource();
+    return source === null
+      ? NO_RUN_SUMMARY
+      : workflowStateSummary(source, this.nodes());
   });
 
   /**
-   * Whether the workflow builds an RFP over several runs (plan 4.3): it has
-   * the hidden `rfpId` field Continue sets.
+   * The steps of the run shown that failed on a contract violation, by id,
+   * with the side it broke on (ui.md 4.4b); empty with no run.
    */
-  readonly continuesRfp = computed(
-    () =>
-      this.workflow()?.input.some(
-        (field) => field.name === RFP_ID_FIELD && field.hidden === true,
-      ) ?? false,
+  readonly contractViolations = computed<Record<string, ContractSide>>(() =>
+    contractViolationSides(this.runResult()?.steps),
+  );
+
+  /** The stored run's `contractHash`; null while live, or for an old run. */
+  readonly runContractHash = computed(() => this.run()?.contractHash ?? null);
+
+  /**
+   * The run panel's steps: each step once, as its last attempt, with how
+   * many times it ran; in the order the run shows them.
+   */
+  readonly runPanelSteps = computed<RunPanelStep[]>(() => {
+    const steps = this.runResult()?.steps ?? [];
+    const byId = new Map<string, RunPanelStep>();
+    for (const step of steps) {
+      const seen = byId.get(step.id);
+      byId.set(step.id, { ...step, attempts: (seen?.attempts ?? 0) + 1 });
+    }
+    return [...byId.values()];
+  });
+
+  /** How many times each step ran in the run shown (a loop's retry runs one twice); empty with no run. */
+  readonly nodeAttempts = computed<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const step of this.runResult()?.steps ?? []) {
+      if (step.status === null) continue;
+      out[step.id] = (Object.hasOwn(out, step.id) ? out[step.id] : 0) + 1;
+    }
+    return out;
+  });
+
+  /** Each node's status in the run shown (Start and End included); empty with no run. */
+  readonly nodeStatuses = computed<Record<string, WorkflowNodeStatus>>(() =>
+    nodeStatuses(this.nodes()),
   );
 
   /**
-   * Follow up is offered under a stored answer of a workflow with a question;
-   * the RFP Builder offers Continue instead.
+   * The node whose dialog is open, with its data, or the tool whose sub-node
+   * opened it; null when none is.
    */
+  readonly openInspection = computed<NodeInspection | null>(() => {
+    const id = this.openNodeId();
+    return id === null ? null : this.inspect(id);
+  });
+
+  private inspect(id: string): NodeInspection | null {
+    const nodes = this.nodes();
+    return (
+      nodes.find((node) => node.nodeId === id) ?? buildToolInspection(nodes, id)
+    );
+  }
+
+  /**
+   * Whether an agent step's dialog can chat about the run shown (api.md 136,
+   * 137): only once that run ended and is stored, and only for a run of the
+   * workflow this page resolved (a run of a removed workflow has none).
+   */
+  readonly nodeChat = computed<NodeChatAvailability>(() => {
+    const workflow = this.workflow();
+    if (workflow === null) return { state: 'hidden' };
+    const stored = this.run();
+    if (stored !== null) {
+      if (stored.workflowId !== workflow.id) return { state: 'hidden' };
+      return stored.status === 'running'
+        ? { state: 'running' }
+        : { state: 'ready', runId: stored.id };
+    }
+    if (this.running()) return { state: 'running' };
+    const id = this.runId();
+    return id === null ? { state: 'no-run' } : { state: 'ready', runId: id };
+  });
+
+  /** Follow up is offered under a stored answer of a workflow with a question. */
   readonly canFollowUp = computed(() => {
     const run = this.run();
     return (
@@ -284,34 +386,22 @@ export class WorkflowDesigner {
       run.answer !== undefined &&
       run.status === 'success' &&
       this.questionField() !== null &&
-      !this.continuesRfp() &&
       !this.running()
     );
   });
 
   /**
-   * Run again (plan 1.24.11): the next workflow opened shows its Run tab with
+   * Run again (plan 1.24.11): the next workflow opened shows its run form with
    * this earlier run's input filled in.
    */
   prefillRunAgain(input: WorkflowRun['input']): void {
     this.prefill = input as RunFormValues;
   }
 
-  /**
-   * Continue is offered under every stored RFP Builder answer: a first run
-   * may only propose, and creates no RFP until the consultant confirms (rfp R4).
-   */
-  readonly canContinue = computed(() => {
-    const run = this.run();
-    return (
-      run !== null &&
-      run.answer !== undefined &&
-      run.status === 'success' &&
-      this.continuesRfp() &&
-      this.questionField() !== null &&
-      !this.running()
-    );
-  });
+  /** "Answer in the workflow": the next workflow opened shows this stored run. */
+  showRunOnLoad(run: WorkflowRun): void {
+    this.pendingRun = run;
+  }
 
   /** Open a workflow: everything of the previous one is discarded. */
   load(id: string): void {
@@ -322,17 +412,20 @@ export class WorkflowDesigner {
         this.workflow.set(workflow);
         this.inputValues.set(initialInputValues(workflow.input));
         this.loading.set(false);
+        if (this.pendingRun !== null) {
+          const pending = this.pendingRun;
+          this.pendingRun = null;
+          if (pending.workflowId === workflow.id) this.showStored(pending);
+        }
         if (this.prefill !== null) {
           const input = this.prefill;
           this.prefill = null;
           this.inputValues.set(runAgainValues(workflow.input, input));
-          this.setTab('run');
+          this.requestRunForm();
         }
         if (
           workflow.input.some(
-            (field) =>
-              !field.hidden &&
-              (field.type === 'datasets' || field.type === 'dataset'),
+            (field) => !field.hidden && field.type === 'datasets',
           )
         ) {
           this.loadDatasets();
@@ -347,7 +440,10 @@ export class WorkflowDesigner {
 
   private loadDatasets(): void {
     this.datasetsSubscription = this.datasetsApi.getDatasets().subscribe({
-      next: (response) => this.datasets.set(response.datasets ?? []),
+      next: (response) => {
+        this.datasets.set(response.datasets ?? []);
+        this.datasetsLoaded.set(true);
+      },
       error: () => this.datasets.set([]),
     });
   }
@@ -358,36 +454,57 @@ export class WorkflowDesigner {
     this.loadSubscription = null;
     this.datasetsSubscription?.unsubscribe();
     this.datasetsSubscription = null;
-    this.downloadSubscription?.unsubscribe();
-    this.downloadSubscription = null;
-    this.rfpDownloading.set(null);
-    this.reportDownloading.set(false);
     this.cancelStream();
     this.loading.set(false);
     this.error.set(null);
     this.workflow.set(null);
     this.selectedStepId.set(null);
-    this.tab.set('workflow');
+    this.openNodeId.set(null);
+    this.runFormRequest.set(0);
     this.datasets.set([]);
+    this.datasetsLoaded.set(false);
     this.inputValues.set({});
     this.followUpText.set('');
     this.runError.set(null);
-    this.pendingContinue.set(null);
+    this.inputErrors.set([]);
     this.resetRun();
   }
 
-  /** Select a step (the panel shows it on Step), or clear the selection. */
+  /** Select a node (a step, `start` or `end`), or clear the selection. */
   select(id: string | null): void {
     this.selectedStepId.set(id);
-    if (id !== null) this.tab.set('step');
   }
 
-  setTab(tab: WorkflowPanelTab): void {
-    if (this.tabs().some((t) => t.id === tab)) this.tab.set(tab);
+  /**
+   * Open a node's dialog, or a tool's from its sub-node id
+   * (`<stepId>-tool-<name>`); the node, or the tool's agent step, is
+   * selected too.
+   */
+  openNode(id: string): void {
+    const node = this.inspect(id);
+    this.selectedStepId.set(
+      node?.kind === 'tool' && node.step ? node.step.id : id,
+    );
+    this.openNodeId.set(id);
   }
 
+  closeNode(): void {
+    this.openNodeId.set(null);
+  }
+
+  /** Execute workflow on the canvas: ask the right panel to focus its run form. */
+  requestRunForm(): void {
+    this.runFormRequest.update((n) => n + 1);
+  }
+
+  /** A field's new value; editing a field clears its error. */
   setInput(name: string, value: WorkflowInputValue): void {
     this.inputValues.update((values) => ({ ...values, [name]: value }));
+    if (this.inputErrors().some((error) => error.field === name)) {
+      this.inputErrors.update((errors) =>
+        errors.filter((error) => error.field !== name),
+      );
+    }
   }
 
   /** A text, text area or number field's value; empty until typed. */
@@ -423,104 +540,35 @@ export class WorkflowDesigner {
   }
 
   /**
-   * Run the workflow once on the form's values (api.md 119); after Continue,
-   * on the continued run's RFP with that run as the context (plan 4.3).
+   * Run the workflow once on the form's values (api.md 119), once the form
+   * has checked them: an invalid input sends nothing, each field shows its
+   * error and Start is invalid (ui.md 4.4b).
    */
   execute(): void {
     const workflow = this.workflow();
     if (workflow === null || this.running()) return;
-    const pending = this.pendingContinue();
-    if (pending !== null) {
-      this.start(
-        workflow,
-        continueRequest(workflow.input, this.inputValues(), pending),
-        { id: pending.id, question: pending.question },
-      );
-      return;
-    }
-    this.start(workflow, { input: runInput(workflow.input, this.inputValues()) }, null);
-  }
-
-  /**
-   * The RFP Builder's Continue (plan 4.3): the message field is cleared for
-   * the consultant's reply, and the next Execute continues the shown run (its
-   * message and proposal as the context) on its RFP, when it has one.
-   */
-  continueRun(): void {
-    const run = this.run();
-    const field = this.questionField();
-    if (!this.canContinue() || run === null || field === null) return;
-    this.setInput(field, '');
-    this.pendingContinue.set({
-      id: run.id,
-      question: run.question ?? '',
-      ...(run.rfpId ? { rfpId: run.rfpId } : {}),
-    });
-  }
-
-  /** Drop a pending Continue: the next Execute starts a fresh exchange. */
-  cancelContinue(): void {
-    this.pendingContinue.set(null);
-  }
-
-  /**
-   * Save the shown run's RFP package, or one of its files, from the run's
-   * route (rfp R9, R16; api.md 127), named as the server names it.
-   */
-  downloadRfpPackage(pkg: RfpPackage, file?: string): void {
-    const runId = this.run()?.id ?? this.runId();
-    if (runId === null || this.rfpDownloading() !== null) return;
-    this.rfpDownloading.set(`${pkg.rfpId}/${file ?? ''}`);
-    this.downloadSubscription = this.runsApi
-      .downloadRfpPackage(runId, pkg.rfpId, file, pkg.draft)
-      .subscribe({
-        next: (blob) => {
-          this.rfpDownloading.set(null);
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = rfpPackageFilename(pkg, file);
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 0);
-          this.toast.success('RFP package downloaded');
-        },
-        error: (err) => {
-          this.rfpDownloading.set(null);
-          this.toast.error(err?.error?.message ?? 'RFP package download failed');
-        },
-      });
-  }
-
-  /**
-   * Save the shown run's deep-analysis report (plan 1.25.3): the run's file
-   * item at the report's path, from the run's route (api.md 126), named as
-   * the file is.
-   */
-  downloadReport(report: AnalysisReport): void {
-    const run = this.run();
-    if (run === null || this.reportDownloading()) return;
-    const item = (run.panelItems ?? []).find(
-      (candidate) => candidate.kind === 'file' && candidate.path === report.path,
+    const values = this.inputValues();
+    const errors = validateRunForm(
+      workflow.input,
+      values,
+      this.datasetsLoaded() ? this.datasets() : null,
     );
-    if (item === undefined) {
-      this.toast.error('Report download failed');
+    if (errors.length > 0) {
+      this.cancelStream();
+      this.resetRun();
+      this.runError.set(null);
+      this.refuse(errors);
       return;
     }
-    const fileName = report.path.split('/').pop() || 'report.md';
-    this.reportDownloading.set(true);
-    this.downloadSubscription = this.runsApi.downloadPanelItem(run.id, item.id).subscribe({
-      next: (blob) => {
-        this.reportDownloading.set(false);
-        saveFile({ blob, fileName });
-        this.toast.success('Report downloaded');
-      },
-      error: (err) => {
-        this.reportDownloading.set(false);
-        this.toast.error(err?.error?.message ?? 'Report download failed');
-      },
-    });
+    this.start(workflow, { input: runInput(workflow.input, values) }, null);
+  }
+
+  /** The input was refused: errors on the fields, focus on the first one. */
+  private refuse(errors: WorkflowInputError[]): void {
+    this.inputErrors.set(errors);
+    if (Object.keys(this.fieldErrors()).length > 0) {
+      this.invalidFocusRequest.update((n) => n + 1);
+    }
   }
 
   /**
@@ -538,10 +586,6 @@ export class WorkflowDesigner {
     this.setInput(field, text);
     this.followUpText.set('');
     const request = followUpRequest(run, field, text);
-    // An RFP Builder's clarification pick stays on the run's RFP (plan 4.3).
-    if (this.continuesRfp() && run.rfpId) {
-      request.input = { ...request.input, [RFP_ID_FIELD]: run.rfpId };
-    }
     this.start(workflow, request, {
       id: run.id,
       question: run.question ?? '',
@@ -582,6 +626,7 @@ export class WorkflowDesigner {
     if (!this.running()) return;
     this.cancelStream();
     this.stopped.set(true);
+    this.liveFinishedAt.set(new Date().toISOString());
     const id = this.runId();
     if (id !== null) this.readBackStopped(id, this.generation, 0);
   }
@@ -614,38 +659,111 @@ export class WorkflowDesigner {
     this.stoppedTimer = null;
   }
 
-  /** The run as stored: shown, with the RFP document it put in the panel read. */
+  /** The run as stored: shown. */
   private showStored(run: WorkflowRun): void {
     this.run.set(run);
-    const item = this.continuesRfp() ? rfpDocumentItem(run.panelItems) : null;
-    if (item === null) return;
-    const generation = this.generation;
-    this.documentSubscription?.unsubscribe();
-    this.documentSubscription = this.runsApi
-      .panelItemFile(run.id, item.id)
-      .subscribe({
-        next: (file) => {
-          if (generation !== this.generation) return;
-          this.rfpDocument.set({ title: item.title, text: file.text });
-        },
-        error: () => undefined,
-      });
   }
 
   private resetRun(): void {
-    this.documentSubscription?.unsubscribe();
-    this.documentSubscription = null;
-    this.rfpDocument.set(null);
     this.runId.set(null);
     this.run.set(null);
     this.contextRun.set(null);
+    this.liveInput.set(null);
+    this.liveStartedAt.set(null);
+    this.liveFinishedAt.set(null);
     this.liveSteps.set({});
     this.reasoning.set('');
     this.toolCalls.set([]);
     this.streamingText.set('');
-    this.livePhases.set(null);
     this.streamError.set(null);
     this.stopped.set(false);
+    this.liveWaiting.set(null);
+    this.resumeError.set(null);
+  }
+
+  /**
+   * Answer the question a suspended run waits on (api.md 138): the SAME run
+   * continues (same `runId`, its steps and attempts), its live progress
+   * appended to what it had. A refusal before the stream leaves the run as
+   * it was: an expired one reads as stopped, any other shows on the card.
+   */
+  resume(answer: string): void {
+    const workflow = this.workflow();
+    const stored = this.run();
+    const waiting = this.waitingFor();
+    const text = answer.trim();
+    if (workflow === null || stored === null || waiting === null) return;
+    if (this.running() || !text) return;
+    if (stored.status !== 'suspended' || waiting.expired) return;
+    this.cancelStream();
+    const generation = this.generation;
+    const live = () => generation === this.generation;
+    const grouped: Record<string, WorkflowRunStep[]> = {};
+    for (const step of stored.steps) {
+      (grouped[step.id] ??= []).push(step);
+    }
+    this.resumeError.set(null);
+    this.liveWaiting.set(null);
+    this.liveSteps.set(grouped);
+    this.runId.set(stored.id);
+    this.liveInput.set(stored.input ?? null);
+    this.liveStartedAt.set(stored.startedAt);
+    this.liveFinishedAt.set(null);
+    this.streamError.set(null);
+    this.stopped.set(false);
+    this.reasoning.set('');
+    this.toolCalls.set([]);
+    this.streamingText.set('');
+    this.run.set(null);
+    this.running.set(true);
+    const controller = new AbortController();
+    this.abort = controller;
+    const base = this.streamHandlers(workflow, live);
+    let refused: number | null = null;
+    void this.runsApi
+      .resumeRun(
+        stored.id,
+        waiting.stepId,
+        text,
+        {
+          ...base,
+          onRefused: (status) => {
+            refused = status;
+          },
+          onError: (message, errors) => {
+            if (!live()) return;
+            if (refused === null) {
+              base.onError?.(message, errors);
+              return;
+            }
+            this.running.set(false);
+            if (refused === 410) {
+              this.showStored({
+                ...stored,
+                status: 'stopped',
+                waitingFor: { ...waiting, expired: true },
+              });
+            } else {
+              this.showStored(stored);
+              this.resumeError.set(message);
+            }
+          },
+        },
+        controller.signal,
+      )
+      .finally(() => {
+        if (!live()) return;
+        this.running.set(false);
+        this.abort = null;
+      });
+  }
+
+  /**
+   * An expired run: start a new one with the user's answer as a follow-up on
+   * it (`context.fromRunId`).
+   */
+  rerunWithAnswer(answer: string): void {
+    this.followUp(answer);
   }
 
   private start(
@@ -657,7 +775,10 @@ export class WorkflowDesigner {
     const generation = this.generation;
     this.resetRun();
     this.contextRun.set(context);
+    this.liveInput.set(request.input);
+    this.liveStartedAt.set(new Date().toISOString());
     this.runError.set(null);
+    this.inputErrors.set([]);
     this.running.set(true);
     const controller = new AbortController();
     this.abort = controller;
@@ -667,68 +788,7 @@ export class WorkflowDesigner {
       .streamRun(
         workflow.id,
         request,
-        {
-          onRun: ({ runId }) => {
-            if (!live()) return;
-            this.runId.set(runId);
-            this.pendingContinue.set(null);
-          },
-          onStep: (step) => {
-            if (!live()) return;
-            this.liveSteps.update((steps) => ({ ...steps, [step.id]: step }));
-          },
-          onReasoning: (delta) => {
-            if (live()) this.reasoning.update((text) => text + delta);
-          },
-          onWorkflow: (view) => {
-            if (live()) this.livePhases.set(view);
-          },
-          onText: (delta) => {
-            if (live()) this.streamingText.update((text) => text + delta);
-          },
-          onTool: (call) => {
-            if (!live()) return;
-            this.toolCalls.update((calls) => [
-              ...calls,
-              { ...call, finished: false },
-            ]);
-          },
-          onToolResult: (summary) => {
-            if (!live()) return;
-            this.updateOpenCall(summary.tool, (call) => ({
-              ...call,
-              finished: true,
-              ...(summary.rowCount !== undefined
-                ? { rowCount: summary.rowCount }
-                : {}),
-              ...(summary.error ? { error: summary.error } : {}),
-            }));
-          },
-          onToolProgress: (progress) => {
-            if (!live()) return;
-            this.updateOpenCall(progress.tool, (call) => ({
-              ...call,
-              progress: progress.message,
-            }));
-          },
-          onDone: (run) => {
-            if (!live()) return;
-            this.runId.set(run.id);
-            this.running.set(false);
-            this.showStored(run);
-          },
-          onError: (message) => {
-            if (!live()) return;
-            if (this.runId() === null) {
-              // Refused (or unreachable) before the run started: no result.
-              this.runError.set(message);
-              this.resetRun();
-            } else {
-              this.streamError.set(message);
-            }
-            this.running.set(false);
-          },
-        },
+        this.streamHandlers(workflow, live),
         controller.signal,
       )
       .finally(() => {
@@ -736,6 +796,127 @@ export class WorkflowDesigner {
         this.running.set(false);
         this.abort = null;
       });
+  }
+
+  /** The run stream's handlers, shared by a run and its resume; `live` is false once superseded. */
+  private streamHandlers(
+    workflow: WorkflowDetail,
+    live: () => boolean,
+  ): RunStreamHandlers {
+    return {
+      onRun: ({ runId }) => {
+        if (!live()) return;
+        this.runId.set(runId);
+      },
+      onStep: (step) => {
+        if (!live()) return;
+        this.applyStep(workflow, step);
+      },
+      onInputRequired: (event) => {
+        if (!live()) return;
+        this.liveWaiting.set({
+          stepId: event.stepId,
+          title: event.title,
+          question: event.question,
+          options: event.options,
+          expiresAt: event.expiresAt,
+        });
+      },
+      onReasoning: (delta) => {
+        if (live()) this.reasoning.update((text) => text + delta);
+      },
+      onText: (delta) => {
+        if (live()) this.streamingText.update((text) => text + delta);
+      },
+      onTool: (call) => {
+        if (!live()) return;
+        this.toolCalls.update((calls) => [
+          ...calls,
+          { ...call, finished: false },
+        ]);
+      },
+      onToolResult: (summary) => {
+        if (!live()) return;
+        this.updateOpenCall(summary.tool, (call) => ({
+          ...call,
+          finished: true,
+          ...(summary.rowCount !== undefined
+            ? { rowCount: summary.rowCount }
+            : {}),
+          ...(summary.error ? { error: summary.error } : {}),
+        }));
+      },
+      onToolProgress: (progress) => {
+        if (!live()) return;
+        this.updateOpenCall(progress.tool, (call) => ({
+          ...call,
+          progress: progress.message,
+        }));
+      },
+      onDone: (run) => {
+        if (!live()) return;
+        this.runId.set(run.id);
+        if (run.status !== 'suspended') {
+          this.liveFinishedAt.set(new Date().toISOString());
+        }
+        this.running.set(false);
+        this.showStored(run);
+      },
+      onError: (message, errors) => {
+        if (!live()) return;
+        if (this.runId() === null) {
+          // Refused (or unreachable) before the run started: no result.
+          this.runError.set(
+            errors ? this.unshownError(workflow, errors) : message,
+          );
+          if (errors) this.refuse(errors);
+          this.resetRun();
+        } else {
+          this.streamError.set(message);
+          this.liveFinishedAt.set(new Date().toISOString());
+        }
+        this.running.set(false);
+      },
+    };
+  }
+
+  /**
+   * A step event: replaces the event of the same attempt, or adds the next
+   * attempt. An agent step that starts begins with no live tool calls or
+   * reasoning of its own (an earlier agent step's are in its stored event).
+   */
+  private applyStep(workflow: WorkflowDetail, step: WorkflowRunStep): void {
+    const attempt = step.attempt ?? 1;
+    this.liveSteps.update((steps) => {
+      const list = Object.hasOwn(steps, step.id) ? [...steps[step.id]] : [];
+      const at = list.findIndex((e) => (e.attempt ?? 1) === attempt);
+      if (at >= 0) list[at] = step;
+      else list.push(step);
+      list.sort((a, b) => (a.attempt ?? 1) - (b.attempt ?? 1));
+      return { ...steps, [step.id]: list };
+    });
+    const kind = workflow.steps.find((s) => s.id === step.id)?.kind;
+    if (kind === 'agent' && step.status === 'running') {
+      this.toolCalls.set([]);
+      this.reasoning.set('');
+    }
+  }
+
+  /**
+   * The first refusal no form control shows (not about a field, or about a
+   * hidden one): it stays under Execute; null when every error has a field.
+   */
+  private unshownError(
+    workflow: WorkflowDetail,
+    errors: WorkflowInputError[],
+  ): string | null {
+    const shown = new Set(
+      workflow.input.filter((f) => !f.hidden).map((f) => f.name),
+    );
+    const other = errors.find(
+      (error) => error.field === null || !shown.has(error.field),
+    );
+    return other?.message ?? null;
   }
 
   /** Update the latest unfinished call of `tool`. */

@@ -10,6 +10,7 @@ import {
 } from './helpers/app-actions';
 import { apiJson } from './helpers/api';
 import { seedPastChat } from './helpers/past-chats';
+import { V2_WORKFLOW_ID, V2_WORKFLOW_NAME } from './helpers/runs-api';
 import { worldCupKey } from './helpers/world-cup-db';
 import {
   createUserAgent,
@@ -257,26 +258,26 @@ test('a chat saved before workflows names the workflow of its agent', async ({
 }) => {
   // Saved with an agent binding and no `workflowId` (past-chats R65).
   const id = seedPastChat(appDataDir, {
-    name: 'Saved RFP chat',
+    name: 'Saved readiness chat',
     datasets: [WORLD_CUP_DATASET],
-    agentKey: 'rfp',
-    agentName: 'RFP Builder',
+    agentKey: 'data-readiness',
+    agentName: 'Data Readiness Agent',
   });
   await page.reload();
 
   await openSessions(page);
-  const row = sessionRow(page, 'Saved RFP chat');
+  const row = sessionRow(page, 'Saved readiness chat');
   await expect(row.getByTestId('row-session-workflow')).toHaveText(
-    'RFP Builder',
+    'Data Readiness Agent',
   );
-  await row.getByRole('button', { name: /^Saved RFP chat/ }).click();
+  await row.getByRole('button', { name: /^Saved readiness chat/ }).click();
   await expect(page.locator('header').getByTestId('session-id')).toHaveText(
     `ID ${id.slice(0, 8)}`,
   );
   await expect(
     page.locator('header').getByText('Workflow', { exact: true }),
   ).toBeVisible();
-  await expect(headerWorkflow(page)).toHaveText('RFP Builder');
+  await expect(headerWorkflow(page)).toHaveText('Data Readiness Agent');
 });
 
 // ------------------------------------------------------------------ Runs
@@ -344,12 +345,12 @@ test.describe('Runs and Past chats', () => {
   const composerBox = (page: Page) =>
     page.getByPlaceholder('Ask a follow-up question…');
 
-  /** A stored run of the Assistant, made through the API. */
+  /** A stored run of Questions to Insights v2, made through the API. */
   async function seedRun(page: Page): Promise<string> {
     const run = await apiJson<{ id: string }>(
       page,
       'POST',
-      '/workflows/agent%3Aassistant/runs',
+      `/workflows/${V2_WORKFLOW_ID}/runs`,
       { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
     );
     return run.id;
@@ -406,7 +407,7 @@ test.describe('Runs and Past chats', () => {
         await expect(page.getByTestId('runs-tab-runs')).toHaveAttribute('aria-selected', 'true');
         const row = page.getByTestId(`run-${runId}`);
         await expect(row.getByTestId('row-run-title')).toHaveText(QUESTION);
-        await expect(row.getByTestId('row-run-workflow')).toHaveText('Assistant');
+        await expect(row.getByTestId('row-run-workflow')).toHaveText(V2_WORKFLOW_NAME);
         await expect(row.getByTestId('row-run-status')).toHaveText('Done');
       });
       await scenarioStep(page, 'When I open it', async () => {
@@ -421,12 +422,9 @@ test.describe('Runs and Past chats', () => {
       await scenarioStep(page, 'When I click Run again', async () => {
         await page.getByTestId('run-again').click();
       });
-      await scenarioStep(page, 'Then the Assistant opens on Run with the same input', async () => {
-        await expect(page.getByTestId('workflow-detail-name')).toHaveText('Assistant');
-        await expect(page.getByTestId('workflow-panel-tab-run')).toHaveAttribute(
-          'aria-selected',
-          'true',
-        );
+      await scenarioStep(page, `Then "${V2_WORKFLOW_NAME}" opens on Run with the same input`, async () => {
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2_WORKFLOW_NAME);
+        await expect(page.getByTestId('workflow-run')).toBeVisible();
         await expect(page.getByTestId('workflow-input-question')).toHaveValue(QUESTION);
         await expect(
           page.getByTestId('workflow-input-datasets').getByRole('button', { name: WORLD_CUP_DATASET }),

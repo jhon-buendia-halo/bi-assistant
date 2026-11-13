@@ -8,13 +8,13 @@ import {
   messageText,
   startLlmStub,
 } from './helpers/llm-stub';
-import { gate, runAnswer, runAssistantInTab } from './helpers/run-ui';
+import { gate, runAnswer, runQuestionInTab } from './helpers/run-ui';
 import { worldCupKey } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Chat and visuals" in
- * specs/capabilities/agent-answers/spec.md, now through the Assistant's Run
- * tab: a run streams its reasoning and tool activity, renders the answer's
+ * specs/capabilities/agent-answers/spec.md, now through the Run tab of
+ * Questions to Insights v2: a run streams its reasoning and tool activity, renders the answer's
  * Markdown and its SQL, and can be stopped. The model is the recording stub.
  */
 
@@ -69,7 +69,7 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
   };
 
   try {
-    await runAssistantInTab(page, QUESTION, WORLD_CUP_DATASET);
+    await runQuestionInTab(page, QUESTION, WORLD_CUP_DATASET);
     await expect(page.getByTestId('workflow-run-live')).toContainText(
       'Thinking',
     );

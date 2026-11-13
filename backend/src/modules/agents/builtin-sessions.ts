@@ -5,10 +5,10 @@ import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog
  * Built-in agents a session can be bound to (ADR-0028): each declares the
  * datasets its sessions run over, the text shown while there is none, and the
  * starter questions of its welcome block. Read by the hub (`AgentsService`:
- * datasets, missingDatasets, chatRequirement) and by `SessionsService`
+ * datasets, missingDatasets) and by `SessionsService`
  * (createFromAgent, the derived `agent` of a session).
  *
- * An agent declares either one dataset by name (the RFP Builder) or a dataset
+ * An agent declares either one dataset by name or a dataset
  * *kind*: every dataset bound to a datasource of one of `datasourceKinds`
  * (the Data Readiness Agent, agents.md 2.10).
  */
@@ -32,16 +32,6 @@ export type BuiltinAgentSession = {
 export const BUILTIN_AGENT_SESSIONS: Readonly<
   Record<string, BuiltinAgentSession>
 > = {
-  rfp: {
-    datasetName: 'Intellify RFP API',
-    requirement:
-      'Load the "Intellify RFP API" sample in Settings → Testing Data first',
-    starterQuestions: [
-      'Start an RFP for a client',
-      'Which of my clients renew on 1 January 2027?',
-      'Resume my draft RFPs',
-    ],
-  },
   'data-readiness': {
     datasourceKinds: ['postgres', 'databricks'],
     sessionName: 'Data Readiness',

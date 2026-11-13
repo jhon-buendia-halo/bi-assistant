@@ -6,11 +6,11 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships nine built-in agents (the assistant, *Questions to Insights v2*, the *RFP Builder*, the *Data Readiness Agent*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships eight built-in agents (the assistant, *Questions to Insights v2*, the *Data Readiness Agent*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
 
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *RFP Builder*, the *Data Readiness Agent* and *Questions to Insights v2*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *Data Readiness Agent* and *Questions to Insights v2*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
-**Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
+**Angle.** One sub-question of a *deep analysis* (removed 2026-11-12).
 
 **Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
 
@@ -22,15 +22,15 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
 
-**Carrier.** An insurer that writes one or more *lines of coverage*. A carrier is the *incumbent* on a client's line when it carries the client's live policy for that line. The *RFP Builder* proposes the carriers to invite to bid on an *RFP*. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md).
+**Carrier.** An insurer that writes one or more *lines of coverage*. A carrier is the *incumbent* on a client's line when it carries the client's live policy for that line.
 
 **Catalog.** The top level of an *entity* name. A Databricks Unity Catalog catalog; the database name on PostgreSQL; `api` on a REST API datasource. See *Entity*.
 
-**Census.** A client's employee data for one plan year: headcount, eligible and enrolled employees, average age and salary, gender split, employees by state, enrolment by coverage tier and by employee class. The census names its own plans, which are mapped to the client's *plan designs*. It is the first *exhibit* of an *RFP package*.
+**Census.** A client's employee data for one plan year: headcount, eligible and enrolled employees, average age and salary, gender split, employees by state, enrolment by coverage tier and by employee class. The census names its own plans, which are mapped to the client's *plan designs*.
 
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
-**Code-defined workflow.** A *workflow* written in code with its own steps, some deterministic and some calling an agent, and shipped with the app; today *Questions to Insights v2*'s four-step turn. It drives the *workflow bar* from its steps. See [../system/architecture.md](../system/architecture.md) ADR-0034 and ADR-0040.
+**Code-defined workflow.** A *workflow* written in code with its own steps, some deterministic and some calling an agent, and shipped with the app; today only *Questions to Insights v2*'s four-step turn (2026-11-12). It drives the *workflow bar* from its steps. See [../system/architecture.md](../system/architecture.md) ADR-0034 and ADR-0040.
 
 **Concept.** An *ontology item* of kind `concept`: a business term with a name, a definition, optional synonyms and optional **mappings** that say where it lives in the data (an entity, and optionally a column and/or a SQL expression). Rendered to the assistant as a `[term]` line. Replaces the former knowledge entry of kind `term`.
 
@@ -60,7 +60,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Datasource.** A saved connection to a data platform. Three kinds: `databricks` (a SQL warehouse, via host, token and warehouse id), `postgres` (host, port, database, user, password, SSL) and `rest` (an HTTP API with a base URL, an auth mode and a list of endpoints that are mapped to tables). Legacy name: *connection* (collection `connections`). The first single Databricks connection was migrated to a datasource with id `legacy-databricks`.
 
-**Deep analysis.** A background investigation of one question from several *angles*, producing a downloadable markdown *report*. One at a time per session. The chat stays usable while it runs. The result is posted as an assistant message whose text is the executive summary.
+**Deep analysis.** Removed 2026-11-12 (ADR-0042). It was a background investigation of one question from several *angles*, producing a downloadable markdown *report*. Reports in old transcripts stay readable.
 
 **Diagnostics.** The system log of the app: backend log lines, desktop shell events and interface errors, kept in a bounded buffer, shown in the System logs panel and exportable as a redacted, LLM-readable markdown report. A *log run* groups entries by backend process lifetime.
 
@@ -78,7 +78,6 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
 
-**Exhibit.** A table attached to an *RFP package* as a CSV file with a header row, computed from the Intellify data for the RFP's client and lines in scope: A census, B plan designs, C financials and D carriers.
 
 **Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down only marks the answer as wrong.
 
@@ -98,13 +97,12 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Instruction.** An *ontology item* of kind `instruction`: a standing rule, data quirk or coverage fact the assistant follows, with optional entities.
 
-**Intellify RFP API.** The REST API the app ships for the *RFP Builder*: read routes over the Intellify sample data and the store of *RFP* records, protected by an API key and described by an OpenAPI document. It starts with the app by default, on its own port, and can also run on its own. The app reaches it through the REST *datasource* that the "Intellify RFP API" *sample fixture* registers. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md) and ADR-0027.
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
 **Knowledge used.** The list of *ontology items* that were actually included in the context of one answer, recorded when the context was built and stored on the answer in the field `knowledge`. It shows what the model was given, not what it applied. The UI says "Ontology in context".
 
-**Line of coverage.** A kind of employee benefit a client offers and a *carrier* insures, such as medical, dental, vision, life, disability, voluntary benefits or an employee assistance programme. The Intellify data has 12 (its *products*). Also called a *line*. An *RFP* markets one or more lines.
+**Line of coverage.** A kind of employee benefit a client offers and a *carrier* insures, such as medical, dental, vision, life, disability, voluntary benefits or an employee assistance programme. The Intellify data has 12 (its *products*). Also called a *line*.
 
 **Link (skill or tool).** A reference written in an agent's instructions (or, for a tool, in an in-app skill's body) with `/` in the editor: shown as a chip, saved as `[[skill:<name>]]` or `[[tool:<name>]]`. The links decide which skills and optional tools the agent gets, and the model sees each as a plain mention (`the "x" tool`). See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R81-R86 and ADR-0024.
 
@@ -128,9 +126,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap*, saved disabled until a human accepts it.
 
-**Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, *Questions to Insights v2*, the *RFP Builder* and the *Data Readiness Agent*. Each can start a chat.
+**Official agent.** One of the app's own agents shown in the agent hub's Official section: the *assistant*, *Questions to Insights v2* and the *Data Readiness Agent*.
 
-**One-step workflow.** The *workflow* the app makes for an agent that a chat can run and that has no workflow of its own (the assistant, the *RFP Builder*, the *Data Readiness Agent*, every *Live* *user agent*): one step that runs the agent. Its id is `agent:<agent key or id>`. It never writes the *workflow bar*; the agent's own *workflow phases* keep driving it. See [../system/architecture.md](../system/architecture.md) ADR-0040.
+**One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: only *Questions to Insights v2* is. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
 
 **Ontology.** What a dataset means, written down for the assistant: the *ontology items* (concepts, relations, constraints and instructions) that belong to the dataset, plus the *shared items*. Edited in the dataset's Ontology tab. Only enabled items reach the assistant, within a size budget per turn. Replaces the knowledge library, whose entries became ontology items (ADR-0036). See [dataset-ontology](../capabilities/dataset-ontology/spec.md).
 
@@ -158,21 +156,18 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Relation.** An *ontology item* of kind `relation`: how two concepts connect (`is-a`, `part-of`, `has-many`, `related-to`), or that a concept is `measured-by` a governed metric. Rendered as a `[relation]` line the assistant uses to choose joins and the governed metric.
 
-**Renewal kick-off.** The date work on a line's renewal starts: the renewal effective date minus the policy's kick-off timing, a number of days. Intellify plans are taken to run by calendar year, so a renewal takes effect on 1 January after the plan year. An *RFP*'s timeline is built from the kick-off and the effective date.
+**Renewal kick-off.** The date work on a line's renewal starts: the renewal effective date minus the policy's kick-off timing, a number of days. Intellify plans are taken to run by calendar year, so a renewal takes effect on 1 January after the plan year.
 
-**Report.** The markdown output of a *deep analysis*: title, executive summary, findings by angle, data appendix.
+**Report.** The markdown output of a *deep analysis* (removed 2026-11-12): title, executive summary, findings by angle, data appendix. Old ones stay in stored transcripts.
 
 **Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
 
-**RFP (request for proposal).** The document a benefits consultant sends *carriers* to invite bids on a client's *lines of coverage* at renewal. In the app, an RFP record kept by the *Intellify RFP API*: the client, plan year, effective date, status (`draft`, `ready`, `issued` or `closed`, moving forward only), the last completed stage, narrative sections, and the lines in scope, carriers invited, requirements and timeline. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md).
 
-**RFP Builder.** The second *Official agent*: a built-in agent that walks a Mercer benefits consultant through building an *RFP* for one client in seven stages over the Intellify data, saves each decision the consultant confirms through the *Intellify RFP API*, and assembles the *RFP package*. It has its own prompt, one skill per stage and its own tools, and no SQL tool. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md) and [../system/agents.md](../system/agents.md).
 
-**RFP package.** What the *RFP Builder* hands the consultant for one *RFP*: the RFP document in Markdown and PDF, the four *exhibits* as CSV files and a manifest, together in one zip that downloads from the chat. It is regenerated from the stored record and the live data on every export.
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 
-**Run.** One execution of a *workflow* on a typed input: its steps run once and each reports its status and output. A run of an agent workflow is stored and listed under Runs; a run can carry one earlier run as context (Follow up, a clarification answer, the RFP Builder's Continue). Replaces the chat (ADR-0041).
+**Run.** One execution of a *workflow* on a typed input: its steps run once and each reports its status and output. A run of an agent workflow is stored and listed under Runs; a run can carry one earlier run as context (Follow up, a clarification answer). Replaces the chat (ADR-0041).
 
 **Run workflow.** A *workflow* that is started by a *run* on its typed input fields, defined in code, rather than by a chat. Since ADR-0041 every workflow is a run workflow.
 
@@ -192,7 +187,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Schema note.** A *dataset*'s *schema layer* and free-text description for one *schema*. Saved with the dataset and given to the assistant. See [../capabilities/datasets/spec.md](../capabilities/datasets/spec.md).
 
-**Session.** A stored conversation of an earlier version, now a *past chat* (read-only), bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Every session runs one *workflow* on each message (ADR-0040). A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/agent-answers/spec.md](../capabilities/agent-answers/spec.md), R52-R59). A session started from the *RFP Builder* is bound to it and runs it on every turn (see [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+**Session.** A stored conversation of an earlier version, now a *past chat* (read-only), bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Every session runs one *workflow* on each message (ADR-0040). A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/agent-answers/spec.md](../capabilities/agent-answers/spec.md), R52-R59). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
 **Session panel.** The right-hand panel when the main view is a *session*'s chat. It shows one *panel item* at a time (the *visual* panel, a document, a file or a table), with a menu of everything shown in the session and a Download button. See [agent-panel](../capabilities/agent-panel/spec.md).
 
@@ -240,7 +235,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Warning.** A fault note from a *result guard*, shown with the data record and returned to the assistant so it re-runs before answering.
 
-**Workflow.** What a chat runs on every message: a fixed sequence of steps defined in code, each one deterministic code or a call to an *agent*. Every *session* runs one workflow: a *code-defined workflow* or an agent's *one-step workflow*. Workflows are listed in the Workflows area and never edited in the app. The hierarchy is workflows → agents → skills → tools. See [../system/architecture.md](../system/architecture.md) ADR-0040.
+**Workflow.** A fixed sequence of steps defined in code, each one deterministic code or a call to an *agent*, run once on a typed input. Since 2026-11-12 the only workflow is *Questions to Insights v2*. Workflows are listed in the Workflows area and never edited in the app; agents are a separate library the steps call. The hierarchy is workflows → agents → skills → tools. See [../system/architecture.md](../system/architecture.md) ADR-0040 and ADR-0042.
 
 **Workflow bar.** The strip pinned under the page header, above the chat, that shows the steps of the process an agent is guiding the user through, the status of each (done, current, waiting for the user, skipped), and what the agent needs now. The agent drives it with `update_workflow`; its steps come from the agent's *workflow section*, or from the agent itself when it has none. See [agent-panel](../capabilities/agent-panel/spec.md) R13 to R20.
 

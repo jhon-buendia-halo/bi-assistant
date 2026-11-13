@@ -66,6 +66,13 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
     }
   });
 
+  it('the deep-analysis report download removed in 1.23.35 answers 404 (48)', async () => {
+    const res = await fetch(
+      `${backend!.url}/sessions/s1/deep-analysis/job-1/download`,
+    );
+    expect(res.status).toBe(404);
+  });
+
   it('the ontology bootstrap stream answers 200 and reports a failure in the stream (3.4)', async () => {
     const res = await post(
       '/datasets/no-such-dataset/ontology/bootstrap/stream',

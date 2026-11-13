@@ -126,5 +126,5 @@ if (failed) {
   process.exit(1);
 }
 console.log('Ready. Run the web app on a free port with an isolated data dir, for example:');
-console.log('  node backend/dist/cli.js --no-open --port 3400 --intellify-api-port 3420 --data-dir .qa-reports/app-data');
+console.log('  node backend/dist/cli.js --no-open --port 3400 --data-dir .qa-reports/app-data');
 console.log('  node scripts/setup-local.mjs http://127.0.0.1:3400');

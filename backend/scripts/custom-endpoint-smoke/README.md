@@ -5,7 +5,7 @@ A live check of the **Custom endpoint** LLM provider (`custom`, llm-settings R44
 It starts an isolated app instance from the built backend, with a throwaway data dir and its own app secret:
 
 ```
-node dist/cli.js --no-open --port $APP_PORT --data-dir <mktemp>   # INTELLIFY_API_PORT=0
+node dist/cli.js --no-open --port $APP_PORT --data-dir <mktemp>
 ```
 
 waits until `GET /llm/settings` answers, then for **each API style that has a base URL**:

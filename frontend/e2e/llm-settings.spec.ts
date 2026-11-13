@@ -4,7 +4,7 @@ import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { seedWorldCupDataset } from './helpers/agents-api';
 import { LlmStub, startLlmStub, turnRequests } from './helpers/llm-stub';
-import { runAssistantOk } from './helpers/runs-api';
+import { runQuestionOk } from './helpers/runs-api';
 
 // Mirrors the "LLM settings" Feature in specs/capabilities/llm-settings/spec.md
 // (the scenarios that need no real provider), against a local stub of the
@@ -259,7 +259,7 @@ test('saves the chosen effort and uses it on the next turn', async ({
   });
 
   const question = 'How many matches were played in 2022?';
-  await runAssistantOk(page, question);
+  await runQuestionOk(page, question);
   expect(turnRequests(stub, question).length).toBeGreaterThan(0);
   expect(turnRequests(stub, question)[0].reasoningEffort).toBe('medium');
 });

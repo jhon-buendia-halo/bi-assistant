@@ -1,0 +1,81 @@
+<section
+  #card
+  tabindex="-1"
+  data-testid="workflow-run-input-required"
+  [attr.aria-labelledby]="uid + '-title'"
+  class="card flex flex-col gap-3 border-l-4 border-l-on-warning-soft p-4 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+>
+  <h2 [id]="uid + '-title'" class="m-0 text-[14px] font-semibold text-fg-strong">
+    Waiting for your answer
+  </h2>
+  @if (expired()) {
+    <p class="m-0 text-[13px] text-fg" data-testid="workflow-run-input-expired" role="status">
+      This run can no longer continue.
+    </p>
+  }
+  <p class="m-0 text-[12px] text-fg-muted" data-testid="workflow-run-input-step">
+    {{ waiting().title }}
+  </p>
+  <p class="m-0 text-[14px] text-fg-strong" data-testid="workflow-run-input-question">
+    {{ waiting().question }}
+  </p>
+  @if (waiting().options.length > 0) {
+    <div class="flex flex-col items-stretch gap-2" role="group" aria-label="Suggested answers">
+      @for (option of waiting().options; track $index) {
+        <button
+          type="button"
+          class="btn btn-secondary h-auto justify-start rounded-xl py-2 text-left leading-snug whitespace-normal break-words"
+          [attr.data-testid]="'workflow-run-input-option-' + $index"
+          [disabled]="busy()"
+          (click)="pick(option)"
+        >
+          {{ option }}
+        </button>
+      }
+    </div>
+  }
+  <label class="flex flex-col gap-1 text-[12px] text-fg-muted" [attr.for]="uid + '-answer'">
+    Your answer
+    <textarea
+      [id]="uid + '-answer'"
+      rows="2"
+      class="field w-full resize-y text-[13px]"
+      data-testid="workflow-run-input-answer"
+      [value]="text()"
+      [disabled]="busy()"
+      (input)="onInput($event)"
+    ></textarea>
+  </label>
+  @if (error(); as message) {
+    <p
+      role="alert"
+      data-testid="workflow-run-input-error"
+      class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+    >
+      {{ message }}
+    </p>
+  }
+  <div>
+    @if (expired()) {
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="workflow-run-input-rerun"
+        [disabled]="blank() || busy()"
+        (click)="submit()"
+      >
+        Run again with my answer
+      </button>
+    } @else {
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="workflow-run-input-continue"
+        [disabled]="blank() || busy()"
+        (click)="submit()"
+      >
+        Continue
+      </button>
+    }
+  </div>
+</section>

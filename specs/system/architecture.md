@@ -80,7 +80,6 @@ flowchart TB
   end
 
   backend["NestJS backend<br/>(backend/src, createApp)<br/>API + Mastra agents"]
-  intellifyapi["Intellify RFP API<br/>(backend/src/intellify-api, second Nest app, :3100)"]
 
   subgraph data["APP_DATA_DIR (userData, or ~/.questions-to-insights for the CLI)"]
     appdb[("app.sqlite<br/>(better-sqlite3 DocStore)")]
@@ -109,8 +108,6 @@ flowchart TB
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
   backend -->|"fs read/write (Mastra workspace)"| ws
   backend -->|"pg / @databricks/sql / HTTPS"| ext
-  backend -->|"HTTP + X-API-Key (RFP tools, REST datasource)"| intellifyapi
-  intellifyapi -->|"pg: READ ONLY over intellify.*, writes to rfp.*"| intellifydb[("intellify_mercer_demo<br/>(PostgreSQL)")]
   backend -.->|"OTLP traces, metrics + logs,<br/>only when developer observability is on"| devtools
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
@@ -122,7 +119,6 @@ flowchart TB
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
 - **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. It binds `127.0.0.1` by default (ADR-0030). How to run it: [delivery.md](delivery.md) section 4.1.
-- **Intellify RFP API** (`backend/src/intellify-api/`) — a second NestJS application in the backend package, started in-process by `createApp()` on its own port (default 3100) or alone; the app reaches it only over HTTP with an API key (ADR-0027).
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
 - **Status:** Accepted
@@ -242,7 +238,7 @@ flowchart TB
   - A data folder used in local mode and then opened by an org server shows none of its private items there: they belong to `local`, which is no org user.
 
 #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-- **Status:** Accepted
+- **Status:** Superseded (2026-11-12): the RFP Builder and the Intellify RFP API were removed from the product (roadmap "Remove the RFP Builder and the Intellify RFP API"). The text below is kept as history; the `rfp` schema in an existing Intellify database and any stored RFP data are left in place and unused.
 - **Date:** 2026-10-14
 - **Context:**
   - The RFP Builder agent (ADR-0028) must reach the Intellify data model (the `intellify` fixture, BA-212) only through a REST API that we build, and must save the state of an RFP so a consultant can resume it.
@@ -287,16 +283,14 @@ flowchart LR
 
   subgraph mastra["mastra/"]
     mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
-    turnwf["workflows/<br/>(agent-turn, qti-v2-turn, seq-text-demo; ADR-0034, ADR-0040)"]
+    turnwf["workflows/<br/>(qti-v2-turn; ADR-0034, ADR-0040, ADR-0042)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
     designer["visualization agent"]
     sqlagents["sql-fixer, sql-verifier agents"]
     bootstrap["knowledge-bootstrap agent<br/>(Ontology Bootstrap)"]
-    rfpagent["rfp agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
-    rfptools["tools/rfp.tools.ts (HTTP)"]
     skills["skills/<br/>(built-in only; declared per agent; ADR-0018, ADR-0021)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
   end
@@ -337,12 +331,8 @@ flowchart LR
   mastrasvc --> designer
   mastrasvc --> sqlagents
   mastrasvc --> bootstrap
-  mastrasvc --> rfpagent
   mastrasvc --> turnwf
   turnwf -.->|"agent step calls back into the session turn"| sessions
-  rfpagent --> rfptools
-  rfpagent -.->|"its seven stage skills (catalog + skill tool)"| skills
-  rfptools -->|"restTarget(), exportRfpPackage()"| toolsvc
   assistant --> tools
   assistant -.->|"its skills (catalog + skill tools)"| skills
   designer -.->|"interactive-visuals (pipeline-loaded)"| skills
@@ -422,7 +412,7 @@ flowchart LR
 - **Consequences:** Renaming collections or persisted fields needs explicit migrations (`LEGACY_TABLE_NAMES`, `LEGACY_DOC_FIELDS`).
 
 #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
-- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too, and since its 1.23.9 amendment the `seq-text-demo` run workflow); amended by ADR-0041 (one workspace per run; runs keep no lasting memory)
+- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too, and since its 1.23.9 amendment the `seq-text-demo` run workflow); amended by ADR-0042 (only `qti-v2-turn` remains a workflow; `seq-text-demo` is removed); amended by ADR-0041 (one workspace per run; runs keep no lasting memory)
 - **Date:** 2026-10-01
 - **Context:** Agents need tools, memory, and a provider-agnostic model layer.
 - **Decision:** Standalone Mastra instance wrapped by `MastraService`; models resolved at call time from persisted LLM settings; LibSQL memory; one filesystem workspace per session.
@@ -454,7 +444,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run)
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow, removed by ADR-0042); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run)
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -676,7 +666,7 @@ flowchart LR
   - A System agent's prompt edit can degrade a structured-output pipeline (designer, fixer, verifier, bootstrap, judge); their callers' existing fallbacks for unusable output still apply.
 
 #### ADR-0028 — A built-in RFP Builder agent with dedicated HTTP tools, resolved through a REST datasource; sessions can bind to a built-in agent
-- **Status:** Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
+- **Status:** Superseded (2026-11-12): the RFP Builder agent was removed from the product together with the Intellify RFP API (ADR-0027); the sessions-bind-to-a-built-in-agent mechanism it introduced stays for the Data Readiness Agent and Questions to Insights v2. Kept as history. Earlier status: Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
@@ -1001,7 +991,7 @@ flowchart LR
   - Consequences: the privacy rules of the capability gain the raw-export rule; the new endpoints are 112 (with `format`), 113 and 114 ([api.md](api.md) 2.18); the stack gains the two packages ([tech-stack.md](tech-stack.md)).
 
 #### ADR-0040 — Workflow-first: a session runs a workflow defined in code; agents are the steps' building blocks; an agent without a workflow gets a one-step workflow, never registered per agent
-- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md)
+- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input) and by ADR-0042 (2026-11-12: agents are no longer workflows; the one-step workflow is gone and the catalogue is `qti-v2-turn` only). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md)
 - **Date:** 2026-11-11
 - **Context:**
   - A session is bound to an agent. A user agent is bound by `agentId` and runs the `assistant` with its configuration (ADR-0008). A built-in agent is bound by `agentKey` and runs that agent (ADR-0028).
@@ -1092,6 +1082,51 @@ flowchart LR
   - Evals keep calling agents directly with a throwaway run host (1.23.26b); the dev scripts (`run-eval`, `check-answers`, `custom-endpoint-smoke`) run on run hosts too.
   - **Chat write paths removed (1.23.27):** `POST /sessions`, the chat message routes, the session visual actions, preview sessions, the non-streamed turn and the deep-analysis start and poll routes are gone; a stored session is only read, downloaded from and deleted. The `sessions` collection and every stored shape are unchanged, and the turn engine still reads a stored session in the sessions unit suites (a test seam), never at runtime.
   - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
+
+#### ADR-0042 — Workflows and agents are separate; only Questions to Insights v2 is a workflow
+- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041.
+- **Date:** 2026-11-12
+- **Context:**
+  - ADR-0040 gave every agent without a workflow of its own an automatic one-step workflow (`agent:<key or id>`), so the Workflows area listed the assistant, the Data Readiness Agent and every Live user agent next to Questions to Insights v2. The agent page also ran that workflow (**Run**).
+  - Only Questions to Insights v2 has real steps. The other entries were an agent in a workflow's clothes, and the Sequential test workflow (`seq-text-demo`) and Deep analysis were a test fixture and an early code workflow.
+  - On 2026-11-12 the user asked to separate agents from workflows, keep only the Questions to Insights v2 workflow for now, and delete the others.
+- **Decision:**
+  - **The workflow catalogue is `[qti-v2-turn]`.** An agent is not a workflow. The one-step workflow, its `agent:<key or id>` ids, the Sequential test workflow and Deep analysis are removed from the code, the API and the UI.
+  - **Agents are a library.** The Agents area configures them (prompt, tools, skills, evals, versions). A user agent keeps **Try it** (a draft run, not a workflow run); no agent has a **Run** on its page. The `assistant-v2` agent keeps being called by the `analyse` step of `qti-v2-turn`; `GET /agents/:key` `usedInWorkflows` lists `qti-v2-turn` for it and is empty for every other agent.
+  - **The agent turn engine stays.** `qti-v2-turn`'s analyse step, Try it and the eval runner (`assistant`, `data-readiness`, through `createRunHost({ agentKey })`) use it. The internal `agent-turn` Mastra workflow stays for Try it, evals and stored sessions, with `agent:<key>` ids that never reach the catalogue.
+  - **Stored data stays.** Runs of removed workflows list and open read-only as legacy runs (no Run again, no follow-up). Sessions bound to a removed workflow id read as plain past chats (`workflowRef.deleted: true`). Stored readiness reports stay viewable; the Data Readiness Agent stays in the library but the UI generates no new report.
+- **Rejected:**
+  - **Keeping the one-step workflows hidden:** dead code with a public API for nothing.
+  - **Migrating or deleting stored runs:** silent data loss, and the runs are still readable.
+  - **Removing the agents themselves:** the user asked to separate them from workflows, not to remove them.
+- **Consequences:**
+  - **Partly supersedes ADR-0040:** "an agent without a workflow gets a one-step workflow" no longer holds; its catalogue, ids and code-defined workflow remain only as `qti-v2-turn`; the agent turn engine stays as that workflow's analyse step and behind Try it and the eval runner (the internal `agent-turn` workflow). Marked in ADR-0040's status.
+  - **Amends ADR-0041:** a run of an agent workflow is no longer a thing; a run is a run of `qti-v2-turn` (or a legacy run). Deep analysis, deferred by ADR-0041 to a code-defined run workflow, is dropped.
+  - **Amends ADR-0008:** a user agent no longer runs as a one-step workflow; Try it is its only run.
+  - **Stack-neutral:** a rebuild needs one stored, streamed run workflow, an agent library with a draft preview, and read-only legacy runs.
+
+#### ADR-0043 — Human in the loop: a run that needs the user is suspended with Mastra's suspend/resume and continued in place; its runtime stays in memory, with a snapshot only while it waits
+- **Status:** Accepted (2026-11-13).
+- **Date:** 2026-11-13
+- **Context:**
+  - Questions to Insights v2 asks the user in two places: Clarify (Plan decided the question is ambiguous) and Analyse (the agent called `ask_clarification` because the data was). Until now both **ended** the run with the question, and the user's pick started a **new** run with the old one as context: two runs, the steps run twice, and the run page lost the thread.
+  - Mastra workflows can pause a step and continue the same run (`suspend()` in a step, `run.resume()` / `run.resumeStream()` with the suspended path, `suspendSchema` / `resumeSchema`; https://mastra.ai/docs/workflows/suspend-and-resume, https://mastra.ai/docs/workflows/human-in-the-loop). The user chose this (approach B) on 2026-11-13 over a persisted, restart-proof design (C, later).
+  - Probed on the installed `@mastra/core` 1.66 (2026-11-12): a suspend inside a nested workflow inside `.dountil()` reports the run `suspended` with `result.suspended = [[<top step>, …, <step>]]`; `run.resumeStream({ step: that path, resumeData, requestContext })` re-runs the step with `resumeData` and `suspendData` and goes on where the run stopped, re-reporting each enclosing nested workflow as a started step. **Resume reads the run's persisted snapshot**: with `shouldPersistSnapshot: () => false` it throws `No snapshot found for this workflow run`. A predicate that persists only the `suspended` status works; the snapshot then stays `suspended` in storage after the resumed run ends (only `suspended` is written), until deleted. The snapshot includes the run's `RequestContext`, serialized (functions drop out).
+- **Decision:**
+  - **The step suspends, the same run continues.** Clarify suspends with the plan's question and options and, resumed with `{ answer }`, hands Plan its input back with the answer; the plan loop (`.dountil()` over a nested `plan-round`: Plan, then Clarify when needed, then a `.map()` that passes on Clarify's output or Plan's) runs Plan again, which never asks twice. Analyse suspends when the agent asks, and resumed runs the agent again in the same attempt with the question and the answer. The run's status gains `suspended` and the stored run `waitingFor` (data-model 3.16); `POST /workflow-runs/:id/resume/stream` (api.md 138) answers it and streams the same run.
+  - **The runtime stays in server memory.** The turn's closures (the run host, its agent options and records, the step tracker, the Mastra run) are held in an in-memory registry keyed by run id for 30 minutes (`SuspendedRuns`); the runtime object on the RequestContext is handed in again on resume. Nothing of it needs to be serializable.
+  - **A snapshot only while suspended.** Every `qti-v2-turn` workflow (and its nested ones) persists its snapshot only on the `suspended` status, because Mastra resumes from it; the backend deletes it when the resumed run ends, when the run expires or is deleted, and, at start-up, every suspended `qti-v2-turn` snapshot left over.
+  - **Expiry and restarts stop the run.** A run not answered in 30 minutes, and any run still `suspended` when the app starts, is stored `stopped` with `waitingFor.expired`; a resume answers 410, and the client offers **Run again with my answer** (a new run whose context is the expired run's question and clarifying question).
+  - **Past chats keep the card.** A session's (past chat's) turn is not suspendable: a suspended workflow run ends the turn on the clarification card, as before, and the run's snapshot is deleted at once.
+- **Rejected:**
+  - **Persisted, restart-proof suspension (approach C):** needs every runtime object rebuilt from storage (the run host, the agent options, the step tracker); deferred.
+  - **Keeping a run that ends on the question plus a follow-up run (the old behaviour):** two runs per answer, every step re-run.
+  - **A loop in our own code around Mastra:** duplicates the engine's control flow and its step events.
+- **Consequences:**
+  - The contract hash of `qti-v2-turn` changes (Plan's input gains the optional `clarification`, its output `stopped`, Clarify's output becomes Plan's input; edges gain `clarify → plan` `loop` `Answered` and lose `clarify → end`).
+  - The run stream gains the `step` status `suspended` and the `input-required` event (api.md 3.6); a node chat on a waiting run answers 409; a waiting run can't be visualized.
+  - **Amends ADR-0034 / ADR-0041:** Clarify no longer ends a v2 run, and the eval target scores a suspended run on its question and options.
+  - **Stack-neutral:** a rebuild needs a workflow engine that pauses a step on a typed payload and continues the same run with a typed answer, and a store of the paused run (in memory, with an expiry, or persisted).
 
 ## Level 4 — Code
 

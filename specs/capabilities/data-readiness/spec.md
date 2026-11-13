@@ -28,7 +28,7 @@ Capability-local vocabulary:
 - R1. The Data Readiness Agent SHALL be a built-in agent shown on the Agent Hub in the **Official** section.
   - Registry key `data-readiness`, `Owner: Official`.
   - Description: "Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings."
-  - Its card and detail view SHALL NOT offer **Start chat** ([agents-evals](../agents-evals/spec.md) R53). Its one-step **workflow** `Data Readiness Agent` (`agent:data-readiness`) offers it, on its Workflows card (accessible name `Start chat with Data Readiness Agent`) and on its workflow page ([workflows](../workflows/spec.md) R6); the agent's detail says **Used in** `Data Readiness Agent` (agents-evals R109).
+  - Since 2026-11-12 (ADR-0042) the agent is a library entry, not a workflow: its card and detail view offer no **Start chat** and no **Run**, it has no workflow (`agent:data-readiness` no longer exists, [workflows](../workflows/spec.md) R2), and its detail says `Not used in any workflow.` (agents-evals R109). The UI generates no new readiness report; reports already stored stay viewable wherever they were (a stored run or past chat, a stored report). The agent's evals still run it.
   - While no dataset bound to a PostgreSQL or Databricks datasource exists, that Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
   - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5), with no Chat Box, opening on System Prompt:
     - the System Prompt tab shows the prompt as served and allows the built-in prompt edit; an edited prompt SHALL still start with `You are the Data Readiness Agent`;
@@ -266,36 +266,23 @@ Feature: Data readiness
   Background:
     Given the app runs with the LLM stub as its provider
 
-  Scenario: Start chat is blocked without a PostgreSQL or Databricks dataset
-    Given no dataset is bound to a PostgreSQL or Databricks datasource
+  Scenario: the Data Readiness Agent is an Official library agent with no workflow
+    Given the app runs with the LLM stub as its provider
     When I open "Agents"
-    Then the "Official" section shows "Data Readiness Agent" with "Owner: Official" and no "Start chat"
+    Then the "Official" section shows "Data Readiness Agent" with "Owner: Official" and no "Start chat" or "Run"
     When I open "Workflows"
-    Then "Start chat with Data Readiness Agent" is disabled with the title "Add a PostgreSQL or Databricks dataset first"
-
-  Scenario: I run the Data Readiness Agent on a dataset
-
-  Scenario: Assessing a dataset from the chat shows the scorecard
-    Given the World Cup sample datasource and a dataset "World Cup" over it exist
-    When I open "Workflows" and click "Start chat with Data Readiness Agent"
-    Then I see the toast "Session \"Data Readiness\" created"
-    And the session header shows the agent chip "Data Readiness Agent"
-    When I ask "Assess the readiness of this dataset"
-    And the agent calls "assess_data_readiness"
-    Then the right panel shows the readiness scorecard for the World Cup datasource
-    And the scorecard shows an overall score out of 100 and a maturity band
-    And it shows ten dimension bars, with "Accuracy" and "Currency" marked "Not assessed"
-    And while it runs the tool row shows the assessment progress
-    And the answer carries a readiness card with "Open scorecard"
+    Then I do not see "Data Readiness Agent"
+    When I open the "Data Readiness Agent" agent
+    Then its "Used in" line says "Not used in any workflow."
 
   Scenario: A table too large to profile is listed as not profiled
     Given a table in the dataset has more than 100,000,000 rows
-    When I assess the dataset from the chat
+    When the dataset is assessed (an evals or API assessment; the UI starts none)
     Then the scorecard lists that table as not profiled, with the reason "too-large" and its row count
     And the assessment finishes without waiting on that table's statistics
 
   Scenario: The scorecard shows the same numbers as the API
-    Given an assessment of the World Cup datasource was run from the chat
+    Given a stored assessment of the World Cup datasource
     When I request "GET /data-readiness/assessments/<report id>"
     Then its overall score, maturity band and dimension scores equal those on the scorecard
     And the overall score is the rounded mean of the eight assessed dimension scores
@@ -315,19 +302,6 @@ Feature: Data readiness
     When a filter combination matches nothing
     Then the table reads "No findings match these filters."
 
-  Scenario: The agent shows the records behind a finding
-    Given a Data Readiness session on the "Formula 1" dataset
-    When I ask "what are the records with second_nationality_country_id null values"
-    Then the agent runs a read-only query on "driver" for rows where "second_nationality_country_id" is null
-    And the answer leads with the number of such rows and shows them in a table
-    And no score changes
-
-  Scenario: A general analysis question is declined
-    Given a Data Readiness session on the "Formula 1" dataset
-    When I ask "how many races were there in 2010?"
-    Then the agent declines in one sentence
-    And it says Questions to Insights answers that
-    And it runs no query
 ```
 
 ## Acceptance
@@ -342,4 +316,4 @@ Feature: Data readiness
 3. `POST /data-readiness/assessments` on the World Cup PostgreSQL sample stores a report whose overall score is the mean of its eight assessed dimension scores. `GET` lists it and reads it back.
 4. The hub shows the Data Readiness Agent under Official. A session started from it runs the agent: its first request offers `describe_entity` and `run_readonly_sql` besides the readiness tools. An assessment shows the scorecard, and Past assessments reopens an earlier one.
 5. An assessment profiles through one pooled session per worker, folds the text-column probes into the per-table statement, lists tables above 100,000,000 rows as not profiled, shows its phases on the running tool row, and is cancelled by Stop without storing a report (R28 to R33). Its scores equal those of the unpooled profiler for the same profile.
-6. The Data readiness Feature passes on the web target at the acceptance gate. The `data-readiness` eval set passes at 100 % over 3 runs, and the assistant's and RFP Builder's eval sets are unchanged.
+6. The Data readiness Feature passes on the web target at the acceptance gate. The `data-readiness` eval set passes at 100 % over 3 runs, and the assistant's eval sets are unchanged.

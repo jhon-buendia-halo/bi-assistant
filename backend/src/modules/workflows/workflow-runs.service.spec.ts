@@ -12,12 +12,6 @@ jest.mock('../sessions/sessions.service', () => ({
   SessionsService: class {},
   RUN_HOST_ID_PREFIX: 'run-',
 }));
-// The sequential test workflow runs on the engine stand-in.
-jest.mock('@mastra/core/workflows', () =>
-  jest.requireActual<typeof import('../../mastra/testing/workflows.stub')>(
-    '../../mastra/testing/workflows.stub',
-  ),
-);
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -25,7 +19,8 @@ import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
-import { seqTextDemoWorkflow } from '../../mastra/workflows/seq-text-demo.workflow';
+import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
+import { ContractViolationError } from '../../mastra/workflows/workflow-contract';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
@@ -34,13 +29,15 @@ import { UserAgentsRepository } from '../user-agents/repositories/user-agents.re
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import { AgentsService } from '../agents/agents.service';
 import type { SessionsService } from '../sessions/sessions.service';
-import type { WorkflowRun } from './workflow-run-steps';
+import type { WorkflowRun, WorkflowRunDoc } from './workflow-run-steps';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import {
   WorkflowRunsService,
   type RunStreamEvent,
 } from './workflow-runs.service';
 import { WorkflowRunsController } from './workflow-runs.controller';
+import { WorkflowNodeChatsService } from './workflow-node-chats.service';
+import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowsController } from './workflows.controller';
 import { WorkflowsService } from './workflows.service';
 
@@ -59,27 +56,70 @@ function fakeAgent(name: string, tools: string[]) {
   };
 }
 
-type StubWorkflow = {
-  createRun(): Promise<{
-    stream(args: { inputData: unknown }): {
-      fullStream: AsyncIterable<unknown>;
-      result: Promise<unknown>;
-    };
-  }>;
+/** One engine step event, as the turn's `onStep` receives it. */
+type StepEvent = {
+  type: string;
+  payload: {
+    id: string;
+    status?: string;
+    payload?: unknown;
+    output?: unknown;
+    error?: unknown;
+  };
 };
+
+const stepStart = (id: string, payload?: unknown): StepEvent => ({
+  type: 'workflow-step-start',
+  payload: { id, ...(payload === undefined ? {} : { payload }) },
+});
+const stepResult = (id: string, output: unknown): StepEvent => ({
+  type: 'workflow-step-result',
+  payload: { id, status: 'success', output },
+});
+
+/** What the Analyse step of `qti-v2-turn` (and agent-turn's Answer) ends with. */
+const ANALYSE_OUTPUT = { calls: [], stopped: false };
+/** What Wrap up ends with: the run's output. */
+const WRAP_UP_OUTPUT = {
+  sqlQueries: 0,
+  failedQueries: 0,
+  rows: 0,
+  answer: 'Brazil won.',
+};
+/** What Plan, Validate and Write answer end with. */
+const PLAN_OUTPUT = { plan: { needsClarification: false } };
+const VALIDATE_OUTPUT = { ok: true, attempt: 1, findings: [] };
+const ANSWER_OUTPUT = { headline: 'Brazil won.', answer: 'Brazil won.' };
+
+/** The steps `qti-v2-turn` reports before its agent step's turn streams. */
+const V2_STEPS_BEFORE: StepEvent[] = [
+  stepStart('receive-question', {
+    question: 'Who won in 2002?',
+    datasets: ['World Cup Core'],
+  }),
+  stepResult('receive-question', { question: 'Who won in 2002?' }),
+  stepStart('load-catalog', { question: 'Who won in 2002?' }),
+  stepResult('load-catalog', { entities: 1 }),
+  stepStart('plan', { question: 'Who won in 2002?' }),
+  stepResult('plan', PLAN_OUTPUT),
+  stepStart('analyse', { question: 'Who won in 2002?' }),
+];
 
 const DATASETS = [
   { name: 'World Cup Core', datasourceKind: 'postgres' },
   { name: 'Claims', datasourceKind: 'databricks' },
 ];
 
-/** What the fake run host's turn does. */
+/**
+ * What the fake run host's turn does. A `qti-v2-turn` host reports its four
+ * steps as the engine does (Receive question and Load catalog, then Analyse
+ * around the turn's events, then Wrap up); a draft host, agent-turn's one
+ * Answer step.
+ */
 interface TurnScript {
   events?: { type: string; content?: string }[];
-  steps?: {
-    type: string;
-    payload: { id: string; status?: string; output?: unknown; error?: unknown };
-  }[];
+  /** The step events before the turn's events (default: the engine's). */
+  steps?: StepEvent[];
   throws?: Error;
   /** Abort the run mid-turn, as a closed connection does. */
   abort?: AbortController;
@@ -106,31 +146,25 @@ function build(
       'ask_clarification',
     ]),
     'assistant-v2': fakeAgent('Questions to Insights v2', ['run_readonly_sql']),
-    rfp: fakeAgent('RFP Builder', ['create_rfp']),
     'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
-  const runWorkflow = jest.fn();
-  const streamWorkflow = jest.fn(async (key: string, inputData: unknown) => {
-    if (key !== 'seq-text-demo') throw new Error(`no stand-in for ${key}`);
-    const workflow = seqTextDemoWorkflow as unknown as StubWorkflow;
-    return (await workflow.createRun()).stream({ inputData });
-  });
   const deleteMemoryThread = jest.fn().mockResolvedValue(undefined);
   const mastra = {
     listAgents: () => registry,
-    runWorkflow,
-    streamWorkflow,
     deleteMemoryThread,
   } as unknown as MastraService;
   const agents = new AgentsService(mastra, userAgents);
   const workflows = new WorkflowsService(agents);
   let hostMessages: { role: string; content: string; at: string }[] = [];
+  let draftHost = false;
   const sessions = {
     createRunHost: jest.fn(
       (spec: {
         runId: string;
+        draftAgentId?: string;
         context?: { question: string; answer: string };
       }) => {
+        draftHost = !!spec.draftAgentId;
         hostMessages = spec.context
           ? [
               { role: 'user', content: spec.context.question, at: 't' },
@@ -150,9 +184,9 @@ function build(
         onStep: (event: unknown) => void,
       ) => {
         hostMessages.push({ role: 'user', content: question, at: 't' });
-        for (const step of script.steps ?? [
-          { type: 'workflow-step-start', payload: { id: 'answer' } },
-        ]) {
+        const agentStep = draftHost ? 'answer' : 'analyse';
+        for (const step of script.steps ??
+          (draftHost ? [stepStart('answer')] : V2_STEPS_BEFORE)) {
           onStep(step);
         }
         for (const event of script.events ?? []) emit(event);
@@ -161,14 +195,15 @@ function build(
           return;
         }
         if (script.throws) throw script.throws;
-        onStep({
-          type: 'workflow-step-result',
-          payload: {
-            id: 'answer',
-            status: 'success',
-            output: { calls: [], stopped: false },
-          },
-        });
+        onStep(stepResult(agentStep, ANALYSE_OUTPUT));
+        if (!draftHost) {
+          onStep(stepStart('validate', ANALYSE_OUTPUT));
+          onStep(stepResult('validate', VALIDATE_OUTPUT));
+          onStep(stepStart('write-answer', VALIDATE_OUTPUT));
+          onStep(stepResult('write-answer', ANSWER_OUTPUT));
+          onStep(stepStart('wrap-up', ANSWER_OUTPUT));
+          onStep(stepResult('wrap-up', WRAP_UP_OUTPUT));
+        }
         hostMessages.push({
           role: 'assistant',
           content: script.answer ?? 'Brazil won.',
@@ -181,15 +216,15 @@ function build(
     finishRunHost: jest.fn(() =>
       Promise.resolve({
         id: 'host',
-        name: 'Assistant',
+        name: 'Questions to Insights v2',
         datasets: ['World Cup Core'],
         messages: hostMessages,
         visualizations: [],
         panelItems: [],
         workflowRef: {
-          id: 'agent:assistant',
-          name: 'Assistant',
-          kind: 'agent',
+          id: 'qti-v2-turn',
+          name: 'Questions to Insights v2',
+          kind: 'code',
           deleted: false,
         },
       }),
@@ -234,8 +269,12 @@ function build(
       Promise.resolve({
         ...host,
         panelItems: host.panelItems ?? [],
-        workflow: { phases: [], source: 'agent' },
-        agent: { id: 'assistant', name: 'Assistant', deleted: false },
+        workflow: { phases: [], source: 'workflow' },
+        agent: {
+          id: 'assistant-v2',
+          name: 'Questions to Insights v2',
+          deleted: false,
+        },
       }),
     ),
     panelItemFileOf: jest.fn(() =>
@@ -310,13 +349,6 @@ function build(
         archive: Buffer.from('zip'),
       }),
     ),
-    downloadRfpPackageOf: jest.fn(() =>
-      Promise.resolve({
-        filename: 'rfp-acme.zip',
-        contentType: 'application/zip',
-        body: Buffer.from('zip'),
-      }),
-    ),
   };
   const datasetsRepository = {
     list: jest.fn().mockResolvedValue(datasets),
@@ -324,17 +356,22 @@ function build(
   const repository = new WorkflowRunsRepository(
     new SqliteDocStore(db, 'workflow_runs'),
   );
+  const nodeChats = new WorkflowNodeChatsRepository(
+    new SqliteDocStore(db, 'workflow_run_node_chats'),
+  );
   const service = new WorkflowRunsService(
     workflows,
     sessions as unknown as SessionsService,
     datasetsRepository,
     mastra,
     repository,
+    nodeChats,
   );
   return {
     db,
     service,
     repository,
+    nodeChats,
     deleteMemoryThread,
     /** The same store and collaborators after a backend restart. */
     restarted: () =>
@@ -344,14 +381,19 @@ function build(
         datasetsRepository,
         mastra,
         new WorkflowRunsRepository(new SqliteDocStore(db, 'workflow_runs')),
+        nodeChats,
       ),
     sessions,
     userAgents,
-    runWorkflow,
-    streamWorkflow,
     workflows,
   };
 }
+
+/** The step ids and statuses of a run's `step` events, in order. */
+const stepTrail = (events: RunStreamEvent[]) =>
+  events.flatMap((event) =>
+    event.type === 'step' ? [`${event.id}:${event.status}`] : [],
+  );
 
 /** Run a workflow through the streamed path and collect its events. */
 async function streamed(
@@ -365,10 +407,6 @@ async function streamed(
   const run = await ctx.service.stream(prepared, (e) => events.push(e), signal);
   return { events, run };
 }
-
-const READINESS_REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
-const RFP_REQUIREMENT =
-  'Load the "Intellify RFP API" sample in Settings → Testing Data first';
 
 describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4.1)', () => {
   let ctx: ReturnType<typeof build>;
@@ -387,89 +425,55 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
       { input: { question: '   ', datasets: ['Claims'] } },
       'Question is required',
     ],
-    [{ input: { question: 'Who won?' } }, 'Select at least one dataset'],
-    [
-      { input: { question: 'Who won?', datasets: ['Nope'] } },
-      'Dataset "Nope" not found',
-    ],
-    [
-      { input: { question: 'Who won?', datasets: ['Claims'], careful: 'yes' } },
-      'Careful: cross-check the result with an independent query must be true or false',
-    ],
-  ])('the Assistant refuses %p with %p', async (body, message) => {
-    ctx = build();
-    await refuse('agent:assistant', body, message);
-  });
-
-  it.each([
     [{ input: { datasets: ['Claims'] } }, 'Question is required'],
+    [{ input: { question: 'Who won?' } }, 'Select at least one dataset'],
     [
       { input: { question: 'Who won?', datasets: [] } },
       'Select at least one dataset',
+    ],
+    [
+      { input: { question: 'Who won?', datasets: ['Nope'] } },
+      'Dataset "Nope" not found',
     ],
   ])('Questions to Insights v2 refuses %p with %p', async (body, message) => {
     ctx = build();
     await refuse('qti-v2-turn', body, message);
   });
 
-  it.each([
-    [{ input: {} }, 'Dataset is required'],
-    [{ input: { dataset: 'Nope' } }, 'Dataset "Nope" not found'],
-  ])('the Data Readiness Agent refuses %p with %p', async (body, message) => {
-    ctx = build([
-      ...DATASETS,
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
-    ]);
-    await refuse('agent:data-readiness', body, message);
-  });
-
-  it('the Data Readiness Agent refuses a dataset of another kind', async () => {
-    ctx = build([
-      ...DATASETS,
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
-    ]);
-    await refuse(
-      'agent:data-readiness',
-      { input: { dataset: 'Intellify RFP API' } },
-      'Dataset "Intellify RFP API" is not a PostgreSQL or Databricks dataset',
-    );
-  });
-
-  it('refuses a workflow while its run requirement holds', async () => {
-    ctx = build([{ name: 'Intellify RFP API', datasourceKind: 'rest' }]);
-    await refuse('agent:data-readiness', { input: {} }, READINESS_REQUIREMENT);
-    ctx.db.close();
+  it('refuses the whole input at once: every error in field order, then the context, nothing stored', async () => {
     ctx = build();
-    await refuse('agent:rfp', { input: { message: 'Start' } }, RFP_REQUIREMENT);
-  });
-
-  it('the RFP Builder refuses a run without a message', async () => {
-    ctx = build([
-      ...DATASETS,
-      { name: 'Intellify RFP API', datasourceKind: 'rest' },
-    ]);
-    await refuse(
-      'agent:rfp',
-      { input: { rfpId: 'r-1' } },
-      'Message is required',
-    );
-  });
-
-  it('a user agent refuses a run while none of its datasets exist, and one without a question', async () => {
-    ctx = build();
-    const gone = await ctx.userAgents.create({
-      name: 'Gone',
-      description: '',
-      instructions: '',
-      datasets: ['Nowhere'],
-      starterQuestions: [],
+    const refusal = await ctx.service
+      .prepare('qti-v2-turn', {
+        input: { question: ' \n ', datasets: [] },
+        context: { fromRunId: 'nope' },
+      })
+      .catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(BadRequestException);
+    expect((refusal as BadRequestException).getResponse()).toEqual({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: 'Question is required',
+      errors: [
+        { field: 'question', message: 'Question is required' },
+        { field: 'datasets', message: 'Select at least one dataset' },
+        { field: null, message: 'Run "nope" not found' },
+      ],
     });
-    await ctx.userAgents.publish(gone.id);
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+    expect(await ctx.repository.list()).toEqual([]);
+  });
+
+  it('refuses a question over 4000 characters', async () => {
+    ctx = build();
     await refuse(
-      `agent:${gone.id}`,
-      { input: { question: 'Hi' } },
-      "None of this agent's datasets exist",
+      'qti-v2-turn',
+      { input: { question: 'x'.repeat(4001), datasets: ['Claims'] } },
+      'Question must be at most 4000 characters',
     );
+  });
+
+  it('answers 404 for a workflow the catalogue does not list, the removed ones included (1.23.35)', async () => {
+    ctx = build();
     const live = await ctx.userAgents.create({
       name: 'Historian',
       description: '',
@@ -478,21 +482,33 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
       starterQuestions: [],
     });
     await ctx.userAgents.publish(live.id);
-    await refuse(`agent:${live.id}`, { input: {} }, 'Question is required');
-  });
-
-  it('answers 404 for a workflow the catalogue does not list', async () => {
-    ctx = build();
-    for (const id of ['nope', 'agent:sql-fixer', 'agent-turn']) {
-      await expect(ctx.service.prepare(id, { input: {} })).rejects.toThrow(
-        new NotFoundException(`Workflow "${id}" not found`),
-      );
+    for (const id of [
+      'agent:assistant',
+      'agent:data-readiness',
+      `agent:${live.id}`,
+      'seq-text-demo',
+      'deep-analysis',
+      'agent:rfp',
+      'nope',
+      'agent:sql-fixer',
+      'agent-turn',
+    ]) {
+      const refusal = ctx.service.prepare(id, {
+        input: { question: 'Who won?', datasets: ['Claims'], text: 'Hi' },
+      });
+      await expect(refusal).rejects.toBeInstanceOf(NotFoundException);
+      await expect(refusal).rejects.toThrow(`Workflow "${id}" not found`);
     }
+    await expect(
+      ctx.service.run('seq-text-demo', { input: { text: 'Hi' } }),
+    ).rejects.toThrow('Workflow "seq-text-demo" not found');
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+    expect(await ctx.repository.list()).toEqual([]);
   });
 
   it("refuses a workflow that has no input fields: it can't run on an input", async () => {
     ctx = build();
-    jest.spyOn(ctx.workflows, 'get').mockResolvedValue({
+    jest.spyOn(ctx.workflows, 'definition').mockResolvedValue({
       id: 'x',
       input: [],
     } as never);
@@ -502,7 +518,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   it('refuses a context naming a run it does not hold', async () => {
     ctx = build();
     await refuse(
-      'agent:assistant',
+      'qti-v2-turn',
       {
         input: { question: 'And 2018?', datasets: ['Claims'] },
         context: { fromRunId: 'gone' },
@@ -512,7 +528,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   });
 });
 
-describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
+describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
 
@@ -528,87 +544,212 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
         { type: 'text', content: 'Brazil won.' },
       ],
     });
-    const { events, run } = await streamed(ctx, 'agent:assistant', {
+    const { events, run } = await streamed(ctx, 'qti-v2-turn', {
       input: { ...ASK, careful: true, extra: 'ignored' },
     });
 
     expect(ctx.sessions.createRunHost).toHaveBeenCalledWith({
       runId: run.id,
-      workflowId: 'agent:assistant',
-      name: 'Assistant',
+      workflowId: 'qti-v2-turn',
+      name: 'Questions to Insights v2',
       datasets: ['World Cup Core'],
     });
+    // Careful is no field of v2's input: the turn runs without it.
     expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
       `run-${run.id}`,
       'Who won in 2002?',
       expect.any(Function),
       undefined,
-      true,
+      false,
       expect.any(Function),
     );
     // The host is discarded once, after the turn.
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledWith(`run-${run.id}`);
-    expect(events.map((event) => event.type)).toEqual([
+    expect(
+      events.map((event) =>
+        event.type === 'step' ? `${event.id}:${event.status}` : event.type,
+      ),
+    ).toEqual([
       'run',
-      'step',
+      'receive-question:running',
+      'receive-question:success',
+      'load-catalog:running',
+      'load-catalog:success',
+      'plan:running',
+      'plan:success',
+      'analyse:running',
       'tool',
       'text',
-      'step',
+      'analyse:success',
+      'validate:running',
+      'validate:success',
+      'write-answer:running',
+      'write-answer:success',
+      'wrap-up:running',
+      'wrap-up:success',
+      // The steps the run never took end skipped: the Clarify branch.
+      'clarify:skipped',
       'done',
     ]);
     expect(events[0]).toEqual({
       type: 'run',
       runId: run.id,
-      workflowId: 'agent:assistant',
+      workflowId: 'qti-v2-turn',
     });
+    // Each step carries what it received and when it started.
     expect(events[1]).toEqual({
       type: 'step',
-      id: 'answer',
-      title: 'Answer',
+      id: 'receive-question',
+      title: 'Receive question',
       status: 'running',
+      input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
+      startedAt: expect.any(String) as string,
     });
-    expect(events[4]).toEqual({
+    expect(events[10]).toEqual({
       type: 'step',
-      id: 'answer',
-      title: 'Answer',
+      id: 'analyse',
+      title: 'Analyse',
       status: 'success',
-      output: { calls: [], stopped: false },
+      // A step inside the analysis loop carries its attempt (api.md 3.6).
+      attempt: 1,
+      input: { question: 'Who won in 2002?' },
+      output: ANALYSE_OUTPUT,
+      startedAt: expect.any(String) as string,
+      endedAt: expect.any(String) as string,
+      // The turn's `tool` event is the step's call; no result came for it.
+      toolCalls: [{ tool: 'run_readonly_sql' }],
     });
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
-      workflowId: 'agent:assistant',
-      workflowName: 'Assistant',
+      workflowId: 'qti-v2-turn',
+      workflowName: 'Questions to Insights v2',
       input: {
         question: '  Who won in 2002?  ',
         datasets: ['World Cup Core'],
-        careful: true,
       },
       status: 'success',
       steps: [
+        { id: 'receive-question', status: 'success' },
+        { id: 'load-catalog', status: 'success', output: { entities: 1 } },
+        { id: 'plan', status: 'success', output: PLAN_OUTPUT },
+        { id: 'clarify', title: 'Clarify', status: 'skipped' },
         {
-          id: 'answer',
-          title: 'Answer',
+          id: 'analyse',
+          title: 'Analyse',
           status: 'success',
-          output: { calls: [], stopped: false },
+          attempt: 1,
+          output: ANALYSE_OUTPUT,
         },
+        { id: 'validate', status: 'success', attempt: 1 },
+        { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
+        { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
       ],
-      output: { calls: [], stopped: false },
+      output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
       answer: { role: 'assistant', content: 'Brazil won.' },
       datasets: ['World Cup Core'],
       panelItems: [],
       visualizations: [],
     });
+    expect(run.input).not.toHaveProperty('careful');
     expect(run.finishedAt).toBeDefined();
+    // Every step that ran has its start and end times, the end never before
+    // the start; the skipped Clarify has none.
+    for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
+      expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
+        Date.parse(step.startedAt!),
+      );
+    }
     await expect(ctx.service.get(run.id)).resolves.toEqual(run);
+  });
+
+  it("attaches the turn's tool calls to its running agent step, in the step events and the stored run", async () => {
+    ctx = build(DATASETS, {
+      steps: [
+        stepStart('analyse', {
+          question: 'Who won?',
+          datasets: ['World Cup Core'],
+        }),
+      ],
+      events: [
+        {
+          type: 'tool',
+          content: JSON.stringify({ name: 'run_readonly_sql', input: 'wins' }),
+        },
+        {
+          type: 'tool-result',
+          content: JSON.stringify({
+            tool: 'run_readonly_sql',
+            input: 'SELECT winner FROM matches',
+            rowCount: 1,
+          }),
+        },
+        {
+          type: 'tool',
+          content: JSON.stringify({ name: 'run_readonly_sql', input: 'x' }),
+        },
+        {
+          type: 'tool-result',
+          content: JSON.stringify({
+            tool: 'run_readonly_sql',
+            input: 'SELECT nope',
+            error: 'column "nope" does not exist',
+          }),
+        },
+      ],
+    });
+    const { events, run } = await streamed(ctx, 'qti-v2-turn', {
+      input: ASK,
+    });
+    const calls = [
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT winner FROM matches',
+        rowCount: 1,
+        durationMs: expect.any(Number) as number,
+      },
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT nope',
+        error: 'column "nope" does not exist',
+        durationMs: expect.any(Number) as number,
+      },
+    ];
+    const steps = events.filter(
+      (event) => event.type === 'step' && event.id === 'analyse',
+    );
+    expect(steps[0]).toMatchObject({
+      status: 'running',
+      input: { question: 'Who won?', datasets: ['World Cup Core'] },
+    });
+    expect(steps[0]).not.toHaveProperty('toolCalls');
+    expect(steps[1]).toMatchObject({
+      status: 'success',
+      input: { question: 'Who won?', datasets: ['World Cup Core'] },
+      toolCalls: calls,
+    });
+    const analyse = (doc: { steps: WorkflowRun['steps'] } | null) =>
+      doc?.steps.find((step) => step.id === 'analyse');
+    expect(analyse(run)?.toolCalls).toEqual(calls);
+    // A code step makes no calls.
+    expect(run.steps.find((s) => s.id === 'wrap-up')).not.toHaveProperty(
+      'toolCalls',
+    );
+    const stored = await ctx.repository.get(run.id);
+    expect(analyse(stored)).toMatchObject({
+      input: { question: 'Who won?', datasets: ['World Cup Core'] },
+      startedAt: expect.any(String) as string,
+      endedAt: expect.any(String) as string,
+      toolCalls: calls,
+    });
   });
 
   it('ends with error, as the chat stream does, when the turn fails; the host is still discarded', async () => {
     ctx = build(DATASETS, {
       throws: new Error('The endpoint rejected the API key (401)'),
     });
-    const { events, run } = await streamed(ctx, 'agent:assistant', {
+    const { events, run } = await streamed(ctx, 'qti-v2-turn', {
       input: ASK,
     });
     expect(events.at(-1)).toEqual({
@@ -620,13 +761,28 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
       status: 'failed',
       error: 'The endpoint rejected the API key (401)',
       steps: [
+        { id: 'receive-question', status: 'success' },
+        { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
         {
-          id: 'answer',
+          id: 'analyse',
           status: 'failed',
+          attempt: 1,
           error: 'The endpoint rejected the API key (401)',
         },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
+        { id: 'wrap-up', status: 'skipped' },
       ],
     });
+    expect(stepTrail(events).slice(-5)).toEqual([
+      'clarify:skipped',
+      'analyse:failed',
+      'validate:skipped',
+      'write-answer:skipped',
+      'wrap-up:skipped',
+    ]);
     expect(run.answer).toBeUndefined();
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
   });
@@ -639,15 +795,41 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     });
     const { events, run } = await streamed(
       ctx,
-      'agent:assistant',
+      'qti-v2-turn',
       { input: ASK },
       abort.signal,
     );
     // What streamed before the stop was sent; nothing after it.
-    expect(events.map((event) => event.type)).toEqual(['run', 'step', 'text']);
+    expect(
+      events.map((event) =>
+        event.type === 'step' ? `${event.id}:${event.status}` : event.type,
+      ),
+    ).toEqual([
+      'run',
+      'receive-question:running',
+      'receive-question:success',
+      'load-catalog:running',
+      'load-catalog:success',
+      'plan:running',
+      'plan:success',
+      'analyse:running',
+      'text',
+    ]);
     expect(run.status).toBe('stopped');
-    expect(run.steps).toEqual([
-      { id: 'answer', title: 'Answer', status: 'stopped' },
+    expect(run.steps.slice(3)).toEqual([
+      { id: 'clarify', title: 'Clarify', status: 'skipped' },
+      {
+        id: 'analyse',
+        title: 'Analyse',
+        status: 'stopped',
+        attempt: 1,
+        input: { question: 'Who won in 2002?' },
+        startedAt: expect.any(String) as string,
+        endedAt: expect.any(String) as string,
+      },
+      { id: 'validate', title: 'Validate', status: 'skipped' },
+      { id: 'write-answer', title: 'Write answer', status: 'skipped' },
+      { id: 'wrap-up', title: 'Wrap up', status: 'skipped' },
     ]);
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -655,15 +837,15 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
 
   it("gives a later run the earlier run's question and answer as context (plan 5.4)", async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'agent:assistant', { input: ASK });
-    const second = await streamed(ctx, 'agent:assistant', {
+    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const second = await streamed(ctx, 'qti-v2-turn', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
     expect(ctx.sessions.createRunHost).toHaveBeenLastCalledWith({
       runId: second.run.id,
-      workflowId: 'agent:assistant',
-      name: 'Assistant',
+      workflowId: 'qti-v2-turn',
+      name: 'Questions to Insights v2',
       datasets: ['World Cup Core'],
       context: {
         question: 'Who won in 2002?',
@@ -678,7 +860,7 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
 
   it('rates the stored answer of a run (api.md 128)', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
 
     const up = await ctx.service.rateAnswer(first.run.id, 'up');
     expect(ctx.sessions.rateRunAnswer).toHaveBeenCalledWith(
@@ -697,7 +879,7 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'agent:assistant',
+      'qti-v2-turn',
       { input: ASK },
       abort.signal,
     );
@@ -706,67 +888,25 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     );
   });
 
-  it("an RFP Continue gives the run the RFP, the last proposal and the earlier run's stages (plan 4.3)", async () => {
-    ctx = build(
-      [...DATASETS, { name: 'Intellify RFP API', datasourceKind: 'rest' }],
-      {
-        answer:
-          'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?',
-      },
-    );
-    const stages = {
-      current: 1,
-      done: [],
-      updatedAt: '2026-11-11T10:00:00.000Z',
-    };
-    const finishView = ctx.sessions.finishRunHost.getMockImplementation()!;
-    ctx.sessions.finishRunHost.mockImplementationOnce(async () => ({
-      ...(await finishView()),
-      rfpId: 'rfp-1',
-      workflowState: stages,
-    }));
-    const first = await streamed(ctx, 'agent:rfp', {
-      input: {
-        message: 'Start an RFP for Orchard Manufacturing, plan year 2027',
-      },
-    });
-    expect(first.run.rfpId).toBe('rfp-1');
-    const second = await streamed(ctx, 'agent:rfp', {
-      input: { message: 'yes', rfpId: 'rfp-1' },
-      context: { fromRunId: first.run.id },
-    });
-    expect(ctx.sessions.createRunHost).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        runId: second.run.id,
-        workflowId: 'agent:rfp',
-        rfpId: 'rfp-1',
-        workflowState: stages,
-        context: {
-          question: 'Start an RFP for Orchard Manufacturing, plan year 2027',
-          answer:
-            'Stage 1: Orchard Manufacturing renews on 1 January 2027. Confirm?',
-        },
-      }),
-    );
-    expect(second.run.question).toBe('yes');
-    expect(second.run.input).toEqual({ message: 'yes', rfpId: 'rfp-1' });
-  });
-
-  it("a context run of another RFP, or none, does not carry the earlier run's stages", async () => {
+  it('a context run carries the earlier question and answer only, never its stages or a legacy RFP id', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
     const finishView = ctx.sessions.finishRunHost.getMockImplementation()!;
     ctx.sessions.finishRunHost.mockImplementationOnce(async () => ({
       ...(await finishView()),
+      rfpId: 'rfp-1',
       workflowState: { current: 2, done: [1], updatedAt: 't' },
     }));
-    const first = await streamed(ctx, 'agent:assistant', { input: ASK });
-    await streamed(ctx, 'agent:assistant', {
+    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    await streamed(ctx, 'qti-v2-turn', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
-    expect(ctx.sessions.createRunHost.mock.lastCall?.[0]).not.toHaveProperty(
-      'workflowState',
-    );
+    const spec = ctx.sessions.createRunHost.mock.lastCall?.[0];
+    expect(spec).not.toHaveProperty('workflowState');
+    expect(spec).not.toHaveProperty('rfpId');
+    expect(spec).toMatchObject({
+      context: { question: 'Who won in 2002?', answer: 'Brazil won in 2002.' },
+    });
   });
 
   it('refuses a context run that has no answer', async () => {
@@ -774,88 +914,39 @@ describe('WorkflowRunsService: an agent workflow run (agents.md 5.14)', () => {
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'agent:assistant',
+      'qti-v2-turn',
       { input: ASK },
       abort.signal,
     );
     await expect(
-      ctx.service.prepare('agent:assistant', {
+      ctx.service.prepare('qti-v2-turn', {
         input: ASK,
         context: { fromRunId: stopped.run.id },
       }),
     ).rejects.toThrow(`Run "${stopped.run.id}" has no answer to continue from`);
   });
 
-  it('POST /runs (118) answers an agent run as the stream ends it', async () => {
+  it('POST /runs (118) answers the run as the stream ends it, and stores it', async () => {
     ctx = build();
-    const run = (await ctx.service.run('agent:assistant', {
-      input: ASK,
-    })) as WorkflowRun;
+    const run = await ctx.service.run('qti-v2-turn', { input: ASK });
     expect(run).toMatchObject({
-      workflowId: 'agent:assistant',
+      workflowId: 'qti-v2-turn',
       status: 'success',
       answer: { content: 'Brazil won.' },
+      output: WRAP_UP_OUTPUT,
     });
-    expect(ctx.runWorkflow).not.toHaveBeenCalled();
-  });
-});
-
-describe('WorkflowRunsService: a code-only workflow run (api.md 118, 119)', () => {
-  let ctx: ReturnType<typeof build>;
-  afterEach(() => ctx.db.close());
-
-  it('118 runs it once on its checked input, as before', async () => {
-    ctx = build();
-    const outcome = {
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      steps: [],
-    };
-    ctx.runWorkflow.mockResolvedValue(outcome);
-    const answer = (await ctx.service.run('seq-text-demo', {
-      input: { text: ' a ', extra: 1 },
-    })) as typeof outcome & { runId: string };
-    expect(answer).toEqual({
-      ...outcome,
-      runId: expect.any(String) as string,
-    });
-    expect(ctx.runWorkflow).toHaveBeenCalledWith('seq-text-demo', {
-      text: ' a ',
-    });
-    await expect(ctx.service.run('seq-text-demo', {})).rejects.toThrow(
-      'Text is required',
+    await expect(ctx.service.get(run.id)).resolves.toEqual(run);
+    // A refusal stores nothing.
+    await expect(ctx.service.run('qti-v2-turn', {})).rejects.toThrow(
+      'Question is required',
     );
-    // 118 stores the run too (plan 5.1), and a refusal stores nothing.
-    const stored = await ctx.repository.list();
-    expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatchObject({
-      id: answer.runId,
-      workflowId: 'seq-text-demo',
-      workflowName: 'Sequential test workflow',
-      input: { text: ' a ' },
-      status: 'success',
-      steps: [],
-      datasets: [],
-    });
-    expect(stored[0].finishedAt).toBeDefined();
+    expect(await ctx.repository.list()).toHaveLength(1);
   });
 
-  it('118 stores a code-only run as failed when its engine throws, and rethrows', async () => {
-    ctx = build();
-    ctx.runWorkflow.mockRejectedValue(new Error('engine down'));
-    await expect(
-      ctx.service.run('seq-text-demo', { input: { text: 'a' } }),
-    ).rejects.toThrow('engine down');
-    const [stored] = await ctx.repository.list();
-    expect(stored).toMatchObject({ status: 'failed', error: 'engine down' });
-  });
-
-  it('119 stores a code-only run when it starts and when it ends', async () => {
+  it('stores a run when it starts, as running, and step by step as it ends', async () => {
     ctx = build();
     const atStart: unknown[] = [];
-    const prepared = await ctx.service.prepare('seq-text-demo', {
-      input: { text: 'Hello world' },
-    });
+    const prepared = await ctx.service.prepare('qti-v2-turn', { input: ASK });
     const run = await ctx.service.stream(prepared, (event) => {
       if (event.type === 'run') {
         void ctx.repository.get(event.runId).then((doc) => atStart.push(doc));
@@ -863,55 +954,16 @@ describe('WorkflowRunsService: a code-only workflow run (api.md 118, 119)', () =
     });
     await new Promise((resolve) => setImmediate(resolve));
     expect(atStart[0]).toMatchObject({ id: run.id, status: 'running' });
-    await expect(ctx.repository.get(run.id)).resolves.toMatchObject({
-      status: 'success',
-      output: { summary: '2 words, 11 characters: "Hello world"' },
-    });
-  });
-
-  it('119 streams each step and ends with done', async () => {
-    ctx = build();
-    const { events, run } = await streamed(ctx, 'seq-text-demo', {
-      input: { text: '  Hello   workflow   world  ' },
-    });
-    expect(
-      events.map((event) =>
-        event.type === 'step' ? `${event.id}:${event.status}` : event.type,
-      ),
-    ).toEqual([
-      'run',
-      'clean-text:running',
-      'clean-text:success',
-      'count-words:running',
-      'count-words:success',
-      'format-result:running',
-      'format-result:success',
-      'done',
-    ]);
-    expect(run).toMatchObject({
-      workflowId: 'seq-text-demo',
-      status: 'success',
-      output: { summary: '3 words, 20 characters: "Hello workflow world"' },
-      datasets: [],
-    });
-    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
-  });
-
-  it('119 reports a failed step, skips the rest, and still ends with done', async () => {
-    ctx = build();
-    const { events, run } = await streamed(ctx, 'seq-text-demo', {
-      input: { text: '   ' },
-    });
-    expect(events.at(-1)).toEqual({ type: 'done', run });
-    expect(run.status).toBe('failed');
-    expect(run.error).toBe('The text is empty');
-    expect(run.steps.map((step) => [step.id, step.status, step.error])).toEqual(
-      [
-        ['clean-text', 'failed', 'The text is empty'],
-        ['count-words', 'skipped', undefined],
-        ['format-result', 'skipped', undefined],
-      ],
-    );
+    const stored = await ctx.repository.get(run.id);
+    expect(stored).toMatchObject({ status: 'success', output: WRAP_UP_OUTPUT });
+    // Each stored step that ran keeps what it received and its times.
+    for (const step of stored!.steps.filter((s) => s.status !== 'skipped')) {
+      expect(step.input).toBeDefined();
+      expect(Date.parse(step.startedAt!)).not.toBeNaN();
+      expect(Date.parse(step.endedAt!)).toBeGreaterThanOrEqual(
+        Date.parse(step.startedAt!),
+      );
+    }
   });
 });
 
@@ -919,13 +971,15 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
   it('answers a refusal with its status before any stream, and streams SSE frames otherwise', async () => {
     const run = { id: 'r1', status: 'success' };
     const runs = {
-      prepare: jest.fn((id: string) =>
-        id === 'agent:assistant'
-          ? Promise.resolve({ id })
-          : Promise.reject(new BadRequestException('Question is required')),
+      prepare: jest.fn((id: string, body: { input?: { question?: string } }) =>
+        id !== 'qti-v2-turn'
+          ? Promise.reject(new NotFoundException(`Workflow "${id}" not found`))
+          : body.input?.question
+            ? Promise.resolve({ id })
+            : Promise.reject(new BadRequestException('Question is required')),
       ),
       stream: jest.fn((_prepared: unknown, emit: (event: unknown) => void) => {
-        emit({ type: 'run', runId: 'r1', workflowId: 'agent:assistant' });
+        emit({ type: 'run', runId: 'r1', workflowId: 'qti-v2-turn' });
         emit({ type: 'text', content: 'Hi' });
         emit({ type: 'done', run });
         return Promise.resolve(run);
@@ -949,9 +1003,18 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
         .expect(({ body }) =>
           expect(body).toMatchObject({ message: 'Question is required' }),
         );
+      await request(server)
+        .post('/workflows/agent%3Aassistant/runs/stream')
+        .send({ input: { question: 'Hi' } })
+        .expect(404)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            message: 'Workflow "agent:assistant" not found',
+          }),
+        );
       expect(runs.stream).not.toHaveBeenCalled();
       const res = await request(server)
-        .post('/workflows/agent%3Aassistant/runs/stream')
+        .post('/workflows/qti-v2-turn/runs/stream')
         .send({ input: { question: 'Hi' } })
         .expect(200);
       expect(res.headers['content-type']).toBe(
@@ -959,14 +1022,14 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
       );
       expect(res.text).toBe(
         [
-          'data: {"type":"run","runId":"r1","workflowId":"agent:assistant"}',
+          'data: {"type":"run","runId":"r1","workflowId":"qti-v2-turn"}',
           'data: {"type":"text","content":"Hi"}',
           'data: {"type":"done","run":{"id":"r1","status":"success"}}',
         ]
           .map((frame) => `${frame}\n\n`)
           .join(''),
       );
-      expect(runs.prepare).toHaveBeenLastCalledWith('agent:assistant', {
+      expect(runs.prepare).toHaveBeenLastCalledWith('qti-v2-turn', {
         input: { question: 'Hi' },
       });
     } finally {
@@ -981,7 +1044,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
 
   const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
 
-  it('stores an agent run when it starts, as running with its input and workflow', async () => {
+  it('stores a run when it starts, as running with its input and workflow', async () => {
     ctx = build();
     let atTurn: unknown;
     ctx.sessions.streamRunTurn.mockImplementationOnce(
@@ -989,12 +1052,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         atTurn = await ctx.repository.get(hostId.slice('run-'.length));
       },
     );
-    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     expect(atTurn).toMatchObject({
       id: run.id,
-      workflowId: 'agent:assistant',
-      workflowName: 'Assistant',
-      input: { ...ASK, careful: false },
+      workflowId: 'qti-v2-turn',
+      workflowName: 'Questions to Insights v2',
+      input: ASK,
       status: 'running',
       steps: [],
       datasets: [],
@@ -1003,19 +1066,71 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     expect((atTurn as { startedAt?: string }).startedAt).toBe(run.startedAt);
   });
 
+  it("stores the workflow's contractHash when the run starts, and done.run carries it (agents.md 5.12)", async () => {
+    ctx = build();
+    const { contractHash } = CODE_WORKFLOWS[0];
+    expect(contractHash).toMatch(/^[0-9a-f]{12}$/);
+    let atTurn: unknown;
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (hostId: string) => {
+        atTurn = await ctx.repository.get(hostId.slice('run-'.length));
+      },
+    );
+    const { run, events } = await streamed(ctx, 'qti-v2-turn', {
+      input: ASK,
+    });
+    expect(atTurn).toMatchObject({ contractHash });
+    expect(run.contractHash).toBe(contractHash);
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      run: { contractHash },
+    });
+    await expect(ctx.service.get(run.id)).resolves.toMatchObject({
+      contractHash,
+    });
+  });
+
+  it('stores a contract violation as the failed step and run error; later steps are skipped', async () => {
+    const violation = new ContractViolationError(
+      'Analyse',
+      'output',
+      'calls[2].rowCount',
+      'Invalid input: expected number, received string',
+    );
+    ctx = build(DATASETS, { throws: violation });
+    const failed = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const message =
+      'Contract violation in Analyse: calls[2].rowCount Invalid input: expected number, received string';
+    await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
+      status: 'failed',
+      error: message,
+      steps: [
+        { id: 'receive-question', status: 'success' },
+        { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
+        { id: 'analyse', status: 'failed', error: message },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
+        { id: 'wrap-up', status: 'skipped' },
+      ],
+    });
+  });
+
   it('updates it when it ends with the projection of the host; the derived views are not stored', async () => {
     ctx = build();
     ctx.sessions.finishRunHost.mockImplementationOnce(() =>
       Promise.resolve({
         id: 'host',
-        name: 'RFP Builder',
-        datasets: ['Intellify RFP API'],
+        name: 'Data Readiness Agent',
+        datasets: ['Claims'],
         messages: [
-          { role: 'user', content: 'Start an RFP', at: 't1' },
+          { role: 'user', content: 'Assess Claims', at: 't1' },
           { role: 'assistant', content: 'Which client?', at: 't2' },
         ],
-        agentKey: 'rfp',
-        agentName: 'RFP Builder',
+        agentKey: 'data-readiness',
+        agentName: 'Data Readiness Agent',
+        // A host shaped by an earlier version: its RFP id is not stored.
         rfpId: 'rfp-1',
         visualizations: [{ id: 'v1', title: 'Goals' }],
         panelItems: [
@@ -1029,34 +1144,47 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         ],
         workflowState: { phases: [], updatedAt: 't' },
         workflow: { phases: [], source: 'agent' },
-        agent: { id: 'rfp', name: 'RFP Builder', deleted: false },
+        agent: {
+          id: 'data-readiness',
+          name: 'Data Readiness Agent',
+          deleted: false,
+        },
         workflowRef: {
-          id: 'agent:rfp',
-          name: 'RFP Builder',
+          id: 'agent:data-readiness',
+          name: 'Data Readiness Agent',
           kind: 'agent',
           deleted: false,
         },
       } as never),
     );
-    const { run, events } = await streamed(ctx, 'agent:assistant', {
+    const { run, events } = await streamed(ctx, 'qti-v2-turn', {
       input: ASK,
     });
     const stored = await ctx.repository.get(run.id);
     expect(stored).toMatchObject({
       status: 'success',
-      steps: [{ id: 'answer', status: 'success' }],
-      output: { calls: [], stopped: false },
+      steps: [
+        { id: 'receive-question', status: 'success' },
+        { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
+        { id: 'analyse', status: 'success' },
+        { id: 'validate', status: 'success' },
+        { id: 'write-answer', status: 'success' },
+        { id: 'wrap-up', status: 'success' },
+      ],
+      output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
       answer: { role: 'assistant', content: 'Which client?', at: 't2' },
-      datasets: ['Intellify RFP API'],
-      agentKey: 'rfp',
-      agentName: 'RFP Builder',
-      rfpId: 'rfp-1',
+      datasets: ['Claims'],
+      agentKey: 'data-readiness',
+      agentName: 'Data Readiness Agent',
       visualizations: [{ id: 'v1', title: 'Goals' }],
       panelItems: [{ id: 'p1', kind: 'document' }],
       workflowState: { phases: [], updatedAt: 't' },
     });
     expect(stored?.finishedAt).toBeDefined();
+    expect(stored).not.toHaveProperty('rfpId');
     expect(stored).not.toHaveProperty('agent');
     expect(stored).not.toHaveProperty('workflow');
     expect(stored).not.toHaveProperty('workflowRef');
@@ -1064,8 +1192,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
       id: stored?.id,
-      agent: { id: 'assistant' },
-      workflow: { source: 'agent' },
+      agent: { id: 'assistant-v2' },
+      workflow: { source: 'workflow' },
       panelItems: [{ id: 'p1' }],
     });
     expect(ctx.sessions.toView).toHaveBeenLastCalledWith(
@@ -1075,24 +1203,42 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
 
   it('stores a failed run with its error, and a stopped one as stopped', async () => {
     ctx = build(DATASETS, { throws: new Error('Model error') });
-    const failed = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const failed = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
       status: 'failed',
       error: 'Model error',
-      steps: [{ id: 'answer', status: 'failed', error: 'Model error' }],
+      steps: [
+        { id: 'receive-question', status: 'success' },
+        { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
+        { id: 'analyse', status: 'failed', error: 'Model error' },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
+        { id: 'wrap-up', status: 'skipped' },
+      ],
     });
     ctx.db.close();
     const abort = new AbortController();
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'agent:assistant',
+      'qti-v2-turn',
       { input: ASK },
       abort.signal,
     );
     await expect(ctx.repository.get(stopped.run.id)).resolves.toMatchObject({
       status: 'stopped',
-      steps: [{ id: 'answer', status: 'stopped' }],
+      steps: [
+        { id: 'receive-question', status: 'success' },
+        { id: 'load-catalog', status: 'success' },
+        { id: 'plan', status: 'success' },
+        { id: 'clarify', status: 'skipped' },
+        { id: 'analyse', status: 'stopped' },
+        { id: 'validate', status: 'skipped' },
+        { id: 'write-answer', status: 'skipped' },
+        { id: 'wrap-up', status: 'skipped' },
+      ],
     });
   });
 
@@ -1101,7 +1247,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     ctx.sessions.finishRunHost.mockImplementationOnce(() =>
       Promise.reject(new Error('disk full')),
     );
-    const prepared = await ctx.service.prepare('agent:assistant', {
+    const prepared = await ctx.service.prepare('qti-v2-turn', {
       input: ASK,
     });
     let runId = '';
@@ -1118,9 +1264,9 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
 
   it('takes a stored run as context after a restart (plan 5.4)', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     const after = ctx.restarted();
-    const prepared = await after.prepare('agent:assistant', {
+    const prepared = await after.prepare('qti-v2-turn', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
@@ -1202,6 +1348,87 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
   });
 });
 
+/** A run of the sequential test workflow an earlier version stored. */
+const SEQ_RUN: WorkflowRunDoc = {
+  id: 'old-seq',
+  workflowId: 'seq-text-demo',
+  workflowName: 'Sequential test workflow',
+  input: { text: '  Hello world  ' },
+  status: 'success',
+  steps: [
+    {
+      id: 'clean-text',
+      title: 'Clean text',
+      status: 'success',
+      input: { text: '  Hello world  ' },
+      output: { text: 'Hello world' },
+      startedAt: '2026-11-11T11:00:00.000Z',
+      endedAt: '2026-11-11T11:00:00.500Z',
+    },
+  ],
+  output: { summary: '2 words, 11 characters: "Hello world"' },
+  datasets: [],
+  startedAt: '2026-11-11T11:00:00.000Z',
+  finishedAt: '2026-11-11T11:00:01.000Z',
+};
+
+/** A one-step Assistant run an earlier version stored. */
+const ASSISTANT_RUN: WorkflowRunDoc = {
+  id: 'old-assistant',
+  workflowId: 'agent:assistant',
+  workflowName: 'Assistant',
+  input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
+  status: 'success',
+  steps: [{ id: 'answer', title: 'Answer', status: 'success' }],
+  question: 'Who hosted in 2002?',
+  answer: { role: 'assistant', content: 'Korea and Japan.', at: 't' },
+  datasets: ['World Cup Core'],
+  panelItems: [],
+  visualizations: [],
+  startedAt: '2026-11-11T10:00:00.000Z',
+  finishedAt: '2026-11-11T10:00:05.000Z',
+};
+
+/** A deep analysis run an earlier version stored: its report is a file. */
+const DEEP_RUN: WorkflowRunDoc = {
+  id: 'old-deep',
+  workflowId: 'deep-analysis',
+  workflowName: 'Deep analysis',
+  input: { question: 'Why did scoring fall?', datasets: ['World Cup Core'] },
+  status: 'success',
+  steps: [
+    { id: 'plan', title: 'Plan', status: 'success' },
+    { id: 'assemble', title: 'Assemble', status: 'success' },
+  ],
+  output: { title: 'Scoring', executiveSummary: 'Defences got better.' },
+  question: 'Why did scoring fall?',
+  answer: {
+    role: 'assistant',
+    content: 'Defences got better.',
+    at: 't',
+    report: {
+      jobId: 'old-deep',
+      title: 'Scoring',
+      path: 'reports/old-deep.md',
+      angles: 3,
+    },
+  },
+  datasets: ['World Cup Core'],
+  panelItems: [
+    {
+      id: 'p1',
+      kind: 'file',
+      title: 'Scoring',
+      path: 'reports/old-deep.md',
+      bytes: 1200,
+      shownAt: 't',
+    },
+  ],
+  visualizations: [],
+  startedAt: '2026-11-10T10:00:00.000Z',
+  finishedAt: '2026-11-10T10:04:00.000Z',
+};
+
 describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
@@ -1210,64 +1437,206 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it('lists summaries newest first, filtered by workflow, titled from the question or the first text input', async () => {
     ctx = build();
-    const agent = await streamed(ctx, 'agent:assistant', { input: ASK });
-    const code = await streamed(ctx, 'seq-text-demo', {
-      input: { text: '  Hello world  ' },
-    });
+    const v2 = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     // Same-millisecond starts would tie: order by the stored startedAt.
-    await ctx.repository.update(agent.run.id, {
-      startedAt: '2026-11-11T10:00:00.000Z',
+    await ctx.repository.update(v2.run.id, {
+      startedAt: '2026-11-11T12:00:00.000Z',
     });
-    await ctx.repository.update(code.run.id, {
-      startedAt: '2026-11-11T11:00:00.000Z',
-    });
-    const all = await ctx.service.list();
-    expect(all).toEqual([
+    // Runs an earlier version stored of workflows removed in 1.23.35.
+    await ctx.repository.insert(SEQ_RUN);
+    await ctx.repository.insert(ASSISTANT_RUN);
+    expect(await ctx.service.list()).toEqual([
       {
-        id: code.run.id,
+        id: v2.run.id,
+        workflowId: 'qti-v2-turn',
+        workflowName: 'Questions to Insights v2',
+        status: 'success',
+        title: 'Who won in 2002?',
+        startedAt: '2026-11-11T12:00:00.000Z',
+        finishedAt: v2.run.finishedAt,
+      },
+      {
+        id: 'old-seq',
         workflowId: 'seq-text-demo',
         workflowName: 'Sequential test workflow',
         status: 'success',
         title: 'Hello world',
         startedAt: '2026-11-11T11:00:00.000Z',
-        finishedAt: code.run.finishedAt,
+        finishedAt: '2026-11-11T11:00:01.000Z',
       },
       {
-        id: agent.run.id,
+        id: 'old-assistant',
         workflowId: 'agent:assistant',
         workflowName: 'Assistant',
         status: 'success',
-        title: 'Who won in 2002?',
+        title: 'Who hosted in 2002?',
         startedAt: '2026-11-11T10:00:00.000Z',
-        finishedAt: agent.run.finishedAt,
+        finishedAt: '2026-11-11T10:00:05.000Z',
       },
     ]);
     expect(
-      (await ctx.service.list('agent:assistant')).map((run) => run.id),
-    ).toEqual([agent.run.id]);
+      (await ctx.service.list('qti-v2-turn')).map((run) => run.id),
+    ).toEqual([v2.run.id]);
+    expect(
+      (await ctx.service.list('seq-text-demo')).map((run) => run.id),
+    ).toEqual(['old-seq']);
   });
 
   it('gets one run with its derived views, or 404 Run "<id>" not found', async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     await expect(ctx.service.get(run.id)).resolves.toEqual(run);
     await expect(ctx.service.get('nope')).rejects.toThrow(
       new NotFoundException('Run "nope" not found'),
     );
-    const code = await streamed(ctx, 'seq-text-demo', { input: { text: 'a' } });
-    const fetched = await ctx.service.get(code.run.id);
-    expect(fetched).toEqual(code.run);
-    expect(fetched).not.toHaveProperty('agent');
+  });
+
+  describe('a stored run of a workflow removed in 1.23.35', () => {
+    it('a sequential test run reads as stored: its steps and output, no agent views', async () => {
+      ctx = build();
+      await ctx.repository.insert(SEQ_RUN);
+      const read = await ctx.service.get('old-seq');
+      expect(read).toMatchObject({ ...SEQ_RUN, ownerId: 'local' });
+      expect(read).not.toHaveProperty('agent');
+      expect(ctx.sessions.toView).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an Assistant run', () => ASSISTANT_RUN],
+      ['a deep analysis run, its report kept as a file', () => DEEP_RUN],
+    ])(
+      '%s reads as a plain run, through its run-backed host',
+      async (_label, stored) => {
+        ctx = build();
+        const doc = stored();
+        await ctx.repository.insert(doc);
+        const read = await ctx.service.get(doc.id);
+        expect(read).toMatchObject({
+          id: doc.id,
+          workflowId: doc.workflowId,
+          status: 'success',
+          question: doc.question,
+          answer: { content: doc.answer!.content },
+        });
+        expect(ctx.sessions.toView).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            id: `run-${doc.id}`,
+            workflowId: doc.workflowId,
+            run: true,
+          }),
+        );
+        // Its files are served from its workspace, as before.
+        await ctx.service.panelItemFile(doc.id, 'p1');
+        expect(ctx.sessions.panelItemFileOf).toHaveBeenCalledWith(
+          expect.objectContaining({ workspaceId: `session-run-${doc.id}` }),
+          'p1',
+        );
+      },
+    );
+
+    it('cannot run again: a run request naming its workflow is not found', async () => {
+      ctx = build();
+      await ctx.repository.insert(DEEP_RUN);
+      for (const id of ['deep-analysis', 'seq-text-demo', 'agent:assistant']) {
+        await expect(
+          ctx.service.prepare(id, {
+            input: { question: 'Again', datasets: ['World Cup Core'] },
+            context: { fromRunId: DEEP_RUN.id },
+          }),
+        ).rejects.toThrow(new NotFoundException(`Workflow "${id}" not found`));
+      }
+      expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+    });
+
+    it('a v2 run may take its question and answer as context; one without an answer is refused clearly', async () => {
+      ctx = build();
+      await ctx.repository.insert(DEEP_RUN);
+      await ctx.repository.insert(SEQ_RUN);
+      const prepared = await ctx.service.prepare('qti-v2-turn', {
+        input: { question: 'Why?', datasets: ['World Cup Core'] },
+        context: { fromRunId: DEEP_RUN.id },
+      });
+      expect(prepared.context).toEqual({
+        fromRunId: DEEP_RUN.id,
+        question: DEEP_RUN.question,
+        answer: DEEP_RUN.answer!.content,
+      });
+      const refusal = ctx.service.prepare('qti-v2-turn', {
+        input: { question: 'Why?', datasets: ['World Cup Core'] },
+        context: { fromRunId: 'old-seq' },
+      });
+      await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+      await expect(refusal).rejects.toThrow(
+        'Run "old-seq" has no answer to continue from',
+      );
+    });
+
+    it('deletes a run without a question without touching any workspace, and one with a question with its workspace', async () => {
+      ctx = build();
+      await ctx.repository.insert(SEQ_RUN);
+      await ctx.repository.insert(DEEP_RUN);
+      await ctx.service.delete('old-seq');
+      expect(ctx.sessions.deleteRunHostResources).not.toHaveBeenCalled();
+      await ctx.service.delete(DEEP_RUN.id);
+      expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
+        `run-${DEEP_RUN.id}`,
+      );
+      expect(await ctx.repository.list()).toEqual([]);
+    });
+  });
+
+  it('reads a stored RFP Builder run as a plain run: its legacy rfpId is dropped', async () => {
+    ctx = build();
+    await ctx.repository.insert({
+      id: 'old-rfp',
+      workflowId: 'agent:rfp',
+      workflowName: 'RFP Builder',
+      input: { message: 'Start an RFP', rfpId: 'rfp-1' },
+      status: 'success',
+      steps: [],
+      startedAt: '2026-11-01T10:00:00.000Z',
+      finishedAt: '2026-11-01T10:01:00.000Z',
+      question: 'Start an RFP',
+      answer: { role: 'assistant', content: 'Which client?', at: 't2' },
+      datasets: ['Intellify RFP API'],
+      agentKey: 'rfp',
+      agentName: 'RFP Builder',
+      rfpId: 'rfp-1',
+      panelItems: [],
+      visualizations: [],
+    } as never);
+    const read = await ctx.service.get('old-rfp');
+    expect(read).toMatchObject({
+      id: 'old-rfp',
+      workflowId: 'agent:rfp',
+      status: 'success',
+      answer: { content: 'Which client?' },
+    });
+    expect(read).not.toHaveProperty('rfpId');
+    expect((await ctx.service.list()).map((run) => run.id)).toContain(
+      'old-rfp',
+    );
   });
 
   it('deletes a run with its workspace and memory thread; refuses a running one and an unknown one', async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const said = {
+      id: 'm1',
+      role: 'user' as const,
+      content: 'Why?',
+      createdAt: 't',
+    };
+    await ctx.nodeChats.append(run.id, 'analyse', said);
+    await ctx.nodeChats.append('another-run', 'analyse', said);
     await ctx.service.delete(run.id);
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
       `run-${run.id}`,
     );
     await expect(ctx.repository.get(run.id)).resolves.toBeNull();
+    // Its node chats go with it (data-model 3.17); another run's stay.
+    await expect(ctx.nodeChats.get(run.id, 'analyse')).resolves.toBeNull();
+    expect(await ctx.nodeChats.get('another-run', 'analyse')).not.toBeNull();
     await expect(ctx.service.delete(run.id)).rejects.toThrow(
       new NotFoundException(`Run "${run.id}" not found`),
     );
@@ -1287,19 +1656,9 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
     await expect(ctx.repository.get('busy')).resolves.not.toBeNull();
   });
 
-  it('deletes a code-only run without touching any workspace', async () => {
-    ctx = build();
-    const { run } = await streamed(ctx, 'seq-text-demo', {
-      input: { text: 'a' },
-    });
-    await ctx.service.delete(run.id);
-    expect(ctx.sessions.deleteRunHostResources).not.toHaveBeenCalled();
-    await expect(ctx.repository.get(run.id)).resolves.toBeNull();
-  });
-
   it("serves a run's files through the session file services, given its run-backed host", async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     const host = expect.objectContaining({
       id: `run-${run.id}`,
       run: true,
@@ -1321,13 +1680,6 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       'v1',
       undefined,
     );
-    await ctx.service.downloadRfpPackage(run.id, 'rfp-1', 'rfp.md', true);
-    expect(ctx.sessions.downloadRfpPackageOf).toHaveBeenCalledWith(
-      host,
-      'rfp-1',
-      'rfp.md',
-      true,
-    );
     await expect(ctx.service.panelItemFile('nope', 'p1')).rejects.toThrow(
       new NotFoundException('Run "nope" not found'),
     );
@@ -1342,7 +1694,7 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('generates a visual from the answer: stores its metadata, panel item and a created card on the run', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
 
     const result = await ctx.service.generateVisualization(run.id);
 
@@ -1385,7 +1737,7 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('tailors and reverts: each adds a card; refresh and repair add none and keep one visual entry', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     await ctx.service.generateVisualization(run.id);
 
     await ctx.service.tailorVisualization(
@@ -1415,7 +1767,7 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('refuses a run that is still running, a code-only run, and an unknown run', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'agent:assistant', { input: ASK });
+    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
     await ctx.repository.update(run.id, { status: 'running' });
     await expect(ctx.service.generateVisualization(run.id)).rejects.toThrow(
       new BadRequestException('Wait for the run to finish'),
@@ -1477,15 +1829,13 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
         contentType: 'text/markdown',
         body: Buffer.from('# Notes'),
       }),
-      downloadRfpPackage: jest.fn().mockResolvedValue({
-        filename: 'rfp-acme.zip',
-        contentType: 'application/zip',
-        body: Buffer.from('zip'),
-      }),
     };
     const moduleRef = await Test.createTestingModule({
       controllers: [WorkflowRunsController],
-      providers: [{ provide: WorkflowRunsService, useValue: runs }],
+      providers: [
+        { provide: WorkflowRunsService, useValue: runs },
+        { provide: WorkflowNodeChatsService, useValue: {} },
+      ],
     }).compile();
     const app = moduleRef.createNestApplication();
     await app.init();
@@ -1598,20 +1948,12 @@ describe('WorkflowRunsController /workflow-runs (api.md 120-127)', () => {
             message: 'Unknown download format "docx": use pdf, md or csv',
           }),
         );
-      const pkg = await request(server)
+      // The RFP package route of the removed RFP Builder is gone.
+      await request(server)
         .get(
           '/workflow-runs/r1/rfp-packages/rfp-1/download?file=rfp.md&draft=true',
         )
-        .expect(200);
-      expect(runs.downloadRfpPackage).toHaveBeenCalledWith(
-        'r1',
-        'rfp-1',
-        'rfp.md',
-        true,
-      );
-      expect(pkg.headers['content-disposition']).toBe(
-        'attachment; filename="rfp-acme.zip"',
-      );
+        .expect(404);
     } finally {
       await app.close();
     }

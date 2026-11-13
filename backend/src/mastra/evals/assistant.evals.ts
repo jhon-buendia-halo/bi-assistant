@@ -814,16 +814,22 @@ export interface EvalOrientationInput {
 
 /**
  * The agent a set's cases run on and what each case sends it (agents.md
- * 8.1, `agentKey`): the assistant by default, the RFP Builder for the `rfp`
- * set (`rfp.evals.ts`).
+ * 8.1, `agentKey`): the assistant by default, the Data Readiness Agent for
+ * the `data-readiness` set (`data-readiness.evals.ts`).
  */
 export interface EvalTarget {
   /** Registry key of the agent. */
   agentKey: string;
   agent: Agent;
+  /**
+   * What a case runs, when not the agent alone: Questions to Insights v2's
+   * cases run its whole `qti-v2-turn` workflow (agents.md 8.1). A run of it
+   * never gets the tool-only synthesis: its answer is its Write answer's.
+   */
+  runTarget?: Agent;
   /** The sets that run on this agent. */
   sets: AssistantEvalSet[];
-  /** The orientation system message of a case (Block 1's dataset half, or Block R1). */
+  /** The orientation system message of a case (Block 1's dataset half, or Block D1). */
   orientation(input: EvalOrientationInput): string | Promise<string>;
   /** Whether the curated-knowledge block (Block 3) is sent. */
   sendsKnowledge: boolean;
@@ -847,8 +853,8 @@ export interface EvalTarget {
   sessionAgentKey?: string;
   /**
    * How much of each tool input and output the LLM judge reads; the
-   * report's 2,000 characters when unset. The RFP Builder's tools answer
-   * whole records, so its judge reads more of them.
+   * report's 2,000 characters when unset. An agent whose tools answer
+   * whole reports (Data Readiness) has its judge read more of them.
    */
   judgeTraceChars?: number;
   /**
@@ -1178,7 +1184,7 @@ function evalRequestContext(
  * earlier steps already captured, the same way production threads a live
  * records array through requestContext during `streamTurn`.
  */
-function captureStepRecords(
+export function captureStepRecords(
   step: unknown,
   turnRecords: ToolDataRecord[],
 ): void {
@@ -1232,11 +1238,13 @@ export async function createEvalHost(
   /** Bind the host to this built-in agent (`EvalTarget.sessionAgentKey`). */
   agentKey?: string,
 ): Promise<EvalHost> {
-  // An agent that declares its own datasets (RFP Builder, Data Readiness)
+  // An agent that declares its own datasets (Data Readiness)
   // takes them; the assistant runs over the run's.
+  // An agent host: the agent's turn on the agent-turn engine, with no
+  // catalogue workflow behind it (agents are a library since 1.23.35).
   const host = await sessions.createRunHost({
     runId: `eval-${randomUUID()}`,
-    workflowId: `agent:${agentKey ?? 'assistant'}`,
+    agentKey: agentKey ?? 'assistant',
     name: `${agentKey ?? 'assistant'} eval`,
     ...(agentKey ? {} : { datasets }),
     context: EVAL_HOST_PLACEHOLDER,
@@ -1259,9 +1267,9 @@ export async function cleanupEvalHost(
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it —
- * mirrors `parseJsonObject` in `SqlChecks`/`DeepAnalysisService`,
- * duplicated here rather than imported so this module's judge check stays
- * usable without pulling in either of those heavier services. */
+ * mirrors `parseJsonObject` in `SqlChecks`, duplicated here rather than
+ * imported so this module's judge check stays usable without pulling in
+ * that heavier service. */
 function parseJsonObject(text: string | undefined): unknown {
   const trimmed = (text ?? '').trim();
   if (!trimmed) return undefined;
@@ -1448,7 +1456,7 @@ export async function runAssistantEvalCase(
         },
       ],
       scorers: evalCase.scorers,
-      target: target.agent,
+      target: target.runTarget ?? target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from TurnOptions.agentContext — without this the model
       // used to run out of steps mid-analysis (the AI-SDK default cap is 5)
@@ -1484,7 +1492,7 @@ export async function runAssistantEvalCase(
     // production this path should be rare — the empty-answer failures in the
     // original bug report were caused by the 5-step default, not by the
     // model routinely finishing without prose.
-    if (!answer.trim() && toolCalls.length > 0) {
+    if (!target.runTarget && !answer.trim() && toolCalls.length > 0) {
       answer = await synthesizeToolOnlyTurn(
         target.agent,
         question,

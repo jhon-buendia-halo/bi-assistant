@@ -70,31 +70,6 @@ export class SessionsController {
     res.send(archive);
   }
 
-  /** An RFP package the session's RFP Builder exported, or one file of it (api.md #105). */
-  @Get(':id/rfp-packages/:rfpId/download')
-  async downloadRfpPackage(
-    @Param('id') id: string,
-    @Param('rfpId') rfpId: string,
-    @Res() res: Response,
-    @Query('file') file?: string,
-    @Query('draft') draft?: string,
-  ): Promise<void> {
-    const { filename, contentType, body } =
-      await this.sessionsService.downloadRfpPackage(
-        id,
-        rfpId,
-        typeof file === 'string' ? file : undefined,
-        draft === 'true',
-      );
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Length', body.length);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${filename.replace(/["\\\r\n]/g, '_')}"`,
-    );
-    res.send(body);
-  }
-
   /** A file item's text from the session workspace (api.md #106). */
   @Get(':id/panel-items/:itemId/file')
   panelItemFile(

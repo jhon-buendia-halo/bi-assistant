@@ -7,7 +7,8 @@
 }
 
 .workflow-item {
-  min-width: 0;
+  // Never narrower than its card's minimum and its arrow (below).
+  min-width: auto;
   flex: 1 1 0;
 
   &.agent {
@@ -15,9 +16,16 @@
   }
 }
 
+// A step's card never shrinks below its words: with many steps (Questions to
+// Insights v2's eight) the row grows past the tab and scrolls sideways
+// rather than letting a card spill over its arrow.
 .step-column {
-  min-width: 0;
+  min-width: 136px;
   flex: 1 1 auto;
+}
+
+.workflow-item.agent .step-column {
+  min-width: 184px;
 }
 
 .workflow-step {

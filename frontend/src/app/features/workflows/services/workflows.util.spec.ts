@@ -2,11 +2,8 @@ import { WorkflowInputField, WorkflowSummary } from '../models/workflow.model';
 import {
   buildWorkflowSections,
   canRunFromPage,
-  continueRequest,
   followUpRequest,
   initialInputValues,
-  rfpDocumentItem,
-  rfpPackageFilename,
   questionFieldName,
   runInput,
   filterRuns,
@@ -29,11 +26,10 @@ function workflow(
     id,
     name,
     description: `${name} description`,
-    kind: 'agent',
+    kind: 'code',
     owner: 'Official',
-    agents: [{ key: id.replace(/^agent:/, ''), name }],
-    stepCount: 1,
-    bar: 'agent',
+    agents: [],
+    stepCount: 4,
     trigger: 'run',
     input: [],
     datasets: [],
@@ -43,13 +39,9 @@ function workflow(
   };
 }
 
-/** The sequential test workflow: a run workflow (plan 9.1). */
-const SEQ: WorkflowSummary = workflow('seq-text-demo', 'Sequential test workflow', {
-  kind: 'code',
+/** A code workflow that calls no agent. */
+const THREE_STEPS: WorkflowSummary = workflow('three-steps', 'Three steps', {
   stepCount: 3,
-  bar: 'steps',
-  trigger: 'run',
-  agents: [],
   input: [
     {
       name: 'text',
@@ -61,72 +53,39 @@ const SEQ: WorkflowSummary = workflow('seq-text-demo', 'Sequential test workflow
   ],
 });
 
-/** The catalogue as `GET /workflows` orders it (workflows R1). */
+/** The catalogue as `GET /workflows` orders it (workflows R1), plus a second code workflow. */
 const CATALOGUE: WorkflowSummary[] = [
-  workflow('agent:assistant', 'Assistant', {
-    agents: [{ key: 'assistant', name: 'Questions to Insights Assistant' }],
-  }),
   workflow('qti-v2-turn', 'Questions to Insights v2', {
-    kind: 'code',
-    stepCount: 4,
-    bar: 'steps',
     agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+    runRequirement: 'Set up an LLM first',
   }),
-  workflow('agent:data-readiness', 'Data Readiness Agent'),
-  workflow('agent:rfp', 'RFP Builder', {
-    runRequirement:
-      'Load the "Intellify RFP API" sample in Settings → Testing Data first',
-  }),
-  workflow('agent:u2', 'Zeta analyst', { owner: 'You' }),
-  workflow('agent:u1', 'Alpha analyst', {
-    owner: 'You',
+  workflow('report-steps', 'Report steps', {
     description: 'Answers about the health plan',
   }),
 ];
 
 describe('workflows.util', () => {
   describe('buildWorkflowSections', () => {
-    it('groups Official then Mine and keeps the catalogue order in each (R5)', () => {
+    it('lists every workflow under Official in the catalogue order, with no Mine section (R5)', () => {
       const sections = buildWorkflowSections(CATALOGUE, '');
-      expect(sections.map((section) => section.id)).toEqual([
-        'official',
-        'mine',
-      ]);
-      expect(sections.map((section) => section.label)).toEqual([
-        'Official',
-        'Mine',
-      ]);
-      expect(sections[0].workflows.map((w) => w.id)).toEqual([
-        'agent:assistant',
-        'qti-v2-turn',
-        'agent:data-readiness',
-        'agent:rfp',
-      ]);
-      // The server orders user workflows by name; the list never re-sorts.
-      expect(sections[1].workflows.map((w) => w.id)).toEqual([
-        'agent:u2',
-        'agent:u1',
-      ]);
-    });
-
-    it('omits Mine when there are no user workflows', () => {
-      const sections = buildWorkflowSections(
-        CATALOGUE.filter((w) => w.owner === 'Official'),
-        '',
-      );
       expect(sections.map((section) => section.id)).toEqual(['official']);
+      expect(sections.map((section) => section.label)).toEqual(['Official']);
+      expect(sections[0].workflows.map((w) => w.id)).toEqual([
+        'qti-v2-turn',
+        'report-steps',
+      ]);
     });
 
     it('filters by name or description, ignoring case and spaces around', () => {
       expect(
-        buildWorkflowSections(CATALOGUE, '  rfp ').flatMap((section) =>
+        buildWorkflowSections(CATALOGUE, '  insights ').flatMap((section) =>
           section.workflows.map((w) => w.id),
         ),
-      ).toEqual(['agent:rfp']);
+      ).toEqual(['qti-v2-turn']);
       const byDescription = buildWorkflowSections(CATALOGUE, 'HEALTH PLAN');
-      expect(byDescription.map((section) => section.id)).toEqual(['mine']);
+      expect(byDescription.map((section) => section.id)).toEqual(['official']);
       expect(byDescription[0].workflows.map((w) => w.id)).toEqual([
-        'agent:u1',
+        'report-steps',
       ]);
     });
 
@@ -144,28 +103,24 @@ describe('workflows.util', () => {
 
     it('is null while a section shows', () => {
       expect(
-        workflowsEmptyMessage('rfp', buildWorkflowSections(CATALOGUE, 'rfp')),
+        workflowsEmptyMessage('report', buildWorkflowSections(CATALOGUE, 'report')),
       ).toBeNull();
     });
   });
 
   describe('labels', () => {
-    it('reads "<n> steps" for a code-defined workflow and "One step" otherwise', () => {
-      expect(workflowKindLabel(CATALOGUE[1])).toBe('4 steps');
-      expect(workflowKindLabel(CATALOGUE[0])).toBe('One step');
-    });
-
-    it('reads "<n> steps" for a code workflow that calls no agent (workflows R5)', () => {
-      expect(workflowKindLabel(SEQ)).toBe('3 steps');
+    it('reads "<n> steps" for every workflow (workflows R5)', () => {
+      expect(workflowKindLabel(CATALOGUE[0])).toBe('4 steps');
+      expect(workflowKindLabel(THREE_STEPS)).toBe('3 steps');
     });
 
     it('says nothing about agents for a workflow that calls none', () => {
-      expect(workflowUsesLabel(SEQ)).toBe('');
+      expect(workflowUsesLabel(THREE_STEPS)).toBe('');
     });
 
     it('lists the agents the steps call', () => {
       expect(workflowUsesLabel(CATALOGUE[0])).toBe(
-        'Uses Questions to Insights Assistant',
+        'Uses Questions to Insights v2',
       );
       expect(
         workflowUsesLabel(
@@ -236,21 +191,13 @@ describe('workflows.util', () => {
       },
     ];
 
-    it('the run workflows and every agent workflow (the Assistant, v2, Data Readiness, the RFP Builder and user agents) run from their page', () => {
-      const runnable = [SEQ, ...CATALOGUE]
+    it('a workflow with an input runs from its page; one without has no run form', () => {
+      const runnable = [THREE_STEPS, ...CATALOGUE]
         .map((w) => ({ ...w, input: w.input.length ? w.input : ASSISTANT_INPUT }))
         .filter(canRunFromPage)
         .map((w) => w.id);
-      expect(runnable).toEqual([
-        'seq-text-demo',
-        'agent:assistant',
-        'qti-v2-turn',
-        'agent:data-readiness',
-        'agent:rfp',
-        'agent:u2',
-        'agent:u1',
-      ]);
-      expect(canRunFromPage(workflow('agent:assistant', 'Assistant'))).toBe(false);
+      expect(runnable).toEqual(['three-steps', 'qti-v2-turn', 'report-steps']);
+      expect(canRunFromPage(workflow('no-input', 'No input'))).toBe(false);
     });
 
     it('the form starts from the defaults: a boolean unchecked unless its default is true', () => {
@@ -280,12 +227,12 @@ describe('workflows.util', () => {
       expect(
         runInput(
           [
-            { name: 'dataset', label: 'Dataset', type: 'dataset', required: true },
-            { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
+            { name: 'title', label: 'Title', type: 'text', required: true },
+            { name: 'secret', label: 'Secret', type: 'text', required: false, hidden: true },
           ],
-          { dataset: 'World Cup Core', rfpId: 'r-1' },
+          { title: 'World Cup Core', secret: 'r-1' },
         ),
-      ).toEqual({ dataset: 'World Cup Core' });
+      ).toEqual({ title: 'World Cup Core' });
     });
 
     it("the question field is the first visible text area: the follow-up's", () => {
@@ -316,84 +263,6 @@ describe('workflows.util', () => {
         input: { question: 'And the fewest?', datasets: ['World Cup Core'], careful: false },
         context: { fromRunId: 'run-1' },
       });
-    });
-  });
-
-  describe('the RFP Builder, one exchange per run (plan 4.3; rfp R2, R9, R16)', () => {
-    const RFP_INPUT: WorkflowInputField[] = [
-      {
-        name: 'message',
-        label: 'Message',
-        type: 'textarea',
-        required: true,
-        placeholder: 'Name the client and plan year, or state your decision',
-      },
-      { name: 'rfpId', label: 'RFP', type: 'text', required: false, hidden: true },
-    ];
-
-    it("Continue sends the typed message, the earlier run's RFP and the earlier run as its context", () => {
-      expect(
-        continueRequest(
-          RFP_INPUT,
-          { message: '  yes  ', rfpId: 'stale' },
-          { id: 'run-1', rfpId: 'rfp-1' },
-        ),
-      ).toEqual({
-        input: { message: '  yes  ', rfpId: 'rfp-1' },
-        context: { fromRunId: 'run-1' },
-      });
-      // A run that only proposed (no RFP yet) is continued by its context alone.
-      expect(continueRequest(RFP_INPUT, { message: 'yes' }, { id: 'run-1' })).toEqual({
-        input: { message: 'yes' },
-        context: { fromRunId: 'run-1' },
-      });
-    });
-
-    it('names the package as the server does: rfp-<title>[-draft].zip, or the file itself', () => {
-      const pkg = {
-        rfpId: '0b6c1f2e-1111-2222-3333-444455556666',
-        title: 'Orchard Manufacturing — 2027 benefits RFP',
-        files: [],
-      };
-      expect(rfpPackageFilename(pkg)).toBe(
-        'rfp-orchard-manufacturing-2027-benefits-rfp.zip',
-      );
-      expect(rfpPackageFilename({ ...pkg, draft: true })).toBe(
-        'rfp-orchard-manufacturing-2027-benefits-rfp-draft.zip',
-      );
-      expect(rfpPackageFilename({ ...pkg, title: '—' })).toBe('rfp-0b6c1f2e.zip');
-      expect(rfpPackageFilename(pkg, 'exhibits/exhibit-a-census.csv')).toBe(
-        'exhibit-a-census.csv',
-      );
-    });
-
-    it("the RFP document is the run's latest rfp.md file item, final or draft", () => {
-      const file = (id: string, path: string, shownAt: string) => ({
-        id,
-        kind: 'file' as const,
-        title: path,
-        path,
-        bytes: 10,
-        shownAt,
-      });
-      expect(rfpDocumentItem(undefined)).toBeNull();
-      expect(
-        rfpDocumentItem([
-          file('p1', 'notes.md', '2026-11-11T10:00:03.000Z'),
-          file('p2', 'rfp/r-1/draft/rfp.md', '2026-11-11T10:00:01.000Z'),
-          file('p3', 'rfp/r-1/rfp.md', '2026-11-11T10:00:02.000Z'),
-          {
-            id: 'p4',
-            kind: 'document' as const,
-            title: 'rfp/r-1/rfp.md',
-            markdown: '# x',
-            shownAt: '2026-11-11T10:00:04.000Z',
-          },
-        ])?.id,
-      ).toBe('p3');
-      expect(
-        rfpDocumentItem([file('p1', 'exhibits/rfp.md', '2026-11-11T10:00:00.000Z')]),
-      ).toBeNull();
     });
   });
 });

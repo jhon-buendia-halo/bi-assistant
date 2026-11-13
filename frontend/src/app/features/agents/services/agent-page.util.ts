@@ -37,8 +37,8 @@ export function defaultAgentTab(kind: AgentKind): AgentTabId {
 }
 
 /**
- * Only a user agent has Try it, a run of its draft (R90; the tab id stays `chat`). A chat
- * with a built-in agent starts from its workflow (workflows R6).
+ * Only a user agent has Try it, a run of its draft (R90; the tab id stays
+ * `chat`). Agents are a library: none runs from its page otherwise.
  */
 export function hasChatTab(kind: AgentKind): boolean {
   return kind === 'user';
@@ -46,12 +46,10 @@ export function hasChatTab(kind: AgentKind): boolean {
 
 /**
  * The Used in line's text when no workflow uses the agent (R109, plan 5.8):
- * a draft-only user agent until it is published, a System agent always.
+ * every agent but Questions to Insights v2. A System agent is called by the
+ * app itself.
  */
 export function usedInEmptyText(kind: AgentKind): string {
-  if (kind === 'user') {
-    return 'Not used in any workflow yet. Publish it to get its one-step workflow.';
-  }
   if (kind === 'system') {
     return 'Not used in any workflow. The app calls this agent itself.';
   }
@@ -124,7 +122,7 @@ export function skillLinked(instructions: string, name: string): boolean {
 /**
  * The agents every user agent builds on: their built-in skills are the ones
  * "included in every agent" (agents-evals R75). An Official agent's own
- * skills, such as the RFP Builder's stages, are not.
+ * skills are not.
  */
 const EVERY_AGENT_SKILL_OWNERS = new Set(['assistant', 'visualization']);
 

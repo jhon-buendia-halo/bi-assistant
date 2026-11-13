@@ -4,26 +4,14 @@ import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { followOsTheme } from './helpers/app-actions';
-import { runAssistantOk } from './helpers/runs-api';
-import {
-  createSkill,
-  createUserAgent,
-  saveLenaiSettings,
-  seedWorldCupDataset,
-} from './helpers/agents-api';
-import {
-  LlmStub,
-  STUB_ANSWER,
-  startLlmStub,
-  systemTexts,
-  turnRequests,
-} from './helpers/llm-stub';
+import { apiJson } from './helpers/api';
+import { createSkill, createUserAgent } from './helpers/agents-api';
 
 /**
  * Mirrors the Feature "Skill library" in specs/capabilities/agents-evals/spec.md
  * (R68-R80): the user's skills library and skill editor, and the built-in
- * skill editor. The built-in scenario's model is the recording LLM stub, so
- * the catalog the assistant receives can be read.
+ * skill editor. The built-in scenario reads the served skill back through
+ * the API (`GET /skills/built-in/:name`).
  */
 
 const EMPTY_LIBRARY =
@@ -307,23 +295,20 @@ test('the library and the skill editor have no detectable accessibility violatio
   await axeClean(page);
 });
 
+/** The served description of a built-in skill (api.md 100). */
+async function builtInDescription(page: Page, name: string): Promise<string> {
+  const skill = await apiJson<{ description: string }>(
+    page,
+    'GET',
+    `/skills/built-in/${name}`,
+  );
+  return skill.description;
+}
+
 test.describe('built-in skills', () => {
-  let stub: LlmStub;
-
-  test.beforeEach(async ({ page }) => {
-    stub = await startLlmStub();
-    await seedWorldCupDataset(page);
-    await saveLenaiSettings(page, stub.baseUrl);
-  });
-
-  test.afterEach(async () => {
-    await stub.close();
-  });
-
   test('I edit a built-in skill, and Reset restores it', async ({ page }) => {
     const edited =
       'Use when the turn carries curated knowledge: glossary, rules and filters.';
-    const question = 'Who won in 2022?';
 
     await openLibrary(page);
     await expect(
@@ -332,13 +317,13 @@ test.describe('built-in skills', () => {
         exact: true,
       }),
     ).toBeVisible();
-    for (const name of [
-      'curated-knowledge',
-      'deep-analysis',
-      'interactive-visuals',
-    ]) {
+    for (const name of ['curated-knowledge', 'interactive-visuals']) {
       await expect(page.getByTestId(`builtin-skill-row-${name}`)).toBeVisible();
     }
+    // Deep analysis is removed: its skill is gone.
+    await expect(
+      page.getByTestId('builtin-skill-row-deep-analysis'),
+    ).toHaveCount(0);
 
     await openBuiltIn(page, 'curated-knowledge');
     await expect(page.getByTestId('builtin-skill-banner')).toContainText(
@@ -352,22 +337,9 @@ test.describe('built-in skills', () => {
     await expect(row).toContainText('Modified');
     await evidenceShot(page, '1.14.5', 'builtin-skill-modified.png');
 
-    const result = await runAssistantOk(page, question);
-    expect(result.text).toContain(STUB_ANSWER);
-    const requests = turnRequests(stub, question);
-    expect(
-      requests.length,
-      `a streamed call for "${question}"`,
-    ).toBeGreaterThan(0);
-    const catalog =
-      systemTexts(requests[0])
-        .join('\n')
-        .match(/<available_skills>[\s\S]*?<\/available_skills>/)?.[0] ?? '';
-    expect(catalog).toMatch(
-      /<name>curated-knowledge<\/name>\s*<description>Use when the turn carries curated knowledge: glossary, rules and filters\.<\/description>/,
-    );
+    // The override is what the app serves (no run carries skills any more).
+    expect(await builtInDescription(page, 'curated-knowledge')).toBe(edited);
 
-    // The run left the page on the library: open the skill again.
     await openBuiltIn(page, 'curated-knowledge');
     const asked: string[] = [];
     page.once('dialog', (dialog) => {
@@ -383,33 +355,6 @@ test.describe('built-in skills', () => {
     await expect(
       page.getByTestId('builtin-skill-row-curated-knowledge'),
     ).not.toContainText('Modified');
-  });
-
-  test('an override that drops a placeholder is refused', async ({ page }) => {
-    await openLibrary(page);
-    await openBuiltIn(page, 'deep-analysis');
-
-    const plan = page.getByLabel('Content of phases/1-plan.md', {
-      exact: true,
-    });
-    const original = await plan.inputValue();
-    expect(original).toContain('{{');
-    await plan.fill(original.replace(/\{\{[^}]*\}\}/g, ''));
-    await page.getByTestId('builtin-skill-save').click();
-    const error = notifications(page)
-      .locator('div')
-      .filter({ hasText: /^phases\/1-plan\.md must use the placeholders/ })
-      .filter({ has: page.locator('.text-on-danger-soft') });
-    await expect(error).toBeVisible();
-
-    // Leaving discards the unsaved edit.
-    page.once('dialog', (dialog) => void dialog.accept());
-    await button(page, 'Back').click();
-    await expect(
-      page.getByTestId('builtin-skill-row-deep-analysis'),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId('builtin-skill-row-deep-analysis'),
-    ).not.toContainText('Modified');
+    expect(await builtInDescription(page, 'curated-knowledge')).not.toBe(edited);
   });
 });

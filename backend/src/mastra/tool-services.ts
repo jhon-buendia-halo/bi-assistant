@@ -75,24 +75,6 @@ export interface DatasetToolTurnRecord {
   rationale?: string;
 }
 
-/** Where the RFP tools send their requests (agents.md 3.10). */
-export interface RestTarget {
-  /** The REST datasource's base URL. */
-  baseUrl: string;
-  /** Headers built as the REST connector builds them (the key in `X-API-Key`). */
-  headers: Record<string, string>;
-}
-
-/** What `export_rfp_package` returns (agents.md 3.10; data-model 3.4.1). */
-export interface RfpPackageResult {
-  rfpId: string;
-  title: string;
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** Set by `export_rfp_draft`: the package is marked DRAFT. */
-  draft?: true;
-}
-
 /**
  * The input of `show_in_panel` (agents.md 3.11): a flat object, validated per
  * kind by the bridge.
@@ -197,23 +179,6 @@ export interface DatasetToolServices {
     limit: number,
     datasets: string[],
   ): Promise<SqlRunResult>;
-  /**
-   * The base URL and headers of a REST datasource, secrets resolved on the
-   * server: the target of the RFP tools (agents.md 3.10).
-   */
-  restTarget(datasourceId: string): Promise<RestTarget>;
-  /**
-   * Download the RFP package (`GET /v1/rfps/{id}/package.zip`) from the
-   * datasource's API and unzip it into the session workspace `rfp/<rfpId>/`,
-   * overwriting an earlier export. With `draft`, `?draft=true` into
-   * `rfp/<rfpId>/draft/` instead (never touching the final package).
-   */
-  exportRfpPackage(
-    sessionId: string,
-    datasourceId: string,
-    rfpId: string,
-    options?: { draft?: boolean },
-  ): Promise<RfpPackageResult>;
 }
 
 let services: DatasetToolServices | null = null;

@@ -9,7 +9,7 @@ import {
 /**
  * The links of an Official agent's shared prompt (agents-evals R99, R105;
  * agents.md 2.1, 2.8): the assistant links the library tools and its
- * built-in skills, the RFP Builder its own tools and its stage skills. Links
+ * built-in skills, other Official agents their own tools and skills. Links
  * are mentions: every tool of the agent stays on.
  */
 
@@ -86,13 +86,14 @@ export function officialGraphInput(
 
 /**
  * Questions to Insights v2 (agents-evals R107): its copy names it without an
- * article, and its prompt links tools only (it has no skills).
+ * article. Like the other Official agents, its prompt links its own tools
+ * and built-in skills.
  */
 const ASSISTANT_V2_KEY = 'assistant-v2';
 
 /**
  * How the copy of the built-in prompt editor names the agent: `the assistant`,
- * `the RFP Builder`, `Questions to Insights v2`.
+ * `the Data Readiness Agent`, `Questions to Insights v2`.
  */
 function agentPhrase(agent: { key: string; name: string }): string {
   if (agent.key === ASSISTANT_KEY) return 'the assistant';
@@ -107,10 +108,8 @@ export function officialPromptCopy(agent: { key: string; name: string }): {
   generatedToolsNote: string;
 } {
   const who = agentPhrase(agent);
-  const links =
-    agent.key === ASSISTANT_V2_KEY ? 'a tool' : 'a tool or a built-in skill';
   return {
-    toolbarHint: `Type / to link ${links}. Links here are mentions; ${who} keeps all its tools.`,
+    toolbarHint: `Type / to link a tool or a built-in skill. Links here are mentions; ${who} keeps all its tools.`,
     toolsNote: `The ## Tools list is generated from the tools ${who} gets and is inserted before ## Working rules.`,
     generatedToolsNote: `## Tools — generated from the tools ${who} gets`,
   };

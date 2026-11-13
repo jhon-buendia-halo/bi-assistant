@@ -41,8 +41,6 @@ export interface Agent {
   /** Dataset names in the effective configuration that no longer exist. */
   missingDatasets?: string[];
   datasets?: string[];
-  /** Official agents with a dataset: what must exist before a run. */
-  chatRequirement?: string;
   starterQuestions?: string[];
 }
 
@@ -79,7 +77,7 @@ export interface AgentWorkflowStep {
   output: string[];
   /** The agent step only. */
   agent?: { name: string; tools: string[]; maxSteps: number };
-  exits: { label: string; outcome: 'fails' | 'stops' }[];
+  exits: { label: string; outcome: 'fails' | 'stops' | 'waits' }[];
 }
 
 /** A workflow-backed agent's turn workflow, its steps in run order. */
@@ -117,7 +115,11 @@ export interface AgentDetail extends Agent {
   toolLinks?: AgentToolLink[];
   /** Workflow-backed built-in agents only (Questions to Insights v2). */
   workflow?: AgentWorkflow;
-  /** The workflows whose steps call this agent, in catalogue order (api.md 34). */
+  /**
+   * The workflows whose steps call this agent, in catalogue order (api.md
+   * 34): Questions to Insights v2 for `assistant-v2`, empty for every other
+   * agent (agents are a library, not workflows).
+   */
   usedInWorkflows: { id: string; name: string }[];
   /** The LLM configuration the agent uses (LLM Config tab). */
   llm?: AgentLlm;

@@ -1,9 +1,11 @@
-import type { WorkflowRunResult } from '../../mastra/workflows/workflow-run';
 import {
   RUN_INTERRUPTED_ERROR,
+  RunStepTracker,
+  expiredRunPatch,
   interruptedRunPatch,
+  loopStepIds,
+  noteToolFrame,
   runHostDoc,
-  runOfResult,
   runSummaryOf,
   runTitle,
   type WorkflowRunDoc,
@@ -82,15 +84,14 @@ describe('runHostDoc (plan 5.2: a run-backed host)', () => {
     };
     const host = runHostDoc({
       ...base,
-      workflowId: 'agent:rfp',
-      workflowName: 'RFP Builder',
+      workflowId: 'agent:data-readiness',
+      workflowName: 'Data Readiness Agent',
       status: 'success',
       question: 'Who won?',
       answer,
       datasets: ['World Cup Core'],
-      agentKey: 'rfp',
-      agentName: 'RFP Builder',
-      rfpId: 'rfp-1',
+      agentKey: 'data-readiness',
+      agentName: 'Data Readiness Agent',
       panelItems: [
         {
           id: 'p1',
@@ -114,14 +115,13 @@ describe('runHostDoc (plan 5.2: a run-backed host)', () => {
     });
     expect(host).toEqual({
       id: 'run-r-1',
-      name: 'RFP Builder',
+      name: 'Data Readiness Agent',
       workspaceId: 'session-run-r-1',
       run: true,
       datasets: ['World Cup Core'],
-      agentKey: 'rfp',
-      agentName: 'RFP Builder',
-      workflowId: 'agent:rfp',
-      rfpId: 'rfp-1',
+      agentKey: 'data-readiness',
+      agentName: 'Data Readiness Agent',
+      workflowId: 'agent:data-readiness',
       messages: [
         { role: 'user', content: 'Who won?', at: '2026-11-11T10:00:00.000Z' },
         answer,
@@ -152,48 +152,6 @@ describe('runHostDoc (plan 5.2: a run-backed host)', () => {
   });
 });
 
-describe('runOfResult (api.md 118 stores a code-only run)', () => {
-  it('projects a WorkflowRunResult into the stored run', () => {
-    const result: WorkflowRunResult = {
-      workflowId: 'seq-text-demo',
-      status: 'failed',
-      steps: [
-        {
-          id: 'clean-text',
-          title: 'Clean text',
-          status: 'failed',
-          error: 'The text is empty',
-        },
-        { id: 'count-words', title: 'Count words', status: 'skipped' },
-      ],
-      error: 'The text is empty',
-    };
-    expect(runOfResult(result, '2026-11-11T10:00:01.000Z')).toEqual({
-      status: 'failed',
-      steps: result.steps,
-      error: 'The text is empty',
-      finishedAt: '2026-11-11T10:00:01.000Z',
-    });
-  });
-
-  it('caps a step output larger than 20 000 JSON characters', () => {
-    const big = { text: 'x'.repeat(20_001) };
-    const patch = runOfResult(
-      {
-        workflowId: 'seq-text-demo',
-        status: 'success',
-        steps: [{ id: 'a', title: 'A', status: 'success', output: big }],
-        output: { summary: 'ok' },
-      },
-      't',
-    );
-    expect(patch.steps).toEqual([
-      { id: 'a', title: 'A', status: 'success', outputTruncated: true },
-    ]);
-    expect(patch.output).toEqual({ summary: 'ok' });
-  });
-});
-
 describe('interruptedRunPatch (plan 5.1 step 5)', () => {
   it('fails a run the app stopped in, and any step still running', () => {
     expect(
@@ -219,5 +177,501 @@ describe('interruptedRunPatch (plan 5.1 step 5)', () => {
     expect(RUN_INTERRUPTED_ERROR).toBe(
       'The app stopped before the run finished',
     );
+  });
+});
+
+/** A clock the test moves by hand, from 2026-11-12T10:00:00Z. */
+function fakeClock() {
+  const start = Date.UTC(2026, 10, 12, 10, 0, 0);
+  let elapsed = 0;
+  return {
+    now: () => new Date(start + elapsed),
+    advance: (ms: number) => {
+      elapsed += ms;
+    },
+    at: (ms: number) => new Date(start + ms).toISOString(),
+  };
+}
+
+const STEPS = [
+  { id: 'load', title: 'Load', kind: 'code' as const },
+  { id: 'answer', title: 'Answer', kind: 'agent' as const },
+  { id: 'wrap', title: 'Wrap up', kind: 'code' as const },
+];
+
+const start = (id: string, payload?: unknown) => ({
+  type: 'workflow-step-start',
+  payload: { id, status: 'running', payload },
+});
+
+const result = (id: string, output: unknown, status = 'success') => ({
+  type: 'workflow-step-result',
+  payload: { id, status, output },
+});
+
+describe('RunStepTracker: input and times (api.md 3.6 `step`)', () => {
+  it('records what a step received and when it started, then merges its result and end', () => {
+    const clock = fakeClock();
+    const tracker = new RunStepTracker(STEPS, clock.now);
+    expect(tracker.apply(start('load', { text: 'Hi' }))).toEqual({
+      id: 'load',
+      title: 'Load',
+      status: 'running',
+      input: { text: 'Hi' },
+      startedAt: clock.at(0),
+    });
+    clock.advance(1500);
+    expect(tracker.apply(result('load', { words: 1 }))).toEqual({
+      id: 'load',
+      title: 'Load',
+      status: 'success',
+      input: { text: 'Hi' },
+      output: { words: 1 },
+      startedAt: clock.at(0),
+      endedAt: clock.at(1500),
+    });
+  });
+
+  it('marks an input larger than 20 000 JSON characters instead of carrying it, and ignores a non-object input', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    const big = tracker.apply(start('load', { text: 'x'.repeat(20_001) }));
+    expect(big).toMatchObject({ inputTruncated: true });
+    expect(big).not.toHaveProperty('input');
+    const odd = tracker.apply(start('answer', 'not an object'));
+    expect(odd).not.toHaveProperty('input');
+    expect(odd).not.toHaveProperty('inputTruncated');
+  });
+
+  it('marks an output larger than 20 000 JSON characters instead of carrying it', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('load', { text: 'Hi' }));
+    const big = tracker.apply(result('load', { text: 'x'.repeat(20_001) }));
+    expect(big).toMatchObject({ status: 'success', outputTruncated: true });
+    expect(big).not.toHaveProperty('output');
+  });
+
+  it('a failed result keeps the input and start, and adds its error and end', () => {
+    const clock = fakeClock();
+    const tracker = new RunStepTracker(STEPS, clock.now);
+    tracker.apply(start('load', { text: ' ' }));
+    clock.advance(10);
+    expect(
+      tracker.apply({
+        type: 'workflow-step-result',
+        payload: { id: 'load', status: 'failed', error: 'The text is empty' },
+      }),
+    ).toEqual({
+      id: 'load',
+      title: 'Load',
+      status: 'failed',
+      input: { text: ' ' },
+      error: 'The text is empty',
+      startedAt: clock.at(0),
+      endedAt: clock.at(10),
+    });
+  });
+
+  it('finish keeps the input and start, and sets the end on the steps it ends; a skipped step has none', () => {
+    const clock = fakeClock();
+    const tracker = new RunStepTracker(STEPS, clock.now);
+    tracker.apply(start('load', { text: 'Hi' }));
+    clock.advance(5);
+    tracker.apply(result('load', { words: 1 }));
+    tracker.apply(start('answer', { words: 1 }));
+    clock.advance(20);
+    const { steps, changed } = tracker.finish('stopped');
+    expect(steps).toEqual([
+      {
+        id: 'load',
+        title: 'Load',
+        status: 'success',
+        input: { text: 'Hi' },
+        output: { words: 1 },
+        startedAt: clock.at(0),
+        endedAt: clock.at(5),
+      },
+      {
+        id: 'answer',
+        title: 'Answer',
+        status: 'stopped',
+        input: { words: 1 },
+        startedAt: clock.at(5),
+        endedAt: clock.at(25),
+      },
+      { id: 'wrap', title: 'Wrap up', status: 'skipped' },
+    ]);
+    expect(changed.map((step) => step.id)).toEqual(['answer', 'wrap']);
+    const failed = new RunStepTracker(STEPS, clock.now);
+    failed.apply(start('load', { text: 'Hi' }));
+    expect(failed.finish('failed', 'boom').steps[0]).toEqual({
+      id: 'load',
+      title: 'Load',
+      status: 'failed',
+      input: { text: 'Hi' },
+      error: 'boom',
+      startedAt: clock.at(25),
+      endedAt: clock.at(25),
+    });
+  });
+});
+
+describe('RunStepTracker: tool calls of an agent step (agents.md 5.14)', () => {
+  it('attaches each call to the running agent step, its result to the first unfinished call of that name, with its duration', () => {
+    const clock = fakeClock();
+    const tracker = new RunStepTracker(STEPS, clock.now);
+    tracker.apply(start('load', {}));
+    // No agent step runs yet: a call has nowhere to go.
+    tracker.noteTool('run_readonly_sql');
+    tracker.apply(result('load', {}));
+    tracker.apply(start('answer', {}));
+    tracker.noteTool('run_readonly_sql', 'goals by team');
+    clock.advance(100);
+    tracker.noteTool('run_readonly_sql', 'matches by year');
+    tracker.noteTool('list_entities');
+    clock.advance(200);
+    tracker.noteToolResult({
+      tool: 'run_readonly_sql',
+      input: 'SELECT team, SUM(goals) FROM goals GROUP BY team',
+      rowCount: 32,
+    });
+    clock.advance(50);
+    tracker.noteToolResult({
+      tool: 'run_readonly_sql',
+      input: 'SELECT year FROM matches',
+      error: 'relation "matches" does not exist',
+    });
+    const done = tracker.apply(result('answer', { calls: [] }));
+    expect(done?.toolCalls).toEqual([
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT team, SUM(goals) FROM goals GROUP BY team',
+        rowCount: 32,
+        durationMs: 300,
+      },
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT year FROM matches',
+        error: 'relation "matches" does not exist',
+        durationMs: 250,
+      },
+      // A call whose tool sends no result has no duration.
+      { tool: 'list_entities' },
+    ]);
+    expect(tracker.finish('success').steps[1].toolCalls).toHaveLength(3);
+    expect(tracker.finish('success').steps[0]).not.toHaveProperty('toolCalls');
+  });
+
+  it("keeps the call's own input when its result has none, and a result without a call as a call", () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('answer', {}));
+    tracker.noteTool('assess_data_readiness', 'Acme');
+    tracker.noteToolResult({ tool: 'assess_data_readiness' });
+    tracker.noteToolResult({ tool: 'show_in_panel', input: 'Draft' });
+    expect(tracker.finish('success').steps[1].toolCalls).toEqual([
+      { tool: 'assess_data_readiness', input: 'Acme', durationMs: 0 },
+      { tool: 'show_in_panel', input: 'Draft' },
+    ]);
+  });
+
+  it('caps a step at 50 calls and a call input at 2 000 characters', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('answer', {}));
+    for (let i = 0; i < 60; i++) tracker.noteTool(`tool_${i}`);
+    tracker.noteToolResult({ tool: 'tool_0', input: 'S'.repeat(2_500) });
+    const calls = tracker.finish('success').steps[1].toolCalls!;
+    expect(calls).toHaveLength(50);
+    expect(calls.at(-1)?.tool).toBe('tool_49');
+    expect(calls[0].input).toHaveLength(2_000);
+  });
+
+  it('a step started again starts with no calls; the steps it returns are copies', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('answer', {}));
+    tracker.noteTool('a');
+    const before = tracker.finish('success').steps[1];
+    before.toolCalls!.push({ tool: 'mutated' });
+    expect(tracker.finish('success').steps[1].toolCalls).toEqual([
+      { tool: 'a' },
+    ]);
+    tracker.apply(start('answer', {}));
+    expect(tracker.finish('success').steps[1]).not.toHaveProperty('toolCalls');
+  });
+});
+
+describe('RunStepTracker: attempts of a step inside a loop (api.md 3.6 `attempt`)', () => {
+  const LOOP = [
+    { id: 'plan', title: 'Plan', kind: 'agent' as const },
+    { id: 'clarify', title: 'Clarify', kind: 'code' as const },
+    { id: 'analyse', title: 'Analyse', kind: 'agent' as const, repeats: true },
+    { id: 'validate', title: 'Validate', kind: 'code' as const, repeats: true },
+    { id: 'write', title: 'Write answer', kind: 'agent' as const },
+  ];
+
+  it('keeps one entry per attempt, in order, each with its attempt and its own tool calls', () => {
+    const tracker = new RunStepTracker(LOOP, fakeClock().now);
+    tracker.apply(start('plan'));
+    expect(tracker.apply(result('plan', { plan: {} }))).not.toHaveProperty(
+      'attempt',
+    );
+    expect(tracker.apply(start('analyse', { n: 1 }))).toMatchObject({
+      status: 'running',
+      attempt: 1,
+    });
+    tracker.noteTool('run_readonly_sql', 'first');
+    expect(tracker.apply(result('analyse', { calls: [] }))).toMatchObject({
+      status: 'success',
+      attempt: 1,
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'first' }],
+    });
+    tracker.apply(start('validate'));
+    expect(tracker.apply(result('validate', { ok: false }))).toMatchObject({
+      attempt: 1,
+      output: { ok: false },
+    });
+    // The retry: the same steps again, as attempt 2.
+    expect(tracker.apply(start('analyse', { n: 2 }))).toEqual({
+      id: 'analyse',
+      title: 'Analyse',
+      status: 'running',
+      attempt: 2,
+      input: { n: 2 },
+      startedAt: expect.any(String) as string,
+    });
+    tracker.noteTool('sample_rows', 'second');
+    tracker.apply(result('analyse', { calls: [] }));
+    tracker.apply(start('validate'));
+    tracker.apply(result('validate', { ok: true }));
+    tracker.apply(start('write'));
+    tracker.apply(result('write', { answer: 'A.' }));
+    const { steps } = tracker.finish('success');
+    expect(
+      steps.map((step) => [
+        step.id,
+        step.status,
+        step.attempt,
+        step.toolCalls?.map((call) => call.tool),
+      ]),
+    ).toEqual([
+      ['plan', 'success', undefined, undefined],
+      ['clarify', 'skipped', undefined, undefined],
+      ['analyse', 'success', 1, ['run_readonly_sql']],
+      ['analyse', 'success', 2, ['sample_rows']],
+      ['validate', 'success', 1, undefined],
+      ['validate', 'success', 2, undefined],
+      ['write', 'success', undefined, undefined],
+    ]);
+    expect(tracker.lastOutput()).toEqual({ answer: 'A.' });
+  });
+
+  it('ends a running attempt when the run stops, keeping the earlier one', () => {
+    const tracker = new RunStepTracker(LOOP, fakeClock().now);
+    tracker.apply(start('analyse'));
+    tracker.apply(result('analyse', {}));
+    tracker.apply(start('validate'));
+    tracker.apply(result('validate', { ok: false }));
+    tracker.apply(start('analyse'));
+    const { steps, changed } = tracker.finish('stopped');
+    expect(
+      steps
+        .filter((step) => step.id === 'analyse')
+        .map((step) => [step.status, step.attempt]),
+    ).toEqual([
+      ['success', 1],
+      ['stopped', 2],
+    ]);
+    expect(changed.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'plan:skipped',
+      'clarify:skipped',
+      'analyse:stopped',
+      'write:skipped',
+    ]);
+  });
+
+  it('replaces the entry of a step outside a loop that starts again', () => {
+    const tracker = new RunStepTracker(LOOP, fakeClock().now);
+    tracker.apply(start('plan'));
+    tracker.apply(result('plan', {}));
+    tracker.apply(start('plan'));
+    expect(
+      tracker.finish('success').steps.filter((step) => step.id === 'plan'),
+    ).toHaveLength(1);
+  });
+});
+
+describe('loopStepIds (api.md 117 edges)', () => {
+  it("is the steps on a loop edge's way back: from its target to its source", () => {
+    expect([
+      ...loopStepIds([
+        { from: 'start', to: 'plan', kind: 'next' },
+        { from: 'plan', to: 'analyse', kind: 'branch' },
+        { from: 'analyse', to: 'validate', kind: 'next' },
+        { from: 'validate', to: 'analyse', kind: 'loop' },
+        { from: 'validate', to: 'write', kind: 'next' },
+      ]),
+    ]).toEqual(['analyse', 'validate']);
+    expect(loopStepIds(undefined).size).toBe(0);
+    expect(loopStepIds([{ from: 'a', to: 'b', kind: 'next' }]).size).toBe(0);
+  });
+
+  it("follows a branch straight back to the loop's source: v2's Plan and Clarify repeat", () => {
+    expect([
+      ...loopStepIds([
+        { from: 'load-catalog', to: 'plan', kind: 'next' },
+        { from: 'plan', to: 'clarify', kind: 'branch' },
+        { from: 'clarify', to: 'plan', kind: 'loop' },
+        { from: 'plan', to: 'analyse', kind: 'branch' },
+        { from: 'analyse', to: 'validate', kind: 'next' },
+        { from: 'validate', to: 'analyse', kind: 'loop' },
+      ]),
+    ]).toEqual(['plan', 'clarify', 'analyse', 'validate']);
+  });
+});
+
+describe('RunStepTracker: a step that waits for the user (api.md 138, ADR-0043)', () => {
+  const STEPS = [
+    { id: 'plan', title: 'Plan', kind: 'agent' as const, repeats: true },
+    { id: 'clarify', title: 'Clarify', kind: 'code' as const, repeats: true },
+    { id: 'analyse', title: 'Analyse', kind: 'agent' as const, repeats: true },
+    { id: 'write', title: 'Write answer', kind: 'agent' as const },
+  ];
+  const suspended = (id: string) => ({
+    type: 'workflow-step-suspended',
+    payload: { id, status: 'suspended', suspendPayload: { question: 'Q?' } },
+  });
+
+  it('marks the waiting step suspended, and pause() lists only the steps that ran', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('plan', { q: 1 }));
+    tracker.apply(result('plan', { plan: {} }));
+    tracker.apply(start('clarify', { plan: {} }));
+    expect(tracker.apply(suspended('clarify'))).toEqual({
+      id: 'clarify',
+      title: 'Clarify',
+      status: 'suspended',
+      attempt: 1,
+      input: { plan: {} },
+      startedAt: expect.any(String) as string,
+    });
+    expect(tracker.pause().map((s) => `${s.id}:${s.status}`)).toEqual([
+      'plan:success',
+      'clarify:suspended',
+    ]);
+  });
+
+  it('a resumed step goes on in the same attempt with its input, start and earlier tool calls; the next Plan is attempt 2', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('plan'));
+    tracker.apply(result('plan', {}));
+    tracker.apply(start('analyse', { n: 1 }));
+    tracker.noteTool('run_readonly_sql', 'before');
+    const waiting = tracker.apply(suspended('analyse'))!;
+    // Resumed: the engine starts the step again.
+    expect(tracker.apply(start('analyse', { n: 1 }))).toMatchObject({
+      status: 'running',
+      attempt: 1,
+      startedAt: waiting.startedAt,
+      input: { n: 1 },
+      toolCalls: [{ tool: 'run_readonly_sql', input: 'before' }],
+    });
+    tracker.noteTool('run_readonly_sql', 'after');
+    expect(tracker.apply(result('analyse', {}))).toMatchObject({
+      status: 'success',
+      attempt: 1,
+      toolCalls: [
+        { tool: 'run_readonly_sql', input: 'before' },
+        { tool: 'run_readonly_sql', input: 'after' },
+      ],
+    });
+    // Clarify goes back to Plan: its next run is a second attempt.
+    tracker.apply(start('plan'));
+    tracker.apply(result('plan', {}));
+    expect(
+      tracker
+        .finish('success')
+        .steps.map((s) => `${s.id}:${s.status}#${s.attempt ?? '-'}`),
+    ).toEqual([
+      'plan:success#1',
+      'plan:success#2',
+      'clarify:skipped#-',
+      'analyse:success#1',
+      'write:skipped#-',
+    ]);
+  });
+});
+
+describe('expiredRunPatch (api.md 138 410, ADR-0043)', () => {
+  it('stops the run, keeps waitingFor marked expired and stops the waiting step', () => {
+    const waitingFor = {
+      stepId: 'clarify',
+      title: 'Clarify',
+      question: 'Q?',
+      options: ['a', 'b'],
+      since: '2026-11-11T10:00:00.000Z',
+      expiresAt: '2026-11-11T10:30:00.000Z',
+    };
+    expect(
+      expiredRunPatch(
+        {
+          ...base,
+          status: 'suspended',
+          waitingFor,
+          steps: [
+            { id: 'plan', title: 'Plan', status: 'success' },
+            { id: 'clarify', title: 'Clarify', status: 'suspended' },
+          ],
+        },
+        '2026-11-11T11:00:00.000Z',
+      ),
+    ).toEqual({
+      status: 'stopped',
+      waitingFor: { ...waitingFor, expired: true },
+      steps: [
+        { id: 'plan', title: 'Plan', status: 'success' },
+        {
+          id: 'clarify',
+          title: 'Clarify',
+          status: 'stopped',
+          endedAt: '2026-11-11T11:00:00.000Z',
+        },
+      ],
+      finishedAt: '2026-11-11T11:00:00.000Z',
+    });
+  });
+});
+
+describe('noteToolFrame (api.md 3.1 `tool`, `tool-result`)', () => {
+  it('feeds the JSON tool events, and a bare legacy tool name, to the tracker; other events change nothing', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now);
+    tracker.apply(start('answer', {}));
+    noteToolFrame(tracker, {
+      type: 'tool',
+      content: JSON.stringify({
+        name: 'run_readonly_sql',
+        rationale: 'Count',
+        input: 'count',
+      }),
+    });
+    noteToolFrame(tracker, {
+      type: 'tool-result',
+      content: JSON.stringify({
+        tool: 'run_readonly_sql',
+        input: 'SELECT 1',
+        rowCount: 1,
+        rationale: 'Count',
+      }),
+    });
+    noteToolFrame(tracker, { type: 'tool', content: 'describe_entity' });
+    noteToolFrame(tracker, { type: 'text', content: 'Brazil' });
+    noteToolFrame(tracker, { type: 'tool-result', content: '{"oops"' });
+    noteToolFrame(tracker, { type: 'tool' });
+    expect(tracker.finish('success').steps[1].toolCalls).toEqual([
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT 1',
+        rowCount: 1,
+        durationMs: 0,
+      },
+      { tool: 'describe_entity' },
+    ]);
   });
 });

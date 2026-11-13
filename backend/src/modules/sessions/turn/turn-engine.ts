@@ -2,12 +2,20 @@
 // the user's question to the persisted answer and the `done` event.
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
-import { parseClarification } from '../../../mastra/tools/clarification.tool';
+import {
+  clarificationOptions,
+  parseClarification,
+} from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import { READINESS_REPORT_EVENT } from '../../../mastra/readiness-tool-services';
+import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
+  QTI_V2_TURN_WORKFLOW_ID,
+  clarifyingQuestionOf,
+  turnSummaryOf,
+  type AnsweredClarification,
   type QtiV2TurnInput,
   type QtiV2TurnRuntime,
 } from '../../../mastra/workflows/qti-v2-turn.steps';
@@ -46,27 +54,23 @@ import type {
   ChatMessage,
   CrossCheck,
   ReadinessReportRef,
-  RfpPackageRef,
   SessionDoc,
   SessionView,
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
-  WorkflowState,
   WorkflowView,
 } from '../entities/session.entity';
 import {
   readinessProgressEvent,
   type RunStepEvent,
   type StreamEvent,
+  type TurnResumeIo,
+  type TurnSuspension,
 } from './stream-events';
 import {
   ASSISTANT_AGENT_KEY,
-  EXPORT_RFP_PACKAGE_TOOLS,
-  RFP_STAGES,
-  RFP_TOOLS,
   SHOW_IN_PANEL_TOOL,
-  UPDATE_RFP_TOOL,
   UPDATE_WORKFLOW_TOOL,
   VISUAL_TOOLS,
   appendUserMessage,
@@ -75,14 +79,14 @@ import {
   knowledgeUsed,
   reasoningTrail,
   resultError,
-  rfpPackageRef,
   toolCallInput,
-  turnRfpHolder,
-  turnRfpPatch,
 } from './turn-records';
 import {
+  analyseAttemptOf,
   analyseOutcomeOf,
-  isTurnSummary,
+  answeredTurnInput,
+  catalogStepId,
+  clarificationOptionText,
   turnWorkflowOf,
   type TurnWorkflow,
 } from './turn-workflow';
@@ -116,19 +120,49 @@ export interface TurnEngineDeps {
   readinessBridge(): ReadinessBridge | undefined;
 }
 
+/**
+ * How a turn's workflow run (or one resume of it) ended: done (a success or
+ * a stop), or suspended at a catalogue step on a clarifying question
+ * (ADR-0043), with `resume` when the engine can go on with an answer and
+ * `discard` to drop the run's snapshot.
+ */
+type TurnRunOutcome =
+  | { status: 'done' }
+  | {
+      status: 'suspended';
+      stepId: string;
+      question: string;
+      options: string[];
+      resume?: (answer: string) => Promise<TurnRunOutcome>;
+      discard: () => Promise<void>;
+    };
+
 export class TurnEngine {
   constructor(private readonly deps: TurnEngineDeps) {}
 
-  /** The streamed turn itself, once the request reached the assistant. */
+  /**
+   * The streamed turn itself, once the request reached the assistant. A
+   * turn whose workflow run waits for the user (Clarify, or Analyse's
+   * clarifying question; ADR-0043) answers a `TurnSuspension` when
+   * `suspendable` (a run host's turn): the turn is not over, and its
+   * `resume` goes on with the answer, reporting to the new request's
+   * stream. Otherwise (a session's) the question ends the turn as a
+   * clarification card, as it always has, and the workflow run is dropped.
+   */
   async streamTurn(
     session: SessionDoc,
     trimmed: string,
-    emit: (event: StreamEvent) => void,
-    abortSignal: AbortSignal | undefined,
+    firstEmit: (event: StreamEvent) => void,
+    firstAbortSignal: AbortSignal | undefined,
     activeVisualId: string | undefined,
     careful: boolean,
-    onStepEvent?: (event: RunStepEvent) => void,
-  ): Promise<void> {
+    firstOnStepEvent?: (event: RunStepEvent) => void,
+    suspendable = false,
+  ): Promise<TurnSuspension | undefined> {
+    // Where the turn reports to: a resumed turn reports to its new request.
+    let emit = firstEmit;
+    let abortSignal = firstAbortSignal;
+    let onStepEvent = firstOnStepEvent;
     const id = session.id;
     appendUserMessage(session, trimmed);
     // Persist the prompt before model startup. A user can stop while the
@@ -152,6 +186,13 @@ export class TurnEngine {
       turn.signal,
       activeVisualId,
     );
+    // A node chat's context block (agents.md 5.16), after the agent's own.
+    if (session.contextBlock) {
+      options.context.push({
+        role: 'system' as const,
+        content: session.contextBlock,
+      });
+    }
     // A live reference to this turn's captured records, handed to the visual
     // tools via requestContext so create_visual/update_visual called later in
     // the same turn can see SQL the turn already ran (drill-down queries a
@@ -166,19 +207,28 @@ export class TurnEngine {
     // Set inside `consume`, so typed without narrowing to the initial null.
     let clarification = null as ChatMessage['clarification'] | null;
     let visualEvent: VisualEvent | undefined;
-    // The package an `export_rfp_package` call stored this turn (RFP Builder).
-    let rfpPackage: RfpPackageRef | undefined;
     // The last report a readiness tool returned this turn (Data Readiness Agent).
     let readinessReport: ReadinessReportRef | undefined;
-    // The RFP Builder's `turn-rfp` holder, and the stage the tracker last showed.
-    const rfpHolder = turnRfpHolder(options.requestContext);
-    let drivenStage: number | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
     // Every tool name the model actually invoked this turn — the zero-SQL-
     // turn grounding guard below fires only when this stays empty.
     const calledTools = new Set<string>();
     // The model call's own failure: Mastra reports it as a chunk, not a throw.
     let streamError: unknown;
+    // While v2's Analyse step streams: its text, kept out of the answer.
+    let notes: string | undefined;
+    // While v2's Analyse step streams: what a clarifying question stops (the
+    // attempt's agent stream, not the turn: the step waits for the answer).
+    let attemptStop: AbortController | undefined;
+    // Where v2's current analysis attempt's records start: a resumed
+    // attempt keeps the queries it ran before it asked.
+    let attemptStart = 0;
+    // The agent's clarifying questions this turn, each with the answer:
+    // every later attempt goes on with them.
+    const answers: AnsweredClarification[] = [];
+    const workflow = turnWorkflowOf(session);
+    // v2's answer is its Write answer step's only (agents.md 5.11).
+    const v2 = workflow.engineId === QTI_V2_TURN_WORKFLOW_ID;
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -198,7 +248,10 @@ export class TurnEngine {
             if (delta) emit({ type: 'reasoning', content: delta });
           } else if (chunk.type === 'text-delta') {
             const delta = (chunk.payload as { text?: string }).text ?? '';
-            if (delta) {
+            if (delta && notes !== undefined) {
+              // v2's Analyse step: its text is a note, not the answer.
+              notes += delta;
+            } else if (delta) {
               text += delta;
               emit({ type: 'text', content: delta });
             }
@@ -220,7 +273,7 @@ export class TurnEngine {
                 : undefined;
             if (asked) {
               clarification = asked;
-              turn.abort();
+              (attemptStop ?? turn).abort();
               break;
             }
             if (payload.toolCallId) {
@@ -369,43 +422,6 @@ export class TurnEngine {
               });
               continue;
             }
-            if (!isAssistant && RFP_TOOLS.has(toolName)) {
-              // Every RFP tool shows its step (api.md 3.1); a result with
-              // columns and rows is also kept as a data record (agents.md 5.1).
-              const error = resultError(payload.result);
-              if (EXPORT_RFP_PACKAGE_TOOLS.has(toolName) && !error) {
-                const stored = rfpPackageRef(payload.result);
-                if (stored) {
-                  rfpPackage = stored;
-                  emit({
-                    type: 'rfp-package',
-                    content: JSON.stringify(stored),
-                  });
-                }
-              }
-              const record = toolDataRecord(toolName, args, payload.result);
-              if (record) data.push(record);
-              // A saved stage moves the tracker mid-turn (ADR-0029).
-              if (
-                toolName === UPDATE_RFP_TOOL &&
-                !error &&
-                rfpHolder?.stage !== undefined &&
-                rfpHolder.stage !== drivenStage
-              ) {
-                drivenStage = rfpHolder.stage;
-                await this.driveRfpStage(id, drivenStage, emit);
-              }
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: toolName,
-                  input: firstStringArgument(args),
-                  rowCount: record?.rowCount,
-                  error,
-                }),
-              });
-              continue;
-            }
             const record = toolDataRecord(toolName, args, payload.result);
             if (record) {
               data.push(record);
@@ -423,36 +439,137 @@ export class TurnEngine {
           }
         }
       } catch (error) {
-        if (!turn.signal.aborted) throw error;
+        if (!turn.signal.aborted && !attemptStop?.signal.aborted) throw error;
       }
     };
+    let ran: TurnRunOutcome;
     try {
       // Every streamed turn is one run of the session's workflow (agents.md
       // 5.1, ADR-0040). Its agent step streams the agent through `consume`:
       // v2's Analyse step (5.11, ADR-0034) or a one-step workflow's Answer.
-      await this.runTurnWorkflow(
+      // The model error a step reports, in the chat stream's words.
+      const stepError = (error: unknown) =>
+        chatTurnError(error, () => this.deps.llmService.getView());
+      const stepModel = {
+        abortSignal: turn.signal,
+        providerOptions: options.providerOptions as
+          Record<string, unknown> | undefined,
+        requestContext: options.requestContext,
+      };
+      ran = await this.runTurnWorkflow(
         session,
-        turnWorkflowOf(session),
+        workflow,
         trimmed,
-        emit,
+        // The current request's stream: a resumed turn reports to its own.
+        (event) => emit(event),
         {
-          analyse: async ({ catalogBlock }) => {
-            await consume(
-              await agent.stream(input, {
-                ...options,
-                context: [
-                  ...options.context,
-                  { role: 'system' as const, content: catalogBlock },
-                ],
-              }),
-            );
+          // v2's steps (agents.md 5.11): Plan and Write answer call the
+          // agent's model without tools; Analyse streams the agent itself.
+          plan: async ({ question, catalogBlock, clarification: answered }) => {
+            try {
+              // After Clarify, Plan plans with its question and the answer.
+              const planned = await this.deps.mastra.planV2Turn(
+                {
+                  messages: input,
+                  question,
+                  catalogBlock,
+                  ...(answered ? { answered } : {}),
+                },
+                stepModel,
+              );
+              return {
+                plan: planned.plan,
+                stopped: planned.stopped || turn.signal.aborted,
+              };
+            } catch (error) {
+              throw await stepError(error);
+            }
+          },
+          analyse: async ({ catalogBlock, planBlock, attempt, answered }) => {
+            // A resumed attempt keeps the records it made before it asked.
+            if (answered) answers.push(answered);
+            else attemptStart = data.length;
+            // A retry, and an attempt after the user answered the agent,
+            // run without the memory thread, so the question is not stored
+            // twice; the plan block and the answered questions carry what
+            // they need.
+            const attemptOptions: typeof options = { ...options };
+            if (attempt > 1 || answers.length) {
+              delete (attemptOptions as { memory?: unknown }).memory;
+            }
+            // A clarifying question stops this attempt's stream only.
+            const stop = new AbortController();
+            const stopAttempt = () => stop.abort();
+            turn.signal.addEventListener('abort', stopAttempt, { once: true });
+            attemptStop = stop;
+            notes = '';
+            let attemptNotes = '';
+            try {
+              await consume(
+                await agent.stream(
+                  answers.length
+                    ? (answeredTurnInput(input, trimmed, answers) as never)
+                    : input,
+                  {
+                    ...attemptOptions,
+                    abortSignal: stop.signal,
+                    context: [
+                      ...options.context,
+                      { role: 'system' as const, content: catalogBlock },
+                      { role: 'system' as const, content: planBlock },
+                    ],
+                  },
+                ),
+              );
+            } finally {
+              attemptNotes = notes ?? '';
+              notes = undefined;
+              attemptStop = undefined;
+              turn.signal.removeEventListener('abort', stopAttempt);
+            }
+            // The agent asked the user: the step waits for the answer.
+            const asked = turn.signal.aborted ? null : clarification;
+            clarification = null;
+            // Stopping the stream for the question is no model error.
+            if (asked) streamError = undefined;
             // Any model error fails the step (agents.md 5.11).
             if (streamError !== undefined && !turn.signal.aborted) {
-              throw await chatTurnError(streamError, () =>
-                this.deps.llmService.getView(),
-              );
+              throw await stepError(streamError);
             }
-            return analyseOutcomeOf(data, turn.signal.aborted);
+            return {
+              ...analyseAttemptOf(
+                data.slice(attemptStart),
+                turn.signal.aborted,
+                attemptNotes,
+              ),
+              ...(asked
+                ? {
+                    clarification: {
+                      question: asked.question,
+                      options: asked.options.map(clarificationOptionText),
+                    },
+                  }
+                : {}),
+            };
+          },
+          writeAnswer: async (written) => {
+            try {
+              const result = await this.deps.mastra.writeV2Answer(written, {
+                ...stepModel,
+                onText: (delta) => {
+                  text += delta;
+                  emit({ type: 'text', content: delta });
+                },
+              });
+              // The stored answer is the step's whole answer.
+              if (result.answer.answer) text = result.answer.answer;
+              return {
+                answer: result.answer,
+                stopped: result.stopped || turn.signal.aborted,
+              };
+            } catch (error) {
+              throw await stepError(error);
+            }
           },
           answer: async () => {
             await consume(await agent.stream(input, options));
@@ -467,128 +584,169 @@ export class TurnEngine {
             return analyseOutcomeOf(data, turn.signal.aborted);
           },
         },
-        onStepEvent,
+        (event) => onStepEvent?.(event),
       );
     } finally {
       abortSignal?.removeEventListener('abort', forwardAbort);
     }
-    // The stage `create_rfp` or `get_rfp` reported moves the tracker too.
-    if (rfpHolder?.stage !== undefined && rfpHolder.stage !== drivenStage) {
-      await this.driveRfpStage(id, rfpHolder.stage, emit);
-    }
-    if (!turn.signal.aborted && !clarification && !text && stream) {
-      text = ((await stream.text) ?? '').trim();
-    }
-    if (
-      !turn.signal.aborted &&
-      !clarification &&
-      !text.trim() &&
-      !visualEvent &&
-      !readinessReport
-    ) {
-      // A model can spend every allowed step on tools and finish without a
-      // user-facing answer. Give it one tool-disabled pass to turn the data it
-      // already collected into prose; never let a completed turn disappear.
-      text = await synthesizeToolOnlyTurn(
-        agent,
-        trimmed,
-        data,
-        turn.signal,
-        options.providerOptions,
-        this.deps.logger,
-        options.requestContext,
-      );
-      if (turn.signal.aborted) return;
-      if (text) emit({ type: 'text', content: text });
-    }
+    // The workflow run waits for the user (ADR-0043). A run host's turn
+    // hands back its suspension: `resume` reports to the new request and
+    // goes on with the answer. A session's turn ends on the question, as a
+    // clarification card (agents.md 5.1), and its workflow run is dropped.
+    const settle = async (
+      outcome: TurnRunOutcome,
+    ): Promise<TurnSuspension | undefined> => {
+      if (outcome.status === 'suspended') {
+        if (suspendable && outcome.resume) {
+          const resumeRun = outcome.resume;
+          return {
+            stepId: outcome.stepId,
+            question: outcome.question,
+            options: outcome.options,
+            resume: async (answer: string, io: TurnResumeIo) => {
+              emit = io.emit;
+              abortSignal = io.abortSignal;
+              onStepEvent = io.onStepEvent;
+              abortSignal?.addEventListener('abort', forwardAbort, {
+                once: true,
+              });
+              let next: TurnRunOutcome;
+              try {
+                next = await resumeRun(answer);
+              } finally {
+                abortSignal?.removeEventListener('abort', forwardAbort);
+              }
+              return settle(next);
+            },
+            discard: outcome.discard,
+          };
+        }
+        await outcome.discard();
+        clarification = {
+          question: outcome.question,
+          options: clarificationOptions(outcome.options),
+        };
+      }
+      await finishTurn();
+      return undefined;
+    };
+    const finishTurn = async (): Promise<void> => {
+      // v2's answer is its Write answer step's text only (agents.md 5.11):
+      // its Analyse stream's text is a note, and no synthesis replaces it.
+      if (!v2 && !turn.signal.aborted && !clarification && !text && stream) {
+        text = ((await stream.text) ?? '').trim();
+      }
+      if (
+        !v2 &&
+        !turn.signal.aborted &&
+        !clarification &&
+        !text.trim() &&
+        !visualEvent &&
+        !readinessReport
+      ) {
+        // A model can spend every allowed step on tools and finish without a
+        // user-facing answer. Give it one tool-disabled pass to turn the data it
+        // already collected into prose; never let a completed turn disappear.
+        text = await synthesizeToolOnlyTurn(
+          agent,
+          trimmed,
+          data,
+          turn.signal,
+          options.providerOptions,
+          this.deps.logger,
+          options.requestContext,
+        );
+        if (turn.signal.aborted) return;
+        if (text) emit({ type: 'text', content: text });
+      }
 
-    // Zero-SQL-turn grounding guard: the system prompt already forbids
-    // answering data questions from parametric memory, but prompt-only
-    // enforcement missed cases in evals (e.g. "Who won the 2022 World Cup?"
-    // answered with no tool calls at all). This is the runtime backstop —
-    // one corrective pass, tools allowed, at most once per turn. Text is
-    // streamed to the client incrementally above, before this guard can
-    // even run, so there is nothing to "un-stream"; the client's source of
-    // truth is the persisted message delivered with `done` below (see
-    // `SessionChat` — it replaces its whole message list from that event,
-    // it does not keep the streamed deltas), so overwriting `text` here is
-    // enough to make the corrected answer the one the user ends up seeing.
-    if (
-      isAssistant &&
-      !turn.signal.aborted &&
-      !clarification &&
-      text.trim() &&
-      calledTools.size === 0
-    ) {
-      const corrected = await this.runGroundingGuard(
-        agent,
-        trimmed,
-        text,
-        options,
-        data,
-        turn.signal,
-      );
-      if (corrected) text = corrected;
-    }
+      // Zero-SQL-turn grounding guard: the system prompt already forbids
+      // answering data questions from parametric memory, but prompt-only
+      // enforcement missed cases in evals (e.g. "Who won the 2022 World Cup?"
+      // answered with no tool calls at all). This is the runtime backstop —
+      // one corrective pass, tools allowed, at most once per turn. Text is
+      // streamed to the client incrementally above, before this guard can
+      // even run, so there is nothing to "un-stream"; the client's source of
+      // truth is the persisted message delivered with `done` below (see
+      // `SessionChat` — it replaces its whole message list from that event,
+      // it does not keep the streamed deltas), so overwriting `text` here is
+      // enough to make the corrected answer the one the user ends up seeing.
+      if (
+        isAssistant &&
+        !turn.signal.aborted &&
+        !clarification &&
+        text.trim() &&
+        calledTools.size === 0
+      ) {
+        const corrected = await this.runGroundingGuard(
+          agent,
+          trimmed,
+          text,
+          options,
+          data,
+          turn.signal,
+        );
+        if (corrected) text = corrected;
+      }
 
-    // Visual tools persist metadata mid-turn; reload so this write keeps it.
-    const fresh = await this.deps.get(id);
-    const messages = fresh.messages;
-    const entities = sourceEntities(data);
-    const reasoning = reasoningTrail(data);
-    const knowledge = knowledgeUsed(options.requestContext);
-    if (clarification) {
-      // The turn stops here, but the schema/sample work done before the
-      // question is real work — keep it on the card instead of dropping it.
-      messages.push({
-        role: 'assistant',
-        content: clarification.question,
-        at: new Date().toISOString(),
-        clarification,
-        ...(data.length ? { data } : {}),
-        ...(entities.length ? { entities } : {}),
-        ...(reasoning ? { reasoning } : {}),
-        ...(knowledge ? { knowledge } : {}),
-        ...(rfpPackage ? { rfpPackage } : {}),
-        ...(readinessReport ? { readinessReport } : {}),
-      });
-    } else if (text.trim() || visualEvent || readinessReport) {
-      const interpretation = interpretationLine(data, entities);
-      // Careful mode only, and only when there is a result set to corroborate.
-      // The assistant's only: another agent runs no SQL to cross-check.
-      const crossChecked =
-        careful && isAssistant && !turn.signal.aborted
-          ? await this.deps.crossCheckAnswer(session, trimmed, data)
-          : undefined;
-      messages.push({
-        role: 'assistant',
-        content:
-          text.trim() ||
-          (visualEvent
-            ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
-            : readinessAnswerFallback(readinessReport!)),
-        at: new Date().toISOString(),
-        ...(data.length ? { data } : {}),
-        ...(entities.length ? { entities } : {}),
-        ...(interpretation ? { interpretation } : {}),
-        ...(reasoning ? { reasoning } : {}),
-        ...(knowledge ? { knowledge } : {}),
-        ...((await this.deps.sql.matchesVerifiedQuery(session, data))
-          ? { verified: true }
-          : {}),
-        ...(visualEvent ? { visual: visualEvent } : {}),
-        ...(crossChecked ? { crossCheck: crossChecked } : {}),
-        ...(rfpPackage ? { rfpPackage } : {}),
-        ...(readinessReport ? { readinessReport } : {}),
-      });
-    }
-    const updated = await this.deps.updateDoc(id, {
-      messages,
-      ...turnRfpPatch(session, options.requestContext),
-    });
-    if (!turn.signal.aborted || clarification) {
-      emit({ type: 'done', session: await this.deps.toView(updated ?? fresh) });
-    }
+      // Visual tools persist metadata mid-turn; reload so this write keeps it.
+      const fresh = await this.deps.get(id);
+      const messages = fresh.messages;
+      const entities = sourceEntities(data);
+      const reasoning = reasoningTrail(data);
+      const knowledge = knowledgeUsed(options.requestContext);
+      if (clarification) {
+        // The turn stops here, but the schema/sample work done before the
+        // question is real work — keep it on the card instead of dropping it.
+        messages.push({
+          role: 'assistant',
+          content: clarification.question,
+          at: new Date().toISOString(),
+          clarification,
+          ...(data.length ? { data } : {}),
+          ...(entities.length ? { entities } : {}),
+          ...(reasoning ? { reasoning } : {}),
+          ...(knowledge ? { knowledge } : {}),
+          ...(readinessReport ? { readinessReport } : {}),
+        });
+      } else if (text.trim() || visualEvent || readinessReport) {
+        const interpretation = interpretationLine(data, entities);
+        // Careful mode only, and only when there is a result set to corroborate.
+        // The assistant's only: another agent runs no SQL to cross-check.
+        const crossChecked =
+          careful && isAssistant && !turn.signal.aborted
+            ? await this.deps.crossCheckAnswer(session, trimmed, data)
+            : undefined;
+        messages.push({
+          role: 'assistant',
+          content:
+            text.trim() ||
+            (visualEvent
+              ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
+              : readinessAnswerFallback(readinessReport!)),
+          at: new Date().toISOString(),
+          ...(data.length ? { data } : {}),
+          ...(entities.length ? { entities } : {}),
+          ...(interpretation ? { interpretation } : {}),
+          ...(reasoning ? { reasoning } : {}),
+          ...(knowledge ? { knowledge } : {}),
+          ...((await this.deps.sql.matchesVerifiedQuery(session, data))
+            ? { verified: true }
+            : {}),
+          ...(visualEvent ? { visual: visualEvent } : {}),
+          ...(crossChecked ? { crossCheck: crossChecked } : {}),
+          ...(readinessReport ? { readinessReport } : {}),
+        });
+      }
+      const updated = await this.deps.updateDoc(id, { messages });
+      if (!turn.signal.aborted || clarification) {
+        emit({
+          type: 'done',
+          session: await this.deps.toView(updated ?? fresh),
+        });
+      }
+    };
+    return settle(ran);
   }
 
   /**
@@ -610,7 +768,7 @@ export class TurnEngine {
     emit: (event: StreamEvent) => void,
     runtime: QtiV2TurnRuntime & AgentTurnRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
-  ): Promise<void> {
+  ): Promise<TurnRunOutcome> {
     // The agent step's own failure, kept so the turn reports it as is.
     let stepError: unknown;
     const captured = async <T>(step: () => Promise<T>): Promise<T> => {
@@ -628,42 +786,121 @@ export class TurnEngine {
       } satisfies AgentTurnRuntime);
     } else {
       requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
+        plan: (input) => captured(() => runtime.plan(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
+        writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
       } satisfies QtiV2TurnRuntime);
     }
     const turnInput: QtiV2TurnInput = {
       question,
       datasets: session.datasets,
     };
-    const run = await this.deps.mastra.streamWorkflow(
-      workflow.engineId,
-      turnInput,
-      requestContext,
-    );
     let state = session.workflowState;
-    for await (const event of run.fullStream) {
-      if (onStepEvent && stepEventOf(event)) onStepEvent(event);
-      if (workflow.bar !== 'steps') continue;
-      const stepEvent = stepEventOf(event);
-      if (!stepEvent) continue;
-      const next = workflowRunState(state, stepEvent, workflow.stepIds);
-      if (!next) continue;
-      state = next;
-      await this.deps.updateDoc(session.id, { workflowState: state });
-      session.workflowState = state;
-      await this.emitWorkflow(session.id, emit);
-    }
-    const result = await run.result;
-    if (result.status === 'failed') {
-      const failure: unknown =
-        stepError ?? result.error ?? new Error('The turn failed');
-      throw failure;
-    }
-    if (result.status === 'success' && isTurnSummary(result.result)) {
-      this.deps.logger.log(
-        `Questions to Insights v2 turn in session ${session.id}: ${JSON.stringify(result.result)}`,
-      );
-    }
+    // Drive one stream of the run (its start, or a resume) to its outcome.
+    const drive = async (
+      run: WorkflowRunStream,
+      resumed = false,
+    ): Promise<TurnRunOutcome> => {
+      // Drop the run's snapshot (ADR-0043): it is written only while the
+      // run waits, so a resumed run that ends leaves it behind otherwise.
+      const discard = async () => {
+        try {
+          await run.discard?.();
+        } catch (error) {
+          this.deps.logger.warn(
+            `Could not discard the suspended turn of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      };
+      // The last catalogue step that suspended, with what it asked.
+      let waiting: { stepId: string; payload: unknown } | undefined;
+      for await (const engineEvent of run.fullStream) {
+        // A nested workflow's step is `<workflow>.<step>`: the step's own id.
+        const event = engineEvent.payload?.id
+          ? {
+              ...engineEvent,
+              payload: {
+                ...engineEvent.payload,
+                id: catalogStepId(engineEvent.payload.id),
+              },
+            }
+          : engineEvent;
+        const stepId = event.payload?.id;
+        if (
+          event.type === 'workflow-step-suspended' &&
+          stepId &&
+          workflow.stepIds.includes(stepId)
+        ) {
+          waiting = { stepId, payload: event.payload?.suspendPayload };
+        }
+        if (onStepEvent && stepEventOf(event)) onStepEvent(event);
+        if (workflow.bar !== 'steps') continue;
+        const stepEvent = stepEventOf(event);
+        if (!stepEvent) continue;
+        const next = workflowRunState(state, stepEvent, workflow.stepIds);
+        if (!next) continue;
+        state = next;
+        await this.deps.updateDoc(session.id, { workflowState: state });
+        session.workflowState = state;
+        await this.emitWorkflow(session.id, emit);
+      }
+      const result = await run.result;
+      if (resumed && result.status !== 'suspended') await discard();
+      if (result.status === 'failed') {
+        const failure: unknown =
+          stepError ?? result.error ?? new Error('The turn failed');
+        throw failure;
+      }
+      if (result.status === 'suspended') {
+        // The path is handed back to the engine unchanged (ADR-0043).
+        const path = result.suspended?.[0] ?? [];
+        const stepId = waiting?.stepId ?? catalogStepId(path.at(-1) ?? '');
+        const asked = clarifyingQuestionOf(
+          waiting?.payload ?? result.steps?.[path[0] ?? '']?.suspendPayload,
+        );
+        if (!asked) {
+          await discard();
+          throw new Error(`The ${stepId} step waited with no question`);
+        }
+        const resumeRun = run.resume;
+        return {
+          status: 'suspended',
+          stepId,
+          question: asked.question,
+          options: asked.options,
+          ...(resumeRun
+            ? {
+                resume: (answer: string) =>
+                  drive(
+                    resumeRun({
+                      step: path,
+                      resumeData: { answer },
+                      requestContext,
+                    }),
+                    true,
+                  ),
+              }
+            : {}),
+          discard,
+        };
+      }
+      const summary =
+        result.status === 'success' ? turnSummaryOf(result.result) : undefined;
+      if (summary) {
+        const { answer, ...counts } = summary;
+        this.deps.logger.log(
+          `Questions to Insights v2 turn in session ${session.id}: ${JSON.stringify({ ...counts, answerLength: answer.length })}`,
+        );
+      }
+      return { status: 'done' };
+    };
+    return drive(
+      await this.deps.mastra.streamWorkflow(
+        workflow.engineId,
+        turnInput,
+        requestContext,
+      ),
+    );
   }
 
   /**
@@ -779,41 +1016,5 @@ export class TurnEngine {
     const item = withVisualItems(session).find((i) => i.id === itemId);
     if (!item) return;
     emit({ type: 'panel-item', content: JSON.stringify({ item }) });
-  }
-
-  /**
-   * The RFP Builder's saved stage drives its tracker: the next stage is the
-   * current one, those up to it are done (ADR-0029).
-   */
-  private async driveRfpStage(
-    sessionId: string,
-    stage: number,
-    emit: (event: StreamEvent) => void,
-  ): Promise<void> {
-    const session = await this.deps.get(sessionId);
-    if (!this.deps.effectiveWorkflowFor(session).length) return;
-    const completed = Math.max(0, Math.min(Math.trunc(stage), RFP_STAGES));
-    const now = new Date().toISOString();
-    const current = Math.min(completed + 1, RFP_STAGES);
-    // The card belongs to the phase it was written for: moving on clears it,
-    // waiting included.
-    const previous = session.workflowState;
-    const card =
-      previous?.current === current
-        ? {
-            ...(previous.waiting ? { waiting: true } : {}),
-            ...(previous.note ? { note: previous.note } : {}),
-          }
-        : {};
-    const workflowState: WorkflowState = {
-      current,
-      done: Array.from({ length: completed }, (_, i) => i + 1),
-      ...(previous?.skipped?.length ? { skipped: previous.skipped } : {}),
-      ...(previous?.todos ? { todos: previous.todos } : {}),
-      ...card,
-      updatedAt: now,
-    };
-    await this.deps.updateDoc(sessionId, { workflowState });
-    await this.emitWorkflow(sessionId, emit);
   }
 }

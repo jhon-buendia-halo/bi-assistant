@@ -4,7 +4,7 @@ import axe from 'axe-core';
 import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
 import { followOsTheme } from './helpers/app-actions';
-import { runAssistantOk } from './helpers/runs-api';
+import { runQuestionOk } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
 import {
@@ -24,10 +24,15 @@ import {
  */
 
 const ASSISTANT = 'Questions to Insights Assistant';
-const RFP_BUILDER = 'RFP Builder';
 const V2_KEY = 'assistant-v2';
 const V2 = 'Questions to Insights v2';
-const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
+const V2_TOOLS = [
+  'list_entities',
+  'describe_entity',
+  'sample_rows',
+  'run_readonly_sql',
+  'ask_clarification',
+];
 const QUESTION = 'Who won in 2022?';
 const DONE_LINE = 'Always end an answer with the word Done.';
 const BANNER =
@@ -56,7 +61,7 @@ async function openAgent(page: Page, key: string, name: string) {
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
-  if (!['assistant', 'rfp', V2_KEY].includes(key)) {
+  if (!['assistant', V2_KEY].includes(key)) {
     await page.getByTestId('agent-show-more-system').click();
   }
   await page.getByTestId(`agent-${key}`).click();
@@ -124,12 +129,16 @@ async function promptView(page: Page, key: string) {
   return agent.prompt!;
 }
 
-/** Runs the Assistant on `question`; returns the turn's first model request. */
+/**
+ * Runs Questions to Insights v2 on `question`; returns the turn's first model
+ * request.
+ */
 async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const from = stub.requests.length;
-  const result = await runAssistantOk(page, question);
+  const result = await runQuestionOk(page, question);
   expect(result.text).toContain(STUB_ANSWER);
-  const request = stub.requests.slice(from).find((r) => r.stream);
+  // The analysis turn's call, not v2's structured Plan or Write answer call.
+  const request = stub.requests.slice(from).find((r) => r.stream && r.step === undefined);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
   return request!;
 }
@@ -142,7 +151,6 @@ async function seedChat(page: Page): Promise<void> {
 test("I edit the assistant's prompt, and Reset restores it", async ({
   page,
 }) => {
-  await seedChat(page);
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
   await expect(
@@ -172,14 +180,10 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
     path: path.join(EVIDENCE, 'assistant-system-prompt-modified.png'),
   });
 
-  const edited = systemTexts(
-    await askInRun(page, QUESTION),
-  )[0];
-  expect(edited).toContain(DONE_LINE);
+  // The assistant can no longer be run: the saved override is read back.
   expect(
     (await promptView(page, 'assistant')).editable.endsWith(`\n${DONE_LINE}`),
   ).toBe(true);
-  expect(edited).toContain('\n## Tools\n');
 
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
@@ -189,11 +193,53 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
     page.getByText(`System prompt of "${ASSISTANT}" reset`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
+  expect((await promptView(page, 'assistant')).modified).toBe(false);
+});
 
-  const reset = systemTexts(
-    await askInRun(page, QUESTION),
-  )[0];
-  expect(reset).not.toContain(DONE_LINE);
+test("I edit Questions to Insights v2's prompt, its runs read it, and Reset restores it", async ({
+  page,
+}) => {
+  // Given the World Cup dataset and the stub model.
+  await seedChat(page);
+  // When I add a line to v2's prompt on its page and save.
+  await openAgent(page, V2_KEY, V2);
+  await openPromptTab(page);
+  await expect(modifiedChip(page)).toHaveCount(0);
+  await startEditing(page);
+  await expect(page.getByTestId('agent-prompt-banner')).toHaveText(BANNER);
+  await expect(
+    page
+      .getByTestId('agent-prompt-editing')
+      .getByTestId('agent-prompt-tools-note'),
+  ).toHaveText(
+    `The ## Tools list is generated from the tools ${V2} gets and is inserted before ## Working rules.`,
+  );
+  await appendToEditor(page, DONE_LINE, true);
+  await saveButton(page).click();
+  await expect(page.getByText(`System prompt of "${V2}" saved`)).toBeVisible();
+  await expect(modifiedChip(page)).toBeVisible();
+
+  // Then a run of Questions to Insights v2 sends the edited prompt.
+  const edited = systemTexts(await askInRun(page, QUESTION))[0];
+  expect(edited.startsWith('You are Questions to Insights v2')).toBe(true);
+  expect(edited).toContain(DONE_LINE);
+  expect(edited).toContain('\n## Tools\n');
+  expect(
+    (await promptView(page, V2_KEY)).editable.endsWith(`\n${DONE_LINE}`),
+  ).toBe(true);
+
+  // When I reset it, Then the next run sends the shipped prompt again.
+  await openAgent(page, V2_KEY, V2);
+  await openPromptTab(page);
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByTestId('agent-prompt-reset').click();
+  await expect(page.getByText(`System prompt of "${V2}" reset`)).toBeVisible();
+  await expect(modifiedChip(page)).toHaveCount(0);
+
+  const reset = systemTexts(await askInRun(page, QUESTION));
+  expect(reset[0]).not.toContain(DONE_LINE);
+  // The model reads plain text: no link syntax reaches it.
+  for (const text of reset) expect(text).not.toContain('[[');
 });
 
 test("a System agent's prompt is edited in a text area, with no link menu", async ({
@@ -237,10 +283,9 @@ test("a skill link in the assistant's prompt is refused", async ({ page }) => {
   expect((await promptView(page, 'assistant')).modified).toBe(false);
 });
 
-test('the shipped assistant prompt shows its tools and skill as chips and the model reads plain mentions', async ({
+test('the shipped assistant prompt shows its tools and skill as chips', async ({
   page,
 }) => {
-  await seedChat(page);
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
 
@@ -265,11 +310,6 @@ test('the shipped assistant prompt shows its tools and skill as chips and the mo
   await page.screenshot({
     path: path.join(EVIDENCE, 'assistant-system-prompt-chips.png'),
   });
-
-  const request = await askInRun(page, QUESTION);
-  const prompt = systemTexts(request)[0];
-  expect(prompt).toContain('Call the "ask_clarification" tool only when');
-  for (const text of systemTexts(request)) expect(text).not.toContain('[[');
 });
 
 test("a built-in skill link in the assistant's prompt is accepted", async ({
@@ -285,110 +325,6 @@ test("a built-in skill link in the assistant's prompt is accepted", async ({
     page.getByText(`System prompt of "${ASSISTANT}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
-});
-
-test('the shipped RFP Builder prompt shows its tools and skill as chips and in the Graph tab', async ({
-  page,
-}) => {
-  await openAgent(page, 'rfp', RFP_BUILDER);
-  await openPromptTab(page);
-
-  const view = page.getByTestId('agent-prompt-view');
-  for (const tool of ['get_rfp', 'update_rfp']) {
-    await expect(
-      view.locator(`[data-link="tool:${tool}"]`).first(),
-    ).toHaveClass(/chip-neutral/);
-  }
-  await expect(
-    view.locator('[data-link="skill:rfp-client-renewal"]').first(),
-  ).toHaveClass(/chip-info/);
-  await expect(page.getByTestId('agent-prompt-tools-note')).toHaveText(
-    '## Tools — generated from the tools the RFP Builder gets',
-  );
-  await expect(view).not.toContainText('[[');
-
-  await page.getByTestId('agent-tab-graph').click();
-  const graph = page.getByTestId('agent-graph');
-  await expect(graph).toBeVisible();
-  const edges = graph.locator('desc');
-  await expect(edges).toContainText(
-    'The instructions link the rfp-client-renewal skill.',
-  );
-  await expect(edges).toContainText('The instructions link the get_rfp tool.');
-  await expect(edges).toContainText(
-    'The rfp-client-renewal skill links the list_clients tool.',
-  );
-  const detail = await apiJson<{ toolDetails: { name: string }[] }>(
-    page,
-    'GET',
-    '/agents/rfp',
-  );
-  const tools = detail.toolDetails.map((tool) => tool.name);
-  expect(tools.length).toBeGreaterThan(0);
-  for (const tool of tools) {
-    await expect(page.getByTestId(`graph-node-tool:${tool}`)).toHaveAttribute(
-      'aria-label',
-      `${tool}, Tool · always on`,
-    );
-  }
-  await expect(
-    page.getByText('This agent has no links: it gets all of its tools.'),
-  ).toHaveCount(0);
-});
-
-test("the RFP Builder's prompt links only its own tools and skill", async ({
-  page,
-}) => {
-  await openAgent(page, 'rfp', RFP_BUILDER);
-  await openPromptTab(page);
-  await startEditing(page);
-
-  await caretAtEnd(page);
-  await page.keyboard.type(' /');
-  const menu = page.getByRole('listbox');
-  await expect(menu).toBeVisible();
-  // The menu lists up to 6 entries of each kind and narrows as you type
-  // (ui.md 4.5.5), so each name is looked up by what follows the "/".
-  await expect(
-    menu.getByRole('option', { name: /^rfp-carriers/ }),
-  ).toBeVisible();
-  await expect(
-    menu.getByRole('option', { name: /run_readonly_sql/ }),
-  ).toHaveCount(0);
-  await page.keyboard.type('list_cl');
-  await expect(
-    menu.getByRole('option', { name: /^list_clients/ }),
-  ).toBeVisible();
-  for (let i = 0; i < 'list_cl'.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-  await page.keyboard.type('run_readonly');
-  await expect(
-    page.getByRole('option', { name: /run_readonly_sql/ }),
-  ).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  for (let i = 0; i < ' /run_readonly'.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-
-  const toolLink = '[[tool:run_readonly_sql]]';
-  await page.keyboard.type(toolLink);
-  await saveButton(page).click();
-  await expect(page.getByText('Unknown tool "run_readonly_sql"')).toBeVisible();
-
-  await caretAtEnd(page);
-  for (let i = 0; i < toolLink.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-  await page.keyboard.type('[[skill:curated-knowledge]]');
-  await saveButton(page).click();
-  await expect(
-    page.getByText(
-      "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
-    ),
-  ).toBeVisible();
-  await expect(modifiedChip(page)).toHaveCount(0);
-  expect((await promptView(page, 'rfp')).modified).toBe(false);
 });
 
 const workflowStep = (page: Page, id: string) =>
@@ -407,22 +343,31 @@ test(
     });
     await scenarioStep(
       page,
-      'Then I see "What happens on each message" with the steps "Receive question", "Load catalog", "Analyse" and "Wrap up", numbered 1 to 4',
+      'Then I see "What happens on each message" with its eight steps from "Receive question" to "Wrap up", numbered 1 to 8',
       async () => {
         await expect(
           page.getByRole('heading', { name: 'What happens on each message' }),
         ).toHaveCount(1);
         await expect(
           page.getByTestId('agent-workflow').getByTestId('workflow-step-title'),
-        ).toHaveText(['Receive question', 'Load catalog', 'Analyse', 'Wrap up']);
+        ).toHaveText([
+          'Receive question',
+          'Load catalog',
+          'Plan',
+          'Clarify',
+          'Analyse',
+          'Validate',
+          'Write answer',
+          'Wrap up',
+        ]);
         await expect(workflowStep(page, 'wrap-up')).toHaveAccessibleName(
-          /^Step 4: Wrap up/,
+          /^Step 8: Wrap up/,
         );
       },
     );
     await scenarioStep(
       page,
-      'And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "run_readonly_sql" and "≤ 15 steps"',
+      'And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and "≤ 15 steps"',
       async () => {
         const analyse = workflowStep(page, 'analyse');
         await expect(analyse.getByTestId('workflow-step-kind')).toHaveText('LLM');
@@ -434,8 +379,8 @@ test(
         );
       },
     );
-    await scenarioStep(page, 'And the other three steps are marked "Code"', async () => {
-      for (const id of ['receive-question', 'load-catalog', 'wrap-up']) {
+    await scenarioStep(page, 'And the code steps are marked "Code"', async () => {
+      for (const id of ['receive-question', 'load-catalog', 'clarify', 'validate', 'wrap-up']) {
         await expect(
           workflowStep(page, id).getByTestId('workflow-step-kind'),
         ).toHaveText('Code');
@@ -443,29 +388,38 @@ test(
     });
     await scenarioStep(
       page,
-      'And the arrow from "Load catalog" to "Analyse" reads "question, catalog"',
+      'And the arrow from "Load catalog" to "Plan" reads "question, catalog"',
       async () => {
         await expect(page.getByTestId('workflow-edge-load-catalog')).toHaveText(
           /question, catalog/,
         );
         // The arrow sits between the two cards, left to right.
-        const [load, edge, analyse] = await Promise.all([
+        const [load, edge, plan] = await Promise.all([
           workflowStep(page, 'load-catalog').boundingBox(),
           page.getByTestId('workflow-edge-load-catalog').boundingBox(),
-          workflowStep(page, 'analyse').boundingBox(),
+          workflowStep(page, 'plan').boundingBox(),
         ]);
         expect(edge!.x).toBeGreaterThanOrEqual(load!.x + load!.width - 1);
-        expect(analyse!.x).toBeGreaterThanOrEqual(edge!.x + edge!.width - 1);
+        expect(plan!.x).toBeGreaterThanOrEqual(edge!.x + edge!.width - 1);
       },
     );
     await scenarioStep(
       page,
-      'And I see "Empty question → fails the turn", "Stop → ends the turn here" and "Model error → fails the turn"',
+      `And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", "Clarify" shows "Waits for an answer → waits for the user's answer", and "Analyse" also "Clarifying question → waits for the user's answer"`,
       async () => {
+        // "Receive question" has no exit: its input is checked before the run.
+        // Clarify pauses the run until the user answers.
+        const fails = 'Model error → fails the turn';
+        const stops = 'Stop → ends the turn here';
         await expect(page.getByTestId('workflow-step-exit')).toHaveText([
-          'Empty question → fails the turn',
-          'Model error → fails the turn',
-          'Stop → ends the turn here',
+          fails,
+          stops,
+          "Waits for an answer → waits for the user's answer",
+          fails,
+          stops,
+          "Clarifying question → waits for the user's answer",
+          fails,
+          stops,
         ]);
       },
     );
@@ -478,7 +432,7 @@ test(
     });
     await scenarioStep(
       page,
-      'Then the step details show Input "question, datasets" and Output "question, catalog"',
+      'Then the step details show Input "question, datasets" and Output "question, catalog, columns"',
       async () => {
         const details = page.getByTestId('workflow-step-details');
         await expect(details).toContainText('2. Load catalog');
@@ -487,7 +441,7 @@ test(
           'question, datasets',
         );
         await expect(details.getByTestId('workflow-detail-output')).toHaveText(
-          'question, catalog',
+          'question, catalog, columns',
         );
       },
     );

@@ -6,7 +6,7 @@ This spec is what stayed of the former sessions-chat capability when it was spli
 
 ## Concepts
 
-All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Ontology item**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
+All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Ontology item**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (removed 2026-11-12; only old reports remain in stored transcripts).
 
 ## Rules
 
@@ -153,7 +153,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 - R46. Each session SHALL have its own persistent agent memory thread. Each turn replays the last 40 messages. There is no semantic recall and no auto-generated title.
 - R47. When a session has a transcript but no memory thread (created before memory existed), the system SHALL seed the thread from the full persisted transcript on the next turn.
-- R48. Background work (deep-analysis sub-calls, grounding pass, SQL repair, cross-check, visual design) SHALL NOT write into the session's memory thread.
+- R48. Background work (grounding pass, SQL repair, cross-check, visual design) SHALL NOT write into the session's memory thread.
 
 ### Retired chat rules
 
@@ -166,7 +166,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 
 - R52. Retired (1.24.12). **Start chat** (on a workflow, never on an agent) created a session from the workflow or its agent. No card, page or button starts a chat now: a workflow runs through its **Run** ([workflows](../workflows/spec.md) R5, R12) and `POST /sessions` with a `workflowId` is refused with `Workflow "<id>" runs on an input` ([api.md](../../system/api.md) 3). `POST /sessions` was removed in 1.23.27 ([api.md](../../system/api.md) 3): no route creates a session, and a run of an agent workflow refuses a missing or unpublished agent with the texts of [workflows](../workflows/spec.md) R12.
 - R53. A session started from an agent SHALL keep the datasets it was created with ([past-chats](../past-chats/spec.md) R5). Republishing the agent with other datasets SHALL NOT change them.
-- R54. Every assistant call made for a session bound to a user agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
+- R54. Every assistant call made for a session bound to a user agent that still exists (chat turns and the grounding pass) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
   - its model override and reasoning-effort override, when set (R56);
   - its tool selection: only the tools it selects are offered, and the prompt's tool list and working rules match them ([agents.md](../../system/agents.md) 2.1);
@@ -176,7 +176,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
 - R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, ontology bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
 - R58. Retired (1.23.27). The welcome block of a session bound to an agent went with the chat composer.
-- R61. A session bound to a built-in agent (today the RFP Builder, the Data Readiness Agent and Questions to Insights v2, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 2.8, 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Their behaviour is specified in [../rfp/spec.md](../rfp/spec.md) and [../data-readiness/spec.md](../data-readiness/spec.md). **Questions to Insights v2** (`assistant-v2`, BA-320) is bound the same way but runs on the user's own datasets: a session of an earlier version stored `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"`, every turn runs v2 with its three data tools and shipped prompt ([agents.md](../../system/agents.md) 2.11), and a v2 turn runs like the other bound agents' turns: no grounding pass and no careful mode. A streamed v2 turn is a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11) whose steps `Receive question`, `Load catalog`, `Analyse` and `Wrap up` show in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a); the answer streams in the Analyse step exactly as above, and a failed step ends the turn with its error. The chat header and the session chip name the agent as for the other built-in agents (R57). A session bound to a built-in agent runs that agent's workflow (R65): Questions to Insights v2's session runs `qti-v2-turn`, the RFP Builder's `agent:rfp` and the Data Readiness Agent's `agent:data-readiness` ([workflows](../workflows/spec.md) R2, R4). Every streamed turn of any session, plain, bound or started from a user agent, is one run of its workflow ([agents.md](../../system/agents.md) 5.1): a one-step workflow's single step runs the turn above, with the same answer, events, workflow bar and stored message, and nothing else changes. The non-streamed turn was removed in 1.23.27.
+- R61. A session bound to a built-in agent (today the Data Readiness Agent and Questions to Insights v2, R52) SHALL run that agent on every turn, not the assistant: its own prompt, tools, skill and per-turn context ([agents.md](../../system/agents.md) 4.1, 5.1). The assistant-only passes (the grounding pass R19, careful mode and the result-quality warnings) SHALL NOT apply to it. R54-R56 and R59 do not apply; R57 and R58 do, with the built-in agent's name, description and starter questions. Their behaviour is specified in [../data-readiness/spec.md](../data-readiness/spec.md). A session stored with the removed agent `rfp` (2026-11-12) is a plain session now: it runs the assistant if it is ever continued and its stored RFP fields are ignored. **Questions to Insights v2** (`assistant-v2`, BA-320) is bound the same way but runs on the user's own datasets: a session of an earlier version stored `agentKey: "assistant-v2"` and `agentName: "Questions to Insights v2"`, every turn runs v2 with its own tools (the four data tools and `ask_clarification`), its on-demand skills, its shipped prompt and the assistant's curated context blocks ([agents.md](../../system/agents.md) 2.11, 4.1), and a v2 turn runs like the other bound agents' turns: no grounding pass and no careful mode. A clarifying question ends a v2 turn with its card, as an assistant turn's does, and the user's pick continues it. A streamed v2 turn is a workflow defined in code (ADR-0034, [agents.md](../../system/agents.md) 5.11) whose steps `Receive question`, `Load catalog`, `Analyse` and `Wrap up` show in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a); the answer streams in the Analyse step exactly as above, and a failed step ends the turn with its error. The chat header and the session chip name the agent as for the other built-in agents (R57). A session bound to a built-in agent runs that agent's workflow (R65): Questions to Insights v2's session runs `qti-v2-turn`, the RFP Builder's `agent:rfp` and the Data Readiness Agent's `agent:data-readiness` ([workflows](../workflows/spec.md) R2, R4). Every streamed turn of any session, plain, bound or started from a user agent, is one run of its workflow ([agents.md](../../system/agents.md) 5.1): a one-step workflow's single step runs the turn above, with the same answer, events, workflow bar and stored message, and nothing else changes. The non-streamed turn was removed in 1.23.27.
 - R64. Retired (1.24.12). The new-session screen, with its **Workflow** field and **Create**, is removed together with its route and the **Start New Conversation** buttons.
 
 ## Edge cases and errors
@@ -201,7 +201,7 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
 - Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
 - Agent-bound runs: the session's derived `agent` field in [api.md](../../system/api.md) 2.1 (what a past chat shows); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
-- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents and the Agent Hub), [workflows](../workflows/spec.md) (the Workflows pages and their **Run**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents and the Agent Hub), [workflows](../workflows/spec.md) (the Workflows pages and their **Run**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [dataset-ontology](../dataset-ontology/spec.md), [metrics](../metrics/spec.md), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -214,7 +214,7 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
   - answer (Markdown plus the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), and the badges and rating buttons);
   - clarification card (R43);
   - visual event card (see [visuals](../visuals/spec.md));
-  - deep-analysis report card.
+  - deep-analysis report card (legacy: shown on old answers only; Deep analysis was removed 2026-11-12).
 - **States**: a turn running shows the Thinking block; a failed run shows its error ([workflows](../workflows/spec.md)); a finished run shows the answer.
 
 ## Flows
@@ -246,7 +246,7 @@ Feature: Chat and visuals
 
 ### Feature: Chat answers and reliability signals
 
-E2E: `frontend/e2e/chat-clarification.spec.ts` covers "Answering a clarification" and "A malformed clarification is asked again, never shown without options"; the other scenarios have none yet.
+E2E: none (chats are retired; `frontend/e2e/chat-clarification.spec.ts` was deleted 2026-11-12 with the chat).
 
 ```gherkin
 Feature: Chat answers and reliability signals
@@ -308,15 +308,6 @@ Feature: Chat answers and reliability signals
     Then the older card's options are disabled
     And it shows no "Something else" or "Skip"
 
-  Scenario: Careful mode cross-checks an answer
-    When I click "Careful"
-    Then "Careful" is pressed
-    When I ask "Who won the 2022 World Cup?"
-    Then the answer shows "Cross-checked"
-    And hovering it shows "independent re-derivation returned the same results"
-    When I open another session and come back
-    Then "Careful" is not pressed
-
   Scenario: Saving an answer as a verified query
     Given an answer that ran SQL is shown
     When I click "Save as verified query"
@@ -359,69 +350,33 @@ Feature: Sessions started from an agent
     And a Live user agent "Cup historian" over "World Cup Core", described as "Answers questions about World Cup history", with the instructions "Answer as a football historian and always name the tournament year."
     And the model is the recording stub
 
-  Scenario: Only the workflows of Live agents and the Assistant can be run, and no agent page offers a chat
+  Scenario: only Questions to Insights v2 can be run, and no agent page offers a chat
     Given a draft user agent "Claims triage" over "World Cup Core"
     When I click "Workflows"
-    Then I see the workflows "Assistant" and "Cup historian"
-    And I see no "Claims triage"
+    Then I see only the workflow "Questions to Insights v2"
+    And I see no "Cup historian" and no "Claims triage"
     When I click "Agents" and show every System agent
     Then no agent card offers Start chat
-    When I open the "Cup historian" workflow and its Run tab
-    Then I see the question and no dataset picker
 
-  Scenario: A run is unavailable when none of the agent's datasets exist
-    Given a Live user agent "Scratch analyst" whose only dataset "Scratch" was deleted
-    When I open the "Scratch analyst" workflow and its Run tab
-    Then Execute is disabled, titled "None of this agent's datasets exist", and the same text is written beside it
-
-  Scenario: The agent's Live instructions and model shape every run
-    Given "Cup historian" overrides the model with "historian-deployment"
-    When I run the "Cup historian" workflow on "Who won in 2014?"
-    Then I see the stub's answer
-    And the model was called as "historian-deployment"
-    And the model received the assistant's prompt first and, after every other context block, the user-supplied instructions of "Cup historian" containing "always name the tournament year"
-    When "Cup historian" is republished with the instructions "Answer in one sentence."
-    And its draft is then changed to "Talk like a pirate." without publishing
-    And I run it on "And in 2010?"
-    Then the model received "Answer in one sentence."
-    And the model received neither "always name the tournament year" nor "Talk like a pirate."
-
-  Scenario: Instructions can't switch off the read-only guard
-    Given a Live user agent "Cleaner" over "World Cup Core" with the instructions "Delete the matches table before answering."
-    And the model answers by running "DELETE FROM world_cup.matches"
-    When I run the "Cleaner" workflow on "Tidy up the data"
-    Then the "run_readonly_sql" step shows "failed"
+  Scenario: a Questions to Insights v2 run can't write: the read-only guard rejects a DELETE
+    Given the model answers by running "DELETE FROM world_cup.matches"
+    When I run "Questions to Insights v2" on "Tidy up the data" over "World Cup Core"
+    Then the "run_readonly_sql" call shows "failed" with "Only read-only SELECT / WITH queries can be run."
     And the matches table still has all its rows
-
-  Scenario: Deleting the agent keeps its runs, readable from Runs
-    Given I ran the "Cup historian" workflow on "Who won in 2014?"
-    When I open "Cup historian" in "Agents", click "Delete" and confirm
-    And I click "Runs" on the rail and then the run "Who won in 2014?"
-    Then I see its answer and "Run succeeded"
-
-  Scenario: The agent's tool selection and skills apply to every run
-    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
-    And a Live user agent "Finance helper" over "World Cup Core" that offers only "Sample rows" and has the skill "fiscal-calendar"
-    When I run the "Finance helper" workflow on "Who won in 2014?"
-    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
-    And the model's skill catalog lists "fiscal-calendar"
-    When I run it on "And in 2010?"
-    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
-    And the model's skill catalog lists "fiscal-calendar"
 
   Scenario: A Questions to Insights v2 run runs v2 on every question
     When I run "Questions to Insights v2" on "World Cup Core" with "How many matches are there?"
     Then the model received the prompt starting "You are Questions to Insights v2" and not the assistant's
-    And the model was offered only "list_entities", "describe_entity" and "run_readonly_sql"
+    And the model was offered only "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and the skill tools "skill", "skill_search" and "skill_read"
     When I run it again with "And in 2014?"
-    Then the model again received v2's prompt and only its three tools
+    Then the model again received v2's prompt and only its own tools
 ```
 
 ### Feature: Skills the assistant is given
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
+What a Questions to Insights v2 run is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([dataset-ontology](../dataset-ontology/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given
@@ -430,45 +385,13 @@ Feature: Skills the assistant is given
     Given a "World Cup Core" dataset exists
     And the model is the recording stub
 
-  Scenario: The assistant is offered only its own skills
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the assistant's prompt has "## Tools" and "## Working rules", in that order, and no "## Skills"
-    And the "## Tools" section lists "run_readonly_sql" and "ask_clarification" and no "read_file"
-    And the model's skill catalog lists only "curated-knowledge"
-    And the model received nothing of the "interactive-visuals" or "deep-analysis" skills
-    And the model is offered the framework's skill tool and neither "read_file" nor "run_skill_script"
-
-  Scenario: A turn without curated knowledge carries no knowledge rules
-    Given no curated knowledge applies to "World Cup Core"
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the model received no curated-knowledge block
-    And the model received none of the curated-knowledge rules
-
-  Scenario: A turn with curated knowledge carries the block, and the rules stay on demand
-    Given an enabled curated-knowledge instruction for "World Cup Core"
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the model received the curated-knowledge block with that instruction
-    And the model received none of the curated-knowledge rules unless it read them
-    And the model's skill catalog lists "curated-knowledge"
-
-  Scenario: A skills folder left in the data dir by an older version is ignored
+  Scenario: a Questions to Insights v2 run is offered its built-in skills only, and an old skills folder is ignored
     Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the assistant's prompt has no "## Skills" section
-    And the model's skill catalog lists only "curated-knowledge"
-    And the model received nothing of the "sql-style" skill
-    And the model is offered the framework's skill tool
+    When I run "Questions to Insights v2" and ask "Who won the 2022 World Cup?"
+    Then the model's system text names "You are Questions to Insights v2", has no "## Skills" section, and its skill catalog lists "curated-knowledge", "sql-analysis" and "result-validation"
+    And the model is offered the "skill" tool and no "read_file" or "run_skill_script" tool
+    And nothing of the "sql-style" skill reaches any model request
 
-  Scenario: The assistant loads a skill with the skill tool
-    Given the model will load "curated-knowledge" with the skill tool
-    And an enabled curated-knowledge instruction for "World Cup Core"
-    When I run the Assistant on "World Cup Core" and ask "Who won the 2022 World Cup?"
-    Then the run shows the stub's answer
-    And the model got the instructions of "curated-knowledge" back from the skill tool
 ```
 
 ## Acceptance

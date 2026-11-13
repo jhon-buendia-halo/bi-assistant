@@ -1,0 +1,2001 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) qti-v2-turn's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+{
+  "contractHash": "23577e797e19",
+  "edges": [
+    {
+      "from": "start",
+      "kind": "next",
+      "to": "receive-question",
+    },
+    {
+      "from": "receive-question",
+      "kind": "next",
+      "to": "load-catalog",
+    },
+    {
+      "from": "load-catalog",
+      "kind": "next",
+      "to": "plan",
+    },
+    {
+      "from": "plan",
+      "kind": "branch",
+      "label": "Needs clarification",
+      "to": "clarify",
+    },
+    {
+      "from": "clarify",
+      "kind": "loop",
+      "label": "Answered",
+      "to": "plan",
+    },
+    {
+      "from": "plan",
+      "kind": "branch",
+      "label": "Clear",
+      "to": "analyse",
+    },
+    {
+      "from": "analyse",
+      "kind": "next",
+      "to": "validate",
+    },
+    {
+      "from": "validate",
+      "kind": "loop",
+      "label": "Retry once",
+      "to": "analyse",
+    },
+    {
+      "from": "validate",
+      "kind": "next",
+      "label": "Valid or retried",
+      "to": "write-answer",
+    },
+    {
+      "from": "write-answer",
+      "kind": "next",
+      "to": "wrap-up",
+    },
+    {
+      "from": "wrap-up",
+      "kind": "next",
+      "to": "end",
+    },
+  ],
+  "input": [
+    {
+      "name": "question",
+      "required": true,
+      "type": "textarea",
+    },
+    {
+      "name": "datasets",
+      "required": true,
+      "type": "datasets",
+    },
+  ],
+  "steps": [
+    {
+      "id": "receive-question",
+      "inputSchema": {
+        "properties": {
+          "datasets": {
+            "description": "The run's dataset names.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "datasets",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "datasets": {
+            "description": "The run's dataset names.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "datasets",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "load-catalog",
+      "inputSchema": {
+        "properties": {
+          "datasets": {
+            "description": "The run's dataset names.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "datasets",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "columns": {
+            "description": "The columns of each entity, for Plan only: at most 40 per entity and 400 in all.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columns": {
+                  "description": "Its columns, in dataset order (capped).",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "description": "The column name.",
+                        "type": "string",
+                      },
+                      "type": {
+                        "description": "Its type, as the dataset records it.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+                "more": {
+                  "description": "How many more columns it has that are not listed.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "entity",
+                "columns",
+                "more",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "columns",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "plan",
+      "inputSchema": {
+        "properties": {
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "clarification": {
+            "description": "After Clarify: its question and the answer. Plan plans with them and never asks again.",
+            "properties": {
+              "answer": {
+                "description": "The user's answer.",
+                "type": "string",
+              },
+              "options": {
+                "description": "Its answer options.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "question": {
+                "description": "The clarifying question the run asked.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "options",
+              "answer",
+            ],
+            "type": "object",
+          },
+          "columns": {
+            "description": "The columns of each entity, for Plan only: at most 40 per entity and 400 in all.",
+            "items": {
+              "properties": {
+                "columns": {
+                  "description": "Its columns, in dataset order (capped).",
+                  "items": {
+                    "properties": {
+                      "name": {
+                        "description": "The column name.",
+                        "type": "string",
+                      },
+                      "type": {
+                        "description": "Its type, as the dataset records it.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+                "more": {
+                  "description": "How many more columns it has that are not listed.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "entity",
+                "columns",
+                "more",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "columns",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "additionalProperties": false,
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Set when the turn was stopped while Plan ran: nothing after Plan runs.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "plan",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "clarify",
+      "inputSchema": {
+        "properties": {
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Set when the turn was stopped while Plan ran: nothing after Plan runs.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "plan",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "clarification": {
+            "additionalProperties": false,
+            "description": "The clarifying question and the answer Plan plans with.",
+            "properties": {
+              "answer": {
+                "description": "The user's answer.",
+                "type": "string",
+              },
+              "options": {
+                "description": "Its answer options.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "question": {
+                "description": "The clarifying question the run asked.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "options",
+              "answer",
+            ],
+            "type": "object",
+          },
+          "columns": {
+            "description": "The columns of each entity, for Plan only: at most 40 per entity and 400 in all.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columns": {
+                  "description": "Its columns, in dataset order (capped).",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "description": "The column name.",
+                        "type": "string",
+                      },
+                      "type": {
+                        "description": "Its type, as the dataset records it.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+                "more": {
+                  "description": "How many more columns it has that are not listed.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "entity",
+                "columns",
+                "more",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "columns",
+          "clarification",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "analyse",
+      "inputSchema": {
+        "properties": {
+          "attempt": {
+            "description": "On a retry: the attempt Validate checked.",
+            "type": "number",
+          },
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findings": {
+            "description": "On a retry: the previous attempt's validation findings.",
+            "items": {
+              "properties": {
+                "check": {
+                  "description": "What was checked.",
+                  "type": "string",
+                },
+                "detail": {
+                  "description": "What the check found.",
+                  "type": "string",
+                },
+                "passed": {
+                  "description": "Whether the check passed.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "check",
+                "passed",
+                "detail",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "plan",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "description": "This attempt: 1, or 2 on the retry.",
+            "type": "number",
+          },
+          "calls": {
+            "description": "The attempt's tool calls, in order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "additionalProperties": false,
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "queries": {
+            "description": "The attempt's SQL queries, in order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "description": "Why it failed.",
+                  "type": "string",
+                },
+                "rationale": {
+                  "description": "Why the agent ran it.",
+                  "type": "string",
+                },
+                "rowCount": {
+                  "description": "Rows it returned.",
+                  "type": "number",
+                },
+                "rows": {
+                  "description": "Its result rows, at most 50.",
+                  "items": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "sql": {
+                  "description": "The statement that ran.",
+                  "type": "string",
+                },
+                "truncated": {
+                  "description": "The result was cut at its row limit or when stored.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "sql",
+                "rows",
+                "rowCount",
+                "truncated",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "The turn ended early: the user stopped it.",
+            "type": "boolean",
+          },
+          "text": {
+            "description": "The agent's own notes; never the run's answer.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "plan",
+          "attempt",
+          "calls",
+          "queries",
+          "text",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "validate",
+      "inputSchema": {
+        "properties": {
+          "attempt": {
+            "description": "This attempt: 1, or 2 on the retry.",
+            "type": "number",
+          },
+          "calls": {
+            "description": "The attempt's tool calls, in order.",
+            "items": {
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "queries": {
+            "description": "The attempt's SQL queries, in order.",
+            "items": {
+              "properties": {
+                "error": {
+                  "description": "Why it failed.",
+                  "type": "string",
+                },
+                "rationale": {
+                  "description": "Why the agent ran it.",
+                  "type": "string",
+                },
+                "rowCount": {
+                  "description": "Rows it returned.",
+                  "type": "number",
+                },
+                "rows": {
+                  "description": "Its result rows, at most 50.",
+                  "items": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "sql": {
+                  "description": "The statement that ran.",
+                  "type": "string",
+                },
+                "truncated": {
+                  "description": "The result was cut at its row limit or when stored.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "sql",
+                "rows",
+                "rowCount",
+                "truncated",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "The turn ended early: the user stopped it.",
+            "type": "boolean",
+          },
+          "text": {
+            "description": "The agent's own notes; never the run's answer.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+          "plan",
+          "attempt",
+          "calls",
+          "queries",
+          "text",
+          "stopped",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "description": "The attempt it checked: 1 or 2.",
+            "type": "number",
+          },
+          "calls": {
+            "description": "The checked attempt's tool calls.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findings": {
+            "description": "Each check, passed or not.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "check": {
+                  "description": "What was checked.",
+                  "type": "string",
+                },
+                "detail": {
+                  "description": "What the check found.",
+                  "type": "string",
+                },
+                "passed": {
+                  "description": "Whether the check passed.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "check",
+                "passed",
+                "detail",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "ok": {
+            "description": "Every check passed (the measures check is a warning only).",
+            "type": "boolean",
+          },
+          "plan": {
+            "additionalProperties": false,
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "queries": {
+            "description": "The checked attempt's SQL queries.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "description": "Why it failed.",
+                  "type": "string",
+                },
+                "rationale": {
+                  "description": "Why the agent ran it.",
+                  "type": "string",
+                },
+                "rowCount": {
+                  "description": "Rows it returned.",
+                  "type": "number",
+                },
+                "rows": {
+                  "description": "Its result rows, at most 50.",
+                  "items": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "sql": {
+                  "description": "The statement that ran.",
+                  "type": "string",
+                },
+                "truncated": {
+                  "description": "The result was cut at its row limit or when stored.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "sql",
+                "rows",
+                "rowCount",
+                "truncated",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "ok",
+          "attempt",
+          "findings",
+          "question",
+          "catalog",
+          "plan",
+          "calls",
+          "queries",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "write-answer",
+      "inputSchema": {
+        "properties": {
+          "calls": {
+            "description": "The last attempt's tool calls, for Wrap up.",
+            "items": {
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findings": {
+            "description": "The last attempt's validation findings.",
+            "items": {
+              "properties": {
+                "check": {
+                  "description": "What was checked.",
+                  "type": "string",
+                },
+                "detail": {
+                  "description": "What the check found.",
+                  "type": "string",
+                },
+                "passed": {
+                  "description": "Whether the check passed.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "check",
+                "passed",
+                "detail",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "plan": {
+            "description": "The analysis plan.",
+            "properties": {
+              "assumptions": {
+                "description": "Each default chosen for something the question leaves open.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "clarification": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "options": {
+                        "description": "2-4 answer options, each a short title, optionally followed by " — " and one line explaining it.",
+                        "items": {
+                          "type": "string",
+                        },
+                        "maxItems": 4,
+                        "minItems": 2,
+                        "type": "array",
+                      },
+                      "question": {
+                        "description": "One short clarifying question.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "question",
+                      "options",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+                "description": "The question to ask when needsClarification is true, else null.",
+              },
+              "entities": {
+                "description": "The catalog entities the analysis will likely read.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "measures": {
+                "description": "The figures the answer needs.",
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "needsClarification": {
+                "description": "The metric or meaning is undefined and the choice changes the analysis.",
+                "type": "boolean",
+              },
+              "question": {
+                "description": "The question restated in one sentence, its defaults explicit.",
+                "type": "string",
+              },
+              "scope": {
+                "description": "The slice of the data the answer covers.",
+                "type": "string",
+              },
+            },
+            "required": [
+              "question",
+              "measures",
+              "entities",
+              "scope",
+              "assumptions",
+              "needsClarification",
+              "clarification",
+            ],
+            "type": "object",
+          },
+          "queries": {
+            "description": "The SQL queries of the last attempt, with their rows.",
+            "items": {
+              "properties": {
+                "error": {
+                  "description": "Why it failed.",
+                  "type": "string",
+                },
+                "rationale": {
+                  "description": "Why the agent ran it.",
+                  "type": "string",
+                },
+                "rowCount": {
+                  "description": "Rows it returned.",
+                  "type": "number",
+                },
+                "rows": {
+                  "description": "Its result rows, at most 50.",
+                  "items": {
+                    "additionalProperties": {},
+                    "propertyNames": {
+                      "type": "string",
+                    },
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "sql": {
+                  "description": "The statement that ran.",
+                  "type": "string",
+                },
+                "truncated": {
+                  "description": "The result was cut at its row limit or when stored.",
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "sql",
+                "rows",
+                "rowCount",
+                "truncated",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "plan",
+          "queries",
+          "findings",
+          "calls",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The run's answer in Markdown, starting with the headline.",
+            "type": "string",
+          },
+          "calls": {
+            "description": "The last attempt's tool calls.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "headline": {
+            "description": "One line that answers the question with the key figure.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "headline",
+          "answer",
+          "calls",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "wrap-up",
+      "inputSchema": {
+        "properties": {
+          "answer": {
+            "description": "The run's answer.",
+            "type": "string",
+          },
+          "calls": {
+            "description": "The last attempt's tool calls.",
+            "items": {
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+        },
+        "required": [
+          "answer",
+          "calls",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The run's answer.",
+            "type": "string",
+          },
+          "failedQueries": {
+            "description": "Of those, the ones that failed.",
+            "type": "number",
+          },
+          "rows": {
+            "description": "Rows the successful queries returned.",
+            "type": "number",
+          },
+          "sqlQueries": {
+            "description": "SQL queries the last attempt ran.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "sqlQueries",
+          "failedQueries",
+          "rows",
+          "answer",
+        ],
+        "type": "object",
+      },
+    },
+  ],
+}
+`;

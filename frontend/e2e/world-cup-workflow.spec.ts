@@ -16,7 +16,7 @@ import {
   type StubReply,
   messageText,
 } from './helpers/llm-stub';
-import { railItem, runAnswer, runAssistantInTab } from './helpers/run-ui';
+import { railItem, runAnswer, runQuestionInTab } from './helpers/run-ui';
 
 const QUESTION = 'How many World Cup matches are in the data?';
 const ANSWER = 'The World Cup data holds the matches counted by the query.';
@@ -45,9 +45,9 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
             },
           };
 
-    // A run of the Assistant over the dataset just created queries the real
-    // database and shows the answer with the query behind it.
-    await runAssistantInTab(page, QUESTION, WORLD_CUP_DATASET);
+    // A run of Questions to Insights v2 over the dataset just created queries
+    // the real database and shows the answer with the query behind it.
+    await runQuestionInTab(page, QUESTION, WORLD_CUP_DATASET);
     await expect(runAnswer(page)).toContainText(ANSWER);
     await runAnswer(page)
       .getByText(/Data used \(1 query\)/)

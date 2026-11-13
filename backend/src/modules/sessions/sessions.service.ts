@@ -10,7 +10,6 @@ import {
 import { parseWorkflow } from '../../mastra/workflow-section';
 import { agentPromptOverrideFor } from '../../mastra/agent-prompt-overrides';
 import { assistantShippedPrompt } from '../../mastra/agents/assistant-prompt';
-import { RFP_PROMPT } from '../../mastra/agents/system-prompts';
 import {
   builtinAgentSession,
   builtinSessionDatasets,
@@ -27,7 +26,6 @@ import {
   type SyntheticDataBridgeDeps,
 } from './synthetic-data-bridge';
 import { SYNTHETIC_DATA_SERVICE } from '../synthetic-data/synthetic-data.token';
-import { RfpPackagesService } from '../rfp-packages/rfp-packages.service';
 import { MastraService } from '../../mastra/mastra.service';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
@@ -63,6 +61,7 @@ import {
   ASSISTANT_WORKFLOW_NAME,
   parseWorkflowId,
   sessionWorkflowId,
+  WRAPPED_AGENT_KEYS,
 } from '../../mastra/workflows/workflow-catalog';
 import { renderPdf } from '../../common/markdown-pdf';
 import {
@@ -85,22 +84,26 @@ import {
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
-  WorkflowState,
   WorkflowView,
 } from './entities/session.entity';
 import { SessionDatasets } from './turn/session-datasets';
 import { SqlChecks } from './turn/sql-checks';
 import { TurnEngine } from './turn/turn-engine';
 import { TurnOptions } from './turn/turn-options';
-import type { RunStepEvent, StreamEvent } from './turn/stream-events';
-import {
-  ASSISTANT_AGENT_KEY,
-  RFP_AGENT_KEY,
-  lastSuccessfulSql,
-} from './turn/turn-records';
+import type {
+  RunStepEvent,
+  StreamEvent,
+  TurnSuspension,
+} from './turn/stream-events';
+import { ASSISTANT_AGENT_KEY, lastSuccessfulSql } from './turn/turn-records';
 import { workflowSourceOf } from './turn/turn-workflow';
 
-export type { RunStepEvent, StreamEvent } from './turn/stream-events';
+export type {
+  RunStepEvent,
+  StreamEvent,
+  TurnResumeIo,
+  TurnSuspension,
+} from './turn/stream-events';
 export { toolCallInput } from './turn/turn-records';
 
 /** Id prefix of an agent editor's preview session (agents-evals R60). */
@@ -110,7 +113,7 @@ export const RUN_HOST_ID_PREFIX = 'run-';
 
 /**
  * What a run host is created from (agents.md 5.14): the run, the workflow it
- * runs, the input's datasets and RFP, and the one earlier run given as
+ * runs, the input's datasets, and the one earlier run given as
  * context (plan 5.4).
  */
 /** A visual action on a run-backed host (api.md 130-134). */
@@ -132,17 +135,30 @@ export interface RunVisualOutcome {
 
 export interface RunHostSpec {
   runId: string;
-  /** `agent:assistant`, `qti-v2-turn`, `deep-analysis`, `agent:<key>` or `agent:<user-agent id>`. */
-  workflowId: string;
-  /** The workflow's name: the host's name. */
+  /**
+   * The catalogue workflow the run runs (`qti-v2-turn`). Unused for an agent
+   * host (`agentKey`) and a draft run (`draftAgentId`).
+   */
+  workflowId?: string;
+  /**
+   * An agent host (the eval runner): the built-in agent (`assistant` or
+   * `data-readiness`) whose turn the host runs on the agent-turn engine,
+   * with no catalogue workflow behind it.
+   */
+  agentKey?: string;
+  /** The workflow's or the agent's name: the host's name. */
   name: string;
-  /** The input's datasets; absent for the RFP Builder and user agents. */
+  /** The input's datasets; absent for an agent with its own datasets. */
   datasets?: string[];
-  rfpId?: string;
-  /** The stage tracker an RFP Continue starts from: the earlier run's (plan 4.3). */
-  workflowState?: WorkflowState;
   /** The earlier run's question and answer, put before this run's question. */
   context?: { question: string; answer: string };
+  /**
+   * Earlier messages put before the turn's message instead of `context`: a
+   * node chat's earlier messages (agents.md 5.16).
+   */
+  transcript?: { role: 'user' | 'assistant'; content: string }[];
+  /** A system block every turn of the host gets (agents.md 5.16). */
+  contextBlock?: string;
   /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
@@ -173,8 +189,6 @@ export class SessionsService implements OnModuleInit {
     // The dataset ontology, rendered as the curated-knowledge block.
     private readonly knowledge: OntologyService,
     private readonly userAgents: UserAgentsService,
-    // The RFP Builder's REST target and package export (agents.md 3.10).
-    @Optional() private readonly rfpPackages?: RfpPackagesService,
     // The Data Readiness Agent's assessments (agents.md 3.13).
     @Optional() private readonly readiness?: DataReadinessService,
     // Sampled profiles and synthetic scripts for the same agent (agents.md 3.14).
@@ -204,7 +218,6 @@ export class SessionsService implements OnModuleInit {
       metrics,
       knowledge,
       userAgents,
-      rfpPackages,
       datasets: this.turnDatasets,
       logger: this.logger,
       existingDatasets: (names) => this.existingDatasets(names),
@@ -278,15 +291,6 @@ export class SessionsService implements OnModuleInit {
         this.showPanelItem(sessionId, input, turnRecords),
       updateWorkflow: (sessionId, input) =>
         this.updateWorkflow(sessionId, input),
-      restTarget: (datasourceId) =>
-        this.requireRfpPackages().restTarget(datasourceId),
-      exportRfpPackage: (sessionId, datasourceId, rfpId, options) =>
-        this.requireRfpPackages().exportRfpPackage(
-          sessionId,
-          datasourceId,
-          rfpId,
-          options,
-        ),
     });
 
     if (this.readiness) {
@@ -336,28 +340,6 @@ export class SessionsService implements OnModuleInit {
     );
   }
 
-  /** The RFP package service, which only a unit test leaves out. */
-  private requireRfpPackages(): RfpPackagesService {
-    if (!this.rfpPackages) {
-      throw new Error('RFP packages are not available in this process');
-    }
-    return this.rfpPackages;
-  }
-
-  /**
-   * Same grounding for a background job (deep analysis) — tools scoped to the
-   * session, the same system blocks — but **without** the conversation memory
-   * thread. A job fires many internal sub-calls; writing them into the thread
-   * would pollute the history the user's next chat question is answered from.
-   */
-  async backgroundAgentOptions(
-    session: SessionDoc,
-    question?: string,
-    abortSignal?: AbortSignal,
-  ) {
-    return this.turnOptions.agentContext(session, question, abortSignal);
-  }
-
   /**
    * Careful mode's cross-check (agents.md 5.4), the seam the turn engine
    * reaches it through.
@@ -401,41 +383,30 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * A run host (ADR-0041; agents.md 5.14): the in-memory session one run of
-   * an agent workflow executes its agent turn on, shaped as `POST /sessions`
-   * would shape a session of that workflow: bound to the workflow's agent,
-   * over the input's datasets (the RFP Builder's declared dataset; a user
-   * agent's Live datasets that exist), with the input's RFP and, as its
-   * transcript, the earlier run's question and answer (plan 5.4). Its
-   * workspace is `session-run-<run id>`, created as a session's. Never
-   * stored or listed.
+   * A run host (ADR-0041; agents.md 5.14): the in-memory session one run
+   * executes its agent turn on, shaped as `POST /sessions` would shape a
+   * session of it: bound to the catalogue workflow's agent (`workflowId`)
+   * or, for the eval runner, to a built-in agent directly (`agentKey`: the
+   * assistant over the given datasets, the Data Readiness Agent over its
+   * declared ones when none are given), with, as its transcript, the earlier
+   * run's question and answer (plan 5.4). 404 for a workflow the catalogue
+   * does not hold (an `agent:` id, `seq-text-demo`, `deep-analysis`) or an
+   * agent that has no agent-turn binding. Its workspace is
+   * `session-run-<run id>`, created as a session's. Never stored or listed.
    */
   async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     if (spec.draftAgentId) return this.createDraftRunHost(spec);
-    const notFound = () =>
-      new NotFoundException(`Workflow "${spec.workflowId}" not found`);
-    const parsed = parseWorkflowId(spec.workflowId);
-    if (!parsed) throw notFound();
     let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
     let datasets = spec.datasets ?? [];
-    if (parsed.kind === 'code' && !parsed.source.primaryFor) {
-      // A run workflow whose steps call the assistant (deep analysis,
-      // agents.md 5.15) runs on a host shaped as an assistant chat.
-      if (parsed.source.calls !== ASSISTANT_AGENT_KEY) throw notFound();
-    } else if (parsed.kind === 'code') {
-      const primary = parsed.source.primaryFor;
-      const agent = primary ? this.mastra.listAgents()[primary] : undefined;
-      if (!primary || !agent) throw notFound();
-      binding = { agentKey: primary, agentName: agent.name ?? primary };
-    } else if (parsed.kind === 'builtin-agent') {
-      if (parsed.agentKey !== ASSISTANT_AGENT_KEY) {
-        const agent = this.mastra.listAgents()[parsed.agentKey];
-        if (!agent) throw notFound();
-        binding = {
-          agentKey: parsed.agentKey,
-          agentName: agent.name ?? parsed.agentKey,
-        };
-        const builtin = this.builtinSessionAgent(parsed.agentKey);
+    if (spec.agentKey !== undefined) {
+      const key = spec.agentKey;
+      const agent = WRAPPED_AGENT_KEYS.includes(key)
+        ? this.mastra.listAgents()[key]
+        : undefined;
+      if (!agent) throw new NotFoundException(`Agent "${key}" not found`);
+      if (key !== ASSISTANT_AGENT_KEY) {
+        binding = { agentKey: key, agentName: agent.name ?? key };
+        const builtin = this.builtinSessionAgent(key);
         if (!spec.datasets && builtin) {
           const declared = builtinSessionDatasets(
             builtin.session,
@@ -448,13 +419,16 @@ export class SessionsService implements OnModuleInit {
         }
       }
     } else {
-      const agent = await this.userAgents.get(parsed.agentId);
-      if (!agent?.live) throw notFound();
-      datasets = await this.existingDatasets(agent.live.datasets);
-      if (!datasets.length) {
-        throw new BadRequestException("None of this agent's datasets exist");
+      const parsed = spec.workflowId
+        ? parseWorkflowId(spec.workflowId)
+        : undefined;
+      const primary =
+        parsed?.kind === 'code' ? parsed.source.primaryFor : undefined;
+      const agent = primary ? this.mastra.listAgents()[primary] : undefined;
+      if (!primary || !agent) {
+        throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
       }
-      binding = { agentId: parsed.agentId, agentName: agent.live.name };
+      binding = { agentKey: primary, agentName: agent.name ?? primary };
     }
     const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
     const name = spec.name.slice(0, 64);
@@ -467,17 +441,16 @@ export class SessionsService implements OnModuleInit {
       datasets,
       ...binding,
       workflowId: sessionWorkflowId(binding),
-      ...(spec.rfpId ? { rfpId: spec.rfpId } : {}),
-      ...(spec.workflowState
-        ? { workflowState: { ...spec.workflowState } }
-        : {}),
       run: true,
-      messages: spec.context
-        ? [
-            { role: 'user', content: spec.context.question, at: now },
-            { role: 'assistant', content: spec.context.answer, at: now },
-          ]
-        : [],
+      messages: spec.transcript
+        ? spec.transcript.map((message) => ({ ...message, at: now }))
+        : spec.context
+          ? [
+              { role: 'user', content: spec.context.question, at: now },
+              { role: 'assistant', content: spec.context.answer, at: now },
+            ]
+          : [],
+      ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
@@ -537,7 +510,9 @@ export class SessionsService implements OnModuleInit {
   /**
    * The run host's agent turn (agents.md 5.14): today's streamed turn,
    * unchanged (5.1), on the host. Every step event of the turn's workflow
-   * run goes to `onStepEvent`, whatever the workflow's bar.
+   * run goes to `onStepEvent`, whatever the workflow's bar. A turn whose
+   * workflow waits for the user (ADR-0043) answers its suspension: the host
+   * stays in memory until the turn is resumed or discarded.
    */
   async streamRunTurn(
     hostId: string,
@@ -546,12 +521,12 @@ export class SessionsService implements OnModuleInit {
     abortSignal: AbortSignal | undefined,
     careful: boolean,
     onStepEvent: (event: RunStepEvent) => void,
-  ): Promise<void> {
+  ): Promise<TurnSuspension | undefined> {
     const host = this.memoryHosts.get(hostId);
     if (!host?.run) throw new NotFoundException(`Session ${hostId} not found`);
     const trimmed = (question ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
-    await this.turns.streamTurn(
+    return this.turns.streamTurn(
       { ...host },
       trimmed,
       emit,
@@ -559,7 +534,18 @@ export class SessionsService implements OnModuleInit {
       undefined,
       careful,
       onStepEvent,
+      true,
     );
+  }
+
+  /**
+   * A run host as the API shows a session, while its run waits for the
+   * user (ADR-0043): the host stays in memory.
+   */
+  async runHostView(hostId: string): Promise<SessionView> {
+    const host = this.memoryHosts.get(hostId);
+    if (!host?.run) throw new NotFoundException(`Session ${hostId} not found`);
+    return this.toView({ ...host });
   }
 
   /**
@@ -674,7 +660,8 @@ export class SessionsService implements OnModuleInit {
    * `agent`, `workflow` and the full `panelItems` list (api.md 2.1). Computed
    * on every read, never stored.
    */
-  async toView(session: SessionDoc): Promise<SessionView> {
+  async toView(stored: SessionDoc): Promise<SessionView> {
+    const session = this.readable(stored);
     if (session.agentKey) {
       return this.viewOf(session, this.builtinAgentRef(session));
     }
@@ -690,7 +677,8 @@ export class SessionsService implements OnModuleInit {
     const agents = sessions.some((session) => session.agentId)
       ? new Map((await this.userAgents.list()).map((doc) => [doc.id, doc.live]))
       : new Map<string, AgentConfig | undefined>();
-    return sessions.map((session) => {
+    return sessions.map((stored) => {
+      const session = this.readable(stored);
       if (session.agentKey) {
         return this.viewOf(session, this.builtinAgentRef(session));
       }
@@ -698,6 +686,28 @@ export class SessionsService implements OnModuleInit {
       const config = agents.get(session.agentId);
       return this.viewOf(session, agentRef(session, config), config);
     });
+  }
+
+  /**
+   * A stored session as this version reads it: a built-in agent key that is
+   * no longer registered (the removed RFP Builder, `rfp`) is ignored with its
+   * name and its one-step workflow id, and a legacy `rfpId` is dropped, so the
+   * session reads as a plain Assistant session. Nothing is rewritten in the
+   * store.
+   */
+  private readable(session: SessionDoc): SessionDoc {
+    const legacy = session as SessionDoc & { rfpId?: unknown };
+    const key = session.agentKey;
+    const orphan = !!key && !this.mastra.listAgents()[key];
+    if (!orphan && legacy.rfpId === undefined) return session;
+    const copy: SessionDoc & { rfpId?: unknown } = { ...session };
+    delete copy.rfpId;
+    if (orphan) {
+      delete copy.agentKey;
+      delete copy.agentName;
+      if (copy.workflowId === `agent:${key}`) delete copy.workflowId;
+    }
+    return copy;
   }
 
   private viewOf(
@@ -751,7 +761,7 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * The phases of the `## Workflow` section of the prompt the session runs
-   * (ADR-0029): the RFP Builder's prompt (override or shipped), a user
+   * (ADR-0029): none for a built-in agent bound by key, a user
    * agent's Live instructions when they have the section, else the
    * assistant's prompt. `config` is the running agent version, when any.
    */
@@ -764,13 +774,7 @@ export class SessionsService implements OnModuleInit {
     if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
       return workflowStepPhases(QTI_V2_TURN_STEPS);
     }
-    if (session.agentKey) {
-      return session.agentKey === RFP_AGENT_KEY
-        ? parseWorkflow(
-            agentPromptOverrideFor(RFP_AGENT_KEY)?.prompt ?? RFP_PROMPT,
-          )
-        : [];
-    }
+    if (session.agentKey) return [];
     const own = config ? parseWorkflow(config.instructions) : [];
     if (own.length) return own;
     return parseWorkflow(
@@ -1034,29 +1038,6 @@ export class SessionsService implements OnModuleInit {
     version?: number,
   ): Promise<{ filename: string; archive: Buffer }> {
     return this.visuals.download(session, visualizationId, version);
-  }
-
-  /**
-   * An RFP package stored in the session workspace, or one of its files
-   * (api.md #105). Owner-scoped: another user's session is not found.
-   */
-  async downloadRfpPackage(
-    id: string,
-    rfpId: string,
-    file?: string,
-    draft = false,
-  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
-    return this.downloadRfpPackageOf(await this.get(id), rfpId, file, draft);
-  }
-
-  /** `downloadRfpPackage` over a given session or run-backed host (api.md 127). */
-  downloadRfpPackageOf(
-    session: SessionDoc,
-    rfpId: string,
-    file?: string,
-    draft = false,
-  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
-    return this.requireRfpPackages().download(session.id, rfpId, file, draft);
   }
 
   /**

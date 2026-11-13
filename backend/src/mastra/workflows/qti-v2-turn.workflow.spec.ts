@@ -1,5 +1,6 @@
 // The real engine pulls in ESM-only packages Jest cannot require; the stub
-// runs `.then()` steps in order with the engine's step events (see it).
+// runs `.then()`, `.branch()`, `.dountil()` and nested workflows with the
+// engine's step events (see it).
 jest.mock('@mastra/core/workflows', () =>
   jest.requireActual<typeof import('../testing/workflows.stub')>(
     '../testing/workflows.stub',
@@ -26,175 +27,704 @@ jest.mock('../tool-services', () => ({
 }));
 
 import { RequestContext } from '@mastra/core/request-context';
+import type { z } from 'zod';
 import { qtiV2TurnWorkflow } from './qti-v2-turn.workflow';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
   QTI_V2_TURN_STEPS,
   QTI_V2_TURN_WORKFLOW_ID,
+  turnSummaryOf,
+  type AnalyseAttempt,
+  type QtiV2Plan,
   type QtiV2TurnRuntime,
 } from './qti-v2-turn.steps';
+import {
+  ContractViolationError,
+  contractJsonSchema,
+} from './workflow-contract';
 
-interface StubWorkflow {
+interface StubNode {
   id: string;
-  steps: { id: string; description?: string }[];
-  createRun(): Promise<{
-    stream(args: { inputData: unknown; requestContext: unknown }): {
-      fullStream: AsyncIterable<{
-        type: string;
-        payload?: { id?: string; status?: string };
-      }>;
-      result: Promise<{ status: string; result?: unknown; error?: unknown }>;
+  description?: string;
+  inputSchema?: z.ZodCatch<z.ZodType>;
+  outputSchema?: z.ZodType;
+  entries?: StubEntry[];
+}
+type StubEntry =
+  | { type: 'step'; step: StubNode }
+  | { type: 'branch'; pairs: [unknown, StubNode][] }
+  | { type: 'dountil'; step: StubNode }
+  | { type: 'map'; id: string };
+
+interface StubStream {
+  fullStream: AsyncIterable<{
+    type: string;
+    payload?: {
+      id?: string;
+      status?: string;
+      output?: unknown;
+      suspendPayload?: unknown;
     };
   }>;
+  result: Promise<{
+    status: string;
+    result?: unknown;
+    error?: unknown;
+    suspended?: string[][];
+    steps?: Record<string, { suspendPayload?: unknown }>;
+  }>;
+}
+
+interface StubRun {
+  stream(args: { inputData: unknown; requestContext: unknown }): StubStream;
+  resumeStream(args: {
+    step: string[];
+    resumeData: unknown;
+    requestContext: unknown;
+  }): StubStream;
+}
+
+interface StubWorkflow extends StubNode {
+  entries: StubEntry[];
+  createRun(): Promise<StubRun>;
 }
 
 const workflow = qtiV2TurnWorkflow as unknown as StubWorkflow;
 
-async function run(question: string, analyse: QtiV2TurnRuntime['analyse']) {
+/** The leaf steps of a workflow, nested workflows walked depth first. */
+function leafSteps(node: StubNode): StubNode[] {
+  if (!node.entries) return [node];
+  return node.entries.flatMap((entry) =>
+    entry.type === 'map'
+      ? []
+      : entry.type === 'branch'
+        ? entry.pairs.flatMap(([, step]) => leafSteps(step))
+        : leafSteps(entry.step),
+  );
+}
+
+const PLAN: QtiV2Plan = {
+  question: 'How many matches are in the data?',
+  measures: ['match count'],
+  entities: ['wc.public.matches'],
+  scope: 'Every match in the data.',
+  assumptions: [],
+  needsClarification: false,
+  clarification: null,
+};
+
+const CLARIFYING: QtiV2Plan = {
+  ...PLAN,
+  needsClarification: true,
+  clarification: {
+    question: 'Dominant by what measure?',
+    options: ['Matches won', 'Goals scored'],
+  },
+};
+
+const GOOD_ATTEMPT: AnalyseAttempt = {
+  calls: [
+    { tool: 'list_entities', failed: false },
+    { tool: 'run_readonly_sql', rowCount: 1, failed: false },
+  ],
+  queries: [
+    {
+      sql: 'SELECT count(*) AS match_count FROM wc.public.matches',
+      rationale: 'I count the matches.',
+      rows: [{ match_count: 16 }],
+      rowCount: 1,
+      truncated: false,
+    },
+  ],
+  text: 'There are 16 matches.',
+  stopped: false,
+};
+
+const FAILED_ATTEMPT: AnalyseAttempt = {
+  calls: [{ tool: 'run_readonly_sql', failed: true }],
+  queries: [
+    {
+      sql: 'SELECT nope',
+      rows: [],
+      rowCount: 0,
+      truncated: false,
+      error: 'column "nope" does not exist',
+    },
+  ],
+  text: '',
+  stopped: false,
+};
+
+/** A runtime whose model steps are mocks, each answering as scripted. */
+type ScriptedTurn = {
+  [K in keyof QtiV2TurnRuntime]: jest.Mock<
+    ReturnType<QtiV2TurnRuntime[K]>,
+    Parameters<QtiV2TurnRuntime[K]>
+  >;
+};
+
+/** A runtime whose model steps answer as scripted. */
+function runtime(overrides: Partial<QtiV2TurnRuntime> = {}): ScriptedTurn {
+  return {
+    plan: jest.fn(() => Promise.resolve({ plan: PLAN, stopped: false })),
+    analyse: jest.fn(() => Promise.resolve(GOOD_ATTEMPT)),
+    writeAnswer: jest.fn(() =>
+      Promise.resolve({
+        answer: {
+          headline: 'The data holds 16 matches.',
+          answer: 'The data holds 16 matches.\n\nHow I got this: …',
+        },
+        stopped: false,
+      }),
+    ),
+    ...overrides,
+  } as ScriptedTurn;
+}
+
+async function run(
+  question: string,
+  turn: ScriptedTurn | QtiV2TurnRuntime | undefined,
+  datasets: unknown = ['World Cup'],
+) {
   const requestContext = new RequestContext();
-  requestContext.set(QTI_V2_TURN_RUNTIME_KEY, { analyse });
-  const output = (await workflow.createRun()).stream({
-    inputData: { question, datasets: ['World Cup'] },
-    requestContext,
-  });
+  if (turn) requestContext.set(QTI_V2_TURN_RUNTIME_KEY, turn);
+  const engineRun = await workflow.createRun();
+  const drained = await drain(
+    engineRun.stream({ inputData: { question, datasets }, requestContext }),
+  );
+  return { ...drained, engineRun, requestContext };
+}
+
+/** A stream's step events (`<id>:<status>`), step outputs and result. */
+async function drain(output: StubStream) {
   const events: string[] = [];
+  const outputs = new Map<string, unknown>();
   for await (const event of output.fullStream) {
     if (event.payload?.id) {
       events.push(`${event.payload.id}:${event.payload.status}`);
+      if (event.type === 'workflow-step-result') {
+        outputs.set(event.payload.id, event.payload.output);
+      }
     }
   }
-  return { events, result: await output.result };
+  return { events, outputs, result: await output.result };
 }
 
+/** Resume a suspended run with the user's answer, at the path it gave. */
+async function resume(
+  started: Awaited<ReturnType<typeof run>>,
+  answer: string,
+  path = started.result.suspended![0],
+) {
+  return drain(
+    started.engineRun.resumeStream({
+      step: path,
+      resumeData: { answer },
+      requestContext: started.requestContext,
+    }),
+  );
+}
+
+/** The plan loop's events of a round where Plan needed no clarification. */
+const CLEAR_PLAN_ROUND = [
+  'plan-round:running',
+  'plan-round.plan:running',
+  'plan-round.plan:success',
+  'plan-round.plan-round-outcome:running',
+  'plan-round.plan-round-outcome:success',
+  'plan-round:success',
+];
+
 describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
-  it('runs the four steps in order, with their titles', () => {
+  it('builds the eight catalogue steps, in order, with their titles', () => {
     expect(workflow.id).toBe(QTI_V2_TURN_WORKFLOW_ID);
-    expect(workflow.steps.map((s) => [s.id, s.description])).toEqual([
+    expect(leafSteps(workflow).map((s) => [s.id, s.description])).toEqual([
       ['receive-question', 'Receive question'],
       ['load-catalog', 'Load catalog'],
+      ['plan', 'Plan'],
+      ['clarify', 'Clarify'],
       ['analyse', 'Analyse'],
+      ['validate', 'Validate'],
+      ['write-answer', 'Write answer'],
       ['wrap-up', 'Wrap up'],
     ]);
   });
 
+  it('is built with .dountil() around the plan round (Plan, then Clarify), a .branch() to the analysis, and .dountil() around the analysis attempt', () => {
+    expect(workflow.entries.map((entry) => entry.type)).toEqual([
+      'step',
+      'step',
+      'dountil',
+      'branch',
+    ]);
+    const planLoop = workflow.entries[2] as Extract<
+      StubEntry,
+      { type: 'dountil' }
+    >;
+    expect(planLoop.step.id).toBe('plan-round');
+    expect(planLoop.step.entries?.map((entry) => entry.type)).toEqual([
+      'step',
+      'branch',
+      'map',
+    ]);
+    expect(leafSteps(planLoop.step).map((step) => step.id)).toEqual([
+      'plan',
+      'clarify',
+    ]);
+    const branch = workflow.entries[3] as Extract<
+      StubEntry,
+      { type: 'branch' }
+    >;
+    expect(branch.pairs.map(([, step]) => step.id)).toEqual(['analysis-path']);
+    const path = branch.pairs[0][1];
+    expect(path.entries?.map((entry) => entry.type)).toEqual([
+      'dountil',
+      'branch',
+    ]);
+    const loop = path.entries![0] as Extract<StubEntry, { type: 'dountil' }>;
+    expect(loop.step.id).toBe('analysis-attempt');
+    expect(leafSteps(loop.step).map((step) => step.id)).toEqual([
+      'analyse',
+      'validate',
+    ]);
+  });
+
   // The agent's Graph tab draws the catalogue (agents-evals R108): its
-  // field names must be the built steps' own schema fields, in order.
-  it("matches the step catalogue's ids and input and output fields", () => {
-    const built = workflow.steps as unknown as {
-      id: string;
-      inputSchema: { shape: Record<string, unknown> };
-      outputSchema: { shape: Record<string, unknown> };
-    }[];
+  // field names and JSON Schemas must be the built steps' own schemas, in
+  // order (agents.md 5.12: one source of truth). The engine sees each
+  // declared input schema wrapped so it never refuses (`withContract` does).
+  it("matches the step catalogue's ids, fields and JSON Schemas", () => {
     expect(
-      built.map((step) => ({
+      leafSteps(workflow).map((step) => ({
         id: step.id,
-        input: Object.keys(step.inputSchema.shape),
-        output: Object.keys(step.outputSchema.shape),
+        input: contractJsonSchema(step.inputSchema!.unwrap(), 'input'),
+        output: contractJsonSchema(step.outputSchema!, 'output'),
       })),
     ).toEqual(
       QTI_V2_TURN_STEPS.map((step) => ({
         id: step.id,
-        input: [...step.input],
-        output: [...step.output],
+        input: step.inputSchema,
+        output: step.outputSchema,
       })),
     );
+    expect(
+      Object.fromEntries(
+        QTI_V2_TURN_STEPS.map((step) => [step.id, [step.input, step.output]]),
+      ),
+    ).toEqual({
+      'receive-question': [
+        ['question', 'datasets'],
+        ['question', 'datasets'],
+      ],
+      'load-catalog': [
+        ['question', 'datasets'],
+        ['question', 'catalog', 'columns'],
+      ],
+      plan: [
+        ['question', 'catalog', 'columns', 'clarification'],
+        ['question', 'catalog', 'plan', 'stopped'],
+      ],
+      clarify: [
+        ['question', 'catalog', 'plan', 'stopped'],
+        ['question', 'catalog', 'columns', 'clarification'],
+      ],
+      analyse: [
+        ['question', 'catalog', 'plan', 'attempt', 'findings'],
+        [
+          'question',
+          'catalog',
+          'plan',
+          'attempt',
+          'calls',
+          'queries',
+          'text',
+          'stopped',
+        ],
+      ],
+      validate: [
+        [
+          'question',
+          'catalog',
+          'plan',
+          'attempt',
+          'calls',
+          'queries',
+          'text',
+          'stopped',
+        ],
+        [
+          'ok',
+          'attempt',
+          'findings',
+          'question',
+          'catalog',
+          'plan',
+          'calls',
+          'queries',
+        ],
+      ],
+      'write-answer': [
+        ['question', 'plan', 'queries', 'findings', 'calls'],
+        ['headline', 'answer', 'calls'],
+      ],
+      'wrap-up': [
+        ['answer', 'calls'],
+        ['sqlQueries', 'failedQueries', 'rows', 'answer'],
+      ],
+    });
   });
 
-  it('hands Analyse the trimmed question and the catalog, and wraps up its SQL calls', async () => {
-    const analyse = jest.fn<
-      ReturnType<QtiV2TurnRuntime['analyse']>,
-      Parameters<QtiV2TurnRuntime['analyse']>
-    >(() =>
-      Promise.resolve({
-        calls: [
-          { tool: 'list_entities', failed: false },
-          { tool: 'run_readonly_sql', rowCount: 4, failed: false },
-          { tool: 'run_readonly_sql', failed: true },
-        ],
-        stopped: false,
-      }),
+  it('runs with its inputs validated (validateInputs: true)', () => {
+    expect(
+      (
+        qtiV2TurnWorkflow as unknown as {
+          options: { validateInputs?: boolean };
+        }
+      ).options.validateInputs,
+    ).toBe(true);
+  });
+
+  it('plans, analyses, validates and writes the answer on a clear question', async () => {
+    const turn = runtime();
+    const { events, outputs, result } = await run(
+      '  How many matches?  ',
+      turn,
     );
-    const { events, result } = await run('  How many matches?  ', analyse);
     expect(events).toEqual([
       'receive-question:running',
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
-      'analyse:running',
-      'analyse:success',
-      'wrap-up:running',
-      'wrap-up:success',
+      ...CLEAR_PLAN_ROUND,
+      'analysis-path:running',
+      'analysis-path.analysis-attempt:running',
+      'analysis-path.analysis-attempt.analyse:running',
+      'analysis-path.analysis-attempt.analyse:success',
+      'analysis-path.analysis-attempt.validate:running',
+      'analysis-path.analysis-attempt.validate:success',
+      'analysis-path.analysis-attempt:success',
+      'analysis-path.answer-path:running',
+      'analysis-path.answer-path.write-answer:running',
+      'analysis-path.answer-path.write-answer:success',
+      'analysis-path.answer-path.wrap-up:running',
+      'analysis-path.answer-path.wrap-up:success',
+      'analysis-path.answer-path:success',
+      'analysis-path:success',
     ]);
-    expect(analyse).toHaveBeenCalledWith({
+    const catalogBlock = [
+      'Catalog loaded for this turn: 2 entities.',
+      '- wc.public.matches (dataset: World Cup; 2 columns)',
+      '- wc.public.teams (dataset: World Cup; ? columns)',
+    ].join('\n');
+    // Plan also sees each entity's columns (names and types).
+    expect(turn.plan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'How many matches?',
+        catalogBlock: [
+          catalogBlock,
+          '',
+          'Columns of each entity (name type):',
+          // The stand-in's columns have no type.
+          '- wc.public.matches: id, year',
+        ].join('\n'),
+      }),
+    );
+    expect(turn.analyse).toHaveBeenCalledTimes(1);
+    expect(turn.analyse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'How many matches?',
+        catalogBlock,
+        plan: PLAN,
+        attempt: 1,
+        planBlock: `Analysis plan for this turn:\n${JSON.stringify(PLAN)}`,
+      }),
+    );
+    expect(
+      outputs.get('analysis-path.analysis-attempt.validate'),
+    ).toMatchObject({ ok: true, attempt: 1 });
+    expect(turn.writeAnswer).toHaveBeenCalledWith({
       question: 'How many matches?',
-      catalog: [
-        {
-          entity: 'wc.public.matches',
-          dataset: 'World Cup',
-          datasourceId: 'ds-pg',
-          datasourceKind: 'postgres',
-          columnCount: 2,
-        },
-        {
-          entity: 'wc.public.teams',
-          dataset: 'World Cup',
-          datasourceId: 'ds-pg',
-          datasourceKind: 'postgres',
-          columnCount: null,
-        },
-      ],
-      catalogBlock: [
-        'Catalog loaded for this turn: 2 entities.',
-        '- wc.public.matches (dataset: World Cup; 2 columns)',
-        '- wc.public.teams (dataset: World Cup; ? columns)',
-      ].join('\n'),
+      plan: PLAN,
+      queries: GOOD_ATTEMPT.queries,
+      findings: expect.arrayContaining([
+        expect.objectContaining({ check: 'Ran a query', passed: true }),
+      ]) as unknown,
     });
     expect(result).toEqual({
       status: 'success',
-      result: { sqlQueries: 2, failedQueries: 1, rows: 4 },
+      result: {
+        'analysis-path': {
+          'answer-path': {
+            sqlQueries: 1,
+            failedQueries: 0,
+            rows: 1,
+            answer: 'The data holds 16 matches.\n\nHow I got this: …',
+          },
+        },
+      },
     });
   });
 
-  it('fails Receive question on an empty question, before the agent runs', async () => {
-    const analyse = jest.fn();
-    const { events, result } = await run('   ', analyse);
+  it('retries the analysis once when Validate fails, handing it the findings', async () => {
+    const turn = runtime({
+      analyse: jest
+        .fn()
+        .mockResolvedValueOnce(FAILED_ATTEMPT)
+        .mockResolvedValueOnce(GOOD_ATTEMPT),
+    });
+    const { events, outputs } = await run('How many matches?', turn);
+    expect(
+      events.filter((event) => /\.(analyse|validate):/.test(event)),
+    ).toEqual([
+      'analysis-path.analysis-attempt.analyse:running',
+      'analysis-path.analysis-attempt.analyse:success',
+      'analysis-path.analysis-attempt.validate:running',
+      'analysis-path.analysis-attempt.validate:success',
+      'analysis-path.analysis-attempt.analyse:running',
+      'analysis-path.analysis-attempt.analyse:success',
+      'analysis-path.analysis-attempt.validate:running',
+      'analysis-path.analysis-attempt.validate:success',
+    ]);
+    expect(turn.analyse).toHaveBeenCalledTimes(2);
+    const second = turn.analyse.mock.calls[1][0] as unknown as {
+      attempt: number;
+      planBlock: string;
+    };
+    expect(second.attempt).toBe(2);
+    expect(second.planBlock).toContain(
+      'Attempt 1 of this analysis failed validation.',
+    );
+    expect(second.planBlock).toContain(
+      '- Ran a query: None of the 1 SQL query succeeded.',
+    );
+    expect(
+      outputs.get('analysis-path.analysis-attempt.validate'),
+    ).toMatchObject({ ok: true, attempt: 2 });
+    expect(turn.writeAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes the answer after a second failed attempt, with its findings', async () => {
+    const turn = runtime({
+      analyse: jest.fn(() => Promise.resolve(FAILED_ATTEMPT)),
+    });
+    const { result } = await run('How many matches?', turn);
+    expect(turn.analyse).toHaveBeenCalledTimes(2);
+    expect(turn.writeAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        findings: expect.arrayContaining([
+          expect.objectContaining({ check: 'Ran a query', passed: false }),
+        ]) as unknown,
+      }),
+    );
+    expect(result.status).toBe('success');
+  });
+
+  it('suspends at Clarify with the plan question when the plan needs clarification: no analysis yet', async () => {
+    const turn = runtime({
+      plan: jest.fn(() =>
+        Promise.resolve({ plan: CLARIFYING, stopped: false }),
+      ),
+    });
+    const { events, result } = await run('Which team was dominant?', turn);
+    expect(events.slice(-4)).toEqual([
+      'plan-round.plan:success',
+      'plan-round.clarify:running',
+      'plan-round.clarify:suspended',
+      'plan-round:suspended',
+    ]);
+    expect(events.some((event) => event.startsWith('analysis-path'))).toBe(
+      false,
+    );
+    expect(turn.analyse).not.toHaveBeenCalled();
+    expect(result.status).toBe('suspended');
+    // The path from the top, handed back unchanged on resume (ADR-0043).
+    expect(result.suspended).toEqual([['plan-round', 'clarify']]);
+    expect(result.steps?.['plan-round']?.suspendPayload).toEqual(
+      CLARIFYING.clarification,
+    );
+  });
+
+  it('resumes Clarify with the answer, goes back to Plan with it, then analyses and writes the answer', async () => {
+    const turn = runtime({
+      plan: jest
+        .fn()
+        .mockResolvedValueOnce({ plan: CLARIFYING, stopped: false })
+        // Even when the model asks again, an answered plan never does.
+        .mockResolvedValueOnce({ plan: CLARIFYING, stopped: false }),
+    });
+    const started = await run('Which team was dominant?', turn);
+    const { events, outputs, result } = await resume(started, 'Matches won');
+    expect(events.slice(0, 6)).toEqual([
+      'plan-round:running',
+      'plan-round.clarify:running',
+      'plan-round.clarify:success',
+      'plan-round.plan-round-outcome:running',
+      'plan-round.plan-round-outcome:success',
+      'plan-round:success',
+    ]);
+    expect(events.slice(6, 12)).toEqual(CLEAR_PLAN_ROUND);
+    // Clarify hands Plan its own input back, with the answer.
+    expect(outputs.get('plan-round.clarify')).toEqual({
+      question: 'Which team was dominant?',
+      catalog: expect.any(Array) as unknown,
+      columns: expect.any(Array) as unknown,
+      clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
+    });
+    expect(turn.plan).toHaveBeenCalledTimes(2);
+    expect(turn.plan.mock.calls[1][0]).toMatchObject({
+      question: 'Which team was dominant?',
+      clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
+    });
+    expect(outputs.get('plan-round.plan')).toMatchObject({
+      plan: { needsClarification: false, clarification: null },
+    });
+    expect(turn.analyse).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('success');
+    expect(turnSummaryOf(result.result)?.answer).toContain('16 matches');
+  });
+
+  it('suspends at Analyse when the agent asks a clarifying question, and resumes it with the answer in the same attempt', async () => {
+    const asked = {
+      question: 'Which tournament?',
+      options: ['2018', '2022'],
+    };
+    const turn = runtime({
+      analyse: jest
+        .fn()
+        .mockResolvedValueOnce({ ...GOOD_ATTEMPT, clarification: asked })
+        .mockResolvedValueOnce(GOOD_ATTEMPT),
+    });
+    const started = await run('How many matches?', turn);
+    expect(started.events.slice(-3)).toEqual([
+      'analysis-path.analysis-attempt.analyse:suspended',
+      'analysis-path.analysis-attempt:suspended',
+      'analysis-path:suspended',
+    ]);
+    expect(started.result.status).toBe('suspended');
+    expect(started.result.suspended).toEqual([
+      ['analysis-path', 'analysis-attempt', 'analyse'],
+    ]);
+    expect(started.result.steps?.['analysis-path']?.suspendPayload).toEqual(
+      asked,
+    );
+    expect(turn.writeAnswer).not.toHaveBeenCalled();
+
+    const { events, result } = await resume(started, '2022');
+    expect(events.slice(0, 4)).toEqual([
+      'analysis-path:running',
+      'analysis-path.analysis-attempt:running',
+      'analysis-path.analysis-attempt.analyse:running',
+      'analysis-path.analysis-attempt.analyse:success',
+    ]);
+    expect(turn.analyse).toHaveBeenCalledTimes(2);
+    // The agent goes on with its question and the answer, same attempt.
+    expect(turn.analyse.mock.calls[1][0]).toMatchObject({
+      attempt: 1,
+      answered: { ...asked, answer: '2022' },
+    });
+    expect(turn.writeAnswer).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('success');
+  });
+
+  it('ends the loop and writes no answer when Analyse stops', async () => {
+    const turn = runtime({
+      analyse: jest.fn(() =>
+        Promise.resolve({ ...GOOD_ATTEMPT, stopped: true }),
+      ),
+    });
+    const { events, result } = await run('Go', turn);
+    expect(events).toContain('analysis-path.analysis-attempt.analyse:bailed');
+    expect(events.some((event) => event.includes('validate'))).toBe(false);
+    expect(events.some((event) => event.includes('write-answer'))).toBe(false);
+    expect(turn.analyse).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      status: 'success',
+      result: { 'analysis-path': {} },
+    });
+  });
+
+  it('ends at Plan when the turn was stopped while it planned', async () => {
+    const turn = runtime({
+      plan: jest.fn(() => Promise.resolve({ plan: PLAN, stopped: true })),
+    });
+    const { events, result } = await run('Go', turn);
+    expect(events.slice(-3)).toEqual([
+      'plan-round.plan:running',
+      'plan-round.plan:bailed',
+      'plan-round:success',
+    ]);
+    expect(events.some((event) => event.startsWith('analysis-path'))).toBe(
+      false,
+    );
+    expect(turn.analyse).not.toHaveBeenCalled();
+    expect(result.status).toBe('success');
+  });
+
+  it('fails Analyse on an output that breaks its contract, and never writes an answer', async () => {
+    const turn = runtime({
+      analyse: jest.fn(() =>
+        Promise.resolve({
+          ...GOOD_ATTEMPT,
+          calls: [
+            {
+              tool: 'run_readonly_sql',
+              rowCount: 'many' as unknown as number,
+              failed: false,
+            },
+          ],
+        }),
+      ),
+    });
+    const { events, result } = await run('Go', turn);
+    expect(events).toContain('analysis-path.analysis-attempt.analyse:failed');
+    expect(events.some((event) => event.includes('write-answer'))).toBe(false);
+    expect(result.status).toBe('failed');
+    expect(result.error).toBeInstanceOf(ContractViolationError);
+    expect((result.error as Error).message).toBe(
+      'Contract violation in Analyse: calls[0].rowCount Invalid input: expected number, received string',
+    );
+  });
+
+  it('fails Receive question on a run input that breaks its contract, before any later step', async () => {
+    const turn = runtime();
+    const { events, result } = await run('Go', turn, 'World Cup');
     expect(events).toEqual([
       'receive-question:running',
       'receive-question:failed',
     ]);
-    expect(analyse).not.toHaveBeenCalled();
-    expect(result.status).toBe('failed');
-    expect((result.error as Error).message).toBe('The question is empty');
+    expect((result.error as Error).message).toBe(
+      'Contract violation in Receive question (input): datasets Invalid input: expected array, received string',
+    );
+    expect(turn.plan).not.toHaveBeenCalled();
   });
 
-  it('fails Analyse with the agent error and never wraps up', async () => {
-    const { events, result } = await run('Go', () =>
-      Promise.reject(new Error('model down')),
+  it('no longer fails Receive question on a blank question: the input node refuses it before the run', async () => {
+    const { events, result } = await run('   ', runtime());
+    expect(events.slice(0, 2)).toEqual([
+      'receive-question:running',
+      'receive-question:success',
+    ]);
+    expect(result.status).toBe('success');
+  });
+
+  it('fails a model step with its own error', async () => {
+    const { events, result } = await run(
+      'Go',
+      runtime({
+        writeAnswer: jest.fn(() => Promise.reject(new Error('model down'))),
+      }),
     );
-    expect(events.slice(-2)).toEqual(['analyse:running', 'analyse:failed']);
+    expect(events).toContain('analysis-path.answer-path.write-answer:failed');
+    expect(events.some((event) => event.includes('wrap-up'))).toBe(false);
     expect(result).toMatchObject({ status: 'failed' });
     expect((result.error as Error).message).toBe('model down');
   });
 
-  it('ends at Analyse when the turn was stopped', async () => {
-    const { events, result } = await run('Go', () =>
-      Promise.resolve({ calls: [], stopped: true }),
-    );
-    expect(events.slice(-2)).toEqual(['analyse:running', 'analyse:bailed']);
-    expect(events).not.toContain('wrap-up:running');
-    expect(result.status).toBe('success');
-  });
-
-  it('fails Analyse when the run has no turn runtime', async () => {
-    const output = (await workflow.createRun()).stream({
-      inputData: { question: 'Go', datasets: [] },
-      requestContext: new RequestContext(),
-    });
-    for await (const event of output.fullStream) void event;
-    const result = await output.result;
+  it('fails Plan when the run has no turn runtime', async () => {
+    const { result } = await run('Go', undefined, []);
     expect(result.status).toBe('failed');
     expect((result.error as Error).message).toBe(
-      'The Analyse step has no turn to run',
+      'The Plan step has no turn to run',
     );
   });
 });

@@ -4,34 +4,59 @@ import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
 import {
+  planWithModel,
+  writeAnswerWithModel,
+} from './workflows/qti-v2-turn.agents';
+import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
   initializeSessionWorkspace,
   sessionWorkspaceId,
 } from './session-workspaces';
-import {
-  workflowRunResult,
-  type EngineRunResult,
-  type WorkflowRunResult,
-} from './workflows/workflow-run';
 
 /** A workflow run event, as the session code reads it (agents.md 5.11). */
 export interface WorkflowRunEvent {
   type: string;
-  payload?: { id?: string; status?: string; output?: unknown; error?: unknown };
+  payload?: {
+    id?: string;
+    status?: string;
+    output?: unknown;
+    error?: unknown;
+    /** `workflow-step-suspended`: what the step suspended with. */
+    suspendPayload?: unknown;
+  };
 }
 
-/** A streamed workflow run's outcome: `failed` carries the step's error. */
+/**
+ * A streamed workflow run's outcome: `failed` carries the step's error;
+ * `suspended` the path of each waiting step, from the top-level workflow
+ * down (`suspended`), to hand back unchanged when resuming, and each
+ * top-level step's result (`steps`, a waiting one with its
+ * `suspendPayload`).
+ */
 export interface WorkflowStreamOutcome {
   status: string;
   error?: unknown;
   result?: unknown;
+  suspended?: string[][];
+  steps?: Record<string, { suspendPayload?: unknown } | undefined>;
 }
 
-/** A streamed workflow run. */
+/**
+ * A streamed workflow run. A suspended run (ADR-0043) is resumed with
+ * `resume` (a new stream of the same run, from the waiting step), and a
+ * suspended run that will never resume is discarded with `discard` (its
+ * snapshot deleted). Stand-ins may leave both out.
+ */
 export interface WorkflowRunStream {
   fullStream: AsyncIterable<WorkflowRunEvent>;
   result: Promise<WorkflowStreamOutcome>;
+  resume?: (args: {
+    step: string[];
+    resumeData: unknown;
+    requestContext?: RequestContext;
+  }) => WorkflowRunStream;
+  discard?: () => Promise<void>;
 }
 
 // Thin DI wrapper around the standalone Mastra instance. Keeps the rest of
@@ -47,6 +72,26 @@ export class MastraService {
     return this.mastra.getAgent(id as Parameters<typeof mastra.getAgent>[0]);
   }
 
+  /**
+   * Questions to Insights v2's Plan step model call (agents.md 5.11): the
+   * agent's model, no tools, the plan read from its reply.
+   */
+  planV2Turn(
+    ...args: Parameters<typeof planWithModel>
+  ): ReturnType<typeof planWithModel> {
+    return planWithModel(...args);
+  }
+
+  /**
+   * Questions to Insights v2's Write answer step model call (agents.md
+   * 5.11): the agent's model, no tools, the answer streamed to `onText`.
+   */
+  writeV2Answer(
+    ...args: Parameters<typeof writeAnswerWithModel>
+  ): ReturnType<typeof writeAnswerWithModel> {
+    return writeAnswerWithModel(...args);
+  }
+
   /** Every registered agent, keyed by its registry name. */
   listAgents(): Record<string, Agent> {
     return this.mastra.listAgents();
@@ -55,7 +100,9 @@ export class MastraService {
   /**
    * Start a run of a registered workflow and stream it (agents.md 5.11,
    * 5.14): its step events on `fullStream`, its outcome on `result`. A
-   * code-only run workflow needs no `requestContext`.
+   * code-only run workflow needs no `requestContext`. A run that suspends
+   * (ADR-0043) is resumed with the stream's `resume` (the same Mastra run,
+   * from its snapshot) or dropped with `discard`.
    */
   async streamWorkflow(
     key: string,
@@ -66,45 +113,49 @@ export class MastraService {
       key as Parameters<typeof mastra.getWorkflow>[0],
     );
     const run = await workflow.createRun();
-    const output = run.stream({
-      // The key is widened to string, so the registered workflows' input
-      // types intersect; the caller passes the input of the workflow it names.
-      inputData: inputData as never,
-      requestContext,
-    });
-    return {
+    const wrap = (output: {
+      fullStream: unknown;
+      result: Promise<unknown>;
+    }): WorkflowRunStream => ({
       fullStream: output.fullStream as AsyncIterable<WorkflowRunEvent>,
-      result: output.result,
-    };
+      result: output.result as Promise<WorkflowStreamOutcome>,
+      resume: ({ step, resumeData, requestContext: context }) =>
+        wrap(
+          run.resumeStream({
+            step,
+            resumeData: resumeData as never,
+            ...(context ? { requestContext: context } : {}),
+          }),
+        ),
+      discard: () => workflow.deleteWorkflowRunById(run.runId),
+    });
+    return wrap(
+      run.stream({
+        // The key is widened to string, so the registered workflows' input
+        // types intersect; the caller passes the input of the workflow it
+        // names.
+        inputData: inputData as never,
+        requestContext,
+      }),
+    );
   }
 
   /**
-   * Run a registered run workflow once on its input and wait for it to end
-   * (api.md 118): each step's result in the workflow's order, a step that
-   * did not run `skipped`, and the final output. Nothing is stored.
+   * Delete every suspended run snapshot of a registered workflow (ADR-0043):
+   * at start-up nothing can resume them, as their runtime lived in memory.
+   * Answers how many were deleted.
    */
-  async runWorkflow(
-    key: string,
-    inputData: Record<string, unknown>,
-  ): Promise<WorkflowRunResult> {
+  async discardSuspendedWorkflowRuns(key: string): Promise<number> {
     const workflow = this.mastra.getWorkflow(
       key as Parameters<typeof mastra.getWorkflow>[0],
     );
-    const steps = workflow.stepGraph.flatMap((entry) =>
-      entry.type === 'step'
-        ? [
-            {
-              id: entry.step.id,
-              title: entry.step.description ?? entry.step.id,
-            },
-          ]
-        : [],
-    );
-    const run = await workflow.createRun();
-    const result = (await run.start({
-      inputData: inputData as never,
-    })) as EngineRunResult;
-    return workflowRunResult(key, steps, result);
+    const listed = (await workflow.listWorkflowRuns({
+      status: 'suspended',
+    })) as { runs: { runId: string }[] };
+    for (const run of listed.runs) {
+      await workflow.deleteWorkflowRunById(run.runId);
+    }
+    return listed.runs.length;
   }
 
   /** Create or restore a session-scoped workspace and register it with Mastra. */

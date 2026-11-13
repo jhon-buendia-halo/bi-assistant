@@ -37,7 +37,6 @@ import { evalSetsFor } from '../../mastra/evals/eval-sets';
 import {
   builtinAgentSession,
   builtinSessionDatasets,
-  canStartBuiltinSession,
   existingDatasetsFor,
 } from './builtin-sessions';
 import {
@@ -60,12 +59,7 @@ import {
   agentWorkflow,
   type AgentWorkflow,
 } from '../../mastra/workflows/agent-workflows';
-import {
-  ASSISTANT_WORKFLOW_ID,
-  ASSISTANT_WORKFLOW_NAME,
-  parseWorkflowId,
-  workflowsUsingAgent,
-} from '../../mastra/workflows/workflow-catalog';
+import { workflowsUsingAgent } from '../../mastra/workflows/workflow-catalog';
 
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
@@ -92,11 +86,6 @@ export interface AgentSummary {
   /** Effective configuration (Live, else draft); empty for built-ins. */
   datasets: string[];
   starterQuestions: string[];
-  /**
-   * A built-in agent that declares a dataset (ADR-0028): why Start chat is
-   * blocked while that dataset is missing. Absent otherwise.
-   */
-  chatRequirement?: string;
 }
 
 export interface AgentToolDetail {
@@ -185,7 +174,10 @@ export interface AgentDetail extends AgentSummary {
   prompt?: AgentPromptView;
   /** Workflow-backed built-in agents only: their turn's steps (api.md 34). */
   workflow?: AgentWorkflow;
-  /** The workflows whose steps call this agent, in catalogue order (api.md 34). */
+  /**
+   * The catalogue workflows whose steps call this agent (api.md 34):
+   * `qti-v2-turn` for `assistant-v2`, none for any other agent.
+   */
   usedInWorkflows: { id: string; name: string }[];
 }
 
@@ -241,7 +233,7 @@ export class AgentsService {
         llm: await this.llmDetail(),
         ...(prompt ? { prompt } : {}),
         ...(workflow ? { workflow } : {}),
-        usedInWorkflows: usedInWorkflows(key, detail.name, { builtin: true }),
+        usedInWorkflows: workflowsUsingAgent(key),
       };
     }
     const doc = await this.userAgents.get(key);
@@ -269,11 +261,8 @@ export class AgentsService {
       model: assistant?.model ?? null,
       toolLinks: toolLinks(doc, skills),
       llm: await this.llmDetail(effectiveConfig(doc)),
-      // Only a Live agent has a one-step workflow (workflows R1).
-      usedInWorkflows: usedInWorkflows(doc.id, doc.live?.name ?? '', {
-        builtin: false,
-        userAgentLive: Boolean(doc.live),
-      }),
+      // A user agent is a library entry: no workflow runs it (1.23.35).
+      usedInWorkflows: [],
     };
   }
 
@@ -518,9 +507,8 @@ export class AgentsService {
     pins: string[],
   ): Promise<AgentSummary> {
     const official = OFFICIAL_AGENT_KEYS.includes(key);
-    // A built-in agent with datasets of its own (the RFP Builder's named
-    // one, the Data Readiness Agent's kind) shows them, and while none
-    // qualifies, why Start chat is blocked (api.md 2.6 #33).
+    // A built-in agent with datasets of its own (a named one, or the Data
+    // Readiness Agent's kind) shows them (api.md 2.6 #33).
     const builtinSession = builtinAgentSession(key);
     const declared = builtinSession
       ? builtinSessionDatasets(
@@ -546,33 +534,8 @@ export class AgentsService {
         builtinSession && 'datasourceKinds' in builtinSession
           ? [...builtinSession.starterQuestions]
           : [],
-      ...(builtinSession && declared && !canStartBuiltinSession(declared)
-        ? { chatRequirement: builtinSession.requirement }
-        : {}),
     };
   }
-}
-
-/**
- * The workflows that use an agent, with their catalogue names (api.md 34):
- * a code workflow's own name, `Assistant` for the assistant's one-step
- * workflow, and the agent's name for any other one-step workflow.
- */
-function usedInWorkflows(
-  key: string,
-  agentName: string,
-  opts: { builtin: boolean; userAgentLive?: boolean },
-): { id: string; name: string }[] {
-  return workflowsUsingAgent(key, opts).map((id) => {
-    const parsed = parseWorkflowId(id);
-    const name =
-      parsed?.kind === 'code'
-        ? parsed.source.name
-        : id === ASSISTANT_WORKFLOW_ID
-          ? ASSISTANT_WORKFLOW_NAME
-          : agentName;
-    return { id, name };
-  });
 }
 
 /** A user agent as a catalogue entry; `key` is its id (R48). */

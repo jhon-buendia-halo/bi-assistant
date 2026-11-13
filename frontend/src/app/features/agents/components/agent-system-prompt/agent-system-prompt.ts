@@ -111,7 +111,7 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly officialSkills = computed(() =>
     officialLinkSkills(this.builtInSkills(), this.agent().key),
   );
-  /** The editor hint and notes, naming the agent (`the assistant`, `the RFP Builder`). */
+  /** The editor hint and notes, naming the agent (`the assistant`, `the Data Readiness Agent`). */
   readonly officialCopy = computed(() => officialPromptCopy(this.agent()));
   readonly builtInKnown = computed(() =>
     knownLinks([], this.officialTools(), this.officialSkills()),

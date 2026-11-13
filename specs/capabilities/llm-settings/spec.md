@@ -294,7 +294,7 @@ Feature: Custom endpoint connection
     When I click "Save connection"
     Then I see "Configuration saved"
 
-  Scenario: A run of the Assistant runs on the custom endpoint
+  Scenario: a run of Questions to Insights v2 runs on the custom endpoint
     Given a custom endpoint configuration with the model "qwen3-8b" at "http://127.0.0.1:8317/v1" is saved
     When I run the Assistant on a question
     Then the server received a request to "/v1/chat/completions" for the model "qwen3-8b"
@@ -402,7 +402,7 @@ Feature: GitHub Copilot connection
     When I choose the provider "GitHub Copilot" and click "Load models"
     Then the model list reads "Your Copilot plan lists no models to choose — leave the model as auto."
 
-  Scenario: A run of the Assistant runs on GitHub Copilot
+  Scenario: a run of Questions to Insights v2 runs on GitHub Copilot
     Given GitHub Copilot is saved as the provider with the model "auto"
     When I run the Assistant on the "World Cup Core" dataset and ask "Who won the 2018 World Cup final and what was the score?"
     Then the answer streams in as it is written

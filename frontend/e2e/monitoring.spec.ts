@@ -5,7 +5,7 @@ import {
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
-import { runAssistantOk } from './helpers/runs-api';
+import { V2_WORKFLOW_NAME, runQuestionOk } from './helpers/runs-api';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -24,13 +24,16 @@ import { scenarioStep } from './support/demo-captions';
  * 1.21.14–1.21.16). The
  * calls are real: a run's agent turn against the recording LLM stub, traced
  * by Mastra into the app's trace store and read back by the Monitoring API.
- * A run's calls are named `Assistant: <the question>` (monitoring R45).
+ * The runs are of Questions to Insights v2 (`qti-v2-turn`), whose Analyse
+ * step is one turn of the `assistant-v2` agent; a run's calls are named
+ * `Questions to Insights v2: <the question>` (monitoring R45).
  */
 
 const QUESTION = 'Which team scored the most goals?';
-/** The name Monitoring gives the Assistant's run on `question` (R45). */
-const runName = (question: string) => `Assistant: ${question}`;
-const ASSISTANT = 'Questions to Insights Assistant';
+/** The name Monitoring gives the v2 run on `question` (R45). */
+const runName = (question: string) => `${V2_WORKFLOW_NAME}: ${question}`;
+/** The name the `assistant-v2` agent's calls are attributed to. */
+const AGENT = 'Questions to Insights v2';
 /** saveLenaiSettings' deployment name, the model the calls are made with. */
 const MODEL = 'stub-deployment';
 
@@ -67,15 +70,15 @@ const railItem = (page: Page, name: string) =>
 const rows = (page: Page) =>
   page.getByTestId('llm-calls-table').locator('[data-testid^="llm-call-row-"]');
 
-/** The assistant's call of the run on QUESTION. */
+/** The v2 agent's call of the run on QUESTION. */
 const assistantRow = (page: Page): Locator =>
   rows(page)
-    .filter({ hasText: ASSISTANT })
+    .filter({ hasText: AGENT })
     .filter({ hasText: runName(QUESTION) });
 
-/** Runs the Assistant on QUESTION and waits for its answer. */
+/** Runs Questions to Insights v2 on QUESTION and waits for its answer. */
 async function askInRun(page: Page): Promise<void> {
-  const result = await runAssistantOk(page, QUESTION);
+  const result = await runQuestionOk(page, QUESTION);
   expect(result.text).toContain(STUB_ANSWER);
 }
 
@@ -95,12 +98,12 @@ async function openMonitoringWithCall(page: Page): Promise<void> {
 
 test.describe('Feature: LLM calls', () => {
   test(
-    'Inspect the context window of an assistant call',
+    'Inspect the context window of a Questions to Insights v2 call',
     { tag: ['@demo', '@story-1.21.15'] },
     async ({ page }) => {
       await scenarioStep(
         page,
-        `Given I ran the Assistant on "${QUESTION}"`,
+        `Given I ran Questions to Insights v2 on "${QUESTION}"`,
         async () => {
           await askInRun(page);
         },
@@ -121,7 +124,7 @@ test.describe('Feature: LLM calls', () => {
           ).toBeVisible();
           const row = assistantRow(page).first();
           const cells = row.locator('td');
-          await expect(cells.nth(1)).toHaveText(ASSISTANT);
+          await expect(cells.nth(1)).toHaveText(AGENT);
           await expect(cells.nth(2)).toContainText(MODEL);
           await expect(cells.nth(3)).toHaveText(runName(QUESTION));
           await expect(cells.nth(4)).toHaveText(/^\s*[\d,]+ \/ [\d,]+\s*$/);
@@ -130,24 +133,24 @@ test.describe('Feature: LLM calls', () => {
       );
       await scenarioStep(
         page,
-        `When I filter by the agent "${ASSISTANT}" and the status "Succeeded"`,
+        `When I filter by the agent "${AGENT}" and the status "Succeeded"`,
         async () => {
           await page
             .getByTestId('llm-filter-agent')
-            .selectOption({ label: ASSISTANT });
+            .selectOption({ label: AGENT });
           await page.getByTestId('llm-filter-status').selectOption('succeeded');
         },
       );
       await scenarioStep(
         page,
-        'Then every call listed is a succeeded assistant call',
+        `Then every call listed is a succeeded "${AGENT}" call`,
         async () => {
           await expect(assistantRow(page).first()).toBeVisible();
           const count = await rows(page).count();
           expect(count).toBeGreaterThan(0);
           for (let i = 0; i < count; i += 1) {
             const cells = rows(page).nth(i).locator('td');
-            await expect(cells.nth(1)).toHaveText(ASSISTANT);
+            await expect(cells.nth(1)).toHaveText(AGENT);
             await expect(cells.nth(7)).toHaveText('Succeeded');
           }
         },
@@ -162,7 +165,7 @@ test.describe('Feature: LLM calls', () => {
           const detail = page.getByTestId('llm-call-detail');
           await expect(detail).toBeVisible();
           await expect(detail.getByRole('heading', { level: 2 })).toHaveText(
-            `${ASSISTANT} · ${MODEL}`,
+            `${AGENT} · ${MODEL}`,
             { useInnerText: true },
           );
           await expect(page.getByTestId('context-bar')).toBeVisible();
@@ -233,7 +236,7 @@ test.describe('Feature: LLM calls', () => {
           await expect(page.getByTestId('llm-calls-table')).toBeVisible();
           await expect(
             page.getByTestId('llm-filter-agent').locator('option:checked'),
-          ).toHaveText(ASSISTANT);
+          ).toHaveText(AGENT);
           await expect(page.getByTestId('llm-filter-status')).toHaveValue(
             'succeeded',
           );
@@ -348,7 +351,7 @@ test.describe('Feature: LLM call detail', () => {
       await openMonitoringWithCall(page);
       await page
         .getByTestId('llm-filter-agent')
-        .selectOption({ label: ASSISTANT });
+        .selectOption({ label: AGENT });
       await assistantRow(page).first().click();
 
       const detail = page.getByTestId('llm-call-detail');
@@ -390,7 +393,7 @@ test.describe('Feature: LLM call detail', () => {
       );
       await expect(
         page.getByTestId('llm-filter-agent').locator('option:checked'),
-      ).toHaveText(ASSISTANT);
+      ).toHaveText(AGENT);
     },
   );
 });
@@ -438,13 +441,13 @@ function scriptTwoTurns(): void {
   };
 }
 
-/** Runs the Assistant on `question` and checks the answer it streamed. */
+/** Runs Questions to Insights v2 on `question` and checks the answer it streamed. */
 async function ask(
   page: Page,
   question: string,
   answer: string,
 ): Promise<string> {
-  const result = await runAssistantOk(page, question);
+  const result = await runQuestionOk(page, question);
   expect(result.text).toContain(answer);
   return result.runId!;
 }
@@ -481,7 +484,7 @@ test.describe('Feature: Session flow', () => {
       scriptTwoTurns();
       await scenarioStep(
         page,
-        'Given I ran the Assistant on two questions',
+        'Given I ran Questions to Insights v2 on two questions',
         async () => {
           await ask(page, FIRST_QUESTION, FIRST_ANSWER);
           await ask(page, SECOND_QUESTION, SECOND_ANSWER);
@@ -506,7 +509,7 @@ test.describe('Feature: Session flow', () => {
           );
           const cells = sessionRow(page).first().locator('td');
           await expect(cells.nth(0)).toHaveText(runName(FIRST_QUESTION));
-          await expect(cells.nth(1)).toContainText(ASSISTANT);
+          await expect(cells.nth(1)).toContainText(AGENT);
           await expect(cells.nth(2)).toHaveText('1');
           await expect(sessionRow(page, SECOND_QUESTION)).toHaveCount(1);
           await expect(cells.nth(9)).toHaveText('Succeeded');
@@ -683,7 +686,7 @@ test.describe('Feature: Session flow', () => {
       // Filters narrow the sessions; no session matches an old date range.
       await page
         .getByTestId('session-filter-agent')
-        .selectOption({ label: ASSISTANT });
+        .selectOption({ label: AGENT });
       await expect(sessionRow(page).first()).toBeVisible();
       await expect(page.getByTestId('session-filters-clear')).toBeEnabled();
       await page.getByTestId('session-filter-range').selectOption('custom');
@@ -699,7 +702,7 @@ test.describe('Feature: Session flow', () => {
       // Open a session of the chosen agent.
       await page
         .getByTestId('session-filter-agent')
-        .selectOption({ label: ASSISTANT });
+        .selectOption({ label: AGENT });
       await sessionRow(page).first().click();
       await expect(page.getByTestId('monitoring-session-detail')).toBeVisible();
       await expect(railItem(page, 'Monitoring')).toHaveAttribute(
@@ -765,7 +768,7 @@ test.describe('Feature: Session flow', () => {
       );
       await expect(
         page.getByTestId('session-filter-agent').locator('option:checked'),
-      ).toHaveText(ASSISTANT);
+      ).toHaveText(AGENT);
       // … and so does the rail.
       await sessionRow(page).first().click();
       await expect(page.getByTestId('monitoring-session-detail')).toBeVisible();
@@ -776,7 +779,7 @@ test.describe('Feature: Session flow', () => {
       );
       await expect(
         page.getByTestId('session-filter-agent').locator('option:checked'),
-      ).toHaveText(ASSISTANT);
+      ).toHaveText(AGENT);
     },
   );
 });
@@ -788,24 +791,12 @@ test.describe('Feature: Runs in Monitoring', () => {
     "A workflow run's call is attributed to the run",
     { tag: ['@demo', '@story-1.23.20'] },
     async ({ page }) => {
-      const runName = `Assistant: ${RUN_QUESTION}`;
+      const runName = `${V2_WORKFLOW_NAME}: ${RUN_QUESTION}`;
       await scenarioStep(
         page,
-        'Given I ran the Assistant workflow on a question',
+        `Given I ran the "${V2_WORKFLOW_NAME}" workflow on a question`,
         async () => {
-          const res = await page.request.post(
-            `${apiBase(page)}/workflows/${encodeURIComponent('agent:assistant')}/runs/stream`,
-            {
-              data: {
-                input: {
-                  question: RUN_QUESTION,
-                  datasets: ['World Cup Core'],
-                },
-              },
-            },
-          );
-          expect(res.status()).toBe(200);
-          expect(await res.text()).toContain('"type":"done"');
+          await runQuestionOk(page, RUN_QUESTION);
         },
       );
       await scenarioStep(page, 'When I open Monitoring', async () => {
@@ -820,11 +811,11 @@ test.describe('Feature: Runs in Monitoring', () => {
       });
       await scenarioStep(
         page,
-        'Then the call is listed under the run "Assistant: <title>"',
+        `Then the call is listed under the run "${V2_WORKFLOW_NAME}: <title>"`,
         async () => {
           await expect(
             rows(page).filter({ hasText: runName }).first(),
-          ).toContainText(ASSISTANT);
+          ).toContainText(AGENT);
           await expect(
             page
               .getByTestId('llm-filter-session')
