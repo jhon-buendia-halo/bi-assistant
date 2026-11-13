@@ -301,6 +301,61 @@ describe('The workflow catalogue (API)', () => {
       );
     });
 
+    it('GET /workflows/qti-v2-turn gives every step its declared JSON Schemas and the workflow its contractHash (agents.md 5.12)', async () => {
+      const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
+        .body as {
+        contractHash: string;
+        steps: {
+          id: string;
+          input: string[];
+          output: string[];
+          inputSchema: {
+            type: string;
+            properties: Record<string, { type?: unknown }>;
+            required: string[];
+          };
+          outputSchema: {
+            type: string;
+            properties: Record<string, { type?: unknown }>;
+            required: string[];
+          };
+        }[];
+      };
+      expect(v2.contractHash).toMatch(/^[0-9a-f]{12}$/);
+      for (const step of v2.steps) {
+        expect(step.inputSchema.type).toBe('object');
+        expect(step.outputSchema.type).toBe('object');
+        // The field names are derived from the schemas, in schema order.
+        expect(Object.keys(step.inputSchema.properties)).toEqual(step.input);
+        expect(Object.keys(step.outputSchema.properties)).toEqual(step.output);
+      }
+      const analyse = v2.steps.find((step) => step.id === 'analyse')!;
+      expect(analyse.inputSchema).toMatchObject({
+        properties: {
+          question: { type: 'string', description: 'The trimmed question.' },
+          catalog: { type: 'array', items: { type: 'object' } },
+        },
+        required: ['question', 'catalog'],
+      });
+      expect(analyse.outputSchema.properties).toMatchObject({
+        calls: {
+          type: 'array',
+          items: {
+            properties: { rowCount: { type: 'number' } },
+            required: ['tool', 'failed'],
+          },
+        },
+        stopped: { type: 'boolean' },
+      });
+      // 116 is unchanged: the summary carries neither.
+      const [summary] = await workflows();
+      expect(summary).not.toHaveProperty('contractHash');
+      // The same hash on every read.
+      const again = (await http().get('/workflows/qti-v2-turn').expect(200))
+        .body as { contractHash: string };
+      expect(again.contractHash).toBe(v2.contractHash);
+    });
+
     it("an agent's detail says which workflows use it: only assistant-v2 is used in one", async () => {
       const used = async (key: string) =>
         (

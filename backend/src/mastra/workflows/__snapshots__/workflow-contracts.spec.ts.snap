@@ -1,0 +1,313 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) qti-v2-turn's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+{
+  "contractHash": "66f1c458827e",
+  "input": [
+    {
+      "name": "question",
+      "required": true,
+      "type": "textarea",
+    },
+    {
+      "name": "datasets",
+      "required": true,
+      "type": "datasets",
+    },
+  ],
+  "steps": [
+    {
+      "id": "receive-question",
+      "inputSchema": {
+        "properties": {
+          "datasets": {
+            "description": "The run's dataset names.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "datasets",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "datasets": {
+            "description": "The run's dataset names.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "datasets",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "load-catalog",
+      "inputSchema": {
+        "properties": {
+          "datasets": {
+            "description": "The run's dataset names.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "datasets",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "analyse",
+      "inputSchema": {
+        "properties": {
+          "catalog": {
+            "description": "The entities of the run's datasets.",
+            "items": {
+              "properties": {
+                "columnCount": {
+                  "description": "Its column count, when known.",
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "dataset": {
+                  "description": "The dataset it belongs to.",
+                  "type": "string",
+                },
+                "datasourceId": {
+                  "description": "The dataset's datasource id.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "datasourceKind": {
+                  "description": "postgres, databricks or rest.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "entity": {
+                  "description": "The entity (table) key.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "entity",
+                "dataset",
+                "datasourceId",
+                "datasourceKind",
+                "columnCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The trimmed question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "catalog",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "calls": {
+            "description": "The turn's tool calls, in order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "stopped": {
+            "description": "The user stopped the turn.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "calls",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "wrap-up",
+      "inputSchema": {
+        "properties": {
+          "calls": {
+            "description": "The turn's tool calls, in order.",
+            "items": {
+              "properties": {
+                "failed": {
+                  "description": "Whether the call failed.",
+                  "type": "boolean",
+                },
+                "rowCount": {
+                  "description": "Rows a SQL call returned.",
+                  "type": "number",
+                },
+                "tool": {
+                  "description": "The tool name.",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "tool",
+                "failed",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "stopped": {
+            "description": "The user stopped the turn.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "calls",
+          "stopped",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "failedQueries": {
+            "description": "Of those, the ones that failed.",
+            "type": "number",
+          },
+          "rows": {
+            "description": "Rows the successful queries returned.",
+            "type": "number",
+          },
+          "sqlQueries": {
+            "description": "SQL queries the turn ran.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "sqlQueries",
+          "failedQueries",
+          "rows",
+        ],
+        "type": "object",
+      },
+    },
+  ],
+}
+`;

@@ -21,6 +21,8 @@ import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
+import { QTI_V2_TURN_STEPS } from '../../mastra/workflows/qti-v2-turn.steps';
+import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
@@ -190,19 +192,45 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   });
 
   describe('get', () => {
-    it("qti-v2-turn's steps are agentWorkflow('assistant-v2')'s", async () => {
+    it("qti-v2-turn's steps are agentWorkflow('assistant-v2')'s, with their declared schemas", async () => {
       ctx = build();
       const detail = await ctx.service.get('qti-v2-turn');
-      // Its agent steps also name their agent's key (api.md 117).
+      // Its agent steps also name their agent's key, and every step carries
+      // its declared input and output schema (api.md 117; agents.md 5.12).
       expect(detail.steps).toEqual(
-        agentWorkflow('assistant-v2')!.steps.map((step) =>
-          step.agent
+        agentWorkflow('assistant-v2')!.steps.map((step, index) => ({
+          ...(step.agent
             ? { ...step, agent: { ...step.agent, key: 'assistant-v2' } }
-            : step,
-        ),
+            : step),
+          inputSchema: QTI_V2_TURN_STEPS[index].inputSchema,
+          outputSchema: QTI_V2_TURN_STEPS[index].outputSchema,
+        })),
       );
       expect(detail.steps.some((step) => step.agent)).toBe(true);
-      expect(detail).toMatchObject({ id: 'qti-v2-turn', stepCount: 4 });
+      expect(detail).toMatchObject({
+        id: 'qti-v2-turn',
+        stepCount: 4,
+        contractHash: CODE_WORKFLOWS[0].contractHash,
+      });
+      expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
+      // Analyse receives the question (a string) and the catalog.
+      expect(detail.steps[2].inputSchema).toMatchObject({
+        type: 'object',
+        properties: {
+          question: { type: 'string' },
+          catalog: { type: 'array', items: { type: 'object' } },
+        },
+        required: ['question', 'catalog'],
+      });
+      // A run needs the hash too: it stores it (data-model 3.16).
+      await expect(
+        ctx.service.definition('qti-v2-turn'),
+      ).resolves.toMatchObject({
+        contractHash: CODE_WORKFLOWS[0].contractHash,
+      });
+      // 116 is unchanged: no hash and no schemas on a summary.
+      const [summary] = await ctx.service.list();
+      expect(summary).not.toHaveProperty('contractHash');
     });
 
     it('details the agent its steps call: its key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {

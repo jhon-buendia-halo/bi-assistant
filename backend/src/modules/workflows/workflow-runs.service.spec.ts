@@ -19,6 +19,8 @@ import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
+import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
+import { ContractViolationError } from '../../mastra/workflows/workflow-contract';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
@@ -1017,6 +1019,53 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       ownerId: 'local',
     });
     expect((atTurn as { startedAt?: string }).startedAt).toBe(run.startedAt);
+  });
+
+  it("stores the workflow's contractHash when the run starts, and done.run carries it (agents.md 5.12)", async () => {
+    ctx = build();
+    const { contractHash } = CODE_WORKFLOWS[0];
+    expect(contractHash).toMatch(/^[0-9a-f]{12}$/);
+    let atTurn: unknown;
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (hostId: string) => {
+        atTurn = await ctx.repository.get(hostId.slice('run-'.length));
+      },
+    );
+    const { run, events } = await streamed(ctx, 'qti-v2-turn', {
+      input: ASK,
+    });
+    expect(atTurn).toMatchObject({ contractHash });
+    expect(run.contractHash).toBe(contractHash);
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      run: { contractHash },
+    });
+    await expect(ctx.service.get(run.id)).resolves.toMatchObject({
+      contractHash,
+    });
+  });
+
+  it('stores a contract violation as the failed step and run error; later steps are skipped', async () => {
+    const violation = new ContractViolationError(
+      'Analyse',
+      'output',
+      'calls[2].rowCount',
+      'Invalid input: expected number, received string',
+    );
+    ctx = build(DATASETS, { throws: violation });
+    const failed = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const message =
+      'Contract violation in Analyse: calls[2].rowCount Invalid input: expected number, received string';
+    await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
+      status: 'failed',
+      error: message,
+      steps: [
+        { id: 'receive-question', status: 'success' },
+        { id: 'load-catalog', status: 'success' },
+        { id: 'analyse', status: 'failed', error: message },
+        { id: 'wrap-up', status: 'skipped' },
+      ],
+    });
   });
 
   it('updates it when it ends with the projection of the host; the derived views are not stored', async () => {

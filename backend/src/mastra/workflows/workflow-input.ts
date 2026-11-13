@@ -1,9 +1,10 @@
 /**
  * A workflow's input node (the Start node; api.md 116-119; workflows R14):
- * the typed fields a run takes, the static check that they give every step
- * what it reads, which steps read each field, and the check of a run's whole
- * input before anything runs. Plain data and pure functions, no framework
- * import, so the catalogue, the services and Jest can read it.
+ * the typed fields a run takes, which steps read each field, and the check
+ * of a run's whole input before anything runs. Plain data and pure
+ * functions, no framework import, so the catalogue, the services and Jest
+ * can read it. That the fields give every step what it reads, with the
+ * right types, is the data contract's check (./workflow-contract.ts).
  */
 
 /** The type of one input field (plan 4.1). */
@@ -53,64 +54,18 @@ export interface WorkflowInputFieldDetail extends WorkflowInputField {
   usedBy: string[];
 }
 
-/** What the input checks need of a step: its id and its field names. */
+/** What `usedBy` needs of a step: its id and its field names. */
 export interface InputStepShape {
   id: string;
   input: readonly string[];
   output: readonly string[];
 }
 
-/** What the input checks need of a workflow: its fields and its steps. */
+/** What `usedBy` needs of a workflow: its fields and its steps. */
 export interface InputWorkflowShape {
   id?: string;
   input: readonly WorkflowInputField[];
   steps: readonly InputStepShape[];
-}
-
-/** A step input that neither the workflow's input nor an earlier step gives. */
-export interface UncoveredStepInput {
-  stepId: string;
-  field: string;
-}
-
-/**
- * The step inputs a workflow leaves uncovered, in step then field order:
- * every name a step reads must be a field of the workflow's input or an
- * output of an earlier step. Empty when the input node gives the run
- * everything it needs.
- */
-export function checkWorkflowInputCoverage(
-  workflow: InputWorkflowShape,
-): UncoveredStepInput[] {
-  const given = new Set(workflow.input.map((field) => field.name));
-  const uncovered: UncoveredStepInput[] = [];
-  for (const step of workflow.steps) {
-    for (const field of step.input) {
-      if (!given.has(field)) uncovered.push({ stepId: step.id, field });
-    }
-    for (const field of step.output) given.add(field);
-  }
-  return uncovered;
-}
-
-/**
- * The workflows, refused (thrown) when any leaves a step input uncovered:
- * the catalogue is built through it, so a broken workflow never loads.
- */
-export function assertWorkflowInputCoverage<T extends InputWorkflowShape>(
-  workflows: readonly T[],
-): readonly T[] {
-  for (const workflow of workflows) {
-    const uncovered = checkWorkflowInputCoverage(workflow);
-    if (uncovered.length) {
-      throw new Error(
-        `Workflow "${workflow.id ?? '?'}" has step inputs that neither its input nor an earlier step gives: ${uncovered
-          .map((entry) => `${entry.stepId}.${entry.field}`)
-          .join(', ')}`,
-      );
-    }
-  }
-  return workflows;
 }
 
 /**

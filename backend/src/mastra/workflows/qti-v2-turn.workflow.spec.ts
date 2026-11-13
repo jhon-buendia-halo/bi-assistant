@@ -26,6 +26,7 @@ jest.mock('../tool-services', () => ({
 }));
 
 import { RequestContext } from '@mastra/core/request-context';
+import type { z } from 'zod';
 import { qtiV2TurnWorkflow } from './qti-v2-turn.workflow';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
@@ -33,6 +34,10 @@ import {
   QTI_V2_TURN_WORKFLOW_ID,
   type QtiV2TurnRuntime,
 } from './qti-v2-turn.steps';
+import {
+  ContractViolationError,
+  contractJsonSchema,
+} from './workflow-contract';
 
 interface StubWorkflow {
   id: string;
@@ -78,26 +83,107 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
   });
 
   // The agent's Graph tab draws the catalogue (agents-evals R108): its
-  // field names must be the built steps' own schema fields, in order.
-  it("matches the step catalogue's ids and input and output fields", () => {
+  // field names and JSON Schemas must be the built steps' own schemas, in
+  // order (agents.md 5.12: one source of truth). The engine sees each
+  // declared input schema wrapped so it never refuses (`withContract` does).
+  it("matches the step catalogue's ids, fields and JSON Schemas", () => {
     const built = workflow.steps as unknown as {
       id: string;
-      inputSchema: { shape: Record<string, unknown> };
-      outputSchema: { shape: Record<string, unknown> };
+      inputSchema: z.ZodCatch<z.ZodType>;
+      outputSchema: z.ZodType;
     }[];
     expect(
       built.map((step) => ({
         id: step.id,
-        input: Object.keys(step.inputSchema.shape),
-        output: Object.keys(step.outputSchema.shape),
+        input: contractJsonSchema(step.inputSchema.unwrap(), 'input'),
+        output: contractJsonSchema(step.outputSchema, 'output'),
       })),
     ).toEqual(
       QTI_V2_TURN_STEPS.map((step) => ({
         id: step.id,
-        input: [...step.input],
-        output: [...step.output],
+        input: step.inputSchema,
+        output: step.outputSchema,
       })),
     );
+    expect(QTI_V2_TURN_STEPS.map((step) => [step.input, step.output])).toEqual([
+      [
+        ['question', 'datasets'],
+        ['question', 'datasets'],
+      ],
+      [
+        ['question', 'datasets'],
+        ['question', 'catalog'],
+      ],
+      [
+        ['question', 'catalog'],
+        ['calls', 'stopped'],
+      ],
+      [
+        ['calls', 'stopped'],
+        ['sqlQueries', 'failedQueries', 'rows'],
+      ],
+    ]);
+  });
+
+  it('runs with its inputs validated (validateInputs: true)', () => {
+    expect(
+      (
+        qtiV2TurnWorkflow as unknown as {
+          options: { validateInputs?: boolean };
+        }
+      ).options.validateInputs,
+    ).toBe(true);
+  });
+
+  it('fails Analyse on an output that breaks its contract, and never wraps up', async () => {
+    const { events, result } = await run('Go', () =>
+      Promise.resolve({
+        calls: [
+          { tool: 'list_entities', failed: false },
+          { tool: 'run_readonly_sql', rowCount: 4, failed: false },
+          {
+            tool: 'run_readonly_sql',
+            rowCount: 'many' as unknown as number,
+            failed: false,
+          },
+        ],
+        stopped: false,
+      }),
+    );
+    expect(events.slice(-2)).toEqual(['analyse:running', 'analyse:failed']);
+    expect(events).not.toContain('wrap-up:running');
+    expect(result.status).toBe('failed');
+    expect(result.error).toBeInstanceOf(ContractViolationError);
+    expect((result.error as Error).message).toBe(
+      'Contract violation in Analyse: calls[2].rowCount Invalid input: expected number, received string',
+    );
+  });
+
+  it('fails Receive question on a run input that breaks its contract, before any later step', async () => {
+    const analyse = jest.fn(() =>
+      Promise.resolve({ calls: [], stopped: false }),
+    );
+    const requestContext = new RequestContext();
+    requestContext.set(QTI_V2_TURN_RUNTIME_KEY, { analyse });
+    const output = (await workflow.createRun()).stream({
+      inputData: { question: 'Go', datasets: 'World Cup' },
+      requestContext,
+    });
+    const events: string[] = [];
+    for await (const event of output.fullStream) {
+      if (event.payload?.id) {
+        events.push(`${event.payload.id}:${event.payload.status}`);
+      }
+    }
+    const result = await output.result;
+    expect(events).toEqual([
+      'receive-question:running',
+      'receive-question:failed',
+    ]);
+    expect((result.error as Error).message).toBe(
+      'Contract violation in Receive question (input): datasets Invalid input: expected array, received string',
+    );
+    expect(analyse).not.toHaveBeenCalled();
   });
 
   it('hands Analyse the trimmed question and the catalog, and wraps up its SQL calls', async () => {
