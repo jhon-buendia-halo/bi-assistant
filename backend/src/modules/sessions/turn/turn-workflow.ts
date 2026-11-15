@@ -86,8 +86,12 @@ export function isTurnSummary(value: unknown): value is Record<string, number> {
   );
 }
 
-/** The most result rows of one query an analysis attempt passes on. */
-export const ATTEMPT_ROWS_CAP = 50;
+/**
+ * The most result rows of one query an analysis attempt passes on: all a
+ * data record keeps (`STORED_ROWS_CAP`), so the answer can list them
+ * (plan 1.25.6); Write answer itself reads the first `ANSWER_ROWS_CAP`.
+ */
+export const ATTEMPT_ROWS_CAP = 200;
 
 /**
  * An analysis attempt's SQL queries from its data records (agents.md
