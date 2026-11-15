@@ -65,6 +65,36 @@ describe('WorkflowNodeDialog', () => {
     expect(byId('workflow-ndv-output')).not.toBeNull();
   });
 
+  it('stacks Input, the tabs and Output, with Input and Output collapsed until toggled', () => {
+    open(node('analyse'));
+    const sections = Array.from(
+      byId('workflow-ndv')!.querySelectorAll<HTMLElement>(
+        '[data-testid="workflow-ndv-input"], [data-testid="workflow-ndv-params"], [data-testid="workflow-ndv-output"]',
+      ),
+    ).map((s) => s.dataset['testid']);
+    expect(sections).toEqual([
+      'workflow-ndv-input',
+      'workflow-ndv-params',
+      'workflow-ndv-output',
+    ]);
+    for (const k of ['input', 'output']) {
+      const toggle = byId(`workflow-ndv-${k}-toggle`)!;
+      const body = el().querySelector<HTMLElement>(`#workflow-ndv-${k}-body`)!;
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(toggle.getAttribute('aria-controls')).toBe(body.id);
+      expect(body.hidden).toBe(true);
+      toggle.click();
+      fixture.detectChanges();
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(body.hidden).toBe(false);
+      toggle.click();
+      fixture.detectChanges();
+      expect(body.hidden).toBe(true);
+    }
+    // The run's status stays in Output's header while it is collapsed.
+    expect(byId('workflow-ndv-output-status')?.closest('[hidden]')).toBeNull();
+  });
+
   it('shows an agent step: input, parameters, tool calls and output', () => {
     open(node('analyse'));
     expect(byId('workflow-ndv-input')?.textContent).toContain('Top 5 states?');
@@ -84,7 +114,10 @@ describe('WorkflowNodeDialog', () => {
       'Model error → fails · Stop → ends here',
     );
     // No declared schema (an older backend): the names, untyped.
-    expect(fields('workflow-step-field-input')).toEqual(['question', 'catalog']);
+    expect(fields('workflow-step-field-input')).toEqual([
+      'question',
+      'catalog',
+    ]);
     expect(fields('workflow-step-field-output')).toEqual(['calls', 'stopped']);
     expect(text('workflow-step-field-system-prompt')).toBe(
       'You are a data analyst.',
@@ -116,13 +149,18 @@ describe('WorkflowNodeDialog', () => {
     );
   });
 
-  it('names a one-call step\'s agent without a step limit in its header', () => {
+  it("names a one-call step's agent without a step limit in its header", () => {
     const analyse = node('analyse');
     open({
       ...analyse,
       step: {
         ...analyse.step!,
-        agent: { ...analyse.step!.agent!, name: 'Olivia', tools: [], maxSteps: 1 },
+        agent: {
+          ...analyse.step!.agent!,
+          name: 'Olivia',
+          tools: [],
+          maxSteps: 1,
+        },
       },
     });
     expect(el().textContent).toContain('Olivia');
@@ -189,10 +227,10 @@ describe('WorkflowNodeDialog', () => {
       );
 
     beforeEach(() => {
-      api = jasmine.createSpyObj<WorkflowRunsApiService>('WorkflowRunsApiService', [
-        'getNodeChat',
-        'streamNodeChat',
-      ]);
+      api = jasmine.createSpyObj<WorkflowRunsApiService>(
+        'WorkflowRunsApiService',
+        ['getNodeChat', 'streamNodeChat'],
+      );
       api.getNodeChat.and.returnValue(of({ messages: [] }));
       TestBed.overrideProvider(WorkflowRunsApiService, { useValue: api });
     });
@@ -352,7 +390,9 @@ describe('WorkflowNodeDialog', () => {
     });
     const list = byId('workflow-ndv-input-errors')!;
     expect(
-      Array.from(list.querySelectorAll('li')).map((li) => li.textContent?.trim()),
+      Array.from(list.querySelectorAll('li')).map((li) =>
+        li.textContent?.trim(),
+      ),
     ).toEqual(['Question is required', 'Select at least one dataset']);
     expect(text('workflow-ndv-output-status')).toBe('Invalid input');
     expect(byId('workflow-ndv-output')?.textContent).not.toContain(
@@ -435,7 +475,8 @@ describe('WorkflowNodeDialog', () => {
           ?.textContent?.trim(),
       ).toBe('Declared contract');
       expect(
-        output.querySelector('[data-testid="workflow-data-schema"]')?.textContent,
+        output.querySelector('[data-testid="workflow-data-schema"]')
+          ?.textContent,
       ).toContain('How many tool calls ran.');
     });
 
@@ -505,7 +546,11 @@ describe('WorkflowNodeDialog', () => {
     it('shows any other step error as plain text', () => {
       openContract({
         ...FIXTURE_CONTRACT_ANALYSE,
-        run: { ...FIXTURE_CONTRACT_ANALYSE.run!, status: 'failed', error: 'Boom' },
+        run: {
+          ...FIXTURE_CONTRACT_ANALYSE.run!,
+          status: 'failed',
+          error: 'Boom',
+        },
       });
       expect(text('workflow-ndv-output-error')).toBe('Boom');
       expect(byId('workflow-ndv-contract-violation')).toBeNull();
@@ -629,12 +674,12 @@ describe('WorkflowNodeDialog', () => {
         ...FIXTURE_TOOL,
         tool: {
           ...FIXTURE_TOOL.tool!,
-          calls: [{ tool: 'run_readonly_sql', input: 'SELECT 1', finished: false }],
+          calls: [
+            { tool: 'run_readonly_sql', input: 'SELECT 1', finished: false },
+          ],
         },
       });
-      expect(all('workflow-ndv-tool-result').map(squash)).toEqual([
-        'Running…',
-      ]);
+      expect(all('workflow-ndv-tool-result').map(squash)).toEqual(['Running…']);
     });
   });
 
@@ -660,8 +705,10 @@ describe('WorkflowNodeDialog', () => {
       byId('workflow-ndv')!.querySelectorAll<HTMLElement>(
         'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
-    );
+    ).filter((e) => e.closest('[hidden]') === null);
     const last = focusable[focusable.length - 1];
+    // Output starts collapsed: its toggle is the last control Tab reaches.
+    expect(last).toBe(byId('workflow-ndv-output-toggle')!);
     last.focus();
     const tab = new KeyboardEvent('keydown', {
       key: 'Tab',
@@ -691,9 +738,16 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
       running: false,
     });
 
-  function open(id: string, run = GRAPH_RETRY_RUN, chat: NodeChatAvailability = { state: 'hidden' }) {
+  function open(
+    id: string,
+    run = GRAPH_RETRY_RUN,
+    chat: NodeChatAvailability = { state: 'hidden' },
+  ) {
     fixture = TestBed.createComponent(WorkflowNodeDialog);
-    fixture.componentRef.setInput('node', nodes(run).find((n) => n.nodeId === id)!);
+    fixture.componentRef.setInput(
+      'node',
+      nodes(run).find((n) => n.nodeId === id)!,
+    );
     fixture.componentRef.setInput('workflow', GRAPH_WORKFLOW);
     fixture.componentRef.setInput('runId', 'run-retry');
     fixture.componentRef.setInput('chat', chat);
@@ -701,10 +755,10 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
   }
 
   beforeEach(() => {
-    const api = jasmine.createSpyObj<WorkflowRunsApiService>('WorkflowRunsApiService', [
-      'getNodeChat',
-      'streamNodeChat',
-    ]);
+    const api = jasmine.createSpyObj<WorkflowRunsApiService>(
+      'WorkflowRunsApiService',
+      ['getNodeChat', 'streamNodeChat'],
+    );
     api.getNodeChat.and.returnValue(of({ messages: [] }));
     TestBed.configureTestingModule({
       imports: [WorkflowNodeDialog],
@@ -743,15 +797,22 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     expect(view).not.toBeNull();
     expect(text('workflow-plan-question')).toBe('How many matches per stage?');
     const items = (id: string) =>
-      Array.from(byId(id)!.querySelectorAll('li')).map((li) => li.textContent?.trim());
+      Array.from(byId(id)!.querySelectorAll('li')).map((li) =>
+        li.textContent?.trim(),
+      );
     expect(items('workflow-plan-measures')).toEqual(['match count']);
     expect(items('workflow-plan-entities')).toEqual(['matches', 'stages']);
-    expect(items('workflow-plan-assumptions')).toEqual(['A replayed match counts once']);
+    expect(items('workflow-plan-assumptions')).toEqual([
+      'A replayed match counts once',
+    ]);
     expect(text('workflow-plan-scope')).toBe('All tournaments');
     expect(byId('workflow-plan-clarification')).toBeNull();
     // The raw data still follows it.
-    expect(view.compareDocumentPosition(byId('workflow-ndv-output')!.querySelector('app-workflow-data-view')!))
-      .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      view.compareDocumentPosition(
+        byId('workflow-ndv-output')!.querySelector('app-workflow-data-view')!,
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("shows a plan's clarification with its options", () => {
@@ -764,15 +825,24 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
               output: {
                 ...GRAPH_PLAN,
                 needsClarification: true,
-                clarification: { question: 'Which tournament?', options: ['2018', '2022'] },
+                clarification: {
+                  question: 'Which tournament?',
+                  options: ['2018', '2022'],
+                },
               },
             }
           : s,
       ),
     };
     open('plan', run);
-    expect(text('workflow-plan-clarification-question')).toBe('Which tournament?');
-    expect(all('workflow-plan-clarification-option').map((o) => o.textContent?.trim())).toEqual(['2018', '2022']);
+    expect(text('workflow-plan-clarification-question')).toBe(
+      'Which tournament?',
+    );
+    expect(
+      all('workflow-plan-clarification-option').map((o) =>
+        o.textContent?.trim(),
+      ),
+    ).toEqual(['2018', '2022']);
   });
 
   it('shows no plan for a step that only passes the plan on', () => {
@@ -785,13 +855,20 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     open('validate');
     expect(text('workflow-validate-ok')).toBe('Valid');
     expect(text('workflow-validate-attempt')).toContain('Attempt 2');
-    expect(all('workflow-validate-finding').map((f) => f.getAttribute('data-passed'))).toEqual(['true', 'true']);
+    expect(
+      all('workflow-validate-finding').map((f) =>
+        f.getAttribute('data-passed'),
+      ),
+    ).toEqual(['true', 'true']);
 
     byId('workflow-attempt-1')!.click();
     fixture.detectChanges();
     expect(text('workflow-validate-ok')).toBe('Not valid');
     const findings = all('workflow-validate-finding');
-    expect(findings.map((f) => f.getAttribute('data-passed'))).toEqual(['false', 'true']);
+    expect(findings.map((f) => f.getAttribute('data-passed'))).toEqual([
+      'false',
+      'true',
+    ]);
     expect(findings[0].textContent).toContain('Failed:');
     expect(findings[0].textContent).toContain('No query returned rows.');
   });

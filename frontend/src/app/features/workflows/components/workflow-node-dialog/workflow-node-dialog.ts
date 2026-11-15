@@ -79,8 +79,9 @@ const FOCUSABLE =
 
 /**
  * The node dialog (ui.md 4.4b): a node's input, its parameters and settings
- * (and, for an agent step, a chat about its run data), and its output in
- * three columns. The parent returns focus on `close`.
+ * (and, for an agent step, a chat about its run data), and its output,
+ * stacked top to bottom; Input and Output start collapsed. The parent
+ * returns focus on `close`.
  */
 @Component({
   selector: 'app-workflow-node-dialog',
@@ -133,6 +134,9 @@ export class WorkflowNodeDialog {
     const tab = this.tab();
     return tab === 'chat' && !this.hasChat() ? 'parameters' : tab;
   });
+  /** Input (above the tabs) and Output (below them) start collapsed. */
+  readonly inputOpen = signal(false);
+  readonly outputOpen = signal(false);
   /** The chat panel is created when Chat first shows, then kept while other tabs show. */
   readonly chatMounted = signal(false);
 
@@ -333,9 +337,10 @@ export class WorkflowNodeDialog {
 
   onKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Tab') return;
+    // A collapsed Input or Output body is hidden: its controls take no focus.
     const items = Array.from(
       this.dialog().nativeElement.querySelectorAll<HTMLElement>(FOCUSABLE),
-    );
+    ).filter((el) => el.closest('[hidden]') === null);
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];

@@ -55,46 +55,69 @@
     </button>
   </header>
 
-  <div class="grid min-h-0 flex-1 grid-cols-[1fr_minmax(0,1.1fr)_1fr]">
+  <!-- Input, the configuration and Output, top to bottom; Input and Output start collapsed. -->
+  <div class="flex min-h-0 flex-1 flex-col">
     <!-- Input -->
     <section
-      class="min-h-0 overflow-y-auto border-r border-border p-4"
+      class="flex min-h-0 flex-col border-b border-border"
+      [class.grow]="inputOpen()"
+      [class.basis-0]="inputOpen()"
+      [class.shrink-0]="!inputOpen()"
       data-testid="workflow-ndv-input"
       role="group"
       aria-label="Input"
     >
-      <h3
-        class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-      >
-        Input
+      <h3 class="m-0 shrink-0">
+        <button
+          type="button"
+          data-testid="workflow-ndv-input-toggle"
+          aria-controls="workflow-ndv-input-body"
+          [attr.aria-expanded]="inputOpen()"
+          class="flex w-full items-center gap-1.5 px-4 py-2.5 text-left text-[12px] font-medium tracking-wider text-fg-muted uppercase hover:text-fg-strong"
+          (click)="inputOpen.set(!inputOpen())"
+        >
+          <lucide-angular
+            [img]="ChevronRight"
+            [size]="14"
+            class="transition-transform"
+            [class.rotate-90]="inputOpen()"
+          />
+          Input
+        </button>
       </h3>
-      @if (tool(); as tool) {
-        <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
-          @for (call of tool.calls; track $index) {
-            <li>
-              <pre
-                data-testid="workflow-ndv-tool-input"
-                class="m-0 overflow-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap text-fg"
-                tabindex="0"
-                >{{ call.input ?? "No input recorded." }}</pre>
-            </li>
-          } @empty {
-            <li class="text-[13px] text-fg-muted">{{ toolNotRun }}</li>
-          }
-        </ul>
-      } @else {
-        <app-workflow-data-view
-          [value]="run()?.input"
-          [truncated]="run()?.inputTruncated === true"
-          [emptyText]="inputEmpty()"
-          [contract]="node().step?.inputSchema"
-        />
-      }
+      <div
+        id="workflow-ndv-input-body"
+        class="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+        [hidden]="!inputOpen()"
+      >
+        @if (tool(); as tool) {
+          <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+            @for (call of tool.calls; track $index) {
+              <li>
+                <pre
+                  data-testid="workflow-ndv-tool-input"
+                  class="m-0 overflow-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap text-fg"
+                  tabindex="0"
+                  >{{ call.input ?? "No input recorded." }}</pre>
+              </li>
+            } @empty {
+              <li class="text-[13px] text-fg-muted">{{ toolNotRun }}</li>
+            }
+          </ul>
+        } @else {
+          <app-workflow-data-view
+            [value]="run()?.input"
+            [truncated]="run()?.inputTruncated === true"
+            [emptyText]="inputEmpty()"
+            [contract]="node().step?.inputSchema"
+          />
+        }
+      </div>
     </section>
 
     <!-- Parameters / Settings -->
     <section
-      class="min-h-0 overflow-y-auto p-4"
+      class="min-h-0 flex-[2_1_0%] overflow-y-auto p-4"
       [class.flex]="activeTab() === 'chat'"
       [class.flex-col]="activeTab() === 'chat'"
       data-testid="workflow-ndv-params"
@@ -482,16 +505,32 @@
 
     <!-- Output -->
     <section
-      class="min-h-0 overflow-y-auto border-l border-border p-4"
+      class="flex min-h-0 flex-col border-t border-border"
+      [class.grow]="outputOpen()"
+      [class.basis-0]="outputOpen()"
+      [class.shrink-0]="!outputOpen()"
       data-testid="workflow-ndv-output"
       role="group"
       aria-label="Output"
     >
-      <div class="mb-2 flex items-center gap-2">
-        <h3
-          class="m-0 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-        >
-          Output
+      <div class="flex shrink-0 items-center gap-2 pr-4">
+        <h3 class="m-0">
+          <button
+            type="button"
+            data-testid="workflow-ndv-output-toggle"
+            aria-controls="workflow-ndv-output-body"
+            [attr.aria-expanded]="outputOpen()"
+            class="flex items-center gap-1.5 py-2.5 pl-4 text-left text-[12px] font-medium tracking-wider text-fg-muted uppercase hover:text-fg-strong"
+            (click)="outputOpen.set(!outputOpen())"
+          >
+            <lucide-angular
+              [img]="ChevronRight"
+              [size]="14"
+              class="transition-transform"
+              [class.rotate-90]="outputOpen()"
+            />
+            Output
+          </button>
         </h3>
         @if (statusLabel(); as label) {
           <span
@@ -503,125 +542,131 @@
         }
       </div>
 
-      @if (tool(); as tool) {
-        <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
-          @for (call of tool.calls; track $index) {
-            <li
-              data-testid="workflow-ndv-tool-result"
-              class="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px]"
-            >
-              <span
-                class="font-medium"
-                [class.text-fg-strong]="!hasError(call)"
-                [class.text-on-danger-soft]="hasError(call)"
-                >{{ callStatus(call) }}</span
+      <div
+        id="workflow-ndv-output-body"
+        class="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+        [hidden]="!outputOpen()"
+      >
+        @if (tool(); as tool) {
+          <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+            @for (call of tool.calls; track $index) {
+              <li
+                data-testid="workflow-ndv-tool-result"
+                class="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px]"
               >
-              @if (callMeta(call); as meta) {
-                <span class="text-[12px] text-fg-muted"> · {{ meta }}</span>
-              }
-              @if (hasError(call)) {
-                <span class="text-[12px] text-on-danger-soft">
-                  · {{ call.error }}</span
+                <span
+                  class="font-medium"
+                  [class.text-fg-strong]="!hasError(call)"
+                  [class.text-on-danger-soft]="hasError(call)"
+                  >{{ callStatus(call) }}</span
                 >
-              }
-            </li>
-          } @empty {
-            <li class="text-[13px] text-fg-muted">{{ toolNotRun }}</li>
-          }
-        </ul>
-      }
-
-      @if (node().kind === "agent" && run()) {
-        <h4
-          class="m-0 mb-1.5 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-        >
-          Tool calls
-        </h4>
-        <ul class="m-0 mb-3 flex list-none flex-col gap-1.5 p-0">
-          @for (call of toolCalls(); track $index) {
-            <li
-              data-testid="workflow-ndv-tool-call"
-              class="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px]"
-            >
-              <span class="font-medium text-fg-strong">{{ call.tool }}</span>
-              <span class="text-[12px] text-fg-muted">
-                @if (hasError(call)) {
-                  · <span class="text-on-danger-soft">{{ call.error }}</span>
-                } @else if (toolMeta(call)) {
-                  · {{ toolMeta(call) }}
+                @if (callMeta(call); as meta) {
+                  <span class="text-[12px] text-fg-muted"> · {{ meta }}</span>
                 }
-              </span>
-              @if (call.input) {
-                <pre
-                  class="m-0 mt-1 font-mono text-[12px] whitespace-pre-wrap break-words text-fg"
-                  >{{ call.input }}</pre>
-              }
-            </li>
-          } @empty {
-            <li class="text-[13px] text-fg-muted">No tool calls recorded.</li>
-          }
-        </ul>
-      }
+                @if (hasError(call)) {
+                  <span class="text-[12px] text-on-danger-soft">
+                    · {{ call.error }}</span
+                  >
+                }
+              </li>
+            } @empty {
+              <li class="text-[13px] text-fg-muted">{{ toolNotRun }}</li>
+            }
+          </ul>
+        }
 
-      @if (node().kind === "output" && endLine(); as line) {
-        <p
-          class="m-0 mb-2 text-[13px] text-fg"
-          data-testid="workflow-ndv-output-line"
-        >
-          {{ line }}
-        </p>
-      }
+        @if (node().kind === "agent" && run()) {
+          <h4
+            class="m-0 mb-1.5 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+          >
+            Tool calls
+          </h4>
+          <ul class="m-0 mb-3 flex list-none flex-col gap-1.5 p-0">
+            @for (call of toolCalls(); track $index) {
+              <li
+                data-testid="workflow-ndv-tool-call"
+                class="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px]"
+              >
+                <span class="font-medium text-fg-strong">{{ call.tool }}</span>
+                <span class="text-[12px] text-fg-muted">
+                  @if (hasError(call)) {
+                    · <span class="text-on-danger-soft">{{ call.error }}</span>
+                  } @else if (toolMeta(call)) {
+                    · {{ toolMeta(call) }}
+                  }
+                </span>
+                @if (call.input) {
+                  <pre
+                    class="m-0 mt-1 font-mono text-[12px] whitespace-pre-wrap break-words text-fg"
+                    >{{ call.input }}</pre>
+                }
+              </li>
+            } @empty {
+              <li class="text-[13px] text-fg-muted">No tool calls recorded.</li>
+            }
+          </ul>
+        }
 
-      @if (run()?.error; as error) {
-        <p
-          class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] break-words text-on-danger-soft"
-          data-testid="workflow-ndv-output-error"
-        >
-          @if (violation(); as v) {
-            <!-- A broken declared contract: the field path stands out (ui.md 4.4b). -->
-            <span data-testid="workflow-ndv-contract-violation"
-              >{{ v.prefix
-              }}<code
-                class="rounded bg-surface px-1 font-mono text-[12px] font-semibold"
-                data-testid="workflow-ndv-contract-violation-path"
-                >{{ v.path }}</code
-              ><span> {{ v.message }}</span></span
-            >
-          } @else {
-            {{ error }}
-          }
-        </p>
-      }
+        @if (node().kind === "output" && endLine(); as line) {
+          <p
+            class="m-0 mb-2 text-[13px] text-fg"
+            data-testid="workflow-ndv-output-line"
+          >
+            {{ line }}
+          </p>
+        }
 
-      @if (inputErrors().length) {
-        <!-- Start: the last Execute was refused; nothing ran (ui.md 4.4b). -->
-        <p class="m-0 mb-1.5 text-[13px] text-fg">
-          The input was refused, so the workflow did not start:
-        </p>
-        <ul
-          class="m-0 flex list-none flex-col gap-1.5 p-0"
-          data-testid="workflow-ndv-input-errors"
-        >
-          @for (error of inputErrors(); track $index) {
-            <li
-              class="rounded-lg bg-danger-soft px-3 py-1.5 text-[13px] text-on-danger-soft"
-            >
-              {{ error.message }}
-            </li>
-          }
-        </ul>
-      } @else if (!tool() && (!run()?.error || run()?.output)) {
-        <app-workflow-step-output-view
-          [output]="run()?.output"
-          [inputFields]="node().step?.input ?? []"
-        />
-        <app-workflow-data-view
-          [value]="run()?.output"
-          [truncated]="run()?.outputTruncated === true"
-          [emptyText]="outputEmpty()"
-          [contract]="node().step?.outputSchema"
-        />
-      }
+        @if (run()?.error; as error) {
+          <p
+            class="m-0 mb-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] break-words text-on-danger-soft"
+            data-testid="workflow-ndv-output-error"
+          >
+            @if (violation(); as v) {
+              <!-- A broken declared contract: the field path stands out (ui.md 4.4b). -->
+              <span data-testid="workflow-ndv-contract-violation"
+                >{{ v.prefix
+                }}<code
+                  class="rounded bg-surface px-1 font-mono text-[12px] font-semibold"
+                  data-testid="workflow-ndv-contract-violation-path"
+                  >{{ v.path }}</code
+                ><span> {{ v.message }}</span></span
+              >
+            } @else {
+              {{ error }}
+            }
+          </p>
+        }
+
+        @if (inputErrors().length) {
+          <!-- Start: the last Execute was refused; nothing ran (ui.md 4.4b). -->
+          <p class="m-0 mb-1.5 text-[13px] text-fg">
+            The input was refused, so the workflow did not start:
+          </p>
+          <ul
+            class="m-0 flex list-none flex-col gap-1.5 p-0"
+            data-testid="workflow-ndv-input-errors"
+          >
+            @for (error of inputErrors(); track $index) {
+              <li
+                class="rounded-lg bg-danger-soft px-3 py-1.5 text-[13px] text-on-danger-soft"
+              >
+                {{ error.message }}
+              </li>
+            }
+          </ul>
+        } @else if (!tool() && (!run()?.error || run()?.output)) {
+          <app-workflow-step-output-view
+            [output]="run()?.output"
+            [inputFields]="node().step?.input ?? []"
+          />
+          <app-workflow-data-view
+            [value]="run()?.output"
+            [truncated]="run()?.outputTruncated === true"
+            [emptyText]="outputEmpty()"
+            [contract]="node().step?.outputSchema"
+          />
+        }
+      </div>
     </section>
   </div>
 </section>

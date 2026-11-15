@@ -205,6 +205,16 @@ async function openTool(page: Page, stepId: string, tool: string): Promise<Locat
   return dialog;
 }
 
+/** Unfold the node dialog's Input or Output, which start collapsed (ui.md 4.4b). */
+async function expandNodeSection(page: Page, section: 'input' | 'output'): Promise<Locator> {
+  const dialog = nodeDialog(page);
+  const toggle = dialog.getByTestId(`workflow-ndv-${section}-toggle`);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  return dialog.getByTestId(`workflow-ndv-${section}`);
+}
+
 async function closeNode(page: Page): Promise<void> {
   await nodeDialog(page).getByTestId('workflow-ndv-close').click();
   await expect(nodeDialog(page)).toHaveCount(0);
@@ -548,6 +558,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         page,
         'Then its Output shows the question, the measures, the entities, the scope and the assumptions',
         async () => {
+          await expandNodeSection(page, 'output');
           const view = nodeDialog(page).getByTestId('workflow-plan-view');
           await expect(view).toBeVisible();
           await expect(view.getByTestId('workflow-plan-question')).toHaveText(QUESTION);
@@ -576,6 +587,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         page,
         'Then its Output shows the checks as a checklist, valid on attempt 1',
         async () => {
+          await expandNodeSection(page, 'output');
           const view = nodeDialog(page).getByTestId('workflow-validate-view');
           await expect(view).toBeVisible();
           await expect(view.getByTestId('workflow-validate-ok')).toHaveText('Valid');
@@ -871,6 +883,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         'Then its Output lists the refused errors and its parameters say what each field needs',
         async () => {
           const dialog = nodeDialog(page);
+          await expandNodeSection(page, 'output');
           await expect(dialog.getByTestId('workflow-ndv-input-errors').getByRole('listitem')).toHaveText([
             'Question is required',
             'Select at least one dataset',
@@ -1098,7 +1111,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         page,
         'And its Output in Schema mode shows the declared contract',
         async () => {
-          const output = nodeDialog(page).getByTestId('workflow-ndv-output');
+          const output = await expandNodeSection(page, 'output');
           await output.getByTestId('workflow-data-mode-schema').click();
           await expect(output.getByTestId('workflow-data-schema-declared')).toHaveText(
             'Declared contract',
@@ -1174,6 +1187,8 @@ test.describe('Feature: Workflows (the designer)', () => {
         async () => {
           const dialog = nodeDialog(page);
           await expect(dialog.getByTestId('workflow-ndv-output-status')).toHaveText('Done');
+          await expandNodeSection(page, 'input');
+          await expandNodeSection(page, 'output');
           await expect(
             dialog.getByTestId('workflow-ndv-input').getByTestId('workflow-data-json'),
           ).not.toBeEmpty();
@@ -1197,6 +1212,8 @@ test.describe('Feature: Workflows (the designer)', () => {
       await test.step('Then the "Analyse" dialog shows the error in its Output', async () => {
         const dialog = await openNode(page, 'analyse', 'Analyse');
         await expect(dialog.getByTestId('workflow-ndv-output-status')).toHaveText('Failed');
+        await expandNodeSection(page, 'output');
+        await expect(dialog.getByTestId('workflow-ndv-output-error')).toBeVisible();
         await expect(dialog.getByTestId('workflow-ndv-output-error')).not.toBeEmpty();
         await closeNode(page);
       });
@@ -1238,6 +1255,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(dialog.getByTestId('workflow-tool-field-inputs')).toContainText('sql');
         await expect(dialog.getByTestId('workflow-tool-field-step')).toHaveText('Analyse');
         await expect(dialog.getByTestId('workflow-step-field-system-prompt')).toHaveCount(0);
+        await expandNodeSection(page, 'input');
         await expect(dialog.getByTestId('workflow-ndv-input')).toContainText(
           'This tool has not run yet. Execute the workflow to see its calls.',
         );
@@ -1253,6 +1271,8 @@ test.describe('Feature: Workflows (the designer)', () => {
     });
     await test.step('Then its Input shows the SQL the agent ran and its Output the call done', async () => {
       const dialog = nodeDialog(page);
+      await expandNodeSection(page, 'input');
+      await expandNodeSection(page, 'output');
       await expect(dialog.getByTestId('workflow-ndv-tool-input')).toHaveText([SQL]);
       await expect(dialog.getByTestId('workflow-ndv-tool-result')).toHaveCount(1);
       await expect(dialog.getByTestId('workflow-ndv-tool-result')).toContainText(/^\s*Done/);
@@ -1439,6 +1459,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await scan('Answer a Business Question page, input refused');
 
   await openNode(page, 'start', 'Start');
+  await expandNodeSection(page, 'output');
   await expect(nodeDialog(page).getByTestId('workflow-ndv-input-errors')).toBeVisible();
   await scan('Answer a Business Question page, Start dialog with the refused input');
   await page.keyboard.press('Escape');
@@ -1459,14 +1480,16 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(nodeDialog(page)).toHaveCount(0);
 
   // Plan's and Validate's outputs as panels (ui.md 4.4b).
+  await openNode(page, 'plan', 'Plan');
   await expect(
-    (await openNode(page, 'plan', 'Plan')).getByTestId('workflow-plan-view'),
+    (await expandNodeSection(page, 'output')).getByTestId('workflow-plan-view'),
   ).toBeVisible();
   await scan('Answer a Business Question page, Plan dialog after a run');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
+  await openNode(page, 'validate', 'Validate');
   await expect(
-    (await openNode(page, 'validate', 'Validate')).getByTestId('workflow-validate-view'),
+    (await expandNodeSection(page, 'output')).getByTestId('workflow-validate-view'),
   ).toBeVisible();
   await scan('Answer a Business Question page, Validate dialog after a run');
   await page.keyboard.press('Escape');
