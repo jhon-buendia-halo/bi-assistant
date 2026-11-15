@@ -106,6 +106,10 @@ const userAgentsStub = {
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
+import {
+  QUERY_FACTS_CONTEXT_KEY,
+  queryFactsKey,
+} from './query-evidence/query-facts';
 import { sourceEntities } from './visualization-document';
 import { renderPdf } from '../../common/markdown-pdf';
 import { readWorkspaceFile } from './workspace-files';
@@ -441,6 +445,73 @@ describe('SessionsService streaming', () => {
     expect(session.messages.at(-1)?.interpretation).toBe(
       'Computed from 2 queries over main.football.matches — 3 rows analyzed.',
     );
+  });
+
+  it('stores one evidence entry per data record, from the facts beside the results (plan m1-25 1.25.1)', async () => {
+    const streamed: { agent?: { stream: jest.Mock } } = {};
+    // The tools write their facts into the turn's map as they run; the
+    // stand-in stream does the same before it hands out the chunks.
+    function* withFacts(): Generator<unknown> {
+      const options = (
+        streamed.agent!.stream.mock.calls as unknown[][]
+      )[0][1] as {
+        requestContext: { get: (key: string) => unknown };
+      };
+      const facts = options.requestContext.get(QUERY_FACTS_CONTEXT_KEY) as Map<
+        string,
+        unknown
+      >;
+      facts.set('call-0', {
+        datasourceId: 'ds-1',
+        totalRows: 1870,
+        rowLimit: 2,
+      });
+      facts.set(queryFactsKey('run_readonly_sql', 'select 2'), {
+        datasourceId: 'ds-1',
+        totalRows: 1,
+        rowLimit: 100,
+      });
+      yield* answerChunks([
+        { sql: 'select 1', rows: [{ n: 1 }, { n: 2 }], truncated: true },
+        { sql: 'select 2', rows: [{ n: 3 }] },
+        { sql: 'select nope', error: 'column "nope" does not exist' },
+      ]);
+    }
+    const { service, session, agent } = buildStreaming(streamOf(withFacts()));
+    streamed.agent = agent;
+
+    await streamStored(service, 'session-1', 'Why?', () => {});
+
+    const answer = session.messages.at(-1);
+    expect(answer?.data).toHaveLength(3);
+    expect(answer?.evidence).toEqual([
+      {
+        index: 0,
+        coverage: 'partial',
+        datasourceId: 'ds-1',
+        totalRows: 1870,
+        rowLimit: 2,
+      },
+      {
+        index: 1,
+        coverage: 'whole-table',
+        datasourceId: 'ds-1',
+        totalRows: 1,
+        rowLimit: 100,
+      },
+      { index: 2 },
+    ]);
+  });
+
+  it('stores evidence on a clarification card too', async () => {
+    const { service, session } = buildStreaming(clarificationStream());
+
+    await streamStored(service, 'session-1', 'Who won?', () => {});
+
+    expect(session.messages.at(-1)?.clarification).toBeDefined();
+    expect(session.messages.at(-1)?.evidence).toEqual([
+      { index: 0, coverage: 'whole-table' },
+    ]);
   });
 
   it('records the curated knowledge the turn was given on the answer', async () => {

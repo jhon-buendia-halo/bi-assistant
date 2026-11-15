@@ -13,6 +13,7 @@ import {
   ForeignKeyEdge,
   MASKED,
   splitEntity,
+  SQL_ROWS_MAX,
 } from './connector';
 
 const SYSTEM_SCHEMAS = new Set([
@@ -226,16 +227,19 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
     config: PostgresConfig,
     sql: string,
     rowLimit: number,
+    maxRows = SQL_ROWS_MAX,
   ): Promise<QueryResult> {
     const safeSql = assertReadOnlySql(sql);
-    const lim = clampRows(rowLimit, 100, 500);
+    const lim = clampRows(rowLimit, 100, maxRows);
     return this.withClient(config, 30_000, async (client) => {
       await client.query('BEGIN READ ONLY');
       try {
         const result = await client.query(safeSql);
+        const all = result.rows as Record<string, unknown>[];
         return {
           columns: result.fields.map((f) => f.name),
-          rows: (result.rows as Record<string, unknown>[]).slice(0, lim),
+          rows: all.slice(0, lim),
+          totalRows: all.length,
         };
       } finally {
         await client.query('ROLLBACK').catch(() => undefined);

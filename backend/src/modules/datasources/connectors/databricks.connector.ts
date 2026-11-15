@@ -18,6 +18,7 @@ import {
   mapWithConcurrency,
   MASKED,
   splitEntity,
+  SQL_ROWS_MAX,
 } from './connector';
 
 // Timeouts mirrored from data-readiness-agent's Databricks connector: fast
@@ -538,6 +539,7 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     raw: DatabricksConfig,
     sql: string,
     rowLimit: number,
+    maxRows = SQL_ROWS_MAX,
   ): Promise<QueryResult> {
     const safeSql = assertReadOnlySql(sql);
     const config = this.validate(raw);
@@ -548,13 +550,18 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     try {
       const op = await session.executeStatement(safeSql);
       const res = await this.fetchWithTimeout(op, QUERY_TIMEOUT_MS);
-      const lim = clampRows(rowLimit, 100, 500);
-      const rows: Record<string, unknown>[] = (res ?? [])
+      const lim = clampRows(rowLimit, 100, maxRows);
+      const all = res ?? [];
+      const rows: Record<string, unknown>[] = all
         .slice(0, lim)
         .map((r: unknown) => ({
           ...(typeof r === 'object' && r !== null ? r : {}),
         }));
-      return { columns: Object.keys(rows[0] ?? {}), rows };
+      return {
+        columns: Object.keys(rows[0] ?? {}),
+        rows,
+        totalRows: all.length,
+      };
     } finally {
       await session.close();
       await client.close();
