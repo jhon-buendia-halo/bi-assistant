@@ -12,6 +12,7 @@ import {
   foreignTable,
 } from '../agents/query-explainer.prompts';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
+import { answerResult } from './query-explainer-eval-answer';
 import { lastUserText } from './insights-analyst-workflow-target';
 
 /**
@@ -173,17 +174,6 @@ async function countSteps(
       s.verb === 'show' ? s : { ...s, rows: counts[next++] },
     ),
     stageCounts: { status: 'verified', at: new Date().toISOString() },
-  };
-}
-
-/** What `runEvals` reads of a target's result without any tool call. */
-function answerResult(input: unknown, answer: string) {
-  return {
-    text: answer,
-    steps: [],
-    toolCalls: [],
-    toolResults: [],
-    scoringData: { input, output: [] },
   };
 }
 
