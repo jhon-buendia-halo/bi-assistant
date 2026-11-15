@@ -53,6 +53,7 @@ Reply with one JSON object and nothing else:
 Rules:
 - Numbers: keep counts exact; round averages, ratios and other derived figures to at most 2 decimals, and percentages to at most 1 decimal (2.875 is 2.88, 3.000 is 3, 0.125 is 0.13, 25.00% is 25%); never add precision the data does not have.
 - Ties: when values tie at a ranking's cut-off, name every tied entry and say they are tied.
+- Long lists: when the answer lists more than 10 rows of one query's result, write no table for them; put, alone on a line where the table goes, [[rows:<n>]] (n is the query's number in the request), optionally with the columns to show and their headers: [[rows:2 | name=Driver, total_race_starts=Race starts]]. Up to 10 rows, write the table as usual. Never say that rows are missing or were cut because only some were shown to you.
 - Coverage: when the data does not cover what the question asks, say so and state what the data does cover; never fill the gap from general knowledge.
 - Nothing from general knowledge anywhere, assumptions and caveats included: no remark about what the domain usually is (how many matches a tournament normally has, how a rule usually counts), and nothing about values that did not appear in the results (do not say how own goals count when no own goal appears).
 - No usable rows (every query failed, or none ran): say the analysis could not get the data and give no figure.
@@ -127,11 +128,15 @@ export function planMessages(input: {
   };
 }
 
-/** One query as Write answer reads it: why, what came back, the rows. */
+/**
+ * One query as Write answer reads it: why, what came back (with how many
+ * rows are shown when it is not all of them, plan 1.25.6), the rows.
+ */
 function queryLines(query: AnalyseQuery, index: number): string {
+  const shown = Math.min(query.rows.length, ANSWER_ROWS_CAP);
   const facts = query.error
     ? `failed: ${query.error}`
-    : `${query.rowCount} rows${query.truncated ? ', cut at its row limit' : ''}`;
+    : `${query.rowCount} rows${shown < query.rowCount ? `, the first ${shown} shown` : ''}${query.truncated ? ', cut at its row limit' : ''}`;
   const rows = query.error
     ? []
     : [JSON.stringify(query.rows.slice(0, ANSWER_ROWS_CAP))];

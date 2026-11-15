@@ -9,8 +9,12 @@ import {
   ANSWER_BUSINESS_QUESTION_EDGES,
   ANSWER_BUSINESS_QUESTION_STEPS,
   analysisLoopDone,
+  answerDeltas,
   answerOf,
+  answerWithRowTables,
   assessable,
+  expandRowTables,
+  ROW_TABLE_CAP,
   dataQualityFailure,
   dataQualityFindings,
   queriedTables,
@@ -31,6 +35,7 @@ import {
   type AnalysisPlan,
 } from './answer-business-question.steps';
 import {
+  ANSWER_ROWS_CAP,
   PLAN_FIRST_LINE,
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_FIRST_LINE,
@@ -646,6 +651,178 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
     });
   });
 
+  describe('expandRowTables (plan 1.25.6)', () => {
+    const drivers = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        name: `Driver ${i + 1}`,
+        total_race_starts: 400 - i,
+      }));
+    const listed = (rows: Record<string, unknown>[], rowCount = rows.length) =>
+      query({
+        sql: 'SELECT name, total_race_starts FROM drivers ORDER BY 2 DESC',
+        rows,
+        rowCount,
+      });
+
+    it('turns [[rows:1]] into a table of every row the query holds, in order, every column named readably', () => {
+      const out = expandRowTables('Top drivers:\n\n[[rows:1]]\n\nMore.', [
+        listed(drivers(102)),
+      ]);
+      const lines = out.split('\n');
+      expect(lines[0]).toBe('Top drivers:');
+      expect(out).toContain(
+        '| Name | Total race starts |\n| --- | --- |\n| Driver 1 | 400 |\n| Driver 2 | 399 |',
+      );
+      expect(lines.filter((line) => line.startsWith('| Driver'))).toHaveLength(
+        102,
+      );
+      expect(out).toContain('| Driver 102 | 299 |');
+      expect(out).not.toContain('[[');
+      expect(out).not.toContain('Showing the first');
+      expect(out.endsWith('More.')).toBe(true);
+    });
+
+    it('shows only the named columns, in that order, under their headers', () => {
+      const out = expandRowTables(
+        '[[rows:1 | total_race_starts=Race starts, name=Driver]]',
+        [listed(drivers(12))],
+      );
+      expect(out).toContain(
+        '| Race starts | Driver |\n| --- | --- |\n| 400 | Driver 1 |',
+      );
+    });
+
+    it('ignores a column the result does not have; with none left it shows every column', () => {
+      expect(
+        expandRowTables('[[rows:1 | name=Driver, wins=Wins]]', [
+          listed(drivers(12)),
+        ]),
+      ).toContain('| Driver |\n| --- |\n| Driver 1 |');
+      expect(
+        expandRowTables('[[rows:1 | wins=Wins]]', [listed(drivers(12))]),
+      ).toContain('| Name | Total race starts |');
+    });
+
+    it(`adds a note when the result has more rows than the ${ROW_TABLE_CAP} it holds`, () => {
+      const out = expandRowTables('[[rows:1]]', [
+        listed(drivers(ROW_TABLE_CAP), 1870),
+      ]);
+      expect(
+        out.split('\n').filter((line) => line.startsWith('| Driver')),
+      ).toHaveLength(200);
+      expect(out).toContain(
+        '\n\nShowing the first 200 of 1,870 rows. Open the query to download all of them.',
+      );
+    });
+
+    it('removes a marker naming an unknown query, a failed query or an empty result', () => {
+      const queries = [
+        listed(drivers(12)),
+        query({ error: 'boom', rows: [], rowCount: 0 }),
+        listed([]),
+      ];
+      for (const marker of [
+        '[[rows:4]]',
+        '[[rows:2]]',
+        '[[rows:3]]',
+        '[[rows:0]]',
+      ]) {
+        expect(expandRowTables(`Before.\n${marker}\nAfter.`, queries)).toBe(
+          'Before.\nAfter.',
+        );
+      }
+    });
+
+    it('keeps each cell as stored: escapes a pipe and a line break, leaves null empty', () => {
+      const out = expandRowTables('[[rows:1]]', [
+        listed([
+          { name: 'A|B', total_race_starts: 12.3456 },
+          { name: 'line\nbreak', total_race_starts: null },
+        ]),
+      ]);
+      expect(out).toContain('| A\\|B | 12.3456 |');
+      expect(out).toContain('| line<br>break |  |');
+    });
+
+    it('removes a marker written inside a line; leaves other text with brackets alone', () => {
+      expect(
+        expandRowTables('See [[rows:1]] below. [[note]] stays.', [
+          listed(drivers(12)),
+        ]),
+      ).toBe('See  below. [[note]] stays.');
+    });
+
+    it('separates the table from the text around it with blank lines', () => {
+      expect(
+        expandRowTables('Here:\n[[rows:1 | name=Driver]]\nAfter.', [
+          listed(drivers(1)),
+        ]),
+      ).toBe('Here:\n\n| Driver |\n| --- |\n| Driver 1 |\n\nAfter.');
+    });
+
+    it('never expands the headline: a marker in it is removed', () => {
+      expect(
+        answerWithRowTables(
+          {
+            headline: 'Top 12 drivers [[rows:1]]',
+            answer: 'Top 12.\n[[rows:1]]',
+          },
+          [listed(drivers(12))],
+        ).headline,
+      ).toBe('Top 12 drivers');
+    });
+  });
+
+  describe('answerDeltas: the streamed answer (plan 1.25.6)', () => {
+    const rows = Array.from({ length: 12 }, (_, i) => ({ n: i + 1 }));
+    const queries = [query({ rows, rowCount: 12 })];
+
+    /** Stream `text` one character at a time, then finish with it. */
+    function streamed(text: string): { deltas: string[]; final: string } {
+      const deltas: string[] = [];
+      const stream = answerDeltas(queries, (delta) => deltas.push(delta));
+      for (let i = 1; i <= text.length; i += 1) stream.update(text.slice(0, i));
+      const final = expandRowTables(text, queries);
+      stream.finish(final);
+      return { deltas, final };
+    }
+
+    it('never sends a marker, whole or in part, and sends the expanded answer exactly once', () => {
+      const text =
+        'Twelve rows.\n\n[[rows:1 | n=Number]]\n\nA [link](x) and [[other]] text.\n[[rows:1]]';
+      const { deltas, final } = streamed(text);
+      expect(deltas.join('')).toBe(final);
+      expect(final).not.toContain('[[rows');
+      // Append-only: no text sent so far ever ends in the start of a marker.
+      const opening = ['[', '[[', '[[r', '[[ro', '[[row', '[[rows', '[[rows:'];
+      let shown = '';
+      for (const delta of deltas) {
+        shown += delta;
+        expect(opening.some((start) => shown.endsWith(start))).toBe(false);
+      }
+      expect(final).toContain('| Number |');
+      expect(final).toContain('[[other]] text.');
+    });
+
+    it('holds back an unfinished [[ until it proves not to be a marker', () => {
+      const deltas: string[] = [];
+      const stream = answerDeltas(queries, (delta) => deltas.push(delta));
+      stream.update('Ranked [[');
+      expect(deltas.join('')).toBe('Ranked ');
+      stream.update('Ranked [[x');
+      expect(deltas.join('')).toBe('Ranked [[x');
+    });
+
+    it('sends a table as soon as its marker line is complete', () => {
+      const deltas: string[] = [];
+      const stream = answerDeltas(queries, (delta) => deltas.push(delta));
+      stream.update('Rows:\n[[rows:1]]');
+      expect(deltas.join('')).toBe('Rows:\n');
+      stream.update('Rows:\n[[rows:1]]\n');
+      expect(deltas.join('')).toContain('| N |\n| --- |\n| 1 |');
+    });
+  });
+
   describe('validateAttempt', () => {
     it('passes an attempt whose query ran and covers the planned measures', () => {
       const { ok, findings } = validateAttempt({
@@ -743,6 +920,29 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(request).toContain('[{"player":"Kane","goals":6}]');
       expect(request).toContain('2. (no rationale given) (failed: boom)');
       expect(request).toContain('- passed: Ran a query. 1 of 2.');
+    });
+
+    it('says how many rows a long result has and how many Write answer is shown (plan 1.25.6)', () => {
+      const rows = Array.from({ length: 102 }, (_, n) => ({ n }));
+      const request = writeAnswerRequest({
+        question: 'Which 100 drivers have the most race starts?',
+        plan: PLAN,
+        queries: [query({ rows, rowCount: 102 })],
+        findings: [],
+      });
+      expect(request).toContain(
+        '1. I count the goals of each player. (102 rows, the first 50 shown)',
+      );
+      expect(request).toContain(JSON.stringify(rows.slice(0, ANSWER_ROWS_CAP)));
+      expect(request).not.toContain('{"n":50}');
+    });
+
+    it('tells Write answer to mark a list of more than 10 rows instead of writing it (plan 1.25.6)', () => {
+      expect(WRITE_ANSWER_INSTRUCTIONS).toContain('[[rows:<n>]]');
+      expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
+        '[[rows:2 | name=Driver, total_race_starts=Race starts]]',
+      );
+      expect(WRITE_ANSWER_INSTRUCTIONS).toContain('more than 10 rows');
     });
 
     it('hands a retry of Analyse the failed checks of the previous attempt', () => {

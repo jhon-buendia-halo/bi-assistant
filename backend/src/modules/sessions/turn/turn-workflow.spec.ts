@@ -65,8 +65,8 @@ describe('an analysis attempt from its data records (agents.md 5.11)', () => {
       tool: 'run_readonly_sql',
       input: 'SELECT n FROM t',
       rationale: 'I count.',
-      rows: Array.from({ length: 60 }, (_, n) => ({ n })),
-      rowCount: 60,
+      rows: Array.from({ length: 260 }, (_, n) => ({ n })),
+      rowCount: 260,
       truncated: true,
     },
     { tool: 'run_readonly_sql', input: 'SELECT nope', error: 'no column' },
@@ -78,9 +78,11 @@ describe('an analysis attempt from its data records (agents.md 5.11)', () => {
     expect(queries[0]).toMatchObject({
       sql: 'SELECT n FROM t',
       rationale: 'I count.',
-      rowCount: 60,
+      rowCount: 260,
       truncated: true,
     });
+    // Plan 1.25.6: an attempt passes on up to 200 rows, so the answer can list them.
+    expect(ATTEMPT_ROWS_CAP).toBe(200);
     expect(queries[0].rows).toHaveLength(ATTEMPT_ROWS_CAP);
     expect(queries[1]).toEqual({
       sql: 'SELECT nope',
@@ -95,7 +97,7 @@ describe('an analysis attempt from its data records (agents.md 5.11)', () => {
     expect(analyseAttemptOf(records, false, '  A note. ')).toMatchObject({
       calls: [
         { tool: 'list_entities', failed: false },
-        { tool: 'run_readonly_sql', rowCount: 60, failed: false },
+        { tool: 'run_readonly_sql', rowCount: 260, failed: false },
         { tool: 'run_readonly_sql', failed: true },
       ],
       text: 'A note.',
