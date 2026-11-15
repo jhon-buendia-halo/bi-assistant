@@ -13,8 +13,10 @@ import {
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
+  DASHBOARD_READER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
+  MOCK_BUILDER_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
@@ -31,6 +33,14 @@ import {
   READINESS_DEFAULT_QUESTION,
 } from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
+import {
+  RECREATE_DASHBOARD_DEFAULT_QUESTION,
+  RECREATE_DASHBOARD_DESCRIPTION,
+  RECREATE_DASHBOARD_EDGES,
+  RECREATE_DASHBOARD_STEPS,
+  RECREATE_DASHBOARD_WORKFLOW_ID,
+  RECREATE_DASHBOARD_WORKFLOW_NAME,
+} from './recreate-dashboard.steps';
 import {
   ANSWER_BUSINESS_QUESTION_EDGES,
   ANSWER_BUSINESS_QUESTION_STEPS,
@@ -200,6 +210,36 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       ],
       steps: DATA_READINESS_ASSESSMENT_STEPS,
       edges: DATA_READINESS_ASSESSMENT_EDGES,
+      bar: 'steps',
+    },
+    {
+      id: RECREATE_DASHBOARD_WORKFLOW_ID,
+      name: RECREATE_DASHBOARD_WORKFLOW_NAME,
+      description: RECREATE_DASHBOARD_DESCRIPTION,
+      // Grace reads the dashboard; Lucas builds the mock.
+      primaryFor: DASHBOARD_READER_AGENT_KEY,
+      stepAgents: { 'build-mock': MOCK_BUILDER_AGENT_KEY },
+      trigger: 'run',
+      input: [
+        {
+          name: 'image',
+          label: 'Dashboard image',
+          type: 'image',
+          required: true,
+          help: 'A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.',
+        },
+        {
+          name: 'question',
+          label: 'Instructions',
+          type: 'textarea',
+          required: false,
+          placeholder: RECREATE_DASHBOARD_DEFAULT_QUESTION,
+          default: RECREATE_DASHBOARD_DEFAULT_QUESTION,
+          maxLength: QUESTION_MAX_LENGTH,
+        },
+      ],
+      steps: RECREATE_DASHBOARD_STEPS,
+      edges: RECREATE_DASHBOARD_EDGES,
       bar: 'steps',
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));

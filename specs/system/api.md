@@ -648,7 +648,8 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     type: 'text' | 'textarea' | 'number'
         | 'boolean'                   // a checkbox; absent means false (or `default`)
         | 'datasets'                  // one or more dataset names
-        | 'dataset';                  // exactly one dataset name
+        | 'dataset'                   // exactly one dataset name
+        | 'image';                    // one PNG, JPEG or WebP image of at most 5 MB, as a base64 `data:` URL (118's rules); a stored run holds the file's path instead
     required: boolean;
     placeholder?: string;
     help?: string;                    // one line under the control
@@ -668,16 +669,17 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   |---|---|---|---|---|---|---|
   | `answer-business-question` | `Answer a Business Question` | code | `insights-analyst` | 9 | steps | none |
   | `data-readiness-assessment` | `Assess Data Readiness` | code | `data-readiness` | 6 | steps | the Data Readiness Agent's (its PostgreSQL and Databricks datasets) |
+  | `recreate-dashboard` | `Recreate a Dashboard` | code | `dashboard-reader`, `mock-builder` | 4 | steps | none |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33), except the description, which is the workflow's own; v2's starter questions are empty, as in its AgentSummary; Assess Data Readiness's are the Data Readiness Agent's three.
-- **Trigger and input:** both are run workflows: `trigger: 'run'` and an `input` they run on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
+- **Trigger and input:** all are run workflows: `trigger: 'run'` and an `input` they run on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
 
   | id | `input` (in order) |
   |---|---|
   | `answer-business-question` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`, `maxLength` 4000, `usedBy` `['receive-question']`); `datasets` (`Datasets`, datasets, required, `usedBy` `['receive-question']`); `checkDataQuality` (`Check data quality: Sarah reviews the tables the analysis used`, boolean, optional, `default` false, `usedBy` `[]`: it picks the branch to Check data quality, [agents.md](agents.md) 5.11) |
   | `data-readiness-assessment` | `dataset` (`Dataset`, dataset, required, `datasourceKinds` `['postgres', 'databricks']`, `usedBy` `['resolve-dataset']`); `question` (`Question`, textarea, optional, placeholder and default `Assess the readiness of this dataset`, `maxLength` 4000, `usedBy` `['resolve-dataset']`) |
 
-- **Order:** `answer-business-question`, then `data-readiness-assessment`. No agent (System, Official or user) is listed.
+- **Order:** `answer-business-question`, `data-readiness-assessment`, then `recreate-dashboard`. No agent (System, Official or user) is listed.
 
 #### 117. `GET /workflows/:id`
 - Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[]; edges: WorkflowEdge[]; contractHash: string }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
@@ -748,6 +750,8 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   };
   ```
   Field errors (`field` = the field's name): `"<label> is required"` for a required field that is missing, `""` or whitespace-only (`"Question is required"`); `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be at least <min>"` / `"<label> must be at most <max>"` for a number outside `min` / `max`; `"<label> must be at most <maxLength> characters"` for a text whose trimmed length is over `maxLength` (`"Question must be at most 4000 characters"`); `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`). Non-field errors (`field: null`): `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer, listed after the field errors; `"Workflow \"<id>\" can't run on an input"` alone, for a workflow with no input fields. Example: `{ input: { question: "  ", datasets: [] } }` answers `{ statusCode: 400, error: "Bad Request", message: "Question is required", errors: [{ field: "question", message: "Question is required" }, { field: "datasets", message: "Select at least one dataset" }] }`. `404 "Workflow \"<id>\" not found"` for any id 116 does not list (plain Style B, no `errors`).
+  An `image` field: `"<label> must be a PNG, JPEG or WebP image"` when the value is not a base64 `data:` URL of one of those types or its bytes do not start as a file of that type does, and `"<label> must be at most 5 MB"` over 5 MB (5 × 1024 × 1024 bytes, decoded).
+- **An image is not stored in the run.** For each `image` field the checked `data:` URL is taken out: the stored run's `input` holds the path `inputs/<field name>.<png|jpg|webp>` of the file in the run's workspace ([agents.md](agents.md) 5.17), and every response carries that path, never the image. With `context.fromRunId` naming a run of the same workflow, an `image` value equal to that run's stored path stands for that run's image (a follow-up runs on the same image); any other non-image value is refused as above.
 - A refused run is never stored and no step runs.
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream.
 
@@ -1677,7 +1681,7 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset deletes its own ontology items but leaves sessions that name it. Behaviour of such dangling references is not specified in the API.
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
 - **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for ontology, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
-- **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
+- **G9. Request body size.** The JSON body limit is 8 MB (`JSON_BODY_LIMIT`, `app-bootstrap.ts`; since 2026-11-15, so a run's 5 MB image fits as base64, 118), up from the framework default (about 100 kB); large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
 - **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication (G14); only the CLI binds `127.0.0.1` by default. Kept by the user's choice (ADR-0030).
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.
 - **G12. Spec of `PUT /metrics/:id` not-found** is thrown as a 400-class exception but surfaced inside the `ok:false` envelope, so clients cannot distinguish "not found" from validation by status.

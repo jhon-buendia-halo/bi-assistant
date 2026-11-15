@@ -1,7 +1,9 @@
 import { WorkflowInputField } from '../models/workflow.model';
 import {
+  IMAGE_MAX_BYTES,
   fieldRulesLabel,
   inputErrorsByField,
+  isImageDataUrl,
   usedByTitles,
   validateRunForm,
 } from './workflow-input-validation';
@@ -167,5 +169,52 @@ describe('the Start dialog Parameters rows', () => {
       usedByTitles({ ...question, usedBy: ['receive-question', 'gone'] }, steps),
     ).toEqual(['Receive question', 'gone']);
     expect(usedByTitles(question, steps)).toEqual([]);
+  });
+});
+
+describe('an image field', () => {
+  const image: WorkflowInputField = {
+    name: 'image',
+    label: 'Dashboard image',
+    type: 'image',
+    required: true,
+  };
+  const errorOf = (value: string | undefined) =>
+    validateRunForm([image], value === undefined ? {} : { image: value }, null);
+
+  it('takes a PNG, JPEG or WebP data URL', () => {
+    for (const type of ['png', 'jpeg', 'webp']) {
+      expect(errorOf(`data:image/${type};base64,AAAA`)).toEqual([]);
+    }
+    expect(isImageDataUrl('data:image/png;base64,AAAA')).toBeTrue();
+  });
+
+  it('refuses a missing image, another file type and a stored path', () => {
+    expect(errorOf(undefined)).toEqual([
+      { field: 'image', message: 'Dashboard image is required' },
+    ]);
+    const wrong = [
+      {
+        field: 'image',
+        message: 'Dashboard image must be a PNG, JPEG or WebP image',
+      },
+    ];
+    expect(errorOf('data:image/gif;base64,AAAA')).toEqual(wrong);
+    expect(errorOf('data:application/pdf;base64,AAAA')).toEqual(wrong);
+    expect(errorOf('inputs/image.png')).toEqual(wrong);
+    expect(isImageDataUrl('inputs/image.png')).toBeFalse();
+  });
+
+  it('refuses an image over 5 MB and takes one of exactly 5 MB', () => {
+    // Four base64 characters hold three bytes.
+    const base64 = (bytes: number) => 'A'.repeat((bytes / 3) * 4);
+    expect(errorOf(`data:image/png;base64,${base64(IMAGE_MAX_BYTES)}`)).toEqual(
+      [],
+    );
+    expect(
+      errorOf(`data:image/png;base64,${base64(IMAGE_MAX_BYTES + 3)}`),
+    ).toEqual([
+      { field: 'image', message: 'Dashboard image must be at most 5 MB' },
+    ]);
   });
 });

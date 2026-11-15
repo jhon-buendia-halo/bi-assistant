@@ -82,6 +82,16 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     role: 'Insights Writer',
     domain: 'storytelling',
   },
+  'dashboard-reader': {
+    name: 'Grace',
+    role: 'Dashboard Analyst',
+    domain: 'storytelling',
+  },
+  'mock-builder': {
+    name: 'Lucas',
+    role: 'Prototype Developer',
+    domain: 'storytelling',
+  },
 };
 
 /** The persona of a built-in agent, or undefined for an unknown key. */

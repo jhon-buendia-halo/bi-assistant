@@ -16,6 +16,10 @@ import {
   writeAnswerWithModel,
 } from './workflows/answer-business-question.agents';
 import {
+  buildMockWithModel,
+  readDashboardWithModel,
+} from './workflows/recreate-dashboard.agents';
+import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
   initializeSessionWorkspace,
@@ -109,6 +113,28 @@ export class MastraService {
     ...args: Parameters<typeof checkDataQualityWithModel>
   ): ReturnType<typeof checkDataQualityWithModel> {
     return checkDataQualityWithModel(...args);
+  }
+
+  /**
+   * Recreate a Dashboard's Read dashboard step model call (agents.md
+   * 5.17): the Dashboard Reader over the image, the blueprint read from
+   * its reply.
+   */
+  readDashboard(
+    ...args: Parameters<typeof readDashboardWithModel>
+  ): ReturnType<typeof readDashboardWithModel> {
+    return readDashboardWithModel(...args);
+  }
+
+  /**
+   * Recreate a Dashboard's Build mock step model call (agents.md 5.17):
+   * the Mock Builder over the blueprint and the image, the mock read from
+   * its reply.
+   */
+  buildMock(
+    ...args: Parameters<typeof buildMockWithModel>
+  ): ReturnType<typeof buildMockWithModel> {
+    return buildMockWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

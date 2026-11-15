@@ -354,3 +354,27 @@ describe('Runs list helpers (plan 1.24.11)', () => {
     });
   });
 });
+
+describe('runAgainValues with an image field', () => {
+  it("leaves the image out: a stored run holds the file's path, not the image", () => {
+    expect(
+      runAgainValues(
+        [
+          {
+            name: 'image',
+            label: 'Dashboard image',
+            type: 'image',
+            required: true,
+          },
+          {
+            name: 'question',
+            label: 'Instructions',
+            type: 'textarea',
+            required: false,
+          },
+        ],
+        { image: 'inputs/image.png', question: 'Dark theme' },
+      ),
+    ).toEqual({ question: 'Dark theme' });
+  });
+});

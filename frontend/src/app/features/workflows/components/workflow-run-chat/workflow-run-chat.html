@@ -394,6 +394,44 @@
                   }
                 </div>
               }
+              @case ("image") {
+                <div class="flex flex-col gap-1">
+                  <label [for]="inputId(field.name)" class="text-[12px] font-medium text-fg-muted">{{
+                    field.label
+                  }}</label>
+                  <input
+                    type="file"
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.accept]="imageAccept"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    (change)="onImage(field.name, $event)"
+                    class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:text-fg"
+                  />
+                  @if (imagePreview(field.name); as preview) {
+                    <img
+                      [src]="preview"
+                      [alt]="imageName(field.name) || field.label"
+                      [attr.data-testid]="inputId(field.name) + '-preview'"
+                      class="max-h-40 w-auto self-start rounded-md border border-border object-contain"
+                    />
+                  }
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">{{ field.help }}</p>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
               @case ("textarea") {
                 <div class="flex flex-col gap-1">
                   <label

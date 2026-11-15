@@ -12,6 +12,8 @@ import {
   INSIGHTS_ANALYST_TOOL_NAMES,
 } from '../agents/insights-analyst-catalog';
 import {
+  DASHBOARD_READER_AGENT_KEY,
+  DASHBOARD_READER_AGENT_NAME,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_AGENT_NAME,
   DATA_READINESS_MAX_STEPS,
@@ -74,6 +76,13 @@ const STEP_AGENTS: Record<
       'ask_clarification',
     ],
     maxSteps: DATA_READINESS_MAX_STEPS,
+  },
+  // Recreate a Dashboard (agents.md 5.17): both of its agent steps are one
+  // model call without tools.
+  [DASHBOARD_READER_AGENT_KEY]: {
+    name: DASHBOARD_READER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
   },
 };
 

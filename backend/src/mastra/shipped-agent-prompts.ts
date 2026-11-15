@@ -5,6 +5,10 @@ import {
   WRITE_ANSWER_INSTRUCTIONS,
 } from './workflows/answer-business-question.prompts';
 import {
+  BUILD_MOCK_INSTRUCTIONS,
+  READ_DASHBOARD_INSTRUCTIONS,
+} from './workflows/recreate-dashboard.prompts';
+import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
   EVAL_JUDGE_PROMPT,
@@ -31,6 +35,8 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'data-readiness': DATA_READINESS_PROMPT,
   'analysis-planner': PLAN_INSTRUCTIONS,
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
+  'dashboard-reader': READ_DASHBOARD_INSTRUCTIONS,
+  'mock-builder': BUILD_MOCK_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

@@ -140,7 +140,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   await expect(button(page, 'New agent')).toBeEnabled();
   // Every card shows: no section hides a row behind Show more (R3).
   await expect(page.getByText(/^Show more/)).toHaveCount(0);
-  await expect(cards(page)).toHaveCount(12);
+  await expect(cards(page)).toHaveCount(14);
 
   const analysis = section(page, 'analysis');
   await expect(
@@ -164,7 +164,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   for (const [id, heading, keys] of [
     ['data-foundations', 'Data Foundations', ['data-readiness', 'knowledge-bootstrap']],
     ['sql', 'SQL Engineering', ['sql-fixer', 'sql-verifier']],
-    ['storytelling', 'Storytelling', ['answer-writer', 'visualization']],
+    ['storytelling', 'Storytelling', ['dashboard-reader', 'answer-writer', 'mock-builder', 'visualization']],
     ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {
     await expect(
@@ -301,7 +301,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
 
   await owner.selectOption({ label: 'Any owner' });
   await filter(page, 'All').click();
-  await expect(cards(page)).toHaveCount(12);
+  await expect(cards(page)).toHaveCount(14);
   await expect.poll(() => sectionIds(page)).toEqual(DOMAIN_SECTIONS);
 });
 
@@ -498,7 +498,7 @@ test('the hub has no detectable accessibility violations in either theme', async
 }) => {
   await followOsTheme(page);
   await openHub(page);
-  await expect(cards(page)).toHaveCount(12);
+  await expect(cards(page)).toHaveCount(14);
 
   await page.addScriptTag({ content: axe.source });
   for (const theme of ['light', 'dark'] as const) {

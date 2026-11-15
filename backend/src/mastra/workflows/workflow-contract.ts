@@ -145,6 +145,8 @@ const FIELD_SCHEMAS: Record<WorkflowInputFieldType, JsonSchema> = {
   text: { type: 'string' },
   textarea: { type: 'string' },
   dataset: { type: 'string' },
+  // The path the run stores the image at.
+  image: { type: 'string' },
   number: { type: 'number' },
   boolean: { type: 'boolean' },
   datasets: { type: 'array', items: { type: 'string' } },

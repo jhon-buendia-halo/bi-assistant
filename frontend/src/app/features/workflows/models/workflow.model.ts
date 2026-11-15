@@ -17,7 +17,12 @@ export type WorkflowInputFieldType =
   /** One or more dataset names. */
   | 'datasets'
   /** Exactly one dataset name. */
-  | 'dataset';
+  | 'dataset'
+  /**
+   * One image (PNG, JPEG or WebP, at most 5 MB), sent as a `data:` URL; a
+   * stored run holds the path of the file instead.
+   */
+  | 'image';
 
 /** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {

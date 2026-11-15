@@ -39,7 +39,12 @@ describe('built-in agent personas (agents.md 1.1)', () => {
       'data-foundations': ['data-readiness', 'knowledge-bootstrap'],
       analysis: ['analysis-planner', 'assistant', 'insights-analyst'],
       sql: ['sql-fixer', 'sql-verifier'],
-      storytelling: ['answer-writer', 'visualization'],
+      storytelling: [
+        'answer-writer',
+        'dashboard-reader',
+        'mock-builder',
+        'visualization',
+      ],
       quality: ['assistant-eval-judge'],
     });
   });

@@ -1,737 +1,5 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
-exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) data-readiness-assessment's contract (JSON Schemas and hash) is the reviewed one 1`] = `
-{
-  "contractHash": "52f8e7f5d6a1",
-  "edges": [
-    {
-      "from": "start",
-      "kind": "next",
-      "to": "resolve-dataset",
-    },
-    {
-      "from": "resolve-dataset",
-      "kind": "next",
-      "to": "profile-source",
-    },
-    {
-      "from": "profile-source",
-      "kind": "next",
-      "to": "score-readiness",
-    },
-    {
-      "from": "score-readiness",
-      "kind": "next",
-      "to": "save-report",
-    },
-    {
-      "from": "save-report",
-      "kind": "next",
-      "to": "explain-report",
-    },
-    {
-      "from": "explain-report",
-      "kind": "next",
-      "to": "wrap-up",
-    },
-    {
-      "from": "wrap-up",
-      "kind": "next",
-      "to": "end",
-    },
-  ],
-  "input": [
-    {
-      "name": "dataset",
-      "required": true,
-      "type": "dataset",
-    },
-    {
-      "name": "question",
-      "required": false,
-      "type": "textarea",
-    },
-  ],
-  "steps": [
-    {
-      "id": "resolve-dataset",
-      "inputSchema": {
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "question": {
-            "description": "The user's question; by default, assess the dataset.",
-            "type": "string",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-        ],
-        "type": "object",
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-        ],
-        "type": "object",
-      },
-    },
-    {
-      "id": "profile-source",
-      "inputSchema": {
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-        ],
-        "type": "object",
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "entityCount": {
-            "description": "Entities in the profile.",
-            "type": "number",
-          },
-          "notProfiledCount": {
-            "description": "Entities not column-profiled (too large or timed out).",
-            "type": "number",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "relationshipCount": {
-            "description": "Declared and inferred relationships profiled.",
-            "type": "number",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-          "entityCount",
-          "relationshipCount",
-          "notProfiledCount",
-          "stopped",
-        ],
-        "type": "object",
-      },
-    },
-    {
-      "id": "score-readiness",
-      "inputSchema": {
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "entityCount": {
-            "description": "Entities in the profile.",
-            "type": "number",
-          },
-          "notProfiledCount": {
-            "description": "Entities not column-profiled (too large or timed out).",
-            "type": "number",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "relationshipCount": {
-            "description": "Declared and inferred relationships profiled.",
-            "type": "number",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-          "entityCount",
-          "relationshipCount",
-          "notProfiledCount",
-          "stopped",
-        ],
-        "type": "object",
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "dimensionScores": {
-            "description": "The ten dimension scores.",
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "assessed": {
-                  "description": "False for accuracy and currency.",
-                  "type": "boolean",
-                },
-                "dimension": {
-                  "description": "The DMBOK dimension.",
-                  "type": "string",
-                },
-                "findingCount": {
-                  "description": "Its findings.",
-                  "type": "number",
-                },
-                "score": {
-                  "description": "0 to 100.",
-                  "type": "number",
-                },
-              },
-              "required": [
-                "dimension",
-                "score",
-                "assessed",
-                "findingCount",
-              ],
-              "type": "object",
-            },
-            "type": "array",
-          },
-          "findingCount": {
-            "description": "All findings.",
-            "type": "number",
-          },
-          "maturity": {
-            "description": "The maturity band.",
-            "type": "string",
-          },
-          "overallScore": {
-            "description": "The overall score, 0 to 100.",
-            "type": "number",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-          "overallScore",
-          "maturity",
-          "findingCount",
-          "dimensionScores",
-        ],
-        "type": "object",
-      },
-    },
-    {
-      "id": "save-report",
-      "inputSchema": {
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "dimensionScores": {
-            "description": "The ten dimension scores.",
-            "items": {
-              "properties": {
-                "assessed": {
-                  "description": "False for accuracy and currency.",
-                  "type": "boolean",
-                },
-                "dimension": {
-                  "description": "The DMBOK dimension.",
-                  "type": "string",
-                },
-                "findingCount": {
-                  "description": "Its findings.",
-                  "type": "number",
-                },
-                "score": {
-                  "description": "0 to 100.",
-                  "type": "number",
-                },
-              },
-              "required": [
-                "dimension",
-                "score",
-                "assessed",
-                "findingCount",
-              ],
-              "type": "object",
-            },
-            "type": "array",
-          },
-          "findingCount": {
-            "description": "All findings.",
-            "type": "number",
-          },
-          "maturity": {
-            "description": "The maturity band.",
-            "type": "string",
-          },
-          "overallScore": {
-            "description": "The overall score, 0 to 100.",
-            "type": "number",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-          "overallScore",
-          "maturity",
-          "findingCount",
-          "dimensionScores",
-        ],
-        "type": "object",
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "dimensionScores": {
-            "description": "The ten dimension scores.",
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "assessed": {
-                  "description": "False for accuracy and currency.",
-                  "type": "boolean",
-                },
-                "dimension": {
-                  "description": "The DMBOK dimension.",
-                  "type": "string",
-                },
-                "findingCount": {
-                  "description": "Its findings.",
-                  "type": "number",
-                },
-                "score": {
-                  "description": "0 to 100.",
-                  "type": "number",
-                },
-              },
-              "required": [
-                "dimension",
-                "score",
-                "assessed",
-                "findingCount",
-              ],
-              "type": "object",
-            },
-            "type": "array",
-          },
-          "findingCount": {
-            "description": "All findings.",
-            "type": "number",
-          },
-          "maturity": {
-            "description": "The maturity band.",
-            "type": "string",
-          },
-          "overallScore": {
-            "description": "The overall score, 0 to 100.",
-            "type": "number",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "reportId": {
-            "description": "The stored report's id.",
-            "type": "string",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-          "overallScore",
-          "maturity",
-          "findingCount",
-          "dimensionScores",
-          "reportId",
-        ],
-        "type": "object",
-      },
-    },
-    {
-      "id": "explain-report",
-      "inputSchema": {
-        "properties": {
-          "dataset": {
-            "description": "The dataset to assess.",
-            "type": "string",
-          },
-          "datasourceKind": {
-            "description": "postgres or databricks.",
-            "enum": [
-              "postgres",
-              "databricks",
-            ],
-            "type": "string",
-          },
-          "datasourceName": {
-            "description": "The dataset's datasource.",
-            "type": "string",
-          },
-          "dimensionScores": {
-            "description": "The ten dimension scores.",
-            "items": {
-              "properties": {
-                "assessed": {
-                  "description": "False for accuracy and currency.",
-                  "type": "boolean",
-                },
-                "dimension": {
-                  "description": "The DMBOK dimension.",
-                  "type": "string",
-                },
-                "findingCount": {
-                  "description": "Its findings.",
-                  "type": "number",
-                },
-                "score": {
-                  "description": "0 to 100.",
-                  "type": "number",
-                },
-              },
-              "required": [
-                "dimension",
-                "score",
-                "assessed",
-                "findingCount",
-              ],
-              "type": "object",
-            },
-            "type": "array",
-          },
-          "findingCount": {
-            "description": "All findings.",
-            "type": "number",
-          },
-          "maturity": {
-            "description": "The maturity band.",
-            "type": "string",
-          },
-          "overallScore": {
-            "description": "The overall score, 0 to 100.",
-            "type": "number",
-          },
-          "question": {
-            "description": "The user's question.",
-            "type": "string",
-          },
-          "reportId": {
-            "description": "The stored report's id.",
-            "type": "string",
-          },
-          "tableCount": {
-            "description": "The dataset's tables: the scope.",
-            "type": "number",
-          },
-        },
-        "required": [
-          "question",
-          "dataset",
-          "datasourceName",
-          "datasourceKind",
-          "tableCount",
-          "overallScore",
-          "maturity",
-          "findingCount",
-          "dimensionScores",
-          "reportId",
-        ],
-        "type": "object",
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "answer": {
-            "description": "The agent's explanation.",
-            "type": "string",
-          },
-          "findingCount": {
-            "description": "All findings.",
-            "type": "number",
-          },
-          "maturity": {
-            "description": "The maturity band.",
-            "type": "string",
-          },
-          "overallScore": {
-            "description": "The overall score, 0 to 100.",
-            "type": "number",
-          },
-          "reportId": {
-            "description": "The stored report's id.",
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
-        },
-        "required": [
-          "reportId",
-          "overallScore",
-          "maturity",
-          "findingCount",
-          "answer",
-          "stopped",
-        ],
-        "type": "object",
-      },
-    },
-    {
-      "id": "wrap-up",
-      "inputSchema": {
-        "properties": {
-          "answer": {
-            "description": "The agent's explanation.",
-            "type": "string",
-          },
-          "findingCount": {
-            "description": "All findings.",
-            "type": "number",
-          },
-          "maturity": {
-            "description": "The maturity band.",
-            "type": "string",
-          },
-          "overallScore": {
-            "description": "The overall score, 0 to 100.",
-            "type": "number",
-          },
-          "reportId": {
-            "description": "The stored report's id.",
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
-        },
-        "required": [
-          "reportId",
-          "overallScore",
-          "maturity",
-          "findingCount",
-          "answer",
-          "stopped",
-        ],
-        "type": "object",
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "answer": {
-            "description": "The run's answer.",
-            "type": "string",
-          },
-          "findingCount": {
-            "description": "All findings.",
-            "type": "number",
-          },
-          "maturity": {
-            "description": "The maturity band.",
-            "type": "string",
-          },
-          "overallScore": {
-            "description": "The overall score, 0 to 100.",
-            "type": "number",
-          },
-          "reportId": {
-            "description": "The stored report's id.",
-            "type": "string",
-          },
-        },
-        "required": [
-          "reportId",
-          "overallScore",
-          "maturity",
-          "findingCount",
-          "answer",
-        ],
-        "type": "object",
-      },
-    },
-  ],
-}
-`;
-
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
   "contractHash": "09570fe7e004",
@@ -3225,6 +2493,1934 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "failedQueries",
           "rows",
           "answer",
+        ],
+        "type": "object",
+      },
+    },
+  ],
+}
+`;
+
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) data-readiness-assessment's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+{
+  "contractHash": "52f8e7f5d6a1",
+  "edges": [
+    {
+      "from": "start",
+      "kind": "next",
+      "to": "resolve-dataset",
+    },
+    {
+      "from": "resolve-dataset",
+      "kind": "next",
+      "to": "profile-source",
+    },
+    {
+      "from": "profile-source",
+      "kind": "next",
+      "to": "score-readiness",
+    },
+    {
+      "from": "score-readiness",
+      "kind": "next",
+      "to": "save-report",
+    },
+    {
+      "from": "save-report",
+      "kind": "next",
+      "to": "explain-report",
+    },
+    {
+      "from": "explain-report",
+      "kind": "next",
+      "to": "wrap-up",
+    },
+    {
+      "from": "wrap-up",
+      "kind": "next",
+      "to": "end",
+    },
+  ],
+  "input": [
+    {
+      "name": "dataset",
+      "required": true,
+      "type": "dataset",
+    },
+    {
+      "name": "question",
+      "required": false,
+      "type": "textarea",
+    },
+  ],
+  "steps": [
+    {
+      "id": "resolve-dataset",
+      "inputSchema": {
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's question; by default, assess the dataset.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "profile-source",
+      "inputSchema": {
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "entityCount": {
+            "description": "Entities in the profile.",
+            "type": "number",
+          },
+          "notProfiledCount": {
+            "description": "Entities not column-profiled (too large or timed out).",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "relationshipCount": {
+            "description": "Declared and inferred relationships profiled.",
+            "type": "number",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "entityCount",
+          "relationshipCount",
+          "notProfiledCount",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "score-readiness",
+      "inputSchema": {
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "entityCount": {
+            "description": "Entities in the profile.",
+            "type": "number",
+          },
+          "notProfiledCount": {
+            "description": "Entities not column-profiled (too large or timed out).",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "relationshipCount": {
+            "description": "Declared and inferred relationships profiled.",
+            "type": "number",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "entityCount",
+          "relationshipCount",
+          "notProfiledCount",
+          "stopped",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "dimensionScores": {
+            "description": "The ten dimension scores.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "assessed": {
+                  "description": "False for accuracy and currency.",
+                  "type": "boolean",
+                },
+                "dimension": {
+                  "description": "The DMBOK dimension.",
+                  "type": "string",
+                },
+                "findingCount": {
+                  "description": "Its findings.",
+                  "type": "number",
+                },
+                "score": {
+                  "description": "0 to 100.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "dimension",
+                "score",
+                "assessed",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "dimensionScores",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "save-report",
+      "inputSchema": {
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "dimensionScores": {
+            "description": "The ten dimension scores.",
+            "items": {
+              "properties": {
+                "assessed": {
+                  "description": "False for accuracy and currency.",
+                  "type": "boolean",
+                },
+                "dimension": {
+                  "description": "The DMBOK dimension.",
+                  "type": "string",
+                },
+                "findingCount": {
+                  "description": "Its findings.",
+                  "type": "number",
+                },
+                "score": {
+                  "description": "0 to 100.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "dimension",
+                "score",
+                "assessed",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "dimensionScores",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "dimensionScores": {
+            "description": "The ten dimension scores.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "assessed": {
+                  "description": "False for accuracy and currency.",
+                  "type": "boolean",
+                },
+                "dimension": {
+                  "description": "The DMBOK dimension.",
+                  "type": "string",
+                },
+                "findingCount": {
+                  "description": "Its findings.",
+                  "type": "number",
+                },
+                "score": {
+                  "description": "0 to 100.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "dimension",
+                "score",
+                "assessed",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "reportId": {
+            "description": "The stored report's id.",
+            "type": "string",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "dimensionScores",
+          "reportId",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "explain-report",
+      "inputSchema": {
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "dimensionScores": {
+            "description": "The ten dimension scores.",
+            "items": {
+              "properties": {
+                "assessed": {
+                  "description": "False for accuracy and currency.",
+                  "type": "boolean",
+                },
+                "dimension": {
+                  "description": "The DMBOK dimension.",
+                  "type": "string",
+                },
+                "findingCount": {
+                  "description": "Its findings.",
+                  "type": "number",
+                },
+                "score": {
+                  "description": "0 to 100.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "dimension",
+                "score",
+                "assessed",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "reportId": {
+            "description": "The stored report's id.",
+            "type": "string",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "dimensionScores",
+          "reportId",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The agent's explanation.",
+            "type": "string",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "reportId": {
+            "description": "The stored report's id.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "reportId",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "answer",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "wrap-up",
+      "inputSchema": {
+        "properties": {
+          "answer": {
+            "description": "The agent's explanation.",
+            "type": "string",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "reportId": {
+            "description": "The stored report's id.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "reportId",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "answer",
+          "stopped",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The run's answer.",
+            "type": "string",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "reportId": {
+            "description": "The stored report's id.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "reportId",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "answer",
+        ],
+        "type": "object",
+      },
+    },
+  ],
+}
+`;
+
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) recreate-dashboard's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+{
+  "contractHash": "8a2231dc032d",
+  "edges": [
+    {
+      "from": "start",
+      "kind": "next",
+      "to": "load-image",
+    },
+    {
+      "from": "load-image",
+      "kind": "next",
+      "to": "read-dashboard",
+    },
+    {
+      "from": "read-dashboard",
+      "kind": "next",
+      "to": "build-mock",
+    },
+    {
+      "from": "build-mock",
+      "kind": "next",
+      "to": "save-mock",
+    },
+    {
+      "from": "save-mock",
+      "kind": "next",
+      "to": "end",
+    },
+  ],
+  "input": [
+    {
+      "name": "image",
+      "required": true,
+      "type": "image",
+    },
+    {
+      "name": "question",
+      "required": false,
+      "type": "textarea",
+    },
+  ],
+  "steps": [
+    {
+      "id": "load-image",
+      "inputSchema": {
+        "properties": {
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "mediaType": {
+            "description": "image/png, image/jpeg or image/webp.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+          "sizeBytes": {
+            "description": "The image's size in bytes.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+          "mediaType",
+          "sizeBytes",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "read-dashboard",
+      "inputSchema": {
+        "properties": {
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "mediaType": {
+            "description": "image/png, image/jpeg or image/webp.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+          "sizeBytes": {
+            "description": "The image's size in bytes.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+          "mediaType",
+          "sizeBytes",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "blueprint": {
+            "additionalProperties": false,
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it holds and its plausible values.",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid: rows, columns and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "description": "Light or dark, the accent and series colours, the density.",
+                "type": "string",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in order.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "fields": {
+                      "description": "The columns of the mock dataset it reads.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "position": {
+                      "description": "Where it sits and how wide it is, in the layout grid.",
+                      "type": "string",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "position",
+                    "description",
+                    "fields",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "mediaType": {
+            "description": "image/png, image/jpeg or image/webp.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+          "sizeBytes": {
+            "description": "The image's size in bytes.",
+            "type": "number",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+          "mediaType",
+          "sizeBytes",
+          "blueprint",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "build-mock",
+      "inputSchema": {
+        "properties": {
+          "blueprint": {
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "properties": {
+                    "description": {
+                      "description": "What it holds and its plausible values.",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "properties": {
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid: rows, columns and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "description": "Light or dark, the accent and series colours, the density.",
+                "type": "string",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in order.",
+                "items": {
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "fields": {
+                      "description": "The columns of the mock dataset it reads.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "position": {
+                      "description": "Where it sits and how wide it is, in the layout grid.",
+                      "type": "string",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "position",
+                    "description",
+                    "fields",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "mediaType": {
+            "description": "image/png, image/jpeg or image/webp.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+          "sizeBytes": {
+            "description": "The image's size in bytes.",
+            "type": "number",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+          "mediaType",
+          "sizeBytes",
+          "blueprint",
+          "stopped",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "blueprint": {
+            "additionalProperties": false,
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it holds and its plausible values.",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid: rows, columns and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "description": "Light or dark, the accent and series colours, the density.",
+                "type": "string",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in order.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "fields": {
+                      "description": "The columns of the mock dataset it reads.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "position": {
+                      "description": "Where it sits and how wide it is, in the layout grid.",
+                      "type": "string",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "position",
+                    "description",
+                    "fields",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "codeBytes": {
+            "description": "The size of its HTML, CSS and JavaScript.",
+            "type": "number",
+          },
+          "description": {
+            "description": "What the mock shows and how to use it.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+          "title": {
+            "description": "The mock's title.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "blueprint",
+          "title",
+          "description",
+          "codeBytes",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "save-mock",
+      "inputSchema": {
+        "properties": {
+          "blueprint": {
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "properties": {
+                    "description": {
+                      "description": "What it holds and its plausible values.",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "properties": {
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid: rows, columns and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "description": "Light or dark, the accent and series colours, the density.",
+                "type": "string",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in order.",
+                "items": {
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "fields": {
+                      "description": "The columns of the mock dataset it reads.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "position": {
+                      "description": "Where it sits and how wide it is, in the layout grid.",
+                      "type": "string",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "position",
+                    "description",
+                    "fields",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "codeBytes": {
+            "description": "The size of its HTML, CSS and JavaScript.",
+            "type": "number",
+          },
+          "description": {
+            "description": "What the mock shows and how to use it.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+          "title": {
+            "description": "The mock's title.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "blueprint",
+          "title",
+          "description",
+          "codeBytes",
+          "stopped",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The run's answer.",
+            "type": "string",
+          },
+          "blueprint": {
+            "additionalProperties": false,
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it holds and its plausible values.",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid: rows, columns and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "description": "Light or dark, the accent and series colours, the density.",
+                "type": "string",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in order.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "fields": {
+                      "description": "The columns of the mock dataset it reads.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "position": {
+                      "description": "Where it sits and how wide it is, in the layout grid.",
+                      "type": "string",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "position",
+                    "description",
+                    "fields",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "filterCount": {
+            "description": "The filters it recreates.",
+            "type": "number",
+          },
+          "title": {
+            "description": "The mock's title.",
+            "type": "string",
+          },
+          "visualId": {
+            "description": "The stored mock's id: a visual of the run.",
+            "type": "string",
+          },
+          "widgetCount": {
+            "description": "The widgets it recreates.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "visualId",
+          "title",
+          "widgetCount",
+          "filterCount",
+          "answer",
+          "blueprint",
         ],
         "type": "object",
       },

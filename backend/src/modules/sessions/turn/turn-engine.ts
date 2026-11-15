@@ -10,7 +10,9 @@ import type { MastraService } from '../../../mastra/mastra.service';
 import {
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
+  DASHBOARD_READER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
+  MOCK_BUILDER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
@@ -24,6 +26,14 @@ import {
   explainReportBlock,
   type DataReadinessAssessmentRuntime,
 } from '../../../mastra/workflows/data-readiness-assessment.steps';
+import {
+  RECREATE_DASHBOARD_RUNTIME_KEY,
+  RECREATE_DASHBOARD_WORKFLOW_ID,
+  mockCodeBytes,
+  savedMockAnswer,
+  type MockBundle,
+  type RecreateDashboardRuntime,
+} from '../../../mastra/workflows/recreate-dashboard.steps';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
   DATA_QUALITY_CHECK,
@@ -79,6 +89,7 @@ import type {
   ReadinessReportRef,
   SessionDoc,
   SessionView,
+  SessionVisualization,
   ToolDataRecord,
   VisualEvent,
   WorkflowPhase,
@@ -141,6 +152,19 @@ export interface TurnEngineDeps {
   ): Promise<CrossCheck | undefined>;
   /** The readiness tools' bridge, once installed (agents.md 3.13). */
   readinessBridge(): ReadinessBridge | undefined;
+  /** A run's input image, from its host's workspace (agents.md 5.17). */
+  readImage(
+    sessionId: string,
+    path: string,
+  ): Promise<{ data: Buffer; mediaType: string }>;
+  /** A script's syntax error, or null when it parses (agents.md 5.17). */
+  validateScript(javascript: string): string | null;
+  /** Store a built mock as a visual of the session (agents.md 5.17). */
+  saveMock(
+    sessionId: string,
+    bundle: MockBundle,
+    instruction: string,
+  ): Promise<SessionVisualization>;
 }
 
 /**
@@ -470,6 +494,14 @@ export class TurnEngine {
     const startedAssessment = (): ReadinessAssessment => {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
+    };
+    // Recreate a Dashboard's image, once Load image read it, and its mock,
+    // once Build mock wrote it (agents.md 5.17).
+    let dashboardImage: { data: Buffer; mediaType: string } | undefined;
+    let builtMock: MockBundle | undefined;
+    const loadedImage = async (path: string) => {
+      dashboardImage ??= await this.deps.readImage(id, path);
+      return dashboardImage;
     };
     let ran: TurnRunOutcome;
     try {
@@ -828,6 +860,73 @@ export class TurnEngine {
               stopped: turn.signal.aborted || clarification !== null,
             };
           },
+          // Recreate a Dashboard (agents.md 5.17): the two agent steps call
+          // their agent's model with the image; the run keeps the image
+          // and the mock between steps.
+          loadImage: async ({ image }) => {
+            const loaded = await loadedImage(image);
+            return {
+              mediaType: loaded.mediaType,
+              sizeBytes: loaded.data.byteLength,
+            };
+          },
+          readDashboard: async ({ question, image }) => {
+            try {
+              const read = await this.deps.mastra.readDashboard(
+                { question, image: await loadedImage(image) },
+                stepModelOf(DASHBOARD_READER_AGENT_KEY),
+              );
+              return {
+                blueprint: read.blueprint,
+                stopped: read.stopped || turn.signal.aborted,
+              };
+            } catch (error) {
+              throw await stepError(error);
+            }
+          },
+          buildMock: async ({ question, image, blueprint }) => {
+            try {
+              const built = await this.deps.mastra.buildMock(
+                {
+                  question,
+                  image: await loadedImage(image),
+                  blueprint,
+                  validateScript: (javascript) =>
+                    this.deps.validateScript(javascript),
+                },
+                stepModelOf(MOCK_BUILDER_AGENT_KEY),
+              );
+              const stopped =
+                built.stopped || turn.signal.aborted || !built.bundle;
+              builtMock = stopped ? undefined : built.bundle;
+              return {
+                title: builtMock?.title ?? '',
+                description: builtMock?.description ?? '',
+                codeBytes: builtMock ? mockCodeBytes(builtMock) : 0,
+                stopped,
+              };
+            } catch (error) {
+              throw await stepError(error);
+            }
+          },
+          saveMock: async ({ blueprint }) => {
+            if (!builtMock) throw new Error('No mock has been built');
+            const metadata = await this.deps.saveMock(id, builtMock, trimmed);
+            // The answer carries the mock, as a turn's visual does.
+            visualEvent = {
+              visualId: metadata.id,
+              version: 1,
+              title: metadata.title,
+              action: 'created',
+            };
+            emit({
+              type: 'visual-updated',
+              content: JSON.stringify(visualEvent),
+            });
+            text = savedMockAnswer({ title: metadata.title, blueprint });
+            emit({ type: 'text', content: text });
+            return { visualId: metadata.id, title: metadata.title };
+          },
         },
         (event) => onStepEvent?.(event),
       );
@@ -1014,7 +1113,8 @@ export class TurnEngine {
     runtime: AnswerBusinessQuestionRuntime &
       Required<Pick<AnswerBusinessQuestionRuntime, 'checkDataQuality'>> &
       AgentTurnRuntime &
-      DataReadinessAssessmentRuntime,
+      DataReadinessAssessmentRuntime &
+      RecreateDashboardRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
     // The agent step's own failure, kept so the turn reports it as is.
@@ -1030,6 +1130,7 @@ export class TurnEngine {
     const requestContext = new RequestContext();
     const readiness =
       workflow.engineId === DATA_READINESS_ASSESSMENT_WORKFLOW_ID;
+    const recreate = workflow.engineId === RECREATE_DASHBOARD_WORKFLOW_ID;
     if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
@@ -1050,6 +1151,13 @@ export class TurnEngine {
         save: () => captured(() => runtime.save()),
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
+    } else if (recreate) {
+      requestContext.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
+        loadImage: (input) => captured(() => runtime.loadImage(input)),
+        readDashboard: (input) => captured(() => runtime.readDashboard(input)),
+        buildMock: (input) => captured(() => runtime.buildMock(input)),
+        saveMock: (input) => captured(() => runtime.saveMock(input)),
+      } satisfies RecreateDashboardRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
@@ -1062,9 +1170,13 @@ export class TurnEngine {
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
+    // Recreate a Dashboard runs on the run's image (agents.md 5.17).
     const turnInput:
-      AnswerBusinessQuestionInput | { question: string; dataset: string } =
-      readiness
+      | AnswerBusinessQuestionInput
+      | { question: string; dataset: string }
+      | { question: string; image: string } = recreate
+      ? { question, image: session.inputImage ?? '' }
+      : readiness
         ? { question, dataset: session.datasets[0] ?? '' }
         : { question, datasets: session.datasets };
     let state = session.workflowState;

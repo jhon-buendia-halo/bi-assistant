@@ -260,6 +260,41 @@ export class VisualizationService {
   }
 
   /**
+   * New visual (v1) from a bundle that is already written (agents.md 5.17:
+   * the mock a Recreate a Dashboard run built). No designer call and no
+   * source answer: the frame shows the visual and its description only.
+   */
+  async createFromBundle(
+    session: SessionDoc,
+    bundle: Bundle,
+    instruction?: string,
+  ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
+    const { filesystem } = await this.workspaceFor(session);
+    const visualId = randomUUID();
+    const path = `visuals/${visualId}`;
+    const createdAt = new Date().toISOString();
+    const metadata: SessionVisualization = {
+      id: visualId,
+      title: bundle.title,
+      description: bundle.description,
+      path,
+      // No answer is its source: the time it was built.
+      sourceMessageAt: createdAt,
+      createdAt,
+      currentVersion: 1,
+      versions: [
+        { version: 1, createdAt, sourceMessageAt: createdAt, instruction },
+      ],
+    };
+    await this.writeVersion(filesystem, `${path}/v1`, bundle, metadata, 1, {
+      sessionName: session.name,
+      version: 1,
+      generatedAt: createdAt,
+    });
+    return { metadata, bundle };
+  }
+
+  /**
    * Tailor an existing visual into a new version. `turnRecords` merge onto
    * the current version's stored data the same way `create` merges onto the
    * source answer's data — see the class-level note on `create`.

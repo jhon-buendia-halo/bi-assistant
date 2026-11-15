@@ -37,6 +37,13 @@ import {
   type DataReadinessAssessmentRuntime,
 } from './data-readiness-assessment.steps';
 import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
+import { RECREATE_DASHBOARD_STEP_SCHEMAS } from './recreate-dashboard.schemas';
+import {
+  RECREATE_DASHBOARD_RUNTIME_KEY,
+  RECREATE_DASHBOARD_WORKFLOW_ID,
+  type RecreateDashboardRuntime,
+} from './recreate-dashboard.steps';
+import { recreateDashboardWorkflow } from './recreate-dashboard.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
 interface StubRun {
@@ -155,6 +162,63 @@ const FIXTURES: Record<string, ContractFixture> = {
         explain: () =>
           Promise.resolve({ answer: 'Managed (84).', stopped: false }),
       } satisfies DataReadinessAssessmentRuntime);
+      return context;
+    },
+  },
+  [RECREATE_DASHBOARD_WORKFLOW_ID]: {
+    workflow:
+      recreateDashboardWorkflow as unknown as ContractFixture['workflow'],
+    schemas: RECREATE_DASHBOARD_STEP_SCHEMAS,
+    input: { question: '', image: 'inputs/image.png' },
+    requestContext: () => {
+      const context = new RequestContext();
+      // The stubbed run: a loaded image, the dashboard read from it, the
+      // mock built and stored.
+      context.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
+        loadImage: () =>
+          Promise.resolve({ mediaType: 'image/png', sizeBytes: 1234 }),
+        readDashboard: () =>
+          Promise.resolve({
+            blueprint: {
+              title: 'Sales',
+              summary: 'Sales by month.',
+              theme: 'light',
+              layout: 'One row.',
+              filters: [
+                {
+                  id: 'region',
+                  label: 'Region',
+                  kind: 'select',
+                  options: ['All'],
+                },
+              ],
+              widgets: [
+                {
+                  id: 'revenue',
+                  title: 'Revenue',
+                  kind: 'kpi',
+                  position: 'row 1',
+                  description: 'Total revenue',
+                  fields: ['revenue'],
+                  observed: '$1.07M',
+                  filteredBy: ['region'],
+                },
+              ],
+              columns: [
+                { name: 'revenue', type: 'number', description: 'Revenue' },
+              ],
+            },
+            stopped: false,
+          }),
+        buildMock: () =>
+          Promise.resolve({
+            title: 'Sales',
+            description: 'A mock.',
+            codeBytes: 4200,
+            stopped: false,
+          }),
+        saveMock: () => Promise.resolve({ visualId: 'v-1', title: 'Sales' }),
+      } satisfies RecreateDashboardRuntime);
       return context;
     },
   },

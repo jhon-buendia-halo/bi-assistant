@@ -17,7 +17,57 @@ export type WorkflowInputFieldType =
   /** One or more dataset names. */
   | 'datasets'
   /** Exactly one dataset name. */
-  | 'dataset';
+  | 'dataset'
+  /**
+   * One image, sent as a `data:` URL (PNG, JPEG or WebP, at most
+   * `IMAGE_MAX_BYTES`). A run stores it as a file of its workspace and
+   * keeps the file's path as the field's value.
+   */
+  | 'image';
+
+/** The largest image an `image` field takes, in bytes. */
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** The image types an `image` field takes, with their file extension. */
+export const IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+
+/** Whether the bytes start as a file of the media type does. */
+function hasImageSignature(mediaType: string, data: Buffer): boolean {
+  if (mediaType === 'image/png') {
+    return data.subarray(0, 8).toString('hex') === '89504e470d0a1a0a';
+  }
+  if (mediaType === 'image/jpeg') {
+    return data.subarray(0, 3).toString('hex') === 'ffd8ff';
+  }
+  return (
+    data.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    data.subarray(8, 12).toString('latin1') === 'WEBP'
+  );
+}
+
+/**
+ * The image of a base64 `data:` URL: its media type and bytes. Undefined
+ * when the value is no such URL, its type is not one an `image` field
+ * takes, or its bytes are not a file of that type.
+ */
+export function imageOfDataUrl(
+  value: unknown,
+): { mediaType: string; data: Buffer } | undefined {
+  if (typeof value !== 'string') return undefined;
+  const found =
+    /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+      value.trim(),
+    );
+  if (!found || !Object.hasOwn(IMAGE_EXTENSIONS, found[1])) return undefined;
+  const data = Buffer.from(found[2], 'base64');
+  return hasImageSignature(found[1], data)
+    ? { mediaType: found[1], data }
+    : undefined;
+}
 
 /** The datasource kinds a `dataset` or `datasets` field can be limited to. */
 export type InputDatasourceKind = 'postgres' | 'databricks' | 'rest';
@@ -217,6 +267,22 @@ function checkField(
     (typeof value === 'string' && value.trim() !== '') ||
     typeof value === 'number';
   if (!usable) return missingField(field);
+  if (field.type === 'image') {
+    const image = imageOfDataUrl(value);
+    if (!image) {
+      return {
+        ok: false,
+        error: `${field.label} must be a PNG, JPEG or WebP image`,
+      };
+    }
+    if (image.data.byteLength > IMAGE_MAX_BYTES) {
+      return {
+        ok: false,
+        error: `${field.label} must be at most ${IMAGE_MAX_BYTES / (1024 * 1024)} MB`,
+      };
+    }
+    return { ok: true, value: String(value).trim() };
+  }
   if (field.type === 'number') {
     const typed = typeof value === 'string' ? value.trim() : '';
     const number =
@@ -246,7 +312,8 @@ function checkField(
  * at most one per field: the declared fields only, a number field as a
  * number within its `min` and `max`, a boolean as a boolean, a text within
  * its `maxLength` (trimmed), datasets as trimmed names in order without
- * repeats. A field that is missing, `""` or whitespace-only takes its
+ * repeats, an image as a base64 `data:` URL of a PNG, JPEG or WebP file of
+ * at most `IMAGE_MAX_BYTES`. A field that is missing, `""` or whitespace-only takes its
  * `default` (a boolean `false`); a required one without a default is refused
  * with `<label> is required` (`Select at least one dataset` for `datasets`).
  * An optional field that is missing or empty and has no default is left
@@ -273,4 +340,36 @@ export function validateWorkflowInput(
     }
   }
   return errors.length ? { ok: false, errors } : { ok: true, input };
+}
+
+/** An image taken out of a run's input: where the run stores it. */
+export interface InputImageFile {
+  /** The field it came from. */
+  field: string;
+  /** Its path in the run's workspace: `inputs/<field>.<extension>`. */
+  path: string;
+  mediaType: string;
+  data: Buffer;
+}
+
+/**
+ * A checked input with every `image` field's `data:` URL taken out: the
+ * field's value becomes the path the run stores the file at, so the image
+ * is never stored in the run's document nor sent back with it.
+ */
+export function withStoredImages(
+  workflow: { input: readonly WorkflowInputField[] },
+  input: WorkflowInputValues,
+): { input: WorkflowInputValues; images: InputImageFile[] } {
+  const stored: WorkflowInputValues = { ...input };
+  const images: InputImageFile[] = [];
+  for (const field of workflow.input) {
+    if (field.type !== 'image') continue;
+    const image = imageOfDataUrl(input[field.name]);
+    if (!image) continue;
+    const path = `inputs/${field.name}.${IMAGE_EXTENSIONS[image.mediaType]}`;
+    stored[field.name] = path;
+    images.push({ field: field.name, path, ...image });
+  }
+  return { input: stored, images };
 }

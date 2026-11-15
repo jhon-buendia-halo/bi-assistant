@@ -222,6 +222,8 @@ export function runAgainValues(
   const values = initialInputValues(fields);
   for (const field of fields) {
     if (field.hidden || !Object.hasOwn(input, field.name)) continue;
+    // A stored run holds the image's path, not the image: it is picked again.
+    if (field.type === 'image') continue;
     const value = input[field.name];
     values[field.name] = Array.isArray(value)
       ? [...value]

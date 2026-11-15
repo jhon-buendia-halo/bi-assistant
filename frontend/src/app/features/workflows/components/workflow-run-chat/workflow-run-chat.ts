@@ -43,6 +43,10 @@ import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import {
+  IMAGE_ACCEPT,
+  isImageDataUrl,
+} from '../../services/workflow-input-validation';
+import {
   canRunFromPage,
   runOutputEntries,
   runStatusLine,
@@ -326,6 +330,9 @@ export class WorkflowRunChat {
       !this.designer.runResult()?.answer?.clarification,
   );
 
+  /** The file name each image field shows, by field name. */
+  private readonly imageNames = signal<Record<string, string>>({});
+
   /** The line under the workflow's name before a run. */
   protected readonly emptyHint = computed(() => {
     const workflow = this.designer.workflow();
@@ -333,6 +340,10 @@ export class WorkflowRunChat {
       (field) =>
         !field.hidden && (field.type === 'datasets' || field.type === 'dataset'),
     );
+    const image = workflow?.input.some(
+      (field) => !field.hidden && field.type === 'image',
+    );
+    if (image) return 'Upload an image below and press Execute.';
     if (this.designer.questionField() === null) {
       return 'Fill in the input below and press Execute.';
     }
@@ -397,6 +408,48 @@ export class WorkflowRunChat {
       event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     ).value;
     this.designer.setInput(name, value);
+  }
+
+  /** The file types an image field's picker offers. */
+  protected readonly imageAccept = IMAGE_ACCEPT;
+
+  /** The image a field holds, to preview it; null when it holds none. */
+  protected imagePreview(name: string): string | null {
+    const values = this.designer.inputValues();
+    const value = Object.hasOwn(values, name) ? values[name] : undefined;
+    return isImageDataUrl(value) ? value : null;
+  }
+
+  /** The name of the file an image field holds; '' when it holds none. */
+  protected imageName(name: string): string {
+    const names = this.imageNames();
+    return Object.hasOwn(names, name) ? names[name] : '';
+  }
+
+  /**
+   * An image field's file was picked: the form holds it as a `data:` URL,
+   * which is what a run sends (api.md 118). Clearing the picker clears it.
+   */
+  protected onImage(name: string, event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) {
+      this.imageNames.update((names) => ({ ...names, [name]: '' }));
+      this.designer.setInput(name, '');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.imageNames.update((names) => ({ ...names, [name]: file.name }));
+      this.designer.setInput(
+        name,
+        typeof reader.result === 'string' ? reader.result : '',
+      );
+    };
+    reader.onerror = () => {
+      this.imageNames.update((names) => ({ ...names, [name]: '' }));
+      this.designer.setInput(name, '');
+    };
+    reader.readAsDataURL(file);
   }
 
   protected onCheck(name: string, event: Event): void {
