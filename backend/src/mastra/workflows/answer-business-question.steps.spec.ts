@@ -835,6 +835,7 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
         ['Ran a query', true],
         ['No unresolved tool error', true],
         ['No result cut at its row limit', true],
+        ['No answer from a sample', true],
         ['Measures covered (warning only)', true],
       ]);
     });
@@ -887,10 +888,101 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
         queries: [query()],
       });
       expect(ok).toBe(true);
-      expect(findings[3]).toEqual({
+      expect(findings[4]).toEqual({
         check: 'Measures covered (warning only)',
         passed: false,
         detail: 'Not found in any query: possession share.',
+      });
+    });
+
+    describe('No answer from a sample (plan 1.25.7)', () => {
+      const rows50 = Array.from({ length: 50 }, (_, n) => ({ id: n }));
+      const sample = (partial: Partial<AnalyseQuery> = {}) =>
+        query({
+          sql: 'SELECT id FROM world_cup.goals LIMIT 50',
+          rows: rows50,
+          rowCount: 50,
+          ...partial,
+        });
+      const check = (queries: AnalyseQuery[]) => {
+        const result = validateAttempt({ plan: PLAN, calls: [], queries });
+        return {
+          ok: result.ok,
+          finding: result.findings.find(
+            (f) => f.check === 'No answer from a sample',
+          ),
+        };
+      };
+
+      it('fails a LIMIT with no sort that was reached, alone, after the row-limit check', () => {
+        const { ok, finding } = check([sample()]);
+        expect(ok).toBe(false);
+        expect(finding).toEqual({
+          check: 'No answer from a sample',
+          passed: false,
+          detail:
+            '1 result kept an arbitrary sample of rows (a LIMIT with no sort) and no later query read the whole data.',
+        });
+        expect(
+          validateAttempt({ plan: PLAN, calls: [], queries: [sample()] })
+            .findings[3].check,
+        ).toBe('No answer from a sample');
+        expect(check([sample(), sample()]).finding?.detail).toMatch(
+          /^2 results kept an arbitrary sample/,
+        );
+      });
+
+      it('passes when a later successful query is not a sample', () => {
+        const { ok, finding } = check([sample(), query()]);
+        expect(ok).toBe(true);
+        expect(finding).toEqual({
+          check: 'No answer from a sample',
+          passed: true,
+          detail: 'No result the answer reads is an arbitrary sample.',
+        });
+        // A later query that failed does not count.
+        expect(check([sample(), query({ error: 'boom' })]).ok).toBe(false);
+      });
+
+      it('passes a ranking (ORDER BY … LIMIT 50) and a LIMIT that was not reached', () => {
+        expect(
+          check([
+            sample({
+              sql: 'SELECT id FROM world_cup.goals ORDER BY id DESC LIMIT 50',
+            }),
+          ]).ok,
+        ).toBe(true);
+        expect(
+          check([sample({ rows: rows50.slice(0, 7), rowCount: 7 })]).ok,
+        ).toBe(true);
+      });
+
+      it('does not count a failed sample query', () => {
+        expect(
+          check([sample({ error: 'boom', rows: [], rowCount: 0 }), query()])
+            .finding?.passed,
+        ).toBe(true);
+      });
+
+      it('reaches the retry of Analyse and Write answer as the other findings do', () => {
+        const { findings } = validateAttempt({
+          plan: PLAN,
+          calls: [],
+          queries: [sample()],
+        });
+        expect(analysePlanBlock(PLAN, { attempt: 1, findings })).toContain(
+          '- No answer from a sample: 1 result kept an arbitrary sample of rows',
+        );
+        expect(
+          writeAnswerRequest({
+            question: 'Show me 5 goals',
+            plan: PLAN,
+            queries: [sample()],
+            findings,
+          }),
+        ).toContain(
+          '- failed: No answer from a sample. 1 result kept an arbitrary sample of rows',
+        );
       });
     });
   });

@@ -7,6 +7,7 @@
  * loading Mastra; the workflow itself is built in ./answer-business-question.workflow.ts.
  */
 import type { z } from 'zod';
+import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
 import { getDatasetToolServices } from '../tool-services';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
@@ -187,7 +188,7 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       title: 'Validate',
       kind: 'code',
       summary:
-        "Checks the attempt's queries: one ran, no unresolved error, no result cut at its row limit, the plan's measures covered. No LLM.",
+        "Checks the attempt's queries: one ran, no unresolved error, no result cut at its row limit, no answer from an arbitrary sample, the plan's measures covered. No LLM.",
       exits: [],
     },
     SCHEMAS.validate,
@@ -752,6 +753,7 @@ export const VALIDATION_CHECKS = {
   ranQuery: 'Ran a query',
   noToolError: 'No unresolved tool error',
   rowLimit: 'No result cut at its row limit',
+  sample: 'No answer from a sample',
   measures: 'Measures covered (warning only)',
 } as const;
 
@@ -760,7 +762,10 @@ export const VALIDATION_CHECKS = {
  * attempt's tool calls and queries. `ok` when at least one
  * `run_readonly_sql` call succeeded, every failed call was followed by a
  * successful call of the same tool, and every query cut at its row limit was
- * followed by a successful query that was not. The plan's measures are
+ * followed by a successful query that was not, and every query that kept an
+ * arbitrary sample (`coverageOf`: its own LIMIT reached with no sort before
+ * it) was followed by a successful query that did not (plan 1.25.7). The
+ * plan's measures are
  * looked for (best effort: a word of each in some successful query's SQL,
  * rationale or columns) and reported as a warning that never fails the
  * attempt.
@@ -812,6 +817,28 @@ export function validateAttempt(input: {
       ? `${cut.length} ${cut.length === 1 ? 'result was' : 'results were'} cut at the row limit and not aggregated again.`
       : 'No result the answer reads was cut.',
   };
+  const isSample = (query: AnalyseQuery) =>
+    coverageOf({
+      tool: 'run_readonly_sql',
+      sql: query.sql,
+      rowCount: query.rowCount,
+      truncated: query.truncated,
+    }) === 'sample';
+  const sampled = queries.filter(
+    (query, index) =>
+      !query.error &&
+      isSample(query) &&
+      !queries
+        .slice(index + 1)
+        .some((later) => !later.error && !isSample(later)),
+  );
+  const sample: ValidationFinding = {
+    check: VALIDATION_CHECKS.sample,
+    passed: sampled.length === 0,
+    detail: sampled.length
+      ? `${sampled.length} ${sampled.length === 1 ? 'result' : 'results'} kept an arbitrary sample of rows (a LIMIT with no sort) and no later query read the whole data.`
+      : 'No result the answer reads is an arbitrary sample.',
+  };
   const haystack = new Set(
     succeeded.flatMap((query) =>
       words(
@@ -835,8 +862,9 @@ export function validateAttempt(input: {
         : 'Every planned measure appears in a query.',
   };
   return {
-    ok: ranQuery.passed && noToolError.passed && rowLimit.passed,
-    findings: [ranQuery, noToolError, rowLimit, measures],
+    ok:
+      ranQuery.passed && noToolError.passed && rowLimit.passed && sample.passed,
+    findings: [ranQuery, noToolError, rowLimit, sample, measures],
   };
 }
 
