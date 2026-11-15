@@ -42,20 +42,20 @@ export const ANSWER_WRITER_AGENT_KEY = 'answer-writer';
 
 /**
  * The agents of the two model steps of `recreate-dashboard` (agents.md
- * 5.17): Read dashboard and Build mock. System agents: the workflow calls
+ * 5.17): Read dashboard and Map data. System agents: the workflow calls
  * them.
  */
 export const DASHBOARD_READER_AGENT_KEY = 'dashboard-reader';
 /** Its name: the Read dashboard step's agent. */
 export const DASHBOARD_READER_AGENT_NAME = 'Dashboard Reader';
-export const MOCK_BUILDER_AGENT_KEY = 'mock-builder';
+export const DATA_MAPPER_AGENT_KEY = 'data-mapper';
 
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
   DASHBOARD_READER_AGENT_KEY,
-  MOCK_BUILDER_AGENT_KEY,
+  DATA_MAPPER_AGENT_KEY,
   'visualization',
   'sql-fixer',
   'sql-verifier',

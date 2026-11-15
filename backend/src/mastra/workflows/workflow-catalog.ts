@@ -14,9 +14,9 @@ import {
   ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
   DASHBOARD_READER_AGENT_KEY,
+  DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
-  MOCK_BUILDER_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
@@ -216,9 +216,9 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       id: RECREATE_DASHBOARD_WORKFLOW_ID,
       name: RECREATE_DASHBOARD_WORKFLOW_NAME,
       description: RECREATE_DASHBOARD_DESCRIPTION,
-      // Grace reads the dashboard; Lucas builds the mock.
+      // Grace reads the dashboard; Daniel maps it to the datasets.
       primaryFor: DASHBOARD_READER_AGENT_KEY,
-      stepAgents: { 'build-mock': MOCK_BUILDER_AGENT_KEY },
+      stepAgents: { 'map-data': DATA_MAPPER_AGENT_KEY },
       trigger: 'run',
       input: [
         {
@@ -228,6 +228,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           required: true,
           help: 'A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.',
         },
+        { ...DATASETS_FIELD, help: 'The data the dashboard is mapped to.' },
         {
           name: 'question',
           label: 'Instructions',

@@ -5,6 +5,7 @@ import {
   type ExecuteFunctionParams,
 } from '@mastra/core/workflows';
 import type { z } from 'zod';
+import { loadCatalog } from './answer-business-question.steps';
 import {
   RECREATE_DASHBOARD_STEP_SCHEMAS,
   recreateDashboardInputSchema,
@@ -14,8 +15,10 @@ import {
   RECREATE_DASHBOARD_RUNTIME_KEY,
   RECREATE_DASHBOARD_STEPS,
   RECREATE_DASHBOARD_WORKFLOW_ID,
+  mappingExplanation,
   recreateDashboardQuestion,
-  savedMock,
+  renderDashboardBundle,
+  renderedDashboard,
   type RecreateDashboardRuntime,
 } from './recreate-dashboard.steps';
 import { engineInputSchema, withContract } from './workflow-contract';
@@ -24,17 +27,20 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // Mastra's sequential control flow
 // (https://mastra.ai/docs/workflows/control-flow):
 //
-//   load-image → read-dashboard → build-mock → save-mock
+//   load-image → read-dashboard → load-dashboard-catalog → map-data
+//   → render-dashboard
 //
-// Load image and Save mock are code. Read dashboard runs the Dashboard
-// Reader over the uploaded image and returns the dashboard's blueprint;
-// Build mock runs the Mock Builder over the blueprint and the image. A
-// stopped run bails at the step it was stopped in, which ends the run as a
-// success with that step's output (`stopped`).
+// Read dashboard runs the Dashboard Reader over the uploaded image and
+// returns the dashboard as data (the blueprint). Load catalog lists the
+// entities and columns of the run's datasets. Map data runs the Data
+// Mapper over both and returns the mapping, checked against the catalog.
+// Render dashboard draws the blueprint and its mapping with the fixed
+// runtime (no model writes markup), stores it and writes the explanation.
+// A stopped run bails at the step it was stopped in, which ends the run as
+// a success with that step's output (`stopped`).
 //
 // The run's runtime (functions on the RequestContext) holds the image's
-// bytes and the built mock between steps, so no snapshot is ever written:
-// the run never waits for the user.
+// bytes, so no snapshot is ever written: the run never waits for the user.
 //
 // Every step keeps its data contract (agents.md 5.12): its schemas come
 // from ./recreate-dashboard.schemas.ts, and `withContract` validates its
@@ -66,8 +72,9 @@ function runtimeOf(
 ): RecreateDashboardRuntime {
   const runtime = params.requestContext.get(RECREATE_DASHBOARD_RUNTIME_KEY) as
     RecreateDashboardRuntime | undefined;
-  if (!runtime)
+  if (!runtime) {
     throw new Error(`The ${title} step has no dashboard to work on`);
+  }
   return runtime;
 }
 
@@ -81,11 +88,12 @@ const loadImageStep = createStep({
     SCHEMAS['load-image'],
     async (params: StepParams<(typeof SCHEMAS)['load-image']>) => {
       const runtime = runtimeOf(params, STEP['load-image'].title);
-      const { image } = params.inputData;
+      const { image, datasets } = params.inputData;
       const loaded = await runtime.loadImage({ image });
       return {
         question: recreateDashboardQuestion(params.inputData.question),
         image,
+        datasets,
         ...loaded,
       };
     },
@@ -102,45 +110,87 @@ const readDashboardStep = createStep({
     SCHEMAS['read-dashboard'],
     async (params: StepParams<(typeof SCHEMAS)['read-dashboard']>) => {
       const runtime = runtimeOf(params, STEP['read-dashboard'].title);
-      const { question, image } = params.inputData;
+      const { question, image, datasets } = params.inputData;
       const read = await runtime.readDashboard({ question, image });
-      const output = { ...params.inputData, ...read };
+      const output = { question, datasets, ...read };
       return read.stopped ? params.bail(output) : output;
     },
   ),
 });
 
-const buildMockStep = createStep({
-  id: STEP['build-mock'].id,
-  description: STEP['build-mock'].title,
-  inputSchema: engineInputSchema(SCHEMAS['build-mock'].input),
-  outputSchema: SCHEMAS['build-mock'].output,
+const loadCatalogStep = createStep({
+  id: STEP['load-dashboard-catalog'].id,
+  description: STEP['load-dashboard-catalog'].title,
+  inputSchema: engineInputSchema(SCHEMAS['load-dashboard-catalog'].input),
+  outputSchema: SCHEMAS['load-dashboard-catalog'].output,
   execute: withContract(
-    STEP['build-mock'].title,
-    SCHEMAS['build-mock'],
-    async (params: StepParams<(typeof SCHEMAS)['build-mock']>) => {
-      const runtime = runtimeOf(params, STEP['build-mock'].title);
-      const { question, image, blueprint } = params.inputData;
-      const built = await runtime.buildMock({ question, image, blueprint });
-      const output = { blueprint, ...built };
-      return built.stopped ? params.bail(output) : output;
+    STEP['load-dashboard-catalog'].title,
+    SCHEMAS['load-dashboard-catalog'],
+    async (params: StepParams<(typeof SCHEMAS)['load-dashboard-catalog']>) => {
+      const { question, datasets, blueprint } = params.inputData;
+      return {
+        question,
+        datasets,
+        blueprint,
+        // The dataset tools' own services: names and types, no rows.
+        ...(await loadCatalog(datasets)),
+      };
     },
   ),
 });
 
-const saveMockStep = createStep({
-  id: STEP['save-mock'].id,
-  description: STEP['save-mock'].title,
-  inputSchema: engineInputSchema(SCHEMAS['save-mock'].input),
-  outputSchema: SCHEMAS['save-mock'].output,
+const mapDataStep = createStep({
+  id: STEP['map-data'].id,
+  description: STEP['map-data'].title,
+  inputSchema: engineInputSchema(SCHEMAS['map-data'].input),
+  outputSchema: SCHEMAS['map-data'].output,
   execute: withContract(
-    STEP['save-mock'].title,
-    SCHEMAS['save-mock'],
-    async (params: StepParams<(typeof SCHEMAS)['save-mock']>) => {
-      const runtime = runtimeOf(params, STEP['save-mock'].title);
-      const { blueprint } = params.inputData;
-      const saved = await runtime.saveMock({ blueprint });
-      return savedMock({ ...saved, blueprint });
+    STEP['map-data'].title,
+    SCHEMAS['map-data'],
+    async (params: StepParams<(typeof SCHEMAS)['map-data']>) => {
+      const runtime = runtimeOf(params, STEP['map-data'].title);
+      const { question, datasets, blueprint, catalog, columns } =
+        params.inputData;
+      const mapped = await runtime.mapData({
+        question,
+        blueprint,
+        catalog,
+        columns,
+      });
+      const output = {
+        datasets,
+        blueprint,
+        mapping: mapped.mapping,
+        entityCount: catalog.length,
+        stopped: mapped.stopped,
+      };
+      return mapped.stopped ? params.bail(output) : output;
+    },
+  ),
+});
+
+const renderDashboardStep = createStep({
+  id: STEP['render-dashboard'].id,
+  description: STEP['render-dashboard'].title,
+  inputSchema: engineInputSchema(SCHEMAS['render-dashboard'].input),
+  outputSchema: SCHEMAS['render-dashboard'].output,
+  execute: withContract(
+    STEP['render-dashboard'].title,
+    SCHEMAS['render-dashboard'],
+    async (params: StepParams<(typeof SCHEMAS)['render-dashboard']>) => {
+      const runtime = runtimeOf(params, STEP['render-dashboard'].title);
+      const { datasets, blueprint, mapping, entityCount } = params.inputData;
+      const answer = mappingExplanation({
+        blueprint,
+        mapping,
+        datasets,
+        entityCount,
+      });
+      const saved = await runtime.saveDashboard({
+        bundle: renderDashboardBundle(blueprint, mapping),
+        answer,
+      });
+      return renderedDashboard({ ...saved, answer, blueprint, mapping });
     },
   ),
 });
@@ -148,7 +198,7 @@ const saveMockStep = createStep({
 export const recreateDashboardWorkflow = createWorkflow({
   id: RECREATE_DASHBOARD_WORKFLOW_ID,
   description:
-    'Recreate the dashboard of an uploaded image as an interactive mock: read its structure, build the mock on invented data and store it.',
+    "Recreate the dashboard of an uploaded image as an interactive mock mapped to the run's datasets: read its structure, map it to the datasets' columns, draw it and explain the mapping.",
   inputSchema: recreateDashboardInputSchema,
   outputSchema: recreateDashboardResultSchema,
   options: {
@@ -157,12 +207,13 @@ export const recreateDashboardWorkflow = createWorkflow({
     // 118).
     validateInputs: true,
     // The run never waits, and its runtime on the RequestContext (the
-    // image, the mock) must never be serialised.
+    // image) must never be serialised.
     shouldPersistSnapshot: () => false,
   },
 })
   .then(loadImageStep)
   .then(readDashboardStep)
-  .then(buildMockStep)
-  .then(saveMockStep)
+  .then(loadCatalogStep)
+  .then(mapDataStep)
+  .then(renderDashboardStep)
   .commit();

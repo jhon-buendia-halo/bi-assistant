@@ -1,14 +1,15 @@
 /**
  * The model calls of the two agent steps of Recreate a Dashboard (agents.md
- * 5.17): Read dashboard and Build mock. Each runs a registered System agent
- * (`dashboard-reader`, `mock-builder`; agents.md 2.12, 2.13) on the app's
- * model (`resolveAgentModel`), with its own editable instructions, no tools
- * and no memory, in one model call that carries the dashboard image. The
- * run's turn calls them through `RecreateDashboardRuntime`.
+ * 5.17): Read dashboard and Map data. Each runs a registered System agent
+ * (`dashboard-reader`, `data-mapper`; agents.md 2.12, 2.13) on the app's
+ * model (`resolveAgentModel`), with its own editable instructions, no
+ * tools and no memory, in one model call with structured output by JSON
+ * prompt injection. Read dashboard's call carries the image. The run's turn
+ * calls them through `RecreateDashboardRuntime`.
  */
 import type { MessageListInput } from '@mastra/core/agent/message-list';
 import { dashboardReaderAgent } from '../agents/dashboard-reader.agent';
-import { mockBuilderAgent } from '../agents/mock-builder.agent';
+import { dataMapperAgent } from '../agents/data-mapper.agent';
 import { modelCallTuning } from '../model-compat';
 import { resolveAgentModelConfig } from '../model-resolver';
 import {
@@ -18,18 +19,26 @@ import {
   stoppedBy,
   type StepModelOptions,
 } from './answer-business-question.agents';
-import { jsonObjectOf } from './answer-business-question.steps';
 import {
-  buildMockRequest,
+  jsonObjectOf,
+  type CatalogEntity,
+  type EntityColumns,
+} from './answer-business-question.steps';
+import {
+  mapDataRequest,
   readDashboardRequest,
 } from './recreate-dashboard.prompts';
-import { dashboardBlueprintSchema } from './recreate-dashboard.schemas';
+import {
+  dashboardBlueprintSchema,
+  dataMappingSchema,
+} from './recreate-dashboard.schemas';
 import {
   blueprintOf,
   emptyBlueprint,
-  mockBundleOf,
+  emptyMapping,
+  mappingOf,
   type DashboardBlueprint,
-  type MockBundle,
+  type DataMapping,
 } from './recreate-dashboard.steps';
 import { runErrorMessage } from './workflow-run';
 
@@ -41,10 +50,10 @@ export interface StepImage {
   mediaType: string;
 }
 
-/** The most tokens Read dashboard's description takes. */
-const READ_OUTPUT_TOKENS = 6000;
-/** The most tokens Build mock's HTML, CSS and JavaScript take. */
-const BUILD_OUTPUT_TOKENS = 24000;
+/** The most tokens Read dashboard's blueprint takes. */
+const READ_OUTPUT_TOKENS = 8000;
+/** The most tokens Map data's mapping takes. */
+const MAP_OUTPUT_TOKENS = 8000;
 
 /** One user message: the request's text and the image. */
 function imageMessage(request: string, image: StepImage): MessageListInput {
@@ -153,63 +162,52 @@ export async function readDashboardWithModel(
 }
 
 /**
- * The Build mock step's call (agents.md 5.17): the blueprint and the image,
- * and the mock read from the reply (`mockBundleOf`). A reply that is no
- * mock, or whose script does not parse (`validateScript`), is asked for
- * once more with the problem quoted; a second unusable reply fails the
- * step. A stopped turn builds nothing.
+ * The Map data step's call (agents.md 5.17): the dashboard and the catalog,
+ * and the mapping read from the reply and checked against the catalog
+ * (`mappingOf`), so a source the catalog lacks never reaches the
+ * dashboard. A reply that is no JSON object maps nothing: every widget has
+ * no data. A stopped turn maps nothing.
  */
-export async function buildMockWithModel(
+export async function mapDataWithModel(
   input: {
     question: string;
-    image: StepImage;
     blueprint: DashboardBlueprint;
-    /** The script's syntax error, or null when it parses. */
-    validateScript: (javascript: string) => string | null;
+    catalog: readonly CatalogEntity[];
+    columns: readonly EntityColumns[];
   },
   options: StepModelOptions,
-): Promise<{ bundle?: MockBundle; stopped: boolean }> {
-  const call = await tunedOptions(options, BUILD_OUTPUT_TOKENS);
-  let problem: string | undefined;
+): Promise<{ mapping: DataMapping; stopped: boolean }> {
+  const request = mapDataRequest(input);
   try {
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const request = buildMockRequest({
-        question: input.question,
-        blueprint: input.blueprint,
-        ...(problem ? { problem } : {}),
-      });
-      const result = await mockBuilderAgent.generate(
-        imageMessage(request, input.image),
-        call,
-      );
-      const reply = result as {
-        text?: string;
-        error?: unknown;
-        finishReason?: string;
-      };
-      if (stoppedBy(options)) return { stopped: true };
-      const failure = replyFailure(reply.error);
-      if (failure) throw failure;
-      const text = reply.text ?? '';
-      await noteExchange(options, request, text);
-      const bundle = mockBundleOf(text, input.blueprint);
-      if (!bundle) {
-        problem =
-          reply.finishReason === 'length'
-            ? 'it was cut off before the end; write a shorter mock'
-            : 'it had no ```html block or no ```javascript block';
-        continue;
-      }
-      const syntax = input.validateScript(bundle.javascript);
-      if (!syntax) return { bundle, stopped: false };
-      problem =
-        reply.finishReason === 'length'
-          ? 'it was cut off before the end; write a shorter mock'
-          : `its JavaScript does not parse (${syntax})`;
-    }
-    throw new Error(`The model wrote no usable mock: ${problem}`);
+    const result = await dataMapperAgent.generate(request, {
+      ...(await tunedOptions(options, MAP_OUTPUT_TOKENS)),
+      structuredOutput: {
+        schema: dataMappingSchema,
+        jsonPromptInjection: 'inline',
+        // A reply off the schema is read leniently (`mappingOf`).
+        errorStrategy: 'warn',
+      },
+    });
+    const reply = result as {
+      object?: unknown;
+      text?: string;
+      error?: unknown;
+    };
+    if (stoppedBy(options)) return { mapping: emptyMapping(), stopped: true };
+    const failure = replyFailure(reply.error);
+    if (failure) throw failure;
+    await noteExchange(options, request, replyText(reply.object, reply.text));
+    return {
+      mapping: mappingOf(
+        reply.object ?? reply.text,
+        input.blueprint,
+        input.catalog,
+        input.columns,
+      ),
+      stopped: false,
+    };
   } catch (error) {
-    if (stoppedBy(options)) return { stopped: true };
+    if (stoppedBy(options)) return { mapping: emptyMapping(), stopped: true };
     throw error;
   }
 }

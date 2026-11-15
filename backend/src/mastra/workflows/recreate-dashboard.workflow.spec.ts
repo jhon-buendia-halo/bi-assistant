@@ -5,17 +5,51 @@ jest.mock('@mastra/core/workflows', () =>
     '../testing/workflows.stub',
   ),
 );
+// Load catalog reads the datasets through the dataset tools' services.
+jest.mock('../tool-services', () => ({
+  getDatasetToolServices: () => ({
+    getDatasets: (names: string[]) =>
+      Promise.resolve(
+        names.map((name) => ({
+          name,
+          datasourceId: 'd-1',
+          datasourceKind: 'postgres',
+          tables: ['shop.orders'],
+          entities: [
+            {
+              key: 'shop.orders',
+              columns: [
+                { name: 'order_date', type: 'date' },
+                { name: 'Region', type: 'text' },
+                { name: 'total_amount', type: 'numeric' },
+                { name: 'order_id', type: 'int' },
+              ],
+            },
+          ],
+        })),
+      ),
+  }),
+}));
 
 import { RequestContext } from '@mastra/core/request-context';
 import { recreateDashboardWorkflow } from './recreate-dashboard.workflow';
+import {
+  SAMPLE_BLUEPRINT_REPLY,
+  SAMPLE_MAPPING_REPLY,
+} from './recreate-dashboard.sample';
 import {
   RECREATE_DASHBOARD_DEFAULT_QUESTION,
   RECREATE_DASHBOARD_RUNTIME_KEY,
   RECREATE_DASHBOARD_STEPS,
   RECREATE_DASHBOARD_WORKFLOW_ID,
+  blueprintOf,
   emptyBlueprint,
-  savedMockAnswer,
+  emptyMapping,
+  mappingExplanation,
+  mappingOf,
+  renderDashboardBundle,
   type DashboardBlueprint,
+  type MockBundle,
   type RecreateDashboardRuntime,
 } from './recreate-dashboard.steps';
 
@@ -36,28 +70,9 @@ interface StubWorkflow {
 
 const workflow = recreateDashboardWorkflow as unknown as StubWorkflow;
 
-const BLUEPRINT: DashboardBlueprint = {
-  title: 'Sales',
-  summary: 'Sales by month.',
-  theme: 'light',
-  layout: 'One row.',
-  filters: [
-    { id: 'region', label: 'Region', kind: 'select', options: ['All'] },
-  ],
-  widgets: [
-    {
-      id: 'revenue',
-      title: 'Revenue',
-      kind: 'kpi',
-      position: 'row 1',
-      description: 'Total revenue',
-      fields: ['revenue'],
-      observed: '$1.07M',
-      filteredBy: ['region'],
-    },
-  ],
-  columns: [{ name: 'revenue', type: 'number', description: 'Revenue' }],
-};
+const BLUEPRINT = blueprintOf(SAMPLE_BLUEPRINT_REPLY) as DashboardBlueprint;
+
+type MapInput = Parameters<RecreateDashboardRuntime['mapData']>[0];
 
 /** Each phase of the runtime as a Jest mock, so a test reads its calls. */
 type MockedRuntime = {
@@ -77,18 +92,23 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
       calls.push(`readDashboard:${input.image}:${input.question}`);
       return Promise.resolve({ blueprint: BLUEPRINT, stopped: false });
     }),
-    buildMock: jest.fn((input: { blueprint: DashboardBlueprint }) => {
-      calls.push(`buildMock:${input.blueprint.widgets.length}`);
+    mapData: jest.fn((input: MapInput) => {
+      calls.push(
+        `mapData:${input.catalog.map((entry) => entry.entity).join(',')}:${input.columns[0]?.columns.length}`,
+      );
       return Promise.resolve({
-        title: 'Sales',
-        description: 'A mock.',
-        codeBytes: 4200,
+        mapping: mappingOf(
+          SAMPLE_MAPPING_REPLY,
+          input.blueprint,
+          input.catalog,
+          input.columns,
+        ),
         stopped: false,
       });
     }),
-    saveMock: jest.fn(() => {
-      calls.push('saveMock');
-      return Promise.resolve({ visualId: 'v-1', title: 'Sales' });
+    saveDashboard: jest.fn((input: { bundle: MockBundle }) => {
+      calls.push(`saveDashboard:${input.bundle.title}`);
+      return Promise.resolve({ visualId: 'v-1', title: input.bundle.title });
     }),
     ...overrides,
   };
@@ -98,7 +118,7 @@ async function run(given: MockedRuntime | undefined, question = '') {
   const requestContext = new RequestContext();
   if (given) requestContext.set(RECREATE_DASHBOARD_RUNTIME_KEY, given);
   const output = (await workflow.createRun()).stream({
-    inputData: { question, image: 'inputs/image.png' },
+    inputData: { question, image: 'inputs/image.png', datasets: ['Shop'] },
     requestContext,
   });
   const events: string[] = [];
@@ -119,29 +139,71 @@ describe('recreateDashboardWorkflow', () => {
     expect(workflow.options?.shouldPersistSnapshot?.()).toBe(false);
   });
 
-  it('loads the image, reads the dashboard, builds and saves the mock', async () => {
+  it('reads the dashboard, maps it to the catalog, draws it and explains the mapping', async () => {
     const given = runtime();
     const { events, result } = await run(given);
     expect(given.calls).toEqual([
       'loadImage:inputs/image.png',
       `readDashboard:inputs/image.png:${RECREATE_DASHBOARD_DEFAULT_QUESTION}`,
-      'buildMock:1',
-      'saveMock',
+      // The catalog of the run's dataset: its entity and four columns.
+      'mapData:shop.orders:4',
+      'saveDashboard:Sales Performance 2025',
     ]);
     expect(events.filter((event) => event.endsWith(':success'))).toEqual([
       'load-image:success',
       'read-dashboard:success',
-      'build-mock:success',
-      'save-mock:success',
+      'load-dashboard-catalog:success',
+      'map-data:success',
+      'render-dashboard:success',
     ]);
     expect(result.status).toBe('success');
+    const mapping = mappingOf(
+      SAMPLE_MAPPING_REPLY,
+      BLUEPRINT,
+      [
+        {
+          entity: 'shop.orders',
+          dataset: 'Shop',
+          datasourceId: 'd-1',
+          datasourceKind: 'postgres',
+          columnCount: 4,
+        },
+      ],
+      [
+        {
+          entity: 'shop.orders',
+          columns: [
+            { name: 'order_date', type: 'date' },
+            { name: 'Region', type: 'text' },
+            { name: 'total_amount', type: 'numeric' },
+            { name: 'order_id', type: 'int' },
+          ],
+          more: 0,
+        },
+      ],
+    );
+    const answer = mappingExplanation({
+      blueprint: BLUEPRINT,
+      mapping,
+      datasets: ['Shop'],
+      entityCount: 1,
+    });
     expect(result.result).toEqual({
       visualId: 'v-1',
-      title: 'Sales',
-      widgetCount: 1,
-      filterCount: 1,
-      answer: savedMockAnswer({ title: 'Sales', blueprint: BLUEPRINT }),
+      title: 'Sales Performance 2025',
+      widgetCount: 4,
+      filterCount: 2,
+      mappedCount: 2,
+      partialCount: 1,
+      unmappedCount: 1,
+      answer,
       blueprint: BLUEPRINT,
+      mapping,
+    });
+    // What is stored is the fixed runtime's bundle and the explanation.
+    expect(given.saveDashboard).toHaveBeenCalledWith({
+      bundle: renderDashboardBundle(BLUEPRINT, mapping),
+      answer,
     });
   });
 
@@ -152,12 +214,12 @@ describe('recreateDashboardWorkflow', () => {
       question: 'Use a dark theme',
       image: 'inputs/image.png',
     });
-    expect(given.buildMock).toHaveBeenCalledWith({
-      question: 'Use a dark theme',
-      image: 'inputs/image.png',
-      blueprint: BLUEPRINT,
-    });
-    expect(given.saveMock).toHaveBeenCalledWith({ blueprint: BLUEPRINT });
+    expect(given.mapData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Use a dark theme',
+        blueprint: BLUEPRINT,
+      }),
+    );
   });
 
   it('ends at Read dashboard when the run is stopped there', async () => {
@@ -167,26 +229,21 @@ describe('recreateDashboardWorkflow', () => {
       ),
     });
     const { result } = await run(given);
-    expect(given.buildMock).not.toHaveBeenCalled();
-    expect(given.saveMock).not.toHaveBeenCalled();
+    expect(given.mapData).not.toHaveBeenCalled();
+    expect(given.saveDashboard).not.toHaveBeenCalled();
     expect(result.status).toBe('success');
     expect(result.result).toMatchObject({ stopped: true });
   });
 
-  it('ends at Build mock when the run is stopped there', async () => {
+  it('ends at Map data when the run is stopped there', async () => {
     const given = runtime({
-      buildMock: jest.fn(() =>
-        Promise.resolve({
-          title: '',
-          description: '',
-          codeBytes: 0,
-          stopped: true,
-        }),
+      mapData: jest.fn(() =>
+        Promise.resolve({ mapping: emptyMapping(), stopped: true }),
       ),
     });
     const { result } = await run(given);
-    expect(given.saveMock).not.toHaveBeenCalled();
-    expect(result.result).toMatchObject({ stopped: true, codeBytes: 0 });
+    expect(given.saveDashboard).not.toHaveBeenCalled();
+    expect(result.result).toMatchObject({ stopped: true, entityCount: 1 });
   });
 
   it("fails with the step's own error when the image is missing", async () => {

@@ -1,61 +1,63 @@
 /**
  * The prompts of the two model steps of Recreate a Dashboard (agents.md
- * 5.17): the shipped instructions of the Dashboard Reader and the Mock
- * Builder, and the request each step sends. Plain strings, no framework
+ * 5.17): the shipped instructions of the Dashboard Reader and the Data
+ * Mapper, and the request each step sends. Plain strings, no framework
  * import.
  */
 import {
+  BLUEPRINT_AGGREGATIONS,
   BLUEPRINT_FILTER_KINDS,
+  BLUEPRINT_FORMATS,
   BLUEPRINT_WIDGET_KINDS,
 } from './recreate-dashboard.schemas';
-import type { DashboardBlueprint } from './recreate-dashboard.steps';
+import {
+  planCatalogBlock,
+  type CatalogEntity,
+  type EntityColumns,
+} from './answer-business-question.steps';
+import {
+  widgetFields,
+  type DashboardBlueprint,
+} from './recreate-dashboard.steps';
 
 /** The Dashboard Reader's shipped instructions (editable in the app). */
-export const READ_DASHBOARD_INSTRUCTIONS = `You are the Dashboard Reader. You look at one image of a business dashboard and describe its structure so that someone who never saw the image could rebuild it.
+export const READ_DASHBOARD_INSTRUCTIONS = `You are the Dashboard Reader. You look at one image of a business dashboard and return it as data, precise enough for a program to draw it again without the image.
 
 You receive the image and the user's instructions. You have no tools. Describe only what the image shows; where a label or a number is unreadable, choose the most plausible one and keep going.
 
 Reply with one JSON object and nothing else:
 - title: the dashboard's title as shown, or a short fitting one.
 - summary: what the dashboard is for, in one sentence.
-- theme: light or dark, the accent colour and the series colours as hex values read from the image, and how dense the layout is.
-- layout: the grid, row by row: how many columns, which widget sits where and how wide it is.
-- filters: every control that narrows the data (dropdowns, date ranges, search boxes, toggles, tabs). Each is { "id": short kebab-case, "label": as shown, "kind": one of ${BLUEPRINT_FILTER_KINDS.join(', ')}, "options": the options visible, or 3 to 6 plausible ones }.
-- widgets: every tile, chart and table, in reading order. Each is { "id": short kebab-case, "title": as shown, "kind": one of ${BLUEPRINT_WIDGET_KINDS.join(', ')}, "position": where it sits in the layout, "description": the measure, how it is broken down, its units and time grain, "fields": the columns of the mock dataset it reads, "observed": the values, categories, axis ranges and trends you can read in the image, "filteredBy": the ids of the filters that would change it }.
-- columns: the columns of ONE flat mock dataset from which every widget can be computed. Each is { "name": snake_case, "type": string, number, date or boolean, "description": what it holds and its plausible values or range }.
+- theme: { "mode": "light" or "dark", "accent": the accent colour as #rrggbb, "palette": the series colours of the charts in order, as #rrggbb }.
+- layout: the grid in words, row by row.
+- columns: the columns of ONE flat mock dataset from which every widget can be computed. Each is { "name": snake_case, "type": "string", "number", "date" or "boolean", "description": what it holds, "values": for a string column its categories in display order, for a date column its periods in order exactly as the axis labels them (for example "Jan" to "Dec"), else [], "min" and "max": for a number column a plausible range of one row's value, else null }.
+- filters: every control that narrows the data (dropdowns, date ranges, search boxes, toggles, tabs). Each is { "id": short kebab-case, "label": as shown, "kind": one of ${BLUEPRINT_FILTER_KINDS.join(', ')}, "column": the column of the mock dataset it filters, "options": the options visible, the "all" option first when there is one, or 3 to 6 plausible ones that are values of that column }.
+- widgets: every tile, chart and table, in reading order. Each is { "id": short kebab-case, "title": as shown, "kind": one of ${BLUEPRINT_WIDGET_KINDS.join(', ')}, "span": its width in a 12-column grid (four tiles in a row are 3 each; a chart beside a narrower one may be 8 and 4; a full-width table is 12), "measures": the figures it shows, "dimension": the column it breaks them down by, or "" for a single figure, "description": the measure, its breakdown, units and time grain, "observed": the values, categories, axis ranges and trends you can read in the image, "filteredBy": the ids of the filters that would change it }.
+- A measure is { "label": the figure's name as shown, "column": a number column of the mock dataset, "aggregation": one of ${BLUEPRINT_AGGREGATIONS.join(', ')}, "format": one of ${BLUEPRINT_FORMATS.join(', ')}, "unit": a unit or currency symbol, or "", "total": the figure over all the data as the image shows it (for example 1070000 for "$1.07M", 3.1 for "3.1%"), or null when it cannot be read }. A KPI tile, a pie and a donut have one measure; a table has one per numeric column; a chart has one per series.
+
+Every column a measure, a dimension or a filter names must be listed in "columns". Use the same column for the same quantity across widgets, so the widgets agree with each other.
 
 When the image is not a dashboard (no tile, chart or table), reply with "widgets": [] and say why in "summary".`;
 
-/** The Mock Builder's shipped instructions (editable in the app). */
-export const BUILD_MOCK_INSTRUCTIONS = `You are the Mock Builder. You turn the description of a dashboard, and the image it was read from, into an interactive mock that looks and behaves like the original, on invented data.
+/** The Data Mapper's shipped instructions (editable in the app). */
+export const MAP_DATA_INSTRUCTIONS = `You are the Data Mapper. You decide whether the data a dashboard needs exists in a set of datasets, column by column.
 
-You have no tools. Follow the description for structure and the image for look: layout, proportions, colours, typography and chart shapes.
+You receive the dashboard as data (its widgets, each with the columns it reads from a mock dataset, and its filters) and the catalog of the entities (tables) of the user's datasets with the columns of each (name and type). You have no tools and you see no rows: judge by names, types and what a column of that name usually holds.
 
-Reply in exactly this format and nothing else:
+Reply with one JSON object and nothing else:
+- approach: two to four sentences on how you mapped the dashboard: the entities it rests on, how they relate, and the rule you followed for doubtful cases.
+- widgets: one entry per widget of the dashboard, in order: { "widgetId": the widget's id, "fields": one entry per column listed for that widget, "reason": one or two sentences on how the datasets can feed the widget (which entity, which aggregation, which join) or why they cannot }.
+- filters: one entry per filter: { "filterId": the filter's id, "field": the entry for the column it filters }.
+- gaps: what the datasets lack to feed the whole dashboard, one item per missing kind of data, each saying what would have to be added. Empty when nothing is missing.
 
-TITLE: <the dashboard's title>
-DESCRIPTION: <one or two sentences: what the mock shows and how to interact with it>
-\`\`\`html
-<a body fragment: no <html>, <head>, <body>, <script> or <style> tags, no inline event handlers>
-\`\`\`
-\`\`\`css
-<the style sheet>
-\`\`\`
-\`\`\`javascript
-<the script>
-\`\`\`
+A field entry is { "field": the dashboard's column name, exactly as given, "entity": the catalog entity that holds the source, "column": that entity's column, "note": why this column, including any transformation it needs (a sum, a ratio of two columns, a date truncated to the month, a join through a key) }.
 
 Rules:
-- Browser-native HTML, CSS, SVG and JavaScript only. The mock runs in a sandboxed frame with no network: never load a library, font, image, API or any other external resource.
-- Data: the script builds ONE in-memory dataset with the described columns, 150 to 400 rows, from a small seeded pseudo-random generator, so every load shows the same values. Make the values plausible and consistent with what the description observed (categories, ranges, trends, totals of the same order). Never call Math.random or use the current date.
-- Every widget is computed from that dataset through one render function, so all widgets always agree with each other.
-- Every filter works: changing it recomputes every widget it filters. Give each filter an "all" state and include a way to reset them.
-- Charts are drawn as inline SVG that scales to its container; each mark shows a tooltip with its exact value on hover and on keyboard focus. Tables sort when a header is clicked. KPI tiles show the value and, when the original does, its change against the previous period.
-- Layout: a CSS grid that follows the original and collapses to one column under 640px. Root everything in one wrapper element and scope every CSS selector under its class.
-- Colours: the dashboard's own accent and series colours for data marks; for page background, surfaces, text and borders use the frame's tokens so the mock reads in the app's Light and Dark themes: var(--qti-bg), var(--qti-surface), var(--qti-fg), var(--qti-fg-strong), var(--qti-fg-muted), var(--qti-border), var(--qti-grid), var(--qti-axis).
-- Accessible: real <button>, <select>, <input> and <table> elements, labels on every control, an accessible name on every chart.
-- Deterministic and self-contained: no storage, navigation, timers, workers, dynamic code execution or postMessage. Format numbers for reading (thousands separators, compact notation for large values, units).
-- Keep the whole reply under 900 lines.`;
+- Use only entities and columns that appear in the catalog, spelled exactly as there. Never invent one.
+- When no column can feed a field, set "entity" and "column" to "" and say in "note" what is missing. A missing source is a correct answer: do not stretch a column that holds something else.
+- A derived figure (an average order value, a rate) is mapped when the columns to compute it exist: name the main one and describe the computation in "note".
+- Prefer one entity, or entities that join by an evident key, for the fields of the same widget; say so in the widget's reason.
+- Use the same source for the same field in every widget and filter.`;
 
 /** What Read dashboard asks, beside the image. */
 export function readDashboardRequest(input: { question: string }): string {
@@ -68,31 +70,62 @@ export function readDashboardRequest(input: { question: string }): string {
   ].join('\n');
 }
 
-/** What Build mock asks, beside the image. */
-export function buildMockRequest(input: {
+/** The dashboard as Map data's request carries it: what each part reads. */
+export function mappingDashboardBlock(blueprint: DashboardBlueprint): string {
+  return JSON.stringify(
+    {
+      title: blueprint.title,
+      summary: blueprint.summary,
+      columns: blueprint.columns.map((column) => ({
+        name: column.name,
+        type: column.type,
+        description: column.description,
+        ...(column.values.length ? { values: column.values } : {}),
+      })),
+      widgets: blueprint.widgets.map((widget) => ({
+        widgetId: widget.id,
+        title: widget.title,
+        kind: widget.kind,
+        description: widget.description,
+        fields: widgetFields(widget),
+        measures: widget.measures.map(
+          (measure) =>
+            `${measure.label}: ${measure.aggregation} of ${measure.column}`,
+        ),
+        ...(widget.dimension ? { by: widget.dimension } : {}),
+      })),
+      filters: blueprint.filters.map((filter) => ({
+        filterId: filter.id,
+        label: filter.label,
+        field: filter.column,
+        options: filter.options,
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+/** What Map data asks: the dashboard and the catalog to map it to. */
+export function mapDataRequest(input: {
   question: string;
   blueprint: DashboardBlueprint;
-  /** A retry: why the earlier reply could not be used. */
-  problem?: string;
+  catalog: readonly CatalogEntity[];
+  columns: readonly EntityColumns[];
 }): string {
   return [
-    'Build the interactive mock of the dashboard in the image.',
+    'Map the dashboard to the datasets.',
     '',
     '<instructions>',
     input.question,
     '</instructions>',
     '',
     '<dashboard>',
-    JSON.stringify(input.blueprint, null, 2),
+    mappingDashboardBlock(input.blueprint),
     '</dashboard>',
-    ...(input.problem
-      ? [
-          '',
-          '<problem>',
-          `Your earlier reply could not be used: ${input.problem}`,
-          'Reply again with the whole mock in the required format.',
-          '</problem>',
-        ]
-      : []),
+    '',
+    '<catalog>',
+    planCatalogBlock(input.catalog, input.columns),
+    '</catalog>',
   ].join('\n');
 }

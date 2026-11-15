@@ -162,9 +162,9 @@ test('shows the built-in agents and mine in sections by domain', async ({
   );
 
   for (const [id, heading, keys] of [
-    ['data-foundations', 'Data Foundations', ['data-readiness', 'knowledge-bootstrap']],
+    ['data-foundations', 'Data Foundations', ['data-readiness', 'data-mapper', 'knowledge-bootstrap']],
     ['sql', 'SQL Engineering', ['sql-fixer', 'sql-verifier']],
-    ['storytelling', 'Storytelling', ['dashboard-reader', 'answer-writer', 'mock-builder', 'visualization']],
+    ['storytelling', 'Storytelling', ['dashboard-reader', 'answer-writer', 'visualization']],
     ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {
     await expect(

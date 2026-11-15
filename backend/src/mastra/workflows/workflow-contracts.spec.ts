@@ -39,8 +39,15 @@ import {
 import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
 import { RECREATE_DASHBOARD_STEP_SCHEMAS } from './recreate-dashboard.schemas';
 import {
+  SAMPLE_BLUEPRINT_REPLY,
+  SAMPLE_MAPPING_REPLY,
+} from './recreate-dashboard.sample';
+import {
   RECREATE_DASHBOARD_RUNTIME_KEY,
   RECREATE_DASHBOARD_WORKFLOW_ID,
+  blueprintOf,
+  mappingOf,
+  type DashboardBlueprint,
   type RecreateDashboardRuntime,
 } from './recreate-dashboard.steps';
 import { recreateDashboardWorkflow } from './recreate-dashboard.workflow';
@@ -169,55 +176,33 @@ const FIXTURES: Record<string, ContractFixture> = {
     workflow:
       recreateDashboardWorkflow as unknown as ContractFixture['workflow'],
     schemas: RECREATE_DASHBOARD_STEP_SCHEMAS,
-    input: { question: '', image: 'inputs/image.png' },
+    input: { question: '', image: 'inputs/image.png', datasets: ['Shop'] },
     requestContext: () => {
       const context = new RequestContext();
-      // The stubbed run: a loaded image, the dashboard read from it, the
-      // mock built and stored.
+      // The stubbed run: a loaded image, the dashboard read from it, its
+      // mapping to the catalog and the stored dashboard.
       context.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
         loadImage: () =>
           Promise.resolve({ mediaType: 'image/png', sizeBytes: 1234 }),
         readDashboard: () =>
           Promise.resolve({
-            blueprint: {
-              title: 'Sales',
-              summary: 'Sales by month.',
-              theme: 'light',
-              layout: 'One row.',
-              filters: [
-                {
-                  id: 'region',
-                  label: 'Region',
-                  kind: 'select',
-                  options: ['All'],
-                },
-              ],
-              widgets: [
-                {
-                  id: 'revenue',
-                  title: 'Revenue',
-                  kind: 'kpi',
-                  position: 'row 1',
-                  description: 'Total revenue',
-                  fields: ['revenue'],
-                  observed: '$1.07M',
-                  filteredBy: ['region'],
-                },
-              ],
-              columns: [
-                { name: 'revenue', type: 'number', description: 'Revenue' },
-              ],
-            },
+            blueprint: blueprintOf(
+              SAMPLE_BLUEPRINT_REPLY,
+            ) as DashboardBlueprint,
             stopped: false,
           }),
-        buildMock: () =>
+        mapData: ({ blueprint, catalog, columns }) =>
           Promise.resolve({
-            title: 'Sales',
-            description: 'A mock.',
-            codeBytes: 4200,
+            mapping: mappingOf(
+              SAMPLE_MAPPING_REPLY,
+              blueprint,
+              catalog,
+              columns,
+            ),
             stopped: false,
           }),
-        saveMock: () => Promise.resolve({ visualId: 'v-1', title: 'Sales' }),
+        saveDashboard: ({ bundle }) =>
+          Promise.resolve({ visualId: 'v-1', title: bundle.title }),
       } satisfies RecreateDashboardRuntime);
       return context;
     },

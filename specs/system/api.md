@@ -669,7 +669,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   |---|---|---|---|---|---|---|
   | `answer-business-question` | `Answer a Business Question` | code | `insights-analyst` | 9 | steps | none |
   | `data-readiness-assessment` | `Assess Data Readiness` | code | `data-readiness` | 6 | steps | the Data Readiness Agent's (its PostgreSQL and Databricks datasets) |
-  | `recreate-dashboard` | `Recreate a Dashboard` | code | `dashboard-reader`, `mock-builder` | 4 | steps | none |
+  | `recreate-dashboard` | `Recreate a Dashboard` | code | `dashboard-reader`, `data-mapper` | 5 | steps | none |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33), except the description, which is the workflow's own; v2's starter questions are empty, as in its AgentSummary; Assess Data Readiness's are the Data Readiness Agent's three.
 - **Trigger and input:** all are run workflows: `trigger: 'run'` and an `input` they run on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
@@ -678,6 +678,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   |---|---|
   | `answer-business-question` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`, `maxLength` 4000, `usedBy` `['receive-question']`); `datasets` (`Datasets`, datasets, required, `usedBy` `['receive-question']`); `checkDataQuality` (`Check data quality: Sarah reviews the tables the analysis used`, boolean, optional, `default` false, `usedBy` `[]`: it picks the branch to Check data quality, [agents.md](agents.md) 5.11) |
   | `data-readiness-assessment` | `dataset` (`Dataset`, dataset, required, `datasourceKinds` `['postgres', 'databricks']`, `usedBy` `['resolve-dataset']`); `question` (`Question`, textarea, optional, placeholder and default `Assess the readiness of this dataset`, `maxLength` 4000, `usedBy` `['resolve-dataset']`) |
+  | `recreate-dashboard` | `image` (`Dashboard image`, image, required, `help` `A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.`, `usedBy` `['load-image']`); `datasets` (`Datasets`, datasets, required, `help` `The data the dashboard is mapped to.`, `usedBy` `['load-image']`); `question` (`Instructions`, textarea, optional, placeholder and default `Recreate this dashboard as an interactive mock`, `maxLength` 4000, `usedBy` `['load-image']`) |
 
 - **Order:** `answer-business-question`, `data-readiness-assessment`, then `recreate-dashboard`. No agent (System, Official or user) is listed.
 

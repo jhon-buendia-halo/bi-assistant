@@ -6,10 +6,10 @@ import { analysisPlannerAgent } from './agents/analysis-planner.agent';
 import { answerWriterAgent } from './agents/answer-writer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
+import { dataMapperAgent } from './agents/data-mapper.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
-import { mockBuilderAgent } from './agents/mock-builder.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
@@ -44,7 +44,7 @@ export const mastra = new Mastra({
     'answer-writer': answerWriterAgent,
     // The agents of Recreate a Dashboard's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
-    'mock-builder': mockBuilderAgent,
+    'data-mapper': dataMapperAgent,
   },
   // The turn workflows (agents.md 1.2, 5.1): `answer-business-question`, the one
   // catalogue workflow (5.11, ADR-0034; api.md 118, 119), and `agent-turn`,

@@ -45,10 +45,7 @@ import { VerifiedQueriesService } from '../verified-queries/verified-queries.ser
 import { MetricsService } from '../metrics/metrics.service';
 import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
-import {
-  VisualizationService,
-  validateJavascript,
-} from './visualization.service';
+import { VisualizationService } from './visualization.service';
 import {
   buildPanelItem,
   tableCsv,
@@ -254,7 +251,6 @@ export class SessionsService implements OnModuleInit {
         this.crossCheckAnswer(session, question, data),
       readinessBridge: () => this.readinessBridge,
       readImage: (sessionId, path) => readWorkspaceImage(sessionId, path),
-      validateScript: validateJavascript,
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(

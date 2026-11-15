@@ -11,8 +11,8 @@ import {
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
   DASHBOARD_READER_AGENT_KEY,
+  DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
-  MOCK_BUILDER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
@@ -29,8 +29,6 @@ import {
 import {
   RECREATE_DASHBOARD_RUNTIME_KEY,
   RECREATE_DASHBOARD_WORKFLOW_ID,
-  mockCodeBytes,
-  savedMockAnswer,
   type MockBundle,
   type RecreateDashboardRuntime,
 } from '../../../mastra/workflows/recreate-dashboard.steps';
@@ -157,9 +155,7 @@ export interface TurnEngineDeps {
     sessionId: string,
     path: string,
   ): Promise<{ data: Buffer; mediaType: string }>;
-  /** A script's syntax error, or null when it parses (agents.md 5.17). */
-  validateScript(javascript: string): string | null;
-  /** Store a built mock as a visual of the session (agents.md 5.17). */
+  /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
     sessionId: string,
     bundle: MockBundle,
@@ -495,10 +491,8 @@ export class TurnEngine {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
     };
-    // Recreate a Dashboard's image, once Load image read it, and its mock,
-    // once Build mock wrote it (agents.md 5.17).
+    // Recreate a Dashboard's image, once Load image read it (agents.md 5.17).
     let dashboardImage: { data: Buffer; mediaType: string } | undefined;
-    let builtMock: MockBundle | undefined;
     const loadedImage = async (path: string) => {
       dashboardImage ??= await this.deps.readImage(id, path);
       return dashboardImage;
@@ -861,8 +855,7 @@ export class TurnEngine {
             };
           },
           // Recreate a Dashboard (agents.md 5.17): the two agent steps call
-          // their agent's model with the image; the run keeps the image
-          // and the mock between steps.
+          // their agent's model; the run keeps the image between steps.
           loadImage: async ({ image }) => {
             const loaded = await loadedImage(image);
             return {
@@ -884,35 +877,23 @@ export class TurnEngine {
               throw await stepError(error);
             }
           },
-          buildMock: async ({ question, image, blueprint }) => {
+          mapData: async (input) => {
             try {
-              const built = await this.deps.mastra.buildMock(
-                {
-                  question,
-                  image: await loadedImage(image),
-                  blueprint,
-                  validateScript: (javascript) =>
-                    this.deps.validateScript(javascript),
-                },
-                stepModelOf(MOCK_BUILDER_AGENT_KEY),
+              const mapped = await this.deps.mastra.mapData(
+                input,
+                stepModelOf(DATA_MAPPER_AGENT_KEY),
               );
-              const stopped =
-                built.stopped || turn.signal.aborted || !built.bundle;
-              builtMock = stopped ? undefined : built.bundle;
               return {
-                title: builtMock?.title ?? '',
-                description: builtMock?.description ?? '',
-                codeBytes: builtMock ? mockCodeBytes(builtMock) : 0,
-                stopped,
+                mapping: mapped.mapping,
+                stopped: mapped.stopped || turn.signal.aborted,
               };
             } catch (error) {
               throw await stepError(error);
             }
           },
-          saveMock: async ({ blueprint }) => {
-            if (!builtMock) throw new Error('No mock has been built');
-            const metadata = await this.deps.saveMock(id, builtMock, trimmed);
-            // The answer carries the mock, as a turn's visual does.
+          saveDashboard: async ({ bundle, answer }) => {
+            const metadata = await this.deps.saveMock(id, bundle, trimmed);
+            // The answer carries the dashboard, as a turn's visual does.
             visualEvent = {
               visualId: metadata.id,
               version: 1,
@@ -923,7 +904,8 @@ export class TurnEngine {
               type: 'visual-updated',
               content: JSON.stringify(visualEvent),
             });
-            text = savedMockAnswer({ title: metadata.title, blueprint });
+            // The mapping's explanation is the run's answer.
+            text = answer;
             emit({ type: 'text', content: text });
             return { visualId: metadata.id, title: metadata.title };
           },
@@ -1155,8 +1137,8 @@ export class TurnEngine {
       requestContext.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
         loadImage: (input) => captured(() => runtime.loadImage(input)),
         readDashboard: (input) => captured(() => runtime.readDashboard(input)),
-        buildMock: (input) => captured(() => runtime.buildMock(input)),
-        saveMock: (input) => captured(() => runtime.saveMock(input)),
+        mapData: (input) => captured(() => runtime.mapData(input)),
+        saveDashboard: (input) => captured(() => runtime.saveDashboard(input)),
       } satisfies RecreateDashboardRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
@@ -1170,12 +1152,17 @@ export class TurnEngine {
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
-    // Recreate a Dashboard runs on the run's image (agents.md 5.17).
+    // Recreate a Dashboard runs on the run's image and datasets (agents.md
+    // 5.17).
     const turnInput:
       | AnswerBusinessQuestionInput
       | { question: string; dataset: string }
-      | { question: string; image: string } = recreate
-      ? { question, image: session.inputImage ?? '' }
+      | { question: string; image: string; datasets: string[] } = recreate
+      ? {
+          question,
+          image: session.inputImage ?? '',
+          datasets: session.datasets,
+        }
       : readiness
         ? { question, dataset: session.datasets[0] ?? '' }
         : { question, datasets: session.datasets };

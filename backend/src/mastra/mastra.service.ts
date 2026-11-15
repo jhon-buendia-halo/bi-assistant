@@ -16,7 +16,7 @@ import {
   writeAnswerWithModel,
 } from './workflows/answer-business-question.agents';
 import {
-  buildMockWithModel,
+  mapDataWithModel,
   readDashboardWithModel,
 } from './workflows/recreate-dashboard.agents';
 import {
@@ -127,14 +127,14 @@ export class MastraService {
   }
 
   /**
-   * Recreate a Dashboard's Build mock step model call (agents.md 5.17):
-   * the Mock Builder over the blueprint and the image, the mock read from
-   * its reply.
+   * Recreate a Dashboard's Map data step model call (agents.md 5.17): the
+   * Data Mapper over the blueprint and the catalog, the mapping read from
+   * its reply and checked against the catalog.
    */
-  buildMock(
-    ...args: Parameters<typeof buildMockWithModel>
-  ): ReturnType<typeof buildMockWithModel> {
-    return buildMockWithModel(...args);
+  mapData(
+    ...args: Parameters<typeof mapDataWithModel>
+  ): ReturnType<typeof mapDataWithModel> {
+    return mapDataWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

@@ -87,10 +87,10 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     role: 'Dashboard Analyst',
     domain: 'storytelling',
   },
-  'mock-builder': {
-    name: 'Lucas',
-    role: 'Prototype Developer',
-    domain: 'storytelling',
+  'data-mapper': {
+    name: 'Daniel',
+    role: 'Data Mapping Analyst',
+    domain: 'data-foundations',
   },
 };
 
