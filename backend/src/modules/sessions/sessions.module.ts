@@ -15,6 +15,8 @@ import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { QueryEvidenceService } from './query-evidence/query-evidence.service';
 import { QUERY_EVIDENCE_SERVICE } from './query-evidence/query-evidence.token';
+import { AnswerEvidenceService } from './query-evidence/answer-evidence.service';
+import { SessionEvidenceService } from './session-evidence.service';
 
 @Module({
   imports: [
@@ -36,7 +38,15 @@ import { QUERY_EVIDENCE_SERVICE } from './query-evidence/query-evidence.token';
     VisualizationService,
     QueryEvidenceService,
     { provide: QUERY_EVIDENCE_SERVICE, useExisting: QueryEvidenceService },
+    // The query inspector's engine (api.md 139-148), one for runs and chats.
+    AnswerEvidenceService,
+    SessionEvidenceService,
   ],
-  exports: [SessionsService, QueryEvidenceService, QUERY_EVIDENCE_SERVICE],
+  exports: [
+    SessionsService,
+    QueryEvidenceService,
+    QUERY_EVIDENCE_SERVICE,
+    AnswerEvidenceService,
+  ],
 })
 export class SessionsModule {}

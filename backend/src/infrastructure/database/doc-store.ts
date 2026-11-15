@@ -24,6 +24,12 @@ export interface UpdateOptions {
   upsert?: boolean;
   /** `$setOnInsert` semantics — when a document already matches, leave it untouched. */
   setOnInsertOnly?: boolean;
+  /**
+   * Leave `updatedAt` as it is: a write of what the app caches about a
+   * document (a past chat's query evidence, api.md 144-146), which must not
+   * move it in a list sorted by recency.
+   */
+  keepUpdatedAt?: boolean;
 }
 
 /**
