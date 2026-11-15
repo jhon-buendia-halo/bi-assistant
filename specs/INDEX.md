@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-534  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-569  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -297,7 +297,7 @@ roadmap.md:463-464  #### 1.23.32 — Playwright in parallel  `✅ Done`
 roadmap.md:466-468  #### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
 roadmap.md:470-474  #### 1.23.34 — Remove the RFP Builder and the Intellify RFP API  `✅ Done`
 roadmap.md:476-481  #### 1.23.35 — Only the Questions to Insights v2 workflow; agents are a library  `✅ Done`
-roadmap.md:483-534  ### Milestone 1.25 — Query inspector: every figure links to its query (M1-25)
+roadmap.md:483-569  ### Milestone 1.25 — Query inspector: every figure links to its query (M1-25)
 roadmap.md:487-492  #### 1.25.1 — Backend evidence layer: row totals, coverage, table sizes, re-run and CSV  `✅ Done`
 roadmap.md:494-499  #### 1.25.2 — Answer view: figure chips, coverage line and query rows  `✅ Done`
 roadmap.md:501-506  #### 1.25.3 — The query explainer and the step counts  `✅ Done`
@@ -305,9 +305,14 @@ roadmap.md:508-513  #### 1.25.4 — The inspector and its Run panel host  `✅ D
 roadmap.md:515-520  #### 1.25.5 — The run detail page hosts the inspector  `✅ Done`
 roadmap.md:522-527  #### 1.25.6 — An answer that lists more than 50 rows shows all of them  `✅ Done`
 roadmap.md:529-534  #### 1.25.7 — Validate fails an attempt that rests on a sample  `✅ Done`
-roadmap.md:536-540  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:540-540  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:542-544  ## Backlog
+roadmap.md:536-541  #### 1.25.8 — The SQL bridge flags a result as cut only when rows were dropped  `🚧 In progress`
+roadmap.md:543-548  #### 1.25.9 — Answer evidence for a session's message and for a draft run  `🚧 In progress`
+roadmap.md:550-555  #### 1.25.10 — Past chats host the inspector  `🚧 In progress`
+roadmap.md:557-562  #### 1.25.11 — Try it hosts the inspector  `🚧 In progress`
+roadmap.md:564-569  #### 1.25.12 — Evals for the query explainer  `🚧 In progress`
+roadmap.md:571-575  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:575-575  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:577-579  ## Backlog
 
 specs/README.md:7-89  ## Layout
 specs/README.md:28-54  ### Capabilities
