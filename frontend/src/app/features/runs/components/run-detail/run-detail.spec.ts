@@ -30,10 +30,9 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     });
   });
 
-  function mount(run: WorkflowRun, inCatalogue = true): HTMLElement {
+  function mount(run: WorkflowRun): HTMLElement {
     const state = TestBed.inject(RunsState);
     state.activeRun.set(run);
-    state.canRunAgain.set(inCatalogue);
     const fixture = TestBed.createComponent(RunDetail);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
@@ -61,14 +60,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     expect(el.querySelector('[data-testid="workflow-run-stop"]')).toBeNull();
   });
 
-  it('Run again hands the run to the Runs state', () => {
-    const el = mount(RUN);
-    const again = spyOn(TestBed.inject(RunsState), 'runAgain');
-    el.querySelector<HTMLButtonElement>('[data-testid="run-again"]')!.click();
-    expect(again).toHaveBeenCalledWith(RUN);
-  });
-
-  it('a run waiting for an answer offers Answer in the workflow instead of Run again', () => {
+  it('a run waiting for an answer reads "Waiting for you", with no Run again or Answer in the workflow (they are on its workflow page)', () => {
     const waiting: WorkflowRun = {
       ...RUN,
       status: 'suspended',
@@ -86,13 +78,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       el.querySelector('[data-testid="run-detail-status"]')?.textContent,
     ).toContain('Waiting for you');
     expect(el.querySelector('[data-testid="run-again"]')).toBeNull();
-    const open = spyOn(TestBed.inject(RunsState), 'answerInWorkflow');
-    const button = el.querySelector<HTMLButtonElement>(
-      '[data-testid="run-answer-in-workflow"]',
-    )!;
-    expect(button.textContent?.trim()).toBe('Answer in the workflow');
-    button.click();
-    expect(open).toHaveBeenCalledWith(waiting);
+    expect(el.querySelector('[data-testid="run-answer-in-workflow"]')).toBeNull();
   });
 
   it('a run of a removed workflow reads as a plain run: its answer, no Run again, no phases bar', () => {
@@ -109,7 +95,6 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
           source: 'prompt',
         },
       },
-      false,
     );
     expect(el.querySelector('[data-testid="run-detail-workflow"]')?.textContent).toContain(
       'Assistant',

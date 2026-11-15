@@ -607,6 +607,15 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         fixture.detectChanges();
       }
 
+      it('Run again on a run opened from Runs shows its dataset picked in the list (R19)', () => {
+        designer.showRunOnLoad(readinessRun());
+        openAssistant(READINESS);
+        click('workflow-run-again');
+        const select = q('workflow-input-dataset') as HTMLSelectElement;
+        expect(select.value).toBe('World Cup Core');
+        expect(select.selectedOptions[0]?.textContent?.trim()).toBe('World Cup Core');
+      });
+
       it('Open scorecard on the readiness card shows the scorecard under the answer, and Close hides it', () => {
         openAssistant(READINESS);
         finishRun(readinessRun());
@@ -938,6 +947,23 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(q('workflow-run-new')).toBeNull();
     });
 
+    it('a run shown has Run again, which returns to the run form holding its whole input', () => {
+      openStored(answered());
+      const again = q('workflow-run-again')!;
+      expect(again.textContent?.trim()).toBe('Run again');
+      expect(again.getAttribute('title')).toBe("Run again with this run's input");
+      // Run again comes first in the header; New question follows it.
+      expect(again.nextElementSibling).toBe(q('workflow-run-new'));
+      const runAgain = spyOn(designer, 'runAgain').and.callThrough();
+      click('workflow-run-again');
+      expect(runAgain).toHaveBeenCalledTimes(1);
+      expect(designer.runResult()).toBeNull();
+      expect(q('workflow-run-again')).toBeNull();
+      const question = q('workflow-input-question') as HTMLTextAreaElement;
+      expect(question.value).toBe(designer.inputValue('question'));
+      expect(question.value).not.toBe('');
+    });
+
     it('New question is hidden while a run streams', () => {
       openForm();
       typeQuestion('Which team?');
@@ -948,6 +974,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       fixture.detectChanges();
       expect(designer.running()).toBeTrue();
       expect(q('workflow-run-new')).toBeNull();
+      expect(q('workflow-run-again')).toBeNull();
       expect(text('workflow-run-question')).toBe('Which team?');
       // The normal composer shows while it streams.
       expect(text('workflow-run')).toBe('Executing…');

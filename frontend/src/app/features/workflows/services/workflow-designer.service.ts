@@ -162,9 +162,7 @@ export class WorkflowDesigner {
   /** The server refused to resume (not a failed run): shown on the waiting card. */
   readonly resumeError = signal<string | null>(null);
 
-  /** Run again: the values the next loaded workflow's form opens with. */
-  private prefill: RunFormValues | null = null;
-  /** A stored run to show once the workflow has loaded ("Answer in the workflow"). */
+  /** A stored run to show once the workflow has loaded (a run opened from Runs). */
   private pendingRun: WorkflowRun | null = null;
 
   private loadSubscription: Subscription | null = null;
@@ -403,15 +401,23 @@ export class WorkflowDesigner {
     );
   });
 
-  /**
-   * Run again (plan 1.24.11): the next workflow opened shows its run form with
-   * this earlier run's input filled in.
-   */
-  prefillRunAgain(input: WorkflowRun['input']): void {
-    this.prefill = input as RunFormValues;
-  }
+  /** The input of the run shown (as started here, else as stored); null without one. */
+  private readonly shownInput = computed(
+    () => this.liveInput() ?? this.run()?.input ?? null,
+  );
 
-  /** "Answer in the workflow": the next workflow opened shows this stored run. */
+  /** Run again is offered while a run with an input is shown and none is going. */
+  readonly canRunAgain = computed(
+    () =>
+      this.runResult() !== null &&
+      this.shownInput() !== null &&
+      !this.running(),
+  );
+
+  /**
+   * A run opened from Runs (workflows R19): the next workflow opened shows
+   * this stored run, its form holding the run's input.
+   */
   showRunOnLoad(run: WorkflowRun): void {
     this.pendingRun = run;
   }
@@ -428,13 +434,11 @@ export class WorkflowDesigner {
         if (this.pendingRun !== null) {
           const pending = this.pendingRun;
           this.pendingRun = null;
-          if (pending.workflowId === workflow.id) this.showStored(pending);
-        }
-        if (this.prefill !== null) {
-          const input = this.prefill;
-          this.prefill = null;
-          this.inputValues.set(runAgainValues(workflow.input, input));
-          this.requestRunForm();
+          if (pending.workflowId === workflow.id) {
+            this.showStored(pending);
+            // New question keeps the run's other fields (its datasets).
+            this.inputValues.set(runAgainValues(workflow.input, pending.input));
+          }
         }
         if (
           workflow.input.some(
@@ -678,6 +682,24 @@ export class WorkflowDesigner {
     this.followUpText.set('');
     const field = this.questionField();
     if (field !== null) this.setInput(field, '');
+    this.requestRunForm();
+  }
+
+  /**
+   * Run again (workflows R19): like New question, the chat drops the run
+   * shown, but the composer opens with that run's whole input (its question
+   * too), to change and Execute as a new run. The run itself stays stored.
+   */
+  runAgain(): void {
+    const workflow = this.workflow();
+    const input = this.shownInput();
+    if (workflow === null || input === null || this.running()) return;
+    this.cancelStream();
+    this.resetRun();
+    this.runError.set(null);
+    this.inputErrors.set([]);
+    this.followUpText.set('');
+    this.inputValues.set(runAgainValues(workflow.input, input));
     this.requestRunForm();
   }
 

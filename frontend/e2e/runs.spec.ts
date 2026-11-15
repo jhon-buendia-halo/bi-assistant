@@ -413,17 +413,26 @@ test.describe('Runs and Past chats', () => {
       await scenarioStep(page, 'When I open it', async () => {
         await page.getByTestId(`run-${runId}`).getByRole('button').first().click();
       });
-      await scenarioStep(page, 'Then I see its input and its answer', async () => {
-        await expect(page.getByTestId('run-detail-input')).toContainText(QUESTION);
-        await expect(page.getByTestId('run-detail-input')).toContainText(WORLD_CUP_DATASET);
-        await expect(page.getByTestId('run-detail-answer')).toContainText(ANSWER);
-        await expect(page.getByTestId('run-detail-status')).toHaveText('Run succeeded');
-      });
+      await scenarioStep(
+        page,
+        `Then "${V2_WORKFLOW_NAME}" opens drawn with that run: its question, its answer and each node's status`,
+        async () => {
+          await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2_WORKFLOW_NAME);
+          await expect(page.getByTestId('run-detail-input')).toHaveCount(0);
+          await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+          await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          await expect(
+            page.getByTestId('workflow-node-receive-question').getByTestId('workflow-node-status'),
+          ).toHaveText('Done');
+          await expect(page.getByTestId('workflow-state-run-id')).toContainText(runId);
+        },
+      );
       await scenarioStep(page, 'When I click Run again', async () => {
-        await page.getByTestId('run-again').click();
+        await page.getByTestId('workflow-run-again').click();
       });
-      await scenarioStep(page, `Then "${V2_WORKFLOW_NAME}" opens on Run with the same input`, async () => {
-        await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2_WORKFLOW_NAME);
+      await scenarioStep(page, 'Then the composer holds the run\'s input, to change and execute', async () => {
+        await expect(page.getByTestId('workflow-run-question')).toHaveCount(0);
         await expect(page.getByTestId('workflow-run')).toBeVisible();
         await expect(page.getByTestId('workflow-input-question')).toHaveValue(QUESTION);
         await expect(

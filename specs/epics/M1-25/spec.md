@@ -21,7 +21,7 @@ The pattern is built once in the shared layer, so every agent that answers from 
 - **The System agent `query-explainer`** (Hannah): one model call, no tools, when a query is first opened; its steps are stored with the run.
 - **Step counts on demand**, shown only when they pass the checks (the first equals the table's size counted in code, the last equals the rows the query produced).
 - **Endpoints 139 to 143** on a stored run's answer.
-- **Hosts:** the Run panel of Answer a Business Question and, for a stored run of it, the run detail page of the Runs area (added 2026-11-15: that is where a past run opens).
+- **Hosts:** the Run panel of Answer a Business Question and, for a stored run of it, the run detail page of the Runs area (added 2026-11-15, when a past run opened there; since PR #108 a finished run opens on its workflow page, and this page shows a run still running or a legacy run).
 
 Plan and contract: [docs/plans/m1-25-query-inspector.md](../../../docs/plans/m1-25-query-inspector.md).
 

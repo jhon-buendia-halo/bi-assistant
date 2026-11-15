@@ -3,8 +3,6 @@ import {
   ArrowLeft,
   Loader2,
   LucideAngularModule,
-  MessageSquareReply,
-  RotateCcw,
   TriangleAlert,
   Workflow,
 } from 'lucide-angular';
@@ -45,10 +43,10 @@ export function runInputEntries(
 }
 
 /**
- * A stored run reopened (workflows R18-R20; ui.md 4.4c `run-detail`): its result is read-only apart from the visual actions of its answer;
- * its workflow and status, its input, its steps, the answer through
- * `answer-view`, and Run again while its workflow is still in the
- * catalogue. A run of a removed workflow reads as a plain run. Only the
+ * A stored run reopened read-only (workflows R19, R23; ui.md 4.4c
+ * `run-detail`): a run of a removed workflow, or one still running; any
+ * other run opens on its workflow's page. It shows its workflow and status,
+ * its input, its steps and the answer through `answer-view`. Only the
  * visual actions of the answer change the run.
  */
 @Component({
@@ -132,8 +130,6 @@ export class RunDetail {
 
   protected readonly ArrowLeft = ArrowLeft;
   protected readonly Loader2 = Loader2;
-  protected readonly MessageSquareReply = MessageSquareReply;
-  protected readonly RotateCcw = RotateCcw;
   protected readonly TriangleAlert = TriangleAlert;
   protected readonly Workflow = Workflow;
 
