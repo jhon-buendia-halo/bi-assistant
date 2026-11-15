@@ -781,6 +781,11 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 136 | `GET /workflow-runs/:id/node-chats/:stepId` | A step's node chat in a run: its messages | yes |
 | 137 | `POST /workflow-runs/:id/node-chats/:stepId/messages/stream` | Chat with a step's agent about the run's data, streamed (SSE) | yes |
 | 138 | `POST /workflow-runs/:id/resume/stream` | Answer a run that waits for the user and continue the same run, streamed (SSE) | yes |
+| 139 | `POST /workflow-runs/:id/answer/evidence` | Build the query evidence of an answer stored before it, and size the tables its queries read | yes |
+| 140 | `POST /workflow-runs/:id/answer/queries/:index/explanation` | Explain one of the answer's queries step by step (cached with the answer) | yes |
+| 141 | `POST /workflow-runs/:id/answer/queries/:index/stage-counts` | Count the rows after each step of an explained query, checked | yes |
+| 142 | `POST /workflow-runs/:id/answer/queries/:index/rerun` | Run one of the answer's queries again; nothing stored | yes |
+| 143 | `GET /workflow-runs/:id/answer/queries/:index/csv` | One query's rows as CSV, up to 50,000 | yes |
 
 #### 120. `GET /workflow-runs`
 - Query: `workflowId` (optional): only that workflow's runs.
@@ -831,6 +836,7 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Body: `{ rating: "up" | "down" }`. As 7 on the run's answer: sets `feedback` and `verified` on the stored answer; `up` saves a verified query keyed by `sourceRunId` (question = the run's question; same SQL, datasource and entity rules as 7), `down` deletes it.
 - Success `200`: `{ ok: true, message, run }` (`message` as 7, `run` as 121).
 - Errors (Style B): `400 "rating must be 'up' or 'down'"`; `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`.
+- The rating is written under the run's answer lock (139-143), so it never drops evidence another request stored meanwhile.
 
 #### 129. `POST /agents/:id/draft-runs/stream`
 - Prefix `/agents`, served by the workflows module's draft-runs controller. Capability: [agents-evals](../capabilities/agents-evals/spec.md) R60, R61. `:id` is a user agent's id.
@@ -894,6 +900,51 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Response `200`: SSE as 3.6 for the same run: `run { runId, workflowId }` first, then the `step` events (the resumed step continues with its `attempt`, its `input`, `startedAt` and earlier `toolCalls`), the agent turn's events, and `done { run }` (the run `success`, `stopped`, or `suspended` again with a new `waitingFor` and `input-required` before `done`) or `error { content }`. Closing the connection stops the run as in 119.
 - Side effects: the stored run becomes `running` with `waitingFor` removed before `run` is sent, and is updated when it ends as in 119; the workflow snapshot written while it waited is deleted once it ends ([data-model.md](data-model.md) 3.16).
 - "Run again with my answer": for an expired run the client starts a new run (119) with the answer as `question` and `context.fromRunId` the expired run; that context is the expired run's question and its clarifying question with its options (`<question>\n- <option>` …), not an answer (118 accepts it).
+
+#### Query evidence (139-143)
+
+The query inspector's endpoints over a run's stored answer and its `evidence` (3.6, [data-model.md](data-model.md) 3.4.2a; plan `docs/plans/m1-25-query-inspector.md`). `:index` is an `evidence[].index`: the position of the query's record in `answer.data`. Rules for all five:
+- Errors (Style B), in this order: `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`; `400 "Wait for the run to finish"` (the run is `running` or `suspended`); `400 "Query <index> not found in the run's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). An answer stored without `evidence` has it derived from `data` for these checks.
+- Every write to a run's `answer` goes through **one lock per run**, so two writes cannot overwrite each other: each re-reads the run inside the lock, patches it and writes `answer`. This includes 128.
+- Every statement runs through the datasource's `runReadOnlySql` directly (its read-only guard, and PostgreSQL's READ ONLY transaction), never through the SQL repair: a re-run executes the same statement.
+- The datasource of a query (as 133): the record's `evidence.datasourceId` when the run's datasets use it, else the run's only datasource; `400 "Several datasources are in scope for this run; this query cannot be re-run"` when there are several, `400 "No datasource is bound to this run's datasets"` when there is none.
+
+#### 139. `POST /workflow-runs/:id/answer/evidence`
+- Body: none. Builds `evidence` for an answer stored before the feature (from `data`; the coverage of a record without `totalRows` reads the cap its rows ran into), then fills, for each query that did not fail and lacks them, `datasourceId`, `datasourceKind` and `tables`: the catalog entities of the run's datasets whose name the SQL contains (PostgreSQL also `schema.table`; a `sample_rows` record its entity), each sized by one `SELECT COUNT(*) AS n FROM <entity>` per distinct table across the answer, at most 3 at a time. Exact counts, never estimates.
+- Success `201`: `{ ok: true, run }` (`run` as 121).
+- A count that fails gives that table `rows: null, error: "<connector message>"`, never an HTTP error; a query whose datasource cannot be resolved gets its tables with `rows: null` and that reason. Called again with nothing missing, it runs no query and writes nothing.
+- Errors: the shared ones.
+
+#### 140. `POST /workflow-runs/:id/answer/queries/:index/explanation`
+- Body: none. Returns the stored `evidence[index].explanation` when there is one. Otherwise: for a `sample_rows` record, code builds the steps; for SQL, one call to the System agent `query-explainer` ([agents.md](agents.md)), whose request holds the dialect, the rationale, the tables with their sizes, the columns and the SQL, never result rows. The explanation is stored at `answer.evidence[index].explanation` under the lock. A second request for the same run and index while one is running waits for the same result.
+- Success `201`: `{ ok: true, run }`.
+- A reply that is no JSON object is stored with `fallback: true` (steps built by code) and answers 201.
+- Errors: the shared ones; `400 "Query <index> has no SQL to explain"` (a failed record); `400 "The query could not be explained: <model error>"`.
+
+#### 141. `POST /workflow-runs/:id/answer/queries/:index/stage-counts`
+- Body: none. Runs each step's `countSql` in turn, at most 8, and checks them (the start count equals the table size; every statement reads only tables the query reads and returns one whole number of 0 or more; `keep` and `group` never increase the count; the last count, with the outer limit, equals the rows produced). Stores each step's `rows` and `explanation.stageCounts` (`verified`, or `unverified` with its `reason`, when no step count but the start and show counts is stored). `unverified` is a stored result, not an error. Called again once verified, it returns the stored result.
+- Success `201`: `{ ok: true, run }`.
+- Errors: the shared ones; `400 "Explain query <index> first"`.
+
+#### 142. `POST /workflow-runs/:id/answer/queries/:index/rerun`
+- Body: none. Runs the record's statement again, with no repair, at its `rowLimit` (default 100; a `sample_rows` record samples its entity again, default 10). **Nothing is stored**: the answer keeps pointing at the rows it was written from.
+- Success `201`: `{ ok: true, result: QueryRerunResult }`.
+  ```ts
+  type QueryRerunResult = {
+    columns: string[];
+    rows: Record<string, unknown>[];
+    rowCount: number;
+    totalRows?: number;           // rows the statement produced before the cap
+    coverage: QueryCoverage;      // as 3.6, for the new result
+    ranAt: string;                // ISO
+  };
+  ```
+- Errors: the shared ones; `400 "Query <index> has no SQL to run"` (a failed record); the datasource rule's two 400s; the connector's own message as a 400 otherwise.
+
+#### 143. `GET /workflow-runs/:id/answer/queries/:index/csv`
+- The checks of 142, before any header is written. Raises the statement's top-level `LIMIT` (or `FETCH FIRST n`) to 50 001, or appends `LIMIT 50001` when there is none (a trailing `;` or comment is dropped first), runs it with the row clamp raised to 50 001, and keeps 50 000 rows. A `sample_rows` record is sampled again at its size.
+- Response `200`: `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="query-<Q>-<first 8 of the run id>.csv"` (`<Q>` is the query's 1-based position in `evidence`), and `X-Rows-Cut: 50000` when more rows existed. Body: a header row of the columns, then one line per row, CRLF line ends, quoted per RFC 4180 (a field holding `"`, `,`, CR or LF is quoted, `"` doubled); `null` is empty, an object is its JSON.
+- Errors: as 142.
 
 ### 2.7 Deep analysis (removed 2026-11-12)
 
@@ -1120,6 +1171,7 @@ interface ChatMessage {
   visual?: VisualEvent; verified?: boolean; interpretation?: string;
   feedback?: 'up' | 'down'; crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
   reasoning?: ReasoningStep[]; knowledge?: KnowledgeUse[]; report?: AnalysisReport;
+  evidence?: QueryEvidence[];   // the query inspector's facts, beside `data` (data-model 3.4.2a)
 }
 interface ToolDataRecord {
   tool: string; input?: string;                       // SQL text or entity name
@@ -1459,6 +1511,7 @@ type WorkflowRun = {
   // Answer a Business Question runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text (a run stored before 2026-11-13 may hold a clarifying question with its `clarification`); absent while it waits, and when it stopped or failed before answering
+                                   // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql or sample_rows record of answer.data, failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;
   agent?: SessionAgentRef;         // as a session's (2.1)

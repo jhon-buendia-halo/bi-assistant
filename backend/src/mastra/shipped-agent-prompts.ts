@@ -4,6 +4,7 @@ import {
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_INSTRUCTIONS,
 } from './workflows/answer-business-question.prompts';
+import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
@@ -31,6 +32,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'data-readiness': DATA_READINESS_PROMPT,
   'analysis-planner': PLAN_INSTRUCTIONS,
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
+  'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

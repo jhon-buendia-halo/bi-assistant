@@ -1,5 +1,13 @@
 import type { DatasourceKind } from '../modules/datasources/entities/datasource.entity';
 
+// The query facts' side channel (plan m1-25 1.25.1): the data tools write
+// `QueryFacts` beside their result under this requestContext key.
+export {
+  QUERY_FACTS_CONTEXT_KEY,
+  queryFactsKey,
+  type QueryFactsMap,
+} from '../modules/sessions/query-evidence/query-facts';
+
 // DI bridge for Mastra tools, same pattern as model-resolver: tools are
 // constructed at module load with no Nest DI, so SessionsService installs the
 // real implementations at boot.
@@ -45,6 +53,11 @@ export interface SqlRunResult {
   correctedSql?: string;
   /** The run filled its row limit — the result set is probably incomplete. */
   truncated?: boolean;
+  /**
+   * Rows the statement produced before the row limit. The tool takes it off
+   * the result before the model sees it (passed as `QueryFacts` instead).
+   */
+  totalRows?: number;
   /**
    * Guidance for the agent (repair happened, zero rows came back, or the row
    * limit was reached).

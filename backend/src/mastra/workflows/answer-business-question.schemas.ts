@@ -192,7 +192,7 @@ export const analyseQuerySchema = z.object({
   rationale: z.string().optional().describe('Why the agent ran it.'),
   rows: z
     .array(z.record(z.string(), z.unknown()))
-    .describe('Its result rows, at most 50.'),
+    .describe('Its result rows, at most 200.'),
   rowCount: z.number().describe('Rows it returned.'),
   truncated: z
     .boolean()

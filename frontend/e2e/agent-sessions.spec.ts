@@ -148,13 +148,24 @@ test("an Answer a Business Question run can't write: the read-only guard rejects
 
   // No query succeeded, so Validate sent Analyse back once (workflows R27):
   // the DELETE was tried, and refused, in both attempts.
-  await runAnswer(page).getByText('Data used (2 queries)').click();
-  await expect(page.getByText('run_readonly_sql — failed')).toHaveCount(2);
-  await expect(
-    page.getByText('Only read-only SELECT / WITH queries can be run.', {
-      exact: true,
-    }),
-  ).toHaveCount(2);
+  await expect(page.getByTestId('query-coverage-chip')).toHaveText([
+    'Failed',
+    'Failed',
+  ]);
+  for (const index of [0, 1]) {
+    await page.getByTestId(`query-row-${index}`).click();
+    await expect(page.getByTestId('query-inspector-position')).toHaveText(
+      `Query ${index + 1} of 2`,
+    );
+    await expect(
+      page
+        .getByTestId('query-inspector')
+        .getByText('Only read-only SELECT / WITH queries can be run.', {
+          exact: true,
+        }),
+    ).toBeVisible();
+  }
+  await page.getByTestId('query-inspector-close').click();
 
   expect(rowsBefore).toBeGreaterThan(0);
   expect(await matchRowCount()).toBe(rowsBefore);

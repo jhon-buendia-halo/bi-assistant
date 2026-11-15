@@ -26,7 +26,9 @@ import {
 import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from './workflow-run';
 import {
+  answerDeltas,
   answerOf,
+  answerWithRowTables,
   jsonObjectOf,
   planOf,
   type AnalyseQuery,
@@ -218,10 +220,12 @@ function partialAnswer(partial: unknown): string {
 
 /**
  * The Write answer step's call (agents.md 5.11): the answer read from the
- * reply (`answerOf`). With `onText`, the answer's Markdown streams as it is
- * written (each new piece of the partial object's `answer`); whatever the
+ * reply (`answerOf`), its row markers expanded into tables of the queries'
+ * rows (`answerWithRowTables`, plan 1.25.6). With `onText`, the answer's
+ * Markdown streams as it is written (each new piece of the partial object's
+ * `answer`, markers expanded or held back by `answerDeltas`); whatever the
  * stream did not deliver is sent once the reply is complete, so `onText`
- * always receives the whole answer exactly once.
+ * always receives the whole answer exactly once and never a marker.
  */
 export async function writeAnswerWithModel(
   input: {
@@ -232,12 +236,7 @@ export async function writeAnswerWithModel(
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
 ): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
-  let sent = '';
-  const send = (full: string) => {
-    if (!options.onText || !full.startsWith(sent) || full === sent) return;
-    options.onText(full.slice(sent.length));
-    sent = full;
-  };
+  const deltas = answerDeltas(input.queries, options.onText);
   const request = writeAnswerRequest(input);
   try {
     const stream = await writeAnswerAgent.stream(request, {
@@ -251,7 +250,7 @@ export async function writeAnswerWithModel(
     });
     if (options.onText) {
       for await (const partial of stream.objectStream as AsyncIterable<unknown>) {
-        send(partialAnswer(partial));
+        deltas.update(partialAnswer(partial));
       }
     }
     let object: unknown;
@@ -263,13 +262,14 @@ export async function writeAnswerWithModel(
     const text = await stream.text;
     // The model's own failure fails the step (agents.md 5.11).
     if (stream.error && !stoppedBy(options)) throw stream.error;
-    const answer = answerOf(object ?? text);
-    send(answer.answer);
+    const answer = answerWithRowTables(answerOf(object ?? text), input.queries);
+    deltas.finish(answer.answer);
     await noteExchange(options, request, replyText(object, text));
     return { answer, stopped: stoppedBy(options) };
   } catch (error) {
     if (stoppedBy(options)) {
-      return { answer: answerOf(sent), stopped: true };
+      // What was shown, markers already expanded or held back.
+      return { answer: answerOf(deltas.sent()), stopped: true };
     }
     throw error;
   }

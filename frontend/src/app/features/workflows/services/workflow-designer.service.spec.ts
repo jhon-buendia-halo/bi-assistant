@@ -4,7 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { EMPTY, of, throwError } from 'rxjs';
 import {
   WorkflowDetail,
   WorkflowRun,
@@ -25,6 +25,7 @@ class FakeRunsApi {
   }[] = [];
   getRun = jasmine.createSpy('getRun');
   rateAnswer = jasmine.createSpy('rateAnswer');
+  prepareEvidence = jasmine.createSpy('prepareEvidence').and.returnValue(EMPTY);
 
   streamRun(
     workflowId: string,
@@ -731,6 +732,61 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   it('shownQuestion falls back to the run question when its input has none', () => {
     openStored(storedRun({ input: { datasets: [] }, question: ' From the run ' }));
     expect(designer.shownQuestion()).toBe('From the run');
+  });
+
+  describe('the query inspector (M1-25)', () => {
+    const withData = (id = 'run-1') =>
+      storedRun({
+        id,
+        answer: {
+          role: 'assistant',
+          content: 'Brazil scored 12.',
+          at: '2026-11-11T10:00:01.000Z',
+          data: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1 }],
+        },
+      });
+
+    it('openQuery sets the index, closeQuery clears it and answers the opener', () => {
+      const button = document.createElement('button');
+      button.setAttribute('data-testid', 'figure-ref');
+      button.setAttribute('data-query-index', '1');
+      designer.openQuery(1, button);
+      expect(designer.openQueryIndex()).toBe(1);
+      designer.openQuery(0);
+      expect(designer.openQueryIndex()).toBe(0);
+      const opener = designer.closeQuery();
+      expect(designer.openQueryIndex()).toBeNull();
+      expect(opener?.el).toBe(button);
+      expect(opener?.selector).toBe('[data-testid="figure-ref"][data-query-index="1"]');
+    });
+
+    it('restores a maximized Run panel when a query opens', () => {
+      designer.runDockMaximized.set(true);
+      designer.openQuery(0);
+      expect(designer.runDockMaximized()).toBeFalse();
+    });
+
+    it('prepares a stored answer of Answer a Business Question once per run id', () => {
+      const updated = withData();
+      runs.prepareEvidence.and.returnValue(
+        of({ ok: true, run: { ...updated, datasets: ['Updated'] } }),
+      );
+      openStored(withData());
+      expect(runs.prepareEvidence).toHaveBeenCalledOnceWith('run-1');
+      expect(designer.run()?.datasets).toEqual(['Updated']);
+      openStored(withData());
+      expect(runs.prepareEvidence).toHaveBeenCalledTimes(1);
+      openStored(withData('run-2'));
+      expect(runs.prepareEvidence).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not prepare an answer with no data, and a failure is silent', () => {
+      openStored(storedRun());
+      expect(runs.prepareEvidence).not.toHaveBeenCalled();
+      runs.prepareEvidence.and.returnValue(throwError(() => new Error('boom')));
+      openStored(withData('run-3'));
+      expect(designer.run()?.id).toBe('run-3');
+    });
   });
 });
 

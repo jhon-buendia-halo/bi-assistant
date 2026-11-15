@@ -50,12 +50,10 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
     // the real database and shows the answer with the query behind it.
     await runQuestionInTab(page, QUESTION, WORLD_CUP_DATASET);
     await expect(runAnswer(page)).toContainText(ANSWER);
-    await runAnswer(page)
-      .getByText(/Data used \(1 query\)/)
-      .click();
-    await expect(
-      runAnswer(page).locator('pre', { hasText: SQL }),
-    ).toBeVisible();
+    await page.getByTestId('query-row-0').click();
+    await page.getByTestId('query-inspector-tab-sql').click();
+    await expect(page.getByTestId('query-sql')).toHaveText(SQL);
+    await page.getByTestId('query-inspector-close').click();
     const toolResult = stub.requests
       .flatMap((request) => request.messages)
       .filter((message) => message.role === 'tool')

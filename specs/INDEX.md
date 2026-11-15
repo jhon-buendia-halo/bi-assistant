@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-481  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-534  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -297,23 +297,31 @@ roadmap.md:463-464  #### 1.23.32 — Playwright in parallel  `✅ Done`
 roadmap.md:466-468  #### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
 roadmap.md:470-474  #### 1.23.34 — Remove the RFP Builder and the Intellify RFP API  `✅ Done`
 roadmap.md:476-481  #### 1.23.35 — Only the Questions to Insights v2 workflow; agents are a library  `✅ Done`
-roadmap.md:483-487  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:487-487  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:489-491  ## Backlog
+roadmap.md:483-534  ### Milestone 1.25 — Query inspector: every figure links to its query (M1-25)
+roadmap.md:487-492  #### 1.25.1 — Backend evidence layer: row totals, coverage, table sizes, re-run and CSV  `✅ Done`
+roadmap.md:494-499  #### 1.25.2 — Answer view: figure chips, coverage line and query rows  `✅ Done`
+roadmap.md:501-506  #### 1.25.3 — The query explainer and the step counts  `✅ Done`
+roadmap.md:508-513  #### 1.25.4 — The inspector and its Run panel host  `✅ Done`
+roadmap.md:515-520  #### 1.25.5 — The run detail page hosts the inspector  `✅ Done`
+roadmap.md:522-527  #### 1.25.6 — An answer that lists more than 50 rows shows all of them  `✅ Done`
+roadmap.md:529-534  #### 1.25.7 — Validate fails an attempt that rests on a sample  `✅ Done`
+roadmap.md:536-540  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:540-540  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:542-544  ## Backlog
 
-specs/README.md:7-88  ## Layout
+specs/README.md:7-89  ## Layout
 specs/README.md:28-54  ### Capabilities
-specs/README.md:56-88  ### Epics
-specs/README.md:90-94  ## Stack neutrality
-specs/README.md:96-105  ## Data assets
-specs/README.md:107-168  ## Formats
-specs/README.md:109-143  ### Capability spec — `capabilities/<capability>/spec.md`
-specs/README.md:145-168  ### Epic spec — `epics/<EPIC-ID>/spec.md`
-specs/README.md:170-174  ## Lifecycle
-specs/README.md:176-182  ## Rebuild prompt
+specs/README.md:56-89  ### Epics
+specs/README.md:91-95  ## Stack neutrality
+specs/README.md:97-106  ## Data assets
+specs/README.md:108-169  ## Formats
+specs/README.md:110-144  ### Capability spec — `capabilities/<capability>/spec.md`
+specs/README.md:146-169  ### Epic spec — `epics/<EPIC-ID>/spec.md`
+specs/README.md:171-175  ## Lifecycle
+specs/README.md:177-183  ## Rebuild prompt
 
 specs/capabilities/agent-answers/spec.md:7-9  ## Concepts
-specs/capabilities/agent-answers/spec.md:11-180  ## Rules
+specs/capabilities/agent-answers/spec.md:11-207  ## Rules
 specs/capabilities/agent-answers/spec.md:13-41  ### Sending a message and streaming
 specs/capabilities/agent-answers/spec.md:15-15  R8 The system SHALL reject an empty or whitespace-only question: a run re
 specs/capabilities/agent-answers/spec.md:16-16  R9 Retired (1.23.27). The composer's Enter and Shift+Enter went with it.
@@ -344,48 +352,61 @@ specs/capabilities/agent-answers/spec.md:87-107  ### Persisted answer and proven
 specs/capabilities/agent-answers/spec.md:89-94  R30 Each persisted answer SHALL carry:
 specs/capabilities/agent-answers/spec.md:95-95  R31 The interpretation line SHALL be built from the successful SQL runs on
 specs/capabilities/agent-answers/spec.md:96-101  R32 Under an answer, the chat SHALL show these blocks, each only when non-
-specs/capabilities/agent-answers/spec.md:102-106  R33 Each entry in "Data used" SHALL show:
+specs/capabilities/agent-answers/spec.md:102-106  R33 Unless the host shows the query inspector (R67), each entry in "Data u
 specs/capabilities/agent-answers/spec.md:107-107  R34 The chat SHALL offer "Copy message" on every user message and answer.
-specs/capabilities/agent-answers/spec.md:109-117  ### Verified badge and rating
-specs/capabilities/agent-answers/spec.md:111-111  R35 An answer whose last successful SQL equals a stored verified query (ca
-specs/capabilities/agent-answers/spec.md:112-117  R36 An answer with data records SHALL offer "Save as verified query" (thum
-specs/capabilities/agent-answers/spec.md:119-136  ### Careful mode (cross-check)
-specs/capabilities/agent-answers/spec.md:121-121  R37 Careful mode is asked for per run (the `careful` option of a run's tur
-specs/capabilities/agent-answers/spec.md:122-127  R38 In careful mode, before `done`, the system SHALL check the turn's last
-specs/capabilities/agent-answers/spec.md:128-135  R39 The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check
-specs/capabilities/agent-answers/spec.md:136-136  R40 A failing cross-check SHALL NOT lose the answer. A turn with no succes
-specs/capabilities/agent-answers/spec.md:138-146  ### Clarification
-specs/capabilities/agent-answers/spec.md:140-140  R41 The assistant SHALL ask at most one clarifying question per user quest
-specs/capabilities/agent-answers/spec.md:141-141  R42 A clarification SHALL end the turn immediately: the model stops. A cla
-specs/capabilities/agent-answers/spec.md:142-145  R43 Only the latest clarification card SHALL be actionable. Its controls:
-specs/capabilities/agent-answers/spec.md:146-146  R44 When the user answers a clarification, the system SHALL give the model
-specs/capabilities/agent-answers/spec.md:148-150  ### Errors
-specs/capabilities/agent-answers/spec.md:150-150  R45 Retired (1.23.27). The chat error bubble, its toast and **Retry** went
-specs/capabilities/agent-answers/spec.md:152-156  ### Memory and continuity
-specs/capabilities/agent-answers/spec.md:154-154  R46 Each session SHALL have its own persistent agent memory thread. Each t
-specs/capabilities/agent-answers/spec.md:155-155  R47 When a session has a transcript but no memory thread (created before m
-specs/capabilities/agent-answers/spec.md:156-156  R48 Background work (grounding pass, SQL repair, cross-check, visual desig
-specs/capabilities/agent-answers/spec.md:158-161  ### Retired chat rules
-specs/capabilities/agent-answers/spec.md:160-160  R50 Retired (1.23.27). The empty chat's welcome block and its starter prom
-specs/capabilities/agent-answers/spec.md:161-161  R51 Moved to past-chats R66 (the history strip of a transcript; see ../pas
-specs/capabilities/agent-answers/spec.md:163-180  ### Sessions started from an agent
-specs/capabilities/agent-answers/spec.md:167-167  R52 Retired (1.24.12). **Start chat** (on a workflow, never on an agent) c
-specs/capabilities/agent-answers/spec.md:168-168  R53 A session started from an agent SHALL keep the datasets it was created
-specs/capabilities/agent-answers/spec.md:169-175  R54 Every assistant call made for a session bound to a user agent that sti
-specs/capabilities/agent-answers/spec.md:176-176  R55 An agent's instructions SHALL NOT relax any rule enforced in code: the
-specs/capabilities/agent-answers/spec.md:177-177  R56 A model override SHALL name a model or deployment of the configured pr
-specs/capabilities/agent-answers/spec.md:178-178  R58 Retired (1.23.27). The welcome block of a session bound to an agent we
-specs/capabilities/agent-answers/spec.md:179-179  R61 A session bound to a built-in agent (today the Data Readiness Agent an
-specs/capabilities/agent-answers/spec.md:180-180  R64 Retired (1.24.12). The new-session screen, with its **Workflow** field
-specs/capabilities/agent-answers/spec.md:182-194  ## Edge cases and errors
-specs/capabilities/agent-answers/spec.md:196-204  ## Contracts
-specs/capabilities/agent-answers/spec.md:206-218  ## UI
-specs/capabilities/agent-answers/spec.md:220-395  ## Flows
-specs/capabilities/agent-answers/spec.md:222-245  ### Feature: Chat and visuals
-specs/capabilities/agent-answers/spec.md:247-337  ### Feature: Chat answers and reliability signals
-specs/capabilities/agent-answers/spec.md:339-373  ### Feature: Sessions started from an agent
-specs/capabilities/agent-answers/spec.md:375-395  ### Feature: Skills the assistant is given
-specs/capabilities/agent-answers/spec.md:397-406  ## Acceptance
+specs/capabilities/agent-answers/spec.md:109-134  ### Query inspector
+specs/capabilities/agent-answers/spec.md:113-113  R67 A host turns the inspector on with the answer view's `queryInspector`
+specs/capabilities/agent-answers/spec.md:114-114  R68 Each persisted answer MAY carry `evidence`: one entry per `run_readonl
+specs/capabilities/agent-answers/spec.md:115-121  R69 In inspector mode each figure of the answer text SHALL carry a chip `Q
+specs/capabilities/agent-answers/spec.md:122-126  R70 Under the answer, in place of `How I worked this out` and `Data used`,
+specs/capabilities/agent-answers/spec.md:127-127  R71 The answer view in inspector mode SHALL list one **row** per `data` re
+specs/capabilities/agent-answers/spec.md:128-128  R72 An answer stored before the feature has `data` but no `evidence`: the
+specs/capabilities/agent-answers/spec.md:129-129  R73 Opening a query (a chip, a row or the coverage line's link) SHALL show
+specs/capabilities/agent-answers/spec.md:130-130  R74 `Step by step` shows the SQL as a funnel of business steps (`Start fro
+specs/capabilities/agent-answers/spec.md:131-131  R75 The size of each table a query reads is counted in code (`SELECT COUNT
+specs/capabilities/agent-answers/spec.md:132-132  R76 The `Result` tab SHALL always show the rows stored with the answer (at
+specs/capabilities/agent-answers/spec.md:133-133  R77 **Re-run** SHALL run the same statement again, with no repair, on the
+specs/capabilities/agent-answers/spec.md:134-134  R78 The explanation, the step counts and the evidence are written to the r
+specs/capabilities/agent-answers/spec.md:136-144  ### Verified badge and rating
+specs/capabilities/agent-answers/spec.md:138-138  R35 An answer whose last successful SQL equals a stored verified query (ca
+specs/capabilities/agent-answers/spec.md:139-144  R36 An answer with data records SHALL offer "Save as verified query" (thum
+specs/capabilities/agent-answers/spec.md:146-163  ### Careful mode (cross-check)
+specs/capabilities/agent-answers/spec.md:148-148  R37 Careful mode is asked for per run (the `careful` option of a run's tur
+specs/capabilities/agent-answers/spec.md:149-154  R38 In careful mode, before `done`, the system SHALL check the turn's last
+specs/capabilities/agent-answers/spec.md:155-162  R39 The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check
+specs/capabilities/agent-answers/spec.md:163-163  R40 A failing cross-check SHALL NOT lose the answer. A turn with no succes
+specs/capabilities/agent-answers/spec.md:165-173  ### Clarification
+specs/capabilities/agent-answers/spec.md:167-167  R41 The assistant SHALL ask at most one clarifying question per user quest
+specs/capabilities/agent-answers/spec.md:168-168  R42 A clarification SHALL end the turn immediately: the model stops. A cla
+specs/capabilities/agent-answers/spec.md:169-172  R43 Only the latest clarification card SHALL be actionable. Its controls:
+specs/capabilities/agent-answers/spec.md:173-173  R44 When the user answers a clarification, the system SHALL give the model
+specs/capabilities/agent-answers/spec.md:175-177  ### Errors
+specs/capabilities/agent-answers/spec.md:177-177  R45 Retired (1.23.27). The chat error bubble, its toast and **Retry** went
+specs/capabilities/agent-answers/spec.md:179-183  ### Memory and continuity
+specs/capabilities/agent-answers/spec.md:181-181  R46 Each session SHALL have its own persistent agent memory thread. Each t
+specs/capabilities/agent-answers/spec.md:182-182  R47 When a session has a transcript but no memory thread (created before m
+specs/capabilities/agent-answers/spec.md:183-183  R48 Background work (grounding pass, SQL repair, cross-check, visual desig
+specs/capabilities/agent-answers/spec.md:185-188  ### Retired chat rules
+specs/capabilities/agent-answers/spec.md:187-187  R50 Retired (1.23.27). The empty chat's welcome block and its starter prom
+specs/capabilities/agent-answers/spec.md:188-188  R51 Moved to past-chats R66 (the history strip of a transcript; see ../pas
+specs/capabilities/agent-answers/spec.md:190-207  ### Sessions started from an agent
+specs/capabilities/agent-answers/spec.md:194-194  R52 Retired (1.24.12). **Start chat** (on a workflow, never on an agent) c
+specs/capabilities/agent-answers/spec.md:195-195  R53 A session started from an agent SHALL keep the datasets it was created
+specs/capabilities/agent-answers/spec.md:196-202  R54 Every assistant call made for a session bound to a user agent that sti
+specs/capabilities/agent-answers/spec.md:203-203  R55 An agent's instructions SHALL NOT relax any rule enforced in code: the
+specs/capabilities/agent-answers/spec.md:204-204  R56 A model override SHALL name a model or deployment of the configured pr
+specs/capabilities/agent-answers/spec.md:205-205  R58 Retired (1.23.27). The welcome block of a session bound to an agent we
+specs/capabilities/agent-answers/spec.md:206-206  R61 A session bound to a built-in agent (today the Data Readiness Agent an
+specs/capabilities/agent-answers/spec.md:207-207  R64 Retired (1.24.12). The new-session screen, with its **Workflow** field
+specs/capabilities/agent-answers/spec.md:209-221  ## Edge cases and errors
+specs/capabilities/agent-answers/spec.md:223-231  ## Contracts
+specs/capabilities/agent-answers/spec.md:233-245  ## UI
+specs/capabilities/agent-answers/spec.md:247-422  ## Flows
+specs/capabilities/agent-answers/spec.md:249-272  ### Feature: Chat and visuals
+specs/capabilities/agent-answers/spec.md:274-364  ### Feature: Chat answers and reliability signals
+specs/capabilities/agent-answers/spec.md:366-400  ### Feature: Sessions started from an agent
+specs/capabilities/agent-answers/spec.md:402-422  ### Feature: Skills the assistant is given
+specs/capabilities/agent-answers/spec.md:424-433  ## Acceptance
 
 specs/capabilities/agent-panel/spec.md:5-15  ## Concepts
 specs/capabilities/agent-panel/spec.md:17-58  ## Rules
@@ -1353,7 +1374,7 @@ specs/capabilities/visuals/spec.md:407-429  ### Feature: Skills the designer is 
 specs/capabilities/visuals/spec.md:431-443  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
-specs/capabilities/workflows/spec.md:13-72  ## Rules
+specs/capabilities/workflows/spec.md:13-73  ## Rules
 specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly two workflows, in this order
 specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `answer-business-question` and `data-readi
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
@@ -1384,13 +1405,14 @@ specs/capabilities/workflows/spec.md:64-64  R27 Answer a Business Question SHALL
 specs/capabilities/workflows/spec.md:66-68  R29 Assess Data Readiness SHALL run, fixed in code ([../../system/agents.m
 specs/capabilities/workflows/spec.md:69-71  R28 A run that needs the user's answer (Clarify, or Analyse's clarifying q
 specs/capabilities/workflows/spec.md:72-72  R30 Each agent of a run SHALL keep its conversation in a memory thread of
-specs/capabilities/workflows/spec.md:74-91  ## Edge cases and errors
-specs/capabilities/workflows/spec.md:93-97  ## Contracts
-specs/capabilities/workflows/spec.md:99-106  ## UI
-specs/capabilities/workflows/spec.md:108-248  ## Flows
-specs/capabilities/workflows/spec.md:110-209  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:211-248  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:250-266  ## Acceptance
+specs/capabilities/workflows/spec.md:73-73  R31 The answer of a run of Answer a Business Question SHALL turn on the qu
+specs/capabilities/workflows/spec.md:75-92  ## Edge cases and errors
+specs/capabilities/workflows/spec.md:94-98  ## Contracts
+specs/capabilities/workflows/spec.md:100-107  ## UI
+specs/capabilities/workflows/spec.md:109-249  ## Flows
+specs/capabilities/workflows/spec.md:111-210  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:212-249  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:251-267  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -1625,6 +1647,14 @@ specs/epics/M1-23/spec.md:68-77  ## Specs touched
 specs/epics/M1-23/spec.md:79-86  ## Acceptance
 specs/epics/M1-23/spec.md:88-95  ## Dependencies, risks and open questions
 
+specs/epics/M1-25/spec.md:5-13  ## Goal
+specs/epics/M1-25/spec.md:15-26  ## Scope
+specs/epics/M1-25/spec.md:28-34  ## Out of scope
+specs/epics/M1-25/spec.md:36-44  ## Stories
+specs/epics/M1-25/spec.md:46-54  ## Specs touched
+specs/epics/M1-25/spec.md:56-63  ## Acceptance
+specs/epics/M1-25/spec.md:65-70  ## Dependencies, risks and open questions
+
 specs/product/non-functional.md:5-19  ## 1. Platforms and delivery
 specs/product/non-functional.md:21-33  ## 2. Local-first data
 specs/product/non-functional.md:35-86  ## 3. Security
@@ -1651,94 +1681,96 @@ specs/product/vision.md:30-46  ## Product principles
 specs/product/vision.md:48-55  ## What the product deliberately is not
 specs/product/vision.md:57-63  ## Where it is going
 
-specs/system/agents.md:16-200  ## 1. Agent runtime model
-specs/system/agents.md:18-55  ### 1.1 What an agent is
-specs/system/agents.md:57-82  ### 1.2 Registry and lookup
-specs/system/agents.md:84-108  ### 1.3 Model resolution
-specs/system/agents.md:110-165  ### 1.4 Per-call tuning (reasoning effort, token caps)
-specs/system/agents.md:167-180  ### 1.5 Visual designer model override
-specs/system/agents.md:182-189  ### 1.6 Retries and timeouts
-specs/system/agents.md:191-200  ### 1.7 Storage and observability
-specs/system/agents.md:202-750  ## 2. Agents
-specs/system/agents.md:204-354  ### 2.1 `assistant` — Questions to Insights Assistant
-specs/system/agents.md:356-389  ### 2.2 `visualization` (id `interactive-visual-designer`) — Interactive Visual Designer
-specs/system/agents.md:391-437  ### 2.3 `sql-fixer` — SQL Fixer
-specs/system/agents.md:439-487  ### 2.4 `sql-verifier` — SQL Verifier
-specs/system/agents.md:489-582  ### 2.5 `knowledge-bootstrap` — Ontology Bootstrap
-specs/system/agents.md:584-624  ### 2.6 `assistant-eval-judge` — Assistant Eval Judge
-specs/system/agents.md:626-628  ### 2.7 Deep analysis (removed 2026-11-12)
-specs/system/agents.md:630-632  ### 2.8 Retired (2026-11-12): the RFP Builder
-specs/system/agents.md:634-638  ### 2.9 Retired (1.23.8): the showcase agents
-specs/system/agents.md:640-704  ### 2.10 `data-readiness` (id `data-readiness-agent`) — Data Readiness Agent
-specs/system/agents.md:706-750  ### 2.11 `insights-analyst` (id `insights-analyst`) — Insights Analyst
-specs/system/agents.md:752-950  ## 3. Tools
-specs/system/agents.md:764-769  ### 3.1 `list_entities`
-specs/system/agents.md:771-776  ### 3.2 `describe_entity`
-specs/system/agents.md:778-784  ### 3.3 `sample_rows`
-specs/system/agents.md:786-793  ### 3.4 `run_readonly_sql`
-specs/system/agents.md:795-801  ### 3.5 `ask_clarification`
-specs/system/agents.md:803-809  ### 3.6 `create_visual`
-specs/system/agents.md:811-817  ### 3.7 `update_visual`
-specs/system/agents.md:819-821  ### 3.8 Workspace tools
-specs/system/agents.md:823-827  ### 3.9 The framework's skill tools
-specs/system/agents.md:829-831  ### 3.10 Retired (2026-11-12): RFP tools
-specs/system/agents.md:833-862  ### 3.11 `show_in_panel`
-specs/system/agents.md:864-895  ### 3.12 `update_workflow`
-specs/system/agents.md:897-927  ### 3.13 Readiness tools
-specs/system/agents.md:929-950  ### 3.14 Synthetic-data tools
-specs/system/agents.md:952-1088  ## 4. Per-turn context
-specs/system/agents.md:954-1056  ### 4.1 System context blocks
-specs/system/agents.md:1058-1077  ### 4.2 requestContext keys
-specs/system/agents.md:1079-1088  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1090-1445  ## 5. Turn orchestration and the SQL reliability loop
-specs/system/agents.md:1092-1122  ### 5.1 Streamed chat turn
-specs/system/agents.md:1124-1128  ### 5.2 Read-only enforcement
-specs/system/agents.md:1130-1144  ### 5.3 Execution-guided repair
-specs/system/agents.md:1146-1156  ### 5.4 Result guards
-specs/system/agents.md:1158-1172  ### 5.5 Tool-only turn synthesis
-specs/system/agents.md:1174-1186  ### 5.6 Grounding guard (zero-tool turns)
-specs/system/agents.md:1188-1202  ### 5.7 Persisting the turn (derived fields)
-specs/system/agents.md:1204-1219  ### 5.8 Careful mode — independent cross-check
-specs/system/agents.md:1221-1228  ### 5.9 Result-set comparison
-specs/system/agents.md:1230-1255  ### 5.10 Chart-form heuristic
-specs/system/agents.md:1257-1324  ### 5.11 Workflow-backed turn: `answer-business-question` (Answer a Business Question)
-specs/system/agents.md:1326-1361  ### 5.12 Workflows: the catalogue and the ids
-specs/system/agents.md:1363-1382  ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
-specs/system/agents.md:1384-1416  ### 5.14 Runs of Answer a Business Question
-specs/system/agents.md:1418-1420  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
-specs/system/agents.md:1422-1445  ### 5.16 Node chats: chatting with a run step's agent
-specs/system/agents.md:1447-1620  ## 6. Visual designer pipeline
-specs/system/agents.md:1451-1461  ### 6.1 Entry points
-specs/system/agents.md:1463-1465  ### 6.2 Data handed to the designer
-specs/system/agents.md:1467-1483  ### 6.3 Modes and loop
-specs/system/agents.md:1485-1520  ### 6.4 Designer prompt
-specs/system/agents.md:1522-1527  ### 6.5 Repair
-specs/system/agents.md:1529-1531  ### 6.6 Assembled files
-specs/system/agents.md:1533-1535  ### 6.7 Call options
-specs/system/agents.md:1537-1580  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1582-1620  ### 6.9 Chart runtime contract
-specs/system/agents.md:1622-1795  ## 7. Skills and workspaces
-specs/system/agents.md:1624-1633  ### 7.1 Session workspaces
-specs/system/agents.md:1635-1676  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:1678-1704  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:1706-1789  ### 7.4 Skills per agent
-specs/system/agents.md:1791-1795  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:1797-1909  ## 8. Evals
-specs/system/agents.md:1801-1866  ### 8.1 Case and set format
-specs/system/agents.md:1868-1875  ### 8.2 Data preflight
-specs/system/agents.md:1877-1888  ### 8.3 Executing a case
-specs/system/agents.md:1890-1895  ### 8.4 Runs, regression and report
-specs/system/agents.md:1897-1909  ### 8.5 Other entry points
-specs/system/agents.md:1911-1915  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:1917-1930  ## Open questions and gaps
-specs/system/agents.md:1932-2070  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2072-2108  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2110-2112  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2114-2191  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2193-2297  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2299-2346  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2305-2322  ### Plan
-specs/system/agents.md:2324-2346  ### Write answer
+specs/system/agents.md:16-202  ## 1. Agent runtime model
+specs/system/agents.md:18-56  ### 1.1 What an agent is
+specs/system/agents.md:58-84  ### 1.2 Registry and lookup
+specs/system/agents.md:86-110  ### 1.3 Model resolution
+specs/system/agents.md:112-167  ### 1.4 Per-call tuning (reasoning effort, token caps)
+specs/system/agents.md:169-182  ### 1.5 Visual designer model override
+specs/system/agents.md:184-191  ### 1.6 Retries and timeouts
+specs/system/agents.md:193-202  ### 1.7 Storage and observability
+specs/system/agents.md:204-766  ## 2. Agents
+specs/system/agents.md:206-356  ### 2.1 `assistant` — Questions to Insights Assistant
+specs/system/agents.md:358-391  ### 2.2 `visualization` (id `interactive-visual-designer`) — Interactive Visual Designer
+specs/system/agents.md:393-439  ### 2.3 `sql-fixer` — SQL Fixer
+specs/system/agents.md:441-489  ### 2.4 `sql-verifier` — SQL Verifier
+specs/system/agents.md:491-584  ### 2.5 `knowledge-bootstrap` — Ontology Bootstrap
+specs/system/agents.md:586-626  ### 2.6 `assistant-eval-judge` — Assistant Eval Judge
+specs/system/agents.md:628-630  ### 2.7 Deep analysis (removed 2026-11-12)
+specs/system/agents.md:632-634  ### 2.8 Retired (2026-11-12): the RFP Builder
+specs/system/agents.md:636-640  ### 2.9 Retired (1.23.8): the showcase agents
+specs/system/agents.md:642-706  ### 2.10 `data-readiness` (id `data-readiness-agent`) — Data Readiness Agent
+specs/system/agents.md:708-752  ### 2.11 `insights-analyst` (id `insights-analyst`) — Insights Analyst
+specs/system/agents.md:754-766  ### 2.12 `query-explainer` — Query Explainer
+specs/system/agents.md:768-966  ## 3. Tools
+specs/system/agents.md:780-785  ### 3.1 `list_entities`
+specs/system/agents.md:787-792  ### 3.2 `describe_entity`
+specs/system/agents.md:794-800  ### 3.3 `sample_rows`
+specs/system/agents.md:802-809  ### 3.4 `run_readonly_sql`
+specs/system/agents.md:811-817  ### 3.5 `ask_clarification`
+specs/system/agents.md:819-825  ### 3.6 `create_visual`
+specs/system/agents.md:827-833  ### 3.7 `update_visual`
+specs/system/agents.md:835-837  ### 3.8 Workspace tools
+specs/system/agents.md:839-843  ### 3.9 The framework's skill tools
+specs/system/agents.md:845-847  ### 3.10 Retired (2026-11-12): RFP tools
+specs/system/agents.md:849-878  ### 3.11 `show_in_panel`
+specs/system/agents.md:880-911  ### 3.12 `update_workflow`
+specs/system/agents.md:913-943  ### 3.13 Readiness tools
+specs/system/agents.md:945-966  ### 3.14 Synthetic-data tools
+specs/system/agents.md:968-1104  ## 4. Per-turn context
+specs/system/agents.md:970-1072  ### 4.1 System context blocks
+specs/system/agents.md:1074-1093  ### 4.2 requestContext keys
+specs/system/agents.md:1095-1104  ### 4.3 What the chat turn sends as input (memory bootstrap)
+specs/system/agents.md:1106-1462  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1108-1138  ### 5.1 Streamed chat turn
+specs/system/agents.md:1140-1144  ### 5.2 Read-only enforcement
+specs/system/agents.md:1146-1160  ### 5.3 Execution-guided repair
+specs/system/agents.md:1162-1172  ### 5.4 Result guards
+specs/system/agents.md:1174-1188  ### 5.5 Tool-only turn synthesis
+specs/system/agents.md:1190-1202  ### 5.6 Grounding guard (zero-tool turns)
+specs/system/agents.md:1204-1219  ### 5.7 Persisting the turn (derived fields)
+specs/system/agents.md:1221-1236  ### 5.8 Careful mode — independent cross-check
+specs/system/agents.md:1238-1245  ### 5.9 Result-set comparison
+specs/system/agents.md:1247-1272  ### 5.10 Chart-form heuristic
+specs/system/agents.md:1274-1341  ### 5.11 Workflow-backed turn: `answer-business-question` (Answer a Business Question)
+specs/system/agents.md:1343-1378  ### 5.12 Workflows: the catalogue and the ids
+specs/system/agents.md:1380-1399  ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
+specs/system/agents.md:1401-1433  ### 5.14 Runs of Answer a Business Question
+specs/system/agents.md:1435-1437  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
+specs/system/agents.md:1439-1462  ### 5.16 Node chats: chatting with a run step's agent
+specs/system/agents.md:1464-1637  ## 6. Visual designer pipeline
+specs/system/agents.md:1468-1478  ### 6.1 Entry points
+specs/system/agents.md:1480-1482  ### 6.2 Data handed to the designer
+specs/system/agents.md:1484-1500  ### 6.3 Modes and loop
+specs/system/agents.md:1502-1537  ### 6.4 Designer prompt
+specs/system/agents.md:1539-1544  ### 6.5 Repair
+specs/system/agents.md:1546-1548  ### 6.6 Assembled files
+specs/system/agents.md:1550-1552  ### 6.7 Call options
+specs/system/agents.md:1554-1597  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1599-1637  ### 6.9 Chart runtime contract
+specs/system/agents.md:1639-1812  ## 7. Skills and workspaces
+specs/system/agents.md:1641-1650  ### 7.1 Session workspaces
+specs/system/agents.md:1652-1693  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:1695-1721  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:1723-1806  ### 7.4 Skills per agent
+specs/system/agents.md:1808-1812  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:1814-1926  ## 8. Evals
+specs/system/agents.md:1818-1883  ### 8.1 Case and set format
+specs/system/agents.md:1885-1892  ### 8.2 Data preflight
+specs/system/agents.md:1894-1905  ### 8.3 Executing a case
+specs/system/agents.md:1907-1912  ### 8.4 Runs, regression and report
+specs/system/agents.md:1914-1926  ### 8.5 Other entry points
+specs/system/agents.md:1928-1932  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:1934-1947  ## Open questions and gaps
+specs/system/agents.md:1949-2087  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2089-2125  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2127-2129  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2131-2208  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2210-2314  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2316-2364  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2322-2339  ### Plan
+specs/system/agents.md:2341-2364  ### Write answer
+specs/system/agents.md:2366-2382  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
@@ -1750,7 +1782,7 @@ specs/system/api.md:71-76  ### 1.6 CORS
 specs/system/api.md:78-88  ### 1.7 Static web UI and SPA fallback
 specs/system/api.md:90-94  ### 1.8 Conventions used by the UI that clients should preserve
 specs/system/api.md:96-102  ### 1.9 Authentication
-specs/system/api.md:104-1310  ## 2. Endpoints
+specs/system/api.md:104-1362  ## 2. Endpoints
 specs/system/api.md:108-205  ### 2.1 Sessions
 specs/system/api.md:138-141  #### 1. `GET /sessions`
 specs/system/api.md:143-145  #### 2. `GET /sessions/:id`
@@ -1826,96 +1858,102 @@ specs/system/api.md:627-680  #### 116. `GET /workflows`
 specs/system/api.md:682-734  #### 117. `GET /workflows/:id`
 specs/system/api.md:736-752  #### 118. `POST /workflows/:id/runs`
 specs/system/api.md:754-758  #### 119. `POST /workflows/:id/runs/stream`
-specs/system/api.md:760-896  ### 2.6.3 Workflow runs
-specs/system/api.md:785-800  #### 120. `GET /workflow-runs`
-specs/system/api.md:802-804  #### 121. `GET /workflow-runs/:id`
-specs/system/api.md:806-809  #### 122. `DELETE /workflow-runs/:id`
-specs/system/api.md:811-813  #### 123. `GET /workflow-runs/:id/visualizations/:vid`
-specs/system/api.md:815-817  #### 124. `GET /workflow-runs/:id/visualizations/:vid/download`
-specs/system/api.md:819-821  #### 125. `GET /workflow-runs/:id/panel-items/:itemId/file`
-specs/system/api.md:823-825  #### 126. `GET /workflow-runs/:id/panel-items/:itemId/download`
-specs/system/api.md:827-828  #### 127. `GET /workflow-runs/:id/rfp-packages/:rfpId/download`
-specs/system/api.md:830-833  #### 128. `POST /workflow-runs/:id/answer/feedback`
-specs/system/api.md:835-839  #### 129. `POST /agents/:id/draft-runs/stream`
-specs/system/api.md:841-845  #### 130. `POST /workflow-runs/:id/visualizations`
-specs/system/api.md:847-850  #### 131. `POST /workflow-runs/:id/visualizations/:vid/tailor`
-specs/system/api.md:852-855  #### 132. `POST /workflow-runs/:id/visualizations/:vid/revert`
-specs/system/api.md:857-860  #### 133. `POST /workflow-runs/:id/visualizations/:vid/refresh`
-specs/system/api.md:862-865  #### 134. `POST /workflow-runs/:id/visualizations/:vid/repair`
-specs/system/api.md:867-880  #### 136. `GET /workflow-runs/:id/node-chats/:stepId`
-specs/system/api.md:882-888  #### 137. `POST /workflow-runs/:id/node-chats/:stepId/messages/stream`
-specs/system/api.md:890-896  #### 138. `POST /workflow-runs/:id/resume/stream`
-specs/system/api.md:898-915  ### 2.7 Deep analysis (removed 2026-11-12)
-specs/system/api.md:908-909  #### 46. `POST /sessions/:id/deep-analysis`
-specs/system/api.md:911-912  #### 47. `GET /sessions/:id/deep-analysis/:jobId`
-specs/system/api.md:914-915  #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
-specs/system/api.md:917-960  ### 2.8 Ontology
-specs/system/api.md:932-935  #### 49. `GET /datasets/:name/ontology`
-specs/system/api.md:937-940  #### 50. `POST /datasets/:name/ontology`
-specs/system/api.md:942-945  #### 51. `PATCH /ontology/:id`
-specs/system/api.md:947-949  #### 52. `DELETE /ontology/:id`
-specs/system/api.md:951-955  #### 53. `POST /datasets/:name/ontology/bootstrap`
-specs/system/api.md:957-960  #### 54. `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:962-988  ### 2.8a Personas
-specs/system/api.md:973-974  #### 49a. `GET /personas`
-specs/system/api.md:976-980  #### 49b. `POST /personas`
-specs/system/api.md:982-985  #### 49c. `PATCH /personas/:id`
-specs/system/api.md:987-988  #### 49d. `DELETE /personas/:id`
-specs/system/api.md:990-1016  ### 2.8b Visuals library
-specs/system/api.md:1001-1002  #### 49e. `GET /visuals`
-specs/system/api.md:1004-1008  #### 49f. `POST /visuals`
-specs/system/api.md:1010-1013  #### 49g. `PATCH /visuals/:id`
-specs/system/api.md:1015-1016  #### 49h. `DELETE /visuals/:id`
-specs/system/api.md:1018-1062  ### 2.8c Monitoring
-specs/system/api.md:1030-1035  #### 111. `GET /monitoring/llm-calls`
-specs/system/api.md:1037-1041  #### 112. `GET /monitoring/llm-calls/:id`
-specs/system/api.md:1043-1049  #### 113. `GET /monitoring/sessions`
-specs/system/api.md:1051-1055  #### 114. `GET /monitoring/sessions/:id`
-specs/system/api.md:1057-1062  #### 115. `GET /monitoring/traces/:traceId`
-specs/system/api.md:1064-1103  ### 2.9 Testing data
-specs/system/api.md:1074-1091  #### 55. `GET /testing-data`
-specs/system/api.md:1093-1099  #### 56. `POST /testing-data/:fixtureId/load`
-specs/system/api.md:1101-1103  #### 57. `DELETE /testing-data/:fixtureId`
-specs/system/api.md:1105-1136  ### 2.10 Shared wire shapes
-specs/system/api.md:1138-1169  ### 2.11 Developer settings
-specs/system/api.md:1157-1158  #### 53. `GET /developer-settings`
-specs/system/api.md:1160-1164  #### 54. `PUT /developer-settings`
-specs/system/api.md:1166-1169  #### 55. `POST /developer-settings/test-endpoint`
-specs/system/api.md:1172-1192  ### 2.12 UI preferences
-specs/system/api.md:1186-1187  #### 56. `GET /ui-preferences`
-specs/system/api.md:1189-1192  #### 57. `PUT /ui-preferences`
-specs/system/api.md:1194-1196  ### 2.16 Intellify RFP API (removed)
-specs/system/api.md:1198-1229  ### 2.17 Data readiness
-specs/system/api.md:1208-1220  #### 108. `POST /data-readiness/assessments`
-specs/system/api.md:1222-1225  #### 109. `GET /data-readiness/assessments`
-specs/system/api.md:1227-1229  #### 110. `GET /data-readiness/assessments/:id`
-specs/system/api.md:1231-1298  ### 2.18 Synthetic data
-specs/system/api.md:1242-1260  #### 111. `POST /synthetic-data/profiles`
-specs/system/api.md:1262-1277  #### 112. `POST /synthetic-data/scripts`
-specs/system/api.md:1279-1287  #### 113. `POST /synthetic-data/profile-exports`
-specs/system/api.md:1289-1298  #### 114. `POST /synthetic-data/sample-exports`
-specs/system/api.md:1300-1310  ### 2.19 Health
-specs/system/api.md:1308-1310  #### 135. `GET /health`
-specs/system/api.md:1312-1508  ## 3. Streaming and long-running work
-specs/system/api.md:1316-1380  ### 3.1 Chat stream (removed in 1.23.27)
-specs/system/api.md:1382-1384  ### 3.2 Deep analysis (removed 2026-11-12)
-specs/system/api.md:1386-1394  ### 3.3 Eval runs
-specs/system/api.md:1396-1408  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:1410-1419  ### 3.5 Other long-running calls (no progress channel)
-specs/system/api.md:1421-1508  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1510-1575  ## 4. Desktop bridge (IPC)
-specs/system/api.md:1514-1531  ### 4.1 Globals exposed on `window`
-specs/system/api.md:1533-1549  ### 4.2 IPC channels
-specs/system/api.md:1551-1567  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1569-1575  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1577-1620  ## 5. CLI contract
-specs/system/api.md:1622-1668  ## 6. Environment variables
-specs/system/api.md:1624-1641  ### 6.1 Backend (server process)
-specs/system/api.md:1643-1647  ### 6.2 CLI-only
-specs/system/api.md:1649-1658  ### 6.3 Electron main process
-specs/system/api.md:1660-1662  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1664-1668  ### 6.5 Frontend build/runtime
-specs/system/api.md:1670-1686  ## 7. Gaps and open questions
+specs/system/api.md:760-947  ### 2.6.3 Workflow runs
+specs/system/api.md:790-805  #### 120. `GET /workflow-runs`
+specs/system/api.md:807-809  #### 121. `GET /workflow-runs/:id`
+specs/system/api.md:811-814  #### 122. `DELETE /workflow-runs/:id`
+specs/system/api.md:816-818  #### 123. `GET /workflow-runs/:id/visualizations/:vid`
+specs/system/api.md:820-822  #### 124. `GET /workflow-runs/:id/visualizations/:vid/download`
+specs/system/api.md:824-826  #### 125. `GET /workflow-runs/:id/panel-items/:itemId/file`
+specs/system/api.md:828-830  #### 126. `GET /workflow-runs/:id/panel-items/:itemId/download`
+specs/system/api.md:832-833  #### 127. `GET /workflow-runs/:id/rfp-packages/:rfpId/download`
+specs/system/api.md:835-839  #### 128. `POST /workflow-runs/:id/answer/feedback`
+specs/system/api.md:841-845  #### 129. `POST /agents/:id/draft-runs/stream`
+specs/system/api.md:847-851  #### 130. `POST /workflow-runs/:id/visualizations`
+specs/system/api.md:853-856  #### 131. `POST /workflow-runs/:id/visualizations/:vid/tailor`
+specs/system/api.md:858-861  #### 132. `POST /workflow-runs/:id/visualizations/:vid/revert`
+specs/system/api.md:863-866  #### 133. `POST /workflow-runs/:id/visualizations/:vid/refresh`
+specs/system/api.md:868-871  #### 134. `POST /workflow-runs/:id/visualizations/:vid/repair`
+specs/system/api.md:873-886  #### 136. `GET /workflow-runs/:id/node-chats/:stepId`
+specs/system/api.md:888-894  #### 137. `POST /workflow-runs/:id/node-chats/:stepId/messages/stream`
+specs/system/api.md:896-902  #### 138. `POST /workflow-runs/:id/resume/stream`
+specs/system/api.md:904-910  #### Query evidence (139-143)
+specs/system/api.md:912-916  #### 139. `POST /workflow-runs/:id/answer/evidence`
+specs/system/api.md:918-922  #### 140. `POST /workflow-runs/:id/answer/queries/:index/explanation`
+specs/system/api.md:924-927  #### 141. `POST /workflow-runs/:id/answer/queries/:index/stage-counts`
+specs/system/api.md:929-942  #### 142. `POST /workflow-runs/:id/answer/queries/:index/rerun`
+specs/system/api.md:944-947  #### 143. `GET /workflow-runs/:id/answer/queries/:index/csv`
+specs/system/api.md:949-966  ### 2.7 Deep analysis (removed 2026-11-12)
+specs/system/api.md:959-960  #### 46. `POST /sessions/:id/deep-analysis`
+specs/system/api.md:962-963  #### 47. `GET /sessions/:id/deep-analysis/:jobId`
+specs/system/api.md:965-966  #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
+specs/system/api.md:968-1011  ### 2.8 Ontology
+specs/system/api.md:983-986  #### 49. `GET /datasets/:name/ontology`
+specs/system/api.md:988-991  #### 50. `POST /datasets/:name/ontology`
+specs/system/api.md:993-996  #### 51. `PATCH /ontology/:id`
+specs/system/api.md:998-1000  #### 52. `DELETE /ontology/:id`
+specs/system/api.md:1002-1006  #### 53. `POST /datasets/:name/ontology/bootstrap`
+specs/system/api.md:1008-1011  #### 54. `POST /datasets/:name/ontology/bootstrap/stream`
+specs/system/api.md:1013-1039  ### 2.8a Personas
+specs/system/api.md:1024-1025  #### 49a. `GET /personas`
+specs/system/api.md:1027-1031  #### 49b. `POST /personas`
+specs/system/api.md:1033-1036  #### 49c. `PATCH /personas/:id`
+specs/system/api.md:1038-1039  #### 49d. `DELETE /personas/:id`
+specs/system/api.md:1041-1067  ### 2.8b Visuals library
+specs/system/api.md:1052-1053  #### 49e. `GET /visuals`
+specs/system/api.md:1055-1059  #### 49f. `POST /visuals`
+specs/system/api.md:1061-1064  #### 49g. `PATCH /visuals/:id`
+specs/system/api.md:1066-1067  #### 49h. `DELETE /visuals/:id`
+specs/system/api.md:1069-1113  ### 2.8c Monitoring
+specs/system/api.md:1081-1086  #### 111. `GET /monitoring/llm-calls`
+specs/system/api.md:1088-1092  #### 112. `GET /monitoring/llm-calls/:id`
+specs/system/api.md:1094-1100  #### 113. `GET /monitoring/sessions`
+specs/system/api.md:1102-1106  #### 114. `GET /monitoring/sessions/:id`
+specs/system/api.md:1108-1113  #### 115. `GET /monitoring/traces/:traceId`
+specs/system/api.md:1115-1154  ### 2.9 Testing data
+specs/system/api.md:1125-1142  #### 55. `GET /testing-data`
+specs/system/api.md:1144-1150  #### 56. `POST /testing-data/:fixtureId/load`
+specs/system/api.md:1152-1154  #### 57. `DELETE /testing-data/:fixtureId`
+specs/system/api.md:1156-1188  ### 2.10 Shared wire shapes
+specs/system/api.md:1190-1221  ### 2.11 Developer settings
+specs/system/api.md:1209-1210  #### 53. `GET /developer-settings`
+specs/system/api.md:1212-1216  #### 54. `PUT /developer-settings`
+specs/system/api.md:1218-1221  #### 55. `POST /developer-settings/test-endpoint`
+specs/system/api.md:1224-1244  ### 2.12 UI preferences
+specs/system/api.md:1238-1239  #### 56. `GET /ui-preferences`
+specs/system/api.md:1241-1244  #### 57. `PUT /ui-preferences`
+specs/system/api.md:1246-1248  ### 2.16 Intellify RFP API (removed)
+specs/system/api.md:1250-1281  ### 2.17 Data readiness
+specs/system/api.md:1260-1272  #### 108. `POST /data-readiness/assessments`
+specs/system/api.md:1274-1277  #### 109. `GET /data-readiness/assessments`
+specs/system/api.md:1279-1281  #### 110. `GET /data-readiness/assessments/:id`
+specs/system/api.md:1283-1350  ### 2.18 Synthetic data
+specs/system/api.md:1294-1312  #### 111. `POST /synthetic-data/profiles`
+specs/system/api.md:1314-1329  #### 112. `POST /synthetic-data/scripts`
+specs/system/api.md:1331-1339  #### 113. `POST /synthetic-data/profile-exports`
+specs/system/api.md:1341-1350  #### 114. `POST /synthetic-data/sample-exports`
+specs/system/api.md:1352-1362  ### 2.19 Health
+specs/system/api.md:1360-1362  #### 135. `GET /health`
+specs/system/api.md:1364-1561  ## 3. Streaming and long-running work
+specs/system/api.md:1368-1432  ### 3.1 Chat stream (removed in 1.23.27)
+specs/system/api.md:1434-1436  ### 3.2 Deep analysis (removed 2026-11-12)
+specs/system/api.md:1438-1446  ### 3.3 Eval runs
+specs/system/api.md:1448-1460  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
+specs/system/api.md:1462-1471  ### 3.5 Other long-running calls (no progress channel)
+specs/system/api.md:1473-1561  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
+specs/system/api.md:1563-1628  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1567-1584  ### 4.1 Globals exposed on `window`
+specs/system/api.md:1586-1602  ### 4.2 IPC channels
+specs/system/api.md:1604-1620  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1622-1628  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1630-1673  ## 5. CLI contract
+specs/system/api.md:1675-1721  ## 6. Environment variables
+specs/system/api.md:1677-1694  ### 6.1 Backend (server process)
+specs/system/api.md:1696-1700  ### 6.2 CLI-only
+specs/system/api.md:1702-1711  ### 6.3 Electron main process
+specs/system/api.md:1713-1715  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1717-1721  ### 6.5 Frontend build/runtime
+specs/system/api.md:1723-1739  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-256  ## Level 2 — Containers
@@ -1971,47 +2009,48 @@ specs/system/data-model.md:61-73  ### 2.1 Abstract interface
 specs/system/data-model.md:75-79  ### 2.2 Filters and sorts
 specs/system/data-model.md:81-89  ### 2.3 Secret handling (`CryptoService`)
 specs/system/data-model.md:91-97  ### 2.4 Concurrency and atomicity
-specs/system/data-model.md:99-699  ## 3. Collections
+specs/system/data-model.md:99-718  ## 3. Collections
 specs/system/data-model.md:126-181  ### 3.1 `connections` — datasources
 specs/system/data-model.md:183-211  ### 3.2 `settings` — LLM settings
 specs/system/data-model.md:202-211  #### 3.2.1 `settings` document `ui-preferences`
 specs/system/data-model.md:213-238  ### 3.3 `datasets`
-specs/system/data-model.md:240-347  ### 3.4 `sessions`
-specs/system/data-model.md:264-285  #### 3.4.1 `ChatMessage`
-specs/system/data-model.md:287-303  #### 3.4.2 `ToolDataRecord` and `ReasoningStep`
-specs/system/data-model.md:305-322  #### 3.4.3 `SessionVisualization` (session metadata for a visual)
-specs/system/data-model.md:324-347  #### 3.4.4 `PanelItem`, `WorkflowState` and the derived workflow view
-specs/system/data-model.md:349-358  ### 3.5 `datasource_inventories`
-specs/system/data-model.md:360-377  ### 3.6 `verified_queries`
-specs/system/data-model.md:379-397  ### 3.7 `metrics`
-specs/system/data-model.md:399-424  ### 3.8 `eval_runs`
-specs/system/data-model.md:426-455  ### 3.9 `ontology_items`
-specs/system/data-model.md:457-474  ### 3.9a `user_personas`
-specs/system/data-model.md:476-495  ### 3.9b `visual_charts`
-specs/system/data-model.md:497-530  ### 3.10 `agents` — user agents
-specs/system/data-model.md:533-547  ### 3.10.1 `skills` — in-app skills
-specs/system/data-model.md:549-561  ### 3.10.2 `skill_overrides` — built-in skills edited in the app
-specs/system/data-model.md:563-573  ### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
-specs/system/data-model.md:575-577  ### 3.11 Deep-analysis jobs (removed 2026-11-12)
-specs/system/data-model.md:579-584  ### 3.12 Other non-persisted data
-specs/system/data-model.md:586-612  ### 3.13 Relationships and referential rules
-specs/system/data-model.md:614-621  ### 3.14 Ownership (legacy `ownerId`)
-specs/system/data-model.md:623-644  ### 3.15 `readiness_reports` — data-readiness assessments
-specs/system/data-model.md:646-683  ### 3.16 `workflow_runs` — workflow runs
-specs/system/data-model.md:685-699  ### 3.17 `workflow_run_node_chats` — node chats
-specs/system/data-model.md:701-836  ## 4. Files on disk
-specs/system/data-model.md:705-725  ### 4.1 Workspace layout
-specs/system/data-model.md:727-745  ### 4.2 Visual version directory
-specs/system/data-model.md:747-762  ### 4.3 `manifest.json`
-specs/system/data-model.md:764-812  ### 4.4 Visual spec (`spec.json`, schema v1)
-specs/system/data-model.md:814-818  ### 4.5 Reports
-specs/system/data-model.md:820-822  ### 4.6 No skills in workspaces
-specs/system/data-model.md:824-826  ### 4.8 Old user skill folder
-specs/system/data-model.md:828-836  ### 4.7 Legacy visual layout
-specs/system/data-model.md:838-848  ## 5. Agent memory
-specs/system/data-model.md:850-885  ## 6. Migrations
-specs/system/data-model.md:887-889  ## 7. External databases
-specs/system/data-model.md:891-902  ## Open questions, gaps and discrepancies
+specs/system/data-model.md:240-366  ### 3.4 `sessions`
+specs/system/data-model.md:264-286  #### 3.4.1 `ChatMessage`
+specs/system/data-model.md:288-304  #### 3.4.2 `ToolDataRecord` and `ReasoningStep`
+specs/system/data-model.md:306-322  #### 3.4.2a `QueryEvidence`
+specs/system/data-model.md:324-341  #### 3.4.3 `SessionVisualization` (session metadata for a visual)
+specs/system/data-model.md:343-366  #### 3.4.4 `PanelItem`, `WorkflowState` and the derived workflow view
+specs/system/data-model.md:368-377  ### 3.5 `datasource_inventories`
+specs/system/data-model.md:379-396  ### 3.6 `verified_queries`
+specs/system/data-model.md:398-416  ### 3.7 `metrics`
+specs/system/data-model.md:418-443  ### 3.8 `eval_runs`
+specs/system/data-model.md:445-474  ### 3.9 `ontology_items`
+specs/system/data-model.md:476-493  ### 3.9a `user_personas`
+specs/system/data-model.md:495-514  ### 3.9b `visual_charts`
+specs/system/data-model.md:516-549  ### 3.10 `agents` — user agents
+specs/system/data-model.md:552-566  ### 3.10.1 `skills` — in-app skills
+specs/system/data-model.md:568-580  ### 3.10.2 `skill_overrides` — built-in skills edited in the app
+specs/system/data-model.md:582-592  ### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
+specs/system/data-model.md:594-596  ### 3.11 Deep-analysis jobs (removed 2026-11-12)
+specs/system/data-model.md:598-603  ### 3.12 Other non-persisted data
+specs/system/data-model.md:605-631  ### 3.13 Relationships and referential rules
+specs/system/data-model.md:633-640  ### 3.14 Ownership (legacy `ownerId`)
+specs/system/data-model.md:642-663  ### 3.15 `readiness_reports` — data-readiness assessments
+specs/system/data-model.md:665-702  ### 3.16 `workflow_runs` — workflow runs
+specs/system/data-model.md:704-718  ### 3.17 `workflow_run_node_chats` — node chats
+specs/system/data-model.md:720-855  ## 4. Files on disk
+specs/system/data-model.md:724-744  ### 4.1 Workspace layout
+specs/system/data-model.md:746-764  ### 4.2 Visual version directory
+specs/system/data-model.md:766-781  ### 4.3 `manifest.json`
+specs/system/data-model.md:783-831  ### 4.4 Visual spec (`spec.json`, schema v1)
+specs/system/data-model.md:833-837  ### 4.5 Reports
+specs/system/data-model.md:839-841  ### 4.6 No skills in workspaces
+specs/system/data-model.md:843-845  ### 4.8 Old user skill folder
+specs/system/data-model.md:847-855  ### 4.7 Legacy visual layout
+specs/system/data-model.md:857-867  ## 5. Agent memory
+specs/system/data-model.md:869-904  ## 6. Migrations
+specs/system/data-model.md:906-908  ## 7. External databases
+specs/system/data-model.md:910-921  ## Open questions, gaps and discrepancies
 
 specs/system/delivery.md:7-60  ## 1. Electron single-app delivery
 specs/system/delivery.md:25-27  ### Why `--base-href ./`
@@ -2071,65 +2110,66 @@ specs/system/ui.md:181-191  ### 3.3 Toast container
 specs/system/ui.md:193-195  ### 3.4 App logo
 specs/system/ui.md:197-199  ### 3.5 Markdown rendering
 specs/system/ui.md:201-225  ### 3.6 Shared component classes
-specs/system/ui.md:227-842  ## 4. Screens and panels
+specs/system/ui.md:227-877  ## 4. Screens and panels
 specs/system/ui.md:231-239  ### 4.1 Home (welcome)
 specs/system/ui.md:241-247  ### 4.2 Datasets list
 specs/system/ui.md:249-263  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
 specs/system/ui.md:265-318  ### 4.3a Profile & synthesize tab (dataset editor)
 specs/system/ui.md:320-332  ### 4.4 Agent Hub
 specs/system/ui.md:334-345  ### 4.4a Workflows
-specs/system/ui.md:347-408  ### 4.4b Workflow page
-specs/system/ui.md:410-557  ### 4.5 Agent detail
-specs/system/ui.md:438-448  #### 4.5.1 Agent editor and Try it
-specs/system/ui.md:450-457  #### 4.5.2 Skills library
-specs/system/ui.md:459-466  #### 4.5.3 Skill editor
-specs/system/ui.md:468-475  #### 4.5.4 Built-in skill editor
-specs/system/ui.md:477-485  #### 4.5.5 Link editor and chips
-specs/system/ui.md:487-514  #### 4.5.6 Graph tab
-specs/system/ui.md:516-518  #### 4.5.7 LLM Config tab
-specs/system/ui.md:520-525  #### 4.5.8 Try it tab
-specs/system/ui.md:527-534  #### 4.5.9 Job Description tab, user agent
-specs/system/ui.md:536-547  #### 4.5.11 Job Description tab, built-in agent
-specs/system/ui.md:549-557  #### 4.5.10 Skills tab, user agent
-specs/system/ui.md:559-561  ### 4.6 Eval trace (right panel)
-specs/system/ui.md:563-565  ### 4.7 New-session composer
-specs/system/ui.md:567-582  ### 4.7.1 Runs page and Past chats
-specs/system/ui.md:584-590  ### 4.8a Context page
-specs/system/ui.md:592-611  ### 4.8 Ontology tab (dataset editor)
-specs/system/ui.md:613-621  ### 4.8b User personas list and editor
-specs/system/ui.md:623-632  ### 4.8c Visuals library
-specs/system/ui.md:634-644  ### 4.8d Monitoring: tabs and the LLM calls table
-specs/system/ui.md:646-654  ### 4.8e Monitoring: LLM call page
-specs/system/ui.md:656-663  ### 4.8f Monitoring: Runs tab
-specs/system/ui.md:665-677  ### 4.8g Monitoring: session page
-specs/system/ui.md:679-689  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:691-695  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:697-708  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:710-714  ### 4.11 Testing data (settings)
-specs/system/ui.md:717-729  ### 4.12 Developer (settings)
-specs/system/ui.md:730-765  ### 4.12 Past chat (read-only transcript)
-specs/system/ui.md:752-765  #### 4.12.1 Workflow bar
-specs/system/ui.md:767-825  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:780-787  #### 4.13.1 Visual view
-specs/system/ui.md:789-791  #### 4.13.2 Document view
-specs/system/ui.md:793-795  #### 4.13.3 File view
-specs/system/ui.md:797-799  #### 4.13.4 Table view
-specs/system/ui.md:801-825  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:827-829  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:831-833  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:835-842  ### 4.16 Appearance (settings)
-specs/system/ui.md:844-856  ## 5. Cross-cutting behaviour
-specs/system/ui.md:846-848  ### 5.1 State that survives view changes
-specs/system/ui.md:850-852  ### 5.2 Selection state
-specs/system/ui.md:854-856  ### 5.3 Toast policy
-specs/system/ui.md:858-947  ## 6. Design tokens
-specs/system/ui.md:862-905  ### 6.0 Theme tokens
-specs/system/ui.md:907-912  ### 6.1 Colour usage
-specs/system/ui.md:914-919  ### 6.2 Typography
-specs/system/ui.md:921-926  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:928-935  ### 6.4 Icons
-specs/system/ui.md:937-947  ### 6.5 Theming
-specs/system/ui.md:949-993  ## 7. Copy that tests or users rely on
-specs/system/ui.md:995-1006  ## 8. Accessibility
-specs/system/ui.md:1008-1010  ## 9. Visual baseline
-specs/system/ui.md:1013-1020  ## 10. Open questions and gaps
+specs/system/ui.md:347-410  ### 4.4b Workflow page
+specs/system/ui.md:412-559  ### 4.5 Agent detail
+specs/system/ui.md:440-450  #### 4.5.1 Agent editor and Try it
+specs/system/ui.md:452-459  #### 4.5.2 Skills library
+specs/system/ui.md:461-468  #### 4.5.3 Skill editor
+specs/system/ui.md:470-477  #### 4.5.4 Built-in skill editor
+specs/system/ui.md:479-487  #### 4.5.5 Link editor and chips
+specs/system/ui.md:489-516  #### 4.5.6 Graph tab
+specs/system/ui.md:518-520  #### 4.5.7 LLM Config tab
+specs/system/ui.md:522-527  #### 4.5.8 Try it tab
+specs/system/ui.md:529-536  #### 4.5.9 Job Description tab, user agent
+specs/system/ui.md:538-549  #### 4.5.11 Job Description tab, built-in agent
+specs/system/ui.md:551-559  #### 4.5.10 Skills tab, user agent
+specs/system/ui.md:561-563  ### 4.6 Eval trace (right panel)
+specs/system/ui.md:565-567  ### 4.7 New-session composer
+specs/system/ui.md:569-584  ### 4.7.1 Runs page and Past chats
+specs/system/ui.md:586-592  ### 4.8a Context page
+specs/system/ui.md:594-613  ### 4.8 Ontology tab (dataset editor)
+specs/system/ui.md:615-623  ### 4.8b User personas list and editor
+specs/system/ui.md:625-634  ### 4.8c Visuals library
+specs/system/ui.md:636-646  ### 4.8d Monitoring: tabs and the LLM calls table
+specs/system/ui.md:648-656  ### 4.8e Monitoring: LLM call page
+specs/system/ui.md:658-665  ### 4.8f Monitoring: Runs tab
+specs/system/ui.md:667-679  ### 4.8g Monitoring: session page
+specs/system/ui.md:681-691  ### 4.8h Monitoring: waterfall
+specs/system/ui.md:693-697  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:699-710  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:712-716  ### 4.11 Testing data (settings)
+specs/system/ui.md:719-731  ### 4.12 Developer (settings)
+specs/system/ui.md:732-800  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:754-767  #### 4.12.1 Workflow bar
+specs/system/ui.md:769-800  #### 4.12.2 Query inspector (M1-25)
+specs/system/ui.md:802-860  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:815-822  #### 4.13.1 Visual view
+specs/system/ui.md:824-826  #### 4.13.2 Document view
+specs/system/ui.md:828-830  #### 4.13.3 File view
+specs/system/ui.md:832-834  #### 4.13.4 Table view
+specs/system/ui.md:836-860  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:862-864  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:866-868  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:870-877  ### 4.16 Appearance (settings)
+specs/system/ui.md:879-891  ## 5. Cross-cutting behaviour
+specs/system/ui.md:881-883  ### 5.1 State that survives view changes
+specs/system/ui.md:885-887  ### 5.2 Selection state
+specs/system/ui.md:889-891  ### 5.3 Toast policy
+specs/system/ui.md:893-982  ## 6. Design tokens
+specs/system/ui.md:897-940  ### 6.0 Theme tokens
+specs/system/ui.md:942-947  ### 6.1 Colour usage
+specs/system/ui.md:949-954  ### 6.2 Typography
+specs/system/ui.md:956-961  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:963-970  ### 6.4 Icons
+specs/system/ui.md:972-982  ### 6.5 Theming
+specs/system/ui.md:984-1028  ## 7. Copy that tests or users rely on
+specs/system/ui.md:1030-1041  ## 8. Accessibility
+specs/system/ui.md:1043-1045  ## 9. Visual baseline
+specs/system/ui.md:1048-1055  ## 10. Open questions and gaps
