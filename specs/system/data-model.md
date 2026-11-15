@@ -701,7 +701,7 @@ No `ownerId`: the collection is newer than ownership (3.14).
 
 ### 3.18 `artifacts` — saved artifacts
 
-One document per artifact ([workflows](../capabilities/workflows/spec.md) R32; [api.md](api.md) 139-144; since 2026-11-15). Inserted when a run is saved as an artifact (144); only `name` changes afterwards (142).
+One document per artifact ([workflows](../capabilities/workflows/spec.md) R32; [api.md](api.md) 139-143; since 2026-11-15). Inserted by the Save dashboard step of a Recreate a Dashboard run ([agents.md](agents.md) 5.17); only `name` changes afterwards (142).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|

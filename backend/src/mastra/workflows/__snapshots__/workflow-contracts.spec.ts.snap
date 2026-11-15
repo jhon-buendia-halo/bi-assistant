@@ -3233,29 +3233,17 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 }
 `;
 
-exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) recreate-dashboard's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) map-dashboard-data's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "508021e8d9bb",
+  "contractHash": "3230b64c0a2f",
   "edges": [
     {
       "from": "start",
       "kind": "next",
-      "to": "load-source",
+      "to": "load-dashboard",
     },
     {
-      "from": "load-source",
-      "kind": "branch",
-      "label": "From an image",
-      "to": "read-dashboard",
-    },
-    {
-      "from": "load-source",
-      "kind": "branch",
-      "label": "From a saved dashboard",
-      "to": "load-dashboard-catalog",
-    },
-    {
-      "from": "read-dashboard",
+      "from": "load-dashboard",
       "kind": "next",
       "to": "load-dashboard-catalog",
     },
@@ -3277,13 +3265,8 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
   ],
   "input": [
     {
-      "name": "image",
-      "required": false,
-      "type": "image",
-    },
-    {
       "name": "artifact",
-      "required": false,
+      "required": true,
       "type": "artifact",
     },
     {
@@ -3299,11 +3282,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
   ],
   "steps": [
     {
-      "id": "load-source",
+      "id": "load-dashboard",
       "inputSchema": {
         "properties": {
           "artifact": {
-            "description": "The id of a saved dashboard to use in place of an image.",
+            "description": "The id of the saved dashboard to map.",
             "type": "string",
           },
           "datasets": {
@@ -3313,17 +3296,14 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
-          "image": {
-            "description": "The dashboard image's path in the run's workspace.",
-            "type": "string",
-          },
           "question": {
-            "description": "The user's instructions; by default, recreate the dashboard.",
+            "description": "The user's instructions; by default, map the dashboard.",
             "type": "string",
           },
         },
         "required": [
           "question",
+          "artifact",
           "datasets",
         ],
         "type": "object",
@@ -3331,674 +3311,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "blueprint": {
-            "additionalProperties": false,
-            "description": "The saved dashboard's structure; empty for an image.",
-            "properties": {
-              "columns": {
-                "description": "The columns of one mock dataset every widget can read.",
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "description": {
-                      "description": "What it holds.",
-                      "type": "string",
-                    },
-                    "max": {
-                      "description": "A number column: a plausible high.",
-                      "type": [
-                        "number",
-                        "null",
-                      ],
-                    },
-                    "min": {
-                      "description": "A number column: a plausible low.",
-                      "type": [
-                        "number",
-                        "null",
-                      ],
-                    },
-                    "name": {
-                      "description": "A snake_case column name.",
-                      "type": "string",
-                    },
-                    "type": {
-                      "description": "The column type.",
-                      "enum": [
-                        "string",
-                        "number",
-                        "date",
-                        "boolean",
-                      ],
-                      "type": "string",
-                    },
-                    "values": {
-                      "description": "A string column: its categories, in display order. A date column: its periods, in order (for example Jan to Dec). Else empty.",
-                      "items": {
-                        "type": "string",
-                      },
-                      "type": "array",
-                    },
-                  },
-                  "required": [
-                    "name",
-                    "type",
-                    "description",
-                    "values",
-                    "min",
-                    "max",
-                  ],
-                  "type": "object",
-                },
-                "type": "array",
-              },
-              "filters": {
-                "description": "Its controls.",
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "column": {
-                      "description": "The column of the mock dataset it filters; empty for none.",
-                      "type": "string",
-                    },
-                    "id": {
-                      "description": "A short kebab-case id, unique among filters.",
-                      "type": "string",
-                    },
-                    "kind": {
-                      "description": "The control.",
-                      "enum": [
-                        "select",
-                        "multi-select",
-                        "date-range",
-                        "search",
-                        "toggle",
-                        "tabs",
-                        "other",
-                      ],
-                      "type": "string",
-                    },
-                    "label": {
-                      "description": "The label the dashboard shows.",
-                      "type": "string",
-                    },
-                    "options": {
-                      "description": "The options read from the image, or plausible ones.",
-                      "items": {
-                        "type": "string",
-                      },
-                      "type": "array",
-                    },
-                  },
-                  "required": [
-                    "id",
-                    "label",
-                    "kind",
-                    "column",
-                    "options",
-                  ],
-                  "type": "object",
-                },
-                "type": "array",
-              },
-              "layout": {
-                "description": "The grid in words: rows, and which widget sits where.",
-                "type": "string",
-              },
-              "summary": {
-                "description": "What the dashboard is for, in a sentence.",
-                "type": "string",
-              },
-              "theme": {
-                "additionalProperties": false,
-                "description": "Its look.",
-                "properties": {
-                  "accent": {
-                    "description": "The accent colour, as #rrggbb.",
-                    "type": "string",
-                  },
-                  "mode": {
-                    "description": "Light or dark.",
-                    "enum": [
-                      "light",
-                      "dark",
-                    ],
-                    "type": "string",
-                  },
-                  "palette": {
-                    "description": "The series colours in order, as #rrggbb.",
-                    "items": {
-                      "type": "string",
-                    },
-                    "type": "array",
-                  },
-                },
-                "required": [
-                  "mode",
-                  "accent",
-                  "palette",
-                ],
-                "type": "object",
-              },
-              "title": {
-                "description": "The dashboard's title.",
-                "type": "string",
-              },
-              "widgets": {
-                "description": "Its widgets, in reading order.",
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "description": {
-                      "description": "What it shows: measure, breakdown, units and time grain.",
-                      "type": "string",
-                    },
-                    "dimension": {
-                      "description": "The column it breaks the measures down by; empty for none.",
-                      "type": "string",
-                    },
-                    "filteredBy": {
-                      "description": "The ids of the filters that change it.",
-                      "items": {
-                        "type": "string",
-                      },
-                      "type": "array",
-                    },
-                    "id": {
-                      "description": "A short kebab-case id, unique among widgets.",
-                      "type": "string",
-                    },
-                    "kind": {
-                      "description": "What the widget draws.",
-                      "enum": [
-                        "kpi",
-                        "bar",
-                        "line",
-                        "area",
-                        "pie",
-                        "donut",
-                        "table",
-                        "scatter",
-                        "heatmap",
-                        "map",
-                        "gauge",
-                        "funnel",
-                        "text",
-                        "other",
-                      ],
-                      "type": "string",
-                    },
-                    "measures": {
-                      "description": "The figures it shows; one for a KPI, a pie or a donut.",
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "aggregation": {
-                            "description": "How rows fold.",
-                            "enum": [
-                              "sum",
-                              "avg",
-                              "count",
-                              "min",
-                              "max",
-                            ],
-                            "type": "string",
-                          },
-                          "column": {
-                            "description": "The numeric column of the mock dataset.",
-                            "type": "string",
-                          },
-                          "format": {
-                            "description": "How the value is written.",
-                            "enum": [
-                              "number",
-                              "currency",
-                              "percent",
-                              "compact",
-                            ],
-                            "type": "string",
-                          },
-                          "label": {
-                            "description": "The name the dashboard gives the figure.",
-                            "type": "string",
-                          },
-                          "total": {
-                            "description": "The figure over all the data as the image shows it, when readable.",
-                            "type": [
-                              "number",
-                              "null",
-                            ],
-                          },
-                          "unit": {
-                            "description": "A unit or currency symbol; empty for none.",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "label",
-                          "column",
-                          "aggregation",
-                          "format",
-                          "unit",
-                          "total",
-                        ],
-                        "type": "object",
-                      },
-                      "type": "array",
-                    },
-                    "observed": {
-                      "description": "The values, labels and ranges readable in the image.",
-                      "type": "string",
-                    },
-                    "span": {
-                      "description": "Its width in a 12-column grid, 2 to 12; widgets wrap in order.",
-                      "type": "number",
-                    },
-                    "title": {
-                      "description": "The title the dashboard shows.",
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "id",
-                    "title",
-                    "kind",
-                    "span",
-                    "measures",
-                    "dimension",
-                    "description",
-                    "observed",
-                    "filteredBy",
-                  ],
-                  "type": "object",
-                },
-                "type": "array",
-              },
-            },
-            "required": [
-              "title",
-              "summary",
-              "theme",
-              "layout",
-              "filters",
-              "widgets",
-              "columns",
-            ],
-            "type": "object",
-          },
-          "datasets": {
-            "description": "The run's datasets.",
-            "items": {
-              "type": "string",
-            },
-            "type": "array",
-          },
-          "image": {
-            "description": "The image's path in the run's workspace; empty for none.",
+          "artifactName": {
+            "description": "The saved dashboard's name.",
             "type": "string",
           },
-          "question": {
-            "description": "The user's instructions.",
-            "type": "string",
-          },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
-        },
-        "required": [
-          "question",
-          "datasets",
-          "source",
-          "image",
-          "blueprint",
-          "stopped",
-        ],
-        "type": "object",
-      },
-    },
-    {
-      "id": "read-dashboard",
-      "inputSchema": {
-        "properties": {
-          "blueprint": {
-            "description": "The saved dashboard's structure; empty for an image.",
-            "properties": {
-              "columns": {
-                "description": "The columns of one mock dataset every widget can read.",
-                "items": {
-                  "properties": {
-                    "description": {
-                      "description": "What it holds.",
-                      "type": "string",
-                    },
-                    "max": {
-                      "description": "A number column: a plausible high.",
-                      "type": [
-                        "number",
-                        "null",
-                      ],
-                    },
-                    "min": {
-                      "description": "A number column: a plausible low.",
-                      "type": [
-                        "number",
-                        "null",
-                      ],
-                    },
-                    "name": {
-                      "description": "A snake_case column name.",
-                      "type": "string",
-                    },
-                    "type": {
-                      "description": "The column type.",
-                      "enum": [
-                        "string",
-                        "number",
-                        "date",
-                        "boolean",
-                      ],
-                      "type": "string",
-                    },
-                    "values": {
-                      "description": "A string column: its categories, in display order. A date column: its periods, in order (for example Jan to Dec). Else empty.",
-                      "items": {
-                        "type": "string",
-                      },
-                      "type": "array",
-                    },
-                  },
-                  "required": [
-                    "name",
-                    "type",
-                    "description",
-                    "values",
-                    "min",
-                    "max",
-                  ],
-                  "type": "object",
-                },
-                "type": "array",
-              },
-              "filters": {
-                "description": "Its controls.",
-                "items": {
-                  "properties": {
-                    "column": {
-                      "description": "The column of the mock dataset it filters; empty for none.",
-                      "type": "string",
-                    },
-                    "id": {
-                      "description": "A short kebab-case id, unique among filters.",
-                      "type": "string",
-                    },
-                    "kind": {
-                      "description": "The control.",
-                      "enum": [
-                        "select",
-                        "multi-select",
-                        "date-range",
-                        "search",
-                        "toggle",
-                        "tabs",
-                        "other",
-                      ],
-                      "type": "string",
-                    },
-                    "label": {
-                      "description": "The label the dashboard shows.",
-                      "type": "string",
-                    },
-                    "options": {
-                      "description": "The options read from the image, or plausible ones.",
-                      "items": {
-                        "type": "string",
-                      },
-                      "type": "array",
-                    },
-                  },
-                  "required": [
-                    "id",
-                    "label",
-                    "kind",
-                    "column",
-                    "options",
-                  ],
-                  "type": "object",
-                },
-                "type": "array",
-              },
-              "layout": {
-                "description": "The grid in words: rows, and which widget sits where.",
-                "type": "string",
-              },
-              "summary": {
-                "description": "What the dashboard is for, in a sentence.",
-                "type": "string",
-              },
-              "theme": {
-                "description": "Its look.",
-                "properties": {
-                  "accent": {
-                    "description": "The accent colour, as #rrggbb.",
-                    "type": "string",
-                  },
-                  "mode": {
-                    "description": "Light or dark.",
-                    "enum": [
-                      "light",
-                      "dark",
-                    ],
-                    "type": "string",
-                  },
-                  "palette": {
-                    "description": "The series colours in order, as #rrggbb.",
-                    "items": {
-                      "type": "string",
-                    },
-                    "type": "array",
-                  },
-                },
-                "required": [
-                  "mode",
-                  "accent",
-                  "palette",
-                ],
-                "type": "object",
-              },
-              "title": {
-                "description": "The dashboard's title.",
-                "type": "string",
-              },
-              "widgets": {
-                "description": "Its widgets, in reading order.",
-                "items": {
-                  "properties": {
-                    "description": {
-                      "description": "What it shows: measure, breakdown, units and time grain.",
-                      "type": "string",
-                    },
-                    "dimension": {
-                      "description": "The column it breaks the measures down by; empty for none.",
-                      "type": "string",
-                    },
-                    "filteredBy": {
-                      "description": "The ids of the filters that change it.",
-                      "items": {
-                        "type": "string",
-                      },
-                      "type": "array",
-                    },
-                    "id": {
-                      "description": "A short kebab-case id, unique among widgets.",
-                      "type": "string",
-                    },
-                    "kind": {
-                      "description": "What the widget draws.",
-                      "enum": [
-                        "kpi",
-                        "bar",
-                        "line",
-                        "area",
-                        "pie",
-                        "donut",
-                        "table",
-                        "scatter",
-                        "heatmap",
-                        "map",
-                        "gauge",
-                        "funnel",
-                        "text",
-                        "other",
-                      ],
-                      "type": "string",
-                    },
-                    "measures": {
-                      "description": "The figures it shows; one for a KPI, a pie or a donut.",
-                      "items": {
-                        "properties": {
-                          "aggregation": {
-                            "description": "How rows fold.",
-                            "enum": [
-                              "sum",
-                              "avg",
-                              "count",
-                              "min",
-                              "max",
-                            ],
-                            "type": "string",
-                          },
-                          "column": {
-                            "description": "The numeric column of the mock dataset.",
-                            "type": "string",
-                          },
-                          "format": {
-                            "description": "How the value is written.",
-                            "enum": [
-                              "number",
-                              "currency",
-                              "percent",
-                              "compact",
-                            ],
-                            "type": "string",
-                          },
-                          "label": {
-                            "description": "The name the dashboard gives the figure.",
-                            "type": "string",
-                          },
-                          "total": {
-                            "description": "The figure over all the data as the image shows it, when readable.",
-                            "type": [
-                              "number",
-                              "null",
-                            ],
-                          },
-                          "unit": {
-                            "description": "A unit or currency symbol; empty for none.",
-                            "type": "string",
-                          },
-                        },
-                        "required": [
-                          "label",
-                          "column",
-                          "aggregation",
-                          "format",
-                          "unit",
-                          "total",
-                        ],
-                        "type": "object",
-                      },
-                      "type": "array",
-                    },
-                    "observed": {
-                      "description": "The values, labels and ranges readable in the image.",
-                      "type": "string",
-                    },
-                    "span": {
-                      "description": "Its width in a 12-column grid, 2 to 12; widgets wrap in order.",
-                      "type": "number",
-                    },
-                    "title": {
-                      "description": "The title the dashboard shows.",
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "id",
-                    "title",
-                    "kind",
-                    "span",
-                    "measures",
-                    "dimension",
-                    "description",
-                    "observed",
-                    "filteredBy",
-                  ],
-                  "type": "object",
-                },
-                "type": "array",
-              },
-            },
-            "required": [
-              "title",
-              "summary",
-              "theme",
-              "layout",
-              "filters",
-              "widgets",
-              "columns",
-            ],
-            "type": "object",
-          },
-          "datasets": {
-            "description": "The run's datasets.",
-            "items": {
-              "type": "string",
-            },
-            "type": "array",
-          },
-          "image": {
-            "description": "The image's path in the run's workspace; empty for none.",
-            "type": "string",
-          },
-          "question": {
-            "description": "The user's instructions.",
-            "type": "string",
-          },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
-        },
-        "required": [
-          "question",
-          "datasets",
-          "source",
-          "image",
-          "blueprint",
-          "stopped",
-        ],
-        "type": "object",
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
           "blueprint": {
             "additionalProperties": false,
             "description": "The dashboard's structure.",
@@ -4301,34 +3617,16 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
-          "image": {
-            "description": "The image's path in the run's workspace; empty for none.",
-            "type": "string",
-          },
           "question": {
             "description": "The user's instructions.",
             "type": "string",
-          },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
           },
         },
         "required": [
           "question",
           "datasets",
-          "source",
-          "image",
+          "artifactName",
           "blueprint",
-          "stopped",
         ],
         "type": "object",
       },
@@ -4337,8 +3635,12 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "id": "load-dashboard-catalog",
       "inputSchema": {
         "properties": {
+          "artifactName": {
+            "description": "The saved dashboard's name.",
+            "type": "string",
+          },
           "blueprint": {
-            "description": "The saved dashboard's structure; empty for an image.",
+            "description": "The dashboard's structure.",
             "properties": {
               "columns": {
                 "description": "The columns of one mock dataset every widget can read.",
@@ -4633,40 +3935,26 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
-          "image": {
-            "description": "The image's path in the run's workspace; empty for none.",
-            "type": "string",
-          },
           "question": {
             "description": "The user's instructions.",
             "type": "string",
-          },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
           },
         },
         "required": [
           "question",
           "datasets",
-          "source",
-          "image",
+          "artifactName",
           "blueprint",
-          "stopped",
         ],
         "type": "object",
       },
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "artifactName": {
+            "description": "The saved dashboard's name.",
+            "type": "string",
+          },
           "blueprint": {
             "additionalProperties": false,
             "description": "The dashboard's structure.",
@@ -5064,25 +4352,12 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "The user's instructions.",
             "type": "string",
           },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
         },
         "required": [
           "question",
           "datasets",
-          "source",
+          "artifactName",
           "blueprint",
-          "stopped",
           "catalog",
           "columns",
         ],
@@ -5093,6 +4368,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "id": "map-data",
       "inputSchema": {
         "properties": {
+          "artifactName": {
+            "description": "The saved dashboard's name.",
+            "type": "string",
+          },
           "blueprint": {
             "description": "The dashboard's structure.",
             "properties": {
@@ -5481,25 +4760,12 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "The user's instructions.",
             "type": "string",
           },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
-          "stopped": {
-            "description": "Whether the run was stopped.",
-            "type": "boolean",
-          },
         },
         "required": [
           "question",
           "datasets",
-          "source",
+          "artifactName",
           "blueprint",
-          "stopped",
           "catalog",
           "columns",
         ],
@@ -5508,6 +4774,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "artifactName": {
+            "description": "The saved dashboard's name.",
+            "type": "string",
+          },
           "blueprint": {
             "additionalProperties": false,
             "description": "The dashboard's structure.",
@@ -5969,14 +5239,6 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             ],
             "type": "object",
           },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
           "stopped": {
             "description": "Whether the run was stopped.",
             "type": "boolean",
@@ -5984,7 +5246,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
         },
         "required": [
           "datasets",
-          "source",
+          "artifactName",
           "blueprint",
           "mapping",
           "entityCount",
@@ -5997,6 +5259,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "id": "render-dashboard",
       "inputSchema": {
         "properties": {
+          "artifactName": {
+            "description": "The saved dashboard's name.",
+            "type": "string",
+          },
           "blueprint": {
             "description": "The dashboard's structure.",
             "properties": {
@@ -6447,14 +5713,6 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             ],
             "type": "object",
           },
-          "source": {
-            "description": "image or artifact.",
-            "enum": [
-              "image",
-              "artifact",
-            ],
-            "type": "string",
-          },
           "stopped": {
             "description": "Whether the run was stopped.",
             "type": "boolean",
@@ -6462,7 +5720,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
         },
         "required": [
           "datasets",
-          "source",
+          "artifactName",
           "blueprint",
           "mapping",
           "entityCount",
@@ -6773,7 +6031,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "object",
           },
           "filterCount": {
-            "description": "The filters it recreates.",
+            "description": "The filters it holds.",
             "type": "number",
           },
           "mappedCount": {
@@ -6952,7 +6210,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "string",
           },
           "widgetCount": {
-            "description": "The widgets it recreates.",
+            "description": "The widgets it holds.",
             "type": "number",
           },
         },
@@ -6967,6 +6225,1089 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "answer",
           "blueprint",
           "mapping",
+        ],
+        "type": "object",
+      },
+    },
+  ],
+}
+`;
+
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) recreate-dashboard's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+{
+  "contractHash": "b74c6e4c4e3c",
+  "edges": [
+    {
+      "from": "start",
+      "kind": "next",
+      "to": "load-image",
+    },
+    {
+      "from": "load-image",
+      "kind": "next",
+      "to": "read-dashboard",
+    },
+    {
+      "from": "read-dashboard",
+      "kind": "next",
+      "to": "save-dashboard",
+    },
+    {
+      "from": "save-dashboard",
+      "kind": "next",
+      "to": "end",
+    },
+  ],
+  "input": [
+    {
+      "name": "image",
+      "required": true,
+      "type": "image",
+    },
+    {
+      "name": "question",
+      "required": false,
+      "type": "textarea",
+    },
+  ],
+  "steps": [
+    {
+      "id": "load-image",
+      "inputSchema": {
+        "properties": {
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "mediaType": {
+            "description": "image/png, image/jpeg or image/webp.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+          "sizeBytes": {
+            "description": "The image's size in bytes.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+          "mediaType",
+          "sizeBytes",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "read-dashboard",
+      "inputSchema": {
+        "properties": {
+          "image": {
+            "description": "The dashboard image's path in the run's workspace.",
+            "type": "string",
+          },
+          "mediaType": {
+            "description": "image/png, image/jpeg or image/webp.",
+            "type": "string",
+          },
+          "question": {
+            "description": "The user's instructions; by default, recreate the dashboard.",
+            "type": "string",
+          },
+          "sizeBytes": {
+            "description": "The image's size in bytes.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "image",
+          "mediaType",
+          "sizeBytes",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "blueprint": {
+            "additionalProperties": false,
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it holds.",
+                      "type": "string",
+                    },
+                    "max": {
+                      "description": "A number column: a plausible high.",
+                      "type": [
+                        "number",
+                        "null",
+                      ],
+                    },
+                    "min": {
+                      "description": "A number column: a plausible low.",
+                      "type": [
+                        "number",
+                        "null",
+                      ],
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                    "values": {
+                      "description": "A string column: its categories, in display order. A date column: its periods, in order (for example Jan to Dec). Else empty.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                    "values",
+                    "min",
+                    "max",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "column": {
+                      "description": "The column of the mock dataset it filters; empty for none.",
+                      "type": "string",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "column",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid in words: rows, and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "additionalProperties": false,
+                "description": "Its look.",
+                "properties": {
+                  "accent": {
+                    "description": "The accent colour, as #rrggbb.",
+                    "type": "string",
+                  },
+                  "mode": {
+                    "description": "Light or dark.",
+                    "enum": [
+                      "light",
+                      "dark",
+                    ],
+                    "type": "string",
+                  },
+                  "palette": {
+                    "description": "The series colours in order, as #rrggbb.",
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                },
+                "required": [
+                  "mode",
+                  "accent",
+                  "palette",
+                ],
+                "type": "object",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in reading order.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "dimension": {
+                      "description": "The column it breaks the measures down by; empty for none.",
+                      "type": "string",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "measures": {
+                      "description": "The figures it shows; one for a KPI, a pie or a donut.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "aggregation": {
+                            "description": "How rows fold.",
+                            "enum": [
+                              "sum",
+                              "avg",
+                              "count",
+                              "min",
+                              "max",
+                            ],
+                            "type": "string",
+                          },
+                          "column": {
+                            "description": "The numeric column of the mock dataset.",
+                            "type": "string",
+                          },
+                          "format": {
+                            "description": "How the value is written.",
+                            "enum": [
+                              "number",
+                              "currency",
+                              "percent",
+                              "compact",
+                            ],
+                            "type": "string",
+                          },
+                          "label": {
+                            "description": "The name the dashboard gives the figure.",
+                            "type": "string",
+                          },
+                          "total": {
+                            "description": "The figure over all the data as the image shows it, when readable.",
+                            "type": [
+                              "number",
+                              "null",
+                            ],
+                          },
+                          "unit": {
+                            "description": "A unit or currency symbol; empty for none.",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "label",
+                          "column",
+                          "aggregation",
+                          "format",
+                          "unit",
+                          "total",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "span": {
+                      "description": "Its width in a 12-column grid, 2 to 12; widgets wrap in order.",
+                      "type": "number",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "span",
+                    "measures",
+                    "dimension",
+                    "description",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "question": {
+            "description": "The user's instructions.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "question",
+          "blueprint",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "save-dashboard",
+      "inputSchema": {
+        "properties": {
+          "blueprint": {
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "properties": {
+                    "description": {
+                      "description": "What it holds.",
+                      "type": "string",
+                    },
+                    "max": {
+                      "description": "A number column: a plausible high.",
+                      "type": [
+                        "number",
+                        "null",
+                      ],
+                    },
+                    "min": {
+                      "description": "A number column: a plausible low.",
+                      "type": [
+                        "number",
+                        "null",
+                      ],
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                    "values": {
+                      "description": "A string column: its categories, in display order. A date column: its periods, in order (for example Jan to Dec). Else empty.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                    "values",
+                    "min",
+                    "max",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "properties": {
+                    "column": {
+                      "description": "The column of the mock dataset it filters; empty for none.",
+                      "type": "string",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "column",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid in words: rows, and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "description": "Its look.",
+                "properties": {
+                  "accent": {
+                    "description": "The accent colour, as #rrggbb.",
+                    "type": "string",
+                  },
+                  "mode": {
+                    "description": "Light or dark.",
+                    "enum": [
+                      "light",
+                      "dark",
+                    ],
+                    "type": "string",
+                  },
+                  "palette": {
+                    "description": "The series colours in order, as #rrggbb.",
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                },
+                "required": [
+                  "mode",
+                  "accent",
+                  "palette",
+                ],
+                "type": "object",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in reading order.",
+                "items": {
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "dimension": {
+                      "description": "The column it breaks the measures down by; empty for none.",
+                      "type": "string",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "measures": {
+                      "description": "The figures it shows; one for a KPI, a pie or a donut.",
+                      "items": {
+                        "properties": {
+                          "aggregation": {
+                            "description": "How rows fold.",
+                            "enum": [
+                              "sum",
+                              "avg",
+                              "count",
+                              "min",
+                              "max",
+                            ],
+                            "type": "string",
+                          },
+                          "column": {
+                            "description": "The numeric column of the mock dataset.",
+                            "type": "string",
+                          },
+                          "format": {
+                            "description": "How the value is written.",
+                            "enum": [
+                              "number",
+                              "currency",
+                              "percent",
+                              "compact",
+                            ],
+                            "type": "string",
+                          },
+                          "label": {
+                            "description": "The name the dashboard gives the figure.",
+                            "type": "string",
+                          },
+                          "total": {
+                            "description": "The figure over all the data as the image shows it, when readable.",
+                            "type": [
+                              "number",
+                              "null",
+                            ],
+                          },
+                          "unit": {
+                            "description": "A unit or currency symbol; empty for none.",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "label",
+                          "column",
+                          "aggregation",
+                          "format",
+                          "unit",
+                          "total",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "span": {
+                      "description": "Its width in a 12-column grid, 2 to 12; widgets wrap in order.",
+                      "type": "number",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "span",
+                    "measures",
+                    "dimension",
+                    "description",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "question": {
+            "description": "The user's instructions.",
+            "type": "string",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "question",
+          "blueprint",
+          "stopped",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The run's answer.",
+            "type": "string",
+          },
+          "artifactId": {
+            "description": "The saved dashboard's id: an artifact (data-model 3.18).",
+            "type": "string",
+          },
+          "artifactName": {
+            "description": "The artifact's name.",
+            "type": "string",
+          },
+          "blueprint": {
+            "additionalProperties": false,
+            "description": "The dashboard's structure.",
+            "properties": {
+              "columns": {
+                "description": "The columns of one mock dataset every widget can read.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it holds.",
+                      "type": "string",
+                    },
+                    "max": {
+                      "description": "A number column: a plausible high.",
+                      "type": [
+                        "number",
+                        "null",
+                      ],
+                    },
+                    "min": {
+                      "description": "A number column: a plausible low.",
+                      "type": [
+                        "number",
+                        "null",
+                      ],
+                    },
+                    "name": {
+                      "description": "A snake_case column name.",
+                      "type": "string",
+                    },
+                    "type": {
+                      "description": "The column type.",
+                      "enum": [
+                        "string",
+                        "number",
+                        "date",
+                        "boolean",
+                      ],
+                      "type": "string",
+                    },
+                    "values": {
+                      "description": "A string column: its categories, in display order. A date column: its periods, in order (for example Jan to Dec). Else empty.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "description",
+                    "values",
+                    "min",
+                    "max",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "filters": {
+                "description": "Its controls.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "column": {
+                      "description": "The column of the mock dataset it filters; empty for none.",
+                      "type": "string",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among filters.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "The control.",
+                      "enum": [
+                        "select",
+                        "multi-select",
+                        "date-range",
+                        "search",
+                        "toggle",
+                        "tabs",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "label": {
+                      "description": "The label the dashboard shows.",
+                      "type": "string",
+                    },
+                    "options": {
+                      "description": "The options read from the image, or plausible ones.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "kind",
+                    "column",
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "layout": {
+                "description": "The grid in words: rows, and which widget sits where.",
+                "type": "string",
+              },
+              "summary": {
+                "description": "What the dashboard is for, in a sentence.",
+                "type": "string",
+              },
+              "theme": {
+                "additionalProperties": false,
+                "description": "Its look.",
+                "properties": {
+                  "accent": {
+                    "description": "The accent colour, as #rrggbb.",
+                    "type": "string",
+                  },
+                  "mode": {
+                    "description": "Light or dark.",
+                    "enum": [
+                      "light",
+                      "dark",
+                    ],
+                    "type": "string",
+                  },
+                  "palette": {
+                    "description": "The series colours in order, as #rrggbb.",
+                    "items": {
+                      "type": "string",
+                    },
+                    "type": "array",
+                  },
+                },
+                "required": [
+                  "mode",
+                  "accent",
+                  "palette",
+                ],
+                "type": "object",
+              },
+              "title": {
+                "description": "The dashboard's title.",
+                "type": "string",
+              },
+              "widgets": {
+                "description": "Its widgets, in reading order.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "What it shows: measure, breakdown, units and time grain.",
+                      "type": "string",
+                    },
+                    "dimension": {
+                      "description": "The column it breaks the measures down by; empty for none.",
+                      "type": "string",
+                    },
+                    "filteredBy": {
+                      "description": "The ids of the filters that change it.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "id": {
+                      "description": "A short kebab-case id, unique among widgets.",
+                      "type": "string",
+                    },
+                    "kind": {
+                      "description": "What the widget draws.",
+                      "enum": [
+                        "kpi",
+                        "bar",
+                        "line",
+                        "area",
+                        "pie",
+                        "donut",
+                        "table",
+                        "scatter",
+                        "heatmap",
+                        "map",
+                        "gauge",
+                        "funnel",
+                        "text",
+                        "other",
+                      ],
+                      "type": "string",
+                    },
+                    "measures": {
+                      "description": "The figures it shows; one for a KPI, a pie or a donut.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "aggregation": {
+                            "description": "How rows fold.",
+                            "enum": [
+                              "sum",
+                              "avg",
+                              "count",
+                              "min",
+                              "max",
+                            ],
+                            "type": "string",
+                          },
+                          "column": {
+                            "description": "The numeric column of the mock dataset.",
+                            "type": "string",
+                          },
+                          "format": {
+                            "description": "How the value is written.",
+                            "enum": [
+                              "number",
+                              "currency",
+                              "percent",
+                              "compact",
+                            ],
+                            "type": "string",
+                          },
+                          "label": {
+                            "description": "The name the dashboard gives the figure.",
+                            "type": "string",
+                          },
+                          "total": {
+                            "description": "The figure over all the data as the image shows it, when readable.",
+                            "type": [
+                              "number",
+                              "null",
+                            ],
+                          },
+                          "unit": {
+                            "description": "A unit or currency symbol; empty for none.",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "label",
+                          "column",
+                          "aggregation",
+                          "format",
+                          "unit",
+                          "total",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "observed": {
+                      "description": "The values, labels and ranges readable in the image.",
+                      "type": "string",
+                    },
+                    "span": {
+                      "description": "Its width in a 12-column grid, 2 to 12; widgets wrap in order.",
+                      "type": "number",
+                    },
+                    "title": {
+                      "description": "The title the dashboard shows.",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "kind",
+                    "span",
+                    "measures",
+                    "dimension",
+                    "description",
+                    "observed",
+                    "filteredBy",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "title",
+              "summary",
+              "theme",
+              "layout",
+              "filters",
+              "widgets",
+              "columns",
+            ],
+            "type": "object",
+          },
+          "filterCount": {
+            "description": "The filters it holds.",
+            "type": "number",
+          },
+          "title": {
+            "description": "The dashboard's title.",
+            "type": "string",
+          },
+          "visualId": {
+            "description": "The drawn dashboard's id: a visual of the run.",
+            "type": "string",
+          },
+          "widgetCount": {
+            "description": "The widgets it holds.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "artifactId",
+          "artifactName",
+          "visualId",
+          "title",
+          "widgetCount",
+          "filterCount",
+          "answer",
+          "blueprint",
         ],
         "type": "object",
       },

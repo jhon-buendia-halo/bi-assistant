@@ -101,7 +101,6 @@ describe('ArtifactsService', () => {
     const { id } = await service.create({ blueprint: BLUEPRINT });
     const artifact = await service.get(id);
     expect(artifact.blueprint).toEqual(BLUEPRINT);
-    expect(await service.blueprintOf(id)).toEqual(BLUEPRINT);
   });
 
   it('refuses what is not a dashboard, and a bad name', async () => {

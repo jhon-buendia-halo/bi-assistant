@@ -1,12 +1,12 @@
 /**
  * The step catalogue of the Recreate a Dashboard workflow (agents.md 5.17):
- * its id and name, the steps and edges the workflow page shows, the runtime
- * a run hands its steps, and the pure code of its deterministic parts (the
- * lenient readers of the two model replies, the check of a mapping against
- * the catalog, the rendered dashboard and the explanation of the mapping).
- * No framework import, so the catalogue and Jest can read it without
- * loading Mastra; ./recreate-dashboard.workflow.ts builds the Mastra steps
- * from it.
+ * its id and name, the steps and edges the workflow page shows and the
+ * runtime a run hands its steps. It also holds the dashboard's own pure
+ * code, shared with Map a Dashboard to Data (5.18): the lenient readers of
+ * the two model replies, the check of a mapping against the catalog, the
+ * drawn dashboard and the explanation of the mapping. No framework import,
+ * so the catalogue and Jest can read it without loading Mastra;
+ * ./recreate-dashboard.workflow.ts builds the Mastra steps from it.
  */
 import type { z } from 'zod';
 import {
@@ -21,8 +21,8 @@ import {
 } from './recreate-dashboard.schemas';
 import type {
   fieldMappingSchema,
-  loadedSourceSchema,
-  renderedDashboardSchema,
+  loadedImageSchema,
+  savedDashboardSchema,
 } from './recreate-dashboard.schemas';
 import {
   DASHBOARD_MOCK_CSS,
@@ -35,7 +35,6 @@ import {
   type CatalogEntity,
   type ContractStepEntry,
   type EntityColumns,
-  type WorkflowStepExit,
 } from './answer-business-question.steps';
 import type { WorkflowEdge } from './workflow-contract';
 
@@ -47,7 +46,7 @@ export const RECREATE_DASHBOARD_WORKFLOW_NAME = 'Recreate a Dashboard';
 
 /** What the catalogue says the workflow does. */
 export const RECREATE_DASHBOARD_DESCRIPTION =
-  'Reads the image of a dashboard, maps its widgets and filters to the columns of the datasets you pick, and draws an interactive mock that marks what the data cannot feed.';
+  'Reads the image of a dashboard into its filters, widgets and the data they read, draws it as an interactive mock and saves it in Artifacts, ready to be mapped to your data.';
 
 /** What a run asks when its instructions are left empty. */
 export const RECREATE_DASHBOARD_DEFAULT_QUESTION =
@@ -58,11 +57,6 @@ export const RECREATE_DASHBOARD_RUNTIME_KEY = 'recreate-dashboard-runtime';
 
 const SCHEMAS = RECREATE_DASHBOARD_STEP_SCHEMAS;
 
-const MODEL_EXITS: readonly WorkflowStepExit[] = [
-  { label: 'Model error', outcome: 'fails' },
-  { label: 'Stop', outcome: 'stops' },
-];
-
 /**
  * The steps, in catalogue order. Their field names and JSON Schemas come
  * from ./recreate-dashboard.schemas.ts; how they connect is
@@ -71,17 +65,14 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
 export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
   contractStepEntry(
     {
-      id: 'load-source',
-      title: 'Load source',
+      id: 'load-image',
+      title: 'Load image',
       kind: 'code',
       summary:
-        "Finds the run's dashboard: the uploaded image in the run's workspace, or the saved dashboard of the artifact it names. No LLM.",
-      exits: [
-        { label: 'Image missing', outcome: 'fails' },
-        { label: 'Artifact missing', outcome: 'fails' },
-      ],
+        "Finds the uploaded image in the run's workspace and checks its format and size. No LLM.",
+      exits: [{ label: 'Image missing', outcome: 'fails' }],
     },
-    SCHEMAS['load-source'],
+    SCHEMAS['load-image'],
   ),
   contractStepEntry(
     {
@@ -89,9 +80,10 @@ export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
       title: 'Read dashboard',
       kind: 'agent',
       summary:
-        'Only for a run on an image. The Dashboard Reader looks at the image and returns the dashboard as data: its filters, its widgets with their measures and breakdowns, and the columns of one mock dataset behind them.',
+        'The Dashboard Reader looks at the image and returns the dashboard as data: its filters, its widgets with their measures and breakdowns, and the columns of one mock dataset behind them.',
       exits: [
-        ...MODEL_EXITS,
+        { label: 'Model error', outcome: 'fails' },
+        { label: 'Stop', outcome: 'stops' },
         { label: 'No dashboard in the image', outcome: 'fails' },
       ],
       modelOnly: true,
@@ -100,67 +92,34 @@ export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
-      id: 'load-dashboard-catalog',
-      title: 'Load catalog',
+      id: 'save-dashboard',
+      title: 'Save dashboard',
       kind: 'code',
       summary:
-        'Lists the entities of the datasets you picked and the columns of each. No LLM.',
+        'Draws the dashboard with the fixed runtime on invented data, stores it as an interactive visual of the run and saves it in Artifacts with its image. No LLM.',
       exits: [],
     },
-    SCHEMAS['load-dashboard-catalog'],
-  ),
-  contractStepEntry(
-    {
-      id: 'map-data',
-      title: 'Map data',
-      kind: 'agent',
-      summary:
-        'The Data Mapper ties every column the dashboard reads to a column of the datasets, or says what is missing. Each proposed source is then checked against the catalog.',
-      exits: MODEL_EXITS,
-      modelOnly: true,
-    },
-    SCHEMAS['map-data'],
-  ),
-  contractStepEntry(
-    {
-      id: 'render-dashboard',
-      title: 'Render dashboard',
-      kind: 'code',
-      summary:
-        "Draws the dashboard with the fixed runtime, each widget marked mapped, partly mapped or with no data, stores it as an interactive visual of the run and writes the mapping's explanation. No LLM.",
-      exits: [],
-    },
-    SCHEMAS['render-dashboard'],
+    SCHEMAS['save-dashboard'],
   ),
 ];
 
 /** The edges of the workflow (api.md 117), from Start to End. */
 export const RECREATE_DASHBOARD_EDGES: readonly WorkflowEdge[] = [
-  { from: 'start', to: 'load-source', kind: 'next' },
-  {
-    from: 'load-source',
-    to: 'read-dashboard',
-    kind: 'branch',
-    label: 'From an image',
-  },
-  {
-    from: 'load-source',
-    to: 'load-dashboard-catalog',
-    kind: 'branch',
-    label: 'From a saved dashboard',
-  },
-  { from: 'read-dashboard', to: 'load-dashboard-catalog', kind: 'next' },
-  { from: 'load-dashboard-catalog', to: 'map-data', kind: 'next' },
-  { from: 'map-data', to: 'render-dashboard', kind: 'next' },
-  { from: 'render-dashboard', to: 'end', kind: 'next' },
+  { from: 'start', to: 'load-image', kind: 'next' },
+  { from: 'load-image', to: 'read-dashboard', kind: 'next' },
+  { from: 'read-dashboard', to: 'save-dashboard', kind: 'next' },
+  { from: 'save-dashboard', to: 'end', kind: 'next' },
 ];
 
 export type DashboardBlueprint = z.output<typeof dashboardBlueprintSchema>;
 export type DataMapping = z.output<typeof dataMappingSchema>;
 export type FieldMapping = z.output<typeof fieldMappingSchema>;
 export type MappingStatus = DataMapping['widgets'][number]['status'];
-export type DashboardSource = z.output<typeof loadedSourceSchema>['source'];
-export type RenderedDashboard = z.output<typeof renderedDashboardSchema>;
+export type LoadedImage = Pick<
+  z.output<typeof loadedImageSchema>,
+  'mediaType' | 'sizeBytes'
+>;
+export type SavedDashboard = z.output<typeof savedDashboardSchema>;
 
 /** A drawn dashboard: an interactive visual's freeform bundle. */
 export interface MockBundle {
@@ -172,37 +131,29 @@ export interface MockBundle {
 }
 
 /**
- * What a run hands its steps on the RequestContext: the run's image or
- * saved dashboard, the two model calls and the store of the drawn
- * dashboard. A step throws when it is missing.
+ * What a run hands its steps on the RequestContext: the run's image, the
+ * model call and the store of the dashboard. A step throws when it is
+ * missing.
  */
 export interface RecreateDashboardRuntime {
-  /** Load source, for an image: reads it; throws when it is missing. */
-  loadImage(input: { image: string }): Promise<void>;
-  /** Load source, for an artifact: its saved dashboard; throws when gone. */
-  loadArtifact(input: { artifact: string }): Promise<DashboardBlueprint>;
+  /** Load image: the image's type and size; throws when it is missing. */
+  loadImage(input: { image: string }): Promise<LoadedImage>;
   /** Read dashboard: the model's description of the image. */
   readDashboard(input: {
     question: string;
     image: string;
   }): Promise<{ blueprint: DashboardBlueprint; stopped: boolean }>;
-  /** Map data: the model's mapping, checked against the catalog. */
-  mapData(input: {
-    question: string;
-    blueprint: DashboardBlueprint;
-    catalog: CatalogEntity[];
-    columns: EntityColumns[];
-  }): Promise<{ mapping: DataMapping; stopped: boolean }>;
-  /** Render dashboard: stores the drawn dashboard as a visual of the run. */
+  /**
+   * Save dashboard: stores the drawn dashboard as a visual of the run and
+   * the blueprint, with the run's image, as an artifact.
+   */
   saveDashboard(input: {
+    blueprint: DashboardBlueprint;
     bundle: MockBundle;
-    answer: string;
-  }): Promise<{ visualId: string; title: string }>;
+    /** The run's answer, given the artifact's name once it is stored. */
+    answer: (artifactName: string) => string;
+  }): Promise<{ visualId: string; artifactId: string; artifactName: string }>;
 }
-
-/** What Load source says of a run whose input has no dashboard. */
-export const NO_SOURCE_ERROR =
-  'The run has neither a dashboard image nor a saved dashboard';
 
 /** The instructions a run follows: its own, else the default. */
 export function recreateDashboardQuestion(question: string): string {
@@ -657,8 +608,8 @@ export function mappingExplanation(input: {
   mapping: DataMapping;
   datasets: readonly string[];
   entityCount: number;
-  /** A run on a saved dashboard read no image. */
-  source?: DashboardSource;
+  /** The saved dashboard's name. */
+  artifactName: string;
 }): string {
   const { blueprint, mapping } = input;
   const counts = mappingCounts(mapping);
@@ -679,7 +630,7 @@ export function mappingExplanation(input: {
     '',
     '### How the mapping was done',
     '',
-    `1. **${input.source === 'artifact' ? 'Saved dashboard' : 'Read dashboard'}.** ${input.source === 'artifact' ? 'The dashboard was taken from the saved artifact, read earlier from its image, as' : 'The image was read into'} ${counted(blueprint.widgets.length, 'widget')}, ${counted(blueprint.filters.length, 'filter')} and the ${counted(blueprint.columns.length, 'column')} of data they read (${
+    `1. **Load dashboard.** The saved dashboard **${input.artifactName}** was read from Artifacts: ${counted(blueprint.widgets.length, 'widget')}, ${counted(blueprint.filters.length, 'filter')} and the ${counted(blueprint.columns.length, 'column')} of data they read (${
       blueprint.columns.map((column) => `\`${column.name}\``).join(', ') ||
       'none'
     }).`,
@@ -738,25 +689,44 @@ export function mappingExplanation(input: {
   return lines.join('\n');
 }
 
-/** Render dashboard's output: the run's result. */
-export function renderedDashboard(input: {
+/**
+ * Recreate a Dashboard's answer (agents.md 5.17): fixed text, not model
+ * output. What was read, where it was saved and what to do with it next.
+ */
+export function savedDashboardAnswer(input: {
+  blueprint: DashboardBlueprint;
+  artifactName: string;
+}): string {
+  const { blueprint } = input;
+  return [
+    `Read **${blueprint.title}** from the image: ${counted(blueprint.widgets.length, 'widget')}, ${counted(blueprint.filters.length, 'filter')} and the ${counted(blueprint.columns.length, 'column')} of data they read.`,
+    '',
+    ...blueprint.widgets.map(
+      (widget) => `- **${widget.title}** (${widget.kind})`,
+    ),
+    '',
+    `Saved in Artifacts as **${input.artifactName}**. Run **Map a Dashboard to Data** on it to see which of your datasets can feed each widget.`,
+    '',
+    'Every value in the dashboard is invented: nothing is connected to a datasource.',
+  ].join('\n');
+}
+
+/** Save dashboard's output: the run's result. */
+export function savedDashboard(input: {
   visualId: string;
-  title: string;
+  artifactId: string;
+  artifactName: string;
   answer: string;
   blueprint: DashboardBlueprint;
-  mapping: DataMapping;
-}): RenderedDashboard {
-  const counts = mappingCounts(input.mapping);
+}): SavedDashboard {
   return {
+    artifactId: input.artifactId,
+    artifactName: input.artifactName,
     visualId: input.visualId,
-    title: input.title,
+    title: input.blueprint.title,
     widgetCount: input.blueprint.widgets.length,
     filterCount: input.blueprint.filters.length,
-    mappedCount: counts.mapped,
-    partialCount: counts.partial,
-    unmappedCount: counts.unmapped,
     answer: input.answer,
     blueprint: input.blueprint,
-    mapping: input.mapping,
   };
 }

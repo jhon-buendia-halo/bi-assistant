@@ -9,7 +9,6 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DATA_DIR } from '../../infrastructure/database/database.module';
 import { dashboardBlueprintSchema } from '../../mastra/workflows/recreate-dashboard.schemas';
-import type { DashboardBlueprint } from '../../mastra/workflows/recreate-dashboard.steps';
 import { IMAGE_EXTENSIONS } from '../../mastra/workflows/workflow-input';
 import {
   ARTIFACT_NAME_MAX_LENGTH,
@@ -58,11 +57,6 @@ export class ArtifactsService {
   async get(id: string): Promise<Omit<ArtifactDetail, 'document'>> {
     const doc = await this.stored(id);
     return { ...summaryOf(doc), blueprint: doc.blueprint };
-  }
-
-  /** The dashboard a run takes from an artifact (agents.md 5.17); 404. */
-  async blueprintOf(id: string): Promise<DashboardBlueprint> {
-    return (await this.stored(id)).blueprint;
   }
 
   /** The image an artifact's dashboard was read from (api.md 141); 404. */

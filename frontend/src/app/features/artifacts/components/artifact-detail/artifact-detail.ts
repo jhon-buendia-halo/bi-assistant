@@ -26,7 +26,7 @@ import {
 } from '../../services/artifacts.util';
 
 /** The workflow an artifact is handed to, and the field that takes its id. */
-const USE_WORKFLOW_ID = 'recreate-dashboard';
+const USE_WORKFLOW_ID = 'map-dashboard-data';
 const USE_FIELD = 'artifact';
 
 /**
@@ -157,7 +157,7 @@ export class ArtifactDetail implements OnInit {
     });
   }
 
-  /** Opens Recreate a Dashboard with this artifact picked and no image. */
+  /** Opens Map a Dashboard to Data with this artifact picked. */
   protected useInWorkflow(): void {
     const artifact = this.artifact();
     if (artifact === null) return;

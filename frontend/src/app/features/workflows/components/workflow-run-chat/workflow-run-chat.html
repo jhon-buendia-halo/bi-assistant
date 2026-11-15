@@ -23,65 +23,40 @@
           <span>Run again</span>
         </button>
       }
-      @if (canSaveArtifact()) {
-        @if (artifactSave(); as save) {
-          @if (save.status === "saved" && save.artifact) {
-            <span
-              data-testid="workflow-run-artifact-saved"
-              class="flex items-center gap-1.5 text-[12px] text-fg-muted"
-              [class.ml-auto]="!designer.canRunAgain()"
-            >
-              <lucide-angular [img]="CircleCheck" [size]="13" />
-              <span>Saved to Artifacts</span>
-              <button
-                type="button"
-                data-testid="workflow-run-artifact-open"
-                (click)="openSavedArtifact(save.artifact.id)"
-                class="btn btn-ghost px-2 py-0.5 text-[12px]"
-              >
-                Open
-              </button>
-            </span>
-          } @else {
-            <button
-              type="button"
-              data-testid="workflow-run-save-artifact"
-              [disabled]="save.status === 'saving'"
-              (click)="saveAsArtifact()"
-              class="btn btn-ghost px-2.5 py-1"
-              [class.ml-auto]="!designer.canRunAgain()"
-            >
-              <lucide-angular [img]="Boxes" [size]="13" />
-              <span>{{ save.status === "saving" ? "Saving…" : "Save as artifact" }}</span>
-            </button>
-          }
-          @if (save.status === "error") {
-            <span
-              data-testid="workflow-run-artifact-error"
-              role="alert"
-              class="text-[12px] text-on-danger-soft"
-              >{{ save.error }}</span
-            >
-          }
-        } @else {
+      @if (savedArtifactId(); as artifactId) {
+        <!-- Recreate a Dashboard saved the dashboard it read (ui.md 4.8i) -->
+        <span
+          data-testid="workflow-run-artifact-saved"
+          class="flex items-center gap-1.5 text-[12px] text-fg-muted"
+          [class.ml-auto]="!designer.canRunAgain()"
+        >
+          <lucide-angular [img]="CircleCheck" [size]="13" />
+          <span>Saved to Artifacts</span>
           <button
             type="button"
-            data-testid="workflow-run-save-artifact"
-            (click)="saveAsArtifact()"
-            class="btn btn-ghost px-2.5 py-1"
-            [class.ml-auto]="!designer.canRunAgain()"
+            data-testid="workflow-run-artifact-open"
+            (click)="openSavedArtifact(artifactId)"
+            class="btn btn-ghost px-2 py-0.5 text-[12px]"
           >
-            <lucide-angular [img]="Boxes" [size]="13" />
-            <span>Save as artifact</span>
+            Open
           </button>
-        }
+          <button
+            type="button"
+            data-testid="workflow-run-artifact-map"
+            title="Map this dashboard to your datasets"
+            (click)="mapSavedArtifact(artifactId)"
+            class="btn btn-ghost px-2 py-0.5 text-[12px]"
+          >
+            Map to data
+          </button>
+        </span>
       }
       <button
         type="button"
         data-testid="workflow-run-new"
         (click)="designer.newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
-        [class.ml-auto]="!designer.canRunAgain() && !canSaveArtifact()"
+        [class.ml-auto]="!designer.canRunAgain() && savedArtifactId() === null"
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
         <span>New question</span>
@@ -464,7 +439,7 @@
                     class="field"
                   >
                     <option value="" [selected]="designer.inputValue(field.name) === ''">
-                      None — upload an image
+                      {{ field.requiredWithout ? "None — upload an image" : "Select a saved dashboard" }}
                     </option>
                     @for (artifact of artifactChoices(field); track artifact.id) {
                       <option

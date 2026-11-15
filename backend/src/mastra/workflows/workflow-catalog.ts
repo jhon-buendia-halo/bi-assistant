@@ -34,6 +34,14 @@ import {
 } from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
+  MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
+  MAP_DASHBOARD_DATA_DESCRIPTION,
+  MAP_DASHBOARD_DATA_EDGES,
+  MAP_DASHBOARD_DATA_STEPS,
+  MAP_DASHBOARD_DATA_WORKFLOW_ID,
+  MAP_DASHBOARD_DATA_WORKFLOW_NAME,
+} from './map-dashboard-data.steps';
+import {
   RECREATE_DASHBOARD_DEFAULT_QUESTION,
   RECREATE_DASHBOARD_DESCRIPTION,
   RECREATE_DASHBOARD_EDGES,
@@ -216,29 +224,17 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       id: RECREATE_DASHBOARD_WORKFLOW_ID,
       name: RECREATE_DASHBOARD_WORKFLOW_NAME,
       description: RECREATE_DASHBOARD_DESCRIPTION,
-      // Grace reads the dashboard; Daniel maps it to the datasets.
+      // Grace reads the dashboard.
       primaryFor: DASHBOARD_READER_AGENT_KEY,
-      stepAgents: { 'map-data': DATA_MAPPER_AGENT_KEY },
       trigger: 'run',
       input: [
         {
           name: 'image',
           label: 'Dashboard image',
           type: 'image',
-          required: false,
-          requiredWithout: 'artifact',
+          required: true,
           help: 'A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.',
         },
-        {
-          name: 'artifact',
-          label: 'Saved dashboard',
-          type: 'artifact',
-          required: false,
-          requiredWithout: 'image',
-          artifactKinds: ['dashboard'],
-          help: 'Or reuse a dashboard saved in Artifacts: the run skips reading the image.',
-        },
-        { ...DATASETS_FIELD, help: 'The data the dashboard is mapped to.' },
         {
           name: 'question',
           label: 'Instructions',
@@ -253,6 +249,37 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       edges: RECREATE_DASHBOARD_EDGES,
       bar: 'steps',
     },
+    {
+      id: MAP_DASHBOARD_DATA_WORKFLOW_ID,
+      name: MAP_DASHBOARD_DATA_WORKFLOW_NAME,
+      description: MAP_DASHBOARD_DATA_DESCRIPTION,
+      // Daniel maps the saved dashboard to the datasets.
+      primaryFor: DATA_MAPPER_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        {
+          name: 'artifact',
+          label: 'Saved dashboard',
+          type: 'artifact',
+          required: true,
+          artifactKinds: ['dashboard'],
+          help: 'A dashboard saved in Artifacts by Recreate a Dashboard.',
+        },
+        { ...DATASETS_FIELD, help: 'The data the dashboard is mapped to.' },
+        {
+          name: 'question',
+          label: 'Instructions',
+          type: 'textarea',
+          required: false,
+          placeholder: MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
+          default: MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
+          maxLength: QUESTION_MAX_LENGTH,
+        },
+      ],
+      steps: MAP_DASHBOARD_DATA_STEPS,
+      edges: MAP_DASHBOARD_DATA_EDGES,
+      bar: 'steps',
+    },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
@@ -265,7 +292,7 @@ export interface AgentRunTurn {
   careful: boolean;
   /** Answer a Business Question's `checkDataQuality`: Check data quality runs. */
   checkDataQuality?: true;
-  /** Recreate a Dashboard's `artifact`: the saved dashboard it runs on. */
+  /** Map a Dashboard to Data's `artifact`: the saved dashboard it maps. */
   artifact?: string;
 }
 

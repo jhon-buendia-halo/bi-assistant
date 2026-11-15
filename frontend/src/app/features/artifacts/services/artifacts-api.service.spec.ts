@@ -68,17 +68,4 @@ describe('ArtifactsApiService', () => {
   it('builds the image URL', () => {
     expect(service.imageUrl('a-1')).toBe(`${API_BASE_URL}/artifacts/a-1/image`);
   });
-
-  it('saves a run as an artifact, with or without a name', () => {
-    service.saveFromRun('run-1').subscribe();
-    const bare = http.expectOne(`${API_BASE_URL}/workflow-runs/run-1/artifact`);
-    expect(bare.request.method).toBe('POST');
-    expect(bare.request.body).toEqual({});
-    bare.flush(SUMMARY);
-
-    service.saveFromRun('run-1', 'Mine').subscribe();
-    const named = http.expectOne(`${API_BASE_URL}/workflow-runs/run-1/artifact`);
-    expect(named.request.body).toEqual({ name: 'Mine' });
-    named.flush(SUMMARY);
-  });
 });

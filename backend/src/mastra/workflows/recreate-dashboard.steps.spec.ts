@@ -21,7 +21,8 @@ import {
   mappingOf,
   recreateDashboardQuestion,
   renderDashboardBundle,
-  renderedDashboard,
+  savedDashboard,
+  savedDashboardAnswer,
   widgetFields,
   type DashboardBlueprint,
 } from './recreate-dashboard.steps';
@@ -378,6 +379,7 @@ describe('mappingExplanation', () => {
     mapping,
     datasets: ['Shop'],
     entityCount: 1,
+    artifactName: 'Sales board',
   });
 
   it('gives the result, the process and every widget with its sources', () => {
@@ -388,6 +390,9 @@ describe('mappingExplanation', () => {
       '**Result:** 2 mapped, 1 partly mapped, 1 with no data.',
     );
     expect(answer).toContain('### How the mapping was done');
+    expect(answer).toContain(
+      '1. **Load dashboard.** The saved dashboard **Sales board** was read from Artifacts: 4 widgets, 2 filters and the 5 columns of data they read',
+    );
     expect(answer).toContain(
       '3. **Map data.** Everything rests on shop.orders, one row per order.',
     );
@@ -421,26 +426,39 @@ describe('the run result', () => {
     expect(recreateDashboardQuestion(' Dark theme ')).toBe('Dark theme');
   });
 
-  it("is Render dashboard's output, with the counts", () => {
+  it('says what was read, where it was saved and what to do next', () => {
+    const answer = savedDashboardAnswer({
+      blueprint,
+      artifactName: 'Sales board',
+    });
+    expect(answer).toContain(
+      'Read **Sales Performance 2025** from the image: 4 widgets, 2 filters and the 5 columns of data they read.',
+    );
+    expect(answer).toContain('- **Monthly revenue** (bar)');
+    expect(answer).toContain(
+      'Saved in Artifacts as **Sales board**. Run **Map a Dashboard to Data** on it',
+    );
+    expect(answer).toContain('Every value in the dashboard is invented');
+  });
+
+  it("is Save dashboard's output", () => {
     expect(
-      renderedDashboard({
+      savedDashboard({
         visualId: 'v-1',
-        title: 'Sales',
-        answer: 'Explained.',
+        artifactId: 'a-1',
+        artifactName: 'Sales board',
+        answer: 'Saved.',
         blueprint,
-        mapping,
       }),
     ).toEqual({
+      artifactId: 'a-1',
+      artifactName: 'Sales board',
       visualId: 'v-1',
-      title: 'Sales',
+      title: 'Sales Performance 2025',
       widgetCount: 4,
       filterCount: 2,
-      mappedCount: 2,
-      partialCount: 1,
-      unmappedCount: 1,
-      answer: 'Explained.',
+      answer: 'Saved.',
       blueprint,
-      mapping,
     });
   });
 });
@@ -448,37 +466,22 @@ describe('the run result', () => {
 describe('the catalogue', () => {
   it('connects every step from Start to End in order', () => {
     const ids = RECREATE_DASHBOARD_STEPS.map((step) => step.id);
-    expect(ids).toEqual([
-      'load-source',
-      'read-dashboard',
-      'load-dashboard-catalog',
-      'map-data',
-      'render-dashboard',
+    expect(ids).toEqual(['load-image', 'read-dashboard', 'save-dashboard']);
+    expect(RECREATE_DASHBOARD_EDGES.map((edge) => edge.from)).toEqual([
+      'start',
+      ...ids,
     ]);
-    // Read dashboard is a branch: a saved dashboard goes round it.
-    expect(
-      RECREATE_DASHBOARD_EDGES.map(
-        (edge) => `${edge.from}>${edge.to}:${edge.kind}`,
-      ),
-    ).toEqual([
-      'start>load-source:next',
-      'load-source>read-dashboard:branch',
-      'load-source>load-dashboard-catalog:branch',
-      'read-dashboard>load-dashboard-catalog:next',
-      'load-dashboard-catalog>map-data:next',
-      'map-data>render-dashboard:next',
-      'render-dashboard>end:next',
+    expect(RECREATE_DASHBOARD_EDGES.map((edge) => edge.to)).toEqual([
+      ...ids,
+      'end',
     ]);
   });
 
-  it('has two agent steps, each one model call without tools', () => {
+  it('has one agent step, one model call without tools', () => {
     expect(
       RECREATE_DASHBOARD_STEPS.filter((step) => step.kind === 'agent').map(
         (step) => [step.id, step.modelOnly],
       ),
-    ).toEqual([
-      ['read-dashboard', true],
-      ['map-data', true],
-    ]);
+    ).toEqual([['read-dashboard', true]]);
   });
 });

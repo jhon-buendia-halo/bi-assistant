@@ -9,7 +9,6 @@ import {
   viewChild,
 } from '@angular/core';
 import {
-  Boxes,
   Brain,
   CircleCheck,
   Database,
@@ -27,6 +26,7 @@ import {
 import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
 import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
+import { WorkflowsNavState } from '../../services/workflows-nav-state';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import {
@@ -55,6 +55,10 @@ import {
   runOutputEntries,
   runStatusLine,
 } from '../../services/workflows.util';
+
+/** The workflow a saved dashboard is mapped in, and its artifact field. */
+const MAP_WORKFLOW_ID = 'map-dashboard-data';
+const MAP_ARTIFACT_FIELD = 'artifact';
 
 /** The composer's controls Execute workflow may focus, in order. */
 const FORM_CONTROLS =
@@ -139,7 +143,6 @@ const FORM_CONTROLS =
   },
 })
 export class WorkflowRunChat {
-  protected readonly Boxes = Boxes;
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Database = Database;
@@ -157,6 +160,7 @@ export class WorkflowRunChat {
   protected readonly visuals = inject(RunVisualsState);
   private readonly artifactsApi = inject(ArtifactsApiService);
   private readonly artifactsNav = inject(ArtifactsNavState);
+  private readonly workflowsNav = inject(WorkflowsNavState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly log = viewChild<ElementRef<HTMLElement>>('log');
   /** The chat follows the run's newest text while the user stays near its end. */
@@ -384,58 +388,29 @@ export class WorkflowRunChat {
     if (control !== null && control.type === 'file') control.value = '';
   }
 
-  /** The save of the shown run as an artifact: saving, saved or refused. */
-  private readonly saveState = signal<{
-    runId: string;
-    status: 'saving' | 'saved' | 'error';
-    artifact?: ArtifactSummary;
-    error?: string;
-  } | null>(null);
-
-  /** The save state of the run shown; null before one is tried. */
-  protected readonly artifactSave = computed(() => {
-    const state = this.saveState();
-    return state !== null && state.runId === this.designer.runResult()?.runId
-      ? state
+  /**
+   * The artifact the shown run saved (Recreate a Dashboard saves the
+   * dashboard it read); null for a run that saved none.
+   */
+  protected readonly savedArtifactId = computed(() => {
+    const result = this.designer.runResult();
+    const id = result?.output?.['artifactId'];
+    return result !== null &&
+      result.status === 'success' &&
+      typeof id === 'string' &&
+      id !== ''
+      ? id
       : null;
   });
 
-  /** A finished run that read a dashboard can be saved as an artifact. */
-  protected readonly canSaveArtifact = computed(() => {
-    const result = this.designer.runResult();
-    const blueprint = result?.output?.['blueprint'];
-    return (
-      result !== null &&
-      result.status === 'success' &&
-      typeof result.runId === 'string' &&
-      typeof blueprint === 'object' &&
-      blueprint !== null &&
-      !Array.isArray(blueprint)
-    );
-  });
-
-  protected saveAsArtifact(): void {
-    const runId = this.designer.runResult()?.runId;
-    if (typeof runId !== 'string' || this.artifactSave()?.status === 'saving') {
-      return;
-    }
-    this.saveState.set({ runId, status: 'saving' });
-    this.artifactsApi.saveFromRun(runId).subscribe({
-      next: (artifact) => {
-        this.saveState.set({ runId, status: 'saved', artifact });
-        this.artifacts.update((all) => [artifact, ...all]);
-      },
-      error: (err) =>
-        this.saveState.set({
-          runId,
-          status: 'error',
-          error: err?.error?.message ?? 'Backend unreachable',
-        }),
-    });
-  }
-
   protected openSavedArtifact(id: string): void {
     this.artifactsNav.openArtifact(id);
+  }
+
+  /** Opens Map a Dashboard to Data with the saved dashboard picked. */
+  protected mapSavedArtifact(id: string): void {
+    this.designer.prefillOnLoad({ [MAP_ARTIFACT_FIELD]: id });
+    this.workflowsNav.openWorkflow(MAP_WORKFLOW_ID);
   }
 
   /** The line under the workflow's name before a run. */

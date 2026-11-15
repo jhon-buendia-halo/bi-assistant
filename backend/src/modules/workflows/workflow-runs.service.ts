@@ -27,7 +27,6 @@ import {
 import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { ArtifactsService } from '../artifacts/artifacts.service';
-import type { ArtifactSummary } from '../artifacts/entities/artifact.entity';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { clarifyingQuestionText } from '../sessions/turn/turn-workflow';
 import type {
@@ -216,7 +215,7 @@ export class WorkflowRunsService implements OnModuleInit {
     private readonly mastra: MastraService,
     private readonly repository: WorkflowRunsRepository,
     private readonly nodeChats: WorkflowNodeChatsRepository,
-    // The saved dashboards a run's input names and a run is saved as.
+    // The saved dashboards a run's input names.
     private readonly artifacts: ArtifactsService,
   ) {}
 
@@ -845,43 +844,6 @@ export class WorkflowRunsService implements OnModuleInit {
       ...(view.workflow ? { workflow: view.workflow } : {}),
       ...(view.agent ? { agent: view.agent } : {}),
     };
-  }
-
-  /**
-   * Save a run's dashboard as an artifact (api.md 144; agents.md 5.17): the
-   * blueprint of its output and, when the run read an image, that image.
-   * 404 for an unknown run; 400 `Run "<id>" has no dashboard to save` for a
-   * run whose output holds no blueprint (another workflow, or a run that
-   * did not finish).
-   */
-  async saveArtifact(id: string, body: unknown): Promise<ArtifactSummary> {
-    const run = await this.stored(id);
-    const blueprint = run.output?.['blueprint'];
-    if (run.status !== 'success' || !blueprint) {
-      throw new BadRequestException(`Run "${id}" has no dashboard to save`);
-    }
-    const name =
-      body && typeof body === 'object'
-        ? (body as { name?: unknown }).name
-        : undefined;
-    const path = run.input['image'];
-    let image: { data: Buffer; mediaType: string } | undefined;
-    if (typeof path === 'string' && path) {
-      try {
-        image = await this.sessions.runHostImage(
-          `${RUN_HOST_ID_PREFIX}${run.id}`,
-          path,
-        );
-      } catch {
-        // The run's workspace no longer holds it: saved without an image.
-      }
-    }
-    return this.artifacts.create({
-      ...(typeof name === 'string' ? { name } : {}),
-      blueprint,
-      ...(image ? { image } : {}),
-      source: { runId: run.id, workflowId: run.workflowId },
-    });
   }
 
   /**

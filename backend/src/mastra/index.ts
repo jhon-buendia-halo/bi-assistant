@@ -20,6 +20,7 @@ import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
+import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
 import { recreateDashboardWorkflow } from './workflows/recreate-dashboard.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
@@ -55,6 +56,7 @@ export const mastra = new Mastra({
     'answer-business-question': answerBusinessQuestionWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,
+    'map-dashboard-data': mapDashboardDataWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

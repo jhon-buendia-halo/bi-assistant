@@ -31,7 +31,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds three code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13) and Recreate a Dashboard (5.17)', () => {
+  it('holds four code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13), Recreate a Dashboard (5.17) and Map a Dashboard to Data (5.18)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -59,6 +59,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         id: 'recreate-dashboard',
         name: 'Recreate a Dashboard',
         primaryFor: 'dashboard-reader',
+        bar: 'steps',
+        trigger: 'run',
+      },
+      {
+        id: 'map-dashboard-data',
+        name: 'Map a Dashboard to Data',
+        primaryFor: 'data-mapper',
         bar: 'steps',
         trigger: 'run',
       },

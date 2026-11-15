@@ -43,12 +43,4 @@ export class ArtifactsApiService {
   imageUrl(id: string): string {
     return `${API_BASE_URL}/artifacts/${encodeURIComponent(id)}/image`;
   }
-
-  /** Saves the dashboard a finished run read as an artifact. */
-  saveFromRun(runId: string, name?: string): Observable<ArtifactSummary> {
-    return this.http.post<ArtifactSummary>(
-      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/artifact`,
-      name === undefined ? {} : { name },
-    );
-  }
 }

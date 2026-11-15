@@ -256,9 +256,28 @@ export class SessionsService implements OnModuleInit {
         this.crossCheckAnswer(session, question, data),
       readinessBridge: () => this.readinessBridge,
       readImage: (sessionId, path) => readWorkspaceImage(sessionId, path),
-      artifactBlueprint: (artifactId) => {
+      artifact: async (artifactId) => {
         if (!this.artifacts) throw new Error('Artifacts are not available');
-        return this.artifacts.blueprintOf(artifactId);
+        const { name, blueprint } = await this.artifacts.get(artifactId);
+        return { name, blueprint };
+      },
+      saveArtifact: async (sessionId, blueprint, image) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        const session = await this.get(sessionId);
+        const saved = await this.artifacts.create({
+          blueprint,
+          ...(image ? { image } : {}),
+          // A run host is `run-<run id>`: the artifact names its run.
+          ...(sessionId.startsWith(RUN_HOST_ID_PREFIX)
+            ? {
+                source: {
+                  runId: sessionId.slice(RUN_HOST_ID_PREFIX.length),
+                  workflowId: session.workflowId ?? '',
+                },
+              }
+            : {}),
+        });
+        return { id: saved.id, name: saved.name };
       },
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);

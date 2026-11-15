@@ -27,6 +27,11 @@ import {
   type DataReadinessAssessmentRuntime,
 } from '../../../mastra/workflows/data-readiness-assessment.steps';
 import {
+  MAP_DASHBOARD_DATA_RUNTIME_KEY,
+  MAP_DASHBOARD_DATA_WORKFLOW_ID,
+  type MapDashboardDataRuntime,
+} from '../../../mastra/workflows/map-dashboard-data.steps';
+import {
   RECREATE_DASHBOARD_RUNTIME_KEY,
   RECREATE_DASHBOARD_WORKFLOW_ID,
   type DashboardBlueprint,
@@ -156,8 +161,16 @@ export interface TurnEngineDeps {
     sessionId: string,
     path: string,
   ): Promise<{ data: Buffer; mediaType: string }>;
-  /** A saved dashboard, by its artifact's id (agents.md 5.17). */
-  artifactBlueprint(artifactId: string): Promise<DashboardBlueprint>;
+  /** A saved dashboard, by its artifact's id (agents.md 5.18). */
+  artifact(
+    artifactId: string,
+  ): Promise<{ name: string; blueprint: DashboardBlueprint }>;
+  /** Save a run's dashboard, with its image, as an artifact (5.17). */
+  saveArtifact(
+    sessionId: string,
+    blueprint: DashboardBlueprint,
+    image: { data: Buffer; mediaType: string } | undefined,
+  ): Promise<{ id: string; name: string }>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
     sessionId: string,
@@ -499,6 +512,16 @@ export class TurnEngine {
     const loadedImage = async (path: string) => {
       dashboardImage ??= await this.deps.readImage(id, path);
       return dashboardImage;
+    };
+    // The answer carries a stored dashboard, as a turn's visual does.
+    const showVisual = (metadata: SessionVisualization) => {
+      visualEvent = {
+        visualId: metadata.id,
+        version: 1,
+        title: metadata.title,
+        action: 'created',
+      };
+      emit({ type: 'visual-updated', content: JSON.stringify(visualEvent) });
     };
     let ran: TurnRunOutcome;
     try {
@@ -857,12 +880,15 @@ export class TurnEngine {
               stopped: turn.signal.aborted || clarification !== null,
             };
           },
-          // Recreate a Dashboard (agents.md 5.17): the two agent steps call
-          // their agent's model; the run keeps the image between steps.
+          // Recreate a Dashboard (agents.md 5.17): Read dashboard calls its
+          // agent's model with the image, which the run keeps meanwhile.
           loadImage: async ({ image }) => {
-            await loadedImage(image);
+            const loaded = await loadedImage(image);
+            return {
+              mediaType: loaded.mediaType,
+              sizeBytes: loaded.data.byteLength,
+            };
           },
-          loadArtifact: ({ artifact }) => this.deps.artifactBlueprint(artifact),
           readDashboard: async ({ question, image }) => {
             try {
               const read = await this.deps.mastra.readDashboard(
@@ -877,6 +903,26 @@ export class TurnEngine {
               throw await stepError(error);
             }
           },
+          saveDashboard: async ({ blueprint, bundle, answer }) => {
+            const metadata = await this.deps.saveMock(id, bundle, trimmed);
+            const artifact = await this.deps.saveArtifact(
+              id,
+              blueprint,
+              dashboardImage,
+            );
+            showVisual(metadata);
+            // The answer says where the dashboard was saved.
+            text = answer(artifact.name);
+            emit({ type: 'text', content: text });
+            return {
+              visualId: metadata.id,
+              artifactId: artifact.id,
+              artifactName: artifact.name,
+            };
+          },
+          // Map a Dashboard to Data (agents.md 5.18): Map data calls its
+          // agent's model with the saved dashboard and the catalog.
+          loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
           mapData: async (input) => {
             try {
               const mapped = await this.deps.mastra.mapData(
@@ -891,19 +937,9 @@ export class TurnEngine {
               throw await stepError(error);
             }
           },
-          saveDashboard: async ({ bundle, answer }) => {
+          saveMappedDashboard: async ({ bundle, answer }) => {
             const metadata = await this.deps.saveMock(id, bundle, trimmed);
-            // The answer carries the dashboard, as a turn's visual does.
-            visualEvent = {
-              visualId: metadata.id,
-              version: 1,
-              title: metadata.title,
-              action: 'created',
-            };
-            emit({
-              type: 'visual-updated',
-              content: JSON.stringify(visualEvent),
-            });
+            showVisual(metadata);
             // The mapping's explanation is the run's answer.
             text = answer;
             emit({ type: 'text', content: text });
@@ -1096,7 +1132,8 @@ export class TurnEngine {
       Required<Pick<AnswerBusinessQuestionRuntime, 'checkDataQuality'>> &
       AgentTurnRuntime &
       DataReadinessAssessmentRuntime &
-      RecreateDashboardRuntime,
+      RecreateDashboardRuntime &
+      MapDashboardDataRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
     // The agent step's own failure, kept so the turn reports it as is.
@@ -1113,6 +1150,7 @@ export class TurnEngine {
     const readiness =
       workflow.engineId === DATA_READINESS_ASSESSMENT_WORKFLOW_ID;
     const recreate = workflow.engineId === RECREATE_DASHBOARD_WORKFLOW_ID;
+    const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
     if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
@@ -1136,11 +1174,16 @@ export class TurnEngine {
     } else if (recreate) {
       requestContext.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
         loadImage: (input) => captured(() => runtime.loadImage(input)),
-        loadArtifact: (input) => captured(() => runtime.loadArtifact(input)),
         readDashboard: (input) => captured(() => runtime.readDashboard(input)),
-        mapData: (input) => captured(() => runtime.mapData(input)),
         saveDashboard: (input) => captured(() => runtime.saveDashboard(input)),
       } satisfies RecreateDashboardRuntime);
+    } else if (mapping) {
+      requestContext.set(MAP_DASHBOARD_DATA_RUNTIME_KEY, {
+        loadDashboard: (input) => captured(() => runtime.loadDashboard(input)),
+        mapData: (input) => captured(() => runtime.mapData(input)),
+        saveMappedDashboard: (input) =>
+          captured(() => runtime.saveMappedDashboard(input)),
+      } satisfies MapDashboardDataRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
@@ -1153,26 +1196,23 @@ export class TurnEngine {
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
-    // Recreate a Dashboard runs on the run's image and datasets (agents.md
-    // 5.17).
+    // Recreate a Dashboard runs on the run's image (agents.md 5.17); Map a
+    // Dashboard to Data on a saved dashboard and the run's datasets (5.18).
     const turnInput:
       | AnswerBusinessQuestionInput
       | { question: string; dataset: string }
-      | {
-          question: string;
-          image?: string;
-          artifact?: string;
-          datasets: string[];
-        } = recreate
-      ? {
-          question,
-          ...(session.inputImage ? { image: session.inputImage } : {}),
-          ...(session.inputArtifact ? { artifact: session.inputArtifact } : {}),
-          datasets: session.datasets,
-        }
-      : readiness
-        ? { question, dataset: session.datasets[0] ?? '' }
-        : { question, datasets: session.datasets };
+      | { question: string; image: string }
+      | { question: string; artifact: string; datasets: string[] } = recreate
+      ? { question, image: session.inputImage ?? '' }
+      : mapping
+        ? {
+            question,
+            artifact: session.inputArtifact ?? '',
+            datasets: session.datasets,
+          }
+        : readiness
+          ? { question, dataset: session.datasets[0] ?? '' }
+          : { question, datasets: session.datasets };
     let state = session.workflowState;
     // Drive one stream of the run (its start, or a resume) to its outcome.
     const drive = async (

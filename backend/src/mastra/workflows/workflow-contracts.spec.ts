@@ -37,6 +37,13 @@ import {
   type DataReadinessAssessmentRuntime,
 } from './data-readiness-assessment.steps';
 import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
+import { MAP_DASHBOARD_DATA_STEP_SCHEMAS } from './map-dashboard-data.schemas';
+import {
+  MAP_DASHBOARD_DATA_RUNTIME_KEY,
+  MAP_DASHBOARD_DATA_WORKFLOW_ID,
+  type MapDashboardDataRuntime,
+} from './map-dashboard-data.steps';
+import { mapDashboardDataWorkflow } from './map-dashboard-data.workflow';
 import { RECREATE_DASHBOARD_STEP_SCHEMAS } from './recreate-dashboard.schemas';
 import {
   SAMPLE_BLUEPRINT_REPLY,
@@ -176,23 +183,47 @@ const FIXTURES: Record<string, ContractFixture> = {
     workflow:
       recreateDashboardWorkflow as unknown as ContractFixture['workflow'],
     schemas: RECREATE_DASHBOARD_STEP_SCHEMAS,
-    input: { question: '', image: 'inputs/image.png', datasets: ['Shop'] },
+    input: { question: '', image: 'inputs/image.png' },
     requestContext: () => {
       const context = new RequestContext();
-      // The stubbed run: a loaded image, the dashboard read from it, its
-      // mapping to the catalog and the stored dashboard.
+      // The stubbed run: a loaded image, the dashboard read from it and
+      // the stored visual and artifact.
       context.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
-        loadImage: () => Promise.resolve(),
-        loadArtifact: () =>
-          Promise.resolve(
-            blueprintOf(SAMPLE_BLUEPRINT_REPLY) as DashboardBlueprint,
-          ),
+        loadImage: () =>
+          Promise.resolve({ mediaType: 'image/png', sizeBytes: 1234 }),
         readDashboard: () =>
           Promise.resolve({
             blueprint: blueprintOf(
               SAMPLE_BLUEPRINT_REPLY,
             ) as DashboardBlueprint,
             stopped: false,
+          }),
+        saveDashboard: () =>
+          Promise.resolve({
+            visualId: 'v-1',
+            artifactId: 'a-1',
+            artifactName: 'Sales board',
+          }),
+      } satisfies RecreateDashboardRuntime);
+      return context;
+    },
+  },
+  [MAP_DASHBOARD_DATA_WORKFLOW_ID]: {
+    workflow:
+      mapDashboardDataWorkflow as unknown as ContractFixture['workflow'],
+    schemas: MAP_DASHBOARD_DATA_STEP_SCHEMAS,
+    input: { question: '', artifact: 'a-1', datasets: ['Shop'] },
+    requestContext: () => {
+      const context = new RequestContext();
+      // The stubbed run: the saved dashboard, its mapping to the catalog
+      // and the stored dashboard.
+      context.set(MAP_DASHBOARD_DATA_RUNTIME_KEY, {
+        loadDashboard: () =>
+          Promise.resolve({
+            name: 'Sales board',
+            blueprint: blueprintOf(
+              SAMPLE_BLUEPRINT_REPLY,
+            ) as DashboardBlueprint,
           }),
         mapData: ({ blueprint, catalog, columns }) =>
           Promise.resolve({
@@ -204,9 +235,9 @@ const FIXTURES: Record<string, ContractFixture> = {
             ),
             stopped: false,
           }),
-        saveDashboard: ({ bundle }) =>
+        saveMappedDashboard: ({ bundle }) =>
           Promise.resolve({ visualId: 'v-1', title: bundle.title }),
-      } satisfies RecreateDashboardRuntime);
+      } satisfies MapDashboardDataRuntime);
       return context;
     },
   },

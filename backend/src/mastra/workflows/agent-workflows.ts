@@ -14,6 +14,8 @@ import {
 import {
   DASHBOARD_READER_AGENT_KEY,
   DASHBOARD_READER_AGENT_NAME,
+  DATA_MAPPER_AGENT_KEY,
+  DATA_MAPPER_AGENT_NAME,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_AGENT_NAME,
   DATA_READINESS_MAX_STEPS,
@@ -77,10 +79,15 @@ const STEP_AGENTS: Record<
     ],
     maxSteps: DATA_READINESS_MAX_STEPS,
   },
-  // Recreate a Dashboard (agents.md 5.17): both of its agent steps are one
-  // model call without tools.
+  // Recreate a Dashboard (agents.md 5.17) and Map a Dashboard to Data
+  // (5.18): the agent step of each is one model call without tools.
   [DASHBOARD_READER_AGENT_KEY]: {
     name: DASHBOARD_READER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+  [DATA_MAPPER_AGENT_KEY]: {
+    name: DATA_MAPPER_AGENT_NAME,
     tools: [],
     maxSteps: 1,
   },

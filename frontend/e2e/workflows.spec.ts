@@ -58,6 +58,7 @@ const OFFICIAL = [
   [V2_ID, V2],
   [READINESS_ID, READINESS],
   ['recreate-dashboard', 'Recreate a Dashboard'],
+  ['map-dashboard-data', 'Map a Dashboard to Data'],
 ] as const;
 
 const QUESTION = 'How many matches were played in each stage?';
@@ -291,7 +292,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question", "Assess Data Readiness" and "Recreate a Dashboard" under Official, and no Mine section',
+        'Then I see "Answer a Business Question", "Assess Data Readiness", "Recreate a Dashboard" and "Map a Dashboard to Data" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
