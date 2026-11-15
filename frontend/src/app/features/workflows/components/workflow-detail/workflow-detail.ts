@@ -19,7 +19,8 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 
 /**
  * A workflow's page, laid out as an n8n-style designer (workflows R6, R7,
- * R12; ui.md 4.4b): a header with the breadcrumb, the name, id and kind; the
+ * R12; ui.md 4.4b): a one-line header (the breadcrumb ending in the name, the
+ * kind and the id); the
  * canvas, left to right, with Execute workflow at its top-right; the Run
  * panel under it (Chat, Logs and the selected node's data); and a node's
  * dialog over the page. The app's right panel is not used on this page.

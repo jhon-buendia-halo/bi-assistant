@@ -99,6 +99,10 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     q('workflow-breadcrumb')!.click();
     expect(events).toEqual(['back']);
     expect(q('workflow-detail-name')?.tagName).toBe('H1');
+    // One line: the name is the breadcrumb's current item.
+    expect(nav.querySelector('[aria-current="page"] h1')).toBe(
+      q('workflow-detail-name'),
+    );
     expect(text('workflow-detail-name')).toBe('Three steps');
     expect(text('workflow-detail-id')).toBe('three-steps');
     expect(text('workflow-detail-kind')).toBe('3 steps');
