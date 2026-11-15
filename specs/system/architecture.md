@@ -669,7 +669,7 @@ flowchart LR
 - **Status:** Superseded (2026-11-12): the RFP Builder agent was removed from the product together with the Intellify RFP API (ADR-0027); the sessions-bind-to-a-built-in-agent mechanism it introduced stays for the Data Readiness Agent and Questions to Insights v2. Kept as history. Earlier status: Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
 - **Date:** 2026-10-14
 - **Context:**
-  - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
+  - The user asked for an agent that walks a benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
   - Sessions bind to user agents only (ADR-0008); every turn runs the `assistant`, with its SQL repair, grounding guard and careful mode. Start chat is offered to the Official assistant (which opens the composer) and to Live user agents.
   - The BA-213 epic listed new tools as out of scope; the user amended it on 2026-10-14.
 - **Decision:**
