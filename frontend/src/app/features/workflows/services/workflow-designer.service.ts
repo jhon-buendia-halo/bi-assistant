@@ -151,6 +151,8 @@ export class WorkflowDesigner {
 
   /** A stored run to show once the workflow has loaded (a run opened from Runs). */
   private pendingRun: WorkflowRun | null = null;
+  /** Form values to hold once the workflow has loaded (an artifact's "Use in"). */
+  private pendingValues: Record<string, WorkflowInputValue> | null = null;
 
   private loadSubscription: Subscription | null = null;
   private datasetsSubscription: Subscription | null = null;
@@ -409,6 +411,15 @@ export class WorkflowDesigner {
     this.pendingRun = run;
   }
 
+  /**
+   * The next workflow opened starts with these form values over its initial
+   * ones (an artifact opened in Recreate a Dashboard). A name the workflow
+   * has no field for is ignored.
+   */
+  prefillOnLoad(values: Record<string, WorkflowInputValue>): void {
+    this.pendingValues = values;
+  }
+
   /** Open a workflow: everything of the previous one is discarded. */
   load(id: string): void {
     this.clear();
@@ -426,6 +437,17 @@ export class WorkflowDesigner {
             // New question keeps the run's other fields (its datasets).
             this.inputValues.set(runAgainValues(workflow.input, pending.input));
           }
+        }
+        if (this.pendingValues !== null) {
+          const prefill = this.pendingValues;
+          this.pendingValues = null;
+          const known = new Set(workflow.input.map((field) => field.name));
+          this.inputValues.update((values) => ({
+            ...values,
+            ...Object.fromEntries(
+              Object.entries(prefill).filter(([name]) => known.has(name)),
+            ),
+          }));
         }
         if (
           workflow.input.some(

@@ -12,9 +12,11 @@ import {
   recreateDashboardResultSchema,
 } from './recreate-dashboard.schemas';
 import {
+  NO_SOURCE_ERROR,
   RECREATE_DASHBOARD_RUNTIME_KEY,
   RECREATE_DASHBOARD_STEPS,
   RECREATE_DASHBOARD_WORKFLOW_ID,
+  emptyBlueprint,
   mappingExplanation,
   recreateDashboardQuestion,
   renderDashboardBundle,
@@ -24,20 +26,27 @@ import {
 import { engineInputSchema, withContract } from './workflow-contract';
 
 // The Recreate a Dashboard workflow, defined in code (agents.md 5.17), on
-// Mastra's sequential control flow
-// (https://mastra.ai/docs/workflows/control-flow):
+// Mastra's control flow (https://mastra.ai/docs/workflows/control-flow):
 //
-//   load-image → read-dashboard → load-dashboard-catalog → map-data
-//   → render-dashboard
+//   load-source
+//   → .branch(the run has an image → read-dashboard) → .map
+//   → load-dashboard-catalog → map-data → render-dashboard
 //
-// Read dashboard runs the Dashboard Reader over the uploaded image and
-// returns the dashboard as data (the blueprint). Load catalog lists the
-// entities and columns of the run's datasets. Map data runs the Data
-// Mapper over both and returns the mapping, checked against the catalog.
-// Render dashboard draws the blueprint and its mapping with the fixed
-// runtime (no model writes markup), stores it and writes the explanation.
-// A stopped run bails at the step it was stopped in, which ends the run as
-// a success with that step's output (`stopped`).
+// Load source finds the run's dashboard: the uploaded image, or the saved
+// dashboard of an artifact. Only a run on an image takes the branch to Read
+// dashboard, which runs the Dashboard Reader over the image and returns the
+// dashboard as data (the blueprint); a run on an artifact already has it.
+// The map hands Load catalog whichever of the two holds the blueprint.
+// Load catalog lists the entities and columns of the run's datasets. Map
+// data runs the Data Mapper over both and returns the mapping, checked
+// against the catalog. Render dashboard draws the blueprint and its mapping
+// with the fixed runtime (no model writes markup), stores it and writes the
+// explanation.
+//
+// A stopped run ends at the step after the one it was stopped in: Read
+// dashboard is inside a branch, where a bail would end the branch only, so
+// it passes `stopped` on and Load catalog bails; Map data bails itself.
+// Either ends the run as a success with that step's output (`stopped`).
 //
 // The run's runtime (functions on the RequestContext) holds the image's
 // bytes, so no snapshot is ever written: the run never waits for the user.
@@ -78,23 +87,40 @@ function runtimeOf(
   return runtime;
 }
 
-const loadImageStep = createStep({
-  id: STEP['load-image'].id,
-  description: STEP['load-image'].title,
-  inputSchema: engineInputSchema(SCHEMAS['load-image'].input),
-  outputSchema: SCHEMAS['load-image'].output,
+const loadSourceStep = createStep({
+  id: STEP['load-source'].id,
+  description: STEP['load-source'].title,
+  inputSchema: engineInputSchema(SCHEMAS['load-source'].input),
+  outputSchema: SCHEMAS['load-source'].output,
   execute: withContract(
-    STEP['load-image'].title,
-    SCHEMAS['load-image'],
-    async (params: StepParams<(typeof SCHEMAS)['load-image']>) => {
-      const runtime = runtimeOf(params, STEP['load-image'].title);
-      const { image, datasets } = params.inputData;
-      const loaded = await runtime.loadImage({ image });
+    STEP['load-source'].title,
+    SCHEMAS['load-source'],
+    async (params: StepParams<(typeof SCHEMAS)['load-source']>) => {
+      const runtime = runtimeOf(params, STEP['load-source'].title);
+      const { datasets } = params.inputData;
+      const question = recreateDashboardQuestion(params.inputData.question);
+      const artifact = params.inputData.artifact?.trim();
+      const image = params.inputData.image?.trim();
+      // A saved dashboard comes first: the image is then never read.
+      if (artifact) {
+        return {
+          question,
+          datasets,
+          source: 'artifact' as const,
+          image: '',
+          blueprint: await runtime.loadArtifact({ artifact }),
+          stopped: false,
+        };
+      }
+      if (!image) throw new Error(NO_SOURCE_ERROR);
+      await runtime.loadImage({ image });
       return {
-        question: recreateDashboardQuestion(params.inputData.question),
-        image,
+        question,
         datasets,
-        ...loaded,
+        source: 'image' as const,
+        image,
+        blueprint: emptyBlueprint(),
+        stopped: false,
       };
     },
   ),
@@ -110,10 +136,10 @@ const readDashboardStep = createStep({
     SCHEMAS['read-dashboard'],
     async (params: StepParams<(typeof SCHEMAS)['read-dashboard']>) => {
       const runtime = runtimeOf(params, STEP['read-dashboard'].title);
-      const { question, image, datasets } = params.inputData;
+      const { question, image } = params.inputData;
       const read = await runtime.readDashboard({ question, image });
-      const output = { question, datasets, ...read };
-      return read.stopped ? params.bail(output) : output;
+      // Inside a branch: `stopped` is passed on, and Load catalog bails.
+      return { ...params.inputData, ...read };
     },
   ),
 });
@@ -127,14 +153,13 @@ const loadCatalogStep = createStep({
     STEP['load-dashboard-catalog'].title,
     SCHEMAS['load-dashboard-catalog'],
     async (params: StepParams<(typeof SCHEMAS)['load-dashboard-catalog']>) => {
-      const { question, datasets, blueprint } = params.inputData;
-      return {
-        question,
-        datasets,
-        blueprint,
-        // The dataset tools' own services: names and types, no rows.
-        ...(await loadCatalog(datasets)),
-      };
+      const { question, datasets, source, blueprint, stopped } =
+        params.inputData;
+      const passed = { question, datasets, source, blueprint, stopped };
+      // Read dashboard was stopped: the run ends here, nothing is listed.
+      if (stopped) return params.bail({ ...passed, catalog: [], columns: [] });
+      // The dataset tools' own services: names and types, no rows.
+      return { ...passed, ...(await loadCatalog(datasets)) };
     },
   ),
 });
@@ -149,7 +174,7 @@ const mapDataStep = createStep({
     SCHEMAS['map-data'],
     async (params: StepParams<(typeof SCHEMAS)['map-data']>) => {
       const runtime = runtimeOf(params, STEP['map-data'].title);
-      const { question, datasets, blueprint, catalog, columns } =
+      const { question, datasets, source, blueprint, catalog, columns } =
         params.inputData;
       const mapped = await runtime.mapData({
         question,
@@ -159,6 +184,7 @@ const mapDataStep = createStep({
       });
       const output = {
         datasets,
+        source,
         blueprint,
         mapping: mapped.mapping,
         entityCount: catalog.length,
@@ -179,12 +205,14 @@ const renderDashboardStep = createStep({
     SCHEMAS['render-dashboard'],
     async (params: StepParams<(typeof SCHEMAS)['render-dashboard']>) => {
       const runtime = runtimeOf(params, STEP['render-dashboard'].title);
-      const { datasets, blueprint, mapping, entityCount } = params.inputData;
+      const { datasets, source, blueprint, mapping, entityCount } =
+        params.inputData;
       const answer = mappingExplanation({
         blueprint,
         mapping,
         datasets,
         entityCount,
+        source,
       });
       const saved = await runtime.saveDashboard({
         bundle: renderDashboardBundle(blueprint, mapping),
@@ -198,7 +226,7 @@ const renderDashboardStep = createStep({
 export const recreateDashboardWorkflow = createWorkflow({
   id: RECREATE_DASHBOARD_WORKFLOW_ID,
   description:
-    "Recreate the dashboard of an uploaded image as an interactive mock mapped to the run's datasets: read its structure, map it to the datasets' columns, draw it and explain the mapping.",
+    "Recreate a dashboard, from an uploaded image or a saved dashboard, as an interactive mock mapped to the run's datasets: read its structure, map it to the datasets' columns, draw it and explain the mapping.",
   inputSchema: recreateDashboardInputSchema,
   outputSchema: recreateDashboardResultSchema,
   options: {
@@ -211,8 +239,25 @@ export const recreateDashboardWorkflow = createWorkflow({
     shouldPersistSnapshot: () => false,
   },
 })
-  .then(loadImageStep)
-  .then(readDashboardStep)
+  .then(loadSourceStep)
+  // Only a run on an image reads it; a saved dashboard is read already.
+  .branch([
+    [
+      async ({ inputData }) => Promise.resolve(inputData.source === 'image'),
+      readDashboardStep,
+    ],
+  ])
+  .map(
+    async (params) =>
+      Promise.resolve(
+        ((params.inputData as Record<string, unknown>)[
+          STEP['read-dashboard'].id
+        ] ?? params.getStepResult(loadSourceStep)) as z.output<
+          (typeof SCHEMAS)['load-dashboard-catalog']['input']
+        >,
+      ),
+    { id: 'dashboard-source-outcome' },
+  )
   .then(loadCatalogStep)
   .then(mapDataStep)
   .then(renderDashboardStep)

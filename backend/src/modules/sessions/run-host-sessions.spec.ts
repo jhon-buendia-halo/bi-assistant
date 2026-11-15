@@ -467,6 +467,8 @@ function build(options: BuildOptions = {}) {
         'workflow_run_node_chats',
       ),
     ),
+    // No stored artifact: no workflow here takes one.
+    { list: () => Promise.resolve([]) } as never,
   );
   /** A chat session over the same input as `workflow`'s run. */
   const chat = (workflow: Workflow): SessionDoc => {

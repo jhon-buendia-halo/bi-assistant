@@ -355,6 +355,13 @@ describe('renderDashboardBundle', () => {
     );
   });
 
+  it('draws the dashboard alone without a mapping', () => {
+    const alone = renderDashboardBundle(blueprint, null);
+    expect(alone.javascript).toContain('"mapping":null');
+    expect(alone.description).not.toContain('Of its 4 widgets');
+    expect(() => new Script(alone.javascript)).not.toThrow();
+  });
+
   it('cannot be broken out of by a title', () => {
     const hostile = renderDashboardBundle(
       { ...blueprint, title: '</script><script>alert(1)</script>' },
@@ -442,19 +449,25 @@ describe('the catalogue', () => {
   it('connects every step from Start to End in order', () => {
     const ids = RECREATE_DASHBOARD_STEPS.map((step) => step.id);
     expect(ids).toEqual([
-      'load-image',
+      'load-source',
       'read-dashboard',
       'load-dashboard-catalog',
       'map-data',
       'render-dashboard',
     ]);
-    expect(RECREATE_DASHBOARD_EDGES.map((edge) => edge.from)).toEqual([
-      'start',
-      ...ids,
-    ]);
-    expect(RECREATE_DASHBOARD_EDGES.map((edge) => edge.to)).toEqual([
-      ...ids,
-      'end',
+    // Read dashboard is a branch: a saved dashboard goes round it.
+    expect(
+      RECREATE_DASHBOARD_EDGES.map(
+        (edge) => `${edge.from}>${edge.to}:${edge.kind}`,
+      ),
+    ).toEqual([
+      'start>load-source:next',
+      'load-source>read-dashboard:branch',
+      'load-source>load-dashboard-catalog:branch',
+      'read-dashboard>load-dashboard-catalog:next',
+      'load-dashboard-catalog>map-data:next',
+      'map-data>render-dashboard:next',
+      'render-dashboard>end:next',
     ]);
   });
 

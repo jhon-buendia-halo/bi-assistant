@@ -493,3 +493,98 @@ describe('an image field (agents.md 5.17)', () => {
     });
   });
 });
+
+describe('one of an image or an artifact (agents.md 5.17)', () => {
+  const workflow = {
+    input: [
+      {
+        name: 'image',
+        label: 'Dashboard image',
+        type: 'image',
+        required: false,
+        requiredWithout: 'artifact',
+      },
+      {
+        name: 'artifact',
+        label: 'Saved dashboard',
+        type: 'artifact',
+        required: false,
+        requiredWithout: 'image',
+        artifactKinds: ['dashboard'],
+      },
+      { name: 'question', label: 'Question', type: 'textarea', required: true },
+    ] satisfies WorkflowInputField[],
+  };
+  const artifacts = [
+    { id: 'a-1', kind: 'dashboard' },
+    { id: 'a-2', kind: 'report' },
+  ];
+  const image = `data:image/png;base64,${Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('file'),
+  ]).toString('base64')}`;
+  const check = (input: Record<string, unknown>) =>
+    validateWorkflowInput(workflow, { question: 'q', ...input }, { artifacts });
+
+  it('takes either one', () => {
+    expect(check({ image })).toEqual({
+      ok: true,
+      input: { image, question: 'q' },
+    });
+    expect(check({ artifact: ' a-1 ' })).toEqual({
+      ok: true,
+      input: { artifact: 'a-1', question: 'q' },
+    });
+  });
+
+  it('refuses neither, once, on the first of the two', () => {
+    expect(check({ image: '', artifact: '  ' })).toEqual({
+      ok: false,
+      errors: [
+        {
+          field: 'image',
+          message: 'Dashboard image or Saved dashboard is required',
+        },
+      ],
+    });
+    // In field order with the other fields' errors.
+    expect(validateWorkflowInput(workflow, {}, { artifacts })).toEqual({
+      ok: false,
+      errors: [
+        {
+          field: 'image',
+          message: 'Dashboard image or Saved dashboard is required',
+        },
+        { field: 'question', message: 'Question is required' },
+      ],
+    });
+  });
+
+  it('keeps the artifact and drops the image when both are given', () => {
+    expect(check({ image, artifact: 'a-1' })).toEqual({
+      ok: true,
+      input: { artifact: 'a-1', question: 'q' },
+    });
+  });
+
+  it('refuses an unknown artifact and one of another kind, as its own error', () => {
+    expect(check({ artifact: 'gone' })).toEqual({
+      ok: false,
+      errors: [{ field: 'artifact', message: 'Artifact "gone" not found' }],
+    });
+    expect(check({ artifact: 'a-2' })).toEqual({
+      ok: false,
+      errors: [{ field: 'artifact', message: 'Artifact "a-2" not found' }],
+    });
+    // A refused image is not also "missing".
+    expect(check({ image: 'inputs/image.png' })).toEqual({
+      ok: false,
+      errors: [
+        {
+          field: 'image',
+          message: 'Dashboard image must be a PNG, JPEG or WebP image',
+        },
+      ],
+    });
+  });
+});

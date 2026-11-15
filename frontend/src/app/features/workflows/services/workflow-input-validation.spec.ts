@@ -218,3 +218,44 @@ describe('an image field', () => {
     ]);
   });
 });
+
+describe('requiredWithout (an image or a saved artifact)', () => {
+  const image: WorkflowInputField = {
+    name: 'image',
+    label: 'Dashboard image',
+    type: 'image',
+    required: false,
+    requiredWithout: 'artifact',
+  };
+  const artifact: WorkflowInputField = {
+    name: 'artifact',
+    label: 'Saved dashboard',
+    type: 'artifact',
+    required: false,
+    requiredWithout: 'image',
+    artifactKinds: ['dashboard'],
+  };
+  const png = 'data:image/png;base64,AAAA';
+
+  it('refuses neither, once, on the first field of the pair', () => {
+    expect(validateRunForm([image, artifact], {}, null)).toEqual([
+      {
+        field: 'image',
+        message: 'Dashboard image or Saved dashboard is required',
+      },
+    ]);
+    expect(
+      validateRunForm([image, artifact], { image: '', artifact: ' ' }, null),
+    ).toHaveSize(1);
+  });
+
+  it('accepts only an image', () => {
+    expect(validateRunForm([image, artifact], { image: png }, null)).toEqual([]);
+  });
+
+  it('accepts only an artifact, without checking it', () => {
+    expect(
+      validateRunForm([image, artifact], { artifact: 'a-1' }, null),
+    ).toEqual([]);
+  });
+});

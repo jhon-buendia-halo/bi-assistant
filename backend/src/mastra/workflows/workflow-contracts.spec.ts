@@ -182,8 +182,11 @@ const FIXTURES: Record<string, ContractFixture> = {
       // The stubbed run: a loaded image, the dashboard read from it, its
       // mapping to the catalog and the stored dashboard.
       context.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
-        loadImage: () =>
-          Promise.resolve({ mediaType: 'image/png', sizeBytes: 1234 }),
+        loadImage: () => Promise.resolve(),
+        loadArtifact: () =>
+          Promise.resolve(
+            blueprintOf(SAMPLE_BLUEPRINT_REPLY) as DashboardBlueprint,
+          ),
         readDashboard: () =>
           Promise.resolve({
             blueprint: blueprintOf(

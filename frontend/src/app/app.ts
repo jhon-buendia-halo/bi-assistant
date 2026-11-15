@@ -10,6 +10,7 @@ import {
   LucideAngularModule,
   LucideIconData,
   Activity,
+  Boxes,
   Bot,
   FlaskConical,
   FolderKanban,
@@ -30,6 +31,7 @@ import { EvalSelectionService } from './features/agents/services/eval-selection.
 import { AgentsArea } from './features/agents/components/agents-area/agents-area';
 import { AgentTryIt } from './features/agents/components/agent-try-it/agent-try-it';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
+import { ArtifactsArea } from './features/artifacts/components/artifacts-area/artifacts-area';
 import { ContextArea } from './features/context/components/context-area/context-area';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
 import { DatasetsArea } from './features/datasets/components/datasets-area/datasets-area';
@@ -74,6 +76,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     WorkflowsArea,
     AgentsArea,
     ContextArea,
+    ArtifactsArea,
     SessionsArea,
     SessionsHeader,
     MonitoringArea,
@@ -116,6 +119,7 @@ export class App {
     { area: 'workflows', label: 'Workflows', icon: Workflow },
     { area: 'agents', label: 'Agents', icon: Bot },
     { area: 'context', label: 'Context', icon: Layers },
+    { area: 'artifacts', label: 'Artifacts', icon: Boxes },
     { area: 'runs', label: 'Runs', icon: FolderKanban },
     { area: 'monitoring', label: 'Monitoring', icon: Activity },
   ];

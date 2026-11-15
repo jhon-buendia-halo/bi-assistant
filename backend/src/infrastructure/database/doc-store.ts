@@ -77,6 +77,8 @@ export const READINESS_REPORTS_STORE = 'DOC_STORE_readiness_reports';
 export const WORKFLOW_RUNS_STORE = 'DOC_STORE_workflow_runs';
 export const WORKFLOW_RUN_NODE_CHATS_STORE =
   'DOC_STORE_workflow_run_node_chats';
+/** The stored artifacts (data-model 3.18). */
+export const ARTIFACTS_STORE = 'DOC_STORE_artifacts';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;

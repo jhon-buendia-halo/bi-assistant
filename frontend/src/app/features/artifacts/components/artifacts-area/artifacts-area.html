@@ -1,0 +1,19 @@
+@if (shell.mainView() === "artifacts") {
+  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-artifacts-page
+      class="w-full max-w-[960px]"
+      (openArtifact)="artifacts.openArtifact($event)"
+    />
+  </div>
+} @else if (
+  shell.mainView() === "artifact-detail" &&
+  artifacts.activeArtifactId() !== null
+) {
+  <div class="flex min-h-0 flex-1 justify-center overflow-y-auto px-6 py-6">
+    <app-artifact-detail
+      class="flex w-full max-w-[960px] flex-col"
+      [artifactId]="artifacts.activeArtifactId()!"
+      (back)="artifacts.closeArtifactDetail()"
+    />
+  </div>
+}

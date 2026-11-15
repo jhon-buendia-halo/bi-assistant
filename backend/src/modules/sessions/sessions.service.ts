@@ -46,6 +46,7 @@ import { MetricsService } from '../metrics/metrics.service';
 import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
+import { ArtifactsService } from '../artifacts/artifacts.service';
 import {
   buildPanelItem,
   tableCsv,
@@ -167,6 +168,8 @@ export interface RunHostSpec {
    * host's workspace at `path` before the turn.
    */
   image?: { path: string; data: Buffer };
+  /** Recreate a Dashboard's saved dashboard: the artifact's id. */
+  artifact?: string;
   /**
    * A follow-up run (agents.md 5.14): the earlier run's host id, whose
    * memory threads the host starts from as copies of its own.
@@ -208,6 +211,8 @@ export class SessionsService implements OnModuleInit {
     @Optional()
     @Inject(SYNTHETIC_DATA_SERVICE)
     private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
+    // The saved dashboards a Recreate a Dashboard run takes (agents.md 5.17).
+    @Optional() private readonly artifacts?: ArtifactsService,
   ) {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
     // service's own dependencies and its session reads and writes.
@@ -251,6 +256,10 @@ export class SessionsService implements OnModuleInit {
         this.crossCheckAnswer(session, question, data),
       readinessBridge: () => this.readinessBridge,
       readImage: (sessionId, path) => readWorkspaceImage(sessionId, path),
+      artifactBlueprint: (artifactId) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        return this.artifacts.blueprintOf(artifactId);
+      },
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -481,6 +490,7 @@ export class SessionsService implements OnModuleInit {
       ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
       ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
+      ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,

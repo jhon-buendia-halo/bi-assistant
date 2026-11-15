@@ -368,6 +368,8 @@ function build(
     mastra,
     repository,
     nodeChats,
+    // No stored artifact: no workflow here takes one.
+    { list: () => Promise.resolve([]) } as never,
   );
   return {
     db,
@@ -385,6 +387,7 @@ function build(
         mastra,
         new WorkflowRunsRepository(new SqliteDocStore(db, 'workflow_runs')),
         nodeChats,
+        { list: () => Promise.resolve([]) } as never,
       ),
     sessions,
     userAgents,

@@ -9,6 +9,7 @@ import {
   viewChild,
 } from '@angular/core';
 import {
+  Boxes,
   Brain,
   CircleCheck,
   Database,
@@ -23,6 +24,9 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
+import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
+import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
+import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import {
@@ -135,6 +139,7 @@ const FORM_CONTROLS =
   },
 })
 export class WorkflowRunChat {
+  protected readonly Boxes = Boxes;
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Database = Database;
@@ -150,6 +155,8 @@ export class WorkflowRunChat {
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
+  private readonly artifactsApi = inject(ArtifactsApiService);
+  private readonly artifactsNav = inject(ArtifactsNavState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly log = viewChild<ElementRef<HTMLElement>>('log');
   /** The chat follows the run's newest text while the user stays near its end. */
@@ -176,6 +183,20 @@ export class WorkflowRunChat {
         this.designer.runFormRequest.set(0);
         setTimeout(() => this.focusRunForm());
       });
+    });
+    // A workflow with an artifact field: load the artifacts it offers.
+    effect(() => {
+      const workflow = this.designer.workflow();
+      const wants = workflow?.input.some(
+        (field) => !field.hidden && field.type === 'artifact',
+      );
+      if (!wants) return;
+      untracked(() =>
+        this.artifactsApi.list().subscribe({
+          next: (artifacts) => this.artifacts.set(artifacts),
+          error: () => this.artifacts.set([]),
+        }),
+      );
     });
     // A refused Execute: focus the first field with an error.
     effect(() => {
@@ -333,6 +354,90 @@ export class WorkflowRunChat {
   /** The file name each image field shows, by field name. */
   private readonly imageNames = signal<Record<string, string>>({});
 
+  /** The stored artifacts an `artifact` field offers. */
+  private readonly artifacts = signal<ArtifactSummary[]>([]);
+
+  /** The artifacts of the field's kinds (every kind when it names none). */
+  protected artifactChoices(field: WorkflowInputField): ArtifactSummary[] {
+    const kinds = field.artifactKinds;
+    const all = this.artifacts();
+    if (!kinds || kinds.length === 0) return all;
+    return all.filter((artifact) => kinds.includes(artifact.kind));
+  }
+
+  /** An artifact was picked (or None): it replaces the field it is required without. */
+  protected onArtifact(field: WorkflowInputField, event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.designer.setInput(field.name, value);
+    if (value !== '') this.clearPeer(field);
+  }
+
+  /** Empties the field `field` is required without, and its file picker. */
+  private clearPeer(field: WorkflowInputField): void {
+    const peer = field.requiredWithout;
+    if (peer === undefined) return;
+    this.designer.setInput(peer, '');
+    this.imageNames.update((names) => ({ ...names, [peer]: '' }));
+    const control = this.host.nativeElement.querySelector<HTMLInputElement>(
+      `[id="${this.inputId(peer)}"]`,
+    );
+    if (control !== null && control.type === 'file') control.value = '';
+  }
+
+  /** The save of the shown run as an artifact: saving, saved or refused. */
+  private readonly saveState = signal<{
+    runId: string;
+    status: 'saving' | 'saved' | 'error';
+    artifact?: ArtifactSummary;
+    error?: string;
+  } | null>(null);
+
+  /** The save state of the run shown; null before one is tried. */
+  protected readonly artifactSave = computed(() => {
+    const state = this.saveState();
+    return state !== null && state.runId === this.designer.runResult()?.runId
+      ? state
+      : null;
+  });
+
+  /** A finished run that read a dashboard can be saved as an artifact. */
+  protected readonly canSaveArtifact = computed(() => {
+    const result = this.designer.runResult();
+    const blueprint = result?.output?.['blueprint'];
+    return (
+      result !== null &&
+      result.status === 'success' &&
+      typeof result.runId === 'string' &&
+      typeof blueprint === 'object' &&
+      blueprint !== null &&
+      !Array.isArray(blueprint)
+    );
+  });
+
+  protected saveAsArtifact(): void {
+    const runId = this.designer.runResult()?.runId;
+    if (typeof runId !== 'string' || this.artifactSave()?.status === 'saving') {
+      return;
+    }
+    this.saveState.set({ runId, status: 'saving' });
+    this.artifactsApi.saveFromRun(runId).subscribe({
+      next: (artifact) => {
+        this.saveState.set({ runId, status: 'saved', artifact });
+        this.artifacts.update((all) => [artifact, ...all]);
+      },
+      error: (err) =>
+        this.saveState.set({
+          runId,
+          status: 'error',
+          error: err?.error?.message ?? 'Backend unreachable',
+        }),
+    });
+  }
+
+  protected openSavedArtifact(id: string): void {
+    this.artifactsNav.openArtifact(id);
+  }
+
   /** The line under the workflow's name before a run. */
   protected readonly emptyHint = computed(() => {
     const workflow = this.designer.workflow();
@@ -444,6 +549,9 @@ export class WorkflowRunChat {
         name,
         typeof reader.result === 'string' ? reader.result : '',
       );
+      // An image picked replaces the field this one is required without.
+      const field = this.designer.workflow()?.input.find((f) => f.name === name);
+      if (field !== undefined) this.clearPeer(field);
     };
     reader.onerror = () => {
       this.imageNames.update((names) => ({ ...names, [name]: '' }));

@@ -11,6 +11,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import type { ArtifactSummary } from '../artifacts/entities/artifact.entity';
 import type {
   FilePanelItem,
   InteractiveVisualization,
@@ -265,6 +266,15 @@ export class WorkflowRunsController {
     res.setHeader('Content-Length', archive.length);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(archive);
+  }
+
+  /** Save a run's dashboard as an artifact (api.md 144). */
+  @Post(':id/artifact')
+  saveArtifact(
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<ArtifactSummary> {
+    return this.runs.saveArtifact(id, body);
   }
 
   /** A run's file item's text (api.md 125). */

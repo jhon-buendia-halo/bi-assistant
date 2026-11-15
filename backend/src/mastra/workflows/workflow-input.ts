@@ -23,7 +23,9 @@ export type WorkflowInputFieldType =
    * `IMAGE_MAX_BYTES`). A run stores it as a file of its workspace and
    * keeps the file's path as the field's value.
    */
-  | 'image';
+  | 'image'
+  /** The id of one stored artifact (data-model 3.18). */
+  | 'artifact';
 
 /** The largest image an `image` field takes, in bytes. */
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -85,6 +87,13 @@ export interface WorkflowInputField {
   default?: string | number | boolean;
   /** `dataset` / `datasets`: only datasets bound to these kinds. */
   datasourceKinds?: InputDatasourceKind[];
+  /** `artifact`: only artifacts of these kinds. */
+  artifactKinds?: string[];
+  /**
+   * The name of another field: this field is required only while that one
+   * has no value. Two fields that name each other take one of the two.
+   */
+  requiredWithout?: string;
   /** Set by the app, never rendered as a control. */
   hidden?: boolean;
   /** `text` / `textarea`: the most characters of the trimmed text. */
@@ -166,6 +175,14 @@ export interface WorkflowInputError {
 /** What the input check reads besides the input: the stored datasets. */
 export interface WorkflowInputContext {
   datasets?: readonly InputDataset[];
+  /** The stored artifacts an `artifact` field is checked against. */
+  artifacts?: readonly InputArtifact[];
+}
+
+/** An artifact an `artifact` field is checked against. */
+export interface InputArtifact {
+  id: string;
+  kind: string;
 }
 
 export type WorkflowInputValidation =
@@ -236,6 +253,7 @@ function checkField(
   field: WorkflowInputField,
   value: unknown,
   datasets: readonly InputDataset[],
+  artifacts: readonly InputArtifact[] = [],
 ): FieldCheck {
   if (field.type === 'boolean') {
     if (value === undefined || value === null || value === '') {
@@ -267,6 +285,14 @@ function checkField(
     (typeof value === 'string' && value.trim() !== '') ||
     typeof value === 'number';
   if (!usable) return missingField(field);
+  if (field.type === 'artifact') {
+    const id = String(value).trim();
+    const found = artifacts.find((artifact) => artifact.id === id);
+    const kinds = field.artifactKinds;
+    return found && (!kinds?.length || kinds.includes(found.kind))
+      ? { ok: true, value: id }
+      : { ok: false, error: `Artifact "${id}" not found` };
+  }
   if (field.type === 'image') {
     const image = imageOfDataUrl(value);
     if (!image) {
@@ -313,7 +339,10 @@ function checkField(
  * number within its `min` and `max`, a boolean as a boolean, a text within
  * its `maxLength` (trimmed), datasets as trimmed names in order without
  * repeats, an image as a base64 `data:` URL of a PNG, JPEG or WebP file of
- * at most `IMAGE_MAX_BYTES`. A field that is missing, `""` or whitespace-only takes its
+ * at most `IMAGE_MAX_BYTES`, an artifact as the id of a stored artifact of
+ * the field's kinds. Of two fields that name each other in
+ * `requiredWithout`, one must be given (`<label> or <other label> is
+ * required`, on the first of the two); when both are, an image gives way. A field that is missing, `""` or whitespace-only takes its
  * `default` (a boolean `false`); a required one without a default is refused
  * with `<label> is required` (`Select at least one dataset` for `datasets`).
  * An optional field that is missing or empty and has no default is left
@@ -332,14 +361,52 @@ export function validateWorkflowInput(
     const value = Object.hasOwn(body, field.name)
       ? body[field.name]
       : undefined;
-    const checked = checkField(field, value, ctx.datasets ?? []);
+    const checked = checkField(
+      field,
+      value,
+      ctx.datasets ?? [],
+      ctx.artifacts ?? [],
+    );
     if (!checked.ok) {
       errors.push({ field: field.name, message: checked.error });
     } else if (checked.value !== undefined) {
       input[field.name] = checked.value;
     }
   }
-  return errors.length ? { ok: false, errors } : { ok: true, input };
+  // One of two fields that stand in for each other (`requiredWithout`).
+  const reported = new Set<string>();
+  for (const field of workflow.input) {
+    const other = workflow.input.find(
+      (candidate) => candidate.name === field.requiredWithout,
+    );
+    if (!other || reported.has(field.name)) continue;
+    const failed = (name: string) =>
+      errors.some((error) => error.field === name);
+    const given = (name: string) => Object.hasOwn(input, name);
+    if (given(field.name) || given(other.name)) {
+      // With both, an image gives way: the run does not read it.
+      if (given(field.name) && given(other.name) && field.type === 'image') {
+        delete input[field.name];
+      }
+      continue;
+    }
+    // A refused value is that field's own error, not a missing one.
+    if (failed(field.name) || failed(other.name)) continue;
+    reported.add(other.name);
+    errors.push({
+      field: field.name,
+      message: `${field.label} or ${other.label} is required`,
+    });
+  }
+  if (!errors.length) return { ok: true, input };
+  // Field order, as a form reads them.
+  const order = new Map(
+    workflow.input.map((field, index) => [field.name, index]),
+  );
+  errors.sort(
+    (a, b) => (order.get(a.field ?? '') ?? 0) - (order.get(b.field ?? '') ?? 0),
+  );
+  return { ok: false, errors };
 }
 
 /** An image taken out of a run's input: where the run stores it. */

@@ -120,6 +120,7 @@ Summary:
 | `readiness_reports` | Stored data-readiness assessments, one per run, never edited | `id` | `generatedAt` desc (per datasource) | [data-readiness](../capabilities/data-readiness/spec.md) |
 | `workflow_runs` | Every run of a workflow on an input: its input, steps, outcome and, for an agent workflow, its answer and files | `id` | `startedAt` desc | [workflows](../capabilities/workflows/spec.md) |
 | `workflow_run_node_chats` | The chats with a stored run's agent steps (node chats), one per run and step | `id`; `(runId, stepId)` unique | n/a (read by run and step) | [workflows](../capabilities/workflows/spec.md) |
+| `artifacts` | Reusable context saved from workflow runs: today, dashboards read from an image | `id` | `createdAt` desc | [workflows](../capabilities/workflows/spec.md) R32 |
 
 Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints** between collections, and no cascading deletes but one (a run's node chats go with it, 3.17); references are by value (`name`, `id`) and may dangle (section 3.13).
 
@@ -697,6 +698,25 @@ One document per stored run and agent step that someone chatted with ([workflows
 No `ownerId`: the collection is newer than ownership (3.14).
 
 > Implementation note: `modules/workflows/repositories/workflow-node-chats.repository.ts` (`WorkflowNodeChatsRepository`, token `WORKFLOW_RUN_NODE_CHATS_STORE`); the message shape and the context block are framework-free in `node-chat-context.ts`.
+
+### 3.18 `artifacts` — saved artifacts
+
+One document per artifact ([workflows](../capabilities/workflows/spec.md) R32; [api.md](api.md) 139-144; since 2026-11-15). Inserted when a run is saved as an artifact (144); only `name` changes afterwards (142).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | The artifact's id: what a run's `artifact` input names. |
+| `kind` | `dashboard` | yes | The kind of context it holds. |
+| `name` | string | yes | 1 to 80 characters; by default the dashboard's title. |
+| `description` | string | yes | The blueprint's summary (may be empty). |
+| `blueprint` | `DashboardBlueprint` ([agents.md](agents.md) 5.17) | yes | The dashboard as data, checked against the blueprint's schema when stored. It holds no mapping. |
+| `image` | `{ file: string; mediaType: string }` | no | The image the dashboard was read from: the file `<app data dir>/artifacts/<file>` (`<id>.png`, `.jpg` or `.webp`), written before the document and deleted with it. Absent when the run read no image or the file could not be written. |
+| `source` | `{ runId: string; workflowId: string }` | no | The run it was saved from. By value: it may dangle once the run is deleted. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+No `ownerId`: the collection is newer than ownership (3.14). Nothing refers to an artifact by a stored key: a run that used one keeps the blueprint in its own `output`, and its `input.artifact` id may dangle.
+
+> Implementation note: `modules/artifacts/repositories/artifacts.repository.ts` (`ArtifactsRepository`, token `ARTIFACTS_STORE`); `ArtifactsService` writes and deletes the image file.
 
 ## 4. Files on disk
 

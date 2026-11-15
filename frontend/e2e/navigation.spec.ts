@@ -286,6 +286,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
     'Datasets',
     'Agents',
     'Context',
+    'Artifacts',
     'Runs',
     'Monitoring',
   ]) {

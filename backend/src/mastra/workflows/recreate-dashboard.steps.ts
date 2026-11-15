@@ -21,7 +21,7 @@ import {
 } from './recreate-dashboard.schemas';
 import type {
   fieldMappingSchema,
-  loadedImageSchema,
+  loadedSourceSchema,
   renderedDashboardSchema,
 } from './recreate-dashboard.schemas';
 import {
@@ -71,14 +71,17 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
 export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
   contractStepEntry(
     {
-      id: 'load-image',
-      title: 'Load image',
+      id: 'load-source',
+      title: 'Load source',
       kind: 'code',
       summary:
-        "Finds the uploaded image in the run's workspace and checks its format and size. No LLM.",
-      exits: [{ label: 'Image missing', outcome: 'fails' }],
+        "Finds the run's dashboard: the uploaded image in the run's workspace, or the saved dashboard of the artifact it names. No LLM.",
+      exits: [
+        { label: 'Image missing', outcome: 'fails' },
+        { label: 'Artifact missing', outcome: 'fails' },
+      ],
     },
-    SCHEMAS['load-image'],
+    SCHEMAS['load-source'],
   ),
   contractStepEntry(
     {
@@ -86,7 +89,7 @@ export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
       title: 'Read dashboard',
       kind: 'agent',
       summary:
-        'The Dashboard Reader looks at the image and returns the dashboard as data: its filters, its widgets with their measures and breakdowns, and the columns of one mock dataset behind them.',
+        'Only for a run on an image. The Dashboard Reader looks at the image and returns the dashboard as data: its filters, its widgets with their measures and breakdowns, and the columns of one mock dataset behind them.',
       exits: [
         ...MODEL_EXITS,
         { label: 'No dashboard in the image', outcome: 'fails' },
@@ -133,8 +136,19 @@ export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
 
 /** The edges of the workflow (api.md 117), from Start to End. */
 export const RECREATE_DASHBOARD_EDGES: readonly WorkflowEdge[] = [
-  { from: 'start', to: 'load-image', kind: 'next' },
-  { from: 'load-image', to: 'read-dashboard', kind: 'next' },
+  { from: 'start', to: 'load-source', kind: 'next' },
+  {
+    from: 'load-source',
+    to: 'read-dashboard',
+    kind: 'branch',
+    label: 'From an image',
+  },
+  {
+    from: 'load-source',
+    to: 'load-dashboard-catalog',
+    kind: 'branch',
+    label: 'From a saved dashboard',
+  },
   { from: 'read-dashboard', to: 'load-dashboard-catalog', kind: 'next' },
   { from: 'load-dashboard-catalog', to: 'map-data', kind: 'next' },
   { from: 'map-data', to: 'render-dashboard', kind: 'next' },
@@ -145,10 +159,7 @@ export type DashboardBlueprint = z.output<typeof dashboardBlueprintSchema>;
 export type DataMapping = z.output<typeof dataMappingSchema>;
 export type FieldMapping = z.output<typeof fieldMappingSchema>;
 export type MappingStatus = DataMapping['widgets'][number]['status'];
-export type LoadedImage = Pick<
-  z.output<typeof loadedImageSchema>,
-  'mediaType' | 'sizeBytes'
->;
+export type DashboardSource = z.output<typeof loadedSourceSchema>['source'];
 export type RenderedDashboard = z.output<typeof renderedDashboardSchema>;
 
 /** A drawn dashboard: an interactive visual's freeform bundle. */
@@ -161,13 +172,15 @@ export interface MockBundle {
 }
 
 /**
- * What a run hands its steps on the RequestContext: the run's image, the
- * two model calls and the store of the drawn dashboard. A step throws when
- * it is missing.
+ * What a run hands its steps on the RequestContext: the run's image or
+ * saved dashboard, the two model calls and the store of the drawn
+ * dashboard. A step throws when it is missing.
  */
 export interface RecreateDashboardRuntime {
-  /** Load image: the image's type and size; throws when it is missing. */
-  loadImage(input: { image: string }): Promise<LoadedImage>;
+  /** Load source, for an image: reads it; throws when it is missing. */
+  loadImage(input: { image: string }): Promise<void>;
+  /** Load source, for an artifact: its saved dashboard; throws when gone. */
+  loadArtifact(input: { artifact: string }): Promise<DashboardBlueprint>;
   /** Read dashboard: the model's description of the image. */
   readDashboard(input: {
     question: string;
@@ -186,6 +199,10 @@ export interface RecreateDashboardRuntime {
     answer: string;
   }): Promise<{ visualId: string; title: string }>;
 }
+
+/** What Load source says of a run whose input has no dashboard. */
+export const NO_SOURCE_ERROR =
+  'The run has neither a dashboard image nor a saved dashboard';
 
 /** The instructions a run follows: its own, else the default. */
 export function recreateDashboardQuestion(question: string): string {
@@ -581,15 +598,20 @@ function scriptJson(value: unknown): string {
  */
 export function renderDashboardBundle(
   blueprint: DashboardBlueprint,
-  mapping: DataMapping,
+  /** Null draws the dashboard alone: no status, no sources (an artifact). */
+  mapping: DataMapping | null,
 ): MockBundle {
-  const counts = mappingCounts(mapping);
+  const counts = mapping ? mappingCounts(mapping) : undefined;
   return {
     title: blueprint.title,
     description: [
       blueprint.summary ||
         'An interactive mock of the dashboard, on invented data.',
-      `Of its ${blueprint.widgets.length} widgets, ${counts.mapped} can be fed by the selected datasets, ${counts.partial} in part and ${counts.unmapped} not at all; each widget's badge and its Data source section say which.`,
+      ...(counts
+        ? [
+            `Of its ${blueprint.widgets.length} widgets, ${counts.mapped} can be fed by the selected datasets, ${counts.partial} in part and ${counts.unmapped} not at all; each widget's badge and its Data source section say which.`,
+          ]
+        : []),
       'Every value shown is invented. The filters recompute the widgets they filter.',
     ].join(' '),
     html: `<div id="${DASHBOARD_MOCK_ROOT_ID}" class="dmk"></div>`,
@@ -635,6 +657,8 @@ export function mappingExplanation(input: {
   mapping: DataMapping;
   datasets: readonly string[];
   entityCount: number;
+  /** A run on a saved dashboard read no image. */
+  source?: DashboardSource;
 }): string {
   const { blueprint, mapping } = input;
   const counts = mappingCounts(mapping);
@@ -655,7 +679,7 @@ export function mappingExplanation(input: {
     '',
     '### How the mapping was done',
     '',
-    `1. **Read dashboard.** The image was read into ${counted(blueprint.widgets.length, 'widget')}, ${counted(blueprint.filters.length, 'filter')} and the ${counted(blueprint.columns.length, 'column')} of data they read (${
+    `1. **${input.source === 'artifact' ? 'Saved dashboard' : 'Read dashboard'}.** ${input.source === 'artifact' ? 'The dashboard was taken from the saved artifact, read earlier from its image, as' : 'The image was read into'} ${counted(blueprint.widgets.length, 'widget')}, ${counted(blueprint.filters.length, 'filter')} and the ${counted(blueprint.columns.length, 'column')} of data they read (${
       blueprint.columns.map((column) => `\`${column.name}\``).join(', ') ||
       'none'
     }).`,

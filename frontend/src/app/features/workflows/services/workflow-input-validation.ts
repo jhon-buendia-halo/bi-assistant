@@ -126,6 +126,35 @@ function fieldError(
   return null;
 }
 
+/** Whether a form value holds anything (a non-blank text, a number, a non-empty list). */
+function hasValue(value: RunFormValues[string] | undefined): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim() !== '';
+  return typeof value === 'number';
+}
+
+/**
+ * `requiredWithout`: a field with no value, whose partner has none either, is
+ * `<label> or <partner label> is required`, reported once, on the first of
+ * the two in form order. Null when the field is not the one to report.
+ */
+function pairError(
+  fields: readonly WorkflowInputField[],
+  values: RunFormValues,
+  field: WorkflowInputField,
+): string | null {
+  const other = fields.find((f) => f.name === field.requiredWithout);
+  if (other === undefined) return null;
+  if (Object.hasOwn(values, other.name) && hasValue(values[other.name])) {
+    return null;
+  }
+  const otherFirst =
+    fields.indexOf(other) < fields.indexOf(field) &&
+    other.requiredWithout === field.name &&
+    !other.hidden;
+  return otherFirst ? null : `${field.label} or ${other.label} is required`;
+}
+
 /**
  * The run form's input checked before Execute sends it, with the backend's
  * rules and messages (api.md 118, 119; ui.md 4.4b): every error of the
@@ -146,7 +175,10 @@ export function validateRunForm(
     const value = Object.hasOwn(values, field.name)
       ? values[field.name]
       : undefined;
-    const message = fieldError(field, value, datasets);
+    const message =
+      hasValue(value) || field.requiredWithout === undefined
+        ? fieldError(field, value, datasets)
+        : (pairError(fields, values, field) ?? fieldError(field, value, datasets));
     if (message !== null) errors.push({ field: field.name, message });
   }
   return errors;

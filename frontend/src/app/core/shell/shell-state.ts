@@ -20,6 +20,8 @@ export type MainView =
   | 'personas'
   | 'visuals'
   | 'ontologies'
+  | 'artifacts'
+  | 'artifact-detail'
   | 'runs'
   | 'run-detail'
   | 'session-chat'
@@ -33,6 +35,7 @@ export type Area =
   | 'workflows'
   | 'agents'
   | 'context'
+  | 'artifacts'
   | 'runs'
   | 'monitoring'
   | 'settings';
@@ -43,6 +46,7 @@ export const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   workflows: 'workflows',
   agents: 'agents',
   context: 'context',
+  artifacts: 'artifacts',
   runs: 'runs',
   monitoring: 'monitoring',
 };
@@ -62,6 +66,8 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   personas: 'context',
   visuals: 'context',
   ontologies: 'context',
+  artifacts: 'artifacts',
+  'artifact-detail': 'artifacts',
   runs: 'runs',
   'run-detail': 'runs',
   'session-chat': 'runs',
@@ -147,6 +153,7 @@ export class ShellState {
       (area !== 'runs' || this.mainView() === 'runs') &&
       (area !== 'workflows' || this.mainView() === 'workflows') &&
       (area !== 'context' || this.mainView() === 'context') &&
+      (area !== 'artifacts' || this.mainView() === 'artifacts') &&
       (area !== 'monitoring' || this.mainView() === 'monitoring');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {

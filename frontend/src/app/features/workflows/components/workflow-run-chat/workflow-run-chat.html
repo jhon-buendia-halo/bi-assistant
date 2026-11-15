@@ -2,9 +2,9 @@
   <!-- The Chat column of the Run panel (workflows R21; ui.md 4.4b): the
        question, the run's answer as it forms, and the composer. The steps
        are in the Logs column beside it, never here. -->
-  <div class="flex shrink-0 items-center gap-2 px-4 pt-2.5 pb-1">
+  <div class="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 px-4 pt-2.5 pb-1">
     <h3
-      class="m-0 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+      class="m-0 mr-auto flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
     >
       <lucide-angular [img]="MessageSquare" [size]="12" />
       Chat
@@ -23,12 +23,65 @@
           <span>Run again</span>
         </button>
       }
+      @if (canSaveArtifact()) {
+        @if (artifactSave(); as save) {
+          @if (save.status === "saved" && save.artifact) {
+            <span
+              data-testid="workflow-run-artifact-saved"
+              class="flex items-center gap-1.5 text-[12px] text-fg-muted"
+              [class.ml-auto]="!designer.canRunAgain()"
+            >
+              <lucide-angular [img]="CircleCheck" [size]="13" />
+              <span>Saved to Artifacts</span>
+              <button
+                type="button"
+                data-testid="workflow-run-artifact-open"
+                (click)="openSavedArtifact(save.artifact.id)"
+                class="btn btn-ghost px-2 py-0.5 text-[12px]"
+              >
+                Open
+              </button>
+            </span>
+          } @else {
+            <button
+              type="button"
+              data-testid="workflow-run-save-artifact"
+              [disabled]="save.status === 'saving'"
+              (click)="saveAsArtifact()"
+              class="btn btn-ghost px-2.5 py-1"
+              [class.ml-auto]="!designer.canRunAgain()"
+            >
+              <lucide-angular [img]="Boxes" [size]="13" />
+              <span>{{ save.status === "saving" ? "Saving…" : "Save as artifact" }}</span>
+            </button>
+          }
+          @if (save.status === "error") {
+            <span
+              data-testid="workflow-run-artifact-error"
+              role="alert"
+              class="text-[12px] text-on-danger-soft"
+              >{{ save.error }}</span
+            >
+          }
+        } @else {
+          <button
+            type="button"
+            data-testid="workflow-run-save-artifact"
+            (click)="saveAsArtifact()"
+            class="btn btn-ghost px-2.5 py-1"
+            [class.ml-auto]="!designer.canRunAgain()"
+          >
+            <lucide-angular [img]="Boxes" [size]="13" />
+            <span>Save as artifact</span>
+          </button>
+        }
+      }
       <button
         type="button"
         data-testid="workflow-run-new"
         (click)="designer.newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
-        [class.ml-auto]="!designer.canRunAgain()"
+        [class.ml-auto]="!designer.canRunAgain() && !canSaveArtifact()"
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
         <span>New question</span>
@@ -383,6 +436,48 @@
                       </option>
                     }
                   </select>
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("artifact") {
+                <div class="flex flex-col gap-1">
+                  <label
+                    [for]="inputId(field.name)"
+                    class="text-[12px] font-medium text-fg-muted"
+                    >{{ field.label }}</label
+                  >
+                  <select
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    (change)="onArtifact(field, $event)"
+                    class="field"
+                  >
+                    <option value="" [selected]="designer.inputValue(field.name) === ''">
+                      None — upload an image
+                    </option>
+                    @for (artifact of artifactChoices(field); track artifact.id) {
+                      <option
+                        [value]="artifact.id"
+                        [selected]="artifact.id === designer.inputValue(field.name)"
+                      >
+                        {{ artifact.name }}
+                      </option>
+                    }
+                  </select>
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">{{ field.help }}</p>
+                  }
                   @if (fieldError(field.name); as message) {
                     <p
                       [id]="errorId(field.name)"

@@ -7,9 +7,10 @@
  * and JSON Schema from it. Zod only, no framework import, so Jest and the
  * catalogue can load it without Mastra.
  *
- * The flow: Load image → Read dashboard → Load catalog → Map data → Render
- * dashboard. No model writes markup: Read dashboard returns the dashboard
- * as data (the blueprint), Map data ties each widget to the columns of the
+ * The flow: Load source → Read dashboard (a run on an image only; a run on
+ * a saved dashboard skips it) → Load catalog → Map data → Render dashboard.
+ * No model writes markup: Read dashboard returns the dashboard as data (the
+ * blueprint), Map data ties each widget to the columns of the
  * run's datasets (the mapping), and Render dashboard draws both with a
  * fixed runtime. A step passes on what the steps after it read, since the
  * engine hands a step only its previous step's output. The image's bytes
@@ -220,38 +221,61 @@ export const dataMappingSchema = z.object({
     .describe('What the datasets lack to feed the whole dashboard.'),
 });
 
-/** The workflow's input: the run's instructions, its image and datasets. */
+/** Where a run's dashboard comes from. */
+export const DASHBOARD_SOURCES = ['image', 'artifact'] as const;
+
+/**
+ * The workflow's input: the run's instructions, its datasets and its
+ * dashboard, as an image or as a saved dashboard (an artifact). The input
+ * check makes sure one of the two is given (api.md 118).
+ */
 export const recreateDashboardInputSchema = z.object({
   question: z
     .string()
     .describe("The user's instructions; by default, recreate the dashboard."),
   image: z
     .string()
+    .optional()
     .describe("The dashboard image's path in the run's workspace."),
+  artifact: z
+    .string()
+    .optional()
+    .describe('The id of a saved dashboard to use in place of an image.'),
   datasets: z
     .array(z.string())
     .describe('The datasets the dashboard is mapped to; at least one.'),
 });
 
-/** What Load image found. */
-export const loadedImageSchema = recreateDashboardInputSchema.extend({
-  mediaType: z.string().describe('image/png, image/jpeg or image/webp.'),
-  sizeBytes: z.number().describe("The image's size in bytes."),
+/**
+ * What Load source found: the image to read, or the saved dashboard. The
+ * blueprint is the saved one for an artifact and empty for an image, until
+ * Read dashboard reads it.
+ */
+export const loadedSourceSchema = z.object({
+  question: z.string().describe("The user's instructions."),
+  datasets: z.array(z.string()).describe("The run's datasets."),
+  source: z.enum(DASHBOARD_SOURCES).describe('image or artifact.'),
+  image: z
+    .string()
+    .describe("The image's path in the run's workspace; empty for none."),
+  blueprint: dashboardBlueprintSchema.describe(
+    "The saved dashboard's structure; empty for an image.",
+  ),
+  stopped: z.boolean().describe('Whether the run was stopped.'),
 });
 
 /** What Read dashboard understood. */
-export const readDashboardSchema = z.object({
-  question: z.string().describe("The user's instructions."),
-  datasets: z.array(z.string()).describe("The run's datasets."),
+export const readDashboardSchema = loadedSourceSchema.extend({
   blueprint: dashboardBlueprintSchema.describe("The dashboard's structure."),
-  stopped: z.boolean().describe('Whether the run was stopped.'),
 });
 
 /** What Load catalog read: the entities and columns to map to. */
 export const loadedCatalogSchema = z.object({
   question: z.string().describe("The user's instructions."),
   datasets: z.array(z.string()).describe("The run's datasets."),
+  source: z.enum(DASHBOARD_SOURCES).describe('image or artifact.'),
   blueprint: dashboardBlueprintSchema.describe("The dashboard's structure."),
+  stopped: z.boolean().describe('Whether the run was stopped.'),
   catalog: z
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
@@ -263,6 +287,7 @@ export const loadedCatalogSchema = z.object({
 /** What Map data found. */
 export const mappedDashboardSchema = z.object({
   datasets: z.array(z.string()).describe("The run's datasets."),
+  source: z.enum(DASHBOARD_SOURCES).describe('image or artifact.'),
   blueprint: dashboardBlueprintSchema.describe("The dashboard's structure."),
   mapping: dataMappingSchema.describe('The dashboard against the datasets.'),
   entityCount: z.number().describe('The entities it was mapped against.'),
@@ -297,13 +322,13 @@ export const recreateDashboardResultSchema = renderedDashboardSchema
 
 /** Every step's input and output schema, by step id, in catalogue order. */
 export const RECREATE_DASHBOARD_STEP_SCHEMAS = {
-  'load-image': {
+  'load-source': {
     input: recreateDashboardInputSchema,
-    output: loadedImageSchema,
+    output: loadedSourceSchema,
   },
-  'read-dashboard': { input: loadedImageSchema, output: readDashboardSchema },
+  'read-dashboard': { input: loadedSourceSchema, output: readDashboardSchema },
   'load-dashboard-catalog': {
-    input: readDashboardSchema,
+    input: loadedSourceSchema,
     output: loadedCatalogSchema,
   },
   'map-data': { input: loadedCatalogSchema, output: mappedDashboardSchema },

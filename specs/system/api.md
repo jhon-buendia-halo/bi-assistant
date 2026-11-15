@@ -649,12 +649,15 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
         | 'boolean'                   // a checkbox; absent means false (or `default`)
         | 'datasets'                  // one or more dataset names
         | 'dataset'                   // exactly one dataset name
-        | 'image';                    // one PNG, JPEG or WebP image of at most 5 MB, as a base64 `data:` URL (118's rules); a stored run holds the file's path instead
+        | 'image'                     // one PNG, JPEG or WebP image of at most 5 MB, as a base64 `data:` URL (118's rules); a stored run holds the file's path instead
+        | 'artifact';                 // the id of one stored artifact (139)
     required: boolean;
     placeholder?: string;
     help?: string;                    // one line under the control
     default?: string | number | boolean;  // the value of a field that is missing or empty
     datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];  // 'dataset' / 'datasets': only datasets bound to these kinds
+    artifactKinds?: 'dashboard'[];    // 'artifact': only artifacts of these kinds
+    requiredWithout?: string;         // another field's name: this field is required only while that one has no value (118's rules)
     hidden?: boolean;                 // set by the app, never rendered as a control
     maxLength?: number;               // 'text' / 'textarea': the most characters of the trimmed text (118's rules)
     min?: number;                     // 'number': the smallest value
@@ -678,7 +681,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   |---|---|
   | `answer-business-question` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`, `maxLength` 4000, `usedBy` `['receive-question']`); `datasets` (`Datasets`, datasets, required, `usedBy` `['receive-question']`); `checkDataQuality` (`Check data quality: Sarah reviews the tables the analysis used`, boolean, optional, `default` false, `usedBy` `[]`: it picks the branch to Check data quality, [agents.md](agents.md) 5.11) |
   | `data-readiness-assessment` | `dataset` (`Dataset`, dataset, required, `datasourceKinds` `['postgres', 'databricks']`, `usedBy` `['resolve-dataset']`); `question` (`Question`, textarea, optional, placeholder and default `Assess the readiness of this dataset`, `maxLength` 4000, `usedBy` `['resolve-dataset']`) |
-  | `recreate-dashboard` | `image` (`Dashboard image`, image, required, `help` `A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.`, `usedBy` `['load-image']`); `datasets` (`Datasets`, datasets, required, `help` `The data the dashboard is mapped to.`, `usedBy` `['load-image']`); `question` (`Instructions`, textarea, optional, placeholder and default `Recreate this dashboard as an interactive mock`, `maxLength` 4000, `usedBy` `['load-image']`) |
+  | `recreate-dashboard` | `image` (`Dashboard image`, image, optional, `requiredWithout` `artifact`, `help` `A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.`, `usedBy` `['load-source']`); `artifact` (`Saved dashboard`, artifact, optional, `requiredWithout` `image`, `artifactKinds` `['dashboard']`, `help` `Or reuse a dashboard saved in Artifacts: the run skips reading the image.`, `usedBy` `['load-source']`); `datasets` (`Datasets`, datasets, required, `help` `The data the dashboard is mapped to.`, `usedBy` `['load-source']`); `question` (`Instructions`, textarea, optional, placeholder and default `Recreate this dashboard as an interactive mock`, `maxLength` 4000, `usedBy` `['load-source']`) |
 
 - **Order:** `answer-business-question`, `data-readiness-assessment`, then `recreate-dashboard`. No agent (System, Official or user) is listed.
 
@@ -752,6 +755,8 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   ```
   Field errors (`field` = the field's name): `"<label> is required"` for a required field that is missing, `""` or whitespace-only (`"Question is required"`); `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be at least <min>"` / `"<label> must be at most <max>"` for a number outside `min` / `max`; `"<label> must be at most <maxLength> characters"` for a text whose trimmed length is over `maxLength` (`"Question must be at most 4000 characters"`); `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`). Non-field errors (`field: null`): `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer, listed after the field errors; `"Workflow \"<id>\" can't run on an input"` alone, for a workflow with no input fields. Example: `{ input: { question: "  ", datasets: [] } }` answers `{ statusCode: 400, error: "Bad Request", message: "Question is required", errors: [{ field: "question", message: "Question is required" }, { field: "datasets", message: "Select at least one dataset" }] }`. `404 "Workflow \"<id>\" not found"` for any id 116 does not list (plain Style B, no `errors`).
   An `image` field: `"<label> must be a PNG, JPEG or WebP image"` when the value is not a base64 `data:` URL of one of those types or its bytes do not start as a file of that type does, and `"<label> must be at most 5 MB"` over 5 MB (5 × 1024 × 1024 bytes, decoded).
+  An `artifact` field: `"Artifact \"<id>\" not found"` when no stored artifact of the field's `artifactKinds` has that id.
+  Two fields that name each other in `requiredWithout`: when neither has a value, one error on the first of the two in field order, `"<label> or <other label> is required"` (`"Dashboard image or Saved dashboard is required"`); a value that was refused for another reason is not also reported as missing. When both have a value, an `image` field's value is dropped: the run uses the other one.
 - **An image is not stored in the run.** For each `image` field the checked `data:` URL is taken out: the stored run's `input` holds the path `inputs/<field name>.<png|jpg|webp>` of the file in the run's workspace ([agents.md](agents.md) 5.17), and every response carries that path, never the image. With `context.fromRunId` naming a run of the same workflow, an `image` value equal to that run's stored path stands for that run's image (a follow-up runs on the same image); any other non-image value is refused as above.
 - A refused run is never stored and no step runs.
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream.
@@ -899,6 +904,52 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Response `200`: SSE as 3.6 for the same run: `run { runId, workflowId }` first, then the `step` events (the resumed step continues with its `attempt`, its `input`, `startedAt` and earlier `toolCalls`), the agent turn's events, and `done { run }` (the run `success`, `stopped`, or `suspended` again with a new `waitingFor` and `input-required` before `done`) or `error { content }`. Closing the connection stops the run as in 119.
 - Side effects: the stored run becomes `running` with `waitingFor` removed before `run` is sent, and is updated when it ends as in 119; the workflow snapshot written while it waited is deleted once it ends ([data-model.md](data-model.md) 3.16).
 - "Run again with my answer": for an expired run the client starts a new run (119) with the answer as `question` and `context.fromRunId` the expired run; that context is the expired run's question and its clarifying question with its options (`<question>\n- <option>` …), not an answer (118 accepts it).
+
+### 2.6.4 Artifacts
+
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R32; [data-model.md](data-model.md) 3.18; [agents.md](agents.md) 5.17). One kind today, `dashboard`.
+
+```ts
+type ArtifactSummary = {
+  id: string;                       // uuid
+  kind: 'dashboard';
+  name: string;                     // 1 to 80 characters, trimmed
+  description: string;              // the blueprint's summary; may be ''
+  widgetCount: number;
+  filterCount: number;
+  hasImage: boolean;                // whether 141 answers the image the dashboard was read from
+  source?: { runId: string; workflowId: string };   // the run it was saved from
+  createdAt: string;                // ISO
+  updatedAt: string;                // ISO
+};
+type Artifact = ArtifactSummary & {
+  blueprint: DashboardBlueprint;    // the dashboard as data (agents.md 5.17)
+  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame
+};
+```
+
+#### 139. `GET /artifacts`
+- Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending).
+
+#### 140. `GET /artifacts/:id`
+- Response `200`: `Artifact`. `404 "Artifact \"<id>\" not found"`.
+
+#### 141. `GET /artifacts/:id/image`
+- Response `200`: the bytes of the image the dashboard was read from, with its `Content-Type` (`image/png`, `image/jpeg` or `image/webp`) and `Cache-Control: private, max-age=3600`. `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no image"` when it was saved without one or the file is gone.
+
+#### 142. `PATCH /artifacts/:id`
+- Body: `{ name: string }` (trimmed).
+- Response `200`: `ArtifactSummary`. `400 "Name is required"`; `400 "Name must be at most 80 characters"`; `404 "Artifact \"<id>\" not found"`.
+
+#### 143. `DELETE /artifacts/:id`
+- Response `204`. `404 "Artifact \"<id>\" not found"`.
+- Side effects: the document and its image file are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output).
+
+#### 144. `POST /workflow-runs/:id/artifact`
+- Body: `{ name?: string }` (trimmed; empty or absent means the dashboard's title).
+- Saves a run's dashboard as an artifact: the blueprint of the run's `output` and, when the run read an image (its stored `input.image` path), that image, copied from the run's workspace.
+- Response `201`: `ArtifactSummary`, with `source` the run. `404 "Run \"<id>\" not found"`; `400 "Run \"<id>\" has no dashboard to save"` for a run that did not succeed or whose output holds no blueprint; `400 "The dashboard to save is not valid"` when that blueprint does not match the schema or has no widget; `400 "Name must be at most 80 characters"`.
+- Each call stores a new artifact: saving the same run twice gives two.
 
 ### 2.7 Deep analysis (removed 2026-11-12)
 

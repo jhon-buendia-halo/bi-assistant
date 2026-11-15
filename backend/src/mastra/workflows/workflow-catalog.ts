@@ -225,8 +225,18 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           name: 'image',
           label: 'Dashboard image',
           type: 'image',
-          required: true,
+          required: false,
+          requiredWithout: 'artifact',
           help: 'A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.',
+        },
+        {
+          name: 'artifact',
+          label: 'Saved dashboard',
+          type: 'artifact',
+          required: false,
+          requiredWithout: 'image',
+          artifactKinds: ['dashboard'],
+          help: 'Or reuse a dashboard saved in Artifacts: the run skips reading the image.',
         },
         { ...DATASETS_FIELD, help: 'The data the dashboard is mapped to.' },
         {
@@ -255,6 +265,8 @@ export interface AgentRunTurn {
   careful: boolean;
   /** Answer a Business Question's `checkDataQuality`: Check data quality runs. */
   checkDataQuality?: true;
+  /** Recreate a Dashboard's `artifact`: the saved dashboard it runs on. */
+  artifact?: string;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -273,6 +285,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     ...(values['checkDataQuality'] === true
       ? { checkDataQuality: true as const }
       : {}),
+    ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),
   };
 }
 

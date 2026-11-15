@@ -29,6 +29,7 @@ import {
 import {
   RECREATE_DASHBOARD_RUNTIME_KEY,
   RECREATE_DASHBOARD_WORKFLOW_ID,
+  type DashboardBlueprint,
   type MockBundle,
   type RecreateDashboardRuntime,
 } from '../../../mastra/workflows/recreate-dashboard.steps';
@@ -155,6 +156,8 @@ export interface TurnEngineDeps {
     sessionId: string,
     path: string,
   ): Promise<{ data: Buffer; mediaType: string }>;
+  /** A saved dashboard, by its artifact's id (agents.md 5.17). */
+  artifactBlueprint(artifactId: string): Promise<DashboardBlueprint>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
     sessionId: string,
@@ -857,12 +860,9 @@ export class TurnEngine {
           // Recreate a Dashboard (agents.md 5.17): the two agent steps call
           // their agent's model; the run keeps the image between steps.
           loadImage: async ({ image }) => {
-            const loaded = await loadedImage(image);
-            return {
-              mediaType: loaded.mediaType,
-              sizeBytes: loaded.data.byteLength,
-            };
+            await loadedImage(image);
           },
+          loadArtifact: ({ artifact }) => this.deps.artifactBlueprint(artifact),
           readDashboard: async ({ question, image }) => {
             try {
               const read = await this.deps.mastra.readDashboard(
@@ -1136,6 +1136,7 @@ export class TurnEngine {
     } else if (recreate) {
       requestContext.set(RECREATE_DASHBOARD_RUNTIME_KEY, {
         loadImage: (input) => captured(() => runtime.loadImage(input)),
+        loadArtifact: (input) => captured(() => runtime.loadArtifact(input)),
         readDashboard: (input) => captured(() => runtime.readDashboard(input)),
         mapData: (input) => captured(() => runtime.mapData(input)),
         saveDashboard: (input) => captured(() => runtime.saveDashboard(input)),
@@ -1157,10 +1158,16 @@ export class TurnEngine {
     const turnInput:
       | AnswerBusinessQuestionInput
       | { question: string; dataset: string }
-      | { question: string; image: string; datasets: string[] } = recreate
+      | {
+          question: string;
+          image?: string;
+          artifact?: string;
+          datasets: string[];
+        } = recreate
       ? {
           question,
-          image: session.inputImage ?? '',
+          ...(session.inputImage ? { image: session.inputImage } : {}),
+          ...(session.inputArtifact ? { artifact: session.inputArtifact } : {}),
           datasets: session.datasets,
         }
       : readiness

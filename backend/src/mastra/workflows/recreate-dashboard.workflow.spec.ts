@@ -69,6 +69,9 @@ interface StubWorkflow {
 }
 
 const workflow = recreateDashboardWorkflow as unknown as StubWorkflow;
+const CATALOGUE_STEP_IDS = new Set(
+  RECREATE_DASHBOARD_STEPS.map((step) => step.id),
+);
 
 const BLUEPRINT = blueprintOf(SAMPLE_BLUEPRINT_REPLY) as DashboardBlueprint;
 
@@ -86,7 +89,11 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
     calls,
     loadImage: jest.fn(({ image }: { image: string }) => {
       calls.push(`loadImage:${image}`);
-      return Promise.resolve({ mediaType: 'image/png', sizeBytes: 1234 });
+      return Promise.resolve();
+    }),
+    loadArtifact: jest.fn(({ artifact }: { artifact: string }) => {
+      calls.push(`loadArtifact:${artifact}`);
+      return Promise.resolve(BLUEPRINT);
     }),
     readDashboard: jest.fn((input: { question: string; image: string }) => {
       calls.push(`readDashboard:${input.image}:${input.question}`);
@@ -114,16 +121,23 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
   };
 }
 
-async function run(given: MockedRuntime | undefined, question = '') {
+async function run(
+  given: MockedRuntime | undefined,
+  question = '',
+  source: { image?: string; artifact?: string } = {
+    image: 'inputs/image.png',
+  },
+) {
   const requestContext = new RequestContext();
   if (given) requestContext.set(RECREATE_DASHBOARD_RUNTIME_KEY, given);
   const output = (await workflow.createRun()).stream({
-    inputData: { question, image: 'inputs/image.png', datasets: ['Shop'] },
+    inputData: { question, ...source, datasets: ['Shop'] },
     requestContext,
   });
   const events: string[] = [];
   for await (const event of output.fullStream) {
-    if (event.payload?.id) {
+    // The catalogue's steps only: the map between them is the engine's own.
+    if (event.payload?.id && CATALOGUE_STEP_IDS.has(event.payload.id)) {
       events.push(`${event.payload.id}:${event.payload.status}`);
     }
   }
@@ -133,8 +147,11 @@ async function run(given: MockedRuntime | undefined, question = '') {
 describe('recreateDashboardWorkflow', () => {
   it('is built from the step catalogue and never snapshots', () => {
     expect(workflow.id).toBe(RECREATE_DASHBOARD_WORKFLOW_ID);
+    // The steps in sequence; Read dashboard is the branch's (see below).
     expect(workflow.steps.map((step) => [step.id, step.description])).toEqual(
-      RECREATE_DASHBOARD_STEPS.map((step) => [step.id, step.title]),
+      RECREATE_DASHBOARD_STEPS.filter(
+        (step) => step.id !== 'read-dashboard',
+      ).map((step) => [step.id, step.title]),
     );
     expect(workflow.options?.shouldPersistSnapshot?.()).toBe(false);
   });
@@ -150,7 +167,7 @@ describe('recreateDashboardWorkflow', () => {
       'saveDashboard:Sales Performance 2025',
     ]);
     expect(events.filter((event) => event.endsWith(':success'))).toEqual([
-      'load-image:success',
+      'load-source:success',
       'read-dashboard:success',
       'load-dashboard-catalog:success',
       'map-data:success',
@@ -187,6 +204,7 @@ describe('recreateDashboardWorkflow', () => {
       mapping,
       datasets: ['Shop'],
       entityCount: 1,
+      source: 'image',
     });
     expect(result.result).toEqual({
       visualId: 'v-1',
@@ -207,6 +225,62 @@ describe('recreateDashboardWorkflow', () => {
     });
   });
 
+  it('skips Read dashboard for a run on a saved dashboard', async () => {
+    const given = runtime();
+    const { events, result } = await run(given, '', { artifact: 'a-1' });
+    expect(given.calls).toEqual([
+      'loadArtifact:a-1',
+      'mapData:shop.orders:4',
+      'saveDashboard:Sales Performance 2025',
+    ]);
+    expect(given.loadImage).not.toHaveBeenCalled();
+    expect(given.readDashboard).not.toHaveBeenCalled();
+    expect(events.filter((event) => event.endsWith(':success'))).toEqual([
+      'load-source:success',
+      'load-dashboard-catalog:success',
+      'map-data:success',
+      'render-dashboard:success',
+    ]);
+    expect(result.status).toBe('success');
+    const done = result.result as { blueprint: unknown; answer: string };
+    expect(done.blueprint).toEqual(BLUEPRINT);
+    // The explanation says the dashboard was not read from an image.
+    expect(done.answer).toContain(
+      '1. **Saved dashboard.** The dashboard was taken from the saved artifact',
+    );
+    expect(done.answer).not.toContain('The image was read into');
+  });
+
+  it('takes the saved dashboard when the input has both', async () => {
+    const given = runtime();
+    await run(given, '', { image: 'inputs/image.png', artifact: 'a-1' });
+    expect(given.loadArtifact).toHaveBeenCalledWith({ artifact: 'a-1' });
+    expect(given.loadImage).not.toHaveBeenCalled();
+    expect(given.readDashboard).not.toHaveBeenCalled();
+  });
+
+  it('fails when the input has neither an image nor a saved dashboard', async () => {
+    const { result } = await run(runtime(), '', {});
+    expect(result.status).toBe('failed');
+    expect(String((result.error as Error).message)).toContain(
+      'The run has neither a dashboard image nor a saved dashboard',
+    );
+  });
+
+  it("fails with the step's own error when the artifact is gone", async () => {
+    const given = runtime({
+      loadArtifact: jest.fn(() =>
+        Promise.reject(new Error('Artifact "a-1" not found')),
+      ),
+    });
+    const { result } = await run(given, '', { artifact: 'a-1' });
+    expect(result.status).toBe('failed');
+    expect(String((result.error as Error).message)).toContain(
+      'Artifact "a-1" not found',
+    );
+    expect(given.mapData).not.toHaveBeenCalled();
+  });
+
   it("passes the run's own instructions to both agents", async () => {
     const given = runtime();
     await run(given, '  Use a dark theme ');
@@ -222,13 +296,15 @@ describe('recreateDashboardWorkflow', () => {
     );
   });
 
-  it('ends at Read dashboard when the run is stopped there', async () => {
+  it('ends after Read dashboard when the run is stopped there', async () => {
     const given = runtime({
       readDashboard: jest.fn(() =>
         Promise.resolve({ blueprint: emptyBlueprint(), stopped: true }),
       ),
     });
     const { result } = await run(given);
+    // Load catalog ends the run: nothing is listed and nothing is mapped.
+    expect(result.result).toMatchObject({ catalog: [], columns: [] });
     expect(given.mapData).not.toHaveBeenCalled();
     expect(given.saveDashboard).not.toHaveBeenCalled();
     expect(result.status).toBe('success');
@@ -262,18 +338,18 @@ describe('recreateDashboardWorkflow', () => {
     const { result } = await run(undefined);
     expect(result.status).toBe('failed');
     expect(String((result.error as Error).message)).toContain(
-      'The Load image step has no dashboard to work on',
+      'The Load source step has no dashboard to work on',
     );
   });
 
   it('refuses a step output that breaks the contract', async () => {
     const given = runtime({
-      loadImage: jest.fn(() => Promise.resolve({ mediaType: 'image/png' })),
+      loadArtifact: jest.fn(() => Promise.resolve({ title: 'No widgets' })),
     });
-    const { result } = await run(given);
+    const { result } = await run(given, '', { artifact: 'a-1' });
     expect(result.status).toBe('failed');
     expect(String((result.error as Error).message)).toContain(
-      'Contract violation in Load image',
+      'Contract violation in Load source',
     );
   });
 });

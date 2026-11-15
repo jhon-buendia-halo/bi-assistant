@@ -319,6 +319,8 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
 
   function mount(root, input) {
     var blueprint = input.blueprint || {};
+    // Without a mapping the dashboard is drawn alone: no status, no sources.
+    var mapped = !!input.mapping;
     var mapping = input.mapping || {};
     var widgetMapping = {};
     (mapping.widgets || []).forEach(function (entry) {
@@ -640,7 +642,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
       var wrap = el('label', 'dmk-filter');
       var caption = el('span', 'dmk-filter-head');
       caption.appendChild(el('span', 'dmk-filter-label', filter.label));
-      if (entry && entry.status === 'unmapped') {
+      if (mapped && entry && entry.status === 'unmapped') {
         var flag = el('span', 'dmk-badge dmk-unmapped', STATUS_TEXT.unmapped);
         flag.title = (entry.field && entry.field.note) || 'No column of the datasets feeds this filter.';
         caption.appendChild(flag);
@@ -696,20 +698,20 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
     summary.textContent =
       'Data mapping: ' + counts.mapped + ' mapped, ' + counts.partial + ' partly mapped, ' + counts.unmapped +
       ' with no data. Every value shown is invented.';
-    root.appendChild(summary);
+    if (mapped) root.appendChild(summary);
 
     var grid = el('div', 'dmk-grid-layout');
     (blueprint.widgets || []).forEach(function (widget) {
       var entry = widgetMapping[widget.id] || { status: 'unmapped', fields: [], reason: '' };
-      var card = el('section', 'dmk-card dmk-status-' + entry.status);
+      var card = el('section', mapped ? 'dmk-card dmk-status-' + entry.status : 'dmk-card');
       card.setAttribute('data-widget', widget.id);
-      card.setAttribute('data-mapping', entry.status);
-      card.setAttribute('aria-label', widget.title + ' (' + STATUS_TEXT[entry.status] + ')');
+      if (mapped) card.setAttribute('data-mapping', entry.status);
+      card.setAttribute('aria-label', mapped ? widget.title + ' (' + STATUS_TEXT[entry.status] + ')' : widget.title);
       var span = Math.max(2, Math.min(12, Math.round(Number(widget.span) || 4)));
       card.style.gridColumn = 'span ' + span;
       var top = el('div', 'dmk-card-head');
       top.appendChild(el('h3', 'dmk-card-title', widget.title));
-      top.appendChild(el('span', 'dmk-badge dmk-' + entry.status, STATUS_TEXT[entry.status]));
+      if (mapped) top.appendChild(el('span', 'dmk-badge dmk-' + entry.status, STATUS_TEXT[entry.status]));
       card.appendChild(top);
       var body = el('div', 'dmk-card-body');
       bodies[widget.id] = body;
@@ -726,7 +728,7 @@ export const DASHBOARD_MOCK_RUNTIME = `(function () {
         list.appendChild(item);
       });
       if (list.firstChild) details.appendChild(list);
-      card.appendChild(details);
+      if (mapped) card.appendChild(details);
       grid.appendChild(card);
     });
     root.appendChild(grid);
