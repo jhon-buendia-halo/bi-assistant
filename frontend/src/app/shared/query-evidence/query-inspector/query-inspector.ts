@@ -60,6 +60,8 @@ interface FunnelStep {
   step: QueryStep;
   number: number;
   label: string;
+  /** The words after the label. */
+  text: string;
   /** The count on the right, or null when the step has none. */
   count: string | null;
   tint: boolean;
@@ -242,7 +244,7 @@ export class QueryInspector {
       if (step.rows !== undefined) {
         if (step.verb === 'show') {
           count =
-            verified && lastBefore !== undefined
+            verified && lastBefore !== undefined && lastBefore > step.rows
               ? `${formatCount(step.rows)} of ${formatCount(lastBefore)}`
               : rowsLabel(step.rows);
         } else {
@@ -254,6 +256,8 @@ export class QueryInspector {
         step,
         number: i + 1,
         label: VERB_LABELS[step.verb] ?? step.verb,
+        // The Show step's text is written whole by code ("Show the first 100").
+        text: step.verb === 'show' ? step.text.replace(/^Show\s+/, '') : step.text,
         count,
         tint: step.verb === 'show',
       };

@@ -1766,7 +1766,7 @@ specs/system/agents.md:2210-2314  ## Appendix E — `insights-analyst` (Insights
 specs/system/agents.md:2316-2363  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
 specs/system/agents.md:2322-2339  ### Plan
 specs/system/agents.md:2341-2363  ### Write answer
-specs/system/agents.md:2365-2380  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2365-2381  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

@@ -18,7 +18,7 @@ export interface FigureIndexEntry {
 
 export type FigureIndex = FigureIndexEntry[];
 
-/** One figure found in the text, with the queries (Q order, at most 2) that hold it. */
+/** One figure found in the text, with every query (Q order) whose rows hold it. */
 export interface Figure {
   start: number;
   end: number;
@@ -37,7 +37,11 @@ const MONTHS = [
 const MONTH_NAME =
   '(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
 
-const MAX_CHIPS_PER_FIGURE = 2;
+/**
+ * Columns that identify or rank a row. Their values are not figures a reader
+ * would look up, and a small rank matches too many numbers in a text.
+ */
+const IDENTIFIER_COLUMN = /^(id|.*_id|rnk|rank|rn|row_?num(ber)?)$/i;
 
 /** Index every record that did not fail. */
 export function figureIndex(
@@ -49,7 +53,8 @@ export function figureIndex(
     const numbers: number[] = [];
     const dates = new Set<string>();
     for (const row of record.rows) {
-      for (const cell of Object.values(row)) {
+      for (const [column, cell] of Object.entries(row)) {
+        if (IDENTIFIER_COLUMN.test(column)) continue;
         if (typeof cell === 'number') {
           if (Number.isFinite(cell)) numbers.push(cell);
         } else if (typeof cell === 'bigint') {
@@ -143,8 +148,7 @@ export function findFigures(text: string, index: FigureIndex): Figure[] {
     if (date.key === null) continue;
     const queries = index
       .filter((entry) => entry.dates.has(date.key as string))
-      .map((entry) => entry.query)
-      .slice(0, MAX_CHIPS_PER_FIGURE);
+      .map((entry) => entry.query);
     if (queries.length) {
       figures.push({ start: date.start, end: date.end, text: text.slice(date.start, date.end), queries });
     }
@@ -165,8 +169,7 @@ export function findFigures(text: string, index: FigureIndex): Figure[] {
       .filter((entry) =>
         entry.numbers.some((cell) => matches(cell, shown, decimals, scale, percent)),
       )
-      .map((entry) => entry.query)
-      .slice(0, MAX_CHIPS_PER_FIGURE);
+      .map((entry) => entry.query);
     if (queries.length) figures.push({ start, end, text: m[0], queries });
   }
   return figures.sort((a, b) => a.start - b.start);
@@ -175,10 +178,13 @@ export function findFigures(text: string, index: FigureIndex): Figure[] {
 const SKIPPED_ANCESTORS = 'code, pre, a, th, .figure-ref';
 
 /**
- * Adds a chip after each figure of already-sanitized HTML. The chips are built
- * with DOM APIs (labels through `textContent`); nothing is assembled as a
- * string, and text inside `code`, `pre`, `a`, `th` and existing chips is left
- * alone. `sampleQueries` are the queries whose result is only a sample: a
+ * Adds one chip after each figure of already-sanitized HTML. The chips are
+ * built with DOM APIs (labels through `textContent`); nothing is assembled as
+ * a string, and text inside `code`, `pre`, `a`, `th` and existing chips is
+ * left alone. A figure several queries hold gets the chip of one of them: a
+ * query that is not a sample first, then the query that holds the most
+ * figures of this answer, then the earliest; the chip's title names the
+ * others. `sampleQueries` are the queries whose result is only a sample: a
  * figure whose every match is one gets the warning tone.
  */
 export function linkFigures(
@@ -196,18 +202,36 @@ export function linkFigures(
     if (parent && parent.closest(SKIPPED_ANCESTORS)) continue;
     nodes.push(node as Text);
   }
-  for (const node of nodes) {
-    const figures = findFigures(node.data, index);
+  const found = nodes.map((node) => ({ node, figures: findFigures(node.data, index) }));
+  const held = new Map<number, number>();
+  for (const { figures } of found) {
+    for (const figure of figures) {
+      for (const query of figure.queries) held.set(query, (held.get(query) ?? 0) + 1);
+    }
+  }
+  const sourceOf = (queries: number[]): number =>
+    [...queries].sort(
+      (a, b) =>
+        Number(sampleQueries.has(a)) - Number(sampleQueries.has(b)) ||
+        (held.get(b) ?? 0) - (held.get(a) ?? 0) ||
+        a - b,
+    )[0];
+  for (const { node, figures } of found) {
     if (!figures.length) continue;
     const fragment = document.createDocumentFragment();
     let cursor = 0;
     for (const figure of figures) {
       fragment.append(document.createTextNode(node.data.slice(cursor, figure.end)));
       cursor = figure.end;
-      const onlySamples = figure.queries.every((q) => sampleQueries.has(q));
-      for (const query of figure.queries) {
-        fragment.append(chip(query, figure.text, onlySamples));
-      }
+      const source = sourceOf(figure.queries);
+      fragment.append(
+        chip(
+          source,
+          figure.text,
+          figure.queries.every((q) => sampleQueries.has(q)),
+          figure.queries.filter((q) => q !== source),
+        ),
+      );
     }
     fragment.append(document.createTextNode(node.data.slice(cursor)));
     node.replaceWith(fragment);
@@ -215,7 +239,12 @@ export function linkFigures(
   return template.innerHTML;
 }
 
-function chip(query: number, figure: string, sample: boolean): HTMLElement {
+function chip(
+  query: number,
+  figure: string,
+  sample: boolean,
+  others: number[],
+): HTMLElement {
   const label = `Q${query + 1}`;
   const sup = document.createElement('sup');
   const button = document.createElement('button');
@@ -224,7 +253,13 @@ function chip(query: number, figure: string, sample: boolean): HTMLElement {
   button.setAttribute('data-query-index', String(query));
   button.setAttribute('data-testid', 'figure-ref');
   button.setAttribute('aria-label', `Open query ${label}, the source of ${figure}`);
-  if (sample) button.title = 'From a sample: not a reliable figure';
+  const also = others.length
+    ? `Also in ${others.map((q) => `Q${q + 1}`).join(', ')}`
+    : '';
+  const title = [sample ? 'From a sample: not a reliable figure' : '', also]
+    .filter((part) => part !== '')
+    .join('. ');
+  if (title) button.title = title;
   button.textContent = label;
   sup.append(button);
   return sup;

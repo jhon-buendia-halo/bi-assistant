@@ -35,10 +35,11 @@ export const MODEL_VERBS: readonly QueryStepVerb[] = [
 
 export const QUERY_EXPLAINER_INSTRUCTIONS = `You explain one SQL query to a business reader, step by step.
 
-Explain what the query does to the rows, in the order a business reader would follow. Write one step per verb of this contract: start, keep, add, combine, group, count, compute, sort.
+Explain what the query does to the rows, in the order a business reader would follow. Each step has one verb of this contract: start, keep, add, combine, group, count, compute, sort.
 - start: the table the rows come from. Always first, with "table" set to one of the tables you are given.
-- keep: rows are filtered out. add: more rows are brought in. combine: another table is joined. group: rows are grouped. count: rows are counted. compute: a value is worked out. sort: rows are ordered.
-- Write "text" in business words: no SQL keywords, no function names, no column lists. Name what the rows are in "unit" (for example "orders", "products").
+- keep: rows are filtered out. add: details are looked up in another table, set "table" to it (a join). combine: two sets of rows are put together into one (a union). group: rows are grouped. count: rows are counted or totalled within each group. compute: a value is worked out for each row (a ratio, a rank). sort: rows are ordered.
+- Write "text" as one short sentence of at most 90 characters that continues the verb, in business words: no SQL keywords, no function names, no column lists. For example, for start: "every return on record"; for keep: "returns from 1 Jul to 30 Sep 2025"; for count: "returns for each product". Leave detail out rather than write a second sentence.
+- Name what the rows are after the step in "unit", in the plural (for example "orders", "products").
 - For every step write "countSql": one statement in the query's dialect that returns one row with one integer, the number of rows after that step. Read only the tables the query reads. Start with SELECT or WITH, no semicolon.
 - Never write a step for the LIMIT or for the final list: the code adds it.
 

@@ -47,9 +47,15 @@ describe('figure-refs', () => {
     expect(queriesFor('Q12 and a1200b', [rec([{ n: 12 }, { m: 1200 }])])).toEqual([]);
   });
 
-  it('gives a value found in two queries one chip each, in Q order', () => {
+  it('finds every query that holds a value, in Q order', () => {
     const data = [rec([{ n: 1204 }]), rec([{ n: 1204 }])];
     expect(queriesFor('1,204', data)).toEqual([[0, 1]]);
+  });
+
+  it('never matches an identifier or a rank column', () => {
+    const data = [rec([{ id: 4821, team_id: 4821, rnk: 15, rank: 15, wins: 4821 }])];
+    expect(queriesFor('ranked 15 with 4,821 wins', data)).toEqual([[0]]);
+    expect(queriesFor('ranked 15', [rec([{ rnk: 15, row_number: 15 }])])).toEqual([]);
   });
 
   it('ignores a failed record', () => {
@@ -77,6 +83,28 @@ describe('figure-refs', () => {
       expect(root.querySelectorAll('.figure-ref').length).toBe(2);
       expect(root.querySelector('h2 .figure-ref')).not.toBeNull();
       expect(root.querySelector('td .figure-ref')).not.toBeNull();
+    });
+
+    it('gives a figure two queries hold one chip, of the query that holds most of the answer', () => {
+      const both = [rec([{ n: 1204 }]), rec([{ n: 1204 }, { n: 987 }, { n: 912 }])];
+      const root = document.createElement('div');
+      root.innerHTML = linkFigures('<p>1,204 then 987 and 912</p>', figureIndex(both));
+      const chips = [...root.querySelectorAll('.figure-ref')] as HTMLElement[];
+      expect(chips.map((c) => c.textContent)).toEqual(['Q2', 'Q2', 'Q2']);
+      expect(chips[0].title).toBe('Also in Q1');
+      expect(chips[1].title).toBe('');
+    });
+
+    it('prefers a query that is not a sample, and the earliest on a tie', () => {
+      const both = [rec([{ n: 1204 }]), rec([{ n: 1204 }])];
+      const root = document.createElement('div');
+      root.innerHTML = linkFigures('<p>1,204</p>', figureIndex(both), new Set([0]));
+      const chip = root.querySelector('.figure-ref') as HTMLElement;
+      expect(chip.textContent).toBe('Q2');
+      expect(chip.classList.contains('figure-ref--sample')).toBeFalse();
+      root.innerHTML = linkFigures('<p>1,204</p>', figureIndex(both));
+      expect(root.querySelectorAll('.figure-ref').length).toBe(1);
+      expect(root.querySelector('.figure-ref')?.textContent).toBe('Q1');
     });
 
     it('marks a figure whose only match is a sample, with the warning title', () => {
