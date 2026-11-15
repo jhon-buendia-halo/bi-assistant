@@ -593,7 +593,7 @@ specs/capabilities/app-shell/spec.md:59-61  R31 Every error toast SHALL also be 
 specs/capabilities/app-shell/spec.md:62-62  R32 The Settings list pane SHALL end with the build identity: the text "Ag
 specs/capabilities/app-shell/spec.md:63-63  R33 The window title and the document title SHALL be "Agentic Hub". The op
 specs/capabilities/app-shell/spec.md:64-66  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
-specs/capabilities/app-shell/spec.md:67-67  R46 In the Runs area the content shows an open run (`run-detail`: its work
+specs/capabilities/app-shell/spec.md:67-67  R46 In the Runs area the content shows an open run of a removed workflow o
 specs/capabilities/app-shell/spec.md:68-68  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
 specs/capabilities/app-shell/spec.md:69-69  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
 specs/capabilities/app-shell/spec.md:70-70  R49 In the Runs area the page SHALL start with a header: an icon, then the
@@ -1124,9 +1124,9 @@ specs/capabilities/past-chats/spec.md:36-36  R60 A session, with its transcript,
 specs/capabilities/past-chats/spec.md:38-50  ## Edge cases and errors
 specs/capabilities/past-chats/spec.md:52-56  ## Contracts
 specs/capabilities/past-chats/spec.md:58-71  ## UI
-specs/capabilities/past-chats/spec.md:73-156  ## Flows
-specs/capabilities/past-chats/spec.md:75-156  ### Feature: Session management
-specs/capabilities/past-chats/spec.md:158-166  ## Acceptance
+specs/capabilities/past-chats/spec.md:73-158  ## Flows
+specs/capabilities/past-chats/spec.md:75-158  ### Feature: Session management
+specs/capabilities/past-chats/spec.md:160-168  ## Acceptance
 
 specs/capabilities/synthetic-data/spec.md:7-18  ## Concepts
 specs/capabilities/synthetic-data/spec.md:20-126  ## Rules
@@ -1386,10 +1386,10 @@ specs/capabilities/workflows/spec.md:72-72  R30 Each agent of a run SHALL keep i
 specs/capabilities/workflows/spec.md:74-91  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:93-97  ## Contracts
 specs/capabilities/workflows/spec.md:99-106  ## UI
-specs/capabilities/workflows/spec.md:108-247  ## Flows
-specs/capabilities/workflows/spec.md:110-208  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:210-247  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:249-265  ## Acceptance
+specs/capabilities/workflows/spec.md:108-248  ## Flows
+specs/capabilities/workflows/spec.md:110-209  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:211-248  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:250-266  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope

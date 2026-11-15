@@ -7,6 +7,7 @@ import { TestBed } from '@angular/core/testing';
 import { ShellState } from '../../../core/shell/shell-state';
 import { WorkflowRun } from '../../workflows/models/workflow.model';
 import { WorkflowDesigner } from '../../workflows/services/workflow-designer.service';
+import { WorkflowsNavState } from '../../workflows/services/workflows-nav-state';
 import { RunsState } from './runs-state';
 
 const RUN: WorkflowRun = {
@@ -85,44 +86,75 @@ describe('RunsState (plan 1.24.11)', () => {
     expect(state.runs().map((r) => r.title)).toEqual(['Most goals?', 'Older question']);
   });
 
-  it('opens a stored run at run-detail, and offers Run again once its workflow is found', () => {
+  it('opens an ended run on its workflow page, drawn with that run and holding its input', () => {
     state.openRun('r1');
     expect(shell.mainView()).toBe('run-detail');
     expect(shell.currentArea()).toBe('runs');
+    expect(state.loadingRun()).toBeTrue();
     http.expectOne((r) => r.url.endsWith('/workflow-runs/r1')).flush(RUN);
-    expect(state.activeRun()?.id).toBe('r1');
-    expect(state.loadingRun()).toBeFalse();
-    expect(state.canRunAgain()).toBeFalse();
+    expect(shell.mainView()).toBe('run-detail');
     http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
-    expect(state.canRunAgain()).toBeTrue();
+    expect(shell.mainView()).toBe('workflow-detail');
+    expect(TestBed.inject(WorkflowsNavState).activeWorkflowId()).toBe('answer-business-question');
+    expect(state.loadingRun()).toBeFalse();
+    expect(state.activeRun()).toBeNull();
+
+    // The workflow page loads it: the run is shown, its input in the form.
+    const designer = TestBed.inject(WorkflowDesigner);
+    designer.load('answer-business-question');
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    expect(designer.runResult()?.runId).toBe('r1');
+    expect(designer.inputValue('question')).toBe('Most goals?');
+    expect(designer.inputValues()['datasets']).toEqual(['World Cup Core']);
+    expect(designer.runFormRequest()).toBe(0);
   });
 
-  it('opens a run of a removed workflow read-only: no Run again', () => {
+  it('opens a run of a removed workflow read-only (R23)', () => {
     state.openRun('r0');
     http.expectOne((r) => r.url.endsWith('/workflow-runs/r0')).flush(OLD_RUN);
-    expect(state.activeRun()?.id).toBe('r0');
+    expect(state.activeRun()).toBeNull();
     http
       .expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant'))
       .flush(
         { message: 'Workflow "agent:assistant" not found' },
         { status: 404, statusText: 'Not Found' },
       );
-    expect(state.canRunAgain()).toBeFalse();
+    expect(shell.mainView()).toBe('run-detail');
+    expect(state.activeRun()?.id).toBe('r0');
+    expect(state.loadingRun()).toBeFalse();
     expect(state.runError()).toBeNull();
   });
 
-  it('opening another run hides Run again until its own workflow is found', () => {
+  it('opens a run still running read-only, without asking for its workflow', () => {
+    state.openRun('r1');
+    http
+      .expectOne((r) => r.url.endsWith('/workflow-runs/r1'))
+      .flush({ ...RUN, status: 'running' });
+    expect(shell.mainView()).toBe('run-detail');
+    expect(state.activeRun()?.status).toBe('running');
+    expect(state.loadingRun()).toBeFalse();
+  });
+
+  it('a newer open or another view wins over a run still being opened', () => {
     state.openRun('r1');
     http.expectOne((r) => r.url.endsWith('/workflow-runs/r1')).flush(RUN);
-    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
-    expect(state.canRunAgain()).toBeTrue();
+    const first = http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question'));
     state.openRun('r0');
-    expect(state.canRunAgain()).toBeFalse();
+    first.flush(V2_DETAIL);
+    expect(shell.mainView()).toBe('run-detail');
     http.expectOne((r) => r.url.endsWith('/workflow-runs/r0')).flush(OLD_RUN);
     http
       .expectOne((r) => r.url.endsWith('/workflows/agent%3Aassistant'))
       .flush({ message: 'not found' }, { status: 404, statusText: 'Not Found' });
-    expect(state.canRunAgain()).toBeFalse();
+    expect(state.activeRun()?.id).toBe('r0');
+
+    state.openRun('r1');
+    http.expectOne((r) => r.url.endsWith('/workflow-runs/r1')).flush(RUN);
+    const late = http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question'));
+    shell.mainView.set('runs');
+    late.flush(V2_DETAIL);
+    expect(shell.mainView()).toBe('runs');
   });
 
   it('shows a missing run as an error', () => {
@@ -134,18 +166,7 @@ describe('RunsState (plan 1.24.11)', () => {
         { status: 404, statusText: 'Not Found' },
       );
     expect(state.runError()).toBe('Run "nope" not found');
-    expect(state.canRunAgain()).toBeFalse();
-  });
-
-  it('Run again opens the workflow with the run input as the form values', () => {
-    state.runAgain(RUN);
-    expect(shell.mainView()).toBe('workflow-detail');
-    const designer = TestBed.inject(WorkflowDesigner);
-    designer.load('answer-business-question');
-    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
-    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    // The right panel (Run) focuses its form.
-    expect(designer.runFormRequest()).toBe(1);
-    expect(designer.inputValue('question')).toBe('Most goals?');
+    expect(state.loadingRun()).toBeFalse();
+    expect(shell.mainView()).toBe('run-detail');
   });
 });

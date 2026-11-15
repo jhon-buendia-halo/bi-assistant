@@ -76,15 +76,14 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
     }
     await expect(page.getByLabel('Open system logs')).toBeVisible();
 
-    // The run is kept: Runs lists it, and it reopens with its answer.
+    // The run is kept: Runs lists it, and it reopens on its workflow's page
+    // with its question and answer.
     await railItem(page, 'Runs').click();
     const row = page.getByTestId('row-run-title').filter({ hasText: QUESTION });
     await expect(row).toBeVisible();
     await row.click();
-    await expect(page.getByTestId('run-detail-answer')).toContainText(ANSWER);
-    await expect(page.getByTestId('run-detail-input')).toContainText(
-      WORLD_CUP_DATASET,
-    );
+    await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
+    await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
   } finally {
     await stub.close();
   }

@@ -129,8 +129,10 @@ Feature: Session management
 
   Scenario: I find my past runs under Runs and my old chats under Past chats
     Given a run and an old chat with a visual exist
-    When I open Runs, then the run, then Run again
-    Then the workflow opens on Run with the run's input
+    When I open Runs, then the run
+    Then its workflow opens drawn with that run: its question, its answer and each node's status
+    When I click Run again
+    Then the composer holds the run's input, to change and execute
     When I open Past chats and the old chat
     Then I see the past-chat banner and its transcript, and no composer
     And I can open its visual in the panel and download it
