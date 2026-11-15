@@ -1659,6 +1659,34 @@ describe('SessionsService SQL self-correction', () => {
     expect(result.truncated).toBe(true);
     expect(result.note).toContain('row limit 100 reached');
   });
+
+  it('flags a result the connector cut at the limit', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ n }));
+    const runs = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows, totalRows: 2431 });
+    const { run } = await bridge({ runs });
+
+    const result = await run('SELECT n FROM main.health.claims');
+
+    expect(result.truncated).toBe(true);
+    expect(result.note).toContain('row limit 100 reached');
+  });
+
+  it('does not flag a result that lands exactly on the limit with nothing dropped', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ n }));
+    const runs = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows, totalRows: 100 });
+    const { run } = await bridge({ runs });
+
+    const result = await run(
+      'SELECT n FROM main.health.claims ORDER BY n LIMIT 100',
+    );
+
+    expect(result.truncated).toBeUndefined();
+    expect(result.note ?? '').not.toContain('row limit');
+  });
 });
 
 describe('SessionsService visual tool bridge (turn records)', () => {

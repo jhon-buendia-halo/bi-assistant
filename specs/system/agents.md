@@ -1149,7 +1149,7 @@ The fixer's and verifier's outputs are additionally cleaned (fence and trailing 
 
 1. Execute. On success, return rows plus:
    - `correctedSql` when the executed statement differs from the original;
-   - `truncated: true` when `rows.length >= limit`;
+   - `truncated: true` when the connector dropped rows at the limit (`totalRows > rows.length`; for a connector that reports no `totalRows`, when `rows.length >= limit`). A result that lands exactly on the limit with nothing dropped, such as a `LIMIT 100` under a limit of 100, is whole;
    - `note` — the applicable notes joined with `; `, from: `original query failed and was auto-corrected — cite the corrected SQL`; `query returned 0 rows — verify filters/values before concluding`; `row limit <limit> reached — results may be incomplete; aggregate or narrow the query for exact totals`.
    Empty results are not errors and never call the fixer.
 2. On failure, if **2** repair attempts (`SQL_REPAIR_ATTEMPTS`; at most 3 executions) are used up, or the error is **not repairable**, rethrow.
@@ -1169,7 +1169,7 @@ After every successful `run_readonly_sql`, cheap dialect-agnostic heuristics ins
 | `constant-metric` | ≥ 2 rows and a column is numeric on every row and equal to exactly 0 or 1 everywhere. | `<column> is <0|1> on every row, so it cannot explain any difference between them.` |
 | `unordered-limit` | `LIMIT` present and no `ORDER BY`. | `The query keeps only a few rows without ranking them, so these are an arbitrary sample rather than the top results.` |
 | `blank-group-key` | A column has both blank (null/undefined/whitespace) and non-blank values. | `<column> is missing on <n> of <total> rows, so those rows are grouped under a blank value.` |
-| `row-cap-reached` | The call's row limit is > 10 and rows ≥ limit; or the last `LIMIT n` in the SQL has n > 10 and rows = n. A `LIMIT ≤ 10` is a deliberate top-N and never warns. | `The result stopped at <cap> rows, so it is probably cut short and missing later ones.` |
+| `row-cap-reached` | The call's row limit is > 10, rows ≥ limit and the connector dropped rows (or does not say how many the statement produced); or the last `LIMIT n` in the SQL has n > 10 and rows = n. A `LIMIT ≤ 10` is a deliberate top-N and never warns. | `The result stopped at <cap> rows, so it is probably cut short and missing later ones.` |
 
 ### 5.5 Tool-only turn synthesis
 

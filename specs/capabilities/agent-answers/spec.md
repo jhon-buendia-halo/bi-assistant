@@ -71,7 +71,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
   In those cases the original error is reported.
 - R27. When a repair succeeded, the system SHALL record and show the *corrected* statement as the query that ran. The model is told the original failed and was auto-corrected.
-- R28. An empty result SHALL NOT trigger repair. The model is told to verify filters before concluding. A result that fills the requested row limit SHALL be flagged truncated, and the model is told results may be incomplete.
+- R28. An empty result SHALL NOT trigger repair. The model is told to verify filters before concluding. A result the connector cut at the requested row limit SHALL be flagged truncated, and the model is told results may be incomplete; a result that lands exactly on the limit with no row dropped SHALL NOT be (when the connector does not say how many rows the statement produced, a full page is flagged).
 
 ### Result-quality warnings
 
