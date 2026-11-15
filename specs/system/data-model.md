@@ -281,6 +281,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `report` | `AnalysisReport` | no | Legacy (Deep analysis removed 2026-11-12): `{jobId: string, title: string, path: string, angles: number}`, set on the message a finished deep-analysis job appended and on a `deep-analysis` run's `answer`. Stored data stays and is read as before; nothing writes it any more, and the report file (`reports/…`) is no longer reachable from the app. |
 | `rfpPackage` | object | no | Legacy (the RFP Builder was removed 2026-11-12): older assistant messages may still carry an RFP package reference; nothing writes it and it is ignored, so such a message reads as a plain answer. |
 | `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
+| `evidence` | `QueryEvidence[]` | no | The query inspector's facts (3.4.2a): one entry per `run_readonly_sql` or `sample_rows` record of `data`, failed ones included, in `data` order. Derived at persist time from `data` and the facts the tools passed beside their results, on the answer and on a clarification card alike; omitted when `data` holds no such record. Kept **beside** `data`, never on a `ToolDataRecord`, because whole records are fed to models. Older messages lack it; a run's answer gets it from [api.md](api.md) 139. Additive, no migration. |
 
 Messages never carry an id; user messages have only `role`, `content`, `at`.
 
@@ -301,6 +302,24 @@ Messages never carry an id; user messages have only `role`, `content`, `at`.
 | `warnings` | string[] | no | Faults the result guards found (ratio of a sum to itself, a metric constant on every row, an unordered "top N", row cap reached). Omitted when none. |
 
 `ReasoningStep`: `step` (number, 1-based position among records that carried a rationale), `rationale` (string), `tool` (string), `input` (string, no), `rowCount` (number, no), `error` (string, no). Assembled at persist time from `data` so a step can never describe a query that did not run.
+
+#### 3.4.2a `QueryEvidence`
+
+How much data one query of an answer stands for (the query inspector, roadmap 1.25; types in `backend/src/modules/sessions/query-evidence/query-evidence.types.ts`, mirrored in the frontend).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `index` | number | yes | Index of the record in `data`; also the `:index` of [api.md](api.md) 140-143. |
+| `coverage` | enum | no | `whole-table` \| `top-n` \| `sample` \| `partial`; absent on a failed record. Rules, in order, over the SQL with literals and comments masked, at bracket depth 0: `sample_rows` is `sample`; rows cut by the tool's cap are `partial` (`totalRows > rowCount`; for a record without `totalRows`, the cap its rows ran into, unless that is the statement's own LIMIT); the statement's own top-level `LIMIT` (or `FETCH FIRST n`) reached is `top-n` with an `ORDER BY` before it and `sample` without; anything else is `whole-table`. |
+| `outerLimit` | number | no | The statement's own top-level `LIMIT` / `FETCH FIRST n`. |
+| `datasourceId` | string | no | The datasource the call ran on. |
+| `datasourceKind` | string | no | Filled by api.md 139. |
+| `totalRows` | number | no | Rows the statement produced before the tool's row cap (from the connector). |
+| `rowLimit` | number | no | The tool's cap for the call: `run_readonly_sql` `limit` ?? 100, `sample_rows` `limit` ?? 10. |
+| `tables` | `QueryTableSize[]` | no | Filled by api.md 139: `{entity, rows: number \| null, error?}` per table the query reads, an exact `COUNT(*)`; `rows: null` with the error when the count failed. |
+| `explanation` | `QueryExplanation` | no | Filled when the inspector first opens the query (api.md 140, 141): `{steps: QueryStep[], fallback?: true, at, stageCounts?: {status: 'verified' \| 'unverified', at, reason?}}`. |
+
+Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143). A re-run (142) never changes it.
 
 #### 3.4.3 `SessionVisualization` (session metadata for a visual)
 

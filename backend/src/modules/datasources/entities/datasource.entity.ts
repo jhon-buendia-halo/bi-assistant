@@ -133,4 +133,9 @@ export interface CatalogInfo {
 export interface QueryResult {
   columns: string[];
   rows: Record<string, unknown>[];
+  /**
+   * `runReadOnlySql` only: the rows the statement produced before the row
+   * cap sliced them (the query inspector's facts, plan m1-25 1.25.1).
+   */
+  totalRows?: number;
 }

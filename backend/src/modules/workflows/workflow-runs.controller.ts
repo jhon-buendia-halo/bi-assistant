@@ -15,6 +15,9 @@ import type {
   FilePanelItem,
   InteractiveVisualization,
 } from '../sessions/entities/session.entity';
+import { EXPORT_ROWS } from '../sessions/query-evidence/query-coverage';
+import { csvOf } from '../sessions/query-evidence/query-evidence';
+import type { QueryRerunResult } from '../sessions/query-evidence/query-evidence.service';
 import type { NodeChatMessage } from './node-chat-context';
 import { WorkflowNodeChatsService } from './workflow-node-chats.service';
 import type { WorkflowRun, WorkflowRunSummary } from './workflow-run-steps';
@@ -29,6 +32,19 @@ import { streamSse } from './workflows.controller';
 function parseVersion(value?: string): number | undefined {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+/**
+ * The `:index` of the evidence routes (api.md 139-143): a whole number, else
+ * the same 400 as an index the answer does not have.
+ */
+function parseQueryIndex(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException(
+      `Query ${value} not found in the run's answer`,
+    );
+  }
+  return Number(value);
 }
 
 /** Send a file as an attachment, its name made header-safe. */
@@ -89,6 +105,49 @@ export class WorkflowRunsController {
           : 'Answer marked as wrong',
       run,
     };
+  }
+
+  /**
+   * Build the evidence of an answer stored before the query inspector and
+   * size the tables its queries read (api.md 139).
+   */
+  @Post(':id/answer/evidence')
+  async prepareEvidence(
+    @Param('id') id: string,
+  ): Promise<{ ok: true; run: WorkflowRun }> {
+    return { ok: true, run: await this.runs.prepareEvidence(id) };
+  }
+
+  /** Run one of the answer's queries again; nothing is stored (api.md 142). */
+  @Post(':id/answer/queries/:index/rerun')
+  async rerunQuery(
+    @Param('id') id: string,
+    @Param('index') index: string,
+  ): Promise<{ ok: true; result: QueryRerunResult }> {
+    return {
+      ok: true,
+      result: await this.runs.rerunQuery(id, parseQueryIndex(index)),
+    };
+  }
+
+  /**
+   * One query's rows as CSV, up to 50,000 (api.md 143); `X-Rows-Cut:
+   * 50000` when more existed. Checks answer before any header is written.
+   */
+  @Get(':id/answer/queries/:index/csv')
+  async queryCsv(
+    @Param('id') id: string,
+    @Param('index') index: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.runs.queryCsv(id, parseQueryIndex(index));
+    const body = Buffer.from(csvOf(file.columns, file.rows), 'utf8');
+    if (file.cut) res.setHeader('X-Rows-Cut', String(EXPORT_ROWS));
+    sendAttachment(res, {
+      filename: file.filename,
+      contentType: 'text/csv; charset=utf-8',
+      body,
+    });
   }
 
   /**

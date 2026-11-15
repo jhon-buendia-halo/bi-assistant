@@ -13,6 +13,8 @@ import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
+import { QueryEvidenceService } from './query-evidence/query-evidence.service';
+import { QUERY_EVIDENCE_SERVICE } from './query-evidence/query-evidence.token';
 
 @Module({
   imports: [
@@ -28,7 +30,13 @@ import { VisualizationService } from './visualization.service';
     SyntheticDataModule,
   ],
   controllers: [SessionsController],
-  providers: [SessionsService, SessionsRepository, VisualizationService],
-  exports: [SessionsService],
+  providers: [
+    SessionsService,
+    SessionsRepository,
+    VisualizationService,
+    QueryEvidenceService,
+    { provide: QUERY_EVIDENCE_SERVICE, useExisting: QueryEvidenceService },
+  ],
+  exports: [SessionsService, QueryEvidenceService, QUERY_EVIDENCE_SERVICE],
 })
 export class SessionsModule {}

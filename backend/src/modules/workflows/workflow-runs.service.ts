@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   GoneException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -33,6 +34,14 @@ import type {
   InteractiveVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
+import { evidenceOf } from '../sessions/query-evidence/query-evidence';
+import type {
+  QueryEvidenceService,
+  QueryExport,
+  QueryRerunResult,
+} from '../sessions/query-evidence/query-evidence.service';
+import { QUERY_EVIDENCE_SERVICE } from '../sessions/query-evidence/query-evidence.token';
+import type { QueryEvidence } from '../sessions/query-evidence/query-evidence.types';
 import {
   RUN_HOST_ID_PREFIX,
   SessionsService,
@@ -208,7 +217,17 @@ export class WorkflowRunsService implements OnModuleInit {
     private readonly mastra: MastraService,
     private readonly repository: WorkflowRunsRepository,
     private readonly nodeChats: WorkflowNodeChatsRepository,
+    // The query inspector's queries (api.md 139-143).
+    @Inject(QUERY_EVIDENCE_SERVICE)
+    private readonly queryEvidence: QueryEvidenceService,
   ) {}
+
+  /**
+   * The tail of each run's answer writes (api.md 139-143, 128): every
+   * write to a run's `answer` waits for the one before, so two cannot
+   * overwrite each other.
+   */
+  private readonly answerLocks = new Map<string, Promise<unknown>>();
 
   /**
    * Start-up recovery (plan 5.1 step 5): a run still `running` was cut off
@@ -592,16 +611,150 @@ export class WorkflowRunsService implements OnModuleInit {
    * run has no answer.
    */
   async rateAnswer(id: string, rating?: string): Promise<WorkflowRun> {
+    // Under the answer's lock: the run is read inside it, so a rating never
+    // drops evidence another write just stored (and the other way round).
+    return this.withAnswerLock(id, async () => {
+      const run = await this.stored(id);
+      if (!run.answer) throw new NotFoundException(`Run "${id}" has no answer`);
+      const answer = await this.sessions.rateRunAnswer(
+        id,
+        runHostDoc(run),
+        run.answer.at,
+        rating as 'up' | 'down',
+      );
+      const updated = await this.repository.update(id, { answer });
+      return this.wire(updated ?? { ...run, answer });
+    });
+  }
+
+  /**
+   * Run `fn` holding the lock of run `id`'s answer: one write at a time per
+   * run, in call order; a failed write does not block the next. Not
+   * re-entrant: never call it (or `patchEvidence`) from inside `fn`.
+   */
+  async withAnswerLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    const before = this.answerLocks.get(id) ?? Promise.resolve();
+    const current = before.then(fn, fn);
+    const tail = current.catch(() => undefined);
+    this.answerLocks.set(id, tail);
+    try {
+      return await current;
+    } finally {
+      if (this.answerLocks.get(id) === tail) this.answerLocks.delete(id);
+    }
+  }
+
+  /**
+   * Merge `patch` into the evidence entry `index` of run `id`'s answer,
+   * under the lock (plan 3c: re-read the run, patch one entry, write the
+   * answer). For 1.25.3's explanation and step counts. The checks of
+   * api.md 139-143 apply.
+   */
+  async patchEvidence(
+    id: string,
+    index: number,
+    patch: Partial<Omit<QueryEvidence, 'index'>>,
+  ): Promise<WorkflowRun> {
+    return this.withAnswerLock(id, async () => {
+      const { run, answer, evidence } = await this.answered(id);
+      const entry = this.evidenceAt(evidence, index);
+      const next = evidence.map((e) =>
+        e === entry ? { ...e, ...patch, index: e.index } : e,
+      );
+      const updated = await this.repository.update(id, {
+        answer: { ...answer, evidence: next },
+      });
+      return this.wire(
+        updated ?? { ...run, answer: { ...answer, evidence: next } },
+      );
+    });
+  }
+
+  /**
+   * Build the evidence of an answer stored before the feature and size its
+   * tables (api.md 139). Called again with nothing missing, it runs no
+   * query and writes nothing.
+   */
+  async prepareEvidence(id: string): Promise<WorkflowRun> {
+    return this.withAnswerLock(id, async () => {
+      const { run, answer } = await this.answered(id);
+      const evidence = await this.queryEvidence.prepare(answer, run.datasets);
+      if (!evidence) return this.wire(run);
+      const updated = await this.repository.update(id, {
+        answer: { ...answer, evidence },
+      });
+      return this.wire(updated ?? { ...run, answer: { ...answer, evidence } });
+    });
+  }
+
+  /** Run one of the answer's queries again; nothing is stored (api.md 142). */
+  async rerunQuery(id: string, index: number): Promise<QueryRerunResult> {
+    const { run, record, entry } = await this.runnableQuery(id, index);
+    return this.queryEvidence.rerun(record, entry, run.datasets);
+  }
+
+  /**
+   * One query's rows as CSV (api.md 143): up to 50,000, `cut` when more
+   * existed. The file is `query-<Q>-<first 8 of the run id>.csv`.
+   */
+  async queryCsv(
+    id: string,
+    index: number,
+  ): Promise<QueryExport & { filename: string; q: number }> {
+    const { run, record, entry, evidence } = await this.runnableQuery(
+      id,
+      index,
+    );
+    const exported = await this.queryEvidence.exportRows(
+      record,
+      entry,
+      run.datasets,
+    );
+    const q = evidence.indexOf(entry) + 1;
+    return { ...exported, q, filename: `query-${q}-${run.id.slice(0, 8)}.csv` };
+  }
+
+  /**
+   * The checks every evidence endpoint shares (api.md 139-143): 404 for no
+   * run or no answer, 400 while the run is running or waiting. The answer's
+   * evidence, derived from `data` when it predates the feature.
+   */
+  private async answered(id: string): Promise<{
+    run: WorkflowRunDoc;
+    answer: ChatMessage;
+    evidence: QueryEvidence[];
+  }> {
     const run = await this.stored(id);
     if (!run.answer) throw new NotFoundException(`Run "${id}" has no answer`);
-    const answer = await this.sessions.rateRunAnswer(
-      id,
-      runHostDoc(run),
-      run.answer.at,
-      rating as 'up' | 'down',
-    );
-    const updated = await this.repository.update(id, { answer });
-    return this.wire(updated ?? { ...run, answer });
+    if (run.status === 'running' || run.status === 'suspended') {
+      throw new BadRequestException('Wait for the run to finish');
+    }
+    return {
+      run,
+      answer: run.answer,
+      evidence: run.answer.evidence ?? evidenceOf(run.answer.data ?? []),
+    };
+  }
+
+  private evidenceAt(evidence: QueryEvidence[], index: number): QueryEvidence {
+    const entry = evidence.find((e) => e.index === index);
+    if (!entry) {
+      throw new BadRequestException(
+        `Query ${index} not found in the run's answer`,
+      );
+    }
+    return entry;
+  }
+
+  /** The checks of 142 and 143: a query of the answer with SQL to run. */
+  private async runnableQuery(id: string, index: number) {
+    const { run, answer, evidence } = await this.answered(id);
+    const entry = this.evidenceAt(evidence, index);
+    const record = (answer.data ?? [])[index];
+    if (!record || record.error || !record.input?.trim()) {
+      throw new BadRequestException(`Query ${index} has no SQL to run`);
+    }
+    return { run, record, entry, evidence };
   }
 
   /**

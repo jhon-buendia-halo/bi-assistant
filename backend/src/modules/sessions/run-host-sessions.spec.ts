@@ -467,6 +467,7 @@ function build(options: BuildOptions = {}) {
         'workflow_run_node_chats',
       ),
     ),
+    {} as never,
   );
   /** A chat session over the same input as `workflow`'s run. */
   const chat = (workflow: Workflow): SessionDoc => {
