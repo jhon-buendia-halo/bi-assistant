@@ -95,31 +95,39 @@ describe('WorkflowLogsDock, the Logs under the canvas (ui.md 4.4b)', () => {
     fixture.detectChanges();
   }
 
-  it('holds the Logs, unfolded, with how far the run got in its header', () => {
+  function unfold(): void {
+    q('workflow-logs-toggle')!.click();
+    fixture.detectChanges();
+  }
+
+  it('starts folded: only its header, with how far the run got', () => {
     const toggle = q('workflow-logs-toggle')!;
     expect(toggle.textContent?.trim()).toBe('Logs');
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(q('workflow-state')).not.toBeNull();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('title')).toBe('Unfold Logs');
+    expect(q('workflow-state')).toBeNull();
+    expect(q('workflow-logs-dock-resize')).toBeNull();
     expect(q('workflow-logs-progress')!.textContent?.trim()).toBe(
       '0 of 3 nodes ran',
     );
-    expect(q('workflow-logs-dock')!.style.height).toBe(`${DEFAULT_HEIGHT}px`);
+    expect(q('workflow-logs-dock')!.style.height).toBe('');
   });
 
-  it('folds to its header and unfolds', () => {
+  it('unfolds to the Logs at the default share and folds back', () => {
     const toggle = q('workflow-logs-toggle')!;
+    unfold();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('title')).toBe('Fold Logs');
+    expect(q('workflow-state')).not.toBeNull();
+    expect(q('workflow-logs-dock')!.style.height).toBe(`${DEFAULT_HEIGHT}px`);
     toggle.click();
     fixture.detectChanges();
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(q('workflow-state')).toBeNull();
-    expect(q('workflow-logs-dock-resize')).toBeNull();
-    expect(q('workflow-logs-dock')!.style.height).toBe('');
-    toggle.click();
-    fixture.detectChanges();
-    expect(q('workflow-state')).not.toBeNull();
   });
 
   it('resizes from its top edge: a horizontal separator with its bounds', () => {
+    unfold();
     expect(handle().getAttribute('aria-orientation')).toBe('horizontal');
     expect(handle().getAttribute('aria-label')).toBe('Resize Logs panel');
     expect(handle().getAttribute('aria-valuemin')).toBe(String(LOGS_DOCK.min));
@@ -130,6 +138,7 @@ describe('WorkflowLogsDock, the Logs under the canvas (ui.md 4.4b)', () => {
   });
 
   it('Arrow Up grows, Arrow Down shrinks, Home and End go to the bounds, and the share is kept', () => {
+    unfold();
     press('ArrowUp');
     expect(now()).toBe(DEFAULT_HEIGHT + DOCK_KEY_STEP);
     expect(Number(localStorage.getItem(LOGS_DOCK.storageKey))).toBeCloseTo(
@@ -148,6 +157,7 @@ describe('WorkflowLogsDock, the Logs under the canvas (ui.md 4.4b)', () => {
   });
 
   it('a double click resets it to the default share', () => {
+    unfold();
     press('Home');
     handle().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     fixture.detectChanges();

@@ -86,6 +86,11 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   const q = (testId: string) =>
     el.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
   const text = (testId: string) => q(testId)?.textContent?.trim() ?? '';
+  /** The Logs start folded; unfold them to reach their rows. */
+  function unfoldLogs(): void {
+    q('workflow-logs-toggle')!.click();
+    fixture.detectChanges();
+  }
 
   it('shows the breadcrumb, the name as h1, the id and kind, and the canvas', () => {
     open(THREE_STEPS);
@@ -147,6 +152,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
 
   it('a node selects it on the canvas and in the Logs; the background clears it', () => {
     open(THREE_STEPS);
+    unfoldLogs();
     q('workflow-node-count-words')!.click();
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('count-words');
@@ -167,6 +173,10 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
 
   it('a Logs row selects its node; the Run toggle folds the Chat, the Logs toggle the Logs', () => {
     open(THREE_STEPS);
+    // The Logs start folded to their header.
+    expect(q('workflow-logs-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    expect(q('workflow-state-node-all')).toBeNull();
+    unfoldLogs();
     q('workflow-state-node-clean-text')!.click();
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('clean-text');
@@ -277,6 +287,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(dock.tagName.toLowerCase()).toBe('app-workflow-run-dock');
     expect(dock.querySelector('app-workflow-run-chat')).not.toBeNull();
     expect(dock.querySelector('app-workflow-state-panel')).toBeNull();
+    unfoldLogs();
     const logs = q('workflow-logs-dock')!;
     expect(logs.querySelector('app-workflow-state-panel')).not.toBeNull();
     const canvas = el.querySelector('app-workflow-canvas') as HTMLElement;

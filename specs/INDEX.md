@@ -1385,10 +1385,10 @@ specs/capabilities/workflows/spec.md:69-69  R28 A run that needs the user's answ
 specs/capabilities/workflows/spec.md:71-88  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:90-94  ## Contracts
 specs/capabilities/workflows/spec.md:96-103  ## UI
-specs/capabilities/workflows/spec.md:105-244  ## Flows
-specs/capabilities/workflows/spec.md:107-205  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:207-244  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:246-262  ## Acceptance
+specs/capabilities/workflows/spec.md:105-245  ## Flows
+specs/capabilities/workflows/spec.md:107-206  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:208-245  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:247-263  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope

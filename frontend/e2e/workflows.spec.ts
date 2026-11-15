@@ -248,6 +248,14 @@ function logsDock(page: Page): Locator {
   return page.getByTestId('workflow-logs-dock');
 }
 
+/** The Logs start folded to their header: unfolds them to show their rows. */
+async function unfoldLogs(page: Page): Promise<void> {
+  const toggle = logsDock(page).getByTestId('workflow-logs-toggle');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}
+
 /** A node's row in the Logs under the canvas: its state is `data-state`. */
 function logRow(page: Page, id: string): Locator {
   return logsDock(page).getByTestId(`workflow-state-node-${id}`);
@@ -503,6 +511,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText(
             'Run succeeded',
           );
+          await unfoldLogs(page);
           for (const [id, title] of V2_MAIN_STEP_IDS) {
             await expect(runStep(page, id)).toContainText(title);
             await expect(runStep(page, id)).toHaveAttribute('data-state', 'done');
@@ -657,6 +666,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await expect(card.getByTestId('workflow-run-input-option-1')).toHaveText(clarification.options[1]);
           await expect(card).toBeFocused();
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Waiting for you');
+          await unfoldLogs(page);
           await expect(logRow(page, 'clarify')).toHaveAttribute('data-state', 'waiting');
           await expect(page.getByTestId('workflow-run-activity')).toHaveText('Waiting for your answer');
           // The agent has not been called: the run stopped at the question.
@@ -731,6 +741,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         await runOnQuestion(page, question);
       });
       await scenarioStep(page, 'Then the Logs show "Analyse" as the current step', async () => {
+        await unfoldLogs(page);
         const current = page.getByTestId('workflow-state').locator('[aria-current="step"]');
         await expect(current).toHaveCount(1);
         await expect(current).toHaveAttribute('data-testid', 'workflow-state-node-analyse');
@@ -797,6 +808,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
     await test.step(
       'And the steps up to "Plan" are "Done", "Analyse" is "Failed" and the steps after it are "Skipped"',
       async () => {
+        await unfoldLogs(page);
         for (const id of ['receive-question', 'load-catalog', 'plan']) {
           await expect(runStep(page, id)).toHaveAttribute('data-state', 'done');
         }
@@ -1007,9 +1019,14 @@ test.describe('Feature: Workflows (the designer)', () => {
       );
       await scenarioStep(
         page,
-        'And there is no Details panel, the Logs are under the canvas and the Run panel with the Chat is on its right',
+        'And there is no Details panel, the Logs are under the canvas, folded to their header, and the Run panel with the Chat is on its right',
         async () => {
           await expect(detailsPanel(page)).toHaveCount(0);
+          await expect(logsDock(page).getByTestId('workflow-logs-toggle')).toHaveAttribute(
+            'aria-expanded',
+            'false',
+          );
+          await expect(logsDock(page).getByTestId('workflow-state')).toHaveCount(0);
           await expectRunPanel(page);
           const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
           const dockBox = await runDock(page).boundingBox();
@@ -1021,7 +1038,10 @@ test.describe('Feature: Workflows (the designer)', () => {
           await expect(logsDock(page).getByRole('heading', { name: 'Logs', exact: true })).toBeVisible();
         },
       );
-      await scenarioStep(page, 'When I double-click Start', async () => {
+      await scenarioStep(page, 'When I unfold the Logs', async () => {
+        await unfoldLogs(page);
+      });
+      await scenarioStep(page, 'And I double-click Start', async () => {
         await page.getByTestId('workflow-node-start').dblclick();
       });
       await scenarioStep(
@@ -1461,6 +1481,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
+  await unfoldLogs(page);
   await page.getByTestId('workflow-state-node-analyse').click();
   await expect(page.getByTestId('workflow-state-toggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('workflow-state-detail')).toBeVisible();

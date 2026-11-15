@@ -80,8 +80,8 @@ export class WorkflowLogsDock {
   protected readonly designer = inject(WorkflowDesigner);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  /** Unfolded by default; folded, only the header shows. */
-  readonly open = signal(true);
+  /** Folded by default (only the header shows); the toggle unfolds it. */
+  readonly open = signal(false);
   /** The column height the canvas and the Logs share, measured. */
   private readonly room = signal(0);
   private readonly ratio = signal(readDockRatio(LOGS_DOCK));

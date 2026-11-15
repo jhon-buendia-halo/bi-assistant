@@ -450,6 +450,12 @@ test(
               .getByTestId('workflow-node-status'),
           ).toHaveText('Done');
         }
+        // The Logs start folded to their header: unfold them to read their rows.
+        const logsToggle = page
+          .getByTestId('workflow-logs-dock')
+          .getByTestId('workflow-logs-toggle');
+        await logsToggle.click();
+        await expect(logsToggle).toHaveAttribute('aria-expanded', 'true');
         const logged = await page
           // The Logs sit under the canvas since the three-zone page.
           .getByTestId('workflow-logs-dock')
