@@ -1,4 +1,5 @@
 import type { ReadinessMaturity } from './readiness.model';
+import type { QueryEvidence } from '../../../shared/query-evidence/query-evidence.model';
 
 export interface ClarificationOption {
   label: string;
@@ -83,6 +84,8 @@ export interface ChatMessage {
   crossCheck?: CrossCheck;
   /** How the assistant worked its way from the question to this answer. */
   reasoning?: ReasoningStep[];
+  /** The query inspector's facts about each data-gathering call of `data`, in `data` order. */
+  evidence?: QueryEvidence[];
   /** Curated knowledge snippets this answer's context carried. */
   knowledge?: KnowledgeUse[];
   /**

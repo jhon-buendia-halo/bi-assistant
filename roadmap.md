@@ -480,6 +480,38 @@ Stories 1.23.28–1.23.33 make the development workflow faster and cheaper, and 
 - **Notes:** requested 2026-11-12. Stacked on 1.23.34 (branch `chore/workflows-v2-only`). Precedent: 1.23.34, Remove the RFP Builder.
 ---
 
+### Milestone 1.25 — Query inspector: every figure links to its query (M1-25)
+
+A user of Answer a Business Question could not tell how its queries were built and distrusted an answer after seeing a `LIMIT 100`. Each figure in an answer links to the query behind it; each query is explained step by step with a coverage label and its row counts; the full result is one click away. Built once in the shared layer so every agent that answers from data gets it (`CLAUDE.md`, *Rules for both workflows*). Confirmed 2026-11-15 (proposal C of three). Epic spec: [specs/epics/M1-25/spec.md](specs/epics/M1-25/spec.md). Plan and contract: [docs/plans/m1-25-query-inspector.md](docs/plans/m1-25-query-inspector.md). Branch: `jhon-buendia-halo/limit-100-query-proposals`. The number 1.24 is not used: it names plan sections of Milestone 1.23.
+
+#### 1.25.1 — Backend evidence layer: row totals, coverage, table sizes, re-run and CSV  `🚧 In progress`
+- **Intent:** every data-gathering tool call of an answer is stored with the facts that say how much data it stands for, with no change to what any model receives.
+- **Scope:** per plan 1.25.1, on the contract of plan section 2 and the decisions of plan section 3: `totalRows` from the three connectors; the facts passed beside the tool result; `ChatMessage.evidence` derived at persist; the pure modules `query-coverage`, `query-tables`, `query-evidence`; `QueryEvidenceService`; the lock per run; endpoints 139, 142 and 143; api.md 139 to 143, data-model.md, agents.md.
+- **Out of scope:** the frontend; the explainer and endpoints 140 and 141 (1.25.3); any prompt, tool description or `ToolDataRecord` field; the Answer a Business Question workflow files.
+- **Acceptance:** `query-coverage.spec.ts` (the six cases of plan 1.25.1); a `run_readonly_sql` result has no `totalRows` key; a turn's stored answer has one `evidence` entry per data record; 139 sizes each table once and runs nothing when called again; 142 stores nothing; 143 answers CSV with `X-Rows-Cut` when cut; rating an answer (128) still works through the lock.
+- **Notes:** no UI. Wave 1, parallel with 1.25.2. Opus: it touches the turn path every agent uses.
+
+#### 1.25.2 — Answer view: figure chips, coverage line and query rows  `🚧 In progress`
+- **Intent:** in a host that turns the inspector on, each figure of an answer shows which query it came from, and the answer's queries are listed with their coverage.
+- **Scope:** per plan 1.25.2, on plan section 2 (2.4 test ids, 2.5 copy) and plan section 3 (3a): `figure-refs.ts`, `query-labels.ts`, the `query-evidence-summary` component, `renderMarkdown`, the answer view's `queryInspector` input and `inspectQuery` output, the chip styles; the query inspector's rules in the agent-answers spec and its section in ui.md.
+- **Out of scope:** `features/workflows/` and the inspector sheet (1.25.4); the backend; any visible change when `queryInspector` is false.
+- **Acceptance:** `figure-refs.spec.ts` (the cases of plan 1.25.2); with `queryInspector` true the answer view shows chips, the coverage line and one row per query, and emits `inspectQuery` with the record index on a chip or a row; with it false, `answer-view.spec.ts` passes unchanged.
+- **Notes:** UI story, but no host turns the mode on until 1.25.4: its scenario is 1.25.4's, so write unit tests only and no Playwright test. Wave 1, parallel with 1.25.1.
+
+#### 1.25.3 — The query explainer and the step counts  `📋 Planned`
+- **Intent:** opening a query explains it step by step in business words, and exact row counts per step are shown only when they can be verified.
+- **Scope:** per plan 1.25.3, on plan section 2 (2.3, 2.5) and plan section 3 (3f): the System agent `query-explainer` (Hannah), `explanationOf`, `showStep`, `fallbackExplanation`, `checkStageCounts`, `MastraService.explainQuery`, endpoints 140 and 141; agents.md.
+- **Out of scope:** the frontend's source; the Answer a Business Question workflow and its prompts; evals for the new agent.
+- **Acceptance:** the `checkStageCounts` and `explanationOf` cases of plan 1.25.3; 140 stores the explanation once and a second call makes no model request; a reply that is no JSON object stores the code-built steps with `fallback: true`; 141 stores `unverified` with its reason and no step count when a check fails; `agent-personas.spec.ts` lists the new persona.
+- **Notes:** no UI. Wave 2, after 1.25.1, parallel with 1.25.4. Edit the sql cards of `frontend/e2e/agent-hub.spec.ts` without running Playwright: the lead's wave check runs it.
+
+#### 1.25.4 — The inspector and its Run panel host  `📋 Planned`
+- **Intent:** from an answer of Answer a Business Question, a chip or a query row opens the query inspector beside the answer: its steps, its result and its SQL, with download, re-run and copy.
+- **Scope:** per plan 1.25.4, on plan section 2 (2.4, 2.5) and plan section 3 (3b, 3c): the `query-inspector` component, `rows-csv.ts`, the run adapter of `QUERY_EVIDENCE_API`, the API methods for 139 to 143, the designer's open query state and `prepare()`, the sheet on the workflow page, the Run panel turning the mode on; the Playwright assertions of plan section 4; ui.md 4.4b, the workflows spec, the datasources spec.
+- **Out of scope:** the backend; other hosts of the answer view.
+- **Acceptance:** `workflow-runs.spec.ts` with `@demo @story-1.25.4`: run a question, see a chip after a figure and the coverage line, open the query from the chip, read its last step, switch to Result and SQL, copy the SQL, close with Escape and get the focus back on the chip; the Playwright specs listed in plan section 4 pass with the new copy; the designer and inspector unit tests of plan 1.25.4.
+- **Notes:** UI story. Wave 2, after 1.25.2, parallel with 1.25.3. The stub model's reply to the explainer is no JSON object, so the scenario reads the code-built steps (Start from, Show).
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

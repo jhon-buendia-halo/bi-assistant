@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-481  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-513  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -297,20 +297,25 @@ roadmap.md:463-464  #### 1.23.32 — Playwright in parallel  `✅ Done`
 roadmap.md:466-468  #### 1.23.33 — Split `app.ts` / `app.html` by area  `✅ Done`
 roadmap.md:470-474  #### 1.23.34 — Remove the RFP Builder and the Intellify RFP API  `✅ Done`
 roadmap.md:476-481  #### 1.23.35 — Only the Questions to Insights v2 workflow; agents are a library  `✅ Done`
-roadmap.md:483-487  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:487-487  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:489-491  ## Backlog
+roadmap.md:483-513  ### Milestone 1.25 — Query inspector: every figure links to its query (M1-25)
+roadmap.md:487-492  #### 1.25.1 — Backend evidence layer: row totals, coverage, table sizes, re-run and CSV  `🚧 In progress`
+roadmap.md:494-499  #### 1.25.2 — Answer view: figure chips, coverage line and query rows  `🚧 In progress`
+roadmap.md:501-506  #### 1.25.3 — The query explainer and the step counts  `📋 Planned`
+roadmap.md:508-513  #### 1.25.4 — The inspector and its Run panel host  `📋 Planned`
+roadmap.md:515-519  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:519-519  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:521-523  ## Backlog
 
-specs/README.md:7-88  ## Layout
+specs/README.md:7-89  ## Layout
 specs/README.md:28-54  ### Capabilities
-specs/README.md:56-88  ### Epics
-specs/README.md:90-94  ## Stack neutrality
-specs/README.md:96-105  ## Data assets
-specs/README.md:107-168  ## Formats
-specs/README.md:109-143  ### Capability spec — `capabilities/<capability>/spec.md`
-specs/README.md:145-168  ### Epic spec — `epics/<EPIC-ID>/spec.md`
-specs/README.md:170-174  ## Lifecycle
-specs/README.md:176-182  ## Rebuild prompt
+specs/README.md:56-89  ### Epics
+specs/README.md:91-95  ## Stack neutrality
+specs/README.md:97-106  ## Data assets
+specs/README.md:108-169  ## Formats
+specs/README.md:110-144  ### Capability spec — `capabilities/<capability>/spec.md`
+specs/README.md:146-169  ### Epic spec — `epics/<EPIC-ID>/spec.md`
+specs/README.md:171-175  ## Lifecycle
+specs/README.md:177-183  ## Rebuild prompt
 
 specs/capabilities/agent-answers/spec.md:7-9  ## Concepts
 specs/capabilities/agent-answers/spec.md:11-180  ## Rules
@@ -1623,6 +1628,14 @@ specs/epics/M1-23/spec.md:49-66  ## Stories
 specs/epics/M1-23/spec.md:68-77  ## Specs touched
 specs/epics/M1-23/spec.md:79-86  ## Acceptance
 specs/epics/M1-23/spec.md:88-95  ## Dependencies, risks and open questions
+
+specs/epics/M1-25/spec.md:5-13  ## Goal
+specs/epics/M1-25/spec.md:15-26  ## Scope
+specs/epics/M1-25/spec.md:28-34  ## Out of scope
+specs/epics/M1-25/spec.md:36-43  ## Stories
+specs/epics/M1-25/spec.md:45-53  ## Specs touched
+specs/epics/M1-25/spec.md:55-62  ## Acceptance
+specs/epics/M1-25/spec.md:64-69  ## Dependencies, risks and open questions
 
 specs/product/non-functional.md:5-19  ## 1. Platforms and delivery
 specs/product/non-functional.md:21-33  ## 2. Local-first data
