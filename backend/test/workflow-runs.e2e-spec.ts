@@ -100,8 +100,10 @@ const V2_STEP_TRAIL = [
   'write-answer:success',
   'wrap-up:running',
   'wrap-up:success',
-  // The branch not taken, once the run ended.
+  // The branches not taken, once the run ended: Clarify, and Check data
+  // quality, which the input did not ask for (agents.md 5.11).
   'clarify:skipped',
+  'check-data-quality:skipped',
 ];
 
 /** A step frame or stored step as `id:status[:attempt]`. */
@@ -364,6 +366,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       'analyse:success:2',
       'validate:success:1',
       'validate:success:2',
+      'check-data-quality:skipped',
       'write-answer:success',
       'wrap-up:success',
     ]);
@@ -430,10 +433,11 @@ describe('Streamed runs of agent workflows (API)', () => {
       .body as { contractHash?: string };
     expect(stored.contractHash).toBe(detail.contractHash);
     // Every step on the path ran and passed on exactly the fields its schema
-    // requires; Clarify, the branch not taken, was skipped.
+    // requires; Clarify and Check data quality, the branches not taken,
+    // were skipped.
     expect(
       run.steps.filter((step) => step.status === 'skipped').map((s) => s.id),
-    ).toEqual(['clarify']);
+    ).toEqual(['clarify', 'check-data-quality']);
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       const declared = detail.steps.find((entry) => entry.id === step.id)!;
       expect({ id: step.id, status: step.status }).toEqual({
@@ -812,6 +816,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           'analyse:success:2',
           'validate:success:1',
           'validate:success:2',
+          'check-data-quality:skipped',
           'write-answer:success',
           'wrap-up:success',
         ]);
@@ -914,6 +919,7 @@ describe('Streamed runs of agent workflows (API)', () => {
           'analyse:success:2',
           'validate:success:1',
           'validate:success:2',
+          'check-data-quality:skipped',
           'write-answer:success',
           'wrap-up:success',
         ]);
