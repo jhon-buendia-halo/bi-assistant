@@ -198,7 +198,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     const evidence = (r: { url: string; method: string }) =>
       r.method === 'POST' && r.url.endsWith('/workflow-runs/r1/answer/evidence');
 
-    it('shows the query rows and a chip, builds the evidence once, and opens the inspector from a row', () => {
+    it('shows the query rows and a chip, builds the evidence once, and opens the inspector from a row', async () => {
       const { fixture, http, el } = mountWithHttp(WITH_QUERIES);
       http.expectOne(evidence).flush({ ok: true, run: WITH_QUERIES });
       fixture.detectChanges();
@@ -210,6 +210,9 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       expect(el.querySelector('[data-testid="query-inspector"]')).toBeNull();
 
       row.click();
+      fixture.detectChanges();
+      // The inspector is a deferred block: it renders once its chunk has loaded.
+      await fixture.whenStable();
       fixture.detectChanges();
       const sheet = el.querySelector('[data-testid="query-inspector-sheet"]')!;
       expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain(

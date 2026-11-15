@@ -79,12 +79,15 @@
       data-testid="query-inspector-sheet"
       class="absolute inset-y-0 right-0 z-30 w-full max-w-[720px] border-l border-border shadow-lg"
     >
-      <app-query-inspector
-        [message]="open.answer"
-        [index]="open.query"
-        (close)="closeQuery()"
-        (navigate)="inspectQuery(open.message, $event)"
-      />
+      <!-- Deferred: the inspector loads when a query is first opened, not with the page. -->
+      @defer (on immediate) {
+        <app-query-inspector
+          [message]="open.answer"
+          [index]="open.query"
+          (close)="closeQuery()"
+          (navigate)="inspectQuery(open.message, $event)"
+        />
+      }
     </div>
   }
 </div>
