@@ -2,6 +2,13 @@
 
 Running log of every meaningful change, newest first. One entry per epic, written when its PR opens; see step 10 of the `workflow-gate` skill. Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-11-15
+
+### Changed
+- **A workflow's agent steps read like an artifact** (Free style, no roadmap story; [ui.md](specs/system/ui.md) 4.4b). Double-clicking Plan, Analyse, Check data quality or Write answer opens the step's chat beside a report of its run. Its **Preview** tells what the step received, what it did (one line per tool call, with the query's rationale and its SQL on demand), the last query's result with bars, and what it returned; it is built from the stored run data, without a model call. **Data** holds the Input and Output, **Config** the Parameters and Settings, and **Copy** copies the report as Markdown. The chat opens with the step's own words, a card to the report and suggested questions. Every other node's dialog stacks Input, its Parameters and Settings tabs and Output, with Input and Output collapsed.
+- **A workflow page's header fits on one line**: `Workflows / <name>`, the steps chip and the id; the canvas starts 62 px higher.
+- No evidence folder or demo (Free style); `qa.mjs --free` 6/6, the workflows E2E 14/14 and the agent-hub, navigation, workflow-runs and runs E2E 48/48 (web; desktop not run).
+
 ## 2026-11-12
 
 ### Added
