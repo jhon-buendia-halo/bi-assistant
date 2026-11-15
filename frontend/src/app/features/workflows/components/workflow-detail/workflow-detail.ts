@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { QueryInspector } from '../../../../shared/query-evidence/query-inspector/query-inspector';
 import { QUERY_EVIDENCE_API } from '../../../../shared/query-evidence/query-evidence.model';
+import { focusQueryOpener } from '../../../../shared/query-evidence/query-opener';
 import { RunQueryEvidenceApi } from '../../services/run-query-evidence-api';
 import { Loader2, LucideAngularModule, TriangleAlert } from 'lucide-angular';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
@@ -125,16 +126,7 @@ export class WorkflowDetailPage {
    * (found again by its test id when the answer was redrawn meanwhile).
    */
   closeQuery(): void {
-    const opener = this.designer.closeQuery();
-    if (opener === null) return;
-    setTimeout(() => {
-      const target = opener.el.isConnected
-        ? opener.el
-        : opener.selector === null
-          ? null
-          : this.host.nativeElement.ownerDocument.querySelector(opener.selector);
-      (target as HTMLElement | null)?.focus();
-    });
+    focusQueryOpener(this.designer.closeQuery());
   }
 
   /** The dialog's agent link: the dialog closes and the agent's page opens. */

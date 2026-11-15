@@ -9,14 +9,19 @@ import { WorkflowDesigner } from './workflow-designer.service';
 import { WorkflowRunsApiService } from './workflow-runs-api.service';
 
 /**
- * The query inspector's host adapter for the Run panel: it calls the run's
- * evidence endpoints (api.md 139 to 143) for the run the designer shows, and
- * hands each updated run back to the designer so the answer view redraws.
+ * The query inspector's adapter over a stored run: it calls the run's
+ * evidence endpoints (api.md 139 to 143) for the run its host shows, and hands
+ * each updated run back to the host so the answer view redraws. A host
+ * (the Run panel, the run detail page) only says which run is shown and how to
+ * show an updated one.
  */
-@Injectable()
-export class RunQueryEvidenceApi implements QueryEvidenceApi {
-  private readonly designer = inject(WorkflowDesigner);
+export abstract class RunEvidenceApi implements QueryEvidenceApi {
   private readonly runs = inject(WorkflowRunsApiService);
+
+  /** The run the host shows; null when none is stored yet. */
+  protected abstract shownRun(): WorkflowRun | null;
+  /** Show the run a call answered (when it is still the one shown). */
+  protected abstract showRun(run: WorkflowRun): void;
 
   prepare(): Observable<void> {
     return this.withRun((id) =>
@@ -47,18 +52,31 @@ export class RunQueryEvidenceApi implements QueryEvidenceApi {
   }
 
   private withRun<T>(call: (id: string) => Observable<T>): Observable<T> {
-    const id = this.designer.run()?.id;
+    const id = this.shownRun()?.id;
     return id === undefined
       ? throwError(() => new Error('The run is not stored yet'))
       : call(id);
   }
 
-  /** Show the run the call answered; the caller needs nothing else. */
   private apply() {
     return (source: Observable<{ run: WorkflowRun }>): Observable<void> =>
       source.pipe(
-        tap((response) => this.designer.applyRun(response.run)),
+        tap((response) => this.showRun(response.run)),
         map(() => undefined),
       );
+  }
+}
+
+/** The Run panel of a workflow's page: the run is the designer's. */
+@Injectable()
+export class RunQueryEvidenceApi extends RunEvidenceApi {
+  private readonly designer = inject(WorkflowDesigner);
+
+  protected shownRun(): WorkflowRun | null {
+    return this.designer.run();
+  }
+
+  protected showRun(run: WorkflowRun): void {
+    this.designer.applyRun(run);
   }
 }

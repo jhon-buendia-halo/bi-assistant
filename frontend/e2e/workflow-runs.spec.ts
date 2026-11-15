@@ -11,7 +11,7 @@ import {
   messageText,
   startLlmStub,
 } from './helpers/llm-stub';
-import { worldCupKey } from './helpers/world-cup-db';
+import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Workflow runs" in specs/capabilities/workflows/spec.md:
@@ -206,8 +206,10 @@ test.describe('Feature: Workflow runs', () => {
         "And I see the stub's answer with its SQL, and every step Done but Clarify",
         async () => {
           await expect(runAnswer(page)).toContainText(ANSWER);
-          await runAnswer(page).getByText(/Data used \(1 query\)/).click();
-          await expect(runAnswer(page).locator('pre', { hasText: SQL })).toBeVisible();
+          await page.getByTestId('query-row-0').click();
+          await page.getByTestId('query-inspector-tab-sql').click();
+          await expect(page.getByTestId('query-sql')).toHaveText(SQL);
+          await page.getByTestId('query-inspector-close').click();
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
           for (const id of V2_STEPS) {
             await expect(nodeStatus(page, id)).toHaveText('Done');
@@ -250,6 +252,149 @@ test.describe('Feature: Workflow runs', () => {
           expect(next, 'the follow-up after both').toBeGreaterThan(answer);
         },
       );
+    },
+  );
+
+  test(
+    'I open a query of an answer in the inspector and read how it was built',
+    { tag: ['@demo', '@story-1.25.4'] },
+    async ({ page }) => {
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
+        origin: new URL(page.url()).origin,
+      });
+      const total = Number(await worldCupScalar(`SELECT COUNT(*) FROM ${worldCupKey('matches')}`));
+      const sql = `SELECT COUNT(*) AS total_matches FROM ${worldCupKey('matches')}`;
+      const question = 'How many matches does the data hold?';
+      stub.reply = (request) => {
+        if (!isTurn(request, question)) return { text: 'The stub model answered this question.' };
+        return afterToolResult(request)
+          ? { text: `The data holds ${total.toLocaleString('en-US')} matches.` }
+          : {
+              toolCall: {
+                name: toolName(request, 'run_readonly_sql'),
+                arguments: { sql, rationale: 'Counting all the matches.' },
+              },
+            };
+      };
+      const sheet = page.getByTestId('query-inspector');
+
+      await scenarioStep(page, `When I run "${question}" on "${WORLD_CUP_DATASET}"`, async () => {
+        await openWorkflowPage(page, V2_ID, V2);
+        await openRunTab(page);
+        await fillRun(page, question, WORLD_CUP_DATASET);
+        await page.getByTestId('workflow-run').click();
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      });
+      await scenarioStep(page, 'Then I see the coverage line and a query row with its chip', async () => {
+        await expect(page.getByTestId('query-coverage-line')).toContainText('table was read');
+        const row = page.getByTestId('query-row-0');
+        await expect(row).toContainText('Counting all the matches.');
+        await expect(row.getByTestId('query-coverage-chip')).toHaveText('Whole table');
+        await expect(runAnswer(page).getByText('How I worked this out')).toHaveCount(0);
+        await expect(runAnswer(page).getByText(/Data used/)).toHaveCount(0);
+      });
+      const chip = runAnswer(page).getByTestId('figure-ref').first();
+      await scenarioStep(page, 'And a figure of the answer carries a chip to its query', async () => {
+        await expect(chip).toHaveText('Q1');
+        await expect(chip).toHaveAttribute('data-query-index', '0');
+      });
+      await scenarioStep(page, 'When I open the query from the chip', async () => {
+        await chip.click();
+      });
+      await scenarioStep(page, 'Then the inspector opens beside the answer and I read its last step', async () => {
+        await expect(sheet).toBeVisible();
+        await expect(sheet).toHaveAttribute('aria-modal', 'false');
+        await expect(page.getByTestId('query-inspector-close')).toBeFocused();
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-inspector-title')).toHaveText('Counting all the matches.');
+        await expect(page.getByTestId('query-inspector-meta')).toContainText('PostgreSQL');
+        await expect(page.getByTestId('query-inspector-tab-steps')).toHaveAttribute('aria-selected', 'true');
+        const steps = page.getByTestId('query-funnel-step');
+        await expect(steps.first()).toHaveAttribute('data-verb', 'start');
+        await expect(steps.last()).toHaveAttribute('data-verb', 'show');
+        await expect(steps.last()).toContainText('Show');
+        // The sheet stays clear of the Run panel and the answer stays visible.
+        const sheetBox = (await page.getByTestId('query-inspector-sheet').boundingBox())!;
+        const dockBox = (await runDock(page).boundingBox())!;
+        expect(sheetBox.x + sheetBox.width).toBeLessThanOrEqual(dockBox.x + 1);
+        expect(sheetBox.width).toBeLessThanOrEqual(720);
+        await expect(runAnswer(page)).toBeVisible();
+      });
+      await scenarioStep(page, 'When I switch to Result and to SQL', async () => {
+        await page.getByTestId('query-inspector-tab-result').click();
+        await expect(page.getByTestId('query-result-table')).toContainText('total_matches');
+        await expect(page.getByTestId('query-result-table')).toContainText(String(total));
+        await page.getByTestId('query-inspector-tab-sql').click();
+        await expect(page.getByTestId('query-sql')).toHaveText(sql);
+      });
+      await scenarioStep(page, 'And I copy the SQL', async () => {
+        await page.getByTestId('query-copy-sql').click();
+        await expect(page.getByText('SQL copied to clipboard')).toBeVisible();
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(sql);
+      });
+      await scenarioStep(page, 'And I press Escape', async () => {
+        await page.keyboard.press('Escape');
+      });
+      await scenarioStep(page, 'Then the inspector closes and the focus is back on the chip', async () => {
+        await expect(sheet).toHaveCount(0);
+        await expect(runAnswer(page).getByTestId('figure-ref').first()).toBeFocused();
+      });
+    },
+  );
+
+  test(
+    'I open the query of a stored run from the Runs page',
+    { tag: ['@demo', '@story-1.25.5'] },
+    async ({ page }) => {
+      const sql = `SELECT COUNT(*) AS total_matches FROM ${worldCupKey('matches')}`;
+      const question = 'How many matches does the data hold?';
+      stub.reply = (request) => {
+        if (!isTurn(request, question)) return { text: 'The stub model answered this question.' };
+        return afterToolResult(request)
+          ? { text: 'The data holds many matches.' }
+          : {
+              toolCall: {
+                name: toolName(request, 'run_readonly_sql'),
+                arguments: { sql, rationale: 'Counting all the matches.' },
+              },
+            };
+      };
+
+      await scenarioStep(page, `Given I ran "${question}" on "${WORLD_CUP_DATASET}"`, async () => {
+        await openWorkflowPage(page, V2_ID, V2);
+        await openRunTab(page);
+        await fillRun(page, question, WORLD_CUP_DATASET);
+        await page.getByTestId('workflow-run').click();
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      });
+      await scenarioStep(page, 'When I open that run from the Runs page', async () => {
+        await railItem(page, 'Runs').click();
+        await page.getByTestId(/^run-[0-9a-f]{8}-/).first().getByRole('button').first().click();
+        await expect(page.getByTestId('run-detail-answer')).toContainText('The data holds many matches.');
+      });
+      await scenarioStep(page, 'Then I see its coverage line and its query row', async () => {
+        const answer = page.getByTestId('run-detail-answer');
+        await expect(answer.getByTestId('query-coverage-line')).toContainText('table was read');
+        await expect(answer.getByTestId('query-row-0')).toContainText('Counting all the matches.');
+        await expect(answer.getByText(/Data used/)).toHaveCount(0);
+      });
+      await scenarioStep(page, 'When I open the query from its row', async () => {
+        await page.getByTestId('query-row-0').click();
+      });
+      await scenarioStep(page, 'Then the inspector shows its steps and the focus is on its close button', async () => {
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-funnel-step').last()).toHaveAttribute('data-verb', 'show');
+        await expect(page.getByTestId('query-inspector-close')).toBeFocused();
+        const sheet = (await page.getByTestId('query-inspector-sheet').boundingBox())!;
+        expect(sheet.width).toBeLessThanOrEqual(720);
+      });
+      await scenarioStep(page, 'When I press Escape', async () => {
+        await page.keyboard.press('Escape');
+      });
+      await scenarioStep(page, 'Then it closes and the focus is back on the row', async () => {
+        await expect(page.getByTestId('query-inspector')).toHaveCount(0);
+        await expect(page.getByTestId('query-row-0')).toBeFocused();
+      });
     },
   );
 

@@ -4,6 +4,10 @@ import {
   Dataset,
   DatasetsApiService,
 } from '../../datasets/services/datasets-api.service';
+import {
+  QueryOpener,
+  queryOpenerOf,
+} from '../../../shared/query-evidence/query-opener';
 import { ToastService } from '../../../core/toast/toast.service';
 import { MessageFeedback } from '../../sessions/models/session.model';
 import {
@@ -96,7 +100,7 @@ export class WorkflowDesigner {
   /** The query open in the inspector sheet (an index into the answer's `data`); null when none is. */
   readonly openQueryIndex = signal<number | null>(null);
   /** What opened the sheet, to give the focus back on close. */
-  private queryOpener: { el: Element; selector: string | null } | null = null;
+  private queryOpener: QueryOpener | null = null;
   /** The runs whose answer evidence was already requested (api.md 139): once per run id. */
   private readonly preparedRuns = new Set<string>();
   /**
@@ -519,22 +523,13 @@ export class WorkflowDesigner {
   openQuery(index: number, opener: Element | null = null): void {
     this.runDockMaximized.set(false);
     if (this.openQueryIndex() === null && opener !== null) {
-      const testid = opener.getAttribute('data-testid');
-      const query = opener.getAttribute('data-query-index');
-      this.queryOpener = {
-        el: opener,
-        selector:
-          testid === null
-            ? null
-            : `[data-testid="${testid}"]` +
-              (query === null ? '' : `[data-query-index="${query}"]`),
-      };
+      this.queryOpener = queryOpenerOf(opener);
     }
     this.openQueryIndex.set(index);
   }
 
   /** Close the sheet; answers what opened it, to focus again. */
-  closeQuery(): { el: Element; selector: string | null } | null {
+  closeQuery(): QueryOpener | null {
     const opener = this.queryOpener;
     this.queryOpener = null;
     this.openQueryIndex.set(null);
