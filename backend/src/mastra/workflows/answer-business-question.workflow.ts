@@ -5,20 +5,20 @@ import {
   type ExecuteFunctionParams,
 } from '@mastra/core/workflows';
 import { z } from 'zod';
-import { analysePlanBlock } from './qti-v2-turn.prompts';
+import { analysePlanBlock } from './answer-business-question.prompts';
 import {
-  QTI_V2_TURN_STEP_SCHEMAS,
+  ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   analyseInputSchema,
   planInputSchema,
-  qtiV2TurnResultSchema,
+  answerBusinessQuestionResultSchema,
   turnInputSchema,
   turnSummarySchema,
   dataQualityInputSchema,
-} from './qti-v2-turn.schemas';
+} from './answer-business-question.schemas';
 import {
-  QTI_V2_TURN_RUNTIME_KEY,
-  QTI_V2_TURN_STEPS,
-  QTI_V2_TURN_WORKFLOW_ID,
+  ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
+  ANSWER_BUSINESS_QUESTION_STEPS,
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   analysisLoopDone,
   catalogBlock,
   clarifyingQuestionOf,
@@ -30,11 +30,11 @@ import {
   receiveQuestion,
   validateAttempt,
   wrapUp,
-  type QtiV2TurnRuntime,
-} from './qti-v2-turn.steps';
+  type AnswerBusinessQuestionRuntime,
+} from './answer-business-question.steps';
 import { engineInputSchema, withContract } from './workflow-contract';
 
-// The turn of Questions to Insights v2 as a workflow defined in code
+// The turn of Insights Analyst as a workflow defined in code
 // (ADR-0034; agents.md 5.11), on Mastra's control flow
 // (https://mastra.ai/docs/workflows/control-flow) and suspend/resume
 // (https://mastra.ai/docs/workflows/suspend-and-resume, ADR-0043):
@@ -69,19 +69,19 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // runtime (functions on the RequestContext) is handed in again on resume.
 //
 // Every step keeps its data contract (agents.md 5.12): its schemas come
-// from ./qti-v2-turn.schemas.ts, and `withContract` validates its input
+// from ./answer-business-question.schemas.ts, and `withContract` validates its input
 // before it runs and its output after, so a violation fails the step with
 // `Contract violation in <Step title>…` and later steps do not run. The
 // engine sees each step's declared input schema but never refuses with it
 // (`engineInputSchema`), so that message is the one a run shows.
 
 const STEP = Object.fromEntries(
-  QTI_V2_TURN_STEPS.map((step) => [step.id, step]),
+  ANSWER_BUSINESS_QUESTION_STEPS.map((step) => [step.id, step]),
 ) as unknown as Record<
-  keyof typeof QTI_V2_TURN_STEP_SCHEMAS,
+  keyof typeof ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   { id: string; title: string }
 >;
-const SCHEMAS = QTI_V2_TURN_STEP_SCHEMAS;
+const SCHEMAS = ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS;
 
 /** What the engine hands the execute of a step with these schemas. */
 type StepParams<
@@ -111,9 +111,10 @@ const persistWhileWaiting = ({ workflowStatus }: { workflowStatus: string }) =>
 function runtimeOf(
   params: { requestContext: { get(key: string): unknown } },
   title: string,
-): QtiV2TurnRuntime {
-  const runtime = params.requestContext.get(QTI_V2_TURN_RUNTIME_KEY) as
-    QtiV2TurnRuntime | undefined;
+): AnswerBusinessQuestionRuntime {
+  const runtime = params.requestContext.get(
+    ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
+  ) as AnswerBusinessQuestionRuntime | undefined;
   if (!runtime) throw new Error(`The ${title} step has no turn to run`);
   return runtime;
 }
@@ -295,8 +296,8 @@ const validateStep = createStep({
 /** Whether the run checks data quality: its runtime says so (the input). */
 function checksDataQuality(requestContext: unknown): boolean {
   const context = requestContext as { get(key: string): unknown } | undefined;
-  const runtime = context?.get(QTI_V2_TURN_RUNTIME_KEY) as
-    QtiV2TurnRuntime | undefined;
+  const runtime = context?.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
+    AnswerBusinessQuestionRuntime | undefined;
   return runtime?.checksDataQuality === true;
 }
 
@@ -471,12 +472,12 @@ const analysisPathWorkflow = createWorkflow({
   ])
   .commit();
 
-export const qtiV2TurnWorkflow = createWorkflow({
-  id: QTI_V2_TURN_WORKFLOW_ID,
+export const answerBusinessQuestionWorkflow = createWorkflow({
+  id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   description:
-    'One turn of Questions to Insights v2: receive the question, load the catalog, plan (asking the user first when the question is ambiguous), then analyse and validate (retried once) and write the answer.',
+    'One turn of Insights Analyst: receive the question, load the catalog, plan (asking the user first when the question is ambiguous), then analyse and validate (retried once) and write the answer.',
   inputSchema: turnInputSchema,
-  outputSchema: qtiV2TurnResultSchema,
+  outputSchema: answerBusinessQuestionResultSchema,
   options: {
     // The run's input is validated against `turnInputSchema` before the
     // first step (the input node has already checked it, api.md 118, 119).

@@ -111,7 +111,7 @@ function build() {
   });
   const registry: Record<string, unknown> = {
     assistant: agent('Questions to Insights Assistant'),
-    'assistant-v2': agent('Questions to Insights v2'),
+    'insights-analyst': agent('Insights Analyst'),
     'data-readiness': agent('Data Readiness Agent'),
     'sql-fixer': agent('SQL Fixer'),
   };
@@ -177,9 +177,9 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
       ],
       [
         'a v2 session saved before workflows',
-        { agentKey: 'assistant-v2', agentName: 'Questions to Insights v2' },
+        { agentKey: 'insights-analyst', agentName: 'Insights Analyst' },
         {
-          id: 'qti-v2-turn',
+          id: 'answer-business-question',
           name: 'Answer a Business Question',
           kind: 'code',
           deleted: false,
@@ -241,9 +241,9 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
       ],
       [
         'an unresolvable stored workflowId',
-        { workflowId: 'removed-workflow', agentKey: 'assistant-v2' },
+        { workflowId: 'removed-workflow', agentKey: 'insights-analyst' },
         {
-          id: 'qti-v2-turn',
+          id: 'answer-business-question',
           name: 'Answer a Business Question',
           kind: 'code',
           deleted: false,
@@ -262,7 +262,7 @@ describe('SessionsService sessions bound to a workflow (ADR-0040)', () => {
 
     it('never stores workflowRef, and leaves `workflow` (the bar) as it was', async () => {
       const { service } = build();
-      const session = doc({ agentKey: 'assistant-v2' });
+      const session = doc({ agentKey: 'insights-analyst' });
       const view = await service.toView(session);
       expect(session).not.toHaveProperty('workflowRef');
       expect(view.workflow?.source).toBe('workflow');

@@ -16,12 +16,12 @@ import {
 /** The built-in agents' personas: a human name and a job title (R1). */
 const ASSISTANT = 'Emily';
 const ASSISTANT_ROLE = 'Data Analyst';
-/** Questions to Insights v2's persona (agents-evals R107, BA-320). */
+/** Insights Analyst's persona (agents-evals R107, BA-320). */
 const V2_AGENT = 'Michael';
 /** The workflow it runs (workflows R1). */
 const V2 = 'Answer a Business Question';
 const READINESS = 'Sarah';
-const V2_KEY = 'assistant-v2';
+const V2_KEY = 'insights-analyst';
 const V2_DESCRIPTION =
   'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.';
 const V2_TOOLS = [
@@ -277,7 +277,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
   expect(await sectionIds(page)).toEqual(['general']);
 
   await owner.selectOption({ label: 'Official' });
-  // The assistant, Questions to Insights v2 and the Data Readiness Agent
+  // The assistant, Insights Analyst and the Data Readiness Agent
   // are Official, each in its domain (R1, R107).
   await expect(cards(page)).toHaveCount(OFFICIAL_KEYS.length);
   expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
@@ -566,7 +566,7 @@ test(
   },
 );
 
-test('Questions to Insights v2 is an Official card', async ({ page }) => {
+test('Insights Analyst is an Official card', async ({ page }) => {
   await openHub(page);
   const analysis = section(page, 'analysis');
   const card = analysis.getByTestId(`agent-card-${V2_KEY}`);
@@ -577,7 +577,7 @@ test('Questions to Insights v2 is an Official card', async ({ page }) => {
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
 });
 
-test("Questions to Insights v2's page shows its prompt, five tools and three skills", async ({
+test("Insights Analyst's page shows its prompt, five tools and three skills", async ({
   page,
 }) => {
   await openHub(page);
@@ -620,7 +620,7 @@ test("Questions to Insights v2's page shows its prompt, five tools and three ski
   await expect(page.getByText('40 messages')).toBeVisible();
 });
 
-test('saving a Questions to Insights v2 prompt that loses its identity line is refused', async ({
+test('saving an Insights Analyst prompt that loses its identity line is refused', async ({
   page,
 }) => {
   await openHub(page);
@@ -641,7 +641,7 @@ test('saving a Questions to Insights v2 prompt that loses its identity line is r
 
   await expect(
     page.getByText(
-      'The Questions to Insights v2 prompt must start with "You are Questions to Insights"',
+      'The Insights Analyst prompt must start with "You are Questions to Insights"',
     ),
   ).toBeVisible();
   await expect(page.getByTestId('agent-prompt-modified')).toHaveCount(0);
@@ -684,13 +684,13 @@ test(
     await scenarioStep(page, `Then I see "Used in" "${V2}"`, async () => {
       const usedIn = page.getByTestId('agent-used-in');
       await expect(usedIn).toContainText('Used in');
-      await expect(usedIn.getByTestId('agent-used-in-qti-v2-turn')).toHaveText(
+      await expect(usedIn.getByTestId('agent-used-in-answer-business-question')).toHaveText(
         V2,
       );
       await expect(button(page, 'Start chat')).toHaveCount(0);
     });
     await scenarioStep(page, `When I click the "${V2}" chip`, async () => {
-      await page.getByTestId('agent-used-in-qti-v2-turn').click();
+      await page.getByTestId('agent-used-in-answer-business-question').click();
     });
     await scenarioStep(
       page,
@@ -698,7 +698,7 @@ test(
       async () => {
         await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
         await expect(page.getByTestId('workflow-detail-id')).toHaveText(
-          'qti-v2-turn',
+          'answer-business-question',
         );
         await expect(railItem(page, 'Workflows')).toHaveAttribute(
           'aria-current',
@@ -734,7 +734,7 @@ test(
         const usedIn = page.getByTestId('agent-used-in');
         await expect(usedIn).toContainText('Used in');
         await expect(usedIn).not.toContainText(NOT_USED);
-        await expect(usedIn.getByTestId('agent-used-in-qti-v2-turn')).toHaveText(V2);
+        await expect(usedIn.getByTestId('agent-used-in-answer-business-question')).toHaveText(V2);
         await expect(
           usedIn.getByTestId('agent-used-in-data-readiness-assessment'),
         ).toHaveText('Assess Data Readiness');
@@ -807,7 +807,7 @@ test('the agent detail has no detectable accessibility violations in either them
 
   await openHub(page);
   await openAgent(page, V2_KEY, V2_AGENT);
-  await expect(page.getByTestId('agent-used-in-qti-v2-turn')).toBeVisible();
+  await expect(page.getByTestId('agent-used-in-answer-business-question')).toBeVisible();
   await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
   await scan('Official agent');
 

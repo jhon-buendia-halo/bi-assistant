@@ -13,7 +13,7 @@ import {
 /**
  * Mirrors the Feature "Skills the designer is given" in
  * specs/capabilities/visuals/spec.md, through "Generate interactive visuals"
- * on the answer of a Questions to Insights v2 run
+ * on the answer of an Answer a Business Question run
  * (`POST /workflow-runs/:id/visualizations`, api.md 130). The model is the
  * recording OpenAI-compatible stub, so the scenario checks what the backend
  * sent to the visual designer (agents.md sections 6.4 and 7.2).
@@ -93,7 +93,7 @@ test.afterEach(async () => {
 test('a spec-mode designer call carries only the spec-mode reference', async ({
   page,
 }) => {
-  // Given a Questions to Insights v2 run with an answer.
+  // Given an Answer a Business Question run with an answer.
   const run = await runQuestionOk(page, QUESTION);
   expect(run.text).toContain(ANSWER);
   // When I generate an interactive visual from its answer.
@@ -102,7 +102,10 @@ test('a spec-mode designer call carries only the spec-mode reference', async ({
     run: { visualizations?: unknown[] };
   }>(page, 'POST', `/workflow-runs/${run.runId}/visualizations`, {});
   // Then the run holds the visual.
-  expect(generated.run.visualizations ?? [], 'the run holds the visual').toHaveLength(1);
+  expect(
+    generated.run.visualizations ?? [],
+    'the run holds the visual',
+  ).toHaveLength(1);
   expect(JSON.stringify(generated.visualization)).toContain(VISUAL_TITLE);
 
   // And the designer was called once, with only the spec-mode reference.

@@ -306,7 +306,7 @@ export interface SessionDoc {
   agentName?: string;
   /**
    * The registry key of the built-in agent the session is bound to
-   * (`assistant-v2`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
+   * (`insights-analyst`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
    * `agentId`.
    */
   agentKey?: string;

@@ -28,7 +28,7 @@ import { runsOnPickedDatasets } from '../agents/builtin-sessions';
 
 /** One workflow of the catalogue, as `GET /workflows` lists it (api.md 116). */
 export interface WorkflowSummary {
-  /** `qti-v2-turn`, the one catalogue workflow since 1.23.35. */
+  /** `answer-business-question`, the one catalogue workflow since 1.23.35. */
   id: string;
   name: string;
   description: string;
@@ -124,7 +124,7 @@ interface CatalogueEntry {
  * The read-only workflow catalogue (ADR-0040; workflows R1-R3): the
  * code-defined workflows whose agent is registered, built at read time from
  * the pure catalogue (workflow-catalog.ts) and the agent catalogue. Only
- * Questions to Insights v2 (`qti-v2-turn`) since 1.23.35: agents are a
+ * Insights Analyst (`answer-business-question`) since 1.23.35: agents are a
  * library and get no workflow of their own, so an `agent:` id, like the
  * removed `seq-text-demo` and `deep-analysis`, is not found. Nothing is
  * stored or registered per workflow. Runs are `WorkflowRunsService`'s

@@ -1,9 +1,9 @@
 /**
- * The data contract of the turn workflow of Questions to Insights v2
+ * The data contract of the turn workflow of Insights Analyst
  * (agents.md 5.11, 5.12): the Zod schema of the workflow's input and of every
  * step's input and output. The one source of truth: the Mastra workflow
- * (./qti-v2-turn.workflow.ts) builds its steps from it, and the step
- * catalogue (./qti-v2-turn.steps.ts) derives each step's field names and
+ * (./answer-business-question.workflow.ts) builds its steps from it, and the step
+ * catalogue (./answer-business-question.steps.ts) derives each step's field names and
  * JSON Schema from it. Zod only, no framework import, so Jest and the
  * catalogue can load it without Mastra.
  *
@@ -357,14 +357,14 @@ export const turnSummarySchema = z.object({
  * `answer-path`'s Wrap up summary (absent when the turn was stopped). A run
  * waiting for an answer has no result until it is resumed.
  */
-export const qtiV2TurnResultSchema = z.object({
+export const answerBusinessQuestionResultSchema = z.object({
   'analysis-path': z
     .object({ 'answer-path': turnSummarySchema.optional() })
     .optional(),
 });
 
 /** Every step's input and output schema, by step id, in catalogue order. */
-export const QTI_V2_TURN_STEP_SCHEMAS = {
+export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
   'receive-question': { input: turnInputSchema, output: turnInputSchema },
   'load-catalog': { input: turnInputSchema, output: catalogedQuestionSchema },
   plan: { input: planInputSchema, output: plannedQuestionSchema },

@@ -184,7 +184,9 @@ test.describe('OpenAI-compatible', () => {
     );
   });
 
-  test('a run of Questions to Insights v2 runs on the custom endpoint', async ({ page }) => {
+  test('a run of Answer a Business Question runs on the custom endpoint', async ({
+    page,
+  }) => {
     await seedWorldCupDataset(page);
     await saveCustomSettings(page, endpoint, MODEL);
     await page.reload();

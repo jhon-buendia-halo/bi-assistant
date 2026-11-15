@@ -28,16 +28,16 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
-import { qtiV2TurnWorkflow } from './qti-v2-turn.workflow';
+import { answerBusinessQuestionWorkflow } from './answer-business-question.workflow';
 import {
-  QTI_V2_TURN_RUNTIME_KEY,
-  QTI_V2_TURN_STEPS,
-  QTI_V2_TURN_WORKFLOW_ID,
+  ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
+  ANSWER_BUSINESS_QUESTION_STEPS,
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   turnSummaryOf,
   type AnalyseAttempt,
-  type QtiV2Plan,
-  type QtiV2TurnRuntime,
-} from './qti-v2-turn.steps';
+  type AnalysisPlan,
+  type AnswerBusinessQuestionRuntime,
+} from './answer-business-question.steps';
 import {
   ContractViolationError,
   contractJsonSchema,
@@ -89,7 +89,7 @@ interface StubWorkflow extends StubNode {
   createRun(): Promise<StubRun>;
 }
 
-const workflow = qtiV2TurnWorkflow as unknown as StubWorkflow;
+const workflow = answerBusinessQuestionWorkflow as unknown as StubWorkflow;
 
 /** The leaf steps of a workflow, nested workflows walked depth first. */
 function leafSteps(node: StubNode): StubNode[] {
@@ -103,7 +103,7 @@ function leafSteps(node: StubNode): StubNode[] {
   );
 }
 
-const PLAN: QtiV2Plan = {
+const PLAN: AnalysisPlan = {
   question: 'How many matches are in the data?',
   measures: ['match count'],
   entities: ['wc.public.matches'],
@@ -113,7 +113,7 @@ const PLAN: QtiV2Plan = {
   clarification: null,
 };
 
-const CLARIFYING: QtiV2Plan = {
+const CLARIFYING: AnalysisPlan = {
   ...PLAN,
   needsClarification: true,
   clarification: {
@@ -156,7 +156,9 @@ const FAILED_ATTEMPT: AnalyseAttempt = {
 };
 
 /** The runtime's step calls (its flags left out). */
-type TurnCalls = Required<Omit<QtiV2TurnRuntime, 'checksDataQuality'>>;
+type TurnCalls = Required<
+  Omit<AnswerBusinessQuestionRuntime, 'checksDataQuality'>
+>;
 
 /** A runtime whose model steps are mocks, each answering as scripted. */
 type ScriptedTurn = {
@@ -167,7 +169,9 @@ type ScriptedTurn = {
 } & { checksDataQuality?: boolean };
 
 /** A runtime whose model steps answer as scripted. */
-function runtime(overrides: Partial<QtiV2TurnRuntime> = {}): ScriptedTurn {
+function runtime(
+  overrides: Partial<AnswerBusinessQuestionRuntime> = {},
+): ScriptedTurn {
   return {
     plan: jest.fn(() => Promise.resolve({ plan: PLAN, stopped: false })),
     analyse: jest.fn(() => Promise.resolve(GOOD_ATTEMPT)),
@@ -200,11 +204,11 @@ function runtime(overrides: Partial<QtiV2TurnRuntime> = {}): ScriptedTurn {
 
 async function run(
   question: string,
-  turn: ScriptedTurn | QtiV2TurnRuntime | undefined,
+  turn: ScriptedTurn | AnswerBusinessQuestionRuntime | undefined,
   datasets: unknown = ['World Cup'],
 ) {
   const requestContext = new RequestContext();
-  if (turn) requestContext.set(QTI_V2_TURN_RUNTIME_KEY, turn);
+  if (turn) requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, turn);
   const engineRun = await workflow.createRun();
   const drained = await drain(
     engineRun.stream({ inputData: { question, datasets }, requestContext }),
@@ -252,9 +256,9 @@ const CLEAR_PLAN_ROUND = [
   'plan-round:success',
 ];
 
-describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
+describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
   it('builds the nine catalogue steps, in order, with their titles', () => {
-    expect(workflow.id).toBe(QTI_V2_TURN_WORKFLOW_ID);
+    expect(workflow.id).toBe(ANSWER_BUSINESS_QUESTION_WORKFLOW_ID);
     expect(leafSteps(workflow).map((s) => [s.id, s.description])).toEqual([
       ['receive-question', 'Receive question'],
       ['load-catalog', 'Load catalog'],
@@ -319,7 +323,7 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
         output: contractJsonSchema(step.outputSchema!, 'output'),
       })),
     ).toEqual(
-      QTI_V2_TURN_STEPS.map((step) => ({
+      ANSWER_BUSINESS_QUESTION_STEPS.map((step) => ({
         id: step.id,
         input: step.inputSchema,
         output: step.outputSchema,
@@ -327,7 +331,10 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
     );
     expect(
       Object.fromEntries(
-        QTI_V2_TURN_STEPS.map((step) => [step.id, [step.input, step.output]]),
+        ANSWER_BUSINESS_QUESTION_STEPS.map((step) => [
+          step.id,
+          [step.input, step.output],
+        ]),
       ),
     ).toEqual({
       'receive-question': [
@@ -399,7 +406,7 @@ describe('qti-v2-turn workflow (agents.md 5.11, ADR-0034)', () => {
   it('runs with its inputs validated (validateInputs: true)', () => {
     expect(
       (
-        qtiV2TurnWorkflow as unknown as {
+        answerBusinessQuestionWorkflow as unknown as {
           options: { validateInputs?: boolean };
         }
       ).options.validateInputs,

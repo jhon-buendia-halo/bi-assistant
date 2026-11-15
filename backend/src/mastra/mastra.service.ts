@@ -7,7 +7,7 @@ import {
   checkDataQualityWithModel,
   planWithModel,
   writeAnswerWithModel,
-} from './workflows/qti-v2-turn.agents';
+} from './workflows/answer-business-question.agents';
 import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
@@ -74,31 +74,31 @@ export class MastraService {
   }
 
   /**
-   * Questions to Insights v2's Plan step model call (agents.md 5.11): the
+   * Insights Analyst's Plan step model call (agents.md 5.11): the
    * agent's model, no tools, the plan read from its reply.
    */
-  planV2Turn(
+  planAnalysis(
     ...args: Parameters<typeof planWithModel>
   ): ReturnType<typeof planWithModel> {
     return planWithModel(...args);
   }
 
   /**
-   * Questions to Insights v2's Write answer step model call (agents.md
+   * Insights Analyst's Write answer step model call (agents.md
    * 5.11): the agent's model, no tools, the answer streamed to `onText`.
    */
-  writeV2Answer(
+  writeAnswer(
     ...args: Parameters<typeof writeAnswerWithModel>
   ): ReturnType<typeof writeAnswerWithModel> {
     return writeAnswerWithModel(...args);
   }
 
   /**
-   * Questions to Insights v2's optional Check data quality step model call
+   * Insights Analyst's optional Check data quality step model call
    * (agents.md 5.11): Sarah's model, no tools, the issues read from her
    * reply.
    */
-  checkV2DataQuality(
+  checkDataQuality(
     ...args: Parameters<typeof checkDataQualityWithModel>
   ): ReturnType<typeof checkDataQualityWithModel> {
     return checkDataQualityWithModel(...args);

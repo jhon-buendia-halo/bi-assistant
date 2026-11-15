@@ -188,7 +188,7 @@ export interface AgentDetail extends AgentSummary {
   workflow?: AgentWorkflow;
   /**
    * The catalogue workflows whose steps call this agent (api.md 34):
-   * `qti-v2-turn` for `assistant-v2`, none for any other agent.
+   * `answer-business-question` for `insights-analyst`, none for any other agent.
    */
   usedInWorkflows: { id: string; name: string }[];
 }

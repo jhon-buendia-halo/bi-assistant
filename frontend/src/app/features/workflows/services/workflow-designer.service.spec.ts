@@ -63,12 +63,12 @@ class FakeRunsApi {
 
 /** A one-agent-step code workflow over picked datasets, with a checkbox. */
 const ASSISTANT: WorkflowDetail = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: 'Answers questions over the datasets you pick.',
   kind: 'code',
   owner: 'Official',
-  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
   stepCount: 1,
   trigger: 'run',
   input: [
@@ -92,8 +92,8 @@ const ASSISTANT: WorkflowDetail = {
       kind: 'agent',
       summary: 'The agent answers.',
       agent: {
-        key: 'assistant-v2',
-        name: 'Questions to Insights v2',
+        key: 'insights-analyst',
+        name: 'Insights Analyst',
         tools: ['list_entities', 'run_readonly_sql'],
         maxSteps: 8,
       },
@@ -107,8 +107,8 @@ const ASSISTANT: WorkflowDetail = {
 function storedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
     id: 'run-1',
-    workflowId: 'qti-v2-turn',
-    workflowName: 'Questions to Insights v2',
+    workflowId: 'answer-business-question',
+    workflowName: 'Insights Analyst',
     input: { question: 'Which team scored the most goals?', datasets: ['World Cup Core'], verbose: false },
     status: 'success',
     steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { stopped: false } }],
@@ -137,7 +137,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer = TestBed.inject(WorkflowDesigner);
     http = TestBed.inject(HttpTestingController);
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
     http
       .expectOne((r) => r.url.endsWith('/datasets'))
       .flush({ datasets: [{ name: 'World Cup Core', tables: ['a', 'b'], datasourceKind: 'postgres' }] });
@@ -158,7 +158,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       verbose: true,
     });
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     expect(designer.runFormRequest()).toBe(1);
     expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
@@ -166,7 +166,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.checked('verbose')).toBeTrue();
     // A second open starts from the defaults again.
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     expect(designer.runFormRequest()).toBe(0);
   });
@@ -251,7 +251,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       datasets: ['World Cup Core'],
       verbose: false,
     });
-    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     h.onStep!({
       id: 'answer',
       title: 'Answer',
@@ -329,7 +329,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
 
   it("sends the form's typed input to the workflow's stream", () => {
     executeQuestion();
-    expect(runs.last.workflowId).toBe('qti-v2-turn');
+    expect(runs.last.workflowId).toBe('answer-business-question');
     expect(runs.last.body).toEqual({
       input: {
         question: 'Which team scored the most goals?',
@@ -346,7 +346,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()?.status).toBe('running');
     expect(designer.runResult()?.steps.map((s) => s.status)).toEqual([null]);
 
-    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'running' });
     h.onReasoning!('Looking at goals');
@@ -460,7 +460,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   it('an error after the run started fails the run with it, and the running step', () => {
     executeQuestion();
     const h = runs.last.handlers;
-    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     h.onError!('The endpoint rejected the API key (401)');
     expect(designer.runError()).toBeNull();
@@ -474,7 +474,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   it('Stop aborts the stream, shows the run stopped, then reads back the stored run with its partial answer', fakeAsync(() => {
     executeQuestion();
     const h = runs.last.handlers;
-    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
     runs.getRun.and.returnValues(
       of(storedRun({ status: 'running', answer: undefined })),
@@ -558,7 +558,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
 
   it('an old stored run that still carries an rfpId is shown as a plain run', () => {
     executeQuestion();
-    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     runs.last.handlers.onDone!({ ...storedRun(), rfpId: 'rfp-1' } as WorkflowRun);
     expect(designer.run()?.answer?.content).toBe('Brazil scored the most.');
     expect(designer.canFollowUp()).toBe(true);
@@ -568,7 +568,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.nodeChat()).toEqual({ state: 'no-run' });
     executeQuestion();
     expect(designer.nodeChat()).toEqual({ state: 'running' });
-    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     expect(designer.nodeChat()).toEqual({ state: 'running' });
     runs.last.handlers.onDone!(storedRun());
     expect(designer.nodeChat()).toEqual({ state: 'ready', runId: 'run-1' });
@@ -583,7 +583,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
 
   it('a run that failed after it started is stored, so its steps can be chatted about', () => {
     executeQuestion();
-    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     runs.last.handlers.onError!('Model down');
     expect(designer.nodeChat()).toEqual({ state: 'ready', runId: 'run-1' });
   });
@@ -650,7 +650,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.stateOpen.set(false);
     designer.prefillRunAgain({ question: 'Q', datasets: ['World Cup Core'] });
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     expect(designer.stateOpen()).toBeTrue();
   });
@@ -674,7 +674,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
   function openStored(run: WorkflowRun): void {
     designer.showRunOnLoad(run);
     designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
   }
 
@@ -708,7 +708,7 @@ describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
     designer = TestBed.inject(WorkflowDesigner);
     http = TestBed.inject(HttpTestingController);
     designer.load(GRAPH_WORKFLOW.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(GRAPH_WORKFLOW);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(GRAPH_WORKFLOW);
     // No datasets field: the datasets are not read.
     http.match((r) => r.url.endsWith('/datasets')).forEach((r) => r.flush({ datasets: [] }));
     designer.setInput('question', 'How many matches per stage?');
@@ -719,7 +719,7 @@ describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
 
   it('keeps each attempt of a step live, shows the last and counts them', () => {
     const h = runs.last.handlers;
-    h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+    h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', attempt: 1 });
     h.onTool!({ name: 'run_readonly_sql', input: 'select 1' });
     h.onStep!({
@@ -753,8 +753,8 @@ describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
   it('counts the attempts of a stored run and lists each step once', () => {
     runs.last.handlers.onDone!({
       id: 'run-1',
-      workflowId: 'qti-v2-turn',
-      workflowName: 'Questions to Insights v2',
+      workflowId: 'answer-business-question',
+      workflowName: 'Insights Analyst',
       input: { question: 'Q' },
       status: 'success',
       steps: GRAPH_RETRY_RUN.steps.map((step) => ({

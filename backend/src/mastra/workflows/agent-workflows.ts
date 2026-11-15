@@ -6,18 +6,18 @@
  * can read it without loading Mastra.
  */
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_MAX_STEPS,
-  ASSISTANT_V2_NAME,
-  ASSISTANT_V2_TOOL_NAMES,
-} from '../agents/assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_MAX_STEPS,
+  INSIGHTS_ANALYST_NAME,
+  INSIGHTS_ANALYST_TOOL_NAMES,
+} from '../agents/insights-analyst-catalog';
 import {
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_AGENT_NAME,
   DATA_READINESS_MAX_STEPS,
 } from '../agent-constants';
 import { builtinAgentPersona } from '../agent-personas';
-import type { WorkflowStepExit } from './qti-v2-turn.steps';
+import type { WorkflowStepExit } from './answer-business-question.steps';
 import { CODE_WORKFLOWS, stepAgentKey } from './workflow-catalog';
 
 export interface AgentWorkflowStep {
@@ -52,10 +52,10 @@ const STEP_AGENTS: Record<
   string,
   { name: string; tools: readonly string[]; maxSteps: number }
 > = {
-  [ASSISTANT_V2_AGENT_KEY]: {
-    name: ASSISTANT_V2_NAME,
-    tools: ASSISTANT_V2_TOOL_NAMES,
-    maxSteps: ASSISTANT_V2_MAX_STEPS,
+  [INSIGHTS_ANALYST_AGENT_KEY]: {
+    name: INSIGHTS_ANALYST_NAME,
+    tools: INSIGHTS_ANALYST_TOOL_NAMES,
+    maxSteps: INSIGHTS_ANALYST_MAX_STEPS,
   },
   // Assess Data Readiness's Explain report step (agents.md 5.13): the
   // agent's tools as agents.md 2.10 lists them; `assess_data_readiness`

@@ -7,12 +7,12 @@ import { buildToolInspection } from '../../services/workflow-node-inspection';
 
 /** Fixtures for the node dialog and Workflow state panel specs. */
 export const FIXTURE_WORKFLOW: WorkflowDetail = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: 'Answers a question over the datasets.',
   kind: 'code',
   owner: 'Official',
-  agents: [{ key: 'qti', name: 'Questions to Insights v2' }],
+  agents: [{ key: 'qti', name: 'Insights Analyst' }],
   stepCount: 2,
   trigger: 'run',
   input: [
@@ -53,7 +53,7 @@ export const FIXTURE_WORKFLOW: WorkflowDetail = {
       input: ['question', 'catalog'],
       output: ['calls', 'stopped'],
       agent: {
-        name: 'Questions to Insights v2',
+        name: 'Insights Analyst',
         tools: ['list_entities', 'run_readonly_sql'],
         maxSteps: 15,
         key: 'qti',
@@ -68,7 +68,7 @@ export const FIXTURE_WORKFLOW: WorkflowDetail = {
 
 const AGENT = {
   key: 'qti',
-  name: 'Questions to Insights v2',
+  name: 'Insights Analyst',
   model: 'anthropic/claude-sonnet-5-5',
   systemPrompt: 'You are a data analyst.',
   toolDetails: [
@@ -158,7 +158,7 @@ export const FIXTURE_NODES: NodeInspection[] = [
       ],
       agent: {
         key: 'qti',
-        name: 'Questions to Insights v2',
+        name: 'Insights Analyst',
         model: 'anthropic/claude-sonnet-5-5',
         tools: ['list_entities', 'run_readonly_sql'],
       },

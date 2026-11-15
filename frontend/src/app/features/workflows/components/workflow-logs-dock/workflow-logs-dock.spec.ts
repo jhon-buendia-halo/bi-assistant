@@ -17,8 +17,8 @@ const ROOM = 800;
 const DEFAULT_HEIGHT = Math.round(ROOM * LOGS_DOCK.defaultRatio);
 
 const WORKFLOW: WorkflowDetail = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: 'Answers questions over the datasets you pick.',
   kind: 'code',
   owner: 'Official',

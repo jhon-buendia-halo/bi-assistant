@@ -45,7 +45,7 @@ export interface AgentPersona {
 /** By registry key; every registered built-in agent has one. */
 export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
   assistant: { name: 'Emily', role: 'Data Analyst', domain: 'analysis' },
-  'assistant-v2': {
+  'insights-analyst': {
     name: 'Michael',
     role: 'Insights Analyst',
     domain: 'analysis',

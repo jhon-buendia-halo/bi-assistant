@@ -1,10 +1,10 @@
 import type { Agent } from '@mastra/core/agent';
 import { checks } from '@mastra/evals/checks';
-import { assistantV2Agent } from '../agents/assistant-v2.agent';
-import { ASSISTANT_V2_TOOL_NAMES } from '../agents/assistant-v2-catalog';
+import { insightsAnalystAgent } from '../agents/insights-analyst.agent';
+import { INSIGHTS_ANALYST_TOOL_NAMES } from '../agents/insights-analyst-catalog';
 import { entityOrientationLines } from '../context-blocks';
 import type { OptionalAgentTool } from '../agent-tools';
-import { workflowTurnAgent } from './analyst-v2-workflow-target';
+import { workflowTurnAgent } from './insights-analyst-workflow-target';
 import type {
   AssistantEvalCase,
   AssistantEvalSet,
@@ -18,11 +18,11 @@ import {
   hasMarkdownTable,
   ranSuccessfulSql,
   usesStoredValue,
-} from './analyst-v2-eval-checks';
+} from './insights-analyst-eval-checks';
 
 /**
- * The data-analyst eval set of Questions to Insights v2 (agents.md 8.1, 2.11):
- * run on the `assistant-v2` agent over the bundled World Cup sample. Each case
+ * The data-analyst eval set of Insights Analyst (agents.md 8.1, 2.11):
+ * run on the `insights-analyst` agent over the bundled World Cup sample. Each case
  * probes one analyst skill: a ranking with ties, a share, a period comparison,
  * a coverage limit, a question that must be clarified, one that must not, a
  * value lookup, a multi-step question.
@@ -39,10 +39,10 @@ import {
  */
 
 /** The sample fixture the set is bound to. */
-export const ANALYST_V2_EVAL_FIXTURE_ID = 'world-cup';
+export const INSIGHTS_ANALYST_EVAL_FIXTURE_ID = 'world-cup';
 
 /** The registry key of the agent the set runs on. */
-export const ANALYST_V2_EVAL_AGENT_KEY = 'assistant-v2';
+export const INSIGHTS_ANALYST_EVAL_AGENT_KEY = 'insights-analyst';
 
 /**
  * The rules every answer case's rubric ends with (the analyst answer
@@ -55,7 +55,7 @@ const ANSWER_FORMAT =
   'only general knowledge of football would supply fails), and not dump a ' +
   'schema or SQL into the answer.';
 
-const ANALYST_V2_EVAL_CASES: AssistantEvalCase[] = [
+const INSIGHTS_ANALYST_EVAL_CASES: AssistantEvalCase[] = [
   {
     id: 'v2-ranking-ties-top-scorers-2018',
     question: 'Who were the top scorers of the 2018 World Cup?',
@@ -287,43 +287,43 @@ const ANALYST_V2_EVAL_CASES: AssistantEvalCase[] = [
   },
 ];
 
-export const ANALYST_V2_EVAL_SET: AssistantEvalSet = {
-  id: 'analyst-v2',
-  name: 'Analyst v2',
+export const INSIGHTS_ANALYST_EVAL_SET: AssistantEvalSet = {
+  id: 'insights-analyst',
+  name: 'Insights Analyst',
   description:
-    'Data-analyst questions for Questions to Insights v2 over the bundled ' +
+    'Data-analyst questions for Insights Analyst over the bundled ' +
     'World Cup sample: rankings with ties, a share, a period comparison, ' +
     'coverage limits, a question to clarify and one not to, a value lookup ' +
     'and a multi-step question. Select its PostgreSQL datasource with a ' +
     'saved dataset containing the world_cup tables and views.',
-  fixtureId: ANALYST_V2_EVAL_FIXTURE_ID,
-  agentKey: ANALYST_V2_EVAL_AGENT_KEY,
-  cases: ANALYST_V2_EVAL_CASES,
+  fixtureId: INSIGHTS_ANALYST_EVAL_FIXTURE_ID,
+  agentKey: INSIGHTS_ANALYST_EVAL_AGENT_KEY,
+  cases: INSIGHTS_ANALYST_EVAL_CASES,
 };
 
 /** The optional tools v2's orientation names, from its tool list. */
-export function v2OrientationSelection(
-  toolNames: readonly string[] = ASSISTANT_V2_TOOL_NAMES,
+export function insightsAnalystOrientationSelection(
+  toolNames: readonly string[] = INSIGHTS_ANALYST_TOOL_NAMES,
 ): OptionalAgentTool[] {
   return toolNames.includes('sample_rows') ? ['sample_rows'] : [];
 }
 
 /**
- * The eval target of one `assistant-v2` run (agents.md 8.1): Block 1's dataset
+ * The eval target of one `insights-analyst` run (agents.md 8.1): Block 1's dataset
  * half as v2's own turn builds it (with the `sample_rows` hint only when the
  * agent has that tool), and the curated-knowledge block once the agent gets it
  * (together with `sample_rows`, analyst plan P1). The agent loads on first use.
  */
-export function analystV2EvalTarget(
-  loadAgent: () => Agent = () => assistantV2Agent,
-  toolNames: readonly string[] = ASSISTANT_V2_TOOL_NAMES,
+export function insightsAnalystEvalTarget(
+  loadAgent: () => Agent = () => insightsAnalystAgent,
+  toolNames: readonly string[] = INSIGHTS_ANALYST_TOOL_NAMES,
   wholeTurn: (agent: Agent) => Agent = (agent) => workflowTurnAgent(agent),
 ): EvalTarget {
   let agent: Agent | undefined;
   let run: Agent | undefined;
-  const selection = v2OrientationSelection(toolNames);
+  const selection = insightsAnalystOrientationSelection(toolNames);
   return {
-    agentKey: ANALYST_V2_EVAL_AGENT_KEY,
+    agentKey: INSIGHTS_ANALYST_EVAL_AGENT_KEY,
     get agent(): Agent {
       agent ??= loadAgent();
       return agent;
@@ -333,7 +333,7 @@ export function analystV2EvalTarget(
       run ??= wholeTurn((agent ??= loadAgent()));
       return run;
     },
-    sets: [ANALYST_V2_EVAL_SET],
+    sets: [INSIGHTS_ANALYST_EVAL_SET],
     // The judge checks that every fact rests on a query, so it reads the
     // whole result the model saw, not its first 2,000 characters.
     judgeTraceChars: 12_000,

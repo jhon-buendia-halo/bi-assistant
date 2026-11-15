@@ -57,7 +57,7 @@ describe('BuiltInSkillsService', () => {
     ]);
     expect(list[0]).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant', 'assistant-v2'],
+      agents: ['assistant', 'insights-analyst'],
       modified: false,
       builtInChanged: false,
       updatedAt: null,

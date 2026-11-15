@@ -1,10 +1,10 @@
 /**
  * API-level proof of the workflow catalogue (specs/capabilities/workflows
  * R1-R4; api.md 116, 117, 118 and 34; ADR-0040): since 1.23.35 `GET
- * /workflows` lists only Questions to Insights v2 (`qti-v2-turn`); agents
+ * /workflows` lists only Insights Analyst (`answer-business-question`); agents
  * are a library, so no agent gets a workflow (`agent:*` answers 404, as do
  * the removed `seq-text-demo` and `deep-analysis`), and an agent's detail
- * says only `assistant-v2` is used in a workflow. Runs that reach the model
+ * says only `insights-analyst` is used in a workflow. Runs that reach the model
  * are proved in workflow-runs.e2e-spec.ts; here only the refusals before
  * any model call.
  *
@@ -45,7 +45,7 @@ const NOT_WORKFLOWS = [
   'agent:data-readiness',
   'seq-text-demo',
   'deep-analysis',
-  'agent:assistant-v2',
+  'agent:insights-analyst',
   'agent:sql-fixer',
   'agent:rfp',
   'agent-turn',
@@ -96,18 +96,18 @@ describe('The workflow catalogue (API)', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it('lists only Questions to Insights v2 on a fresh data dir (1.23.35)', async () => {
+  it('lists only Insights Analyst on a fresh data dir (1.23.35)', async () => {
     const listed = await workflows();
     expect(listed).toEqual([
       {
-        id: 'qti-v2-turn',
+        id: 'answer-business-question',
         name: 'Answer a Business Question',
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
         // Michael analyses; Olivia plans and Jessica writes (agents.md 5.11).
         agents: [
-          { key: 'assistant-v2', name: 'Michael' },
+          { key: 'insights-analyst', name: 'Michael' },
           { key: 'analysis-planner', name: 'Olivia' },
           { key: 'answer-writer', name: 'Jessica' },
         ],
@@ -230,14 +230,17 @@ describe('The workflow catalogue (API)', () => {
     });
 
     it('a published user agent adds no workflow: agents are a library', async () => {
-      expect((await workflows()).map((w) => w.id)).toEqual(['qti-v2-turn']);
+      expect((await workflows()).map((w) => w.id)).toEqual([
+        'answer-business-question',
+      ]);
       await notFound(`agent:${liveId}`);
       await notFound(`agent:${draftId}`);
     });
 
-    it('GET /workflows/qti-v2-turn details its steps and the agent they call', async () => {
-      const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as {
+    it('GET /workflows/answer-business-question details its steps and the agent they call', async () => {
+      const v2 = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as {
         input: Record<string, unknown>[];
         steps: {
           id: string;
@@ -291,12 +294,12 @@ describe('The workflow catalogue (API)', () => {
           .map((step) => [step.id, step.agent?.key, step.agent?.tools.length]),
       ).toEqual([
         ['plan', 'analysis-planner', 0],
-        ['analyse', 'assistant-v2', 5],
+        ['analyse', 'insights-analyst', 5],
         ['write-answer', 'answer-writer', 0],
       ]);
       expect(v2.agents).toEqual([
         {
-          key: 'assistant-v2',
+          key: 'insights-analyst',
           name: 'Michael',
           model: null,
           systemPrompt: expect.any(String) as string,
@@ -323,7 +326,7 @@ describe('The workflow catalogue (API)', () => {
         },
       ]);
       // Its tools are the ones GET /agents/:key lists (api.md 34).
-      const agent = (await http().get('/agents/assistant-v2').expect(200))
+      const agent = (await http().get('/agents/insights-analyst').expect(200))
         .body as { toolDetails: unknown[] };
       const [detail] = v2.agents as unknown as { toolDetails: unknown[] }[];
       expect(detail.toolDetails).toEqual(agent.toolDetails);
@@ -336,9 +339,10 @@ describe('The workflow catalogue (API)', () => {
       );
     });
 
-    it('GET /workflows/qti-v2-turn gives every step its declared JSON Schemas and the workflow its contractHash (agents.md 5.12)', async () => {
-      const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as {
+    it('GET /workflows/answer-business-question gives every step its declared JSON Schemas and the workflow its contractHash (agents.md 5.12)', async () => {
+      const v2 = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as {
         contractHash: string;
         steps: {
           id: string;
@@ -390,8 +394,9 @@ describe('The workflow catalogue (API)', () => {
       // The flow is its edges (117): a branch after Plan, a loop back from
       // Clarify to Plan once answered, a loop back from Validate to
       // Analyse, End after Wrap up.
-      const { edges } = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as {
+      const { edges } = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as {
         edges: { from: string; to: string; kind: string; label?: string }[];
       };
       expect(edges).toEqual([
@@ -422,8 +427,9 @@ describe('The workflow catalogue (API)', () => {
       expect(summary).not.toHaveProperty('edges');
       expect(summary).not.toHaveProperty('contractHash');
       // The same hash on every read.
-      const again = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as { contractHash: string };
+      const again = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as { contractHash: string };
       expect(again.contractHash).toBe(v2.contractHash);
     });
 
@@ -434,10 +440,19 @@ describe('The workflow catalogue (API)', () => {
             usedInWorkflows: { id: string; name: string }[];
           }
         ).usedInWorkflows;
-      for (const key of ['assistant-v2', 'analysis-planner', 'answer-writer']) {
+      for (const key of [
+        'insights-analyst',
+        'analysis-planner',
+        'answer-writer',
+      ]) {
         expect({ key, used: await used(key) }).toEqual({
           key,
-          used: [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
+          used: [
+            {
+              id: 'answer-business-question',
+              name: 'Answer a Business Question',
+            },
+          ],
         });
       }
       for (const key of ['assistant', 'data-readiness', liveId, draftId]) {
@@ -474,13 +489,18 @@ describe('The workflow catalogue (API)', () => {
         { input: { question: 'x'.repeat(4001), datasets: ['World Cup Core'] } },
         'Question must be at most 4000 characters',
       ],
-    ])('qti-v2-turn refuses %p with 400 %p', async (body, message) => {
-      const res = await runs('qti-v2-turn').send(body).expect(400);
-      expect((res.body as { message: string }).message).toBe(message);
-    });
+    ])(
+      'answer-business-question refuses %p with 400 %p',
+      async (body, message) => {
+        const res = await runs('answer-business-question')
+          .send(body)
+          .expect(400);
+        expect((res.body as { message: string }).message).toBe(message);
+      },
+    );
 
     it('refuses a blank question and no datasets with both errors (the whole input at once)', async () => {
-      const res = await runs('qti-v2-turn')
+      const res = await runs('answer-business-question')
         .send({ input: { question: ' \n ', datasets: [] } })
         .expect(400);
       expect(res.body).toEqual({

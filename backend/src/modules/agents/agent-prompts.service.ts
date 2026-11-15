@@ -12,10 +12,10 @@ import {
 } from '../../mastra/app-skills';
 import { readinessTools } from '../../mastra/tools/readiness.tools';
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_IDENTITY_START,
-  ASSISTANT_V2_TOOL_NAMES,
-} from '../../mastra/agents/assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_IDENTITY_START,
+  INSIGHTS_ANALYST_TOOL_NAMES,
+} from '../../mastra/agents/insights-analyst-catalog';
 import { MastraService } from '../../mastra/mastra.service';
 import { builtinAgentPersona } from '../../mastra/agent-personas';
 import {
@@ -146,7 +146,7 @@ export class AgentPromptsService implements OnModuleInit {
         !!override && override.baseHash !== agentPromptHash(shipped),
       linksAllowed:
         key === ASSISTANT_KEY ||
-        key === ASSISTANT_V2_AGENT_KEY ||
+        key === INSIGHTS_ANALYST_AGENT_KEY ||
         key === DATA_READINESS_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
@@ -190,22 +190,22 @@ function validatePrompt(key: string, value: unknown): string {
     }
     const unknown = links.tools.find((name) => !allowed.tools.includes(name));
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
-  } else if (key === ASSISTANT_V2_AGENT_KEY) {
-    if (!prompt.startsWith(ASSISTANT_V2_IDENTITY_START)) {
+  } else if (key === INSIGHTS_ANALYST_AGENT_KEY) {
+    if (!prompt.startsWith(INSIGHTS_ANALYST_IDENTITY_START)) {
       throw new BadRequestException(
-        `The Questions to Insights v2 prompt must start with "${ASSISTANT_V2_IDENTITY_START}"`,
+        `The Insights Analyst prompt must start with "${INSIGHTS_ANALYST_IDENTITY_START}"`,
       );
     }
     // Its own skills and tools only (agents.md 2.11); links are mentions.
     const links = parseLinks(prompt);
-    const skills = AGENT_SKILLS[ASSISTANT_V2_AGENT_KEY] ?? [];
+    const skills = AGENT_SKILLS[INSIGHTS_ANALYST_AGENT_KEY] ?? [];
     if (links.skills.some((name) => !skills.includes(name))) {
       throw new BadRequestException(
-        "Only Questions to Insights v2's own skills can be linked here: this prompt is shared by every user",
+        "Only Insights Analyst's own skills can be linked here: this prompt is shared by every user",
       );
     }
     const unknown = links.tools.find(
-      (name) => !ASSISTANT_V2_TOOL_NAMES.includes(name),
+      (name) => !INSIGHTS_ANALYST_TOOL_NAMES.includes(name),
     );
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (ANY_LINK.test(prompt)) {

@@ -37,10 +37,10 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
     fixture.detectChanges();
     expect(shellState().mainView()).toBe('workflows');
     expect(el.querySelector('[data-testid="workflows-page"]')).toBeTruthy();
-    workflowsNav().openWorkflow('qti-v2-turn');
+    workflowsNav().openWorkflow('answer-business-question');
     fixture.detectChanges();
     expect(shellState().mainView()).toBe('workflow-detail');
-    expect(workflowsNav().activeWorkflowId()).toBe('qti-v2-turn');
+    expect(workflowsNav().activeWorkflowId()).toBe('answer-business-question');
     expect(shellState().currentArea()).toBe('workflows');
     expect(
       el
@@ -54,7 +54,7 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
   it('opens a workflow page without the right panel: the Run panel sits under the canvas (ui.md 4.4b)', async () => {
     const { fixture, el } = setup();
     expect(shellState().rightPanelOpen()).toBe(false);
-    workflowsNav().openWorkflow('qti-v2-turn');
+    workflowsNav().openWorkflow('answer-business-question');
     fixture.detectChanges();
     // The page is a deferred block.
     await fixture.whenStable();
@@ -72,7 +72,7 @@ describe('Workflows area (workflows R5-R8, app-shell R3)', () => {
   it('does not render the Details panel on a workflow page even when it was left open', async () => {
     const { fixture, el } = setup();
     shellState().rightPanelOpen.set(true);
-    workflowsNav().openWorkflow('qti-v2-turn');
+    workflowsNav().openWorkflow('answer-business-question');
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();

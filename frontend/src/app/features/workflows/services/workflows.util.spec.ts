@@ -55,8 +55,8 @@ const THREE_STEPS: WorkflowSummary = workflow('three-steps', 'Three steps', {
 
 /** The catalogue as `GET /workflows` orders it (workflows R1), plus a second code workflow. */
 const CATALOGUE: WorkflowSummary[] = [
-  workflow('qti-v2-turn', 'Questions to Insights v2', {
-    agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  workflow('answer-business-question', 'Insights Analyst', {
+    agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
     runRequirement: 'Set up an LLM first',
   }),
   workflow('report-steps', 'Report steps', {
@@ -71,7 +71,7 @@ describe('workflows.util', () => {
       expect(sections.map((section) => section.id)).toEqual(['official']);
       expect(sections.map((section) => section.label)).toEqual(['Official']);
       expect(sections[0].workflows.map((w) => w.id)).toEqual([
-        'qti-v2-turn',
+        'answer-business-question',
         'report-steps',
       ]);
     });
@@ -81,7 +81,7 @@ describe('workflows.util', () => {
         buildWorkflowSections(CATALOGUE, '  insights ').flatMap((section) =>
           section.workflows.map((w) => w.id),
         ),
-      ).toEqual(['qti-v2-turn']);
+      ).toEqual(['answer-business-question']);
       const byDescription = buildWorkflowSections(CATALOGUE, 'HEALTH PLAN');
       expect(byDescription.map((section) => section.id)).toEqual(['official']);
       expect(byDescription[0].workflows.map((w) => w.id)).toEqual([
@@ -103,7 +103,10 @@ describe('workflows.util', () => {
 
     it('is null while a section shows', () => {
       expect(
-        workflowsEmptyMessage('report', buildWorkflowSections(CATALOGUE, 'report')),
+        workflowsEmptyMessage(
+          'report',
+          buildWorkflowSections(CATALOGUE, 'report'),
+        ),
       ).toBeNull();
     });
   });
@@ -119,9 +122,7 @@ describe('workflows.util', () => {
     });
 
     it('lists the agents the steps call', () => {
-      expect(workflowUsesLabel(CATALOGUE[0])).toBe(
-        'Uses Questions to Insights v2',
-      );
+      expect(workflowUsesLabel(CATALOGUE[0])).toBe('Uses Insights Analyst');
       expect(
         workflowUsesLabel(
           workflow('x', 'X', {
@@ -160,7 +161,11 @@ describe('workflows.util', () => {
 
     it('shows each output field, a text as it is and anything else as JSON', () => {
       expect(runOutputEntries(success.output)).toEqual([
-        { key: 'summary', value: '1 word, 1 character: "a"', structured: false },
+        {
+          key: 'summary',
+          value: '1 word, 1 character: "a"',
+          structured: false,
+        },
         { key: 'extra', value: '{\n  "n": 1\n}', structured: true },
       ]);
       expect(runOutputEntries(undefined)).toEqual([]);
@@ -168,7 +173,12 @@ describe('workflows.util', () => {
 
     it('shows a text with quotes unescaped, and numbers, booleans and null as they read', () => {
       expect(
-        runOutputEntries({ text: '"Hello" world', words: 2, stopped: false, x: null }),
+        runOutputEntries({
+          text: '"Hello" world',
+          words: 2,
+          stopped: false,
+          x: null,
+        }),
       ).toEqual([
         { key: 'text', value: '"Hello" world', structured: false },
         { key: 'words', value: '2', structured: false },
@@ -193,10 +203,17 @@ describe('workflows.util', () => {
 
     it('a workflow with an input runs from its page; one without has no run form', () => {
       const runnable = [THREE_STEPS, ...CATALOGUE]
-        .map((w) => ({ ...w, input: w.input.length ? w.input : ASSISTANT_INPUT }))
+        .map((w) => ({
+          ...w,
+          input: w.input.length ? w.input : ASSISTANT_INPUT,
+        }))
         .filter(canRunFromPage)
         .map((w) => w.id);
-      expect(runnable).toEqual(['three-steps', 'qti-v2-turn', 'report-steps']);
+      expect(runnable).toEqual([
+        'three-steps',
+        'answer-business-question',
+        'report-steps',
+      ]);
       expect(canRunFromPage(workflow('no-input', 'No input'))).toBe(false);
     });
 
@@ -204,8 +221,20 @@ describe('workflows.util', () => {
       expect(initialInputValues(ASSISTANT_INPUT)).toEqual({ careful: false });
       expect(
         initialInputValues([
-          { name: 'on', label: 'On', type: 'boolean', required: false, default: true },
-          { name: 'n', label: 'N', type: 'number', required: false, default: 3 },
+          {
+            name: 'on',
+            label: 'On',
+            type: 'boolean',
+            required: false,
+            default: true,
+          },
+          {
+            name: 'n',
+            label: 'N',
+            type: 'number',
+            required: false,
+            default: 3,
+          },
         ]),
       ).toEqual({ on: true, n: '3' });
     });
@@ -228,7 +257,13 @@ describe('workflows.util', () => {
         runInput(
           [
             { name: 'title', label: 'Title', type: 'text', required: true },
-            { name: 'secret', label: 'Secret', type: 'text', required: false, hidden: true },
+            {
+              name: 'secret',
+              label: 'Secret',
+              type: 'text',
+              required: false,
+              hidden: true,
+            },
           ],
           { title: 'World Cup Core', secret: 'r-1' },
         ),
@@ -239,7 +274,12 @@ describe('workflows.util', () => {
       expect(questionFieldName(ASSISTANT_INPUT)).toBe('question');
       expect(
         questionFieldName([
-          { name: 'message', label: 'Message', type: 'textarea', required: true },
+          {
+            name: 'message',
+            label: 'Message',
+            type: 'textarea',
+            required: true,
+          },
         ]),
       ).toBe('message');
       expect(questionFieldName([])).toBeNull();
@@ -260,7 +300,11 @@ describe('workflows.util', () => {
           '  And the fewest?  ',
         ),
       ).toEqual({
-        input: { question: 'And the fewest?', datasets: ['World Cup Core'], careful: false },
+        input: {
+          question: 'And the fewest?',
+          datasets: ['World Cup Core'],
+          careful: false,
+        },
         context: { fromRunId: 'run-1' },
       });
     });
@@ -270,7 +314,7 @@ describe('workflows.util', () => {
 describe('Runs list helpers (plan 1.24.11)', () => {
   const rows = [
     { id: 'aa11', title: 'Most goals?', workflowName: 'Assistant' },
-    { id: 'bb22', title: 'Fewest goals?', workflowName: 'Questions to Insights v2' },
+    { id: 'bb22', title: 'Fewest goals?', workflowName: 'Insights Analyst' },
   ];
 
   it('searches a run by title, workflow name or id', () => {
@@ -290,10 +334,23 @@ describe('Runs list helpers (plan 1.24.11)', () => {
     const fields = [
       { name: 'question', label: 'Question', type: 'textarea', required: true },
       { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
-      { name: 'careful', label: 'Careful', type: 'boolean', required: false, default: false },
+      {
+        name: 'careful',
+        label: 'Careful',
+        type: 'boolean',
+        required: false,
+        default: false,
+      },
     ] as WorkflowInputField[];
     expect(
-      runAgainValues(fields, { question: 'Why?', datasets: ['World Cup Core'] }),
-    ).toEqual({ careful: false, question: 'Why?', datasets: ['World Cup Core'] });
+      runAgainValues(fields, {
+        question: 'Why?',
+        datasets: ['World Cup Core'],
+      }),
+    ).toEqual({
+      careful: false,
+      question: 'Why?',
+      datasets: ['World Cup Core'],
+    });
   });
 });

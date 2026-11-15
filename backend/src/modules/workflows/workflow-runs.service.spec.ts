@@ -77,7 +77,7 @@ const stepResult = (id: string, output: unknown): StepEvent => ({
   payload: { id, status: 'success', output },
 });
 
-/** What the Analyse step of `qti-v2-turn` (and agent-turn's Answer) ends with. */
+/** What the Analyse step of `answer-business-question` (and agent-turn's Answer) ends with. */
 const ANALYSE_OUTPUT = { calls: [], stopped: false };
 /** What Wrap up ends with: the run's output. */
 const WRAP_UP_OUTPUT = {
@@ -91,7 +91,7 @@ const PLAN_OUTPUT = { plan: { needsClarification: false } };
 const VALIDATE_OUTPUT = { ok: true, attempt: 1, findings: [] };
 const ANSWER_OUTPUT = { headline: 'Brazil won.', answer: 'Brazil won.' };
 
-/** The steps `qti-v2-turn` reports before its agent step's turn streams. */
+/** The steps `answer-business-question` reports before its agent step's turn streams. */
 const V2_STEPS_BEFORE: StepEvent[] = [
   stepStart('receive-question', {
     question: 'Who won in 2002?',
@@ -111,7 +111,7 @@ const DATASETS = [
 ];
 
 /**
- * What the fake run host's turn does. A `qti-v2-turn` host reports its four
+ * What the fake run host's turn does. A `answer-business-question` host reports its four
  * steps as the engine does (Receive question and Load catalog, then Analyse
  * around the turn's events, then Wrap up); a draft host, agent-turn's one
  * Answer step.
@@ -145,7 +145,7 @@ function build(
       'run_readonly_sql',
       'ask_clarification',
     ]),
-    'assistant-v2': fakeAgent('Questions to Insights v2', ['run_readonly_sql']),
+    'insights-analyst': fakeAgent('Insights Analyst', ['run_readonly_sql']),
     'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
   const deleteMemoryThread = jest.fn().mockResolvedValue(undefined);
@@ -216,13 +216,13 @@ function build(
     finishRunHost: jest.fn(() =>
       Promise.resolve({
         id: 'host',
-        name: 'Questions to Insights v2',
+        name: 'Insights Analyst',
         datasets: ['World Cup Core'],
         messages: hostMessages,
         visualizations: [],
         panelItems: [],
         workflowRef: {
-          id: 'qti-v2-turn',
+          id: 'answer-business-question',
           name: 'Answer a Business Question',
           kind: 'code',
           deleted: false,
@@ -271,8 +271,8 @@ function build(
         panelItems: host.panelItems ?? [],
         workflow: { phases: [], source: 'workflow' },
         agent: {
-          id: 'assistant-v2',
-          name: 'Questions to Insights v2',
+          id: 'insights-analyst',
+          name: 'Insights Analyst',
           deleted: false,
         },
       }),
@@ -435,15 +435,15 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
       { input: { question: 'Who won?', datasets: ['Nope'] } },
       'Dataset "Nope" not found',
     ],
-  ])('Questions to Insights v2 refuses %p with %p', async (body, message) => {
+  ])('Insights Analyst refuses %p with %p', async (body, message) => {
     ctx = build();
-    await refuse('qti-v2-turn', body, message);
+    await refuse('answer-business-question', body, message);
   });
 
   it('refuses the whole input at once: every error in field order, then the context, nothing stored', async () => {
     ctx = build();
     const refusal = await ctx.service
-      .prepare('qti-v2-turn', {
+      .prepare('answer-business-question', {
         input: { question: ' \n ', datasets: [] },
         context: { fromRunId: 'nope' },
       })
@@ -466,7 +466,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   it('refuses a question over 4000 characters', async () => {
     ctx = build();
     await refuse(
-      'qti-v2-turn',
+      'answer-business-question',
       { input: { question: 'x'.repeat(4001), datasets: ['Claims'] } },
       'Question must be at most 4000 characters',
     );
@@ -518,7 +518,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   it('refuses a context naming a run it does not hold', async () => {
     ctx = build();
     await refuse(
-      'qti-v2-turn',
+      'answer-business-question',
       {
         input: { question: 'And 2018?', datasets: ['Claims'] },
         context: { fromRunId: 'gone' },
@@ -528,7 +528,7 @@ describe('WorkflowRunsService: refusals before anything runs (api.md 119; plan 4
   });
 });
 
-describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)', () => {
+describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
 
@@ -544,13 +544,13 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
         { type: 'text', content: 'Brazil won.' },
       ],
     });
-    const { events, run } = await streamed(ctx, 'qti-v2-turn', {
+    const { events, run } = await streamed(ctx, 'answer-business-question', {
       input: { ...ASK, careful: true, extra: 'ignored' },
     });
 
     expect(ctx.sessions.createRunHost).toHaveBeenCalledWith({
       runId: run.id,
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
     });
@@ -596,7 +596,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     expect(events[0]).toEqual({
       type: 'run',
       runId: run.id,
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
     });
     // Each step carries what it received and when it started.
     expect(events[1]).toEqual({
@@ -623,7 +623,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     });
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       workflowName: 'Answer a Business Question',
       input: {
         question: '  Who won in 2002?  ',
@@ -701,7 +701,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
         },
       ],
     });
-    const { events, run } = await streamed(ctx, 'qti-v2-turn', {
+    const { events, run } = await streamed(ctx, 'answer-business-question', {
       input: ASK,
     });
     const calls = [
@@ -751,7 +751,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     ctx = build(DATASETS, {
       throws: new Error('The endpoint rejected the API key (401)'),
     });
-    const { events, run } = await streamed(ctx, 'qti-v2-turn', {
+    const { events, run } = await streamed(ctx, 'answer-business-question', {
       input: ASK,
     });
     expect(events.at(-1)).toEqual({
@@ -799,7 +799,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     });
     const { events, run } = await streamed(
       ctx,
-      'qti-v2-turn',
+      'answer-business-question',
       { input: ASK },
       abort.signal,
     );
@@ -846,14 +846,16 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
 
   it("gives a later run the earlier run's question and answer as context (plan 5.4)", async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
-    const second = await streamed(ctx, 'qti-v2-turn', {
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    const second = await streamed(ctx, 'answer-business-question', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
     expect(ctx.sessions.createRunHost).toHaveBeenLastCalledWith({
       runId: second.run.id,
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
       context: {
@@ -869,7 +871,9 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
 
   it('rates the stored answer of a run (api.md 128)', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
 
     const up = await ctx.service.rateAnswer(first.run.id, 'up');
     expect(ctx.sessions.rateRunAnswer).toHaveBeenCalledWith(
@@ -888,7 +892,7 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'qti-v2-turn',
+      'answer-business-question',
       { input: ASK },
       abort.signal,
     );
@@ -905,8 +909,10 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
       rfpId: 'rfp-1',
       workflowState: { current: 2, done: [1], updatedAt: 't' },
     }));
-    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
-    await streamed(ctx, 'qti-v2-turn', {
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    await streamed(ctx, 'answer-business-question', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
@@ -923,12 +929,12 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'qti-v2-turn',
+      'answer-business-question',
       { input: ASK },
       abort.signal,
     );
     await expect(
-      ctx.service.prepare('qti-v2-turn', {
+      ctx.service.prepare('answer-business-question', {
         input: ASK,
         context: { fromRunId: stopped.run.id },
       }),
@@ -937,25 +943,29 @@ describe('WorkflowRunsService: a Questions to Insights v2 run (agents.md 5.14)',
 
   it('POST /runs (118) answers the run as the stream ends it, and stores it', async () => {
     ctx = build();
-    const run = await ctx.service.run('qti-v2-turn', { input: ASK });
+    const run = await ctx.service.run('answer-business-question', {
+      input: ASK,
+    });
     expect(run).toMatchObject({
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       status: 'success',
       answer: { content: 'Brazil won.' },
       output: WRAP_UP_OUTPUT,
     });
     await expect(ctx.service.get(run.id)).resolves.toEqual(run);
     // A refusal stores nothing.
-    await expect(ctx.service.run('qti-v2-turn', {})).rejects.toThrow(
-      'Question is required',
-    );
+    await expect(
+      ctx.service.run('answer-business-question', {}),
+    ).rejects.toThrow('Question is required');
     expect(await ctx.repository.list()).toHaveLength(1);
   });
 
   it('stores a run when it starts, as running, and step by step as it ends', async () => {
     ctx = build();
     const atStart: unknown[] = [];
-    const prepared = await ctx.service.prepare('qti-v2-turn', { input: ASK });
+    const prepared = await ctx.service.prepare('answer-business-question', {
+      input: ASK,
+    });
     const run = await ctx.service.stream(prepared, (event) => {
       if (event.type === 'run') {
         void ctx.repository.get(event.runId).then((doc) => atStart.push(doc));
@@ -981,14 +991,18 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
     const run = { id: 'r1', status: 'success' };
     const runs = {
       prepare: jest.fn((id: string, body: { input?: { question?: string } }) =>
-        id !== 'qti-v2-turn'
+        id !== 'answer-business-question'
           ? Promise.reject(new NotFoundException(`Workflow "${id}" not found`))
           : body.input?.question
             ? Promise.resolve({ id })
             : Promise.reject(new BadRequestException('Question is required')),
       ),
       stream: jest.fn((_prepared: unknown, emit: (event: unknown) => void) => {
-        emit({ type: 'run', runId: 'r1', workflowId: 'qti-v2-turn' });
+        emit({
+          type: 'run',
+          runId: 'r1',
+          workflowId: 'answer-business-question',
+        });
         emit({ type: 'text', content: 'Hi' });
         emit({ type: 'done', run });
         return Promise.resolve(run);
@@ -1006,7 +1020,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
     try {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       await request(server)
-        .post('/workflows/qti-v2-turn/runs/stream')
+        .post('/workflows/answer-business-question/runs/stream')
         .send({ input: {} })
         .expect(400)
         .expect(({ body }) =>
@@ -1023,7 +1037,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
         );
       expect(runs.stream).not.toHaveBeenCalled();
       const res = await request(server)
-        .post('/workflows/qti-v2-turn/runs/stream')
+        .post('/workflows/answer-business-question/runs/stream')
         .send({ input: { question: 'Hi' } })
         .expect(200);
       expect(res.headers['content-type']).toBe(
@@ -1031,16 +1045,19 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
       );
       expect(res.text).toBe(
         [
-          'data: {"type":"run","runId":"r1","workflowId":"qti-v2-turn"}',
+          'data: {"type":"run","runId":"r1","workflowId":"answer-business-question"}',
           'data: {"type":"text","content":"Hi"}',
           'data: {"type":"done","run":{"id":"r1","status":"success"}}',
         ]
           .map((frame) => `${frame}\n\n`)
           .join(''),
       );
-      expect(runs.prepare).toHaveBeenLastCalledWith('qti-v2-turn', {
-        input: { question: 'Hi' },
-      });
+      expect(runs.prepare).toHaveBeenLastCalledWith(
+        'answer-business-question',
+        {
+          input: { question: 'Hi' },
+        },
+      );
     } finally {
       await app.close();
     }
@@ -1061,10 +1078,12 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         atTurn = await ctx.repository.get(hostId.slice('run-'.length));
       },
     );
-    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     expect(atTurn).toMatchObject({
       id: run.id,
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       workflowName: 'Answer a Business Question',
       input: ASK,
       status: 'running',
@@ -1085,7 +1104,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         atTurn = await ctx.repository.get(hostId.slice('run-'.length));
       },
     );
-    const { run, events } = await streamed(ctx, 'qti-v2-turn', {
+    const { run, events } = await streamed(ctx, 'answer-business-question', {
       input: ASK,
     });
     expect(atTurn).toMatchObject({ contractHash });
@@ -1107,7 +1126,9 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       'Invalid input: expected number, received string',
     );
     ctx = build(DATASETS, { throws: violation });
-    const failed = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const failed = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     const message =
       'Contract violation in Analyse: calls[2].rowCount Invalid input: expected number, received string';
     await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
@@ -1167,7 +1188,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         },
       } as never),
     );
-    const { run, events } = await streamed(ctx, 'qti-v2-turn', {
+    const { run, events } = await streamed(ctx, 'answer-business-question', {
       input: ASK,
     });
     const stored = await ctx.repository.get(run.id);
@@ -1203,7 +1224,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
       id: stored?.id,
-      agent: { id: 'assistant-v2' },
+      agent: { id: 'insights-analyst' },
       workflow: { source: 'workflow' },
       panelItems: [{ id: 'p1' }],
     });
@@ -1214,7 +1235,9 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
 
   it('stores a failed run with its error, and a stopped one as stopped', async () => {
     ctx = build(DATASETS, { throws: new Error('Model error') });
-    const failed = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const failed = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     await expect(ctx.repository.get(failed.run.id)).resolves.toMatchObject({
       status: 'failed',
       error: 'Model error',
@@ -1235,7 +1258,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     ctx = build(DATASETS, { abort });
     const stopped = await streamed(
       ctx,
-      'qti-v2-turn',
+      'answer-business-question',
       { input: ASK },
       abort.signal,
     );
@@ -1260,7 +1283,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     ctx.sessions.finishRunHost.mockImplementationOnce(() =>
       Promise.reject(new Error('disk full')),
     );
-    const prepared = await ctx.service.prepare('qti-v2-turn', {
+    const prepared = await ctx.service.prepare('answer-business-question', {
       input: ASK,
     });
     let runId = '';
@@ -1277,9 +1300,11 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
 
   it('takes a stored run as context after a restart (plan 5.4)', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
-    const first = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     const after = ctx.restarted();
-    const prepared = await after.prepare('qti-v2-turn', {
+    const prepared = await after.prepare('answer-business-question', {
       input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
       context: { fromRunId: first.run.id },
     });
@@ -1450,7 +1475,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it('lists summaries newest first, filtered by workflow, titled from the question or the first text input', async () => {
     ctx = build();
-    const v2 = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const v2 = await streamed(ctx, 'answer-business-question', { input: ASK });
     // Same-millisecond starts would tie: order by the stored startedAt.
     await ctx.repository.update(v2.run.id, {
       startedAt: '2026-11-11T12:00:00.000Z',
@@ -1461,7 +1486,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
     expect(await ctx.service.list()).toEqual([
       {
         id: v2.run.id,
-        workflowId: 'qti-v2-turn',
+        workflowId: 'answer-business-question',
         workflowName: 'Answer a Business Question',
         status: 'success',
         title: 'Who won in 2002?',
@@ -1488,7 +1513,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       },
     ]);
     expect(
-      (await ctx.service.list('qti-v2-turn')).map((run) => run.id),
+      (await ctx.service.list('answer-business-question')).map((run) => run.id),
     ).toEqual([v2.run.id]);
     expect(
       (await ctx.service.list('seq-text-demo')).map((run) => run.id),
@@ -1497,7 +1522,9 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it('gets one run with its derived views, or 404 Run "<id>" not found', async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     await expect(ctx.service.get(run.id)).resolves.toEqual(run);
     await expect(ctx.service.get('nope')).rejects.toThrow(
       new NotFoundException('Run "nope" not found'),
@@ -1565,7 +1592,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       ctx = build();
       await ctx.repository.insert(DEEP_RUN);
       await ctx.repository.insert(SEQ_RUN);
-      const prepared = await ctx.service.prepare('qti-v2-turn', {
+      const prepared = await ctx.service.prepare('answer-business-question', {
         input: { question: 'Why?', datasets: ['World Cup Core'] },
         context: { fromRunId: DEEP_RUN.id },
       });
@@ -1574,7 +1601,7 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
         question: DEEP_RUN.question,
         answer: DEEP_RUN.answer!.content,
       });
-      const refusal = ctx.service.prepare('qti-v2-turn', {
+      const refusal = ctx.service.prepare('answer-business-question', {
         input: { question: 'Why?', datasets: ['World Cup Core'] },
         context: { fromRunId: 'old-seq' },
       });
@@ -1633,7 +1660,9 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it('deletes a run with its workspace and memory thread; refuses a running one and an unknown one', async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     const said = {
       id: 'm1',
       role: 'user' as const,
@@ -1671,7 +1700,9 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
 
   it("serves a run's files through the session file services, given its run-backed host", async () => {
     ctx = build();
-    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     const host = expect.objectContaining({
       id: `run-${run.id}`,
       run: true,
@@ -1707,7 +1738,9 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('generates a visual from the answer: stores its metadata, panel item and a created card on the run', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
 
     const result = await ctx.service.generateVisualization(run.id);
 
@@ -1750,7 +1783,9 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('tailors and reverts: each adds a card; refresh and repair add none and keep one visual entry', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     await ctx.service.generateVisualization(run.id);
 
     await ctx.service.tailorVisualization(
@@ -1780,7 +1815,9 @@ describe('WorkflowRunsService: visual actions on a run (api.md 130-134; visuals 
 
   it('refuses a run that is still running, a code-only run, and an unknown run', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won.' });
-    const { run } = await streamed(ctx, 'qti-v2-turn', { input: ASK });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
     await ctx.repository.update(run.id, { status: 'running' });
     await expect(ctx.service.generateVisualization(run.id)).rejects.toThrow(
       new BadRequestException('Wait for the run to finish'),

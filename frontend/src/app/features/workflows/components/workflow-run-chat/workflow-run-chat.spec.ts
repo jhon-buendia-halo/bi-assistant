@@ -61,19 +61,19 @@ const SEQ: WorkflowDetail = {
 
 const V2: WorkflowDetail = {
   ...SEQ,
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: 'Answers a question in four steps.',
   trigger: 'run',
   input: [],
-  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
   steps: [
     STEP('receive-question', 'Receive question', ['question', 'datasets'], ['question', 'datasets']),
     {
       ...STEP('analyse', 'Analyse', ['question', 'catalog'], ['calls', 'stopped']),
       kind: 'agent',
       agent: {
-        name: 'Questions to Insights v2',
+        name: 'Insights Analyst',
         tools: ['list_entities', 'describe_entity', 'run_readonly_sql'],
         maxSteps: 15,
       },
@@ -126,11 +126,11 @@ class FakeRunsApi {
 /** A code workflow with one agent step, a question, datasets and a checkbox. */
 const ASSISTANT: WorkflowDetail = {
   ...SEQ,
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   trigger: 'run',
   stepCount: 1,
-  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
   input: [
     {
       name: 'question',
@@ -172,8 +172,8 @@ function seqRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
 
 function assistantRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return seqRun({
-    workflowId: 'qti-v2-turn',
-    workflowName: 'Questions to Insights v2',
+    workflowId: 'answer-business-question',
+    workflowName: 'Insights Analyst',
     input: { question: 'Which team scored the most goals?', datasets: [], verbose: false },
     question: 'Which team scored the most goals?',
     steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { stopped: false } }],
@@ -662,7 +662,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       pickDataset();
       click('workflow-run');
       const h = runs.last.handlers;
-      h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+      h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
       h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
       h.onReasoning!('Looking at the goals table');
       h.onTool!({ name: 'run_readonly_sql', input: 'SELECT 1' });
@@ -733,7 +733,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       pickDataset();
       click('workflow-run');
       const h = runs.last.handlers;
-      h.onRun!({ runId: 'run-3', workflowId: 'qti-v2-turn' });
+      h.onRun!({ runId: 'run-3', workflowId: 'answer-business-question' });
       h.onDone!({
         ...assistantRun({
           id: 'run-3',
@@ -818,7 +818,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
     it('before a run shows the empty state with the hint and the example chips, and no New question', () => {
       openForm();
       expect(q('workflow-run-empty')).not.toBeNull();
-      expect(q('workflow-run-empty')!.textContent).toContain('Questions to Insights v2');
+      expect(q('workflow-run-empty')!.textContent).toContain('Insights Analyst');
       expect(q('workflow-run-empty')!.textContent).toContain(
         'Pick the datasets below and type a question.',
       );
@@ -1008,7 +1008,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
 
     it('shows no step cards, progress list or activity line in the chat while the run goes (they live in the Logs and the Run header)', () => {
       const h = startV2();
-      h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+      h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
       h.onStep!({ id: 'receive-question', title: 'Receive question', status: 'success' });
       h.onStep!({ id: 'analyse', title: 'Analyse', status: 'running', startedAt: new Date().toISOString() });
       h.onTool!({ name: 'run_readonly_sql', rationale: 'Counting matches' } as never);
@@ -1022,13 +1022,13 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
 
     it('pins the waiting card at the top when the run suspends and resumes it with the answer', () => {
       const h = startV2();
-      h.onRun!({ runId: 'run-1', workflowId: 'qti-v2-turn' });
+      h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
       h.onStep!({ id: 'analyse', title: 'Analyse', status: 'suspended' });
       h.onInputRequired!({ runId: 'run-1', ...WAITING });
       h.onDone!(
         assistantRun({
           id: 'run-1',
-          workflowId: 'qti-v2-turn',
+          workflowId: 'answer-business-question',
           status: 'suspended',
           answer: undefined,
           waitingFor: WAITING,
@@ -1060,7 +1060,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         designer.showRunOnLoad(
           assistantRun({
             id: 'run-1',
-            workflowId: 'qti-v2-turn',
+            workflowId: 'answer-business-question',
             status: 'stopped',
             answer: undefined,
             waitingFor: { ...WAITING, expired: true },
@@ -1068,7 +1068,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         );
         designer.load(FLOW.id);
         http
-          .expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn'))
+          .expectOne((r) => r.url.endsWith('/workflows/answer-business-question'))
           .flush(FLOW);
         http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
       });

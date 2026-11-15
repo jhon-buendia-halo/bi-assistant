@@ -42,14 +42,14 @@ import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { toolSection } from '../tool-section';
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_MAX_STEPS,
-  assistantV2Agent,
-  assistantV2Instructions,
-  assistantV2Tools,
-} from './assistant-v2.agent';
-import { ASSISTANT_V2_TOOL_NAMES } from './assistant-v2-catalog';
-import { ASSISTANT_V2_PROMPT } from './system-prompts';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_MAX_STEPS,
+  insightsAnalystAgent,
+  insightsAnalystInstructions,
+  insightsAnalystTools,
+} from './insights-analyst.agent';
+import { INSIGHTS_ANALYST_TOOL_NAMES } from './insights-analyst-catalog';
+import { INSIGHTS_ANALYST_PROMPT } from './system-prompts';
 
 /**
  * agents.md Appendix E, verbatim, and the served prompt: Appendix E, its
@@ -58,11 +58,11 @@ import { ASSISTANT_V2_PROMPT } from './system-prompts';
  */
 // A Windows checkout may turn the fixtures' LF into CRLF.
 const SHIPPED = readFileSync(
-  join(__dirname, '__fixtures__', 'assistant-v2-prompt.shipped.txt'),
+  join(__dirname, '__fixtures__', 'insights-analyst-prompt.shipped.txt'),
   'utf8',
 ).replace(/\r\n/g, '\n');
 const GOLDEN = readFileSync(
-  join(__dirname, '__fixtures__', 'assistant-v2-prompt.full.txt'),
+  join(__dirname, '__fixtures__', 'insights-analyst-prompt.full.txt'),
   'utf8',
 ).replace(/\r\n/g, '\n');
 
@@ -88,36 +88,36 @@ const SKILL_NAMES = ['curated-knowledge', 'result-validation', 'sql-analysis'];
 
 afterEach(() => setAgentPromptOverrides([]));
 
-describe('Questions to Insights v2 (agents.md 2.11)', () => {
+describe('Insights Analyst (agents.md 2.11)', () => {
   const config = (
-    assistantV2Agent as unknown as { config: Record<string, unknown> }
+    insightsAnalystAgent as unknown as { config: Record<string, unknown> }
   ).config;
 
   it('is registered with its key, id, name, description and step budget', () => {
-    expect(ASSISTANT_V2_AGENT_KEY).toBe('assistant-v2');
-    expect(ASSISTANT_V2_MAX_STEPS).toBe(15);
-    expect(config['id']).toBe('questions-to-insights-v2');
-    expect(config['name']).toBe('Questions to Insights v2');
+    expect(INSIGHTS_ANALYST_AGENT_KEY).toBe('insights-analyst');
+    expect(INSIGHTS_ANALYST_MAX_STEPS).toBe(15);
+    expect(config['id']).toBe('insights-analyst');
+    expect(config['name']).toBe('Insights Analyst');
     expect(config['description']).toBe(
       'A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.',
     );
   });
 
   it("has the assistant's data tools, sample_rows and ask_clarification, the same instances, in order", async () => {
-    const tools = await assistantV2Agent.listTools();
+    const tools = await insightsAnalystAgent.listTools();
     expect(Object.keys(tools)).toEqual(TOOL_NAMES);
-    expect(ASSISTANT_V2_TOOL_NAMES).toEqual(TOOL_NAMES);
-    expect(tools).toBe(assistantV2Tools);
+    expect(INSIGHTS_ANALYST_TOOL_NAMES).toEqual(TOOL_NAMES);
+    expect(tools).toBe(insightsAnalystTools);
     for (const name of TOOL_NAMES.slice(0, 4)) {
-      expect(assistantV2Tools[name as keyof typeof assistantV2Tools]).toBe(
-        datasetTools[name as keyof typeof datasetTools],
-      );
+      expect(
+        insightsAnalystTools[name as keyof typeof insightsAnalystTools],
+      ).toBe(datasetTools[name as keyof typeof datasetTools]);
     }
-    expect(assistantV2Tools.ask_clarification).toBe(askClarificationTool);
+    expect(insightsAnalystTools.ask_clarification).toBe(askClarificationTool);
   });
 
   it('has no visual, panel or workflow tool and no workspace', async () => {
-    const tools = Object.keys(await assistantV2Agent.listTools());
+    const tools = Object.keys(await insightsAnalystAgent.listTools());
     for (const name of [
       'create_visual',
       'update_visual',
@@ -144,42 +144,42 @@ describe('Questions to Insights v2 (agents.md 2.11)', () => {
   });
 });
 
-describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () => {
+describe("Insights Analyst's prompt (agents.md 2.11, Appendix E)", () => {
   it('ships Appendix E verbatim as the editable text', () => {
-    expect(ASSISTANT_V2_PROMPT).toBe(SHIPPED);
-    expect(shippedAgentPrompt('assistant-v2')).toBe(SHIPPED);
+    expect(INSIGHTS_ANALYST_PROMPT).toBe(SHIPPED);
+    expect(shippedAgentPrompt('insights-analyst')).toBe(SHIPPED);
     expect(
-      ASSISTANT_V2_PROMPT.startsWith('You are Questions to Insights'),
+      INSIGHTS_ANALYST_PROMPT.startsWith('You are Questions to Insights'),
     ).toBe(true);
-    expect(ASSISTANT_V2_PROMPT).not.toContain('## Tools');
-    expect(ASSISTANT_V2_PROMPT).not.toContain('## Workflow');
+    expect(INSIGHTS_ANALYST_PROMPT).not.toContain('## Tools');
+    expect(INSIGHTS_ANALYST_PROMPT).not.toContain('## Workflow');
   });
 
   it('serves Appendix E with the generated Tools section before Working rules, byte for byte', async () => {
-    expect(assistantV2Instructions()).toBe(GOLDEN);
-    expect(await assistantV2Agent.getInstructions()).toBe(GOLDEN);
+    expect(insightsAnalystInstructions()).toBe(GOLDEN);
+    expect(await insightsAnalystAgent.getInstructions()).toBe(GOLDEN);
     const lines = GOLDEN.split('\n');
     const start = lines.indexOf('## Tools');
     const end = lines.indexOf('## Working rules');
     expect(lines.slice(start, end - 1)).toEqual(TOOLS_SECTION);
-    expect(toolSection(assistantV2Tools)).toEqual(TOOLS_SECTION);
+    expect(toolSection(insightsAnalystTools)).toEqual(TOOLS_SECTION);
   });
 
   it('links only its own tools and skills', () => {
-    const links = parseLinks(ASSISTANT_V2_PROMPT);
+    const links = parseLinks(INSIGHTS_ANALYST_PROMPT);
     expect([...links.tools].sort()).toEqual([...TOOL_NAMES].sort());
     expect([...links.skills].sort()).toEqual(SKILL_NAMES);
   });
 
   it('sends the model plain mentions, never link syntax', () => {
-    const served = assistantV2Instructions();
+    const served = insightsAnalystInstructions();
     expect(served).not.toContain('[[');
     expect(served).toContain('load the "sql-analysis" skill.');
     expect(served).toContain('Call the "ask_clarification" tool only when');
   });
 
   it('works as an analyst: method, grounding, ambiguity, SQL practice, rationale and answer format', () => {
-    const served = assistantV2Instructions();
+    const served = insightsAnalystInstructions();
     for (const heading of [
       'Method, for every question:',
       'Grounding:',
@@ -220,9 +220,9 @@ describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () =>
       '- Call [[tool:list_entities]] first.',
     ].join('\n');
     setAgentPromptOverrides([
-      { key: 'assistant-v2', prompt: override, baseHash: 'x' },
+      { key: 'insights-analyst', prompt: override, baseHash: 'x' },
     ]);
-    expect(assistantV2Instructions()).toBe(
+    expect(insightsAnalystInstructions()).toBe(
       [
         'You are Questions to Insights, terse.',
         '',
@@ -233,18 +233,18 @@ describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () =>
       ].join('\n'),
     );
     setAgentPromptOverrides([]);
-    expect(assistantV2Instructions()).toBe(GOLDEN);
+    expect(insightsAnalystInstructions()).toBe(GOLDEN);
   });
 
   it('appends the Tools section to an override without Working rules', () => {
     setAgentPromptOverrides([
       {
-        key: 'assistant-v2',
+        key: 'insights-analyst',
         prompt: 'You are Questions to Insights. Be brief.',
         baseHash: 'x',
       },
     ]);
-    expect(assistantV2Instructions()).toBe(
+    expect(insightsAnalystInstructions()).toBe(
       ['You are Questions to Insights. Be brief.', '', ...TOOLS_SECTION].join(
         '\n',
       ),
@@ -259,15 +259,15 @@ describe("Questions to Insights v2's prompt (agents.md 2.11, Appendix E)", () =>
         baseHash: 'x',
       },
     ]);
-    expect(assistantV2Instructions()).toBe(GOLDEN);
+    expect(insightsAnalystInstructions()).toBe(GOLDEN);
   });
 });
 
-describe("Questions to Insights v2's skills (agents.md 7.4)", () => {
+describe("Insights Analyst's skills (agents.md 7.4)", () => {
   it('declares curated-knowledge, result-validation and sql-analysis on demand', async () => {
-    expect([...AGENT_SKILLS['assistant-v2']].sort()).toEqual(SKILL_NAMES);
+    expect([...AGENT_SKILLS['insights-analyst']].sort()).toEqual(SKILL_NAMES);
     const skills = await (
-      assistantV2Agent as unknown as {
+      insightsAnalystAgent as unknown as {
         resolveSkills(): Promise<InlineSkill[]>;
       }
     ).resolveSkills();
@@ -281,7 +281,7 @@ describe("Questions to Insights v2's skills (agents.md 7.4)", () => {
 
   it('sql-analysis covers ties, ratios, period comparisons, distinct counts, NULLs and the three dialects', async () => {
     const skills = await (
-      assistantV2Agent as unknown as {
+      insightsAnalystAgent as unknown as {
         resolveSkills(): Promise<InlineSkill[]>;
       }
     ).resolveSkills();
@@ -303,7 +303,7 @@ describe("Questions to Insights v2's skills (agents.md 7.4)", () => {
 
   it('result-validation covers empty and partial results, totals, join duplicates, outliers and coverage', async () => {
     const skills = await (
-      assistantV2Agent as unknown as {
+      insightsAnalystAgent as unknown as {
         resolveSkills(): Promise<InlineSkill[]>;
       }
     ).resolveSkills();

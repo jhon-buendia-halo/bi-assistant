@@ -39,20 +39,23 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
         : {
             toolCall: {
               name:
-                request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ??
-                'run_readonly_sql',
+                request.tools.find((tool) =>
+                  tool.endsWith('run_readonly_sql'),
+                ) ?? 'run_readonly_sql',
               arguments: { sql: SQL, rationale: 'Counting the matches.' },
             },
           };
 
-    // A run of Questions to Insights v2 over the dataset just created queries
+    // A run of Insights Analyst over the dataset just created queries
     // the real database and shows the answer with the query behind it.
     await runQuestionInTab(page, QUESTION, WORLD_CUP_DATASET);
     await expect(runAnswer(page)).toContainText(ANSWER);
     await runAnswer(page)
       .getByText(/Data used \(1 query\)/)
       .click();
-    await expect(runAnswer(page).locator('pre', { hasText: SQL })).toBeVisible();
+    await expect(
+      runAnswer(page).locator('pre', { hasText: SQL }),
+    ).toBeVisible();
     const toolResult = stub.requests
       .flatMap((request) => request.messages)
       .filter((message) => message.role === 'tool')

@@ -69,19 +69,19 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
 
   it('lists each workflow as a button that opens it', () => {
     const el = open(
-      agent('assistant-v2', 'official', [
-        { id: 'qti-v2-turn', name: 'Questions to Insights v2' },
+      agent('insights-analyst', 'official', [
+        { id: 'answer-business-question', name: 'Insights Analyst' },
       ]),
     );
     const line = byId(el, 'agent-used-in')!;
     expect(line.textContent).toContain('Used in');
-    const chip = byId(el, 'agent-used-in-qti-v2-turn') as HTMLButtonElement;
+    const chip = byId(el, 'agent-used-in-answer-business-question') as HTMLButtonElement;
     expect(chip.tagName).toBe('BUTTON');
-    expect(chip.textContent?.trim()).toBe('Questions to Insights v2');
+    expect(chip.textContent?.trim()).toBe('Insights Analyst');
     const opened = jasmine.createSpy('openWorkflow');
     fixture.componentInstance.openWorkflow.subscribe(opened);
     chip.click();
-    expect(opened).toHaveBeenCalledOnceWith('qti-v2-turn');
+    expect(opened).toHaveBeenCalledOnceWith('answer-business-question');
   });
 
   it('says a user agent is not used in any workflow, live or not (agents are a library)', () => {

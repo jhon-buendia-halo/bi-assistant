@@ -433,7 +433,7 @@ specs/capabilities/agents-evals/spec.md:30-30  R6 The Job Description tab (the a
 specs/capabilities/agents-evals/spec.md:31-31  R7 The Memory tab SHALL show, for an agent with memory: "Recent messages
 specs/capabilities/agents-evals/spec.md:32-32  R8 Requesting an agent that does not exist SHALL fail with `Agent "<key>"
 specs/capabilities/agents-evals/spec.md:33-35  R9 The system SHALL tolerate an agent whose prompt, tools, memory or mode
-specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant, Questions to Insights v2 and the Data Readiness Ag
+specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant, Insights Analyst and the Data Readiness Agent SHAL
 specs/capabilities/agents-evals/spec.md:37-37  R11 The system SHALL provide the sets below, each bound to one sample fixt
 specs/capabilities/agents-evals/spec.md:38-38  R12 Each set SHALL carry a name, a description of what it covers and what
 specs/capabilities/agents-evals/spec.md:39-39  R13 The Evals tab SHALL open on the list of sets, each showing its name, "
@@ -537,10 +537,10 @@ specs/capabilities/agents-evals/spec.md:252-252  R101 **Save job description** S
 specs/capabilities/agents-evals/spec.md:253-253  R102 **Reset to built-in**, shown while the prompt is modified, SHALL ask `
 specs/capabilities/agents-evals/spec.md:254-254  R103 A save or a reset SHALL apply to the next call of every session, user
 specs/capabilities/agents-evals/spec.md:255-255  R104 When a modified prompt's shipped text has changed since the override w
-specs/capabilities/agents-evals/spec.md:256-256  R105 The Job Description tab of an Official agent (the assistant and Questi
+specs/capabilities/agents-evals/spec.md:256-256  R105 The Job Description tab of an Official agent (the assistant and Insigh
 specs/capabilities/agents-evals/spec.md:258-285  ### Retired agents
 specs/capabilities/agents-evals/spec.md:260-260  R106 Retired (1.23.8): the four showcase agents were removed from the app.
-specs/capabilities/agents-evals/spec.md:261-265  R107 **Questions to Insights v2** (`assistant-v2`; BA-320, [agents.md](../.
+specs/capabilities/agents-evals/spec.md:261-265  R107 **Insights Analyst** (`insights-analyst`; BA-320, [agents.md](../../sy
 specs/capabilities/agents-evals/spec.md:266-280  R108 The Graph tab of a **workflow-backed agent** SHALL open with a drawing
 specs/capabilities/agents-evals/spec.md:281-284  R109 The agent detail's header SHALL carry the line **Used in** under the i
 specs/capabilities/agents-evals/spec.md:285-285  R110 **Personas.** Every built-in agent SHALL be a persona: a human first n
@@ -1114,7 +1114,7 @@ specs/capabilities/past-chats/spec.md:20-20  R49 The full transcript SHALL be st
 specs/capabilities/past-chats/spec.md:22-26  ### Which workflow a past chat names
 specs/capabilities/past-chats/spec.md:24-24  R57 Every session SHALL name the workflow it ran (R65) in the page header'
 specs/capabilities/past-chats/spec.md:25-25  R59 When the agent is deleted, its sessions SHALL keep their transcript, m
-specs/capabilities/past-chats/spec.md:26-26  R65 A session bound to Answer a Business Question reads its workflow `qti-
+specs/capabilities/past-chats/spec.md:26-26  R65 A session bound to Answer a Business Question reads its workflow `answ
 specs/capabilities/past-chats/spec.md:28-32  ### The Past chats list and the read-only chat
 specs/capabilities/past-chats/spec.md:30-30  R62 While a past chat is open, the page header's session context SHALL end
 specs/capabilities/past-chats/spec.md:31-31  R63 In the **Past chats** tab of the Runs page (app-shell R46) the system
@@ -1354,7 +1354,7 @@ specs/capabilities/visuals/spec.md:430-442  ## Acceptance
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-69  ## Rules
 specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly two workflows, in this order
-specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `qti-v2-turn` and `data-readiness-assessme
+specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `answer-business-question` and `data-readi
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
 specs/capabilities/workflows/spec.md:21-23  R4 Every session SHALL run one workflow. A session created from this vers
 specs/capabilities/workflows/spec.md:24-24  R5 The **Workflows** area of the navigation rail ([../app-shell/spec.md](
@@ -1668,7 +1668,7 @@ specs/system/agents.md:626-628  ### 2.7 Deep analysis (removed 2026-11-12)
 specs/system/agents.md:630-632  ### 2.8 Retired (2026-11-12): the RFP Builder
 specs/system/agents.md:634-638  ### 2.9 Retired (1.23.8): the showcase agents
 specs/system/agents.md:640-704  ### 2.10 `data-readiness` (id `data-readiness-agent`) — Data Readiness Agent
-specs/system/agents.md:706-750  ### 2.11 `assistant-v2` (id `questions-to-insights-v2`) — Questions to Insights v2
+specs/system/agents.md:706-750  ### 2.11 `insights-analyst` (id `insights-analyst`) — Insights Analyst
 specs/system/agents.md:752-950  ## 3. Tools
 specs/system/agents.md:764-769  ### 3.1 `list_entities`
 specs/system/agents.md:771-776  ### 3.2 `describe_entity`
@@ -1699,7 +1699,7 @@ specs/system/agents.md:1188-1202  ### 5.7 Persisting the turn (derived fields)
 specs/system/agents.md:1204-1219  ### 5.8 Careful mode — independent cross-check
 specs/system/agents.md:1221-1228  ### 5.9 Result-set comparison
 specs/system/agents.md:1230-1255  ### 5.10 Chart-form heuristic
-specs/system/agents.md:1257-1324  ### 5.11 Workflow-backed turn: `qti-v2-turn` (Answer a Business Question)
+specs/system/agents.md:1257-1324  ### 5.11 Workflow-backed turn: `answer-business-question` (Answer a Business Question)
 specs/system/agents.md:1326-1361  ### 5.12 Workflows: the catalogue and the ids
 specs/system/agents.md:1363-1382  ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
 specs/system/agents.md:1384-1410  ### 5.14 Runs of Answer a Business Question
@@ -1733,8 +1733,8 @@ specs/system/agents.md:1926-2064  ## Appendix A — `assistant` system prompt (c
 specs/system/agents.md:2066-2102  ## Appendix B — `curated-knowledge` skill body (current wording)
 specs/system/agents.md:2104-2106  ## Appendix C — Retired (2026-11-12)
 specs/system/agents.md:2108-2185  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2187-2291  ## Appendix E — `assistant-v2` (Questions to Insights v2) system prompt (shipped wording)
-specs/system/agents.md:2293-2340  ## Appendix F — Questions to Insights v2's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2187-2291  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2293-2340  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
 specs/system/agents.md:2299-2316  ### Plan
 specs/system/agents.md:2318-2340  ### Write answer
 
@@ -2005,9 +2005,9 @@ specs/system/data-model.md:820-822  ### 4.6 No skills in workspaces
 specs/system/data-model.md:824-826  ### 4.8 Old user skill folder
 specs/system/data-model.md:828-836  ### 4.7 Legacy visual layout
 specs/system/data-model.md:838-847  ## 5. Agent memory
-specs/system/data-model.md:849-883  ## 6. Migrations
-specs/system/data-model.md:885-887  ## 7. External databases
-specs/system/data-model.md:889-900  ## Open questions, gaps and discrepancies
+specs/system/data-model.md:849-884  ## 6. Migrations
+specs/system/data-model.md:886-888  ## 7. External databases
+specs/system/data-model.md:890-901  ## Open questions, gaps and discrepancies
 
 specs/system/delivery.md:7-41  ## 1. Electron single-app delivery
 specs/system/delivery.md:25-27  ### Why `--base-href ./`

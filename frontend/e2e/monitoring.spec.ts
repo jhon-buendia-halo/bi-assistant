@@ -24,16 +24,16 @@ import { scenarioStep } from './support/demo-captions';
  * 1.21.14–1.21.16). The
  * calls are real: a run's agent turn against the recording LLM stub, traced
  * by Mastra into the app's trace store and read back by the Monitoring API.
- * The runs are of Questions to Insights v2 (`qti-v2-turn`), whose Analyse
- * step is one turn of the `assistant-v2` agent; a run's calls are named
- * `Questions to Insights v2: <the question>` (monitoring R45).
+ * The runs are of Insights Analyst (`answer-business-question`), whose Analyse
+ * step is one turn of the `insights-analyst` agent; a run's calls are named
+ * `Insights Analyst: <the question>` (monitoring R45).
  */
 
 const QUESTION = 'Which team scored the most goals?';
 /** The name Monitoring gives the v2 run on `question` (R45). */
 const runName = (question: string) => `${V2_WORKFLOW_NAME}: ${question}`;
-/** The name the `assistant-v2` agent's calls are attributed to. */
-const AGENT = 'Questions to Insights v2';
+/** The name the `insights-analyst` agent's calls are attributed to. */
+const AGENT = 'Insights Analyst';
 /** saveLenaiSettings' deployment name, the model the calls are made with. */
 const MODEL = 'stub-deployment';
 
@@ -76,7 +76,7 @@ const assistantRow = (page: Page): Locator =>
     .filter({ hasText: AGENT })
     .filter({ hasText: runName(QUESTION) });
 
-/** Runs Questions to Insights v2 on QUESTION and waits for its answer. */
+/** Runs Insights Analyst on QUESTION and waits for its answer. */
 async function askInRun(page: Page): Promise<void> {
   const result = await runQuestionOk(page, QUESTION);
   expect(result.text).toContain(STUB_ANSWER);
@@ -98,12 +98,12 @@ async function openMonitoringWithCall(page: Page): Promise<void> {
 
 test.describe('Feature: LLM calls', () => {
   test(
-    'Inspect the context window of a Questions to Insights v2 call',
+    'Inspect the context window of an Insights Analyst call',
     { tag: ['@demo', '@story-1.21.15'] },
     async ({ page }) => {
       await scenarioStep(
         page,
-        `Given I ran Questions to Insights v2 on "${QUESTION}"`,
+        `Given I ran Insights Analyst on "${QUESTION}"`,
         async () => {
           await askInRun(page);
         },
@@ -354,9 +354,7 @@ test.describe('Feature: LLM call detail', () => {
     async ({ page }) => {
       await askInRun(page);
       await openMonitoringWithCall(page);
-      await page
-        .getByTestId('llm-filter-agent')
-        .selectOption({ label: AGENT });
+      await page.getByTestId('llm-filter-agent').selectOption({ label: AGENT });
       await assistantRow(page).first().click();
 
       const detail = page.getByTestId('llm-call-detail');
@@ -446,7 +444,7 @@ function scriptTwoTurns(): void {
   };
 }
 
-/** Runs Questions to Insights v2 on `question` and checks the answer it streamed. */
+/** Runs Insights Analyst on `question` and checks the answer it streamed. */
 async function ask(
   page: Page,
   question: string,
@@ -489,7 +487,7 @@ test.describe('Feature: Session flow', () => {
       scriptTwoTurns();
       await scenarioStep(
         page,
-        'Given I ran Questions to Insights v2 on two questions',
+        'Given I ran Insights Analyst on two questions',
         async () => {
           await ask(page, FIRST_QUESTION, FIRST_ANSWER);
           await ask(page, SECOND_QUESTION, SECOND_ANSWER);

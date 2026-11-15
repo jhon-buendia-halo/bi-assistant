@@ -3,7 +3,7 @@ import { AgentWorkflow } from '../../services/agents-api.service';
 import { AgentWorkflowView } from './agent-workflow';
 
 const WORKFLOW: AgentWorkflow = {
-  id: 'qti-v2-turn',
+  id: 'answer-business-question',
   steps: [
     {
       id: 'load-catalog',
@@ -22,7 +22,7 @@ const WORKFLOW: AgentWorkflow = {
       input: ['question', 'catalog'],
       output: ['calls', 'stopped'],
       agent: {
-        name: 'Questions to Insights v2',
+        name: 'Insights Analyst',
         tools: ['list_entities', 'run_readonly_sql'],
         maxSteps: 15,
       },

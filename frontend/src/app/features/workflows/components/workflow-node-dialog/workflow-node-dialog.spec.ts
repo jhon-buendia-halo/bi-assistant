@@ -58,7 +58,7 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-ndv-title')).toBe('Analyse');
     expect(dialog?.textContent).toContain('LLM');
     expect(dialog?.textContent).toContain(
-      'Questions to Insights v2 · ≤ 15 steps',
+      'Insights Analyst · ≤ 15 steps',
     );
     expect(byId('workflow-ndv-input')).not.toBeNull();
     expect(byId('workflow-ndv-params')).not.toBeNull();
@@ -71,7 +71,7 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-step-field-id')).toBe('analyse');
     expect(text('workflow-step-field-kind')).toBe('LLM (agent call)');
     expect(text('workflow-step-field-agent')).toContain(
-      'Questions to Insights v2',
+      'Insights Analyst',
     );
     expect(text('workflow-step-field-model')).toBe(
       'anthropic/claude-sonnet-5-5',
@@ -550,7 +550,7 @@ describe('WorkflowNodeDialog', () => {
       expect(header.textContent).toContain('TOOL');
       expect(header.textContent).not.toContain('LLM');
       expect(header.textContent).toContain(
-        'Tool of Questions to Insights v2 · Analyse',
+        'Tool of Insights Analyst · Analyse',
       );
       expect(byId('workflow-step-field-system-prompt')).toBeNull();
       expect(byId('workflow-step-field-id')).toBeNull();
@@ -564,7 +564,7 @@ describe('WorkflowNodeDialog', () => {
       );
       expect(text('workflow-tool-field-inputs')).toBe('sql, reason');
       expect(text('workflow-tool-field-agent')).toBe(
-        'Questions to Insights v2',
+        'Insights Analyst',
       );
       expect(text('workflow-tool-field-step')).toBe('Analyse');
       open({ ...FIXTURE_TOOL, tool: { ...FIXTURE_TOOL.tool!, inputs: [] } });

@@ -131,11 +131,11 @@ export interface AgentDetail extends Agent {
   prompt?: AgentPromptView;
   /** User agents only: each library tool with its link status. */
   toolLinks?: AgentToolLink[];
-  /** Workflow-backed built-in agents only (Questions to Insights v2). */
+  /** Workflow-backed built-in agents only (Insights Analyst). */
   workflow?: AgentWorkflow;
   /**
    * The workflows whose steps call this agent, in catalogue order (api.md
-   * 34): Questions to Insights v2 for `assistant-v2`, empty for every other
+   * 34): Insights Analyst for `insights-analyst`, empty for every other
    * agent (agents are a library, not workflows).
    */
   usedInWorkflows: { id: string; name: string }[];

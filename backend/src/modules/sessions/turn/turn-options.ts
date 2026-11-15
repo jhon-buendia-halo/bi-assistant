@@ -3,9 +3,9 @@
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_MAX_STEPS,
-} from '../../../mastra/agents/assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_MAX_STEPS,
+} from '../../../mastra/agents/insights-analyst-catalog';
 import type { MastraService } from '../../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
@@ -256,8 +256,8 @@ export class TurnOptions {
     if (session.agentKey === DATA_READINESS_AGENT_KEY) {
       return this.readinessAgentOptions(session, question, abortSignal);
     }
-    if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
-      return this.assistantV2AgentOptions(session, question, abortSignal);
+    if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
+      return this.insightsAnalystAgentOptions(session, question, abortSignal);
     }
     return {
       ...(await this.agentContext(
@@ -272,14 +272,14 @@ export class TurnOptions {
   }
 
   /**
-   * A turn of Questions to Insights v2 (agents.md 2.11, 4.1, 4.2): Block 1's
+   * A turn of Insights Analyst (agents.md 2.11, 4.1, 4.2): Block 1's
    * dataset half with the `sample_rows` hint (no visuals lines), then the
    * governed metrics, curated knowledge and verified-query blocks, built by
    * the same services and in the same order as the assistant's (no
    * agent-instructions block), and the `datasets`, `session-id`,
    * `turn-question` and `knowledge-used` keys.
    */
-  private async assistantV2AgentOptions(
+  private async insightsAnalystAgentOptions(
     session: SessionDoc,
     question?: string,
     abortSignal?: AbortSignal,
@@ -300,7 +300,7 @@ export class TurnOptions {
     // The answer records the knowledge the model saw (agents.md 4.1 Block 3).
     requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
     return {
-      maxSteps: ASSISTANT_V2_MAX_STEPS,
+      maxSteps: INSIGHTS_ANALYST_MAX_STEPS,
       providerOptions: await turnProviderOptions({ reasoningEffort }),
       context: [
         {

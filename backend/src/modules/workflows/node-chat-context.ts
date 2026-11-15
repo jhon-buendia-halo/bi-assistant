@@ -27,7 +27,7 @@ export interface NodeChatMessage {
 
 /**
  * The longest context block, in characters. Measured (2026-11-12): the
- * Analyse step of a real-shaped Questions to Insights v2 run over the World
+ * Analyse step of a real-shaped Answer a Business Question run over the World
  * Cup dataset (15 entities, 7 tool calls of which 4 real SQL queries, a
  * 1 500-character answer) gives about 7 200 characters; the largest step a
  * run can store (20 000-character input and output, 50 calls of 2 000

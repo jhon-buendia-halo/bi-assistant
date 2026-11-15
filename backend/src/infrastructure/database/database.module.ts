@@ -71,6 +71,7 @@ const sqliteDbProvider: Provider = {
     renameLegacyFields(db);
     consolidateOwners(db);
     migrateKnowledgeToOntology(db);
+    renameLegacyAgentIds(db);
     return db;
   },
 };
@@ -431,6 +432,70 @@ export function migrateKnowledgeToOntology(
     db.prepare(
       `ALTER TABLE "${LEGACY_KNOWLEDGE_TABLE}" RENAME TO "${RETIRED_KNOWLEDGE_TABLE}"`,
     ).run();
+  })();
+}
+
+/**
+ * M16 (data-model 6): the ids renamed on 2026-11-15. The agent of the
+ * Analyse step was `assistant-v2` ("Questions to Insights v2") and the
+ * workflow Answer a Business Question was `qti-v2-turn`; both names
+ * outlived the design they described.
+ */
+export const LEGACY_AGENT_KEY = {
+  from: 'assistant-v2',
+  to: 'insights-analyst',
+};
+export const LEGACY_AGENT_NAME = {
+  from: 'Questions to Insights v2',
+  to: 'Insights Analyst',
+};
+export const LEGACY_WORKFLOW_ID = {
+  from: 'qti-v2-turn',
+  to: 'answer-business-question',
+};
+
+/** Each stored field that holds one of the renamed values. */
+const LEGACY_ID_FIELDS: {
+  table: string;
+  path: string;
+  rename: { from: string; to: string };
+}[] = [
+  { table: 'sessions', path: '$.agentKey', rename: LEGACY_AGENT_KEY },
+  { table: 'sessions', path: '$.agentName', rename: LEGACY_AGENT_NAME },
+  { table: 'sessions', path: '$.workflowId', rename: LEGACY_WORKFLOW_ID },
+  { table: 'workflow_runs', path: '$.agentKey', rename: LEGACY_AGENT_KEY },
+  { table: 'workflow_runs', path: '$.agentName', rename: LEGACY_AGENT_NAME },
+  { table: 'workflow_runs', path: '$.workflowId', rename: LEGACY_WORKFLOW_ID },
+  { table: 'eval_runs', path: '$.agentKey', rename: LEGACY_AGENT_KEY },
+  { table: 'agent_prompt_overrides', path: '$.key', rename: LEGACY_AGENT_KEY },
+];
+
+/**
+ * M16: rewrite the stored ids `assistant-v2` and `qti-v2-turn` (and the
+ * agent's stored display name) to their new names, so no reader needs an
+ * alias. Raw SQL so `updatedAt` is untouched (sessions and runs are listed
+ * by recency); idempotent; tables not created yet are skipped.
+ */
+export function renameLegacyAgentIds(db: Db): void {
+  db.transaction(() => {
+    for (const { table, path, rename } of LEGACY_ID_FIELDS) {
+      if (!tableExists(db, table)) continue;
+      db.prepare(
+        `UPDATE "${table}" SET doc = json_set(doc, '${path}', ?)
+          WHERE json_extract(doc, '${path}') = ?`,
+      ).run(rename.to, rename.from);
+    }
+    // The pinned built-in agents (data-model 3.2): one key in a list.
+    if (tableExists(db, 'settings')) {
+      db.prepare(
+        `UPDATE "settings"
+            SET doc = json_set(doc, '$.pinned', (
+              SELECT json_group_array(CASE value WHEN @from THEN @to ELSE value END)
+                FROM json_each(doc, '$.pinned')))
+          WHERE json_extract(doc, '$.key') = 'builtin-agent-pins'
+            AND EXISTS (SELECT 1 FROM json_each(doc, '$.pinned') WHERE value = @from)`,
+      ).run(LEGACY_AGENT_KEY);
+    }
   })();
 }
 

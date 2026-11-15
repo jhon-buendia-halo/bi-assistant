@@ -148,7 +148,7 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
       .expect((res) => expect(res.body).toMatchObject({ ok: true }));
     const run = (
       await http()
-        .post('/workflows/qti-v2-turn/runs')
+        .post('/workflows/answer-business-question/runs')
         .send({ input: { question: QUESTION, datasets: ['World Cup Core'] } })
         .expect(200)
     ).body as { id: string; status: string };

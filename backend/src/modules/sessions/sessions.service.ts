@@ -16,7 +16,7 @@ import {
   canStartBuiltinSession,
   existingDatasetsFor,
 } from '../agents/builtin-sessions';
-import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
+import { INSIGHTS_ANALYST_AGENT_KEY } from '../../mastra/agents/insights-analyst-catalog';
 import { DataReadinessService } from '../data-readiness/data-readiness.service';
 import { setReadinessToolServices } from '../../mastra/readiness-tool-services';
 import { ReadinessBridge } from './readiness-bridge';
@@ -56,7 +56,7 @@ import {
 } from './panel-items';
 import { applyWorkflowUpdate, workflowViewOf } from './workflow-update';
 import { workflowStepPhases } from './workflow-run-state';
-import { QTI_V2_TURN_STEPS } from '../../mastra/workflows/qti-v2-turn.steps';
+import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
 import {
   ASSISTANT_WORKFLOW_NAME,
   parseWorkflowId,
@@ -136,7 +136,7 @@ export interface RunVisualOutcome {
 export interface RunHostSpec {
   runId: string;
   /**
-   * The catalogue workflow the run runs (`qti-v2-turn`). Unused for an agent
+   * The catalogue workflow the run runs (`answer-business-question`). Unused for an agent
    * host (`agentKey`) and a draft run (`draftAgentId`).
    */
   workflowId?: string;
@@ -778,8 +778,8 @@ export class SessionsService implements OnModuleInit {
   ): WorkflowPhase[] {
     // A workflow-backed agent's steps are its code-defined workflow's
     // (agents.md 5.11, ADR-0034).
-    if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
-      return workflowStepPhases(QTI_V2_TURN_STEPS);
+    if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
+      return workflowStepPhases(ANSWER_BUSINESS_QUESTION_STEPS);
     }
     if (session.agentKey) return [];
     const own = config ? parseWorkflow(config.instructions) : [];

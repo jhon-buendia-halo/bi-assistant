@@ -1,6 +1,6 @@
 /**
  * API-level proof of stored runs (ADR-0041; api.md 118-127; data-model
- * 3.16; workflows R18-R20): a Questions to Insights v2 run with the
+ * 3.16; workflows R18-R20): an Answer a Business Question run with the
  * recording stub model is stored, listed, fetched and deleted with its
  * workspace; runs an earlier version stored of the workflows removed in
  * 1.23.35 (`seq-text-demo`, `deep-analysis`, `agent:assistant`) and
@@ -278,7 +278,7 @@ describe('Stored runs: the run history API (API)', () => {
       req.stream && lastQuestion(req).includes(HOLD_QUESTION)
         ? held
         : undefined;
-    const pending = runStream('qti-v2-turn', {
+    const pending = runStream('answer-business-question', {
       input: { question: HOLD_QUESTION, datasets: ['World Cup Core'] },
     });
     await waitForModelCall(HOLD_QUESTION);
@@ -303,7 +303,7 @@ describe('Stored runs: the run history API (API)', () => {
     const run = done.run!;
     expect(run).toMatchObject({
       id: runId,
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       status: 'success',
       question: HOLD_QUESTION,
       answer: { role: 'assistant', content: STUB_ANSWER },
@@ -319,7 +319,7 @@ describe('Stored runs: the run history API (API)', () => {
     expect(list.runs).toEqual([
       {
         id: runId,
-        workflowId: 'qti-v2-turn',
+        workflowId: 'answer-business-question',
         workflowName: 'Answer a Business Question',
         status: 'success',
         title: HOLD_QUESTION,
@@ -480,7 +480,7 @@ describe('Stored runs: the run history API (API)', () => {
     );
 
     it('a v2 run may continue from one with an answer; one without is refused clearly', async () => {
-      const followUp = await runStream('qti-v2-turn', {
+      const followUp = await runStream('answer-business-question', {
         input: { question: 'And why now?', datasets: ['World Cup Core'] },
         context: { fromRunId: 'old-deep' },
       });
@@ -490,7 +490,7 @@ describe('Stored runs: the run history API (API)', () => {
         .delete(`/workflow-runs/${followUp.frames[0].runId}`)
         .expect(200);
       const refused = await http()
-        .post('/workflows/qti-v2-turn/runs/stream')
+        .post('/workflows/answer-business-question/runs/stream')
         .send({
           input: { question: 'And?', datasets: ['World Cup Core'] },
           context: { fromRunId: 'old-seq' },
@@ -523,7 +523,7 @@ describe('Stored runs: the run history API (API)', () => {
   });
 
   it('after a restart: a run the app was killed in is failed, an orphan run workspace is gone, and a stored run is still context', async () => {
-    const first = await runStream('qti-v2-turn', {
+    const first = await runStream('answer-business-question', {
       input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
     });
     const firstId = first.frames[0].runId!;
@@ -537,14 +537,17 @@ describe('Stored runs: the run history API (API)', () => {
         ? held
         : undefined;
     const controller = new AbortController();
-    const pending = fetch(`${backend!.url}/workflows/qti-v2-turn/runs/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        input: { question: 'Hold this one', datasets: ['World Cup Core'] },
-      }),
-      signal: controller.signal,
-    }).catch(() => undefined);
+    const pending = fetch(
+      `${backend!.url}/workflows/answer-business-question/runs/stream`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: { question: 'Hold this one', datasets: ['World Cup Core'] },
+        }),
+        signal: controller.signal,
+      },
+    ).catch(() => undefined);
     await waitForModelCall('Hold this one');
     const cut = (
       (await http().get('/workflow-runs').expect(200)).body as {
@@ -576,7 +579,7 @@ describe('Stored runs: the run history API (API)', () => {
     expect(existsSync(workspace('run-orphan'))).toBe(false);
 
     const before = stub.requests.length;
-    const followUp = await runStream('qti-v2-turn', {
+    const followUp = await runStream('answer-business-question', {
       input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
       context: { fromRunId: firstId },
     });

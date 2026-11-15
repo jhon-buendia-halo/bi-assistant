@@ -23,7 +23,7 @@ import {
  * `/v1`), only paths under that prefix are served; any other path answers
  * 404, like a server reached without its version path.
  *
- * The structured calls of Questions to Insights v2 (Plan, Write answer) are
+ * The structured calls of Insights Analyst (Plan, Write answer) are
  * recognised by their instructions' first line (helpers/v2-steps.ts) and
  * answered by `plan` / `answer`, never by `reply` or `hold`; they are
  * recorded with their `step`. By default the plan is clear and the answer is
@@ -48,7 +48,7 @@ export interface StubRequest {
   reasoningEffort?: string;
   /** The body's `model`, when one was sent. */
   model?: string;
-  /** A structured call of Questions to Insights v2 (Plan, Write answer); absent for any other. */
+  /** A structured call of Insights Analyst (Plan, Write answer); absent for any other. */
   step?: V2Step;
 }
 

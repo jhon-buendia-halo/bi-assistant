@@ -1,6 +1,6 @@
 /**
  * API-level proof of streamed runs (ADR-0041; api.md 118, 119; agents.md
- * 5.14; workflows R14-R16) of Questions to Insights v2 (`qti-v2-turn`), the
+ * 5.14; workflows R14-R16) of Insights Analyst (`answer-business-question`), the
  * one catalogue workflow since 1.23.35: `POST /workflows/:id/runs/stream`
  * runs its steps (Plan, then Clarify or the analysis loop and Write answer),
  * its Analyse step's turn on a run host through the turn engine, so a run
@@ -253,7 +253,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
   it('streams a v2 run: run, its steps each running then done (the analysis twice), the answer, then done with the run', async () => {
     const question = 'How many matches were played?';
-    const res = await runStream('qti-v2-turn', {
+    const res = await runStream('answer-business-question', {
       input: { question, datasets: ['World Cup Core'] },
     });
     expect(res.status).toBe(200);
@@ -261,9 +261,11 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(types[0]).toBe('run');
     expect(types.at(-1)).toBe('done');
     expect(types).toContain('text');
-    expect(res.frames[0]).toMatchObject({ workflowId: 'qti-v2-turn' });
+    expect(res.frames[0]).toMatchObject({
+      workflowId: 'answer-business-question',
+    });
     transcript.push(
-      `# POST /workflows/qti-v2-turn/runs/stream  {"input":{"question":"${question}","datasets":["World Cup Core"]}}`,
+      `# POST /workflows/answer-business-question/runs/stream  {"input":{"question":"${question}","datasets":["World Cup Core"]}}`,
       res.text,
     );
     const steps = res.frames.filter((frame) => frame.type === 'step');
@@ -292,7 +294,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     const run = res.frames.at(-1)!.run!;
     expect(run).toMatchObject({
       id: res.frames[0].runId,
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       status: 'success',
       question,
       datasets: ['World Cup Core'],
@@ -315,7 +317,7 @@ describe('Streamed runs of agent workflows (API)', () => {
 
   it('each step frame and the stored run carry what the step received, its output and its times', async () => {
     const question = 'Who won the 2002 World Cup?';
-    const res = await runStream('qti-v2-turn', {
+    const res = await runStream('answer-business-question', {
       input: { question, datasets: ['World Cup Core'] },
     });
     const steps = res.frames.filter(
@@ -381,16 +383,16 @@ describe('Streamed runs of agent workflows (API)', () => {
       });
   });
 
-  it('POST /workflows/qti-v2-turn/runs (118) answers the stored run', async () => {
+  it('POST /workflows/answer-business-question/runs (118) answers the stored run', async () => {
     const res = await http()
-      .post('/workflows/qti-v2-turn/runs')
+      .post('/workflows/answer-business-question/runs')
       .send({
         input: { question: 'Who won in 1998?', datasets: ['World Cup Core'] },
       })
       .expect(200);
     const run = res.body as NonNullable<Frame['run']>;
     expect(run).toMatchObject({
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       status: 'success',
       question: 'Who won in 1998?',
       answer: { content: STUB_ANSWER },
@@ -401,8 +403,9 @@ describe('Streamed runs of agent workflows (API)', () => {
   });
 
   it("a v2 run stores the workflow's contractHash (117), and every step's output keeps its declared contract", async () => {
-    const detail = (await http().get('/workflows/qti-v2-turn').expect(200))
-      .body as {
+    const detail = (
+      await http().get('/workflows/answer-business-question').expect(200)
+    ).body as {
       contractHash: string;
       steps: {
         id: string;
@@ -411,7 +414,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     };
     const run = (
       await http()
-        .post('/workflows/qti-v2-turn/runs')
+        .post('/workflows/answer-business-question/runs')
         .send({
           input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
         })
@@ -448,7 +451,9 @@ describe('Streamed runs of agent workflows (API)', () => {
       messageText([...req.messages].reverse().find((m) => m.role === 'user')!);
     const question = 'Which stadium hosted the final?';
     const input = { question, datasets: ['World Cup Core'] };
-    const run = await recorded(() => runStream('qti-v2-turn', { input }));
+    const run = await recorded(() =>
+      runStream('answer-business-question', { input }),
+    );
     // Plan, Analyse twice, Write answer: Plan and Write answer without tools.
     expect(run.length).toBe(4);
     const analyse = run.filter((req) => req.tools && req.tools.length > 0);
@@ -457,17 +462,19 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(run[0].tools ?? []).toEqual([]);
     expect(run[3].tools ?? []).toEqual([]);
     // Two runs of the same input send the model the same request.
-    const again = await recorded(() => runStream('qti-v2-turn', { input }));
+    const again = await recorded(() =>
+      runStream('answer-business-question', { input }),
+    );
     expect(again).toEqual(run);
   });
 
   it("a follow-up run sends the earlier run's question and answer first", async () => {
-    const first = await runStream('qti-v2-turn', {
+    const first = await runStream('answer-business-question', {
       input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
     });
     const runId = first.frames[0].runId!;
     const sent = await recorded(() =>
-      runStream('qti-v2-turn', {
+      runStream('answer-business-question', {
         input: { question: 'And in 2006?', datasets: ['World Cup Core'] },
         context: { fromRunId: runId },
       }),
@@ -519,7 +526,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       .expect(201);
     const question = 'How many goals were scored in total?';
     const sent = await recorded(() =>
-      runStream('qti-v2-turn', {
+      runStream('answer-business-question', {
         input: { question, datasets: ['Analyst Goals'] },
       }),
     );
@@ -624,7 +631,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       });
       let runId = '';
       const asked = await recorded(async () => {
-        const first = await runStream('qti-v2-turn', {
+        const first = await runStream('answer-business-question', {
           input: { question: DOMINANT, datasets: ['World Cup Core'] },
         });
         expect(first.status).toBe(200);
@@ -694,7 +701,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         expect(second.frames[0]).toEqual({
           type: 'run',
           runId,
-          workflowId: 'qti-v2-turn',
+          workflowId: 'answer-business-question',
         });
         expect(
           second.frames
@@ -778,7 +785,7 @@ describe('Streamed runs of agent workflows (API)', () => {
             }
           : { text: STUB_ANSWER },
       );
-      const first = await runStream('qti-v2-turn', {
+      const first = await runStream('answer-business-question', {
         input: { question: ASKED, datasets: ['World Cup Core'] },
       });
       expect(first.status).toBe(200);
@@ -864,7 +871,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         message: 'Run "no-such-run" not found',
       });
 
-      const finished = await runStream('qti-v2-turn', {
+      const finished = await runStream('answer-business-question', {
         input: { question: 'How many matches?', datasets: ['World Cup Core'] },
       });
       const finishedId = finished.frames[0].runId!;
@@ -884,7 +891,7 @@ describe('Streamed runs of agent workflows (API)', () => {
             clarification: { question: 'Which one?', options: ['A', 'B'] },
           }),
       });
-      const waiting = await runStream('qti-v2-turn', {
+      const waiting = await runStream('answer-business-question', {
         input: { question: 'Which?', datasets: ['World Cup Core'] },
       });
       const waitingId = waiting.frames[0].runId!;
@@ -918,7 +925,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       answer: () => 'Written: 64 matches.\n\nHow I got this: one count.',
     });
     try {
-      const res = await runStream('qti-v2-turn', {
+      const res = await runStream('answer-business-question', {
         input: {
           question: 'How many matches in all?',
           datasets: ['World Cup Core'],
@@ -956,7 +963,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         : undefined;
     const controller = new AbortController();
     const res = await fetch(
-      `${backend!.url}/workflows/qti-v2-turn/runs/stream`,
+      `${backend!.url}/workflows/answer-business-question/runs/stream`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -991,7 +998,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     let refusal: { status: number; message?: string } = { status: 0 };
     for (let i = 0; i < 40; i++) {
       const answer = await http()
-        .post('/workflows/qti-v2-turn/runs/stream')
+        .post('/workflows/answer-business-question/runs/stream')
         .send({
           input: { question: 'Next', datasets: ['World Cup Core'] },
           context: { fromRunId: runId },
@@ -1013,25 +1020,25 @@ describe('Streamed runs of agent workflows (API)', () => {
     const ASK = { question: 'Hi', datasets: ['World Cup Core'] };
     it.each([
       [
-        'qti-v2-turn',
+        'answer-business-question',
         { input: { datasets: ['World Cup Core'] } },
         400,
         'Question is required',
       ],
       [
-        'qti-v2-turn',
+        'answer-business-question',
         { input: { question: 'Hi' } },
         400,
         'Select at least one dataset',
       ],
       [
-        'qti-v2-turn',
+        'answer-business-question',
         { input: { question: 'Hi', datasets: ['Nope'] } },
         400,
         'Dataset "Nope" not found',
       ],
       [
-        'qti-v2-turn',
+        'answer-business-question',
         { input: ASK, context: { fromRunId: 'nope' } },
         400,
         'Run "nope" not found',
@@ -1089,7 +1096,7 @@ describe('Streamed runs of agent workflows (API)', () => {
       const stored = await history();
       const before = stub.requests.length;
       const res = await fetch(
-        `${backend!.url}/workflows/qti-v2-turn/runs/stream`,
+        `${backend!.url}/workflows/answer-business-question/runs/stream`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

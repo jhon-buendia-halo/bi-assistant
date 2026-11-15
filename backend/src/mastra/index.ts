@@ -4,7 +4,7 @@ import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
 import { analysisPlannerAgent } from './agents/analysis-planner.agent';
 import { answerWriterAgent } from './agents/answer-writer.agent';
-import { assistantV2Agent } from './agents/assistant-v2.agent';
+import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
@@ -16,7 +16,7 @@ import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
-import { qtiV2TurnWorkflow } from './workflows/qti-v2-turn.workflow';
+import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
@@ -29,7 +29,7 @@ appSkills();
 export const mastra = new Mastra({
   agents: {
     assistant: assistantAgent,
-    'assistant-v2': assistantV2Agent,
+    'insights-analyst': insightsAnalystAgent,
     visualization: visualizationAgent,
     'sql-fixer': sqlFixerAgent,
     'sql-verifier': sqlVerifierAgent,
@@ -40,13 +40,13 @@ export const mastra = new Mastra({
     'analysis-planner': analysisPlannerAgent,
     'answer-writer': answerWriterAgent,
   },
-  // The turn workflows (agents.md 1.2, 5.1): `qti-v2-turn`, the one
+  // The turn workflows (agents.md 1.2, 5.1): `answer-business-question`, the one
   // catalogue workflow (5.11, ADR-0034; api.md 118, 119), and `agent-turn`,
   // the engine of a turn bound to an agent (draft runs, evals and stored
   // sessions; 5.12, ADR-0040).
   workflows: {
     'agent-turn': agentTurnWorkflow,
-    'qti-v2-turn': qtiV2TurnWorkflow,
+    'answer-business-question': answerBusinessQuestionWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
   },
   storage: mastraStorage,
