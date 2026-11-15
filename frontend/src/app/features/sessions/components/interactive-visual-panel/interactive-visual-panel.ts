@@ -38,16 +38,20 @@ import {
   ResolvedTheme,
   ThemeService,
 } from '../../../../core/theme/theme.service';
+import { BRAND } from '../../../../core/brand/brand';
+import type { Brand } from '../../../../core/brand/brand.model';
 
 /**
- * Starts the visual's document in the app's theme: the frame picks its Light
- * or Dark tokens from the root's `data-theme` (visuals R40).
+ * Starts the visual's document in the app's theme and brand: the frame picks
+ * its Light or Dark tokens from the root's `data-theme` (visuals R40) and the
+ * brand's palette from `data-brand` (ADR-0045).
  */
 export function withVisualTheme(
   document: string,
   theme: ResolvedTheme,
+  brand: Brand['id'] = BRAND.id,
 ): string {
-  return document.replace(/<html\b/i, `<html data-theme="${theme}"`);
+  return document.replace(/<html\b/i, `<html data-theme="${theme}" data-brand="${brand}"`);
 }
 
 export type TailorChartType =

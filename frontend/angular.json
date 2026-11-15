@@ -26,7 +26,7 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "brands/halo/public"
               }
             ],
             "styles": [
@@ -36,6 +36,7 @@
               "@fontsource/inter-tight/latin-600.css",
               "@fontsource/inter-tight/latin-700.css",
               "@fontsource/fraunces/latin-800.css",
+              "brands/halo/tokens.css",
               "src/styles.scss"
             ]
           },
@@ -59,6 +60,28 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "mercer": {
+              "fileReplacements": [
+                {
+                  "replace": "src/app/core/brand/brand.ts",
+                  "with": "src/app/core/brand/brand.mercer.ts"
+                }
+              ],
+              "styles": [
+                "@fontsource/noto-sans/latin-400.css",
+                "@fontsource/noto-sans/latin-500.css",
+                "@fontsource/noto-sans/latin-600.css",
+                "@fontsource/noto-sans/latin-700.css",
+                "brands/mercer/tokens.css",
+                "src/styles.scss"
+              ],
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "brands/mercer/public"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -90,7 +113,7 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "brands/halo/public"
               }
             ],
             "styles": [
@@ -100,6 +123,7 @@
               "@fontsource/inter-tight/latin-600.css",
               "@fontsource/inter-tight/latin-700.css",
               "@fontsource/fraunces/latin-800.css",
+              "brands/halo/tokens.css",
               "src/styles.scss"
             ]
           }

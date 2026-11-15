@@ -509,7 +509,21 @@ describe('frame theme (visuals R40)', () => {
       /:root \{\s*color-scheme: light;[\s\S]*?--qti-bg: #ffffff;/,
     );
     expect(css).toMatch(
-      /:root\[data-theme="dark"\] \{\s*color-scheme: dark;[\s\S]*?--qti-bg: #12233a;/,
+      /:root\[data-theme="dark"\] \{\s*color-scheme: dark;[\s\S]*?--qti-bg: #242424;/,
+    );
+  });
+
+  it('keeps the Agentic Hub palette for frames the host marks data-brand="mercer" (ADR-0045)', () => {
+    const css = frameCss(sandboxedVisualizationDocument(bundle));
+
+    expect(css).toMatch(
+      /:root\[data-brand="mercer"\] \{[\s\S]*?--qti-fg-strong: #001f52;/,
+    );
+    expect(css).toMatch(
+      /:root\[data-brand="mercer"\]\[data-theme="dark"\] \{[\s\S]*?--qti-bg: #12233a;/,
+    );
+    expect(css).toMatch(
+      /@media \(prefers-color-scheme: dark\) \{\s*:root\[data-brand="mercer"\]:not\(\[data-theme="light"\]\) \{/,
     );
   });
 

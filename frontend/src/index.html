@@ -5,11 +5,12 @@
   <!-- Fixes the cascade-layer order before Angular's inlined critical CSS can
        name a layer first; otherwise `base` would beat `components`. -->
   <style>@layer theme, base, components, utilities;</style>
-  <title>Halo Powered</title>
+  <!-- Set from the brand in main.ts (ADR-0045); each brand ships favicon.ico and brand/. -->
+  <title></title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link rel="icon" type="image/svg+xml" href="brand/halo-favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
   <link rel="apple-touch-icon" href="brand/icon.png">
   <script>
     // Applies the remembered theme before the app boots so the first paint

@@ -1144,12 +1144,35 @@ flowchart LR
   - ADR-0007's token values and Noto Sans are superseded; the semantic-token mechanism, `data-theme` and the preference are unchanged, so no component moves off tokens.
   - Mercer assets are deleted, the LenAI badge is gone, and the Testing Data fixtures no longer mention Mercer.
   - Specs, E2E selectors and screenshots that named the old heading, frame or banner change with this ADR (app-shell R1, R4, R7, R32, R33, R51).
+  - The Mercer look survives as the `mercer` brand, chosen at build time ([ADR-0045](#adr-0045--brands-chosen-at-build-time-white-label-halo-powered-and-agentic-hub)); this ADR describes the `halo` brand.
   - **Stack-neutral:** a rebuild needs a themeable token set, a bundled sans and a display serif, and an inline-vector wordmark; nothing else in the shell is specific to the framework.
 - **Alternatives considered:**
   - **Halo Noir, Halo Daylight and Halo Contrast single themes:** drop either the light or the dark preference that ADR-0007 and ADR-0009 give users.
   - **n8n's own light and dark palette with Inter:** familiar, but carries none of the Halo identity.
   - **Plum Studio:** plum as the primary colour; ember reads better as the action colour and keeps plum for agents.
   - **Gradient Band:** a Halo-gradient header band; heavier than the flat header and competes with the work area.
+
+#### ADR-0045 — Brands chosen at build time (white-label): Halo Powered and Agentic Hub
+- **Status:** Accepted; refines ADR-0044 (the Halo look is the `halo` brand; the pre-rebrand look is restored as `mercer`)
+- **Date:** 2026-11-15
+- **Context:**
+  - The previous Mercer look (the "Agentic Hub" framed shell) must stay available alongside the Halo rebrand, for example for delivery to that client, without either brand leaking into the other's product: no names, images or assets of one in the other's bundle, installer or npm package.
+- **Decision:**
+  - **One build, one brand.** `BRAND=halo|mercer` (default `halo`) picks the brand for every build: web bundle, Electron app and installer. The brand is not a runtime setting.
+  - **One folder per brand:** `frontend/brands/<id>/` holds `brand.json` (`id`, `osName`, `legacyOsName`, `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}`, `publishNpm`), `tokens.css` (the brand's Light and Dark values, including `--qti-font-sans`, `--qti-font-display`, `--qti-radius-card`, `--qti-radius-frame`, and for mercer the frame, banner and logo gradient tokens), `public/` (`favicon.ico`, `brand/favicon.svg`, `brand/icon.png`, and for mercer `brand/agentic-hub/`) and `art/app-icon.svg` (the source of `icon.png`). `frontend/public/` no longer exists; `src/styles/tokens.css` keeps only the shared `@theme inline` mapping.
+  - **Halo** ("Halo Powered"): the flat n8n-style shell of ADR-0044; OS name "Halo BI Assistant".
+  - **Mercer** ("Agentic Hub"): the pre-rebrand look restored exactly: framed shell (textured teal gradient frame, photo banner titled "US Health Agentic Hub", rounded panels), gradient logo circle and "Agentic Hub" in the rail, the "Powered by LenAI" badge, Noto Sans and the ADR-0007 token values. OS name "Agentic Hub", appId `com.halopowered.agentic-hub`, installer `Agentic-Hub-<version>-<os>-<arch>.<ext>`, its own userData folder so both apps install side by side, no legacy data migration. In both brands the Runs header icon, answer mark and Data used icon are lucide.
+  - **Renderer:** `src/app/core/brand/` holds the `Brand` model (`id`, `productName`, `headerTitle`, `welcomeLead`, `welcomeName`, `shell` `flat|framed`, `poweredByLenai`, `art`), `brand.ts` (Halo, default) and `brand.mercer.ts`. The `mercer` Angular build configuration swaps `brand.ts` by `fileReplacements`, the styles (fonts and `brands/mercer/tokens.css`) and the assets (`brands/mercer/public`); `ng build -c production,mercer`. The shell template draws the flat or framed shell from `brand.shell`; `main.ts` sets the document title from the brand.
+  - **Electron:** `scripts/brand.mjs` builds the web bundle (also writing `dist/frontend/browser/brand.json`) and copies the brand's `brand.json` to `frontend/electron/brand.json` (gitignored); `main.cjs` reads it for the app name, window title, legacy migration, per-theme window background and icon. `scripts/electron-dist.mjs` passes appId, product name, artifact name and icons to electron-builder.
+  - **Delivery:** the desktop workflow takes a `brand` input (tag pushes build halo). The npm package ships only brands with `publishNpm: true`; `backend/scripts/assert-publishable-brand.js` checks `backend/public/brand.json` in `prepack` and as its own CI step. Mercer is distributed as the desktop installer only (plus local web builds).
+- **Consequences:**
+  - Each brand's names and images never reach the other's bundle (verified on both builds).
+  - The E2E suite runs on the Halo build; `e2e/brand-mercer.spec.ts` runs only on a `BRAND=mercer` web build and skips otherwise.
+  - A new brand is a new folder plus a `brand.<id>.ts` and a build configuration; no runtime switch exists to test.
+  - **Stack-neutral:** a rebuild needs a build-time brand input that selects a token set, assets, names and packaging identity, and a guard keeping unpublishable brands out of the public package.
+- **Alternatives considered:**
+  - **Brand chosen at runtime in Appearance:** rejected; every build would ship both brands' assets and four brand and theme combinations would need testing.
+  - **The old palette as an extra colour theme only:** rejected; it does not restore the old look (framed shell, banner, names, badge, installer identity).
 
 ## Level 4 — Code
 

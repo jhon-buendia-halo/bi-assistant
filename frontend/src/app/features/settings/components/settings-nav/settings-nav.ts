@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { LucideAngularModule, Search } from 'lucide-angular';
+import { BRAND } from '../../../../core/brand/brand';
 import { APP_VERSION } from '../../../../core/config/app-version';
 import { SettingsState } from '../../services/settings-state';
 
@@ -15,4 +16,5 @@ export class SettingsNav {
   readonly Search = Search;
   /** Shown in the settings sidebar footer; matches the installer's version. */
   readonly appVersion = APP_VERSION;
+  readonly productName = BRAND.productName;
 }

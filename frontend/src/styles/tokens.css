@@ -1,137 +1,17 @@
 /*
- * Theme tokens (specs/system/ui.md §6.0, ADR-0007, Halo Powered rebrand ADR-0044).
- * The resolved theme is set on <html data-theme="light|dark"> by the boot
- * script in index.html and kept in sync by ThemeService. Components use the
- * Tailwind utilities mapped below (bg-surface, text-fg-muted, …), never hex.
- *
- * Palette: halopowered.com — ink #181818, warm greys, ember (the site's CTA
- * #ed3e13, darkened to #d4380f so white text meets WCAG AA) and plum #63254e.
+ * Theme tokens: the Tailwind mapping shared by every brand (specs/system/ui.md
+ * §6.0, ADR-0007, ADR-0045). The values live per brand in
+ * brands/<id>/tokens.css, picked at build time (BRAND=halo|mercer) and loaded
+ * before this file. The resolved theme is set on <html data-theme="light|dark">
+ * by the boot script in index.html and kept in sync by ThemeService.
+ * Components use the utilities mapped below (bg-surface, text-fg-muted, …),
+ * never hex. `@theme` has to stay in the stylesheet that imports Tailwind.
  */
 
-:root,
-:root[data-theme="light"] {
-  color-scheme: light;
-
-  --qti-canvas: #f2f2f0; /* warm grey page */
-  --qti-rail: #ffffff;
-  --qti-surface: #ffffff;
-  --qti-surface-muted: #f6f6f4;
-  --qti-surface-selected: #efefec;
-  --qti-border: #e3e3df;
-  --qti-border-strong: #d2d2cc;
-  --qti-border-selected: #d4380f;
-  --qti-fg: #2a2a2a;
-  --qti-fg-strong: #181818; /* Halo ink */
-  --qti-fg-muted: #5f5f5c;
-  --qti-placeholder: #73736f;
-  --qti-primary: #d4380f; /* Halo ember, AA with white */
-  --qti-primary-hover: #b8300c;
-  --qti-on-primary: #ffffff;
-  --qti-primary-soft: #fdeee8;
-  --qti-on-primary-soft: #9c2a0b;
-  --qti-accent: #d4380f;
-  --qti-icon: #5a5a57;
-  --qti-focus: #ed3e13;
-  --qti-warning-soft: #fbe5d4;
-  --qti-on-warning-soft: #92400e;
-  --qti-info-soft: #f3eaf0; /* plum tint */
-  --qti-on-info-soft: #63254e; /* Halo plum */
-  --qti-neutral-soft: #efefec;
-  --qti-on-neutral-soft: #3d3d3a;
-  --qti-success-soft: #dcf3e8;
-  --qti-on-success-soft: #116444;
-  --qti-danger-soft: #fde3e3;
-  --qti-on-danger-soft: #a2232a;
-
-  /* Context window boxes of an LLM call (Monitoring, roadmap 1.21.15): one distinct colour each. */
-  --qti-context-system-prompt: #931e30;
-  --qti-context-skills: #7c3aed;
-  --qti-context-tools: #0e7c86;
-  --qti-context-chat-history: #b45309;
-  --qti-context-dataset: #15803d;
-  --qti-context-user-prompt: #be185d;
-  --qti-context-tool-results: #64748b;
-
-  /* Span kinds of a turn's trace (Monitoring session flow, roadmap 1.21.16). */
-  --qti-span-agent: #63254e; /* Halo plum: agents and LLM nodes */
-  --qti-span-model: #c8350f;
-  --qti-span-request: #4f7fe0;
-  --qti-span-tool: #0e7c86;
-  --qti-span-memory: #b45309;
-  --qti-span-framework: #94a3b8;
-  --qti-span-other: #64748b;
-
-  --qti-shadow-card: 0 1px 2px rgb(24 24 24 / 0.05);
-  --qti-shadow-subtle: 0 1px 2px rgb(24 24 24 / 0.05);
-  --qti-shadow-input: 0 1px 2px rgb(24 24 24 / 0.06);
-  /* The page's dot texture (halopowered.com hero). */
-  --qti-canvas-dots: radial-gradient(rgb(24 24 24 / 0.07) 1px, transparent 1px);
-  /* Halo brand gradient: plum, crimson, ember, orange. */
-  --halo-gradient: linear-gradient(90deg, #63254e 0%, #931e30 35%, #ed3e13 75%, #ff7014 100%);
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  --qti-canvas: #1c1c1c;
-  --qti-rail: #141414;
-  --qti-surface: #242424;
-  --qti-surface-muted: #2b2b2b;
-  --qti-surface-selected: #303030;
-  --qti-border: #363636;
-  --qti-border-strong: #474747;
-  --qti-border-selected: #ff7a3d;
-  --qti-fg: #d9d9d9;
-  --qti-fg-strong: #ffffff;
-  --qti-fg-muted: #a3a3a3;
-  --qti-placeholder: #8f8f8f;
-  --qti-primary: #ff7a3d; /* ember, lightened; dark text on it */
-  --qti-primary-hover: #ff9361;
-  --qti-on-primary: #141414;
-  --qti-primary-soft: #3b2620;
-  --qti-on-primary-soft: #ffb48f;
-  --qti-accent: #ff7a3d;
-  --qti-icon: #ababab;
-  --qti-focus: #ff9361;
-  --qti-warning-soft: #45290f;
-  --qti-on-warning-soft: #ffcf9e;
-  --qti-info-soft: #33242f;
-  --qti-on-info-soft: #e7c3dc;
-  --qti-neutral-soft: #2f2f2f;
-  --qti-on-neutral-soft: #d4d4d4;
-  --qti-success-soft: #123d2e;
-  --qti-on-success-soft: #8fe0bb;
-  --qti-danger-soft: #4a1c22;
-  --qti-on-danger-soft: #ffb3b8;
-
-  --qti-context-system-prompt: #ff8a65;
-  --qti-context-skills: #b394ff;
-  --qti-context-tools: #4fd1c5;
-  --qti-context-chat-history: #f6ad55;
-  --qti-context-dataset: #6ee7a0;
-  --qti-context-user-prompt: #f78fbf;
-  --qti-context-tool-results: #a0aec0;
-
-  --qti-span-agent: #e3a6cb;
-  --qti-span-model: #ff8a4c;
-  --qti-span-request: #9dc0ff;
-  --qti-span-tool: #4fd1c5;
-  --qti-span-memory: #f6ad55;
-  --qti-span-framework: #7b8aa3;
-  --qti-span-other: #a0aec0;
-
-  --qti-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
-  --qti-shadow-subtle: 0 1px 2px rgb(0 0 0 / 0.4);
-  --qti-shadow-input: 0 1px 2px rgb(0 0 0 / 0.4);
-  --qti-canvas-dots: radial-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1px);
-  --halo-gradient: linear-gradient(90deg, #63254e 0%, #931e30 35%, #ed3e13 75%, #ff7014 100%);
-}
-
 @theme inline {
-  --font-sans: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: var(--qti-font-sans);
   /* The accent word of a display title ("Welcome to Halo Powered"). */
-  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-display: var(--qti-font-display);
 
   --color-canvas: var(--qti-canvas);
   --color-rail: var(--qti-rail);
@@ -164,8 +44,8 @@
   --color-danger-soft: var(--qti-danger-soft);
   --color-on-danger-soft: var(--qti-on-danger-soft);
 
-  --radius-card: 0.625rem; /* 10 px, halopowered.com cards */
-  --radius-frame: 0;
+  --radius-card: var(--qti-radius-card);
+  --radius-frame: var(--qti-radius-frame);
   --shadow-card: var(--qti-shadow-card);
   --shadow-subtle: var(--qti-shadow-subtle);
   --shadow-input: var(--qti-shadow-input);

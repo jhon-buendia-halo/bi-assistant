@@ -44,6 +44,7 @@ import { SessionsState } from './features/sessions/services/sessions-state';
 import { SettingsContent } from './features/settings/components/settings-content/settings-content';
 import { SettingsNav } from './features/settings/components/settings-nav/settings-nav';
 import { WorkflowsArea } from './features/workflows/components/workflows-area/workflows-area';
+import { BRAND } from './core/brand/brand';
 import { AppLogo } from './shared/components/app-logo/app-logo';
 import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
@@ -128,6 +129,11 @@ export class App {
    * Expanded unless the user last collapsed it (R2, R50).
    */
   readonly navExpanded = this.uiPreferences.navExpanded;
+
+  /** The brand this build is for (ADR-0045) and whether its shell is the framed one. */
+  readonly brand = BRAND;
+  readonly framed = BRAND.shell === 'framed';
+  readonly art = BRAND.art;
 
   /** The open area's name, shown after "Halo Powered" in the header; none on the home view. */
   readonly areaLabel = computed(() => {
