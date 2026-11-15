@@ -449,7 +449,7 @@ specs/capabilities/agent-panel/spec.md:103-138  ### Feature: Agent panel
 specs/capabilities/agent-panel/spec.md:140-151  ## Acceptance
 
 specs/capabilities/agents-evals/spec.md:5-16  ## Concepts
-specs/capabilities/agents-evals/spec.md:18-285  ## Rules
+specs/capabilities/agents-evals/spec.md:18-286  ## Rules
 specs/capabilities/agents-evals/spec.md:21-21  R1 The **Agents** screen SHALL be the Agent Hub. It SHALL show the headin
 specs/capabilities/agents-evals/spec.md:22-22  R2 Search SHALL match the trimmed query, case-insensitively, as a substri
 specs/capabilities/agents-evals/spec.md:23-23  R3 Every section SHALL show all its cards; there is no `Show more` or `Sh
@@ -504,82 +504,82 @@ specs/capabilities/agents-evals/spec.md:136-136  R50 Deleting a user agent SHALL
 specs/capabilities/agents-evals/spec.md:137-137  R51 Saving a draft, publishing, deleting or pinning an agent that does not
 specs/capabilities/agents-evals/spec.md:138-138  R52 User agents SHALL persist across restarts of the backend.
 specs/capabilities/agents-evals/spec.md:139-139  R53 Agents are a library, not workflows (ADR-0042, 2026-11-12): they are c
-specs/capabilities/agents-evals/spec.md:141-165  ### Agent editor
+specs/capabilities/agents-evals/spec.md:141-166  ### Agent editor
 specs/capabilities/agents-evals/spec.md:143-143  R54 **New agent** on the hub and **Edit** in a user agent's detail SHALL o
 specs/capabilities/agents-evals/spec.md:144-154  R55 The editor SHALL hold these fields, which enforce the R43 limits as th
 specs/capabilities/agents-evals/spec.md:155-155  R56 **Save** SHALL store the form as the draft, creating the agent on its
 specs/capabilities/agents-evals/spec.md:156-156  R57 **Publish** SHALL first save the form when it has changes (R56; a refu
 specs/capabilities/agents-evals/spec.md:157-157  R58 The editor's header SHALL show the agent's `Draft` or `Live` chip and,
 specs/capabilities/agents-evals/spec.md:158-158  R59 **Back** SHALL return to the agent's detail view, or to the hub for an
-specs/capabilities/agents-evals/spec.md:159-163  R60 **Try it** tests a user agent's **draft** by running it once, the way
-specs/capabilities/agents-evals/spec.md:164-164  R61 A draft run SHALL NOT be listed with the runs or the sessions and SHAL
-specs/capabilities/agents-evals/spec.md:165-165  R62 User agents, their pins, pins of built-in agents and eval runs SHALL b
-specs/capabilities/agents-evals/spec.md:167-177  ### Skills tab
-specs/capabilities/agents-evals/spec.md:169-173  R63 The agent detail SHALL have a **Skills (<n>)** tab. For the Official a
-specs/capabilities/agents-evals/spec.md:174-174  R64 Expanding a skill SHALL list every file in its folder, `SKILL.md` firs
-specs/capabilities/agents-evals/spec.md:175-175  R65 Removed in roadmap 1.13.13: skills ship only with the app, so the tab
-specs/capabilities/agents-evals/spec.md:176-176  R66 Removed in roadmap 1.13.13: there are no user or project skills to ski
-specs/capabilities/agents-evals/spec.md:177-177  R67 Nothing on the tab SHALL change a skill, and viewing it needs nothing
-specs/capabilities/agents-evals/spec.md:179-189  ### Skill library
-specs/capabilities/agents-evals/spec.md:183-183  R68 The Agent Hub's header SHALL offer **Skills**, beside **New agent**. I
-specs/capabilities/agents-evals/spec.md:184-184  R69 The library's **Your skills** section (R75) SHALL list the user's skil
-specs/capabilities/agents-evals/spec.md:185-185  R70 The **skill editor** SHALL hold: **Name**; **Description**, with the h
-specs/capabilities/agents-evals/spec.md:186-186  R71 **Save** SHALL create or save the skill and show `Skill "<name>" creat
-specs/capabilities/agents-evals/spec.md:187-187  R72 **Delete** SHALL ask `Delete "<name>"?`, followed by `Agents using it
-specs/capabilities/agents-evals/spec.md:188-188  R73 Changing or deleting a skill SHALL NOT change a Live agent. The agents
-specs/capabilities/agents-evals/spec.md:189-189  R74 Skills SHALL belong to the one user (the built-in super admin; the sto
-specs/capabilities/agents-evals/spec.md:191-200  ### Built-in skills
-specs/capabilities/agents-evals/spec.md:195-195  R75 The skills library SHALL show two sections: **Your skills** (R69) and
-specs/capabilities/agents-evals/spec.md:196-196  R76 A built-in row SHALL open the **built-in skill editor**: Description,
-specs/capabilities/agents-evals/spec.md:197-197  R77 **Save** SHALL store the override and show `Built-in skill "<name>" sa
-specs/capabilities/agents-evals/spec.md:198-198  R78 **Reset to built-in**, shown while the skill is modified, SHALL ask `R
-specs/capabilities/agents-evals/spec.md:199-199  R79 When a modified built-in's shipped version has changed since the overr
-specs/capabilities/agents-evals/spec.md:200-200  R80 Overrides SHALL apply to every session and agent. Viewing the built-in
-specs/capabilities/agents-evals/spec.md:202-211  ### Links
-specs/capabilities/agents-evals/spec.md:206-206  R81 The **Instructions** field SHALL be a rich editor: plain text lines, w
-specs/capabilities/agents-evals/spec.md:207-207  R82 A chip SHALL show the name of the skill or tool: skills and tools in d
-specs/capabilities/agents-evals/spec.md:208-208  R83 Before the model sees them, every link SHALL become a plain mention: `
-specs/capabilities/agents-evals/spec.md:209-209  R84 In the skill editor the menu SHALL list tools only and the only button
-specs/capabilities/agents-evals/spec.md:210-210  R85 An agent saved before links, whose draft has no `tools`, or has `tools
-specs/capabilities/agents-evals/spec.md:211-211  R86 Read-only views of text with links (the Job Description tab for a user
-specs/capabilities/agents-evals/spec.md:213-219  ### Tools, Graph and LLM Config tabs
-specs/capabilities/agents-evals/spec.md:217-217  R87 For a user agent the **Tools** tab SHALL list every tool of the librar
-specs/capabilities/agents-evals/spec.md:218-218  R88 The **Graph** tab (user agents only) SHALL draw three columns, Instruc
-specs/capabilities/agents-evals/spec.md:219-219  R89 The **LLM Config** tab (every agent; it replaces the Model tab) SHALL
-specs/capabilities/agents-evals/spec.md:221-242  ### Agent page tabs
-specs/capabilities/agents-evals/spec.md:225-226  R90 **Try it** SHALL be the first tab of a user agent (its id stays `chat`
-specs/capabilities/agents-evals/spec.md:227-227  R91 The tabs SHALL open on their defaults: **Try it** for user agents, **J
-specs/capabilities/agents-evals/spec.md:228-228  R92 On a user agent, the **Job Description** tab SHALL show the assistant'
-specs/capabilities/agents-evals/spec.md:229-235  R93 **Edit** SHALL turn the section into the link editor of R81 over the d
-specs/capabilities/agents-evals/spec.md:236-236  R94 Leaving the agent page, or switching to another agent or tab, with an
-specs/capabilities/agents-evals/spec.md:237-241  R95 On a user agent, the **Skills** tab SHALL be the user's skill library
-specs/capabilities/agents-evals/spec.md:242-242  R96 The Skills tab's **New skill**, **Edit** and **Delete** SHALL always b
-specs/capabilities/agents-evals/spec.md:244-256  ### Built-in agents' system prompts
-specs/capabilities/agents-evals/spec.md:248-248  R97 The Job Description tab of a built-in agent SHALL show a `Built-in` ch
-specs/capabilities/agents-evals/spec.md:249-249  R98 **Edit** SHALL open an editor over the editable text ([agents.md](../.
-specs/capabilities/agents-evals/spec.md:250-250  R99 The assistant's editor SHALL be the link editor of R81, limited to too
-specs/capabilities/agents-evals/spec.md:251-251  R100 The assistant's editor SHALL show the read-only note `The ## Tools lis
-specs/capabilities/agents-evals/spec.md:252-252  R101 **Save job description** SHALL store the override and show the backend
-specs/capabilities/agents-evals/spec.md:253-253  R102 **Reset to built-in**, shown while the prompt is modified, SHALL ask `
-specs/capabilities/agents-evals/spec.md:254-254  R103 A save or a reset SHALL apply to the next call of every session, user
-specs/capabilities/agents-evals/spec.md:255-255  R104 When a modified prompt's shipped text has changed since the override w
-specs/capabilities/agents-evals/spec.md:256-256  R105 The Job Description tab of an Official agent (the assistant and Insigh
-specs/capabilities/agents-evals/spec.md:258-285  ### Retired agents
-specs/capabilities/agents-evals/spec.md:260-260  R106 Retired (1.23.8): the four showcase agents were removed from the app.
-specs/capabilities/agents-evals/spec.md:261-265  R107 **Insights Analyst** (`insights-analyst`; BA-320, [agents.md](../../sy
-specs/capabilities/agents-evals/spec.md:266-280  R108 The Graph tab of a **workflow-backed agent** SHALL open with a drawing
-specs/capabilities/agents-evals/spec.md:281-284  R109 The agent detail's header SHALL carry the line **Used in** under the i
-specs/capabilities/agents-evals/spec.md:285-285  R110 **Personas.** Every built-in agent SHALL be a persona: a human first n
-specs/capabilities/agents-evals/spec.md:287-303  ## Edge cases and errors
-specs/capabilities/agents-evals/spec.md:305-314  ## Contracts
-specs/capabilities/agents-evals/spec.md:316-318  ## UI
-specs/capabilities/agents-evals/spec.md:320-1262  ## Flows
-specs/capabilities/agents-evals/spec.md:645-741  ### Feature: Agent skills
-specs/capabilities/agents-evals/spec.md:743-1011  ### Feature: Agent editor
-specs/capabilities/agents-evals/spec.md:1013-1099  ### Feature: Skill library
-specs/capabilities/agents-evals/spec.md:1101-1262  ### Feature: Built-in agent prompts
-specs/capabilities/agents-evals/spec.md:1264-1270  ## Acceptance
-specs/capabilities/agents-evals/spec.md:1272-1281  ## Open questions
+specs/capabilities/agents-evals/spec.md:159-164  R60 **Try it** tests a user agent's **draft** by running it once, the way
+specs/capabilities/agents-evals/spec.md:165-165  R61 A draft run SHALL NOT be listed with the runs or the sessions and SHAL
+specs/capabilities/agents-evals/spec.md:166-166  R62 User agents, their pins, pins of built-in agents and eval runs SHALL b
+specs/capabilities/agents-evals/spec.md:168-178  ### Skills tab
+specs/capabilities/agents-evals/spec.md:170-174  R63 The agent detail SHALL have a **Skills (<n>)** tab. For the Official a
+specs/capabilities/agents-evals/spec.md:175-175  R64 Expanding a skill SHALL list every file in its folder, `SKILL.md` firs
+specs/capabilities/agents-evals/spec.md:176-176  R65 Removed in roadmap 1.13.13: skills ship only with the app, so the tab
+specs/capabilities/agents-evals/spec.md:177-177  R66 Removed in roadmap 1.13.13: there are no user or project skills to ski
+specs/capabilities/agents-evals/spec.md:178-178  R67 Nothing on the tab SHALL change a skill, and viewing it needs nothing
+specs/capabilities/agents-evals/spec.md:180-190  ### Skill library
+specs/capabilities/agents-evals/spec.md:184-184  R68 The Agent Hub's header SHALL offer **Skills**, beside **New agent**. I
+specs/capabilities/agents-evals/spec.md:185-185  R69 The library's **Your skills** section (R75) SHALL list the user's skil
+specs/capabilities/agents-evals/spec.md:186-186  R70 The **skill editor** SHALL hold: **Name**; **Description**, with the h
+specs/capabilities/agents-evals/spec.md:187-187  R71 **Save** SHALL create or save the skill and show `Skill "<name>" creat
+specs/capabilities/agents-evals/spec.md:188-188  R72 **Delete** SHALL ask `Delete "<name>"?`, followed by `Agents using it
+specs/capabilities/agents-evals/spec.md:189-189  R73 Changing or deleting a skill SHALL NOT change a Live agent. The agents
+specs/capabilities/agents-evals/spec.md:190-190  R74 Skills SHALL belong to the one user (the built-in super admin; the sto
+specs/capabilities/agents-evals/spec.md:192-201  ### Built-in skills
+specs/capabilities/agents-evals/spec.md:196-196  R75 The skills library SHALL show two sections: **Your skills** (R69) and
+specs/capabilities/agents-evals/spec.md:197-197  R76 A built-in row SHALL open the **built-in skill editor**: Description,
+specs/capabilities/agents-evals/spec.md:198-198  R77 **Save** SHALL store the override and show `Built-in skill "<name>" sa
+specs/capabilities/agents-evals/spec.md:199-199  R78 **Reset to built-in**, shown while the skill is modified, SHALL ask `R
+specs/capabilities/agents-evals/spec.md:200-200  R79 When a modified built-in's shipped version has changed since the overr
+specs/capabilities/agents-evals/spec.md:201-201  R80 Overrides SHALL apply to every session and agent. Viewing the built-in
+specs/capabilities/agents-evals/spec.md:203-212  ### Links
+specs/capabilities/agents-evals/spec.md:207-207  R81 The **Instructions** field SHALL be a rich editor: plain text lines, w
+specs/capabilities/agents-evals/spec.md:208-208  R82 A chip SHALL show the name of the skill or tool: skills and tools in d
+specs/capabilities/agents-evals/spec.md:209-209  R83 Before the model sees them, every link SHALL become a plain mention: `
+specs/capabilities/agents-evals/spec.md:210-210  R84 In the skill editor the menu SHALL list tools only and the only button
+specs/capabilities/agents-evals/spec.md:211-211  R85 An agent saved before links, whose draft has no `tools`, or has `tools
+specs/capabilities/agents-evals/spec.md:212-212  R86 Read-only views of text with links (the Job Description tab for a user
+specs/capabilities/agents-evals/spec.md:214-220  ### Tools, Graph and LLM Config tabs
+specs/capabilities/agents-evals/spec.md:218-218  R87 For a user agent the **Tools** tab SHALL list every tool of the librar
+specs/capabilities/agents-evals/spec.md:219-219  R88 The **Graph** tab (user agents only) SHALL draw three columns, Instruc
+specs/capabilities/agents-evals/spec.md:220-220  R89 The **LLM Config** tab (every agent; it replaces the Model tab) SHALL
+specs/capabilities/agents-evals/spec.md:222-243  ### Agent page tabs
+specs/capabilities/agents-evals/spec.md:226-227  R90 **Try it** SHALL be the first tab of a user agent (its id stays `chat`
+specs/capabilities/agents-evals/spec.md:228-228  R91 The tabs SHALL open on their defaults: **Try it** for user agents, **J
+specs/capabilities/agents-evals/spec.md:229-229  R92 On a user agent, the **Job Description** tab SHALL show the assistant'
+specs/capabilities/agents-evals/spec.md:230-236  R93 **Edit** SHALL turn the section into the link editor of R81 over the d
+specs/capabilities/agents-evals/spec.md:237-237  R94 Leaving the agent page, or switching to another agent or tab, with an
+specs/capabilities/agents-evals/spec.md:238-242  R95 On a user agent, the **Skills** tab SHALL be the user's skill library
+specs/capabilities/agents-evals/spec.md:243-243  R96 The Skills tab's **New skill**, **Edit** and **Delete** SHALL always b
+specs/capabilities/agents-evals/spec.md:245-257  ### Built-in agents' system prompts
+specs/capabilities/agents-evals/spec.md:249-249  R97 The Job Description tab of a built-in agent SHALL show a `Built-in` ch
+specs/capabilities/agents-evals/spec.md:250-250  R98 **Edit** SHALL open an editor over the editable text ([agents.md](../.
+specs/capabilities/agents-evals/spec.md:251-251  R99 The assistant's editor SHALL be the link editor of R81, limited to too
+specs/capabilities/agents-evals/spec.md:252-252  R100 The assistant's editor SHALL show the read-only note `The ## Tools lis
+specs/capabilities/agents-evals/spec.md:253-253  R101 **Save job description** SHALL store the override and show the backend
+specs/capabilities/agents-evals/spec.md:254-254  R102 **Reset to built-in**, shown while the prompt is modified, SHALL ask `
+specs/capabilities/agents-evals/spec.md:255-255  R103 A save or a reset SHALL apply to the next call of every session, user
+specs/capabilities/agents-evals/spec.md:256-256  R104 When a modified prompt's shipped text has changed since the override w
+specs/capabilities/agents-evals/spec.md:257-257  R105 The Job Description tab of an Official agent (the assistant and Insigh
+specs/capabilities/agents-evals/spec.md:259-286  ### Retired agents
+specs/capabilities/agents-evals/spec.md:261-261  R106 Retired (1.23.8): the four showcase agents were removed from the app.
+specs/capabilities/agents-evals/spec.md:262-266  R107 **Insights Analyst** (`insights-analyst`; BA-320, [agents.md](../../sy
+specs/capabilities/agents-evals/spec.md:267-281  R108 The Graph tab of a **workflow-backed agent** SHALL open with a drawing
+specs/capabilities/agents-evals/spec.md:282-285  R109 The agent detail's header SHALL carry the line **Used in** under the i
+specs/capabilities/agents-evals/spec.md:286-286  R110 **Personas.** Every built-in agent SHALL be a persona: a human first n
+specs/capabilities/agents-evals/spec.md:288-304  ## Edge cases and errors
+specs/capabilities/agents-evals/spec.md:306-315  ## Contracts
+specs/capabilities/agents-evals/spec.md:317-319  ## UI
+specs/capabilities/agents-evals/spec.md:321-1263  ## Flows
+specs/capabilities/agents-evals/spec.md:646-742  ### Feature: Agent skills
+specs/capabilities/agents-evals/spec.md:744-1012  ### Feature: Agent editor
+specs/capabilities/agents-evals/spec.md:1014-1100  ### Feature: Skill library
+specs/capabilities/agents-evals/spec.md:1102-1263  ### Feature: Built-in agent prompts
+specs/capabilities/agents-evals/spec.md:1265-1271  ## Acceptance
+specs/capabilities/agents-evals/spec.md:1273-1282  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
 specs/capabilities/app-shell/spec.md:16-92  ## Rules
@@ -2116,7 +2116,7 @@ specs/system/ui.md:181-191  ### 3.3 Toast container
 specs/system/ui.md:193-195  ### 3.4 App logo
 specs/system/ui.md:197-199  ### 3.5 Markdown rendering
 specs/system/ui.md:201-225  ### 3.6 Shared component classes
-specs/system/ui.md:227-877  ## 4. Screens and panels
+specs/system/ui.md:227-878  ## 4. Screens and panels
 specs/system/ui.md:231-239  ### 4.1 Home (welcome)
 specs/system/ui.md:241-247  ### 4.2 Datasets list
 specs/system/ui.md:249-263  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
@@ -2124,58 +2124,58 @@ specs/system/ui.md:265-318  ### 4.3a Profile & synthesize tab (dataset editor)
 specs/system/ui.md:320-332  ### 4.4 Agent Hub
 specs/system/ui.md:334-345  ### 4.4a Workflows
 specs/system/ui.md:347-410  ### 4.4b Workflow page
-specs/system/ui.md:412-559  ### 4.5 Agent detail
-specs/system/ui.md:440-450  #### 4.5.1 Agent editor and Try it
-specs/system/ui.md:452-459  #### 4.5.2 Skills library
-specs/system/ui.md:461-468  #### 4.5.3 Skill editor
-specs/system/ui.md:470-477  #### 4.5.4 Built-in skill editor
-specs/system/ui.md:479-487  #### 4.5.5 Link editor and chips
-specs/system/ui.md:489-516  #### 4.5.6 Graph tab
-specs/system/ui.md:518-520  #### 4.5.7 LLM Config tab
-specs/system/ui.md:522-527  #### 4.5.8 Try it tab
-specs/system/ui.md:529-536  #### 4.5.9 Job Description tab, user agent
-specs/system/ui.md:538-549  #### 4.5.11 Job Description tab, built-in agent
-specs/system/ui.md:551-559  #### 4.5.10 Skills tab, user agent
-specs/system/ui.md:561-563  ### 4.6 Eval trace (right panel)
-specs/system/ui.md:565-567  ### 4.7 New-session composer
-specs/system/ui.md:569-584  ### 4.7.1 Runs page and Past chats
-specs/system/ui.md:586-592  ### 4.8a Context page
-specs/system/ui.md:594-613  ### 4.8 Ontology tab (dataset editor)
-specs/system/ui.md:615-623  ### 4.8b User personas list and editor
-specs/system/ui.md:625-634  ### 4.8c Visuals library
-specs/system/ui.md:636-646  ### 4.8d Monitoring: tabs and the LLM calls table
-specs/system/ui.md:648-656  ### 4.8e Monitoring: LLM call page
-specs/system/ui.md:658-665  ### 4.8f Monitoring: Runs tab
-specs/system/ui.md:667-679  ### 4.8g Monitoring: session page
-specs/system/ui.md:681-691  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:693-697  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:699-710  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:712-716  ### 4.11 Testing data (settings)
-specs/system/ui.md:719-731  ### 4.12 Developer (settings)
-specs/system/ui.md:732-800  ### 4.12 Past chat (read-only transcript)
-specs/system/ui.md:754-767  #### 4.12.1 Workflow bar
-specs/system/ui.md:769-800  #### 4.12.2 Query inspector (M1-25)
-specs/system/ui.md:802-860  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:815-822  #### 4.13.1 Visual view
-specs/system/ui.md:824-826  #### 4.13.2 Document view
-specs/system/ui.md:828-830  #### 4.13.3 File view
-specs/system/ui.md:832-834  #### 4.13.4 Table view
-specs/system/ui.md:836-860  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:862-864  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:866-868  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:870-877  ### 4.16 Appearance (settings)
-specs/system/ui.md:879-891  ## 5. Cross-cutting behaviour
-specs/system/ui.md:881-883  ### 5.1 State that survives view changes
-specs/system/ui.md:885-887  ### 5.2 Selection state
-specs/system/ui.md:889-891  ### 5.3 Toast policy
-specs/system/ui.md:893-982  ## 6. Design tokens
-specs/system/ui.md:897-940  ### 6.0 Theme tokens
-specs/system/ui.md:942-947  ### 6.1 Colour usage
-specs/system/ui.md:949-954  ### 6.2 Typography
-specs/system/ui.md:956-961  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:963-970  ### 6.4 Icons
-specs/system/ui.md:972-982  ### 6.5 Theming
-specs/system/ui.md:984-1028  ## 7. Copy that tests or users rely on
-specs/system/ui.md:1030-1041  ## 8. Accessibility
-specs/system/ui.md:1043-1045  ## 9. Visual baseline
-specs/system/ui.md:1048-1055  ## 10. Open questions and gaps
+specs/system/ui.md:412-560  ### 4.5 Agent detail
+specs/system/ui.md:440-451  #### 4.5.1 Agent editor and Try it
+specs/system/ui.md:453-460  #### 4.5.2 Skills library
+specs/system/ui.md:462-469  #### 4.5.3 Skill editor
+specs/system/ui.md:471-478  #### 4.5.4 Built-in skill editor
+specs/system/ui.md:480-488  #### 4.5.5 Link editor and chips
+specs/system/ui.md:490-517  #### 4.5.6 Graph tab
+specs/system/ui.md:519-521  #### 4.5.7 LLM Config tab
+specs/system/ui.md:523-528  #### 4.5.8 Try it tab
+specs/system/ui.md:530-537  #### 4.5.9 Job Description tab, user agent
+specs/system/ui.md:539-550  #### 4.5.11 Job Description tab, built-in agent
+specs/system/ui.md:552-560  #### 4.5.10 Skills tab, user agent
+specs/system/ui.md:562-564  ### 4.6 Eval trace (right panel)
+specs/system/ui.md:566-568  ### 4.7 New-session composer
+specs/system/ui.md:570-585  ### 4.7.1 Runs page and Past chats
+specs/system/ui.md:587-593  ### 4.8a Context page
+specs/system/ui.md:595-614  ### 4.8 Ontology tab (dataset editor)
+specs/system/ui.md:616-624  ### 4.8b User personas list and editor
+specs/system/ui.md:626-635  ### 4.8c Visuals library
+specs/system/ui.md:637-647  ### 4.8d Monitoring: tabs and the LLM calls table
+specs/system/ui.md:649-657  ### 4.8e Monitoring: LLM call page
+specs/system/ui.md:659-666  ### 4.8f Monitoring: Runs tab
+specs/system/ui.md:668-680  ### 4.8g Monitoring: session page
+specs/system/ui.md:682-692  ### 4.8h Monitoring: waterfall
+specs/system/ui.md:694-698  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:700-711  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:713-717  ### 4.11 Testing data (settings)
+specs/system/ui.md:720-732  ### 4.12 Developer (settings)
+specs/system/ui.md:733-801  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:755-768  #### 4.12.1 Workflow bar
+specs/system/ui.md:770-801  #### 4.12.2 Query inspector (M1-25)
+specs/system/ui.md:803-861  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:816-823  #### 4.13.1 Visual view
+specs/system/ui.md:825-827  #### 4.13.2 Document view
+specs/system/ui.md:829-831  #### 4.13.3 File view
+specs/system/ui.md:833-835  #### 4.13.4 Table view
+specs/system/ui.md:837-861  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:863-865  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:867-869  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:871-878  ### 4.16 Appearance (settings)
+specs/system/ui.md:880-892  ## 5. Cross-cutting behaviour
+specs/system/ui.md:882-884  ### 5.1 State that survives view changes
+specs/system/ui.md:886-888  ### 5.2 Selection state
+specs/system/ui.md:890-892  ### 5.3 Toast policy
+specs/system/ui.md:894-983  ## 6. Design tokens
+specs/system/ui.md:898-941  ### 6.0 Theme tokens
+specs/system/ui.md:943-948  ### 6.1 Colour usage
+specs/system/ui.md:950-955  ### 6.2 Typography
+specs/system/ui.md:957-962  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:964-971  ### 6.4 Icons
+specs/system/ui.md:973-983  ### 6.5 Theming
+specs/system/ui.md:985-1029  ## 7. Copy that tests or users rely on
+specs/system/ui.md:1031-1042  ## 8. Accessibility
+specs/system/ui.md:1044-1046  ## 9. Visual baseline
+specs/system/ui.md:1049-1056  ## 10. Open questions and gaps
