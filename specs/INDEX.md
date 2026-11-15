@@ -318,7 +318,7 @@ specs/README.md:171-175  ## Lifecycle
 specs/README.md:177-183  ## Rebuild prompt
 
 specs/capabilities/agent-answers/spec.md:7-9  ## Concepts
-specs/capabilities/agent-answers/spec.md:11-180  ## Rules
+specs/capabilities/agent-answers/spec.md:11-207  ## Rules
 specs/capabilities/agent-answers/spec.md:13-41  ### Sending a message and streaming
 specs/capabilities/agent-answers/spec.md:15-15  R8 The system SHALL reject an empty or whitespace-only question: a run re
 specs/capabilities/agent-answers/spec.md:16-16  R9 Retired (1.23.27). The composer's Enter and Shift+Enter went with it.
@@ -349,48 +349,61 @@ specs/capabilities/agent-answers/spec.md:87-107  ### Persisted answer and proven
 specs/capabilities/agent-answers/spec.md:89-94  R30 Each persisted answer SHALL carry:
 specs/capabilities/agent-answers/spec.md:95-95  R31 The interpretation line SHALL be built from the successful SQL runs on
 specs/capabilities/agent-answers/spec.md:96-101  R32 Under an answer, the chat SHALL show these blocks, each only when non-
-specs/capabilities/agent-answers/spec.md:102-106  R33 Each entry in "Data used" SHALL show:
+specs/capabilities/agent-answers/spec.md:102-106  R33 Unless the host shows the query inspector (R67), each entry in "Data u
 specs/capabilities/agent-answers/spec.md:107-107  R34 The chat SHALL offer "Copy message" on every user message and answer.
-specs/capabilities/agent-answers/spec.md:109-117  ### Verified badge and rating
-specs/capabilities/agent-answers/spec.md:111-111  R35 An answer whose last successful SQL equals a stored verified query (ca
-specs/capabilities/agent-answers/spec.md:112-117  R36 An answer with data records SHALL offer "Save as verified query" (thum
-specs/capabilities/agent-answers/spec.md:119-136  ### Careful mode (cross-check)
-specs/capabilities/agent-answers/spec.md:121-121  R37 Careful mode is asked for per run (the `careful` option of a run's tur
-specs/capabilities/agent-answers/spec.md:122-127  R38 In careful mode, before `done`, the system SHALL check the turn's last
-specs/capabilities/agent-answers/spec.md:128-135  R39 The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check
-specs/capabilities/agent-answers/spec.md:136-136  R40 A failing cross-check SHALL NOT lose the answer. A turn with no succes
-specs/capabilities/agent-answers/spec.md:138-146  ### Clarification
-specs/capabilities/agent-answers/spec.md:140-140  R41 The assistant SHALL ask at most one clarifying question per user quest
-specs/capabilities/agent-answers/spec.md:141-141  R42 A clarification SHALL end the turn immediately: the model stops. A cla
-specs/capabilities/agent-answers/spec.md:142-145  R43 Only the latest clarification card SHALL be actionable. Its controls:
-specs/capabilities/agent-answers/spec.md:146-146  R44 When the user answers a clarification, the system SHALL give the model
-specs/capabilities/agent-answers/spec.md:148-150  ### Errors
-specs/capabilities/agent-answers/spec.md:150-150  R45 Retired (1.23.27). The chat error bubble, its toast and **Retry** went
-specs/capabilities/agent-answers/spec.md:152-156  ### Memory and continuity
-specs/capabilities/agent-answers/spec.md:154-154  R46 Each session SHALL have its own persistent agent memory thread. Each t
-specs/capabilities/agent-answers/spec.md:155-155  R47 When a session has a transcript but no memory thread (created before m
-specs/capabilities/agent-answers/spec.md:156-156  R48 Background work (grounding pass, SQL repair, cross-check, visual desig
-specs/capabilities/agent-answers/spec.md:158-161  ### Retired chat rules
-specs/capabilities/agent-answers/spec.md:160-160  R50 Retired (1.23.27). The empty chat's welcome block and its starter prom
-specs/capabilities/agent-answers/spec.md:161-161  R51 Moved to past-chats R66 (the history strip of a transcript; see ../pas
-specs/capabilities/agent-answers/spec.md:163-180  ### Sessions started from an agent
-specs/capabilities/agent-answers/spec.md:167-167  R52 Retired (1.24.12). **Start chat** (on a workflow, never on an agent) c
-specs/capabilities/agent-answers/spec.md:168-168  R53 A session started from an agent SHALL keep the datasets it was created
-specs/capabilities/agent-answers/spec.md:169-175  R54 Every assistant call made for a session bound to a user agent that sti
-specs/capabilities/agent-answers/spec.md:176-176  R55 An agent's instructions SHALL NOT relax any rule enforced in code: the
-specs/capabilities/agent-answers/spec.md:177-177  R56 A model override SHALL name a model or deployment of the configured pr
-specs/capabilities/agent-answers/spec.md:178-178  R58 Retired (1.23.27). The welcome block of a session bound to an agent we
-specs/capabilities/agent-answers/spec.md:179-179  R61 A session bound to a built-in agent (today the Data Readiness Agent an
-specs/capabilities/agent-answers/spec.md:180-180  R64 Retired (1.24.12). The new-session screen, with its **Workflow** field
-specs/capabilities/agent-answers/spec.md:182-194  ## Edge cases and errors
-specs/capabilities/agent-answers/spec.md:196-204  ## Contracts
-specs/capabilities/agent-answers/spec.md:206-218  ## UI
-specs/capabilities/agent-answers/spec.md:220-395  ## Flows
-specs/capabilities/agent-answers/spec.md:222-245  ### Feature: Chat and visuals
-specs/capabilities/agent-answers/spec.md:247-337  ### Feature: Chat answers and reliability signals
-specs/capabilities/agent-answers/spec.md:339-373  ### Feature: Sessions started from an agent
-specs/capabilities/agent-answers/spec.md:375-395  ### Feature: Skills the assistant is given
-specs/capabilities/agent-answers/spec.md:397-406  ## Acceptance
+specs/capabilities/agent-answers/spec.md:109-134  ### Query inspector
+specs/capabilities/agent-answers/spec.md:113-113  R67 A host turns the inspector on with the answer view's `queryInspector`
+specs/capabilities/agent-answers/spec.md:114-114  R68 Each persisted answer MAY carry `evidence`: one entry per `run_readonl
+specs/capabilities/agent-answers/spec.md:115-121  R69 In inspector mode each figure of the answer text SHALL carry a chip `Q
+specs/capabilities/agent-answers/spec.md:122-126  R70 Under the answer, in place of `How I worked this out` and `Data used`,
+specs/capabilities/agent-answers/spec.md:127-127  R71 The answer view in inspector mode SHALL list one **row** per `data` re
+specs/capabilities/agent-answers/spec.md:128-128  R72 An answer stored before the feature has `data` but no `evidence`: the
+specs/capabilities/agent-answers/spec.md:129-129  R73 Opening a query (a chip, a row or the coverage line's link) SHALL show
+specs/capabilities/agent-answers/spec.md:130-130  R74 `Step by step` shows the SQL as a funnel of business steps (`Start fro
+specs/capabilities/agent-answers/spec.md:131-131  R75 The size of each table a query reads is counted in code (`SELECT COUNT
+specs/capabilities/agent-answers/spec.md:132-132  R76 The `Result` tab SHALL always show the rows stored with the answer (at
+specs/capabilities/agent-answers/spec.md:133-133  R77 **Re-run** SHALL run the same statement again, with no repair, on the
+specs/capabilities/agent-answers/spec.md:134-134  R78 The explanation, the step counts and the evidence are written to the r
+specs/capabilities/agent-answers/spec.md:136-144  ### Verified badge and rating
+specs/capabilities/agent-answers/spec.md:138-138  R35 An answer whose last successful SQL equals a stored verified query (ca
+specs/capabilities/agent-answers/spec.md:139-144  R36 An answer with data records SHALL offer "Save as verified query" (thum
+specs/capabilities/agent-answers/spec.md:146-163  ### Careful mode (cross-check)
+specs/capabilities/agent-answers/spec.md:148-148  R37 Careful mode is asked for per run (the `careful` option of a run's tur
+specs/capabilities/agent-answers/spec.md:149-154  R38 In careful mode, before `done`, the system SHALL check the turn's last
+specs/capabilities/agent-answers/spec.md:155-162  R39 The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check
+specs/capabilities/agent-answers/spec.md:163-163  R40 A failing cross-check SHALL NOT lose the answer. A turn with no succes
+specs/capabilities/agent-answers/spec.md:165-173  ### Clarification
+specs/capabilities/agent-answers/spec.md:167-167  R41 The assistant SHALL ask at most one clarifying question per user quest
+specs/capabilities/agent-answers/spec.md:168-168  R42 A clarification SHALL end the turn immediately: the model stops. A cla
+specs/capabilities/agent-answers/spec.md:169-172  R43 Only the latest clarification card SHALL be actionable. Its controls:
+specs/capabilities/agent-answers/spec.md:173-173  R44 When the user answers a clarification, the system SHALL give the model
+specs/capabilities/agent-answers/spec.md:175-177  ### Errors
+specs/capabilities/agent-answers/spec.md:177-177  R45 Retired (1.23.27). The chat error bubble, its toast and **Retry** went
+specs/capabilities/agent-answers/spec.md:179-183  ### Memory and continuity
+specs/capabilities/agent-answers/spec.md:181-181  R46 Each session SHALL have its own persistent agent memory thread. Each t
+specs/capabilities/agent-answers/spec.md:182-182  R47 When a session has a transcript but no memory thread (created before m
+specs/capabilities/agent-answers/spec.md:183-183  R48 Background work (grounding pass, SQL repair, cross-check, visual desig
+specs/capabilities/agent-answers/spec.md:185-188  ### Retired chat rules
+specs/capabilities/agent-answers/spec.md:187-187  R50 Retired (1.23.27). The empty chat's welcome block and its starter prom
+specs/capabilities/agent-answers/spec.md:188-188  R51 Moved to past-chats R66 (the history strip of a transcript; see ../pas
+specs/capabilities/agent-answers/spec.md:190-207  ### Sessions started from an agent
+specs/capabilities/agent-answers/spec.md:194-194  R52 Retired (1.24.12). **Start chat** (on a workflow, never on an agent) c
+specs/capabilities/agent-answers/spec.md:195-195  R53 A session started from an agent SHALL keep the datasets it was created
+specs/capabilities/agent-answers/spec.md:196-202  R54 Every assistant call made for a session bound to a user agent that sti
+specs/capabilities/agent-answers/spec.md:203-203  R55 An agent's instructions SHALL NOT relax any rule enforced in code: the
+specs/capabilities/agent-answers/spec.md:204-204  R56 A model override SHALL name a model or deployment of the configured pr
+specs/capabilities/agent-answers/spec.md:205-205  R58 Retired (1.23.27). The welcome block of a session bound to an agent we
+specs/capabilities/agent-answers/spec.md:206-206  R61 A session bound to a built-in agent (today the Data Readiness Agent an
+specs/capabilities/agent-answers/spec.md:207-207  R64 Retired (1.24.12). The new-session screen, with its **Workflow** field
+specs/capabilities/agent-answers/spec.md:209-221  ## Edge cases and errors
+specs/capabilities/agent-answers/spec.md:223-231  ## Contracts
+specs/capabilities/agent-answers/spec.md:233-245  ## UI
+specs/capabilities/agent-answers/spec.md:247-422  ## Flows
+specs/capabilities/agent-answers/spec.md:249-272  ### Feature: Chat and visuals
+specs/capabilities/agent-answers/spec.md:274-364  ### Feature: Chat answers and reliability signals
+specs/capabilities/agent-answers/spec.md:366-400  ### Feature: Sessions started from an agent
+specs/capabilities/agent-answers/spec.md:402-422  ### Feature: Skills the assistant is given
+specs/capabilities/agent-answers/spec.md:424-433  ## Acceptance
 
 specs/capabilities/agent-panel/spec.md:5-15  ## Concepts
 specs/capabilities/agent-panel/spec.md:17-58  ## Rules
@@ -2080,7 +2093,7 @@ specs/system/ui.md:184-194  ### 3.3 Toast container
 specs/system/ui.md:196-198  ### 3.4 App logo
 specs/system/ui.md:200-202  ### 3.5 Markdown rendering
 specs/system/ui.md:204-228  ### 3.6 Shared component classes
-specs/system/ui.md:230-845  ## 4. Screens and panels
+specs/system/ui.md:230-878  ## 4. Screens and panels
 specs/system/ui.md:234-242  ### 4.1 Home (welcome)
 specs/system/ui.md:244-250  ### 4.2 Datasets list
 specs/system/ui.md:252-266  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
@@ -2116,29 +2129,30 @@ specs/system/ui.md:694-698  ### 4.9 LLM configuration (settings)
 specs/system/ui.md:700-711  ### 4.10 Datasource configuration (settings)
 specs/system/ui.md:713-717  ### 4.11 Testing data (settings)
 specs/system/ui.md:720-732  ### 4.12 Developer (settings)
-specs/system/ui.md:733-768  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:733-801  ### 4.12 Past chat (read-only transcript)
 specs/system/ui.md:755-768  #### 4.12.1 Workflow bar
-specs/system/ui.md:770-828  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:783-790  #### 4.13.1 Visual view
-specs/system/ui.md:792-794  #### 4.13.2 Document view
-specs/system/ui.md:796-798  #### 4.13.3 File view
-specs/system/ui.md:800-802  #### 4.13.4 Table view
-specs/system/ui.md:804-828  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:830-832  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:834-836  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:838-845  ### 4.16 Appearance (settings)
-specs/system/ui.md:847-859  ## 5. Cross-cutting behaviour
-specs/system/ui.md:849-851  ### 5.1 State that survives view changes
-specs/system/ui.md:853-855  ### 5.2 Selection state
-specs/system/ui.md:857-859  ### 5.3 Toast policy
-specs/system/ui.md:861-948  ## 6. Design tokens
-specs/system/ui.md:865-907  ### 6.0 Theme tokens
-specs/system/ui.md:909-914  ### 6.1 Colour usage
-specs/system/ui.md:916-920  ### 6.2 Typography
-specs/system/ui.md:922-927  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:929-936  ### 6.4 Icons
-specs/system/ui.md:938-948  ### 6.5 Theming
-specs/system/ui.md:950-994  ## 7. Copy that tests or users rely on
-specs/system/ui.md:996-1007  ## 8. Accessibility
-specs/system/ui.md:1009-1011  ## 9. Visual baseline
-specs/system/ui.md:1014-1021  ## 10. Open questions and gaps
+specs/system/ui.md:770-801  #### 4.12.2 Query inspector (M1-25)
+specs/system/ui.md:803-861  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:816-823  #### 4.13.1 Visual view
+specs/system/ui.md:825-827  #### 4.13.2 Document view
+specs/system/ui.md:829-831  #### 4.13.3 File view
+specs/system/ui.md:833-835  #### 4.13.4 Table view
+specs/system/ui.md:837-861  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:863-865  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:867-869  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:871-878  ### 4.16 Appearance (settings)
+specs/system/ui.md:880-892  ## 5. Cross-cutting behaviour
+specs/system/ui.md:882-884  ### 5.1 State that survives view changes
+specs/system/ui.md:886-888  ### 5.2 Selection state
+specs/system/ui.md:890-892  ### 5.3 Toast policy
+specs/system/ui.md:894-981  ## 6. Design tokens
+specs/system/ui.md:898-940  ### 6.0 Theme tokens
+specs/system/ui.md:942-947  ### 6.1 Colour usage
+specs/system/ui.md:949-953  ### 6.2 Typography
+specs/system/ui.md:955-960  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:962-969  ### 6.4 Icons
+specs/system/ui.md:971-981  ### 6.5 Theming
+specs/system/ui.md:983-1027  ## 7. Copy that tests or users rely on
+specs/system/ui.md:1029-1040  ## 8. Accessibility
+specs/system/ui.md:1042-1044  ## 9. Visual baseline
+specs/system/ui.md:1047-1054  ## 10. Open questions and gaps
