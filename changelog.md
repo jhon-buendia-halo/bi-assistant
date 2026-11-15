@@ -4,6 +4,20 @@ Running log of every meaningful change, newest first. One entry per epic, writte
 
 ## 2026-11-15
 
+### Added
+- **Query inspector: every figure of an answer links to the query behind it** (epic M1-25, repo only, roadmap 1.25.1–1.25.7, PR #109; [specs/epics/M1-25/spec.md](specs/epics/M1-25/spec.md), plan [m1-25-query-inspector.md](docs/plans/m1-25-query-inspector.md); rules in [agent-answers](specs/capabilities/agent-answers/spec.md), *Query inspector*). A user of Answer a Business Question could not tell how its queries were built and distrusted an answer after seeing a `LIMIT 100`.
+  - 1.25.1: each query of an answer is stored with how much data it stands for (`whole-table`, `top-n`, `sample`, `partial`), the rows the statement produced before the tool's row cap and, on demand, the size of each table it reads; endpoints 139, 142 and 143. No tool result a model reads changed.
+  - 1.25.2: in a host that shows the inspector, each figure carries a chip (`Q1`) linked in code to the query whose rows hold it, and a coverage line and one row per query replace "How I worked this out" and "Data used".
+  - 1.25.3: the System agent `query-explainer` (Hannah) explains a query step by step when it is first opened; exact row counts per step are shown only when they pass the checks (endpoints 140, 141).
+  - 1.25.4: the inspector sheet beside the Run panel: Step by step, Result, SQL, with Download all rows (CSV), Re-run and Copy SQL.
+  - 1.25.5: the run detail page hosts the inspector too (since PR #108 a finished run opens on its workflow page, so this serves a run still running).
+  - `CLAUDE.md`: every agent that answers from data shows its evidence through this pattern.
+
+### Fixed
+- **An answer that lists more than 50 rows shows all of them** (1.25.6). Write answer read 50 rows of each query, so a list of 100 stopped at 50 and said the rest was missing. It now puts a marker where the list goes and code writes the table from the stored rows (up to 200).
+- **Validate fails an attempt that rests on a sample** (1.25.7): a `LIMIT` with no `ORDER BY` that was reached, with no later query over the whole data, is run again instead of written up.
+- Checks for 1.25.1–1.25.7 (Free style, no evidence folder): `qa.mjs --free` 6/6 on the branch merged with `main` (3,156 backend and 1,088 frontend unit tests, 37 selected Playwright tests) plus the `runs`, `workflows`, `data-readiness` and `visual-tailoring` specs (32); axe on the Run panel and the inspector's tabs in both themes; web only, desktop not run. Evals of `insights-analyst` (`claude-sonnet-5-5`, 10 cases, 3 runs per build): every code check passed in every run that reached the model. Known-flaky, not from the change, each re-run 3 of 3: two runs lost to errors of the model endpoint, one run where the model called a tool that does not exist, and one judged failure of `v2-no-clarify-total-goals` (5 of 6 on the branch, 5 of 5 judged on the base).
+
 ### Changed
 - **A workflow's agent steps read like an artifact** (Free style, no roadmap story; [ui.md](specs/system/ui.md) 4.4b). Double-clicking Plan, Analyse, Check data quality or Write answer opens the step's chat beside a report of its run. Its **Preview** tells what the step received, what it did (one line per tool call, with the query's rationale and its SQL on demand), the last query's result with bars, and what it returned; it is built from the stored run data, without a model call. **Data** holds the Input and Output, **Config** the Parameters and Settings, and **Copy** copies the report as Markdown. The chat opens with the step's own words, a card to the report and suggested questions. Every other node's dialog stacks Input, its Parameters and Settings tabs and Output, with Input and Output collapsed.
 - **A workflow page's header fits on one line**: `Workflows / <name>`, the steps chip and the id; the canvas starts 62 px higher.
