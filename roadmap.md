@@ -519,11 +519,19 @@ A user of Answer a Business Question could not tell how its queries were built a
 - **Acceptance:** `run-detail.spec.ts`: a stored run of Answer a Business Question shows chips and query rows and opens the inspector from a row; a run of another workflow renders as before; `prepare` is called once per run shown.
 - **Notes:** found on 2026-11-15 while checking the real app: the Runs page opens a stored run on this page, not on the workflow page. UI story; its Playwright check is one step added to 1.25.4's scenario (open the run from the Runs page and see a chip).
 
-#### 1.25.6 — An answer that lists more than 50 rows reads all of them  `📋 Planned`
-- **Intent:** when a query returns more rows than Write answer receives, the answer does not stop at row 50 and say the rest is missing.
-- **Scope:** to be designed. Write answer gets at most 50 rows per query of the last attempt ([agents.md](specs/system/agents.md) 5.11), so a question that asks for a list of 100 gets the first 50 and a caveat. Options to weigh: a larger row budget for the query the answer lists; the answer naming the result's rows as an attachment the answer view renders from `data` (no model sees them); or an answer that reports the top rows and points at the inspector's Result tab for the rest.
-- **Out of scope:** aggregates, which never depended on the row budget.
-- **Notes:** found on 2026-11-15 with the inspector in the real app: `Which 100 drivers have the most race starts?` returned 102 rows and the answer read `Ranks 51 to 102 are missing from the results I received`. It changes a workflow step, so it starts from Mastra's docs and three approaches (`CLAUDE.md`, the `mastra-workflows` skill). It changes Write answer's input: its evals run.
+#### 1.25.6 — An answer that lists more than 50 rows shows all of them  `🚧 In progress`
+- **Intent:** when the answer is a list longer than what Write answer reads (50 rows of each query), the answer shows every row instead of stopping at row 50 and saying the rest is missing.
+- **Scope:** per plan 1.25.6 (approach B of three, picked by the user on 2026-11-15: the code writes the table). Jessica writes the headline and the commentary and puts a marker line `[[rows:<n>]]` where the full list goes; code replaces it with a Markdown table of that query's rows (at most 200, with a note when there are more). An attempt's queries carry up to 200 rows; the request still shows the first 50 and says how many there are. The marker never reaches the streamed text. agents.md 5.11 and Appendix F, the workflows spec R27.
+- **Out of scope:** results over 200 rows in the answer itself (the note points at the inspector's download); any new step, agent or control flow.
+- **Acceptance:** the cases of plan 1.25.6; the contract snapshot updated on purpose; the insights-analyst evals compared with base before the change is called done.
+- **Notes:** found on 2026-11-15 with the inspector in the real app: `Which 100 drivers have the most race starts?` returned 102 rows and the answer read `Ranks 51 to 102 are missing from the results I received`. No UI of its own: the table is Markdown, so every host shows it and its figures get chips.
+
+#### 1.25.7 — Validate fails an attempt that rests on a sample  `🚧 In progress`
+- **Intent:** an analysis whose only evidence is an arbitrary sample of rows (a `LIMIT` with no `ORDER BY` that was reached) is run again instead of being written up.
+- **Scope:** per plan 1.25.7: a fourth failing check in `validateAttempt`, `No answer from a sample`, with `coverageOf` (1.25.1); the retry block and Write answer's findings carry it; agents.md 5.11, the workflows spec R27.
+- **Out of scope:** the bridge's `truncated` flag (it still reads a result that lands exactly on the tool's row limit as cut; see the plan's note); the `sample_rows` tool, which is exploration and never fails the check.
+- **Acceptance:** the cases of plan 1.25.7; the insights-analyst evals of 1.25.6's run cover it.
+- **Notes:** confirmed in code on 2026-11-15: `SELECT … LIMIT 50` with no sort, under the tool's limit of 100, passed Validate with only a warning to the model.
 
 ## Release 2 — Multi-user  (no target date yet)
 

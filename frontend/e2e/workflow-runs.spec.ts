@@ -659,4 +659,17 @@ test('the Run tab with an answer has no detectable accessibility violations in e
     'true',
   );
   await scan('Run panel with an answer, maximized');
+
+  // The query inspector (roadmap 1.25), each tab: opening it restores the panel.
+  await runAnswer(page).locator('[data-testid^="query-row-"]').first().click();
+  const inspector = page.getByTestId('query-inspector');
+  await expect(inspector).toBeVisible();
+  await expect(inspector.getByTestId('query-funnel-step').first()).toBeVisible();
+  await scan('Query inspector, Step by step');
+  await inspector.getByTestId('query-inspector-tab-result').click();
+  await expect(inspector.getByTestId('query-result-table')).toBeVisible();
+  await scan('Query inspector, Result');
+  await inspector.getByTestId('query-inspector-tab-sql').click();
+  await expect(inspector.getByTestId('query-sql')).toBeVisible();
+  await scan('Query inspector, SQL');
 });

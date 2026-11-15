@@ -227,3 +227,26 @@ First failing test: the designer's `openQuery` sets the index, and showing a sto
 Specs: `ui.md` 4.4b (the sheet, and the sentence about the answer's blocks); `specs/capabilities/workflows/spec.md` (amend R13, add a rule for the inspector); `specs/capabilities/datasources/spec.md` (the `Data used` line).
 
 Must not touch: the backend.
+
+## 1.25.6 — An answer that lists more than 50 rows shows all of them
+
+Approach B of three (2026-11-15): the code writes the table. The workflow's shape, steps and agents do not change.
+
+- **Rows an attempt passes on.** `ATTEMPT_ROWS_CAP` (`sessions/turn/turn-workflow.ts`) goes from 50 to 200, the rows a data record keeps. The schema text of `analyseQuerySchema.rows` says so; the contract hash and its snapshot change on purpose. Check that a step whose data grows past `STEP_OUTPUT_CAP` still shows in the Logs as truncated data, as today.
+- **What Write answer reads.** `ANSWER_ROWS_CAP` stays 50. `queryLines` says how many rows the result has and how many are shown (`102 rows, the first 50 shown`), so the writer never reports rows as missing.
+- **The marker.** The instructions (`WRITE_ANSWER_INSTRUCTIONS`, Appendix F) gain one rule: when the answer lists more than 10 rows of one query's result, write no table for them; put, alone on a line where the table goes, `[[rows:<n>]]` (`n` = the query's number in the request), optionally with the columns to show and their headers, `[[rows:2 | name=Driver, total_race_starts=Race starts]]`. Up to 10 rows, write the table as today. Never say that rows are missing or were cut because only some were shown.
+- **Expansion** (`expandRowTables(answer, queries)`, pure, in `answer-business-question.steps.ts`, called at the end of `writeAnswerWithModel` so the turn engine and the eval target share it): each marker line becomes a Markdown table of the query's rows (at most 200): the named columns in that order with their headers, else every column with its name made readable (`total_race_starts` reads `Total race starts`); cells as stored, with `|` and line breaks escaped and null as an empty cell. When the result has more rows than the table (`rowCount` over the rows held), a line follows: `Showing the first 200 of 1,870 rows. Open the query to download all of them.` A marker naming a query that does not exist, failed or has no rows is removed. A column name the result does not have is ignored; if none is left, every column is shown. The headline is never expanded.
+- **Streaming.** The streamed text never shows a marker: a complete marker is left out and an unfinished `[[` is held back until it closes or proves not to be a marker. The stored answer is the expanded one.
+
+First failing test: `expandRowTables` turns `[[rows:1]]` into a table of 102 rows from a query holding 102; with `| name=Driver` it shows that column under `Driver`; with 200 rows held of 1 870 it adds the note; an unknown query number, a failed query and an empty result remove the line; a `|` in a cell is escaped. Then: the request reads `102 rows, the first 50 shown`; the streamed deltas of an answer holding a marker never contain `[[`.
+
+## 1.25.7 — Validate fails an attempt that rests on a sample
+
+- A fourth failing check in `validateAttempt`, after `No result cut at its row limit`: `No answer from a sample`. It fails when a successful query's coverage is `sample` (`coverageOf` of `sessions/query-evidence/query-coverage.ts`, framework-free: its own top-level LIMIT was reached and nothing sorts the rows before it) and no later successful query is anything else. Detail when it fails: `<n> result(s) kept an arbitrary sample of rows (a LIMIT with no sort) and no later query read the whole data.`; when it passes: `No result the answer reads is an arbitrary sample.`
+- `ok` is the first four checks passing; `Measures covered` stays a warning.
+- The retry block and Write answer's findings carry it as they carry the others.
+- A question that asks for examples (`show me 5 orders`) fails the check once and is answered after the second attempt, with the finding as a caveat: accepted.
+
+Note, not in scope: the SQL bridge (`sessions/turn/sql-checks.ts`) sets `truncated` when a result lands exactly on the tool's row limit, so a `LIMIT 100` that returns 100 rows under the default limit of 100 is told `row limit reached` although nothing was cut. `totalRows` now tells the two apart. Fixing it changes a tool result every agent's model reads, so it needs the evals of each agent that uses the tool.
+
+First failing test: `LIMIT 50` with no ORDER BY returning 50 rows, alone, fails the check; followed by an aggregate that succeeds, it passes; `ORDER BY … LIMIT 50` passes; a failed sample query does not count.
