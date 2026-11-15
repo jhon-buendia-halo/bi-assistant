@@ -118,6 +118,30 @@ export class WorkflowRunsController {
     return { ok: true, run: await this.runs.prepareEvidence(id) };
   }
 
+  /** Explain one query step by step (api.md 140). */
+  @Post(':id/answer/queries/:index/explanation')
+  async explainQuery(
+    @Param('id') id: string,
+    @Param('index') index: string,
+  ): Promise<{ ok: true; run: WorkflowRun }> {
+    return {
+      ok: true,
+      run: await this.runs.explainQuery(id, parseQueryIndex(index)),
+    };
+  }
+
+  /** Count the rows after each step of an explained query (api.md 141). */
+  @Post(':id/answer/queries/:index/stage-counts')
+  async countQuerySteps(
+    @Param('id') id: string,
+    @Param('index') index: string,
+  ): Promise<{ ok: true; run: WorkflowRun }> {
+    return {
+      ok: true,
+      run: await this.runs.countQuerySteps(id, parseQueryIndex(index)),
+    };
+  }
+
   /** Run one of the answer's queries again; nothing is stored (api.md 142). */
   @Post(':id/answer/queries/:index/rerun')
   async rerunQuery(

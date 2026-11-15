@@ -163,7 +163,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
 
   for (const [id, heading, keys] of [
     ['data-foundations', 'Data Foundations', ['data-readiness', 'knowledge-bootstrap']],
-    ['sql', 'SQL Engineering', ['sql-fixer', 'sql-verifier']],
+    ['sql', 'SQL Engineering', ['sql-fixer', 'query-explainer', 'sql-verifier']],
     ['storytelling', 'Storytelling', ['answer-writer', 'visualization']],
     ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {
@@ -232,6 +232,7 @@ test('a user agent moves to the section of the domain chosen in the editor', asy
   expect(await cardKeys(section(page, 'sql'))).toEqual([
     claimsId,
     'sql-fixer',
+    'query-explainer',
     'sql-verifier',
   ]);
   expect(await cardKeys(section(page, 'general'))).toEqual([healthId]);
