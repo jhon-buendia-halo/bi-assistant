@@ -403,12 +403,18 @@ describe('InteractiveVisualPanel data point selection', () => {
 describe('withVisualTheme', () => {
   it('writes the theme on the document root', () => {
     expect(withVisualTheme('<!doctype html>\n<html lang="en"><body></body></html>', 'dark')).toBe(
-      '<!doctype html>\n<html data-theme="dark" lang="en"><body></body></html>',
+      '<!doctype html>\n<html data-theme="dark" data-brand="halo" lang="en"><body></body></html>',
     );
   });
 
   it('leaves an empty document alone', () => {
     expect(withVisualTheme('', 'light')).toBe('');
+  });
+
+  it('writes the brand an Agentic Hub build passes (ADR-0045)', () => {
+    expect(withVisualTheme('<html><body></body></html>', 'light', 'mercer')).toBe(
+      '<html data-theme="light" data-brand="mercer"><body></body></html>',
+    );
   });
 });
 
@@ -442,7 +448,7 @@ describe('InteractiveVisualPanel theme', () => {
 
   it('opens the visual in the app theme', () => {
     expect(frame().getAttribute('srcdoc')).toContain(
-      '<html data-theme="light" lang="en">',
+      '<html data-theme="light" data-brand="halo" lang="en">',
     );
   });
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the US Health Testing Data seed: a PostgreSQL schema plus synthetic data.
 
-Source model: the approved "Mercer US Health data model" design (story BA-306, epic
+Source model: the approved "US Health data model" design (story BA-306, epic
 BA-305): 41 analytics tables in 8 domains (firm & clients, benefit programs, members &
 claims, benchmarking, employee surveys, life/absence/disability, strategy, data
 operations) plus 4 reporting views, all in schema us_health. Columns are typed
@@ -12,7 +12,7 @@ column carries a comment with its grain and meaning.
 All rows are synthetic and deterministic: running this again rewrites the seed byte
 for byte (fixed random seed, gzip mtime=0, no now(), no random UUIDs, no set
 iteration). The dataset's "today" is fixed at 2026-10-31. Change this script and
-regenerate; never edit the seed by hand. Benchmark means follow Mercer's published
+regenerate; never edit the seed by hand. Benchmark means follow published industry
 National Survey headlines; every split, client, carrier, vendor and person is invented.
 
 Planted signals and data-quality defects (each asserted by
@@ -71,14 +71,14 @@ def c(name, typ, comment, ref=None):
 
 
 # 01 firm & clients
-table("offices", "One row per Mercer US Health office (synthetic). Grain: office.", [
+table("offices", "One row per US Health office (synthetic). Grain: office.", [
     c("office_id", "text", "Office key, OF- plus a city code (OF-CHI)."),
     c("city", "text", "Office city."),
     c("state", "text", "Two-letter US state of the office."),
     c("region", "text", "US Census region: Northeast, Midwest, South or West.")])
 table("service_lines", "One row per US Health & Benefits service line. Grain: service line.", [
     c("service_line_id", "text", "Service line key (SL-STRAT, SL-ACT ...)."),
-    c("name", "text", "Service line name, e.g. Strategy & Consulting, Pharmacy (MercerRx)."),
+    c("name", "text", "Service line name, e.g. Strategy & Consulting, Pharmacy."),
     c("category", "text", "Consulting, Specialty or Research."),
     c("description", "text", "What the service line does for clients.")])
 table("colleagues", "One row per consultant or actuary (invented people). Grain: colleague.", [
@@ -99,7 +99,7 @@ table("clients", "One row per employer client (fictional). Grain: client. The hu
     c("union_flag", "bool", "True when the client has collectively bargained employee groups."),
     c("renewal_month", "int", "Month the plan year starts: 1 for most clients, 7 for public sector."),
     c("office_id", "text", "Serving office. FK to offices.", "offices.office_id"),
-    c("client_since", "int", "First year Mercer served the client."),
+    c("client_since", "int", "First year the firm served the client."),
     c("deep_data", "bool", "True when census (employees, members, enrollments) and claims are on file. 8 clients.")])
 table("engagements", "One row per client x service line x engagement period. Grain: engagement.", [
     c("engagement_id", "text", "Engagement key (ENG-C017-STRAT)."),
@@ -128,7 +128,7 @@ table("deliverables", "One row per deliverable produced on an engagement. Grain:
 table("carriers", "One row per carrier, TPA, PBM, stop-loss writer, LAD insurer, leave administrator or vendor (invented names). Grain: organisation.", [
     c("carrier_id", "text", "Carrier key (CR-01)."),
     c("name", "text", "Invented organisation name."),
-    c("carrier_type", "text", "Medical carrier, TPA, PBM, Stop-loss, LAD carrier, Leave administrator, Dental & vision carrier or Ben admin vendor (benefits administration is a third-party vendor, not a Mercer service line).")])
+    c("carrier_type", "text", "Medical carrier, TPA, PBM, Stop-loss, LAD carrier, Leave administrator, Dental & vision carrier or Ben admin vendor (benefits administration is a third-party vendor, not a firm service line).")])
 table("plans", "One row per client x plan year x plan. Grain: plan (a plan id is specific to one plan year).", [
     c("plan_id", "text", "Plan key P-<client>-<plan year>-<line><n> (P-C017-2026-MED1)."),
     c("client_id", "text", "Sponsoring client. FK to clients.", "clients.client_id"),
@@ -244,7 +244,7 @@ table("rx_claims", "One row per pharmacy fill, deep-data clients only. Grain: fi
 # 04 benchmarking
 table("benchmark_sources", "One row per survey edition or study. Grain: source.", [
     c("source_id", "text", "Source key (NS-2025, NS-2026P, ABS-2024 ...)."),
-    c("name", "text", "Source name; Mercer sources are labelled (synthetic): published means where they exist, invented splits."),
+    c("name", "text", "Source name; industry sources are labelled (synthetic): published means where they exist, invented splits."),
     c("publisher", "text", "Publishing organisation."),
     c("survey_year", "int", "Year the values describe (2026/2027 National Survey rows are projections)."),
     c("fielded", "text", "When the survey was in the field."),
@@ -416,7 +416,7 @@ table("roadmap_items", "One row per adopted option x milestone. Grain: roadmap i
     c("year", "int", "Milestone year."),
     c("quarter", "int", "Milestone quarter 1-4."),
     c("milestone", "text", "Milestone description."),
-    c("owner_colleague_id", "text", "Mercer owner. FK to colleagues.", "colleagues.colleague_id"),
+    c("owner_colleague_id", "text", "Firm owner. FK to colleagues.", "colleagues.colleague_id"),
     c("status", "text", "Done, In progress or Planned (as of 2026-10-31).")])
 table("point_solutions", "One row per point-solution vendor product (invented vendors). Grain: solution.", [
     c("solution_id", "text", "Solution key (PS-01)."),
@@ -535,7 +535,7 @@ WHERE b.total_paid > 250000"""),
 FROM us_health.lad_experience x
 JOIN us_health.lad_programs lp ON lp.program_id = x.program_id"""),
     ("v_client_revenue",
-     "One row per client x service line x calendar year: Mercer revenue. 2026 covers Jan-Oct only.",
+     "One row per client x service line x calendar year: firm revenue. 2026 covers Jan-Oct only.",
      [("client_id", "Client."), ("service_line_id", "Service line."), ("revenue_year", "Calendar year."),
       ("months_reported", "Months with revenue rows."),
       ("commission", "Commission plus supplemental compensation, USD."), ("fees", "Fees, USD."),
@@ -596,7 +596,7 @@ OFFICES = [("OF-NYC", "New York", "NY"), ("OF-BOS", "Boston", "MA"), ("OF-PHL", 
 SERVICE_LINES = [
     ("SL-STRAT", "Strategy & Consulting", "Consulting", "Benefits strategy, renewals, carrier negotiation and placement."),
     ("SL-ACT", "Actuarial", "Consulting", "Cost projections, IBNP reserves, premium equivalents, plan modeling."),
-    ("SL-RX", "Pharmacy (MercerRx)", "Specialty", "PBM strategy, RFPs, claims audits and market checks."),
+    ("SL-RX", "Pharmacy", "Specialty", "PBM strategy, RFPs, claims audits and market checks."),
     ("SL-LAD", "Life, Absence & Disability", "Specialty", "Life, AD&D, STD, LTD and leave program design and placement."),
     ("SL-COMP", "Compliance", "Specialty", "ACA, ERISA, state mandate and filing support."),
     ("SL-VOL", "Voluntary Benefits", "Specialty", "Voluntary and worksite benefit placement."),
@@ -1725,13 +1725,13 @@ MEASURES = [
     ("ltd_incidence_per_1000", "per 1,000", "LAD", "level", "New LTD claims per 1,000 covered lives per year.", {2025: 4.03}),
     ("ltd_avg_duration_months", "months", "LAD", "level", "Average LTD claim duration in months.", {2025: 34}),
 ]
-SOURCES = [("NS-2023", "Mercer National Survey (synthetic)", "Mercer", 2023, "Jun–Aug 2023", 2210),
-           ("NS-2024", "Mercer National Survey (synthetic)", "Mercer", 2024, "Jun 12–Aug 16 2024", 2194),
-           ("NS-2025", "Mercer National Survey (synthetic)", "Mercer", 2025, "Jun 10–Aug 15 2025", 2010),
-           ("NS-2026P", "Mercer National Survey (synthetic)", "Mercer", 2026, "Jun–Aug 2025 (2026 projection)", 1950),
-           ("NS-2027P", "Mercer National Survey (synthetic)", "Mercer", 2027, "Jun–Aug 10 2026 (preliminary 2027 projection)", 1800),
-           ("STRAT-2026", "Mercer Survey on Health & Benefit Strategies (synthetic)", "Mercer", 2026, "Apr 2025", 711),
-           ("ABS-2024", "Mercer Absence & Disability Survey (synthetic)", "Mercer", 2024, "Jan–Mar 2024", 630),
+SOURCES = [("NS-2023", "Industry National Survey (synthetic)", "Industry panel", 2023, "Jun–Aug 2023", 2210),
+           ("NS-2024", "Industry National Survey (synthetic)", "Industry panel", 2024, "Jun 12–Aug 16 2024", 2194),
+           ("NS-2025", "Industry National Survey (synthetic)", "Industry panel", 2025, "Jun 10–Aug 15 2025", 2010),
+           ("NS-2026P", "Industry National Survey (synthetic)", "Industry panel", 2026, "Jun–Aug 2025 (2026 projection)", 1950),
+           ("NS-2027P", "Industry National Survey (synthetic)", "Industry panel", 2027, "Jun–Aug 10 2026 (preliminary 2027 projection)", 1800),
+           ("STRAT-2026", "Industry Survey on Health & Benefit Strategies (synthetic)", "Industry panel", 2026, "Apr 2025", 711),
+           ("ABS-2024", "Industry Absence & Disability Survey (synthetic)", "Industry panel", 2024, "Jan–Mar 2024", 630),
            ("SOA-LTD-2025", "SOA Group LTD Incidence Study (synthetic)", "Society of Actuaries", 2025, "Experience 2015–2022", 17)]
 
 
@@ -2244,12 +2244,12 @@ def render(rows):
     """Render the seed SQL text from build() output."""
     out = []
     w = out.append
-    w("-- US Health (Mercer US Health & Benefits) data model: PostgreSQL schema + synthetic data.")
+    w("-- US Health (a US health & benefits consultancy) data model: PostgreSQL schema + synthetic data.")
     w("-- Generated by scripts/generate-us-health-seed.py; do not edit by hand. All data is synthetic;")
     w("-- the dataset's today is 2026-10-31.")
     w(f"DROP SCHEMA IF EXISTS {S} CASCADE;")
     w(f"CREATE SCHEMA {S};")
-    w(f"COMMENT ON SCHEMA {S} IS {q('Synthetic Mercer US Health & Benefits model: firm and clients, benefit programs, members and claims, benchmarks, employee surveys, life/absence/disability, strategy and data feeds. Dataset today = 2026-10-31.')};")
+    w(f"COMMENT ON SCHEMA {S} IS {q('Synthetic US health & benefits consultancy model: firm and clients, benefit programs, members and claims, benchmarks, employee surveys, life/absence/disability, strategy and data feeds. Dataset today = 2026-10-31.')};")
     for t in TABLES:
         n = t["name"]
         lines = [f"  {cn} {SQLTYPE[typ]}" + (" NOT NULL" if cn in t["pk"] else "") for cn, typ, _c, _r in t["cols"]]

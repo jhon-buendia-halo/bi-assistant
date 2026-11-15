@@ -63,13 +63,13 @@ describe('AnswerView', () => {
   };
 
   describe('an answer', () => {
-    it('renders the Markdown body next to the sparks mark', () => {
+    it('renders the Markdown body next to the sparkles mark', () => {
       const el = render({ ...answer, content: 'Denials rose to **12.4%**.' });
       expect(el.querySelector('.prose-dark')?.innerHTML).toContain(
         '<strong>12.4%</strong>',
       );
       expect(
-        el.querySelector('img[src="brand/agentic-hub/sparks.svg"]'),
+        el.querySelector('[data-testid="answer-mark"]'),
       ).toBeTruthy();
     });
 

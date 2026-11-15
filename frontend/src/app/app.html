@@ -1,24 +1,32 @@
+<!-- The shell follows the brand (ADR-0045): flat (Halo Powered, ADR-0044) or
+     framed (Agentic Hub, ADR-0007): gradient frame, photo banner, rounded panels. -->
 <div
   class="relative flex h-screen flex-col text-[13px] text-fg"
-  style="background: var(--frame-gradient)"
+  [class.bg-canvas]="!framed"
+  [style.background]="framed ? 'var(--frame-gradient)' : null"
   [class.resizing-right-panel]="rightPanelResizing()"
 >
-  <!-- Frame texture (Figma "Chat" background) -->
-  <img
-    src="brand/agentic-hub/frame-texture.webp"
-    alt=""
-    aria-hidden="true"
-    class="pointer-events-none absolute inset-0 h-full w-full object-cover mix-blend-multiply"
-    style="opacity: var(--frame-texture-opacity)"
-  />
+  @if (art; as art) {
+    <!-- Frame texture -->
+    <img
+      [src]="art.frameTexture"
+      alt=""
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 h-full w-full object-cover mix-blend-multiply"
+      style="opacity: var(--frame-texture-opacity)"
+    />
+  }
 
   <app-backend-status-banner class="relative" />
 
-  <div class="relative flex min-h-0 flex-1 gap-2 p-2">
+  <div class="relative flex min-h-0 flex-1" [class.gap-2]="framed" [class.p-2]="framed">
     <!-- Navigation rail; the menu button widens it into the drawer -->
     <aside
       aria-label="Navigation rail"
-      class="flex shrink-0 flex-col gap-2 overflow-hidden rounded-xl bg-rail px-2 pt-1 pb-3 transition-[width] duration-150"
+      class="flex shrink-0 flex-col gap-2 overflow-hidden bg-rail px-2 pt-1 pb-3 transition-[width] duration-150"
+      [class.rounded-xl]="framed"
+      [class.border-r]="!framed"
+      [class.border-border]="!framed"
       [class.w-14]="!navExpanded()"
       [class.w-52]="navExpanded()"
     >
@@ -45,23 +53,45 @@
         </div>
       }
 
+      <!-- Brand: the HALO wordmark and "Powered" (only the O on the narrow rail),
+           or the framed shell's gradient logo circle and product name -->
       <div class="flex h-9 shrink-0 items-center gap-3 pl-2.5" [class.pr-1]="navExpanded()">
-        <span
-          class="flex size-6 shrink-0 items-center justify-center rounded-full"
-          style="background: var(--logo-gradient)"
-        >
-          <img
-            src="brand/agentic-hub/logo-mark.svg"
-            alt=""
-            width="7"
-            height="21.24"
-          />
-        </span>
-        @if (navExpanded()) {
-          <span class="min-w-0 flex-1 truncate text-[13px] font-semibold text-fg-strong"
-            >Agentic Hub</span
+        @if (art; as art) {
+          <span
+            class="flex size-6 shrink-0 items-center justify-center rounded-full"
+            style="background: var(--logo-gradient)"
+            data-testid="brand"
           >
+            <img [src]="art.logoMark" alt="" width="7" height="21.24" />
+          </span>
+          @if (navExpanded()) {
+            <span class="min-w-0 flex-1 truncate text-[13px] font-semibold text-fg-strong">{{
+              brand.productName
+            }}</span>
+            <ng-container *ngTemplateOutlet="navToggle" />
+          }
+        } @else if (navExpanded()) {
+          <span
+            class="flex min-w-0 flex-1 items-center text-fg-strong"
+            data-testid="brand"
+            [title]="brand.productName"
+          >
+            <app-logo [height]="14" [label]="brand.productName" />
+            <span
+              aria-hidden="true"
+              class="ml-2.5 border-l border-border pl-2.5 text-[12.5px] font-medium whitespace-nowrap text-fg-muted"
+              >Powered</span
+            >
+          </span>
           <ng-container *ngTemplateOutlet="navToggle" />
+        } @else {
+          <span
+            class="flex size-6 shrink-0 items-center justify-center text-fg-strong"
+            data-testid="brand"
+            [title]="brand.productName"
+          >
+            <app-logo [height]="20" [mark]="true" [label]="brand.productName" />
+          </span>
         }
       </div>
 
@@ -131,61 +161,88 @@
             <span class="text-[13px] font-medium text-fg" aria-hidden="true">Settings</span>
           }
         </button>
-        <div class="h-px w-full bg-border"></div>
-        <div
-          class="flex flex-col items-center gap-0.5 pt-1"
-          title="Powered by LenAI"
-        >
-          <span class="flex size-8 items-center justify-center overflow-hidden rounded">
+        @if (brand.poweredByLenai && art; as art) {
+          <div class="h-px w-full bg-border"></div>
+          <div class="flex flex-col items-center gap-0.5 pt-1" title="Powered by LenAI">
+            <span class="flex size-8 items-center justify-center overflow-hidden rounded">
+              <img
+                [src]="art.lenaiMark"
+                alt=""
+                width="49.0621"
+                height="41.284"
+                class="lenai-art max-w-none"
+              />
+            </span>
             <img
-              src="brand/agentic-hub/lenai-mark.svg"
-              alt=""
-              width="49.0621"
-              height="41.284"
-              class="lenai-art max-w-none"
+              [src]="art.poweredByLenai"
+              alt="Powered by LenAI"
+              class="lenai-art"
+              width="44.5923"
+              height="20.5212"
             />
-          </span>
-          <img
-            src="brand/agentic-hub/powered-by-lenai.svg"
-            alt="Powered by LenAI"
-            class="lenai-art"
-            width="44.5923"
-            height="20.5212"
-          />
-        </div>
+          </div>
+        }
       </div>
     </aside>
 
-    <!-- Canvas: banner above the page and the details panel -->
+    <!-- Canvas: the header (or banner) above the page and the details panel -->
     <div
-      class="flex min-w-0 flex-1 flex-col gap-2 rounded-xl bg-canvas p-3"
+      class="flex min-w-0 flex-1 flex-col"
+      [class.gap-2]="framed"
+      [class.rounded-xl]="framed"
+      [class.bg-canvas]="framed"
+      [class.p-3]="framed"
     >
+      @if (art; as art) {
+        <!-- Banner: the photo behind the product title -->
+        <div
+          role="banner"
+          class="app-drag relative flex min-h-[52px] shrink-0 items-center overflow-hidden rounded-xl px-6 py-2 shadow-subtle"
+          style="background: var(--banner-base)"
+        >
+          <img
+            [src]="art.banner"
+            alt=""
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            style="opacity: var(--banner-image-opacity)"
+          />
+          <div
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0"
+            style="background: var(--banner-shade)"
+          ></div>
+          <h1 class="relative text-[22px] leading-7 font-semibold tracking-[0.2px] text-white">
+            {{ brand.headerTitle }}
+          </h1>
+        </div>
+      } @else {
+      <!-- Header: the product, then the open area as a breadcrumb -->
       <div
         role="banner"
-        class="app-drag relative flex min-h-[52px] shrink-0 items-center overflow-hidden rounded-xl px-6 py-2 shadow-subtle"
-        style="background: var(--banner-base)"
+        class="app-drag flex h-12 shrink-0 items-center gap-2 border-b border-border bg-rail px-5 text-[14px]"
       >
-        <img
-          src="brand/agentic-hub/banner.webp"
-          alt=""
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-0 h-full w-full object-cover"
-          style="opacity: var(--banner-image-opacity)"
-        />
-        <div
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-0"
-          style="background: var(--banner-shade)"
-        ></div>
         <h1
-          class="relative text-[22px] leading-7 font-semibold tracking-[0.2px] text-white"
+          [class.font-semibold]="!areaLabel()"
+          [class.text-fg-strong]="!areaLabel()"
+          [class.text-fg-muted]="areaLabel()"
+          [class.font-medium]="areaLabel()"
         >
-          US Health Agentic Hub
+          {{ brand.headerTitle }}
         </h1>
+        @if (areaLabel(); as label) {
+          <span aria-hidden="true" class="text-fg-muted">/</span>
+          <span class="font-semibold text-fg-strong" data-testid="header-area">{{ label }}</span>
+        }
       </div>
+      }
 
-      <div class="flex min-h-0 flex-1 gap-2">
-        <main class="card relative flex min-w-0 flex-1 overflow-hidden">
+      <div class="flex min-h-0 flex-1" [class.gap-2]="framed">
+        <main
+          class="relative flex min-w-0 flex-1 overflow-hidden"
+          [class.canvas-dots]="!framed"
+          [class.card]="framed"
+        >
           @if (shell.currentArea() === "settings") {
             <app-settings-nav />
           }
@@ -249,7 +306,11 @@
         @if (shell.rightPanelOpen() && shell.rightPanelAvailable()) {
           <aside
             aria-label="Details panel"
-            class="card relative flex shrink-0 flex-col"
+            class="relative flex shrink-0 flex-col"
+            [class.card]="framed"
+            [class.border-l]="!framed"
+            [class.border-border]="!framed"
+            [class.bg-surface]="!framed"
             [style.width.px]="rightPanelWidth()"
           >
             <div
@@ -290,7 +351,8 @@
 
             <!-- Panel body -->
             <div
-              class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-card"
+              class="flex min-h-0 flex-1 flex-col overflow-hidden"
+              [class.rounded-b-card]="framed"
             >
               @if (shell.mainView() === "session-chat" && sessions.activeSession()) {
                 <app-sessions-panel />

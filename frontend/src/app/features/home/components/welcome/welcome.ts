@@ -1,4 +1,5 @@
 import { Component, output } from '@angular/core';
+import { BRAND } from '../../../../core/brand/brand';
 import {
   Bot,
   FlaskConical,
@@ -34,9 +35,13 @@ interface WelcomeStep {
         <header>
           <h2
             id="welcome-title"
-            class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+            [class]="
+              flat
+                ? 'display-title text-[28px] leading-9 text-fg-strong'
+                : 'text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong'
+            "
           >
-            Welcome to Agentic Hub
+            {{ brand.welcomeLead }} <span [class.display-accent]="flat">{{ brand.welcomeName }}</span>
           </h2>
           <p class="mt-1 text-[14px] leading-5 text-fg-muted">
             Run a workflow on your data and read the result, with the steps and
@@ -94,6 +99,9 @@ interface WelcomeStep {
   `,
 })
 export class Welcome {
+  /** The welcome heading's words and look follow the brand (app-shell R51, ADR-0045). */
+  readonly brand = BRAND;
+  readonly flat = BRAND.shell === 'flat';
   readonly Bot = Bot;
 
   readonly openDatasets = output<void>();

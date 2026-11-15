@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the Intellify Testing Data seed: a PostgreSQL schema plus synthetic data.
 
-Source model: the Halo x Marsh "Intellify Data Model" ERD and data dictionary
+Source model: the "Intellify Data Model" ERD and data dictionary
 (49 entities, 243 attributes). Mongo field paths become snake_case columns
 (client_clientId -> client_client_id, _id -> id); every column comment names its
 source field and carries the dictionary's description. ObjectIds are char(24) hex,
@@ -158,16 +158,16 @@ table("national_survey", "One row per client per survey period: national benchma
     ("_id", "oid", "PK", None), ("client_clientId", "oid", "FK", "clients"),
     ("effectivePeriod_startDate", "date", "", None), ("effectivePeriod_endDate", "date", "", None),
     ("answers", "json", "", None), ("deleted", "bool", "", None)])
-table("mercervip_vendors", "One row per vendor in the MercerVIP point-solutions marketplace.", [
+table("marketplace_vendors", "One row per vendor in the benefits point-solutions marketplace.", [
     ("_id", "oid", "PK", None), ("name", "text", "UK", None), ("deleted", "bool", "", None), ("createdAt", "ts", "", None)])
-table("mercervip_products", "One row per vendor product (marketplace SKU, not a line of coverage).", [
-    ("_id", "oid", "PK", None), ("name", "text", "", None), ("vendorId", "oid", "FK", "mercervip_vendors"),
+table("marketplace_products", "One row per vendor product (marketplace SKU, not a line of coverage).", [
+    ("_id", "oid", "PK", None), ("name", "text", "", None), ("vendorId", "oid", "FK", "marketplace_vendors"),
     ("deleted", "bool", "", None), ("createdAt", "ts", "", None)])
-table("mercervip_categories", "One row per MercerVIP marketplace category.", [
+table("marketplace_categories", "One row per benefits marketplace category.", [
     ("_id", "oid", "PK", None), ("name", "text", "UK", None), ("deleted", "bool", "", None), ("createdAt", "ts", "", None)])
-table("point_solutions_products", "One row per client per selected MercerVIP product.", [
-    ("_id", "oid", "PK", None), ("client_clientId", "oid", "FK", "clients"), ("vendor_id", "oid", "FK", "mercervip_vendors"),
-    ("product_id", "oid", "FK", "mercervip_products"), ("deleted", "bool", "", None)])
+table("point_solutions_products", "One row per client per selected marketplace product.", [
+    ("_id", "oid", "PK", None), ("client_clientId", "oid", "FK", "clients"), ("vendor_id", "oid", "FK", "marketplace_vendors"),
+    ("product_id", "oid", "FK", "marketplace_products"), ("deleted", "bool", "", None)])
 table("events", "One row per platform event. collectionId is an untyped reference (client or plan design, per topic).", [
     ("_id", "oid", "PK", None), ("channel", "text", "", None), ("topic", "text", "", None),
     ("collectionId", "text", "", None), ("createdAt", "ts", "", None)])
@@ -417,7 +417,7 @@ for i in range(1, 23):
         timestamp=d, result={"ok": ok, "documentsModified": rng.randint(0, 25000), **({} if ok else {"error": "duplicate key"})},
         flags=rng.choice(["--dry-run=false", "--batch=500", "--batch=1000 --resume", None]))
 
-# MercerVIP
+# Benefits marketplace
 VENDORS = {"Kinetic MSK": ["Virtual Physical Therapy", "Joint Pain Program"],
            "GlucoPath": ["Diabetes Management", "Prediabetes Prevention"],
            "MindHarbor": ["Therapy & Coaching", "Psychiatry"],
@@ -431,15 +431,15 @@ VENDORS = {"Kinetic MSK": ["Virtual Physical Therapy", "Joint Pain Program"],
            "CareCircle": ["Elder Care Support", "Caregiver Coaching"]}
 vendors, vprods = {}, {}
 for name, prods in VENDORS.items():
-    v = add("mercervip_vendors", name=name, deleted=False, createdAt=rts(date(2023, 2, 1), date(2024, 6, 30)))
+    v = add("marketplace_vendors", name=name, deleted=False, createdAt=rts(date(2023, 2, 1), date(2024, 6, 30)))
     vendors[name] = v
-    vprods[name] = [add("mercervip_products", name=p, vendorId=v["_id"], deleted=soft(0.05),
+    vprods[name] = [add("marketplace_products", name=p, vendorId=v["_id"], deleted=soft(0.05),
                         createdAt=rts(date(2024, 7, 1), date(2025, 3, 31))) for p in prods]
-add("mercervip_vendors", name="Pulse Fitness Co", deleted=True, createdAt=rts(date(2023, 2, 1), date(2023, 6, 1)))
+add("marketplace_vendors", name="Pulse Fitness Co", deleted=True, createdAt=rts(date(2023, 2, 1), date(2023, 6, 1)))
 for c in ["Musculoskeletal", "Diabetes & Metabolic", "Mental Health", "Fertility & Family", "Sleep",
           "Navigation & Advocacy", "Financial Wellbeing", "Cardiovascular", "Nutrition", "Caregiving"]:
-    add("mercervip_categories", name=c, deleted=False, createdAt=rts(date(2023, 2, 1), date(2024, 1, 31)))
-add("mercervip_categories", name="Gym Discounts", deleted=True, createdAt=rts(date(2023, 2, 1), date(2023, 6, 1)))
+    add("marketplace_categories", name=c, deleted=False, createdAt=rts(date(2023, 2, 1), date(2024, 1, 31)))
+add("marketplace_categories", name="Gym Discounts", deleted=True, createdAt=rts(date(2023, 2, 1), date(2023, 6, 1)))
 
 # ----------------------------------------------------------------- clients -
 PREFIX = ["Apex", "Brightwater", "Cedar", "Copperline", "Driftwood", "Evergreen", "Falcon", "Granite", "Harborview",
@@ -461,7 +461,7 @@ US_STATES = ["CA", "TX", "NY", "FL", "IL", "PA", "OH", "GA", "NC", "MI", "NJ", "
 REGION = {"CA": "West", "WA": "West", "AZ": "West", "CO": "West", "TX": "South", "FL": "South", "GA": "South",
           "NC": "South", "VA": "South", "NY": "Northeast", "PA": "Northeast", "NJ": "Northeast", "MA": "Northeast",
           "IL": "Midwest", "OH": "Midwest", "MI": "Midwest", "MN": "Midwest", "MO": "Midwest"}
-TENANTS = ["mercer-us-east", "mercer-us-central", "mercer-us-west", "marsh-mma"]
+TENANTS = ["us-east", "us-central", "us-west", "partner-mma"]
 
 clients = []
 names_used = set()
@@ -902,12 +902,12 @@ SPECIFIC = {
         "JSON survey answers: industry, region, headquartersState, employeeCount, medicalPlanCount, offersHDHP, "
         "selfFunded, avgIndividualDeductible, employerHsaContribution, wellnessProgram, spousalSurcharge, "
         "costIncreaseExpectedPct."),
-    "mercervip_vendors.name": "Vendor name (unique).",
-    "mercervip_products.name": "Marketplace product name (not a line of coverage).",
-    "mercervip_products.vendor_id": "Vendor offering the product. FK to mercervip_vendors.id.",
-    "mercervip_categories.name": "Category name (unique).",
-    "point_solutions_products.vendor_id": "Vendor of the selected product. FK to mercervip_vendors.id.",
-    "point_solutions_products.product_id": "Selected MercerVIP product. FK to mercervip_products.id.",
+    "marketplace_vendors.name": "Vendor name (unique).",
+    "marketplace_products.name": "Marketplace product name (not a line of coverage).",
+    "marketplace_products.vendor_id": "Vendor offering the product. FK to marketplace_vendors.id.",
+    "marketplace_categories.name": "Category name (unique).",
+    "point_solutions_products.vendor_id": "Vendor of the selected product. FK to marketplace_vendors.id.",
+    "point_solutions_products.product_id": "Selected marketplace product. FK to marketplace_products.id.",
     "events.channel": "Event channel (intellify.planDesign, intellify.census, ...).",
     "events.topic": "Event type (planDesign.updated, census.uploaded, wizard.completed, ...).",
     "events.collection_id": "Untyped reference: a plan_designs.id for planDesign.* topics, otherwise a clients.id.",

@@ -577,14 +577,14 @@ specs/capabilities/agents-evals/spec.md:1264-1270  ## Acceptance
 specs/capabilities/agents-evals/spec.md:1272-1281  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
-specs/capabilities/app-shell/spec.md:16-91  ## Rules
+specs/capabilities/app-shell/spec.md:16-92  ## Rules
 specs/capabilities/app-shell/spec.md:19-19  R1 The system SHALL present, left to right: the navigation rail (expandab
 specs/capabilities/app-shell/spec.md:20-20  R2 On launch the navigation drawer SHALL be expanded unless the user last
 specs/capabilities/app-shell/spec.md:21-23  R3 The rail SHALL offer, under "Workspace navigation", one icon button ea
 specs/capabilities/app-shell/spec.md:24-24  R4 Below the workspace items the rail SHALL offer **Open system logs** (t
 specs/capabilities/app-shell/spec.md:25-25  R5 Choosing **Settings** on the rail SHALL show the Settings area: a list
 specs/capabilities/app-shell/spec.md:26-26  R6 Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: t
-specs/capabilities/app-shell/spec.md:27-27  R7 The banner SHALL be the page's only level-one heading and SHALL read "
+specs/capabilities/app-shell/spec.md:27-27  R7 In the `halo` brand the header (the `banner` landmark, above the main
 specs/capabilities/app-shell/spec.md:28-30  R8 The sidebar and details panel SHALL keep a fixed minimum usable width
 specs/capabilities/app-shell/spec.md:31-31  R9 The system SHALL provide a **Collapse right panel** control inside the
 specs/capabilities/app-shell/spec.md:32-32  R10 The details panel SHALL open (if collapsed) whenever the user selects
@@ -601,44 +601,45 @@ specs/capabilities/app-shell/spec.md:44-44  R20 For `restarting` the banner SHAL
 specs/capabilities/app-shell/spec.md:45-45  R21 When the app runs without the desktop shell (a plain browser, as in we
 specs/capabilities/app-shell/spec.md:46-46  R22 The desktop shell SHALL run the backend as a supervised child process
 specs/capabilities/app-shell/spec.md:47-47  R54 The desktop app SHALL run as a single instance per profile: launching
-specs/capabilities/app-shell/spec.md:48-48  R55 The desktop shell SHALL NOT report `ready` for a server it did not sta
-specs/capabilities/app-shell/spec.md:49-49  R23 The readiness probe SHALL be an HTTP GET of the sessions list on the l
-specs/capabilities/app-shell/spec.md:50-50  R24 The window SHALL open as soon as the backend is ready, or after the 30
-specs/capabilities/app-shell/spec.md:51-51  R25 When the backend exits unexpectedly (anything other than the app quitt
-specs/capabilities/app-shell/spec.md:52-52  R26 A backend that has stayed ready for 60 seconds SHALL be treated as hea
-specs/capabilities/app-shell/spec.md:53-55  R27 Quitting the app SHALL stop the backend and SHALL NOT trigger a relaun
-specs/capabilities/app-shell/spec.md:56-56  R28 The system SHALL show short messages as toasts stacked at the bottom-r
-specs/capabilities/app-shell/spec.md:57-57  R29 A toast SHALL be one of three kinds: `success`, `error` or `info`, eac
-specs/capabilities/app-shell/spec.md:58-58  R30 Each toast SHALL have a dismiss button, named "Dismiss notification",
-specs/capabilities/app-shell/spec.md:59-61  R31 Every error toast SHALL also be recorded as an error entry with source
-specs/capabilities/app-shell/spec.md:62-62  R32 The Settings list pane SHALL end with the build identity: the text "Ag
-specs/capabilities/app-shell/spec.md:63-63  R33 The window title and the document title SHALL be "Agentic Hub". The op
-specs/capabilities/app-shell/spec.md:64-66  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
-specs/capabilities/app-shell/spec.md:67-67  R46 In the Runs area the content shows an open run of a removed workflow o
-specs/capabilities/app-shell/spec.md:68-68  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
-specs/capabilities/app-shell/spec.md:69-69  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
-specs/capabilities/app-shell/spec.md:70-70  R49 In the Runs area the page SHALL start with a header: an icon, then the
-specs/capabilities/app-shell/spec.md:71-71  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
-specs/capabilities/app-shell/spec.md:72-74  R51 The home view (R2) SHALL welcome the user and explain how the product
-specs/capabilities/app-shell/spec.md:75-75  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
-specs/capabilities/app-shell/spec.md:76-78  R53 All text in the app SHALL be selectable and copyable with the mouse an
-specs/capabilities/app-shell/spec.md:79-79  R39 The Appearance section SHALL offer a single choice labelled **Theme**
-specs/capabilities/app-shell/spec.md:80-80  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
-specs/capabilities/app-shell/spec.md:81-81  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
-specs/capabilities/app-shell/spec.md:82-82  R42 The resolved theme SHALL be applied before the page first paints, so t
-specs/capabilities/app-shell/spec.md:83-83  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
-specs/capabilities/app-shell/spec.md:84-84  R44 In the desktop app, the window's own background (shown while resizing
-specs/capabilities/app-shell/spec.md:85-87  R45 Both themes SHALL produce zero violations in the automated accessibili
-specs/capabilities/app-shell/spec.md:88-88  R35 The application shell, in its initial state, SHALL produce zero violat
-specs/capabilities/app-shell/spec.md:89-89  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
-specs/capabilities/app-shell/spec.md:90-90  R37 Every icon-only control in the shell SHALL have an accessible name (a
-specs/capabilities/app-shell/spec.md:91-91  R38 The application shell in its initial state SHALL match the approved `a
-specs/capabilities/app-shell/spec.md:93-103  ## Edge cases and errors
-specs/capabilities/app-shell/spec.md:105-112  ## Contracts
-specs/capabilities/app-shell/spec.md:114-120  ## UI
-specs/capabilities/app-shell/spec.md:122-375  ## Flows
-specs/capabilities/app-shell/spec.md:377-381  ## Acceptance
-specs/capabilities/app-shell/spec.md:383-389  ## Open questions
+specs/capabilities/app-shell/spec.md:48-48  R56 The brand SHALL be fixed at build time (`BRAND=halo|mercer`, default `
+specs/capabilities/app-shell/spec.md:49-49  R55 The desktop shell SHALL NOT report `ready` for a server it did not sta
+specs/capabilities/app-shell/spec.md:50-50  R23 The readiness probe SHALL be an HTTP GET of the sessions list on the l
+specs/capabilities/app-shell/spec.md:51-51  R24 The window SHALL open as soon as the backend is ready, or after the 30
+specs/capabilities/app-shell/spec.md:52-52  R25 When the backend exits unexpectedly (anything other than the app quitt
+specs/capabilities/app-shell/spec.md:53-53  R26 A backend that has stayed ready for 60 seconds SHALL be treated as hea
+specs/capabilities/app-shell/spec.md:54-56  R27 Quitting the app SHALL stop the backend and SHALL NOT trigger a relaun
+specs/capabilities/app-shell/spec.md:57-57  R28 The system SHALL show short messages as toasts stacked at the bottom-r
+specs/capabilities/app-shell/spec.md:58-58  R29 A toast SHALL be one of three kinds: `success`, `error` or `info`, eac
+specs/capabilities/app-shell/spec.md:59-59  R30 Each toast SHALL have a dismiss button, named "Dismiss notification",
+specs/capabilities/app-shell/spec.md:60-62  R31 Every error toast SHALL also be recorded as an error entry with source
+specs/capabilities/app-shell/spec.md:63-63  R32 The Settings list pane SHALL end with the build identity: the brand's
+specs/capabilities/app-shell/spec.md:64-64  R33 In the `halo` brand the window title and the document title SHALL be "
+specs/capabilities/app-shell/spec.md:65-67  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
+specs/capabilities/app-shell/spec.md:68-68  R46 In the Runs area the content shows an open run of a removed workflow o
+specs/capabilities/app-shell/spec.md:69-69  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
+specs/capabilities/app-shell/spec.md:70-70  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
+specs/capabilities/app-shell/spec.md:71-71  R49 In the Runs area the page SHALL start with a header: an icon, then the
+specs/capabilities/app-shell/spec.md:72-72  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
+specs/capabilities/app-shell/spec.md:73-75  R51 The home view (R2) SHALL welcome the user and explain how the product
+specs/capabilities/app-shell/spec.md:76-76  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
+specs/capabilities/app-shell/spec.md:77-79  R53 All text in the app SHALL be selectable and copyable with the mouse an
+specs/capabilities/app-shell/spec.md:80-80  R39 The Appearance section SHALL offer a single choice labelled **Theme**
+specs/capabilities/app-shell/spec.md:81-81  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
+specs/capabilities/app-shell/spec.md:82-82  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
+specs/capabilities/app-shell/spec.md:83-83  R42 The resolved theme SHALL be applied before the page first paints, so t
+specs/capabilities/app-shell/spec.md:84-84  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
+specs/capabilities/app-shell/spec.md:85-85  R44 In the desktop app, the window's own background (shown while resizing
+specs/capabilities/app-shell/spec.md:86-88  R45 Both themes SHALL produce zero violations in the automated accessibili
+specs/capabilities/app-shell/spec.md:89-89  R35 The application shell, in its initial state, SHALL produce zero violat
+specs/capabilities/app-shell/spec.md:90-90  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
+specs/capabilities/app-shell/spec.md:91-91  R37 Every icon-only control in the shell SHALL have an accessible name (a
+specs/capabilities/app-shell/spec.md:92-92  R38 The application shell in its initial state SHALL match the approved `a
+specs/capabilities/app-shell/spec.md:94-104  ## Edge cases and errors
+specs/capabilities/app-shell/spec.md:106-113  ## Contracts
+specs/capabilities/app-shell/spec.md:115-121  ## UI
+specs/capabilities/app-shell/spec.md:123-395  ## Flows
+specs/capabilities/app-shell/spec.md:397-401  ## Acceptance
+specs/capabilities/app-shell/spec.md:403-409  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
 specs/capabilities/data-readiness/spec.md:24-224  ## Rules
@@ -1311,7 +1312,7 @@ specs/capabilities/visuals-library/spec.md:98-175  ## Flows
 specs/capabilities/visuals-library/spec.md:177-183  ## Acceptance
 
 specs/capabilities/visuals/spec.md:12-14  ## Concepts
-specs/capabilities/visuals/spec.md:16-202  ## Rules
+specs/capabilities/visuals/spec.md:16-203  ## Rules
 specs/capabilities/visuals/spec.md:18-24  ### Creating
 specs/capabilities/visuals/spec.md:20-20  R1 The system SHALL create a visual only from a completed assistant answe
 specs/capabilities/visuals/spec.md:21-22  R2 Every answer with text SHALL offer "Generate interactive visuals". Whi
@@ -1344,33 +1345,33 @@ specs/capabilities/visuals/spec.md:94-97  R24 The sandboxed visual SHALL report 
 specs/capabilities/visuals/spec.md:98-104  R25 On a reported error the panel SHALL silently request one repair, but o
 specs/capabilities/visuals/spec.md:105-109  R26 A repair SHALL regenerate the current version with the runtime error,
 specs/capabilities/visuals/spec.md:110-110  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
-specs/capabilities/visuals/spec.md:112-157  ### Readable frame
+specs/capabilities/visuals/spec.md:112-158  ### Readable frame
 specs/capabilities/visuals/spec.md:114-123  R28 Every visual SHALL render inside a fixed frame. The frame's content co
 specs/capabilities/visuals/spec.md:124-127  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
 specs/capabilities/visuals/spec.md:128-128  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
 specs/capabilities/visuals/spec.md:129-129  R31 The designer's styles SHALL be confined to the visual's own area so th
 specs/capabilities/visuals/spec.md:130-130  R32 The visual SHALL read its rows from the embedded data at runtime, neve
 specs/capabilities/visuals/spec.md:131-131  R33 A frame generated or refreshed at a given time SHALL show that time. O
-specs/capabilities/visuals/spec.md:133-157  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
-specs/capabilities/visuals/spec.md:159-165  ### Sandboxing
-specs/capabilities/visuals/spec.md:161-164  R34 The visual SHALL run in a sandboxed frame:
-specs/capabilities/visuals/spec.md:165-165  R35 The visual SHALL talk to the host only through messages: runtime error
-specs/capabilities/visuals/spec.md:167-174  ### Click to follow up
-specs/capabilities/visuals/spec.md:169-174  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
-specs/capabilities/visuals/spec.md:176-190  ### Export
-specs/capabilities/visuals/spec.md:178-189  R37 "Download bundle" SHALL download a zip of the visual. It always contai
-specs/capabilities/visuals/spec.md:190-190  R38 The downloaded file SHALL be named after the visual's title, slugged a
-specs/capabilities/visuals/spec.md:192-202  ### Storage
-specs/capabilities/visuals/spec.md:194-202  R39 Each version's files SHALL live in the session workspace under the vis
-specs/capabilities/visuals/spec.md:204-225  ## Edge cases and errors
-specs/capabilities/visuals/spec.md:227-240  ## Contracts
-specs/capabilities/visuals/spec.md:242-269  ## UI
-specs/capabilities/visuals/spec.md:271-428  ## Flows
-specs/capabilities/visuals/spec.md:273-275  ### Covered: Chat and visuals
-specs/capabilities/visuals/spec.md:277-286  ### Visual actions on a run
-specs/capabilities/visuals/spec.md:288-404  ### Feature: Visual tailoring
-specs/capabilities/visuals/spec.md:406-428  ### Feature: Skills the designer is given
-specs/capabilities/visuals/spec.md:430-442  ## Acceptance
+specs/capabilities/visuals/spec.md:133-158  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
+specs/capabilities/visuals/spec.md:160-166  ### Sandboxing
+specs/capabilities/visuals/spec.md:162-165  R34 The visual SHALL run in a sandboxed frame:
+specs/capabilities/visuals/spec.md:166-166  R35 The visual SHALL talk to the host only through messages: runtime error
+specs/capabilities/visuals/spec.md:168-175  ### Click to follow up
+specs/capabilities/visuals/spec.md:170-175  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
+specs/capabilities/visuals/spec.md:177-191  ### Export
+specs/capabilities/visuals/spec.md:179-190  R37 "Download bundle" SHALL download a zip of the visual. It always contai
+specs/capabilities/visuals/spec.md:191-191  R38 The downloaded file SHALL be named after the visual's title, slugged a
+specs/capabilities/visuals/spec.md:193-203  ### Storage
+specs/capabilities/visuals/spec.md:195-203  R39 Each version's files SHALL live in the session workspace under the vis
+specs/capabilities/visuals/spec.md:205-226  ## Edge cases and errors
+specs/capabilities/visuals/spec.md:228-241  ## Contracts
+specs/capabilities/visuals/spec.md:243-270  ## UI
+specs/capabilities/visuals/spec.md:272-429  ## Flows
+specs/capabilities/visuals/spec.md:274-276  ### Covered: Chat and visuals
+specs/capabilities/visuals/spec.md:278-287  ### Visual actions on a run
+specs/capabilities/visuals/spec.md:289-405  ### Feature: Visual tailoring
+specs/capabilities/visuals/spec.md:407-429  ### Feature: Skills the designer is given
+specs/capabilities/visuals/spec.md:431-443  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-73  ## Rules
@@ -1963,7 +1964,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1129  ## Level 3 — Components
+specs/system/architecture.md:258-1175  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -1995,7 +1996,9 @@ specs/system/architecture.md:993-1045  #### ADR-0040 — Workflow-first: a sessi
 specs/system/architecture.md:1047-1084  #### ADR-0041 — Chats retired: every workflow runs once on a typed input; runs are stored; existing sessions become read-only past chats
 specs/system/architecture.md:1086-1106  #### ADR-0042 — Workflows and agents are separate; only Questions to Insights v2 is a workflow
 specs/system/architecture.md:1108-1129  #### ADR-0043 — Human in the loop: a run that needs the user is suspended with Mastra's suspend/resume and continued in place; its runtime stays in memory, with a snapshot only while it waits
-specs/system/architecture.md:1131-1186  ## Level 4 — Code
+specs/system/architecture.md:1131-1153  #### ADR-0044 — Halo Powered rebrand: n8n-style flat shell, halopowered.com palette and type, HALO wordmark
+specs/system/architecture.md:1155-1175  #### ADR-0045 — Brands chosen at build time (white-label): Halo Powered and Agentic Hub
+specs/system/architecture.md:1177-1232  ## Level 4 — Code
 
 specs/system/data-model.md:13-57  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory
@@ -2049,123 +2052,124 @@ specs/system/data-model.md:869-904  ## 6. Migrations
 specs/system/data-model.md:906-908  ## 7. External databases
 specs/system/data-model.md:910-921  ## Open questions, gaps and discrepancies
 
-specs/system/delivery.md:7-41  ## 1. Electron single-app delivery
+specs/system/delivery.md:7-60  ## 1. Electron single-app delivery
 specs/system/delivery.md:25-27  ### Why `--base-href ./`
 specs/system/delivery.md:29-36  ### Data directory and secret
-specs/system/delivery.md:38-41  ### Dev and branding helpers
-specs/system/delivery.md:43-135  ## 2. npm scripts
-specs/system/delivery.md:45-66  ### `frontend/package.json`
-specs/system/delivery.md:68-90  ### `backend/package.json`
-specs/system/delivery.md:92-102  ### Repo scripts (`scripts/`, no root `package.json`)
-specs/system/delivery.md:104-124  ### Local run recipes
-specs/system/delivery.md:126-135  ### Verification gate (what must be green before a change ships)
-specs/system/delivery.md:137-166  ## 3. Desktop packaging (electron-builder)
-specs/system/delivery.md:168-208  ## 4. The web app as an npm package
-specs/system/delivery.md:210-312  ## 5. Versioning and releases
-specs/system/delivery.md:216-230  ### `version-on-merge.yml` — Version on merge
-specs/system/delivery.md:232-249  ### `build-desktop.yml` — Build desktop installers
-specs/system/delivery.md:251-260  ### `publish-npm.yml` — Publish npm package
-specs/system/delivery.md:262-277  ### `spec-checks.yml` — Spec checks
-specs/system/delivery.md:279-312  ### Branch rulesets on `main`
-specs/system/delivery.md:283-288  #### "main: specs match the code"
-specs/system/delivery.md:290-308  #### "main: PR approval, admin may merge without"
-specs/system/delivery.md:310-312  #### Both rulesets
-specs/system/delivery.md:314-342  ## 6. Docker Compose: the World Cup sample database and the observability profile
-specs/system/delivery.md:330-342  ### Observability profile (opt-in)
-specs/system/delivery.md:344-361  ## 7. Running a second instance (worktrees and parallel runs)
-specs/system/delivery.md:363-378  ## 8. The product page (`site/`)
-specs/system/delivery.md:380-441  ## 9. Claude Code mods (`.claude/mods/`)
-specs/system/delivery.md:393-441  ### `workflow-steps`
-specs/system/delivery.md:443-479  ## 10. Claude Code project skills (`.claude/skills/`)
-specs/system/delivery.md:481-490  ## 11. Claude Code tools (`.claude/tools/`)
-specs/system/delivery.md:492-511  ## 12. Claude Code agents (`.claude/agents/`)
-specs/system/delivery.md:513-569  ## 13. Deterministic QA (`scripts/qa.mjs`)
+specs/system/delivery.md:38-42  ### Dev and branding helpers
+specs/system/delivery.md:44-60  ### Brands (ADR-0045)
+specs/system/delivery.md:62-154  ## 2. npm scripts
+specs/system/delivery.md:64-85  ### `frontend/package.json`
+specs/system/delivery.md:87-109  ### `backend/package.json`
+specs/system/delivery.md:111-121  ### Repo scripts (`scripts/`, no root `package.json`)
+specs/system/delivery.md:123-143  ### Local run recipes
+specs/system/delivery.md:145-154  ### Verification gate (what must be green before a change ships)
+specs/system/delivery.md:156-185  ## 3. Desktop packaging (electron-builder)
+specs/system/delivery.md:187-227  ## 4. The web app as an npm package
+specs/system/delivery.md:229-334  ## 5. Versioning and releases
+specs/system/delivery.md:235-249  ### `version-on-merge.yml` — Version on merge
+specs/system/delivery.md:251-271  ### `build-desktop.yml` — Build desktop installers
+specs/system/delivery.md:273-282  ### `publish-npm.yml` — Publish npm package
+specs/system/delivery.md:284-299  ### `spec-checks.yml` — Spec checks
+specs/system/delivery.md:301-334  ### Branch rulesets on `main`
+specs/system/delivery.md:305-310  #### "main: specs match the code"
+specs/system/delivery.md:312-330  #### "main: PR approval, admin may merge without"
+specs/system/delivery.md:332-334  #### Both rulesets
+specs/system/delivery.md:336-364  ## 6. Docker Compose: the World Cup sample database and the observability profile
+specs/system/delivery.md:352-364  ### Observability profile (opt-in)
+specs/system/delivery.md:366-383  ## 7. Running a second instance (worktrees and parallel runs)
+specs/system/delivery.md:385-400  ## 8. The product page (`site/`)
+specs/system/delivery.md:402-463  ## 9. Claude Code mods (`.claude/mods/`)
+specs/system/delivery.md:415-463  ### `workflow-steps`
+specs/system/delivery.md:465-501  ## 10. Claude Code project skills (`.claude/skills/`)
+specs/system/delivery.md:503-512  ## 11. Claude Code tools (`.claude/tools/`)
+specs/system/delivery.md:514-533  ## 12. Claude Code agents (`.claude/agents/`)
+specs/system/delivery.md:535-591  ## 13. Deterministic QA (`scripts/qa.mjs`)
 
 specs/system/tech-stack.md:7-15  ## Languages and runtime
-specs/system/tech-stack.md:17-39  ## Frontend (`frontend/`)
-specs/system/tech-stack.md:41-81  ## Backend (`backend/`)
-specs/system/tech-stack.md:83-177  ## Code layout
-specs/system/tech-stack.md:85-94  ### Repository
-specs/system/tech-stack.md:96-135  ### Frontend: feature-based
-specs/system/tech-stack.md:137-177  ### Backend: feature-based modules
-specs/system/tech-stack.md:179-202  ## Test layout
-specs/system/tech-stack.md:204-218  ## To rebuild on another stack
+specs/system/tech-stack.md:17-41  ## Frontend (`frontend/`)
+specs/system/tech-stack.md:43-83  ## Backend (`backend/`)
+specs/system/tech-stack.md:85-179  ## Code layout
+specs/system/tech-stack.md:87-96  ### Repository
+specs/system/tech-stack.md:98-137  ### Frontend: feature-based
+specs/system/tech-stack.md:139-179  ### Backend: feature-based modules
+specs/system/tech-stack.md:181-204  ## Test layout
+specs/system/tech-stack.md:206-220  ## To rebuild on another stack
 
-specs/system/ui.md:9-140  ## 1. App shell
-specs/system/ui.md:11-17  ### 1.1 Window
-specs/system/ui.md:19-56  ### 1.2 Regions
-specs/system/ui.md:58-90  ### 1.3 Rail and drawer
-specs/system/ui.md:92-123  ### 1.4 Navigation model (no router)
-specs/system/ui.md:125-136  ### 1.5 Right panel
-specs/system/ui.md:138-140  ### 1.6 Startup
-specs/system/ui.md:142-152  ## 2. Loading, empty, error and confirmation conventions
-specs/system/ui.md:154-228  ## 3. Shared components
-specs/system/ui.md:156-166  ### 3.1 Backend status banner
-specs/system/ui.md:168-182  ### 3.2 System logs panel
-specs/system/ui.md:184-194  ### 3.3 Toast container
-specs/system/ui.md:196-198  ### 3.4 App logo
-specs/system/ui.md:200-202  ### 3.5 Markdown rendering
-specs/system/ui.md:204-228  ### 3.6 Shared component classes
-specs/system/ui.md:230-880  ## 4. Screens and panels
-specs/system/ui.md:234-242  ### 4.1 Home (welcome)
-specs/system/ui.md:244-250  ### 4.2 Datasets list
-specs/system/ui.md:252-266  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
-specs/system/ui.md:268-321  ### 4.3a Profile & synthesize tab (dataset editor)
-specs/system/ui.md:323-335  ### 4.4 Agent Hub
-specs/system/ui.md:337-348  ### 4.4a Workflows
-specs/system/ui.md:350-413  ### 4.4b Workflow page
-specs/system/ui.md:415-562  ### 4.5 Agent detail
-specs/system/ui.md:443-453  #### 4.5.1 Agent editor and Try it
-specs/system/ui.md:455-462  #### 4.5.2 Skills library
-specs/system/ui.md:464-471  #### 4.5.3 Skill editor
-specs/system/ui.md:473-480  #### 4.5.4 Built-in skill editor
-specs/system/ui.md:482-490  #### 4.5.5 Link editor and chips
-specs/system/ui.md:492-519  #### 4.5.6 Graph tab
-specs/system/ui.md:521-523  #### 4.5.7 LLM Config tab
-specs/system/ui.md:525-530  #### 4.5.8 Try it tab
-specs/system/ui.md:532-539  #### 4.5.9 Job Description tab, user agent
-specs/system/ui.md:541-552  #### 4.5.11 Job Description tab, built-in agent
-specs/system/ui.md:554-562  #### 4.5.10 Skills tab, user agent
-specs/system/ui.md:564-566  ### 4.6 Eval trace (right panel)
-specs/system/ui.md:568-570  ### 4.7 New-session composer
-specs/system/ui.md:572-587  ### 4.7.1 Runs page and Past chats
-specs/system/ui.md:589-595  ### 4.8a Context page
-specs/system/ui.md:597-616  ### 4.8 Ontology tab (dataset editor)
-specs/system/ui.md:618-626  ### 4.8b User personas list and editor
-specs/system/ui.md:628-637  ### 4.8c Visuals library
-specs/system/ui.md:639-649  ### 4.8d Monitoring: tabs and the LLM calls table
-specs/system/ui.md:651-659  ### 4.8e Monitoring: LLM call page
-specs/system/ui.md:661-668  ### 4.8f Monitoring: Runs tab
-specs/system/ui.md:670-682  ### 4.8g Monitoring: session page
-specs/system/ui.md:684-694  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:696-700  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:702-713  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:715-719  ### 4.11 Testing data (settings)
-specs/system/ui.md:722-734  ### 4.12 Developer (settings)
-specs/system/ui.md:735-803  ### 4.12 Past chat (read-only transcript)
-specs/system/ui.md:757-770  #### 4.12.1 Workflow bar
-specs/system/ui.md:772-803  #### 4.12.2 Query inspector (M1-25)
-specs/system/ui.md:805-863  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:818-825  #### 4.13.1 Visual view
-specs/system/ui.md:827-829  #### 4.13.2 Document view
-specs/system/ui.md:831-833  #### 4.13.3 File view
-specs/system/ui.md:835-837  #### 4.13.4 Table view
-specs/system/ui.md:839-863  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:865-867  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:869-871  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:873-880  ### 4.16 Appearance (settings)
-specs/system/ui.md:882-894  ## 5. Cross-cutting behaviour
-specs/system/ui.md:884-886  ### 5.1 State that survives view changes
-specs/system/ui.md:888-890  ### 5.2 Selection state
-specs/system/ui.md:892-894  ### 5.3 Toast policy
-specs/system/ui.md:896-983  ## 6. Design tokens
-specs/system/ui.md:900-942  ### 6.0 Theme tokens
-specs/system/ui.md:944-949  ### 6.1 Colour usage
-specs/system/ui.md:951-955  ### 6.2 Typography
-specs/system/ui.md:957-962  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:964-971  ### 6.4 Icons
-specs/system/ui.md:973-983  ### 6.5 Theming
-specs/system/ui.md:985-1029  ## 7. Copy that tests or users rely on
-specs/system/ui.md:1031-1042  ## 8. Accessibility
-specs/system/ui.md:1044-1046  ## 9. Visual baseline
-specs/system/ui.md:1049-1056  ## 10. Open questions and gaps
+specs/system/ui.md:9-137  ## 1. App shell
+specs/system/ui.md:11-18  ### 1.1 Window
+specs/system/ui.md:20-54  ### 1.2 Regions
+specs/system/ui.md:56-87  ### 1.3 Rail and drawer
+specs/system/ui.md:89-120  ### 1.4 Navigation model (no router)
+specs/system/ui.md:122-133  ### 1.5 Right panel
+specs/system/ui.md:135-137  ### 1.6 Startup
+specs/system/ui.md:139-149  ## 2. Loading, empty, error and confirmation conventions
+specs/system/ui.md:151-225  ## 3. Shared components
+specs/system/ui.md:153-163  ### 3.1 Backend status banner
+specs/system/ui.md:165-179  ### 3.2 System logs panel
+specs/system/ui.md:181-191  ### 3.3 Toast container
+specs/system/ui.md:193-195  ### 3.4 App logo
+specs/system/ui.md:197-199  ### 3.5 Markdown rendering
+specs/system/ui.md:201-225  ### 3.6 Shared component classes
+specs/system/ui.md:227-877  ## 4. Screens and panels
+specs/system/ui.md:231-239  ### 4.1 Home (welcome)
+specs/system/ui.md:241-247  ### 4.2 Datasets list
+specs/system/ui.md:249-263  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
+specs/system/ui.md:265-318  ### 4.3a Profile & synthesize tab (dataset editor)
+specs/system/ui.md:320-332  ### 4.4 Agent Hub
+specs/system/ui.md:334-345  ### 4.4a Workflows
+specs/system/ui.md:347-410  ### 4.4b Workflow page
+specs/system/ui.md:412-559  ### 4.5 Agent detail
+specs/system/ui.md:440-450  #### 4.5.1 Agent editor and Try it
+specs/system/ui.md:452-459  #### 4.5.2 Skills library
+specs/system/ui.md:461-468  #### 4.5.3 Skill editor
+specs/system/ui.md:470-477  #### 4.5.4 Built-in skill editor
+specs/system/ui.md:479-487  #### 4.5.5 Link editor and chips
+specs/system/ui.md:489-516  #### 4.5.6 Graph tab
+specs/system/ui.md:518-520  #### 4.5.7 LLM Config tab
+specs/system/ui.md:522-527  #### 4.5.8 Try it tab
+specs/system/ui.md:529-536  #### 4.5.9 Job Description tab, user agent
+specs/system/ui.md:538-549  #### 4.5.11 Job Description tab, built-in agent
+specs/system/ui.md:551-559  #### 4.5.10 Skills tab, user agent
+specs/system/ui.md:561-563  ### 4.6 Eval trace (right panel)
+specs/system/ui.md:565-567  ### 4.7 New-session composer
+specs/system/ui.md:569-584  ### 4.7.1 Runs page and Past chats
+specs/system/ui.md:586-592  ### 4.8a Context page
+specs/system/ui.md:594-613  ### 4.8 Ontology tab (dataset editor)
+specs/system/ui.md:615-623  ### 4.8b User personas list and editor
+specs/system/ui.md:625-634  ### 4.8c Visuals library
+specs/system/ui.md:636-646  ### 4.8d Monitoring: tabs and the LLM calls table
+specs/system/ui.md:648-656  ### 4.8e Monitoring: LLM call page
+specs/system/ui.md:658-665  ### 4.8f Monitoring: Runs tab
+specs/system/ui.md:667-679  ### 4.8g Monitoring: session page
+specs/system/ui.md:681-691  ### 4.8h Monitoring: waterfall
+specs/system/ui.md:693-697  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:699-710  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:712-716  ### 4.11 Testing data (settings)
+specs/system/ui.md:719-731  ### 4.12 Developer (settings)
+specs/system/ui.md:732-800  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:754-767  #### 4.12.1 Workflow bar
+specs/system/ui.md:769-800  #### 4.12.2 Query inspector (M1-25)
+specs/system/ui.md:802-860  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:815-822  #### 4.13.1 Visual view
+specs/system/ui.md:824-826  #### 4.13.2 Document view
+specs/system/ui.md:828-830  #### 4.13.3 File view
+specs/system/ui.md:832-834  #### 4.13.4 Table view
+specs/system/ui.md:836-860  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:862-864  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:866-868  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:870-877  ### 4.16 Appearance (settings)
+specs/system/ui.md:879-891  ## 5. Cross-cutting behaviour
+specs/system/ui.md:881-883  ### 5.1 State that survives view changes
+specs/system/ui.md:885-887  ### 5.2 Selection state
+specs/system/ui.md:889-891  ### 5.3 Toast policy
+specs/system/ui.md:893-982  ## 6. Design tokens
+specs/system/ui.md:897-940  ### 6.0 Theme tokens
+specs/system/ui.md:942-947  ### 6.1 Colour usage
+specs/system/ui.md:949-954  ### 6.2 Typography
+specs/system/ui.md:956-961  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:963-970  ### 6.4 Icons
+specs/system/ui.md:972-982  ### 6.5 Theming
+specs/system/ui.md:984-1028  ## 7. Copy that tests or users rely on
+specs/system/ui.md:1030-1041  ## 8. Accessibility
+specs/system/ui.md:1043-1045  ## 9. Visual baseline
+specs/system/ui.md:1048-1055  ## 10. Open questions and gaps

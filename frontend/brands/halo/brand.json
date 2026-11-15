@@ -1,0 +1,11 @@
+{
+  "id": "halo",
+  "osName": "Halo BI Assistant",
+  "legacyOsName": "Questions to Insights",
+  "windowTitle": "Halo Powered",
+  "appId": "com.halopowered.questions-to-insights",
+  "artifactName": "Questions-to-Insights-${version}-${os}-${arch}.${ext}",
+  "icon": "brands/halo/public/brand/icon.png",
+  "canvas": { "light": "#f2f2f0", "dark": "#1c1c1c" },
+  "publishNpm": true
+}

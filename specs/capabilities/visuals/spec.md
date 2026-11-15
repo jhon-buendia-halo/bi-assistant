@@ -134,22 +134,23 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 
   | Token | Use | Light | Dark |
   |---|---|---|---|
-  | `--qti-bg` | page | `#ffffff` | `#12233a` |
-  | `--qti-fg` | body text | `rgb(0 0 0 / 0.85)` | `#d5dfec` |
-  | `--qti-fg-strong` | titles, takeaway emphasis | `#001f52` | `#eef4fc` |
-  | `--qti-fg-muted` | labels, captions, footer | `rgb(0 0 0 / 0.6)` | `#93a6bf` |
-  | `--qti-surface` | subtle fills: chips, cards, code, KPI tiles | `#f8fafc` | `#16294a` |
-  | `--qti-border` | card, table and divider lines | `rgb(0 0 0 / 0.1)` | `#24384f` |
-  | `--qti-link` | links | `#0b41ad` | `#5b95ff` |
-  | `--qti-focus` | focus rings | `#0b41ad` | `#7fb0ff` |
+  | `--qti-bg` | page | `#ffffff` | `#242424` |
+  | `--qti-fg` | body text | `#2a2a2a` | `#d9d9d9` |
+  | `--qti-fg-strong` | titles, takeaway emphasis | `#181818` | `#ffffff` |
+  | `--qti-fg-muted` | labels, captions, footer | `#5f5f5c` | `#a3a3a3` |
+  | `--qti-surface` | subtle fills: chips, cards, code, KPI tiles | `#f6f6f4` | `#2b2b2b` |
+  | `--qti-border` | card, table and divider lines | `#e3e3df` | `#363636` |
+  | `--qti-link` | links | `#d4380f` | `#ff7a3d` |
+  | `--qti-focus` | focus rings | `#ed3e13` | `#ff9361` |
   | `--qti-cat-1` … `--qti-cat-8` | series palette | sky `#0284c7`, amber `#d97706`, emerald `#059669`, violet `#7c3aed`, rose `#e11d48`, cyan `#0891b2`, lime `#65a30d`, orange `#ea580c` (the -600 shades, 3:1 on white) | the -400 shades |
-  | `--qti-on-cat` | text on a filled series colour (pie slices, dense heatmap cells) | `#ffffff` | `#0b1626` |
+  | `--qti-on-cat` | text on a filled series colour (pie slices, dense heatmap cells) | `#ffffff` | `#141414` |
   | `--qti-pos` / `--qti-neg` | positive and negative values | `#059669` / `#dc2626` | `#34d399` / `#f87171` |
   | `--qti-grid` | gridlines | `rgb(0 0 0 / 0.08)` | `rgb(255 255 255 / 0.08)` |
-  | `--qti-axis` | axis labels | `rgb(0 0 0 / 0.6)` | `#93a6bf` |
-  | `--qti-tooltip-bg` | tooltips | `#ffffff` | `#1a3357` |
+  | `--qti-axis` | axis labels | `rgb(0 0 0 / 0.6)` | `#a3a3a3` |
+  | `--qti-tooltip-bg` | tooltips | `#ffffff` | `#303030` |
 
-  The Light values mirror the app's Light tokens and the Dark values its Dark tokens ([ui.md](../../system/ui.md) 6.0).
+  The Light values mirror the app's Light tokens and the Dark values its Dark tokens ([ui.md](../../system/ui.md) 6.0); the table holds the Halo Powered brand's values (ADR-0044).
+  - The document root also carries `data-brand="halo|mercer"`, written by the visual panel from the build's brand (ADR-0045). With `mercer` the page tokens take the Agentic Hub values of ADR-0007 (Light `--qti-fg-strong` `#001f52`, `--qti-link` `#0b41ad`; Dark `--qti-bg` `#12233a`, `--qti-fg-strong` `#eef4fc`, …); the series palette is the same in both brands. A document with no `data-brand` (a downloaded `index.html`) uses the Halo values.
   - The document root carries `data-theme="light|dark"`. The visual panel writes the app's resolved theme into the document before it loads. When the theme changes while a visual is open, the panel sends the frame `{type: 'qti-theme', theme}` and the frame bridge switches the attribute in place, so the visual is not reloaded and its state, hover and filters survive. This message goes host to frame only; R35 is unchanged.
   - A document with no `data-theme`, such as the `index.html` of R37 opened on its own, follows the operating system's `prefers-color-scheme`.
   - The chart runtime's text colours (axis, value and pie labels, the legend and the detail table's summary) use these tokens, so spec visuals follow the theme. A heatmap cell's value is `--qti-on-cat` when the cell is more than 55% opaque, `--qti-fg-strong` otherwise.

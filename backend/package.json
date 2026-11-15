@@ -44,7 +44,7 @@
     "evals:assistant": "nest build && node dist/mastra/evals/run-assistant-evals.js",
     "build:web": "npm --prefix ../frontend run build:web && node scripts/copy-web.js",
     "build:all": "npm run build && npm run build:web",
-    "prepack": "npm run build:all",
+    "prepack": "npm run build:all && node scripts/assert-publishable-brand.js",
     "start:web": "node dist/cli.js"
   },
   "dependencies": {
