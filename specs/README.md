@@ -40,8 +40,6 @@ specs/
 | [past-chats](capabilities/past-chats/spec.md) | The stored sessions of earlier versions: the Past chats list, the read-only chat, delete, downloads | Session management (`runs.spec.ts`) |
 | [visuals](capabilities/visuals/spec.md) | Interactive visuals: create, tailor, version, revert, refresh, repair, export | — (covered by the Chat and visuals Feature) |
 | [dataset-ontology](capabilities/dataset-ontology/spec.md) | Each dataset's ontology: concepts, relations, constraints and instructions, shared items, bootstrap from data; the Ontology tab and "Ontology in context" | Dataset ontology (`dataset-ontology.spec.ts`) |
-| [user-personas](capabilities/user-personas/spec.md) | User personas: who asks the questions (role, goals, typical questions, expertise, answer style); manage-only | User personas (`user-personas.spec.ts`) |
-| [visuals-library](capabilities/visuals-library/spec.md) | Visuals library: a catalog of chart types grouped by category (default catalog of 30, previews, when to use, which the app draws); manage-only | Visuals library (E2E: none yet) |
 | [monitoring](capabilities/monitoring/spec.md) | Monitoring: the LLM calls table (filters, paging, estimated cost, status) and a call's page with its context window in seven boxes and its steps; read-only, from Mastra's trace store | LLM calls, LLM call detail (`monitoring.spec.ts`) |
 | [verified-queries](capabilities/verified-queries/spec.md) | Saved, trusted question → SQL pairs | — |
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |

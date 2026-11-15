@@ -16,10 +16,6 @@ export type MainView =
   | 'skills'
   | 'skill-editor'
   | 'builtin-skill-editor'
-  | 'context'
-  | 'personas'
-  | 'visuals'
-  | 'ontologies'
   | 'runs'
   | 'run-detail'
   | 'session-chat'
@@ -32,7 +28,6 @@ export type Area =
   | 'datasets'
   | 'workflows'
   | 'agents'
-  | 'context'
   | 'runs'
   | 'monitoring'
   | 'settings';
@@ -42,7 +37,6 @@ export const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   datasets: 'dataset',
   workflows: 'workflows',
   agents: 'agents',
-  context: 'context',
   runs: 'runs',
   monitoring: 'monitoring',
 };
@@ -58,10 +52,6 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   skills: 'agents',
   'skill-editor': 'agents',
   'builtin-skill-editor': 'agents',
-  context: 'context',
-  personas: 'context',
-  visuals: 'context',
-  ontologies: 'context',
   runs: 'runs',
   'run-detail': 'runs',
   'session-chat': 'runs',
@@ -139,14 +129,12 @@ export class ShellState {
     const leavingEditor = !this.settingsOpen() && this.inEditor();
     // Runs is shown only on its list: from a run, a past chat or the composer
     // the rail returns to the list (app-shell R3). Workflows likewise returns
-    // from a workflow's page to the list (R3), Context from a section to its
-    // cards (R3a), and Monitoring from a call to its table (roadmap 1.21.15).
+    // from a workflow's page to the list (R3), and Monitoring from a call to its table (roadmap 1.21.15).
     const alreadyShown =
       this.currentArea() === area &&
       !leavingEditor &&
       (area !== 'runs' || this.mainView() === 'runs') &&
       (area !== 'workflows' || this.mainView() === 'workflows') &&
-      (area !== 'context' || this.mainView() === 'context') &&
       (area !== 'monitoring' || this.mainView() === 'monitoring');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {

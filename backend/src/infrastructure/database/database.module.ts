@@ -11,8 +11,6 @@ import {
   METRICS_STORE,
   EVAL_RUNS_STORE,
   ONTOLOGY_STORE,
-  PERSONAS_STORE,
-  VISUALS_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
   SETTINGS_STORE,
@@ -48,8 +46,6 @@ const COLLECTIONS = [
   { token: METRICS_STORE, table: 'metrics' },
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
   { token: ONTOLOGY_STORE, table: 'ontology_items' },
-  { token: PERSONAS_STORE, table: 'user_personas' },
-  { token: VISUALS_STORE, table: 'visual_charts' },
   { token: AGENTS_STORE, table: 'agents' },
   { token: SKILLS_STORE, table: 'skills' },
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
@@ -72,6 +68,7 @@ const sqliteDbProvider: Provider = {
     consolidateOwners(db);
     migrateKnowledgeToOntology(db);
     renameLegacyAgentIds(db);
+    dropRemovedCollections(db);
     return db;
   },
 };
@@ -495,6 +492,31 @@ export function renameLegacyAgentIds(db: Db): void {
           WHERE json_extract(doc, '$.key') = 'builtin-agent-pins'
             AND EXISTS (SELECT 1 FROM json_each(doc, '$.pinned') WHERE value = @from)`,
       ).run(LEGACY_AGENT_KEY);
+    }
+  })();
+}
+
+/** The tables of removed features (data-model 6, M17). */
+const REMOVED_TABLES = ['user_personas', 'visual_charts'];
+
+/** The `settings` keys of removed features (data-model 6, M17). */
+const REMOVED_SETTINGS_KEYS = ['personas-seed', 'visuals-seed'];
+
+/**
+ * M17: the user personas and the visuals library were removed with the
+ * Context area (2026-11-15). Their tables and seed markers are dropped so
+ * nothing is left that no code reads. Idempotent; one transaction.
+ */
+export function dropRemovedCollections(db: Db): void {
+  db.transaction(() => {
+    for (const table of REMOVED_TABLES) {
+      db.prepare(`DROP TABLE IF EXISTS "${table}"`).run();
+    }
+    if (tableExists(db, 'settings')) {
+      const marks = REMOVED_SETTINGS_KEYS.map(() => '?').join(', ');
+      db.prepare(
+        `DELETE FROM settings WHERE json_extract(doc, '$.key') IN (${marks})`,
+      ).run(...REMOVED_SETTINGS_KEYS);
     }
   })();
 }

@@ -69,8 +69,7 @@ Graph view
 - R38. The Ontology tab's filter row SHALL end with a **Graph** option. Choosing it SHALL replace the item list with a graph of the dataset's ontology (its own and shared items); choosing another option SHALL return to the list. The graph SHALL draw one node per concept, one node per metric that a measured-by relation targets (in a distinct style), and one labelled arrow per relation from its source to its target; a relation whose endpoint no longer exists SHALL be left out. Disabled and pending items SHALL be drawn faded and dashed; shared items SHALL carry an "All datasets" marker. With **Pending suggestions** on, the graph SHALL show only the pending items and the nodes they connect.
 - R39. The graph SHALL support pan, zoom (with +, − and Fit controls) and dragging nodes. Selecting a node or arrow (click, or Enter on a focused node) SHALL highlight its neighbours and dim the rest, and SHALL show its details (kind, name, description, mappings or relation, and its Mined, Disabled and All datasets states) with an **Edit** button that opens the item's editor; a metric node shows details only. Clicking empty space or pressing Escape SHALL clear the selection. With no concepts, the graph SHALL show "No concepts to draw yet". The graph is drawn by the app itself, with no graph library.
 
-On the Context page
-- R40. The Context page SHALL offer an **Ontologies** card (app-shell R3a) opening a list of every dataset, sorted by name, each with the size of its own ontology ("<n> concepts · <n> relations · …", only the kinds present, or "No ontology yet"), a "<n> pending" chip when it has pending suggestions, and "Could not read this ontology" when its list fails. Shared items are counted once, in a line above the list ("<n> shared item(s) apply to every dataset"), not per dataset. Choosing a dataset SHALL open the same Ontology panel as that dataset's Ontology tab (rules R1-R39 apply unchanged), under an **Ontologies** back control that returns to the list with fresh counts. With no datasets the page SHALL show "No datasets yet".
+- R40. (Removed 2026-11-15.) The Context page and its Ontologies overview are gone. A dataset's ontology is edited only in its **Ontology** tab (R1-R39 apply unchanged).
 
 ## Edge cases and errors
 
@@ -91,7 +90,7 @@ On the Context page
 - Agents: the Ontology Bootstrap agent (prompt requirements, output schema, draft cap, post-processing) and the assistant's curated-knowledge instructions (the `curated-knowledge` skill) and block format: see [../../system/agents.md](../../system/agents.md) 2.5, 4.1 and Appendix B.
 - Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0036.
 - Per-answer provenance is stored on the assistant message and read by [../agent-answers/spec.md](../agent-answers/spec.md).
-- Related: [../datasets/spec.md](../datasets/spec.md) (the editor that hosts the tab, the delete cascade), [../metrics/spec.md](../metrics/spec.md) (the governed metrics a relation can point at; a sibling context block), [../verified-queries/spec.md](../verified-queries/spec.md) (a sibling context block), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../app-shell/spec.md](../app-shell/spec.md) (Context page).
+- Related: [../datasets/spec.md](../datasets/spec.md) (the editor that hosts the tab, the delete cascade), [../metrics/spec.md](../metrics/spec.md) (the governed metrics a relation can point at; a sibling context block), [../verified-queries/spec.md](../verified-queries/spec.md) (a sibling context block), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../app-shell/spec.md](../app-shell/spec.md) (the shell).
 
 ## UI
 
@@ -253,14 +252,6 @@ Feature: Dataset ontology
     When I click the node "Match"
     Then its neighbours are highlighted and its details are shown
     And clicking "Edit" opens the concept editor for "Match"
-
-  Scenario: Review every dataset's ontology from Context
-    Given "World Cup" has 10 concepts and 5 relations, all pending, and "Formula 1" has none
-    When I open "Context" and click the "Ontologies" card
-    Then I see "World Cup" with "10 concepts · 5 relations" and "15 pending", and "Formula 1" with "No ontology yet"
-    When I click "World Cup"
-    Then I see its Ontology panel under an "Ontologies" back control
-    And it is the same as the Ontology tab of the "World Cup" dataset
 
 ```
 
