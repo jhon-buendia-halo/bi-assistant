@@ -351,7 +351,13 @@ function rowCapReached(
   ];
 }
 
-function capOf(
+/**
+ * The row cap a result ran into, or null: the tool's own cap (above a
+ * deliberate top-N) or the statement's last LIMIT, when the rows reached it.
+ * Reads the masked SQL (`maskLiterals`). Exported for the query evidence
+ * (`query-coverage.ts`), which classifies answers stored without `totalRows`.
+ */
+export function capOf(
   mask: string,
   rowCount: number,
   rowLimit?: number,
@@ -400,7 +406,7 @@ function columnsOf(rows: Record<string, unknown>[]): string[] {
  * offset, so keyword scanning cannot trip over a `'... LIMIT ...'` inside a
  * label while expression text is still sliced from the original SQL.
  */
-function maskLiterals(sql: string): string {
+export function maskLiterals(sql: string): string {
   let out = '';
   let i = 0;
   while (i < sql.length) {

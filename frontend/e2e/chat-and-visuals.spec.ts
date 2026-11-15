@@ -86,12 +86,10 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
       'Run succeeded',
     );
 
-    await runAnswer(page)
-      .getByText(/Data used \(1 query\)/)
-      .click();
-    await expect(
-      runAnswer(page).locator('pre', { hasText: SQL }),
-    ).toBeVisible();
+    await page.getByTestId('query-row-0').click();
+    await page.getByTestId('query-inspector-tab-sql').click();
+    await expect(page.getByTestId('query-sql')).toHaveText(SQL);
+    await page.getByTestId('query-inspector-close').click();
 
     // A slow run can be stopped (New question brings the run form back).
     await page.getByTestId('workflow-run-new').click();

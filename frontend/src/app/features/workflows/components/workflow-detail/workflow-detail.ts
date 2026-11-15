@@ -9,6 +9,10 @@ import {
   output,
   untracked,
 } from '@angular/core';
+import { QueryInspector } from '../../../../shared/query-evidence/query-inspector/query-inspector';
+import { QUERY_EVIDENCE_API } from '../../../../shared/query-evidence/query-evidence.model';
+import { focusQueryOpener } from '../../../../shared/query-evidence/query-opener';
+import { RunQueryEvidenceApi } from '../../services/run-query-evidence-api';
 import { Loader2, LucideAngularModule, TriangleAlert } from 'lucide-angular';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { workflowKindLabel } from '../../services/workflows.util';
@@ -30,12 +34,14 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
   selector: 'app-workflow-detail',
   imports: [
     LucideAngularModule,
+    QueryInspector,
     WorkflowCanvas,
     WorkflowNodeDialog,
     WorkflowLogsDock,
     WorkflowRunDock,
   ],
   templateUrl: './workflow-detail.html',
+  providers: [{ provide: QUERY_EVIDENCE_API, useClass: RunQueryEvidenceApi }],
   host: { class: 'flex min-h-0 flex-col' },
 })
 export class WorkflowDetailPage {
@@ -101,6 +107,26 @@ export class WorkflowDetailPage {
       ).find((el) => id.startsWith(`${el.dataset['step']}-tool-`));
       (node ?? tools)?.focus();
     });
+  }
+
+  /** The answer shown beside the sheet: the query inspector reads it. */
+  readonly answer = computed(() => this.designer.runResult()?.answer ?? null);
+
+  /** The query open in the sheet, when the answer holds it. */
+  readonly openQuery = computed(() => {
+    const index = this.designer.openQueryIndex();
+    const answer = this.answer();
+    return index !== null && answer !== null && answer.data?.[index] !== undefined
+      ? { index, answer }
+      : null;
+  });
+
+  /**
+   * The sheet closes; the focus goes back to the chip or row that opened it
+   * (found again by its test id when the answer was redrawn meanwhile).
+   */
+  closeQuery(): void {
+    focusQueryOpener(this.designer.closeQuery());
   }
 
   /** The dialog's agent link: the dialog closes and the agent's page opens. */

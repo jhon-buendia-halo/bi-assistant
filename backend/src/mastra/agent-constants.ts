@@ -40,10 +40,14 @@ export const OFFICIAL_AGENT_KEYS: readonly string[] = [
 export const ANALYSIS_PLANNER_AGENT_KEY = 'analysis-planner';
 export const ANSWER_WRITER_AGENT_KEY = 'answer-writer';
 
+/** The agent that explains a stored query step by step (agents.md 2.12). */
+export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
+
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
+  QUERY_EXPLAINER_AGENT_KEY,
   'visualization',
   'sql-fixer',
   'sql-verifier',

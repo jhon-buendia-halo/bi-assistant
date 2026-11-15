@@ -1,3 +1,4 @@
+<div class="relative flex min-h-0 flex-1 flex-col">
 <div
   class="min-h-0 flex-1 overflow-y-auto px-8 py-6"
   data-testid="run-detail"
@@ -118,6 +119,9 @@
             [message]="answer"
             [latest]="false"
             [busy]="false"
+            [queryInspector]="inspectsQueries()"
+            [question]="run.question ?? null"
+            (inspectQuery)="inspectQuery($event)"
             [showGenerateVisual]="run.status !== 'running'"
             [visualGenerating]="visuals.generating() === run.id"
             (generateVisual)="visuals.generate(run, applyRun)"
@@ -164,4 +168,19 @@
       }
     }
   </div>
+</div>
+@if (openQuery(); as open) {
+  <!-- The query inspector sheet: at the right of the page, never wider than 720 px. -->
+  <div
+    data-testid="query-inspector-sheet"
+    class="absolute inset-y-0 right-0 z-20 w-full max-w-[720px] border-l border-border shadow-lg"
+  >
+    <app-query-inspector
+      [message]="open.answer"
+      [index]="open.index"
+      (close)="closeQuery()"
+      (navigate)="inspectQuery($event)"
+    />
+  </div>
+}
 </div>

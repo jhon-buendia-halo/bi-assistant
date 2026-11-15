@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
+  computed,
   inject,
   input,
   output,
@@ -40,7 +41,18 @@ import {
   legacyTagLabel,
 } from '../../../ontology/models/ontology.model';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import {
+  figureIndex,
+  linkFigures,
+  questionNumbers,
+  sampleQueriesOf,
+} from '../../../../shared/query-evidence/figure-refs';
+import { QueryEvidenceSummary } from '../../../../shared/query-evidence/query-evidence-summary/query-evidence-summary';
+import {
+  MarkdownPipe,
+  renderMarkdown,
+} from '../../../../shared/pipes/markdown.pipe';
 import { ReadinessCard } from '../session-chat/readiness-card';
 
 /** What the clarification card's **Skip** answers. */
@@ -57,7 +69,13 @@ export const SKIP_CLARIFICATION_ANSWER =
  */
 @Component({
   selector: 'app-answer-view',
-  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet, ReadinessCard],
+  imports: [
+    LucideAngularModule,
+    MarkdownPipe,
+    NgTemplateOutlet,
+    QueryEvidenceSummary,
+    ReadinessCard,
+  ],
   templateUrl: './answer-view.html',
   styleUrl: './answer-view.scss',
 })
@@ -87,6 +105,7 @@ export class AnswerView {
 
   private readonly toast = inject(ToastService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly sanitizer = inject(DomSanitizer);
 
   /** The assistant message to render (not a user message, not an error). */
   readonly message = input.required<ChatMessage>();
@@ -101,6 +120,30 @@ export class AnswerView {
   /** Shows **Generate interactive visuals** under an answer with text. */
   readonly showGenerateVisual = input(false);
   readonly visualGenerating = input(false);
+  /**
+   * The host shows the query inspector (1.25): figures carry a query chip and
+   * the coverage line and query rows replace "How I worked this out" and
+   * "Data used". Off, the answer renders exactly as before.
+   */
+  readonly queryInspector = input(false);
+  /**
+   * The question this answer replies to, when the host knows it. A number the
+   * answer repeats from it ("the top 100") gets no figure chip.
+   */
+  readonly question = input<string | null>(null);
+
+  /** The answer body with a chip after each figure (inspector mode only). */
+  readonly inspectorBody = computed<SafeHtml>(() => {
+    const msg = this.message();
+    const html = linkFigures(
+      renderMarkdown(msg.content),
+      figureIndex(msg.data),
+      sampleQueriesOf(msg.evidence),
+      questionNumbers(this.question()),
+    );
+    // Sanitized first; only code-made integers and labels were added after.
+    return this.sanitizer.bypassSecurityTrustHtml(html);
+  });
 
   /** A clarification answer: an option label, a custom answer or Skip. */
   readonly optionPicked = output<string>();
@@ -108,6 +151,17 @@ export class AnswerView {
   readonly generateVisual = output<void>();
   readonly viewVisual = output<VisualEvent>();
   readonly openScorecard = output<ReadinessReportRef>();
+  /** A figure chip or a query row was picked: the index into the message's `data`. */
+  readonly inspectQuery = output<number>();
+
+  /** One handler on the prose element catches the figure chips. */
+  onProseClick(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const chip = target.closest('button.figure-ref');
+    const index = Number(chip?.getAttribute('data-query-index'));
+    if (chip && Number.isInteger(index)) this.inspectQuery.emit(index);
+  }
 
   /** Inline custom answer inside the clarification card. */
   readonly customAnswerOpen = signal(false);

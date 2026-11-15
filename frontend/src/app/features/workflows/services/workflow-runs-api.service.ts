@@ -12,6 +12,7 @@ import {
   dispatchAgentEvent,
   readEventStream,
 } from '../../sessions/services/sessions-api.service';
+import { QueryRerunResult } from '../../../shared/query-evidence/query-evidence.model';
 import {
   NodeChatMessage,
   WorkflowInputError,
@@ -245,6 +246,61 @@ export class WorkflowRunsApiService {
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/answer/feedback`,
       { rating },
     );
+  }
+
+  /**
+   * Build the evidence of an answer stored before the query inspector and size
+   * its tables (api.md 139). Answers the updated run.
+   */
+  prepareEvidence(id: string): Observable<{ ok: boolean; run: WorkflowRun }> {
+    return this.http.post<{ ok: boolean; run: WorkflowRun }>(
+      `${this.answerUrl(id)}/evidence`,
+      {},
+    );
+  }
+
+  /** Explain one query step by step (api.md 140). Answers the updated run. */
+  explainQuery(
+    id: string,
+    index: number,
+  ): Observable<{ ok: boolean; run: WorkflowRun }> {
+    return this.http.post<{ ok: boolean; run: WorkflowRun }>(
+      `${this.answerUrl(id)}/queries/${index}/explanation`,
+      {},
+    );
+  }
+
+  /** Count the rows after each step of one query (api.md 141). Answers the updated run. */
+  countQueryStages(
+    id: string,
+    index: number,
+  ): Observable<{ ok: boolean; run: WorkflowRun }> {
+    return this.http.post<{ ok: boolean; run: WorkflowRun }>(
+      `${this.answerUrl(id)}/queries/${index}/stage-counts`,
+      {},
+    );
+  }
+
+  /** Run one query again, storing nothing (api.md 142). */
+  rerunQuery(
+    id: string,
+    index: number,
+  ): Observable<{ ok: boolean; result: QueryRerunResult }> {
+    return this.http.post<{ ok: boolean; result: QueryRerunResult }>(
+      `${this.answerUrl(id)}/queries/${index}/rerun`,
+      {},
+    );
+  }
+
+  /** One query's rows as a CSV file, up to 50,000 rows (api.md 143). */
+  queryCsv(id: string, index: number): Observable<Blob> {
+    return this.http.get(`${this.answerUrl(id)}/queries/${index}/csv`, {
+      responseType: 'blob',
+    });
+  }
+
+  private answerUrl(id: string): string {
+    return `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/answer`;
   }
 
   /**

@@ -7,6 +7,7 @@
  * loading Mastra; the workflow itself is built in ./answer-business-question.workflow.ts.
  */
 import type { z } from 'zod';
+import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
 import { getDatasetToolServices } from '../tool-services';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
@@ -187,7 +188,7 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       title: 'Validate',
       kind: 'code',
       summary:
-        "Checks the attempt's queries: one ran, no unresolved error, no result cut at its row limit, the plan's measures covered. No LLM.",
+        "Checks the attempt's queries: one ran, no unresolved error, no result cut at its row limit, no answer from an arbitrary sample, the plan's measures covered. No LLM.",
       exits: [],
     },
     SCHEMAS.validate,
@@ -558,6 +559,189 @@ export function answerOf(reply: unknown): BusinessAnswer {
   return answerSchema.parse({ headline, answer: answer || headline });
 }
 
+/** The most rows of one query a table the code writes into the answer shows. */
+export const ROW_TABLE_CAP = 200;
+
+/** What starts every row marker (plan 1.25.6). */
+const MARKER_START = '[[rows:';
+
+/** A line that is a row marker: `[[rows:<n>]]` or `[[rows:<n> | col=Header, …]]`. */
+const MARKER_LINE = /^\s*\[\[rows:\s*(\d+)\s*(?:\|([^\]\n]*))?\]\]\s*$/;
+
+/** A row marker anywhere in a line. */
+const MARKER_ANYWHERE = /\[\[rows:[^\]\n]*\]\]/g;
+
+/** `total_race_starts` reads `Total race starts`. */
+function readableColumn(name: string): string {
+  const words = name.replace(/_+/g, ' ').trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : name;
+}
+
+/** A cell as stored: only a pipe and a line break escaped; null is empty. */
+function tableCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const raw =
+    typeof value === 'string'
+      ? value
+      : typeof value === 'number' ||
+          typeof value === 'boolean' ||
+          typeof value === 'bigint'
+        ? String(value)
+        : JSON.stringify(value);
+  return raw.replace(/\|/g, '\\|').replace(/\r\n|\r|\n/g, '<br>');
+}
+
+/** The columns of a result, in the order they first appear. */
+function resultColumns(rows: readonly Record<string, unknown>[]): string[] {
+  const seen = new Set<string>();
+  for (const row of rows) for (const key of Object.keys(row)) seen.add(key);
+  return [...seen];
+}
+
+/**
+ * The lines a marker line becomes: the query's table (and the note when the
+ * result has more rows than it shows), or none when the marker names no
+ * query, a failed one or an empty result.
+ */
+function rowTableLines(
+  number: number,
+  spec: string | undefined,
+  queries: readonly AnalyseQuery[],
+): string[] {
+  const query = number >= 1 ? queries[number - 1] : undefined;
+  if (!query || query.error || !query.rows.length) return [];
+  const rows = query.rows.slice(0, ROW_TABLE_CAP);
+  const all = resultColumns(rows);
+  const named = (spec ?? '')
+    .split(',')
+    .map((part) => {
+      const at = part.indexOf('=');
+      const key = (at < 0 ? part : part.slice(0, at)).trim();
+      const header = at < 0 ? '' : part.slice(at + 1).trim();
+      return { key, header: header || readableColumn(key) };
+    })
+    .filter((column) => column.key && all.includes(column.key));
+  const columns = named.length
+    ? named
+    : all.map((key) => ({ key, header: readableColumn(key) }));
+  const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
+  const table = [
+    line(columns.map((column) => tableCell(column.header))),
+    line(columns.map(() => '---')),
+    ...rows.map((row) =>
+      line(columns.map((column) => tableCell(row[column.key]))),
+    ),
+  ];
+  const total = Math.max(query.rowCount, query.rows.length);
+  return total > rows.length
+    ? [
+        ...table,
+        '',
+        `Showing the first ${rows.length.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} rows. Open the query to download all of them.`,
+      ]
+    : table;
+}
+
+/**
+ * Write answer's row markers expanded (plan 1.25.6, agents.md 5.11): each
+ * line that is `[[rows:<n>]]` (optionally `| col=Header, …`) becomes a
+ * Markdown table of query `n`'s rows (at most `ROW_TABLE_CAP`), written by
+ * code cell by cell, set apart by blank lines; a marker it cannot expand,
+ * and any marker inside a line, is removed. Each line is expanded on its
+ * own, so the expansion of complete lines is a prefix of the whole one.
+ */
+export function expandRowTables(
+  answer: string,
+  queries: readonly AnalyseQuery[],
+): string {
+  if (!answer.includes(MARKER_START)) return answer;
+  const lines = answer.split('\n');
+  const out: string[] = [];
+  lines.forEach((line, index) => {
+    const marker = MARKER_LINE.exec(line);
+    if (!marker) {
+      out.push(line.replace(MARKER_ANYWHERE, ''));
+      return;
+    }
+    const table = rowTableLines(Number(marker[1]), marker[2], queries);
+    if (!table.length) return;
+    if (index > 0 && lines[index - 1].trim()) out.push('');
+    out.push(...table, '');
+  });
+  // A table that ends the answer leaves no blank line after it.
+  if (out.length && out[out.length - 1] === '' && !answer.endsWith('\n')) {
+    out.pop();
+  }
+  return out.join('\n');
+}
+
+/** The answer with its row markers expanded; the headline is never expanded, only cleaned. */
+export function answerWithRowTables(
+  answer: BusinessAnswer,
+  queries: readonly AnalyseQuery[],
+): BusinessAnswer {
+  const expanded = expandRowTables(answer.answer, queries);
+  const headline =
+    answer.headline.replace(MARKER_ANYWHERE, '').replace(/\s+/g, ' ').trim() ||
+    expanded
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('|'))
+      .map((line) => line.replace(/^[#>*\s]+/, '').trim())
+      .find(Boolean) ||
+    '';
+  return { headline, answer: expanded || headline };
+}
+
+/**
+ * The part of an unfinished last line that may be shown: everything before
+ * a row marker that has begun (or could be beginning), and nothing while the
+ * line could still turn out to be a marker line.
+ */
+function shownOfOpenLine(line: string): string {
+  const couldOpen = (rest: string) =>
+    rest.startsWith(MARKER_START) || MARKER_START.startsWith(rest);
+  if (!line.trim() || couldOpen(line.trimStart())) return '';
+  for (let at = line.indexOf('['); at >= 0; at = line.indexOf('[', at + 1)) {
+    if (couldOpen(line.slice(at))) return line.slice(0, at);
+  }
+  return line;
+}
+
+/**
+ * The streamed answer (plan 1.25.6): `update` with the answer written so
+ * far sends, through `onText`, only what is new of its complete lines with
+ * their markers expanded (`expandRowTables`) and of its last line the part
+ * before any marker that has begun; `finish` with the final, expanded
+ * answer sends the rest. The text sent is never taken back, so a marker,
+ * whole or begun, never reaches a reader.
+ */
+export function answerDeltas(
+  queries: readonly AnalyseQuery[],
+  onText: ((delta: string) => void) | undefined,
+): {
+  update: (partial: string) => void;
+  finish: (answer: string) => void;
+  sent: () => string;
+} {
+  let sent = '';
+  const send = (full: string) => {
+    if (!onText || !full.startsWith(sent) || full === sent) return;
+    onText(full.slice(sent.length));
+    sent = full;
+  };
+  return {
+    update: (partial) => {
+      const end = partial.lastIndexOf('\n') + 1;
+      send(
+        expandRowTables(partial.slice(0, end), queries) +
+          shownOfOpenLine(partial.slice(end)),
+      );
+    },
+    finish: send,
+    sent: () => sent,
+  };
+}
+
 /** Lower-case words of at least four letters, a plural `s` dropped. */
 function words(value: string): string[] {
   const found: string[] = value.toLowerCase().match(/[a-z]{4,}/g) ?? [];
@@ -569,6 +753,7 @@ export const VALIDATION_CHECKS = {
   ranQuery: 'Ran a query',
   noToolError: 'No unresolved tool error',
   rowLimit: 'No result cut at its row limit',
+  sample: 'No answer from a sample',
   measures: 'Measures covered (warning only)',
 } as const;
 
@@ -577,7 +762,10 @@ export const VALIDATION_CHECKS = {
  * attempt's tool calls and queries. `ok` when at least one
  * `run_readonly_sql` call succeeded, every failed call was followed by a
  * successful call of the same tool, and every query cut at its row limit was
- * followed by a successful query that was not. The plan's measures are
+ * followed by a successful query that was not, and every query that kept an
+ * arbitrary sample (`coverageOf`: its own LIMIT reached with no sort before
+ * it) was followed by a successful query that did not (plan 1.25.7). The
+ * plan's measures are
  * looked for (best effort: a word of each in some successful query's SQL,
  * rationale or columns) and reported as a warning that never fails the
  * attempt.
@@ -629,6 +817,28 @@ export function validateAttempt(input: {
       ? `${cut.length} ${cut.length === 1 ? 'result was' : 'results were'} cut at the row limit and not aggregated again.`
       : 'No result the answer reads was cut.',
   };
+  const isSample = (query: AnalyseQuery) =>
+    coverageOf({
+      tool: 'run_readonly_sql',
+      sql: query.sql,
+      rowCount: query.rowCount,
+      truncated: query.truncated,
+    }) === 'sample';
+  const sampled = queries.filter(
+    (query, index) =>
+      !query.error &&
+      isSample(query) &&
+      !queries
+        .slice(index + 1)
+        .some((later) => !later.error && !isSample(later)),
+  );
+  const sample: ValidationFinding = {
+    check: VALIDATION_CHECKS.sample,
+    passed: sampled.length === 0,
+    detail: sampled.length
+      ? `${sampled.length} ${sampled.length === 1 ? 'result' : 'results'} kept an arbitrary sample of rows (a LIMIT with no sort) and no later query read the whole data.`
+      : 'No result the answer reads is an arbitrary sample.',
+  };
   const haystack = new Set(
     succeeded.flatMap((query) =>
       words(
@@ -652,8 +862,9 @@ export function validateAttempt(input: {
         : 'Every planned measure appears in a query.',
   };
   return {
-    ok: ranQuery.passed && noToolError.passed && rowLimit.passed,
-    findings: [ranQuery, noToolError, rowLimit, measures],
+    ok:
+      ranQuery.passed && noToolError.passed && rowLimit.passed && sample.passed,
+    findings: [ranQuery, noToolError, rowLimit, sample, measures],
   };
 }
 

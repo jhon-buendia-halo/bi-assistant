@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   GoneException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -25,6 +26,11 @@ import {
 } from '../../mastra/workflows/workflow-input';
 import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
+import {
+  checkStageCounts,
+  foreignTable,
+  sampleExplanation,
+} from '../../mastra/agents/query-explainer.prompts';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { clarifyingQuestionText } from '../sessions/turn/turn-workflow';
 import type {
@@ -33,6 +39,17 @@ import type {
   InteractiveVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
+import { evidenceOf } from '../sessions/query-evidence/query-evidence';
+import type {
+  QueryEvidenceService,
+  QueryExport,
+  QueryRerunResult,
+} from '../sessions/query-evidence/query-evidence.service';
+import { QUERY_EVIDENCE_SERVICE } from '../sessions/query-evidence/query-evidence.token';
+import type {
+  QueryEvidence,
+  QueryExplanation,
+} from '../sessions/query-evidence/query-evidence.types';
 import {
   RUN_HOST_ID_PREFIX,
   SessionsService,
@@ -208,7 +225,17 @@ export class WorkflowRunsService implements OnModuleInit {
     private readonly mastra: MastraService,
     private readonly repository: WorkflowRunsRepository,
     private readonly nodeChats: WorkflowNodeChatsRepository,
+    // The query inspector's queries (api.md 139-143).
+    @Inject(QUERY_EVIDENCE_SERVICE)
+    private readonly queryEvidence: QueryEvidenceService,
   ) {}
+
+  /**
+   * The tail of each run's answer writes (api.md 139-143, 128): every
+   * write to a run's `answer` waits for the one before, so two cannot
+   * overwrite each other.
+   */
+  private readonly answerLocks = new Map<string, Promise<unknown>>();
 
   /**
    * Start-up recovery (plan 5.1 step 5): a run still `running` was cut off
@@ -592,16 +619,290 @@ export class WorkflowRunsService implements OnModuleInit {
    * run has no answer.
    */
   async rateAnswer(id: string, rating?: string): Promise<WorkflowRun> {
+    // Under the answer's lock: the run is read inside it, so a rating never
+    // drops evidence another write just stored (and the other way round).
+    return this.withAnswerLock(id, async () => {
+      const run = await this.stored(id);
+      if (!run.answer) throw new NotFoundException(`Run "${id}" has no answer`);
+      const answer = await this.sessions.rateRunAnswer(
+        id,
+        runHostDoc(run),
+        run.answer.at,
+        rating as 'up' | 'down',
+      );
+      const updated = await this.repository.update(id, { answer });
+      return this.wire(updated ?? { ...run, answer });
+    });
+  }
+
+  /**
+   * Run `fn` holding the lock of run `id`'s answer: one write at a time per
+   * run, in call order; a failed write does not block the next. Not
+   * re-entrant: never call it (or `patchEvidence`) from inside `fn`.
+   */
+  async withAnswerLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    const before = this.answerLocks.get(id) ?? Promise.resolve();
+    const current = before.then(fn, fn);
+    const tail = current.catch(() => undefined);
+    this.answerLocks.set(id, tail);
+    try {
+      return await current;
+    } finally {
+      if (this.answerLocks.get(id) === tail) this.answerLocks.delete(id);
+    }
+  }
+
+  /**
+   * Merge `patch` into the evidence entry `index` of run `id`'s answer,
+   * under the lock (plan 3c: re-read the run, patch one entry, write the
+   * answer). For 1.25.3's explanation and step counts. The checks of
+   * api.md 139-143 apply.
+   */
+  async patchEvidence(
+    id: string,
+    index: number,
+    patch: Partial<Omit<QueryEvidence, 'index'>>,
+  ): Promise<WorkflowRun> {
+    return this.withAnswerLock(id, async () => {
+      const { run, answer, evidence } = await this.answered(id);
+      const entry = this.evidenceAt(evidence, index);
+      const next = evidence.map((e) =>
+        e === entry ? { ...e, ...patch, index: e.index } : e,
+      );
+      const updated = await this.repository.update(id, {
+        answer: { ...answer, evidence: next },
+      });
+      return this.wire(
+        updated ?? { ...run, answer: { ...answer, evidence: next } },
+      );
+    });
+  }
+
+  /**
+   * Build the evidence of an answer stored before the feature and size its
+   * tables (api.md 139). Called again with nothing missing, it runs no
+   * query and writes nothing.
+   */
+  async prepareEvidence(id: string): Promise<WorkflowRun> {
+    return this.withAnswerLock(id, async () => {
+      const { run, answer } = await this.answered(id);
+      const evidence = await this.queryEvidence.prepare(answer, run.datasets);
+      if (!evidence) return this.wire(run);
+      const updated = await this.repository.update(id, {
+        answer: { ...answer, evidence },
+      });
+      return this.wire(updated ?? { ...run, answer: { ...answer, evidence } });
+    });
+  }
+
+  /** Calls in flight by kind, run and index: a repeat waits for the same result. */
+  private readonly inflight = new Map<string, Promise<WorkflowRun>>();
+
+  private once(key: string, work: () => Promise<WorkflowRun>) {
+    const running = this.inflight.get(key);
+    if (running) return running;
+    const started = work().finally(() => this.inflight.delete(key));
+    this.inflight.set(key, started);
+    return started;
+  }
+
+  /**
+   * Explain one query step by step (api.md 140). Returns the stored
+   * explanation when there is one; a `sample_rows` record is explained by
+   * code, any other by one call to `query-explainer`. A second request for
+   * the same run and index while one runs waits for the same result.
+   */
+  async explainQuery(id: string, index: number): Promise<WorkflowRun> {
+    return this.once(`explain:${id}:${index}`, async () => {
+      // The table sizes the explainer's request holds (idempotent; takes the
+      // lock itself, so it runs before ours, never inside one).
+      await this.prepareEvidence(id);
+      const { run, answer, evidence } = await this.answered(id);
+      const entry = this.evidenceAt(evidence, index);
+      if (entry.explanation) return this.wire(run);
+      const record = (answer.data ?? [])[index];
+      if (!record || record.error || !record.input?.trim()) {
+        throw new BadRequestException(`Query ${index} has no SQL to explain`);
+      }
+      let explanation: QueryExplanation;
+      if (record.tool === 'sample_rows') {
+        explanation = sampleExplanation(record, entry);
+      } else {
+        try {
+          explanation = await this.mastra.explainQuery({
+            record,
+            evidence: entry,
+          });
+        } catch (error) {
+          throw new BadRequestException(
+            `The query could not be explained: ${runErrorMessage(error)}`,
+          );
+        }
+      }
+      return this.patchEvidence(id, index, { explanation });
+    });
+  }
+
+  /**
+   * Count the rows after each step of an explained query (api.md 141). Each
+   * statement runs through `QueryEvidenceService.countRows`, in turn, and
+   * only when every statement reads tables the original query reads;
+   * `checkStageCounts` decides alone whether the counts are stored. A failed
+   * check is stored as `unverified`, not raised. Once verified, the stored
+   * result is returned.
+   */
+  async countQuerySteps(id: string, index: number): Promise<WorkflowRun> {
+    return this.once(`counts:${id}:${index}`, async () => {
+      const { run, answer, evidence } = await this.answered(id);
+      const entry = this.evidenceAt(evidence, index);
+      const explanation = entry.explanation;
+      if (!explanation) {
+        throw new BadRequestException(`Explain query ${index} first`);
+      }
+      if (explanation.stageCounts?.status === 'verified') return this.wire(run);
+      const record = (answer.data ?? [])[index];
+      const unverified = (reason: string) =>
+        this.patchEvidence(id, index, {
+          explanation: {
+            ...explanation,
+            stageCounts: {
+              status: 'unverified',
+              at: new Date().toISOString(),
+              reason,
+            },
+          },
+        });
+      const steps = explanation.steps.filter((s) => s.verb !== 'show');
+      const tables = entry.tables ?? [];
+      if (record?.tool === 'sample_rows') {
+        return unverified('A sample of rows has no steps to count');
+      }
+      if (!tables.length)
+        return unverified('The tables the query reads are not known');
+      const entities = tables.map((t) => t.entity);
+      for (const [i, step] of steps.entries()) {
+        if (!step.countSql) {
+          return unverified(
+            `Step ${i + 1} (${step.verb}) has no count statement`,
+          );
+        }
+        const foreign = foreignTable(step.countSql, entities);
+        if (foreign) {
+          return unverified(
+            `Step ${i + 1} (${step.verb}) reads ${foreign}, which the query does not read`,
+          );
+        }
+      }
+      const source = await this.queryEvidence.datasourceFor(
+        entry,
+        run.datasets,
+      );
+      const counts: number[] = [];
+      for (const [i, step] of steps.entries()) {
+        try {
+          counts.push(
+            await this.queryEvidence.countRows(
+              source.id,
+              step.countSql as string,
+            ),
+          );
+        } catch (error) {
+          return unverified(
+            `Step ${i + 1} (${step.verb}) could not be counted: ${runErrorMessage(error)}`,
+          );
+        }
+      }
+      const check = checkStageCounts({
+        steps,
+        counts,
+        tables,
+        outerLimit: entry.outerLimit,
+        totalRows: entry.totalRows,
+        rowCount: record.rowCount ?? record.rows?.length ?? 0,
+        truncated: record.truncated,
+      });
+      if (check.status === 'unverified') return unverified(check.reason);
+      let next = 0;
+      return this.patchEvidence(id, index, {
+        explanation: {
+          ...explanation,
+          steps: explanation.steps.map((s) =>
+            s.verb === 'show' ? s : { ...s, rows: counts[next++] },
+          ),
+          stageCounts: { status: 'verified', at: new Date().toISOString() },
+        },
+      });
+    });
+  }
+
+  /** Run one of the answer's queries again; nothing is stored (api.md 142). */
+  async rerunQuery(id: string, index: number): Promise<QueryRerunResult> {
+    const { run, record, entry } = await this.runnableQuery(id, index);
+    return this.queryEvidence.rerun(record, entry, run.datasets);
+  }
+
+  /**
+   * One query's rows as CSV (api.md 143): up to 50,000, `cut` when more
+   * existed. The file is `query-<Q>-<first 8 of the run id>.csv`.
+   */
+  async queryCsv(
+    id: string,
+    index: number,
+  ): Promise<QueryExport & { filename: string; q: number }> {
+    const { run, record, entry, evidence } = await this.runnableQuery(
+      id,
+      index,
+    );
+    const exported = await this.queryEvidence.exportRows(
+      record,
+      entry,
+      run.datasets,
+    );
+    const q = evidence.indexOf(entry) + 1;
+    return { ...exported, q, filename: `query-${q}-${run.id.slice(0, 8)}.csv` };
+  }
+
+  /**
+   * The checks every evidence endpoint shares (api.md 139-143): 404 for no
+   * run or no answer, 400 while the run is running or waiting. The answer's
+   * evidence, derived from `data` when it predates the feature.
+   */
+  private async answered(id: string): Promise<{
+    run: WorkflowRunDoc;
+    answer: ChatMessage;
+    evidence: QueryEvidence[];
+  }> {
     const run = await this.stored(id);
     if (!run.answer) throw new NotFoundException(`Run "${id}" has no answer`);
-    const answer = await this.sessions.rateRunAnswer(
-      id,
-      runHostDoc(run),
-      run.answer.at,
-      rating as 'up' | 'down',
-    );
-    const updated = await this.repository.update(id, { answer });
-    return this.wire(updated ?? { ...run, answer });
+    if (run.status === 'running' || run.status === 'suspended') {
+      throw new BadRequestException('Wait for the run to finish');
+    }
+    return {
+      run,
+      answer: run.answer,
+      evidence: run.answer.evidence ?? evidenceOf(run.answer.data ?? []),
+    };
+  }
+
+  private evidenceAt(evidence: QueryEvidence[], index: number): QueryEvidence {
+    const entry = evidence.find((e) => e.index === index);
+    if (!entry) {
+      throw new BadRequestException(
+        `Query ${index} not found in the run's answer`,
+      );
+    }
+    return entry;
+  }
+
+  /** The checks of 142 and 143: a query of the answer with SQL to run. */
+  private async runnableQuery(id: string, index: number) {
+    const { run, answer, evidence } = await this.answered(id);
+    const entry = this.evidenceAt(evidence, index);
+    const record = (answer.data ?? [])[index];
+    if (!record || record.error || !record.input?.trim()) {
+      throw new BadRequestException(`Query ${index} has no SQL to run`);
+    }
+    return { run, record, entry, evidence };
   }
 
   /**
