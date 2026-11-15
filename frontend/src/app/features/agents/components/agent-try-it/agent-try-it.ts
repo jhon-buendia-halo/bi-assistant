@@ -18,6 +18,7 @@ import { AnswerView } from '../../../sessions/components/answer-view/answer-view
 import { ChatMessage } from '../../../sessions/models/session.model';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
 import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
+import { TryItInspector } from '../../services/try-it-inspector';
 
 /** What the backend refuses a draft run with when no dataset exists (api.md R12). */
 export const NO_DATASET_TRY_MESSAGE = 'Select at least one dataset to preview';
@@ -49,6 +50,8 @@ export class AgentTryIt implements OnDestroy {
   protected readonly Square = Square;
 
   private readonly runs = inject(WorkflowRunsApiService);
+  /** The inspector's state; its sheet is in the app's main column. */
+  protected readonly inspector = inject(TryItInspector);
 
   /** The agent's id; for a new agent it is known once `beforeRun` has saved it. */
   readonly agentId = input<string | null>(null);
@@ -75,7 +78,8 @@ export class AgentTryIt implements OnDestroy {
   );
   protected readonly answer = computed((): ChatMessage | null => {
     const state = this.state();
-    return state.kind === 'done' ? (state.run.answer ?? null) : null;
+    if (state.kind !== 'done') return null;
+    return (this.inspector.run() ?? state.run).answer ?? null;
   });
   protected readonly reasoning = computed(() => {
     const state = this.state();
@@ -95,6 +99,7 @@ export class AgentTryIt implements OnDestroy {
 
   ngOnDestroy(): void {
     this.cancel();
+    this.inspector.forget();
   }
 
   protected onInput(event: Event): void {
@@ -113,6 +118,7 @@ export class AgentTryIt implements OnDestroy {
     if (!this.canRun()) return;
     const generation = ++this.generation;
     const current = () => generation === this.generation;
+    this.inspector.begin(this.question().trim());
     this.state.set({ kind: 'running', reasoning: '' });
     const before = this.beforeRun();
     if (before && !(await before())) {
@@ -140,8 +146,14 @@ export class AgentTryIt implements OnDestroy {
             });
           }
         },
+        // The stream's first event, `run`, carries the draft run's id.
+        onRun: ({ runId }) => {
+          if (current()) this.inspector.setRunId(runId);
+        },
         onDone: (run) => {
-          if (current()) this.state.set({ kind: 'done', run });
+          if (!current()) return;
+          this.inspector.finish(run);
+          this.state.set({ kind: 'done', run });
         },
         onError: (message) => {
           if (!current()) return;
@@ -162,6 +174,7 @@ export class AgentTryIt implements OnDestroy {
   stop(): void {
     if (!this.running()) return;
     this.cancel();
+    this.inspector.forget();
     this.state.set({ kind: 'stopped' });
   }
 
@@ -169,6 +182,7 @@ export class AgentTryIt implements OnDestroy {
   reset(): void {
     this.cancel();
     this.question.set('');
+    this.inspector.forget();
     this.refused.set(null);
     this.state.set({ kind: 'idle' });
   }
