@@ -257,6 +257,11 @@ export class WorkflowRunChat {
   }
 
   /** A visual card's View: open that visual under the answer. */
+  /** A figure chip or query row: the query opens in the sheet beside the answer. */
+  protected inspectQuery(index: number): void {
+    this.designer.openQuery(index, window.document.activeElement);
+  }
+
   protected viewVisual(event: VisualEvent): void {
     const run = this.designer.run();
     if (run !== null) this.visuals.view(run, event);

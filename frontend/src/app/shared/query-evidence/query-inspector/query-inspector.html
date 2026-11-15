@@ -1,0 +1,275 @@
+<!-- Header: where this query sits in the answer, its title and meta, the way out. -->
+<header class="flex shrink-0 items-start gap-2 border-b border-border px-4 py-3">
+  <div class="min-w-0 flex-1">
+    <p class="m-0 flex items-center gap-2 text-[12px] text-fg-muted">
+      <span data-testid="query-inspector-position">{{ position() }}</span>
+      @if (coverageLabel(); as chip) {
+        <span class="chip chip-info">{{ chip }}</span>
+      }
+    </p>
+    <h2
+      data-testid="query-inspector-title"
+      class="m-0 mt-0.5 text-[14px] leading-5 font-semibold text-fg-strong"
+    >
+      {{ title() }}
+    </h2>
+    @if (meta()) {
+      <p data-testid="query-inspector-meta" class="m-0 mt-0.5 text-[12px] text-fg-muted">
+        {{ meta() }}
+      </p>
+    }
+  </div>
+  <button
+    type="button"
+    data-testid="query-inspector-prev"
+    class="btn btn-ghost btn-icon"
+    aria-label="Previous query"
+    title="Previous query"
+    [disabled]="index() <= 0"
+    (click)="navigate.emit(index() - 1)"
+  >
+    <lucide-angular [img]="ChevronLeft" [size]="14" />
+  </button>
+  <button
+    type="button"
+    data-testid="query-inspector-next"
+    class="btn btn-ghost btn-icon"
+    aria-label="Next query"
+    title="Next query"
+    [disabled]="index() >= total() - 1"
+    (click)="navigate.emit(index() + 1)"
+  >
+    <lucide-angular [img]="ChevronRight" [size]="14" />
+  </button>
+  <button
+    #closeButton
+    type="button"
+    data-testid="query-inspector-close"
+    class="btn btn-ghost btn-icon"
+    aria-label="Close query inspector"
+    title="Close query inspector"
+    (click)="close.emit()"
+  >
+    <lucide-angular [img]="X" [size]="14" />
+  </button>
+</header>
+
+<div class="shrink-0 px-4 pt-3">
+  <div
+    role="tablist"
+    aria-label="Query views"
+    class="inline-flex overflow-hidden rounded-lg border border-border text-[12px]"
+    (keydown)="onTabKey($event)"
+  >
+    @for (t of tabs; track t) {
+      <button
+        type="button"
+        role="tab"
+        [id]="'query-inspector-tab-' + t"
+        [attr.data-testid]="'query-inspector-tab-' + t"
+        [attr.aria-selected]="tab() === t"
+        [attr.aria-controls]="'query-inspector-panel'"
+        [attr.tabindex]="tab() === t ? 0 : -1"
+        class="px-3 py-1"
+        [class.bg-surface-muted]="tab() === t"
+        [class.font-semibold]="tab() === t"
+        [class.text-fg-strong]="tab() === t"
+        [class.text-fg-muted]="tab() !== t"
+        (click)="selectTab(t)"
+      >
+        {{ tabLabel(t) }}
+      </button>
+    }
+  </div>
+</div>
+
+<div
+  id="query-inspector-panel"
+  role="tabpanel"
+  tabindex="0"
+  [attr.aria-labelledby]="'query-inspector-tab-' + tab()"
+  class="min-h-0 flex-1 overflow-auto px-4 py-3 focus-visible:outline-2 focus-visible:outline-focus"
+>
+  @switch (tab()) {
+    @case ('steps') {
+      @if (failed()) {
+        <p
+          role="alert"
+          class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+        >
+          {{ record()?.error }}
+        </p>
+      } @else if (explanation(); as explained) {
+        <ol data-testid="query-funnel" class="m-0 flex list-none flex-col gap-2 p-0">
+          @for (item of funnel(); track $index) {
+            <li
+              data-testid="query-funnel-step"
+              [attr.data-verb]="item.step.verb"
+              [attr.data-rows]="item.step.rows ?? ''"
+              class="flex items-start gap-3 rounded-lg border border-border px-3 py-2"
+              [class.bg-warning-soft]="item.tint"
+            >
+              <span
+                class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[11px] font-semibold text-fg-muted"
+                aria-hidden="true"
+                >{{ item.number }}</span
+              >
+              <div class="min-w-0 flex-1 text-[13px] leading-5 text-fg">
+                <span class="font-semibold text-fg-strong">{{ item.label }}</span>
+                {{ " " }}<span>{{ item.step.text }}</span>
+                @if (item.step.table) {
+                  {{ " " }}<code class="font-mono text-[12px]">{{ item.step.table }}</code>
+                }
+                @if (item.step.note) {
+                  <span class="block text-[12px] text-fg-muted">{{ item.step.note }}</span>
+                }
+              </div>
+              @if (item.count) {
+                <span class="shrink-0 text-[12px] text-fg-muted">{{ item.count }}</span>
+              }
+            </li>
+          }
+        </ol>
+        @if (canCount()) {
+          <button
+            type="button"
+            data-testid="query-count-steps"
+            class="btn btn-secondary mt-3 px-2.5 py-1 text-[12px]"
+            [disabled]="counting()"
+            (click)="countSteps()"
+          >
+            {{ counting() ? "Counting rows…" : "Count rows at each step" }}
+          </button>
+        }
+        @if (unverified()) {
+          <p data-testid="query-counts-unverified" class="m-0 mt-3 text-[12px] text-fg-muted">
+            The row counts could not be verified, so they are not shown.
+          </p>
+        }
+      } @else if (stepsError(); as message) {
+        <div data-testid="query-explain-error" class="flex flex-col items-start gap-2">
+          <p class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft">
+            The steps could not be explained: {{ message }}. The SQL tab shows the query.
+          </p>
+          <button
+            type="button"
+            data-testid="query-explain-retry"
+            class="btn btn-secondary px-2.5 py-1 text-[12px]"
+            (click)="explain()"
+          >
+            Try again
+          </button>
+        </div>
+      } @else {
+        <p role="status" class="m-0 text-[13px] text-fg-muted">Reading the query…</p>
+      }
+    }
+    @case ('result') {
+      @if (failed()) {
+        <p
+          role="alert"
+          class="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+        >
+          {{ record()?.error }}
+        </p>
+      } @else {
+        @if (rerunBanner(); as banner) {
+          <p
+            data-testid="query-rerun-banner"
+            class="m-0 mb-2 flex flex-wrap items-center gap-2 rounded-md bg-info-soft px-3 py-2 text-[12px] text-on-info-soft"
+          >
+            <span>{{ banner }}</span>
+            <button
+              type="button"
+              class="underline"
+              (click)="showStoredRows()"
+            >
+              Show the answer's rows
+            </button>
+          </p>
+        }
+        @if (resultNote(); as note) {
+          <p data-testid="query-result-note" class="m-0 mb-2 text-[12px] text-fg-muted">
+            {{ note }}
+          </p>
+        }
+        <div
+          class="max-h-full overflow-auto rounded-lg border border-border"
+          tabindex="0"
+          aria-label="Result rows"
+          role="region"
+        >
+          <table data-testid="query-result-table" class="w-full border-collapse text-left text-[12px]">
+            <thead>
+              <tr>
+                @for (column of columns(); track column) {
+                  <th
+                    scope="col"
+                    class="sticky top-0 border-b border-border bg-surface-muted px-2 py-1 font-semibold whitespace-nowrap text-fg-strong"
+                  >
+                    {{ column }}
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of shownRows(); track $index) {
+                <tr>
+                  @for (column of columns(); track column) {
+                    <td class="border-b border-border px-2 py-1 whitespace-nowrap text-fg">
+                      {{ cell(row[column]) }}
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+    @case ('sql') {
+      <pre
+        data-testid="query-sql"
+        class="m-0 overflow-auto rounded-lg bg-surface-muted p-3 font-mono text-[12px] leading-5 break-words whitespace-pre-wrap text-fg"
+        >{{ sql() }}</pre
+      >
+    }
+  }
+</div>
+
+<footer class="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-4 py-3">
+  @if (!failed()) {
+    <button
+      type="button"
+      data-testid="query-download-csv"
+      class="btn btn-secondary px-2.5 py-1 text-[12px]"
+      (click)="download()"
+    >
+      <lucide-angular [img]="Download" [size]="13" />
+      <span>{{ downloadLabel() }}</span>
+    </button>
+    @if (canRerun()) {
+      <button
+        type="button"
+        data-testid="query-rerun"
+        class="btn btn-secondary px-2.5 py-1 text-[12px]"
+        [disabled]="rerunning()"
+        (click)="runAgain()"
+      >
+        <lucide-angular [img]="RefreshCw" [size]="13" />
+        <span>{{ rerunning() ? "Running…" : "Re-run" }}</span>
+      </button>
+    }
+  }
+  @if (sql()) {
+    <button
+      type="button"
+      data-testid="query-copy-sql"
+      class="btn btn-secondary px-2.5 py-1 text-[12px]"
+      (click)="copySql()"
+    >
+      <lucide-angular [img]="Copy" [size]="13" />
+      <span>Copy SQL</span>
+    </button>
+  }
+</footer>

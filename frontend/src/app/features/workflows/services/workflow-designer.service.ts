@@ -7,6 +7,7 @@ import {
 import { ToastService } from '../../../core/toast/toast.service';
 import { MessageFeedback } from '../../sessions/models/session.model';
 import {
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   LiveToolCall,
   NodeChatAvailability,
   RunStepView,
@@ -90,6 +91,14 @@ export class WorkflowDesigner {
   readonly openNodeId = signal<string | null>(null);
   /** Whether the Run panel under the canvas is unfolded. */
   readonly stateOpen = signal(true);
+  /** Whether the Run panel is maximized (opening a query restores it). */
+  readonly runDockMaximized = signal(false);
+  /** The query open in the inspector sheet (an index into the answer's `data`); null when none is. */
+  readonly openQueryIndex = signal<number | null>(null);
+  /** What opened the sheet, to give the focus back on close. */
+  private queryOpener: { el: Element; selector: string | null } | null = null;
+  /** The runs whose answer evidence was already requested (api.md 139): once per run id. */
+  private readonly preparedRuns = new Set<string>();
   /**
    * Bumped by Execute workflow on the canvas (and New question): the Run
    * panel's composer takes the focus. Execute workflow itself never runs.
@@ -462,6 +471,9 @@ export class WorkflowDesigner {
     this.workflow.set(null);
     this.selectedStepId.set(null);
     this.openNodeId.set(null);
+    this.openQueryIndex.set(null);
+    this.queryOpener = null;
+    this.runDockMaximized.set(false);
     this.runFormRequest.set(0);
     this.datasets.set([]);
     this.datasetsLoaded.set(false);
@@ -492,6 +504,68 @@ export class WorkflowDesigner {
 
   closeNode(): void {
     this.openNodeId.set(null);
+  }
+
+  /** The shown run is of Answer a Business Question: its answers get the query inspector. */
+  readonly inspectsQueries = computed(
+    () => this.workflow()?.id === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  );
+
+  /**
+   * Open a query of the shown answer in the inspector sheet (ui.md 4.4b). A
+   * maximized Run panel is restored first; another query swaps the one shown.
+   * `opener` is the chip or row that was used: Escape returns the focus to it.
+   */
+  openQuery(index: number, opener: Element | null = null): void {
+    this.runDockMaximized.set(false);
+    if (this.openQueryIndex() === null && opener !== null) {
+      const testid = opener.getAttribute('data-testid');
+      const query = opener.getAttribute('data-query-index');
+      this.queryOpener = {
+        el: opener,
+        selector:
+          testid === null
+            ? null
+            : `[data-testid="${testid}"]` +
+              (query === null ? '' : `[data-query-index="${query}"]`),
+      };
+    }
+    this.openQueryIndex.set(index);
+  }
+
+  /** Close the sheet; answers what opened it, to focus again. */
+  closeQuery(): { el: Element; selector: string | null } | null {
+    const opener = this.queryOpener;
+    this.queryOpener = null;
+    this.openQueryIndex.set(null);
+    return opener;
+  }
+
+  /** A call changed the stored answer: show the updated run, when it is still the one shown. */
+  applyRun(run: WorkflowRun): void {
+    if (this.run()?.id === run.id) this.run.set(run);
+  }
+
+  /**
+   * Build the evidence of the shown stored answer and size its tables (api.md
+   * 139). Fired once per run id, in the background, when a stored answer of
+   * Answer a Business Question with data is shown; a failure is silent.
+   */
+  private prepareEvidence(run: WorkflowRun): void {
+    if (
+      run.workflowId !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID ||
+      !run.answer?.data?.length ||
+      run.status === 'running' ||
+      run.status === 'suspended' ||
+      this.preparedRuns.has(run.id)
+    ) {
+      return;
+    }
+    this.preparedRuns.add(run.id);
+    this.runsApi.prepareEvidence(run.id).subscribe({
+      next: (result) => this.applyRun(result.run),
+      error: () => undefined,
+    });
   }
 
   /** Execute workflow on the canvas: the Run panel unfolds and focuses its composer. */
@@ -694,9 +768,11 @@ export class WorkflowDesigner {
   /** The run as stored: shown. */
   private showStored(run: WorkflowRun): void {
     this.run.set(run);
+    this.prepareEvidence(run);
   }
 
   private resetRun(): void {
+    this.openQueryIndex.set(null);
     this.runId.set(null);
     this.run.set(null);
     this.contextRun.set(null);
