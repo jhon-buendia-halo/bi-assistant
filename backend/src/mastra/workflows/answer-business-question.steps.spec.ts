@@ -1029,12 +1029,18 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(request).not.toContain('{"n":50}');
     });
 
-    it('tells Write answer to mark a list of more than 10 rows instead of writing it (plan 1.25.6)', () => {
+    it('tells Write answer to mark a result it was shown only part of, as its last rule (plan 1.25.6)', () => {
       expect(WRITE_ANSWER_INSTRUCTIONS).toContain('[[rows:<n>]]');
       expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
         '[[rows:2 | name=Driver, total_race_starts=Race starts]]',
       );
-      expect(WRITE_ANSWER_INSTRUCTIONS).toContain('more than 10 rows');
+      expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
+        'when a query\'s line says that only its first rows are shown',
+      );
+      // Last, so the rules before it read in the order they always had.
+      expect(
+        WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n').pop()?.startsWith('- Long lists:'),
+      ).toBe(true);
     });
 
     it('hands a retry of Analyse the failed checks of the previous attempt', () => {
