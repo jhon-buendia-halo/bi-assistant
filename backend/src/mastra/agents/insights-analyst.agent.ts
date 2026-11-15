@@ -15,25 +15,25 @@ import {
 } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { catalogFrameworkSkills } from '../skill-sources';
-import { ASSISTANT_V2_PROMPT } from './system-prompts';
+import { INSIGHTS_ANALYST_PROMPT } from './system-prompts';
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_DESCRIPTION,
-  ASSISTANT_V2_NAME,
-} from './assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_DESCRIPTION,
+  INSIGHTS_ANALYST_NAME,
+} from './insights-analyst-catalog';
 
 export {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_MAX_STEPS,
-} from './assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_MAX_STEPS,
+} from './insights-analyst-catalog';
 
 /**
  * Its tools (agents.md 2.11): the assistant's dataset tools and its
  * clarification tool (the same instances), in the order of
- * `ASSISTANT_V2_TOOL_NAMES`, and nothing else — no visuals, panel or
+ * `INSIGHTS_ANALYST_TOOL_NAMES`, and nothing else — no visuals, panel or
  * workflow tool and no workspace.
  */
-export const assistantV2Tools = {
+export const insightsAnalystTools = {
   list_entities: listEntitiesTool,
   describe_entity: describeEntityTool,
   sample_rows: sampleRowsTool,
@@ -42,14 +42,14 @@ export const assistantV2Tools = {
 };
 
 /** Its on-demand skills, built per call (agents.md 7.3, 7.4). */
-export function assistantV2Skills() {
-  return catalogFrameworkSkills(ASSISTANT_V2_AGENT_KEY);
+export function insightsAnalystSkills() {
+  return catalogFrameworkSkills(INSIGHTS_ANALYST_AGENT_KEY);
 }
 
 // Links become plain mentions before the model reads them (agents.md 4.1).
 const shippedInstructions = withToolSection(
-  resolveLinks(ASSISTANT_V2_PROMPT),
-  assistantV2Tools,
+  resolveLinks(INSIGHTS_ANALYST_PROMPT),
+  insightsAnalystTools,
 );
 
 let served: { version: number; text: string } | undefined;
@@ -60,14 +60,17 @@ let served: { version: number; text: string } | undefined;
  * section generated from its tools inserted before `## Working rules`, or
  * appended when there is none. Rebuilt only when the overrides change.
  */
-export function assistantV2Instructions(): string {
-  const override = agentPromptOverrideFor(ASSISTANT_V2_AGENT_KEY);
+export function insightsAnalystInstructions(): string {
+  const override = agentPromptOverrideFor(INSIGHTS_ANALYST_AGENT_KEY);
   if (!override) return shippedInstructions;
   const version = agentPromptOverridesVersion();
   if (served?.version !== version) {
     served = {
       version,
-      text: withToolSection(resolveLinks(override.prompt), assistantV2Tools),
+      text: withToolSection(
+        resolveLinks(override.prompt),
+        insightsAnalystTools,
+      ),
     };
   }
   return served.text;
@@ -76,13 +79,13 @@ export function assistantV2Instructions(): string {
 // A business data analyst (BA-320), next to the `assistant`, which it
 // leaves unchanged. Its tools are scoped per call to the session's datasets
 // via requestContext (see ../tools/dataset.tools).
-export const assistantV2Agent = new Agent({
-  id: 'questions-to-insights-v2',
-  name: ASSISTANT_V2_NAME,
-  description: ASSISTANT_V2_DESCRIPTION,
-  instructions: () => assistantV2Instructions(),
+export const insightsAnalystAgent = new Agent({
+  id: 'insights-analyst',
+  name: INSIGHTS_ANALYST_NAME,
+  description: INSIGHTS_ANALYST_DESCRIPTION,
+  instructions: () => insightsAnalystInstructions(),
   // Loaded on demand through Mastra's skill tools (ADR-0025).
-  skills: () => assistantV2Skills(),
+  skills: () => insightsAnalystSkills(),
   // Resolved at call time from the persisted LLM settings (agents.md 1.3).
   model: async () => resolveAgentModel(),
   // One thread per session, configured as the assistant's.
@@ -93,5 +96,5 @@ export const assistantV2Agent = new Agent({
       generateTitle: false,
     },
   }),
-  tools: assistantV2Tools,
+  tools: insightsAnalystTools,
 });

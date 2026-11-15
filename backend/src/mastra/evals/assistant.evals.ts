@@ -822,8 +822,8 @@ export interface EvalTarget {
   agentKey: string;
   agent: Agent;
   /**
-   * What a case runs, when not the agent alone: Questions to Insights v2's
-   * cases run its whole `qti-v2-turn` workflow (agents.md 8.1). A run of it
+   * What a case runs, when not the agent alone: Insights Analyst's
+   * cases run its whole `answer-business-question` workflow (agents.md 8.1). A run of it
    * never gets the tool-only synthesis: its answer is its Write answer's.
    */
   runTarget?: Agent;

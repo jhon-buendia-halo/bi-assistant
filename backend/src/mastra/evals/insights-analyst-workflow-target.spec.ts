@@ -1,4 +1,4 @@
-// The eval target of Questions to Insights v2 runs the whole qti-v2-turn
+// The eval target of Insights Analyst runs the whole answer-business-question
 // workflow (agents.md 8.1): the real workflow definition, on the engine
 // stand-in (the real engine is ESM-only for Jest), with stubbed model steps
 // and a stubbed agent.
@@ -34,17 +34,17 @@ jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
 
 import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
-import { qtiV2TurnWorkflow } from '../workflows/qti-v2-turn.workflow';
-import type { QtiV2Plan } from '../workflows/qti-v2-turn.steps';
-import { endsOnClarifyingQuestion } from './analyst-v2-eval-checks';
+import { answerBusinessQuestionWorkflow } from '../workflows/answer-business-question.workflow';
+import type { AnalysisPlan } from '../workflows/answer-business-question.steps';
+import { endsOnClarifyingQuestion } from './insights-analyst-eval-checks';
 import {
   clarificationAnswer,
   lastUserText,
   workflowTurnAgent,
   type WorkflowTargetParts,
-} from './analyst-v2-workflow-target';
+} from './insights-analyst-workflow-target';
 
-const PLAN: QtiV2Plan = {
+const PLAN: AnalysisPlan = {
   question: 'Who scored the most goals in 2018?',
   measures: ['goals per player'],
   entities: ['world_cup.goals'],
@@ -89,7 +89,7 @@ function agentResult(rows: Record<string, unknown>[] | { error: string }) {
   };
 }
 
-function setUp(plan: QtiV2Plan, results: ReturnType<typeof agentResult>[]) {
+function setUp(plan: AnalysisPlan, results: ReturnType<typeof agentResult>[]) {
   const generate = jest.fn(
     (_input: unknown, options: Record<string, unknown>) => {
       const result = results.shift()!;
@@ -99,8 +99,8 @@ function setUp(plan: QtiV2Plan, results: ReturnType<typeof agentResult>[]) {
     },
   );
   const agent = {
-    id: 'questions-to-insights-v2',
-    name: 'Questions to Insights v2',
+    id: 'insights-analyst',
+    name: 'Insights Analyst',
     generate,
     getModel: jest.fn(() => 'model'),
   } as unknown as Agent;
@@ -108,7 +108,8 @@ function setUp(plan: QtiV2Plan, results: ReturnType<typeof agentResult>[]) {
     plan: jest.Mock;
     writeAnswer: jest.Mock;
   } = {
-    workflow: qtiV2TurnWorkflow as unknown as WorkflowTargetParts['workflow'],
+    workflow:
+      answerBusinessQuestionWorkflow as unknown as WorkflowTargetParts['workflow'],
     plan: jest.fn(() => Promise.resolve({ plan, stopped: false })),
     writeAnswer: jest.fn(() =>
       Promise.resolve({
@@ -140,7 +141,7 @@ function setUp(plan: QtiV2Plan, results: ReturnType<typeof agentResult>[]) {
   };
 }
 
-describe('the v2 eval target runs the whole qti-v2-turn workflow (agents.md 8.1)', () => {
+describe('the v2 eval target runs the whole answer-business-question workflow (agents.md 8.1)', () => {
   it("plans, analyses with the agent and scores Write answer's answer with Analyse's tool calls", async () => {
     const { target, generate, parts, options, onStepFinish } = setUp(PLAN, [
       agentResult([{ player: 'Kane', goals: 6 }]),
@@ -214,7 +215,7 @@ describe('the v2 eval target runs the whole qti-v2-turn workflow (agents.md 8.1)
   });
 
   it('ends on the plan’s clarifying question: no Analyse, the question and options as the answer', async () => {
-    const asked: QtiV2Plan = {
+    const asked: AnalysisPlan = {
       ...PLAN,
       needsClarification: true,
       clarification: {
@@ -240,7 +241,7 @@ describe('the v2 eval target runs the whole qti-v2-turn workflow (agents.md 8.1)
   });
 
   it('scores a run suspended at Clarify on its question and options, passes the clarification check, and drops the suspended run', async () => {
-    const asked: QtiV2Plan = {
+    const asked: AnalysisPlan = {
       ...PLAN,
       needsClarification: true,
       clarification: {
@@ -321,7 +322,7 @@ describe('the v2 eval target runs the whole qti-v2-turn workflow (agents.md 8.1)
   it('keeps every other member of the agent its own', () => {
     const { target, agent } = setUp(PLAN, []);
     expect(target.id).toBe(agent.id);
-    expect(target.name).toBe('Questions to Insights v2');
+    expect(target.name).toBe('Insights Analyst');
     // Compared, never called detached.
     // eslint-disable-next-line @typescript-eslint/unbound-method
     const [own, replaced] = [agent.generate, target.generate];

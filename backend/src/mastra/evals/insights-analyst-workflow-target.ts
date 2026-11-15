@@ -1,12 +1,12 @@
 import type { Agent } from '@mastra/core/agent';
-import type * as StepAgents from '../workflows/qti-v2-turn.agents';
-import type * as TurnWorkflow from '../workflows/qti-v2-turn.workflow';
+import type * as StepAgents from '../workflows/answer-business-question.agents';
+import type * as TurnWorkflow from '../workflows/answer-business-question.workflow';
 import {
-  QTI_V2_TURN_RUNTIME_KEY,
+  ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   clarifyingQuestionOf,
   type ClarifyingQuestion,
-  type QtiV2TurnRuntime,
-} from '../workflows/qti-v2-turn.steps';
+  type AnswerBusinessQuestionRuntime,
+} from '../workflows/answer-business-question.steps';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import { parseClarification } from '../tools/clarification.tool';
 import { analyseAttemptOf } from '../../modules/sessions/turn/turn-workflow';
@@ -14,8 +14,8 @@ import type { ToolDataRecord } from '../../modules/sessions/entities/session.ent
 import { captureStepRecords } from './assistant.evals';
 
 /**
- * The `assistant-v2` eval target's turn (agents.md 8.1): every case runs the
- * WHOLE `qti-v2-turn` workflow, as a run does (5.11), not the agent alone.
+ * The `insights-analyst` eval target's turn (agents.md 8.1): every case runs the
+ * WHOLE `answer-business-question` workflow, as a run does (5.11), not the agent alone.
  * `runEvals` calls the agent's `generate`; this target is the agent with
  * `generate` replaced by one run of the workflow, whose:
  * - Plan and Write answer steps call the model as a run's do;
@@ -58,13 +58,14 @@ export interface WorkflowTargetParts {
  */
 function defaultParts(): WorkflowTargetParts {
   /* eslint-disable @typescript-eslint/no-require-imports */
-  const { qtiV2TurnWorkflow } =
-    require('../workflows/qti-v2-turn.workflow') as typeof TurnWorkflow;
+  const { answerBusinessQuestionWorkflow } =
+    require('../workflows/answer-business-question.workflow') as typeof TurnWorkflow;
   const { planWithModel, writeAnswerWithModel } =
-    require('../workflows/qti-v2-turn.agents') as typeof StepAgents;
+    require('../workflows/answer-business-question.agents') as typeof StepAgents;
   /* eslint-enable @typescript-eslint/no-require-imports */
   return {
-    workflow: qtiV2TurnWorkflow as unknown as WorkflowTargetParts['workflow'],
+    workflow:
+      answerBusinessQuestionWorkflow as unknown as WorkflowTargetParts['workflow'],
     plan: planWithModel,
     writeAnswer: writeAnswerWithModel,
   };
@@ -152,7 +153,7 @@ type GenerateOptions = {
 };
 
 /**
- * The agent, its `generate` running the whole `qti-v2-turn` workflow
+ * The agent, its `generate` running the whole `answer-business-question` workflow
  * (above). Every other member is the agent's own.
  */
 export function workflowTurnAgent(
@@ -173,7 +174,7 @@ export function workflowTurnAgent(
     };
     let analysis: Record<string, unknown> | undefined;
     let answer = '';
-    const runtime: QtiV2TurnRuntime = {
+    const runtime: AnswerBusinessQuestionRuntime = {
       plan: ({ question, catalogBlock }) =>
         parts.plan({ messages: input as never, question, catalogBlock }, model),
       analyse: async ({ catalogBlock, planBlock }) => {
@@ -211,7 +212,7 @@ export function workflowTurnAgent(
         return result;
       },
     };
-    requestContext.set(QTI_V2_TURN_RUNTIME_KEY, runtime);
+    requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, runtime);
     const created = await parts.workflow.createRun();
     const run = created.stream({
       inputData: {
@@ -225,7 +226,7 @@ export function workflowTurnAgent(
     if (outcome.status === 'failed') {
       throw outcome.error instanceof Error
         ? outcome.error
-        : new Error('The Questions to Insights v2 run failed');
+        : new Error('The Answer a Business Question run failed');
     }
     // A run waiting on a clarifying question is scored on it, then dropped.
     const clarified = suspendedQuestionOf(outcome);

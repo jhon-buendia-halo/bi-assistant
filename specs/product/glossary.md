@@ -6,15 +6,15 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships eight built-in agents (the assistant, *Questions to Insights v2*, the *Data Readiness Agent*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships eight built-in agents (the assistant, *Insights Analyst*, the *Data Readiness Agent*, the visual designer, the SQL fixer, the SQL verifier, the Ontology Bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all. An agent is a building block that the steps of a *workflow* call (ADR-0040).
 
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *Data Readiness Agent* and *Questions to Insights v2*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant, the *Data Readiness Agent* and *Insights Analyst*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis* (removed 2026-11-12).
 
 **Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
 
-**Answer a Business Question.** The *code-defined workflow* `qti-v2-turn`, its steps run by three agents: `assistant-v2` (Michael, Analyse), `analysis-planner` (Olivia, Plan) and `answer-writer` (Jessica, Write answer); formerly shown as "Questions to Insights v2", which is now only that agent's name. A stored run keeps the name it ran under.
+**Answer a Business Question.** The *code-defined workflow* `answer-business-question`, its steps run by three agents: `insights-analyst` (Michael, Analyse), `analysis-planner` (Olivia, Plan) and `answer-writer` (Jessica, Write answer); formerly shown as "Questions to Insights v2", the agent's name until 2026-11-15 (since then *Insights Analyst*, key `insights-analyst`, formerly `assistant-v2`; the workflow's id was `qti-v2-turn`). A stored run keeps the name it ran under.
 
 **API style.** Which API a *custom endpoint* speaks: `openai` (shown "OpenAI-compatible"; the base URL includes the version path, e.g. `http://127.0.0.1:8317/v1`, and the key is sent as `Authorization: Bearer`) or `anthropic` (shown "Anthropic-compatible"; the base URL is the server root, e.g. `http://127.0.0.1:8317`, and the key is sent as `x-api-key`). Required for a custom endpoint, ignored for the other providers. See [../capabilities/llm-settings/spec.md](../capabilities/llm-settings/spec.md).
 
@@ -130,7 +130,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined item.** An *ontology item* with source `mined`: drafted by the *ontology bootstrap*, saved disabled until a human accepts it.
 
-**Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): the *assistant*, *Questions to Insights v2* and the *Data Readiness Agent*.
+**Official agent.** One of the app's own agents shown in the agent hub with the owner `Official` (the hub groups agents by domain, not by owner): the *assistant*, *Insights Analyst* and the *Data Readiness Agent*.
 
 **One-step workflow.** Retired (2026-11-12). It was the *workflow* the app made for every agent (id `agent:<agent key or id>`), one step that ran the agent. Agents are no longer workflows: only *Answer a Business Question* is. Stored runs and sessions of one-step workflows stay readable as legacy runs and plain past chats. See [../system/architecture.md](../system/architecture.md) ADR-0040 (partly superseded) and ADR-0042.
 

@@ -1,10 +1,12 @@
 /**
  * API-level proof of the workflow catalogue (specs/capabilities/workflows
- * R1-R4; api.md 116, 117, 118 and 34; ADR-0040): since 1.23.35 `GET
- * /workflows` lists only Questions to Insights v2 (`qti-v2-turn`); agents
- * are a library, so no agent gets a workflow (`agent:*` answers 404, as do
- * the removed `seq-text-demo` and `deep-analysis`), and an agent's detail
- * says only `assistant-v2` is used in a workflow. Runs that reach the model
+ * R1-R4; api.md 116, 117, 118 and 34; ADR-0040, ADR-0042): `GET
+ * /workflows` lists the two code workflows, Answer a Business Question
+ * (`answer-business-question`) and Assess Data Readiness
+ * (`data-readiness-assessment`, since 2026-11-13); agents are a library, so
+ * no agent gets a workflow (`agent:*` answers 404, as do the removed
+ * `seq-text-demo` and `deep-analysis`), and an agent's detail says which
+ * workflows its steps run in. Runs that reach the model
  * are proved in workflow-runs.e2e-spec.ts; here only the refusals before
  * any model call.
  *
@@ -45,7 +47,7 @@ const NOT_WORKFLOWS = [
   'agent:data-readiness',
   'seq-text-demo',
   'deep-analysis',
-  'agent:assistant-v2',
+  'agent:insights-analyst',
   'agent:sql-fixer',
   'agent:rfp',
   'agent-turn',
@@ -96,22 +98,24 @@ describe('The workflow catalogue (API)', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it('lists only Questions to Insights v2 on a fresh data dir (1.23.35)', async () => {
+  it('lists Answer a Business Question, then Assess Data Readiness, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed).toEqual([
       {
-        id: 'qti-v2-turn',
+        id: 'answer-business-question',
         name: 'Answer a Business Question',
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
-        // Michael analyses; Olivia plans and Jessica writes (agents.md 5.11).
+        // Michael analyses; Olivia plans, Sarah checks data quality when
+        // asked and Jessica writes (agents.md 5.11).
         agents: [
-          { key: 'assistant-v2', name: 'Michael' },
+          { key: 'insights-analyst', name: 'Michael' },
           { key: 'analysis-planner', name: 'Olivia' },
+          { key: 'data-readiness', name: 'Sarah' },
           { key: 'answer-writer', name: 'Jessica' },
         ],
-        stepCount: 8,
+        stepCount: 9,
         bar: 'steps',
         trigger: 'run',
         input: [
@@ -131,10 +135,58 @@ describe('The workflow catalogue (API)', () => {
             required: true,
             usedBy: ['receive-question'],
           },
+          {
+            // It picks the branch to Check data quality; no step reads it.
+            name: 'checkDataQuality',
+            label:
+              'Check data quality: Sarah reviews the tables the analysis used',
+            type: 'boolean',
+            required: false,
+            default: false,
+            usedBy: [],
+          },
         ],
         datasets: [],
         missingDatasets: [],
         starterQuestions: [],
+      },
+      {
+        id: 'data-readiness-assessment',
+        name: 'Assess Data Readiness',
+        description: expect.any(String) as string,
+        kind: 'code',
+        owner: 'Official',
+        agents: [{ key: 'data-readiness', name: 'Sarah' }],
+        stepCount: 6,
+        bar: 'steps',
+        trigger: 'run',
+        input: [
+          {
+            name: 'dataset',
+            label: 'Dataset',
+            type: 'dataset',
+            required: true,
+            datasourceKinds: ['postgres', 'databricks'],
+            usedBy: ['resolve-dataset'],
+          },
+          {
+            name: 'question',
+            label: 'Question',
+            type: 'textarea',
+            required: false,
+            placeholder: 'Assess the readiness of this dataset',
+            default: 'Assess the readiness of this dataset',
+            maxLength: 4000,
+            usedBy: ['resolve-dataset'],
+          },
+        ],
+        datasets: [],
+        missingDatasets: [],
+        starterQuestions: [
+          'Assess the readiness of this dataset',
+          'What are the worst data-quality problems?',
+          'Show my past assessments',
+        ],
       },
     ]);
   });
@@ -230,14 +282,18 @@ describe('The workflow catalogue (API)', () => {
     });
 
     it('a published user agent adds no workflow: agents are a library', async () => {
-      expect((await workflows()).map((w) => w.id)).toEqual(['qti-v2-turn']);
+      expect((await workflows()).map((w) => w.id)).toEqual([
+        'answer-business-question',
+        'data-readiness-assessment',
+      ]);
       await notFound(`agent:${liveId}`);
       await notFound(`agent:${draftId}`);
     });
 
-    it('GET /workflows/qti-v2-turn details its steps and the agent they call', async () => {
-      const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as {
+    it('GET /workflows/answer-business-question details its steps and the agent they call', async () => {
+      const v2 = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as {
         input: Record<string, unknown>[];
         steps: {
           id: string;
@@ -253,6 +309,7 @@ describe('The workflow catalogue (API)', () => {
         'clarify',
         'analyse',
         'validate',
+        'check-data-quality',
         'write-answer',
         'wrap-up',
       ]);
@@ -277,6 +334,12 @@ describe('The workflow catalogue (API)', () => {
           maxLength: undefined,
           usedBy: ['receive-question'],
         },
+        {
+          name: 'checkDataQuality',
+          required: false,
+          maxLength: undefined,
+          usedBy: [],
+        },
       ]);
       // Receive question no longer fails on an empty question: the input
       // node refuses it before the run.
@@ -284,19 +347,21 @@ describe('The workflow catalogue (API)', () => {
       expect(v2.steps.flatMap((step) => step.exits)).not.toContainEqual(
         expect.objectContaining({ label: 'Empty question' }),
       );
-      // Olivia plans, Michael analyses with his tools, Jessica writes.
+      // Olivia plans, Michael analyses with his tools, Sarah checks data
+      // quality in one call with no tools, Jessica writes.
       expect(
         v2.steps
           .filter((step) => step.agent)
           .map((step) => [step.id, step.agent?.key, step.agent?.tools.length]),
       ).toEqual([
         ['plan', 'analysis-planner', 0],
-        ['analyse', 'assistant-v2', 5],
+        ['analyse', 'insights-analyst', 5],
+        ['check-data-quality', 'data-readiness', 0],
         ['write-answer', 'answer-writer', 0],
       ]);
       expect(v2.agents).toEqual([
         {
-          key: 'assistant-v2',
+          key: 'insights-analyst',
           name: 'Michael',
           model: null,
           systemPrompt: expect.any(String) as string,
@@ -312,6 +377,17 @@ describe('The workflow catalogue (API)', () => {
           ) as string,
           toolDetails: [],
         },
+        // Sarah: her job description; Check data quality calls her with no
+        // tools, so the workflow shows none.
+        {
+          key: 'data-readiness',
+          name: 'Sarah',
+          model: null,
+          systemPrompt: expect.stringMatching(
+            /^You are the Data Readiness Agent/,
+          ) as string,
+          toolDetails: [],
+        },
         {
           key: 'answer-writer',
           name: 'Jessica',
@@ -323,7 +399,7 @@ describe('The workflow catalogue (API)', () => {
         },
       ]);
       // Its tools are the ones GET /agents/:key lists (api.md 34).
-      const agent = (await http().get('/agents/assistant-v2').expect(200))
+      const agent = (await http().get('/agents/insights-analyst').expect(200))
         .body as { toolDetails: unknown[] };
       const [detail] = v2.agents as unknown as { toolDetails: unknown[] }[];
       expect(detail.toolDetails).toEqual(agent.toolDetails);
@@ -336,9 +412,10 @@ describe('The workflow catalogue (API)', () => {
       );
     });
 
-    it('GET /workflows/qti-v2-turn gives every step its declared JSON Schemas and the workflow its contractHash (agents.md 5.12)', async () => {
-      const v2 = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as {
+    it('GET /workflows/answer-business-question gives every step its declared JSON Schemas and the workflow its contractHash (agents.md 5.12)', async () => {
+      const v2 = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as {
         contractHash: string;
         steps: {
           id: string;
@@ -390,8 +467,9 @@ describe('The workflow catalogue (API)', () => {
       // The flow is its edges (117): a branch after Plan, a loop back from
       // Clarify to Plan once answered, a loop back from Validate to
       // Analyse, End after Wrap up.
-      const { edges } = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as {
+      const { edges } = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as {
         edges: { from: string; to: string; kind: string; label?: string }[];
       };
       expect(edges).toEqual([
@@ -414,6 +492,14 @@ describe('The workflow catalogue (API)', () => {
           kind: 'next',
           label: 'Valid or retried',
         },
+        // When the input ticks Check data quality (agents.md 5.11).
+        {
+          from: 'validate',
+          to: 'check-data-quality',
+          kind: 'branch',
+          label: 'Check data quality',
+        },
+        { from: 'check-data-quality', to: 'write-answer', kind: 'next' },
         { from: 'write-answer', to: 'wrap-up', kind: 'next' },
         { from: 'wrap-up', to: 'end', kind: 'next' },
       ]);
@@ -422,25 +508,41 @@ describe('The workflow catalogue (API)', () => {
       expect(summary).not.toHaveProperty('edges');
       expect(summary).not.toHaveProperty('contractHash');
       // The same hash on every read.
-      const again = (await http().get('/workflows/qti-v2-turn').expect(200))
-        .body as { contractHash: string };
+      const again = (
+        await http().get('/workflows/answer-business-question').expect(200)
+      ).body as { contractHash: string };
       expect(again.contractHash).toBe(v2.contractHash);
     });
 
-    it("an agent's detail says which workflows use it: Michael, Olivia and Jessica are used in one", async () => {
+    it("an agent's detail says which workflows use it: Michael, Olivia and Jessica in one, Sarah in both", async () => {
       const used = async (key: string) =>
         (
           (await http().get(`/agents/${key}`).expect(200)).body as {
             usedInWorkflows: { id: string; name: string }[];
           }
         ).usedInWorkflows;
-      for (const key of ['assistant-v2', 'analysis-planner', 'answer-writer']) {
+      for (const key of [
+        'insights-analyst',
+        'analysis-planner',
+        'answer-writer',
+      ]) {
         expect({ key, used: await used(key) }).toEqual({
           key,
-          used: [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
+          used: [
+            {
+              id: 'answer-business-question',
+              name: 'Answer a Business Question',
+            },
+          ],
         });
       }
-      for (const key of ['assistant', 'data-readiness', liveId, draftId]) {
+      // Sarah runs Check data quality and every agent step of Assess Data
+      // Readiness.
+      expect(await used('data-readiness')).toEqual([
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
+        { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
+      ]);
+      for (const key of ['assistant', liveId, draftId]) {
         expect({ key, used: await used(key) }).toEqual({ key, used: [] });
       }
     });
@@ -474,13 +576,18 @@ describe('The workflow catalogue (API)', () => {
         { input: { question: 'x'.repeat(4001), datasets: ['World Cup Core'] } },
         'Question must be at most 4000 characters',
       ],
-    ])('qti-v2-turn refuses %p with 400 %p', async (body, message) => {
-      const res = await runs('qti-v2-turn').send(body).expect(400);
-      expect((res.body as { message: string }).message).toBe(message);
-    });
+    ])(
+      'answer-business-question refuses %p with 400 %p',
+      async (body, message) => {
+        const res = await runs('answer-business-question')
+          .send(body)
+          .expect(400);
+        expect((res.body as { message: string }).message).toBe(message);
+      },
+    );
 
     it('refuses a blank question and no datasets with both errors (the whole input at once)', async () => {
-      const res = await runs('qti-v2-turn')
+      const res = await runs('answer-business-question')
         .send({ input: { question: ' \n ', datasets: [] } })
         .expect(400);
       expect(res.body).toEqual({

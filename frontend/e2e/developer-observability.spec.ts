@@ -102,7 +102,7 @@ test('workflow runs reach Phoenix when observability is on', async ({
   await seedWorldCupDataset(page);
   await saveAndRestart(app, true);
 
-  // A run of Questions to Insights v2. No model is configured, so the run
+  // A run of Insights Analyst. No model is configured, so the run
   // fails before its agent step; the spans of the steps that ran (the first
   // is `receive-question`) are exported all the same.
   const run = await runQuestion(page, 'Who won the 2022 World Cup?');

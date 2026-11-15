@@ -21,7 +21,7 @@ import {
  *   (answered as a `json` tool call);
  * - `GET …/v1/models`, answering `{ data: [{ id, … }] }` from `setModels`.
  *
- * Questions to Insights v2's structured calls (Plan, Write answer) are told
+ * Insights Analyst's structured calls (Plan, Write answer) are told
  * apart from the probe by their system prompt's first line
  * (helpers/v2-steps.ts): Plan gets a clear plan, Write answer an answer whose
  * Markdown is the last text reply, in the form the call asked for.

@@ -15,8 +15,8 @@ import {
 
 /**
  * What a run is given in skills, in specs/capabilities/agent-answers/spec.md.
- * The one runnable workflow is Questions to Insights v2 (`qti-v2-turn`),
- * whose agent `assistant-v2` loads its built-in skills on demand
+ * The one runnable workflow is Insights Analyst (`answer-business-question`),
+ * whose agent `insights-analyst` loads its built-in skills on demand
  * (`curated-knowledge`, `sql-analysis`, `result-validation`): the scenario
  * checks that they reach the model through the framework's skill catalog,
  * and that a skill left in the data dir by an older version never does.
@@ -96,7 +96,7 @@ async function withOldSkillsFolder(
   return (await launchApp(appDataDir)).page;
 }
 
-test('a Questions to Insights v2 run is offered its built-in skills only, and an old skills folder is ignored', async ({
+test('an Answer a Business Question run is offered its built-in skills only, and an old skills folder is ignored', async ({
   app,
   appDataDir,
   launchApp,
@@ -110,7 +110,7 @@ test('a Questions to Insights v2 run is offered its built-in skills only, and an
     description,
     body,
   );
-  // When I run Questions to Insights v2.
+  // When I run Insights Analyst.
   const request = await ask(page, QUESTION);
 
   // Then the framework's skill catalog lists its three built-in skills and

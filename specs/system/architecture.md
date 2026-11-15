@@ -822,7 +822,7 @@ flowchart LR
   - The `data-readiness` eval set re-runs once: no prompt or tool description changes, but the tool's behaviour does.
   - Stack-neutral: a rebuild needs a way for a tool to push progress to the client during a call, and connection reuse in its profiling layer.
 #### ADR-0034 — Questions to Insights v2 runs each turn as a code-defined Mastra workflow; the workflow bar shows the run's steps
-- **Status:** Accepted; amended by ADR-0040 (its second turn path becomes the only one); amended by ADR-0041 (v2 runs on an input)
+- **Status:** Accepted; amended by ADR-0040 (its second turn path becomes the only one); amended by ADR-0041 (v2 runs on an input). Renamed 2026-11-15: the agent `assistant-v2` is `insights-analyst` (Insights Analyst) and the workflow `qti-v2-turn` is `answer-business-question` (Answer a Business Question), with their files; stored ids are rewritten by data-model M16. This ADR keeps the names of its time.
 - **Date:** 2026-11-09
 - **Context:**
   - Every agent today runs a turn as one agent call; the order of the work lives in the prompt (the assistant's method rules), and the workflow bar is driven by the model calling `update_workflow` under the prompt's `## Workflow` convention (ADR-0029). The model can skip, reorder or misreport steps.

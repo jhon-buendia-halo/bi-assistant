@@ -15,11 +15,11 @@ import { worldCupKey } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Workflow runs" in specs/capabilities/workflows/spec.md:
- * Questions to Insights v2 runs from its page's Run tab (workflows R21), on
+ * Answer a Business Question runs from its page's Run tab (workflows R21), on
  * the recording stub model and the World Cup dataset.
  */
 
-const V2_ID = 'qti-v2-turn';
+const V2_ID = 'answer-business-question';
 const V2 = 'Answer a Business Question';
 const QUESTION = 'Which team scored the most goals?';
 const ANSWER = 'Brazil scored the most goals in this data.';

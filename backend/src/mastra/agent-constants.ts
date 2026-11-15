@@ -29,12 +29,12 @@ export const DATA_READINESS_AGENT_NAME = 'Data Readiness Agent';
  */
 export const OFFICIAL_AGENT_KEYS: readonly string[] = [
   'assistant',
-  'assistant-v2',
+  'insights-analyst',
   'data-readiness',
 ];
 
 /**
- * The agents of the two model-only steps of `qti-v2-turn` (agents.md 5.11):
+ * The agents of the two model-only steps of `answer-business-question` (agents.md 5.11):
  * Plan and Write answer. System agents: the workflow calls them.
  */
 export const ANALYSIS_PLANNER_AGENT_KEY = 'analysis-planner';

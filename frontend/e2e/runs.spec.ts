@@ -345,7 +345,7 @@ test.describe('Runs and Past chats', () => {
   const composerBox = (page: Page) =>
     page.getByPlaceholder('Ask a follow-up question…');
 
-  /** A stored run of Questions to Insights v2, made through the API. */
+  /** A stored run of Insights Analyst, made through the API. */
   async function seedRun(page: Page): Promise<string> {
     const run = await apiJson<{ id: string }>(
       page,

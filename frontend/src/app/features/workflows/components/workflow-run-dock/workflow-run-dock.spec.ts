@@ -18,8 +18,8 @@ const ROOM = 1200;
 const DEFAULT_WIDTH = Math.round(ROOM * DOCK_DEFAULT_RATIO);
 
 const WORKFLOW: WorkflowDetail = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: 'Answers questions over the datasets you pick.',
   kind: 'code',
   owner: 'Official',
@@ -48,8 +48,8 @@ const WORKFLOW: WorkflowDetail = {
 function storedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
     id: 'run-42',
-    workflowId: 'qti-v2-turn',
-    workflowName: 'Questions to Insights v2',
+    workflowId: 'answer-business-question',
+    workflowName: 'Insights Analyst',
     input: { question: 'Which team scored the most goals?' },
     status: 'success',
     steps: [{ id: 'answer', title: 'Answer', status: 'success' }],

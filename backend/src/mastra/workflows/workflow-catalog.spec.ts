@@ -31,7 +31,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds two code workflows: Questions to Insights v2 and Assess Data Readiness (agents.md 5.13)', () => {
+  it('holds two code workflows: Insights Analyst and Assess Data Readiness (agents.md 5.13)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -42,9 +42,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       })),
     ).toEqual([
       {
-        id: 'qti-v2-turn',
+        id: 'answer-business-question',
         name: 'Answer a Business Question',
-        primaryFor: 'assistant-v2',
+        primaryFor: 'insights-analyst',
         bar: 'steps',
         trigger: 'run',
       },
@@ -197,7 +197,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it('reads the registered agents from mastra/index.ts', () => {
       const keys = registeredAgentKeys();
       expect(keys).toContain('assistant');
-      expect(keys).toContain('assistant-v2');
+      expect(keys).toContain('insights-analyst');
       // The RFP Builder was removed.
       expect(keys).not.toContain('rfp');
     });
@@ -247,7 +247,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     });
 
     it('parses a code workflow id', () => {
-      expect(parseWorkflowId('qti-v2-turn')).toEqual({
+      expect(parseWorkflowId('answer-business-question')).toEqual({
         kind: 'code',
         source: CODE_WORKFLOWS[0],
       });
@@ -280,7 +280,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it.each([
       ['a System key', 'agent:sql-fixer'],
       ['another System key', 'agent:visualization'],
-      ["a code workflow's primaryFor key", 'agent:assistant-v2'],
+      ["a code workflow's primaryFor key", 'agent:insights-analyst'],
       ['an unknown id', 'nope'],
       ['an unprefixed agent key', 'data-readiness'],
       ['an empty agent id', 'agent:'],
@@ -302,15 +302,19 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     it.each([
       [
         'a stored, resolvable workflowId',
-        { workflowId: 'qti-v2-turn' },
-        'qti-v2-turn',
+        { workflowId: 'answer-business-question' },
+        'answer-business-question',
       ],
       [
         "a stored user agent's workflowId",
         { workflowId: 'agent:u-1', agentId: 'u-1' },
         'agent:u-1',
       ],
-      ['agentKey assistant-v2', { agentKey: 'assistant-v2' }, 'qti-v2-turn'],
+      [
+        'agentKey insights-analyst',
+        { agentKey: 'insights-analyst' },
+        'answer-business-question',
+      ],
       [
         'agentKey rfp (the removed RFP Builder)',
         { agentKey: 'rfp' },
@@ -359,15 +363,15 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   });
 
   describe('workflowsUsingAgent (api.md 34 usedInWorkflows)', () => {
-    it('assistant-v2 is used in Questions to Insights v2', () => {
-      expect(workflowsUsingAgent('assistant-v2')).toEqual([
-        { id: 'qti-v2-turn', name: 'Answer a Business Question' },
+    it('insights-analyst is used in Insights Analyst', () => {
+      expect(workflowsUsingAgent('insights-analyst')).toEqual([
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
       ]);
     });
 
     it('data-readiness is used in Answer a Business Question (Check data quality) and Assess Data Readiness', () => {
       expect(workflowsUsingAgent('data-readiness')).toEqual([
-        { id: 'qti-v2-turn', name: 'Answer a Business Question' },
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
         { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
       ]);
     });
@@ -471,10 +475,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     });
   });
 
-  it("qti-v2-turn's steps are agentWorkflow('assistant-v2')'s, written once", () => {
-    expect(agentWorkflow('assistant-v2')?.id).toBe(CODE_WORKFLOWS[0].id);
+  it("answer-business-question's steps are agentWorkflow('insights-analyst')'s, written once", () => {
+    expect(agentWorkflow('insights-analyst')?.id).toBe(CODE_WORKFLOWS[0].id);
     expect(
-      agentWorkflow('assistant-v2')?.steps.map(({ id, title }) => [id, title]),
+      agentWorkflow('insights-analyst')?.steps.map(({ id, title }) => [
+        id,
+        title,
+      ]),
     ).toEqual(CODE_WORKFLOWS[0].steps.map(({ id, title }) => [id, title]));
   });
 });

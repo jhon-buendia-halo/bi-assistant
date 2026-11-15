@@ -60,12 +60,12 @@ describe('sessionWorkflowLabel', () => {
     expect(sessionWorkflowLabel(ref)).toBe('Cup historian');
     expect(
       sessionWorkflowLabel({
-        id: 'qti-v2-turn',
-        name: 'Questions to Insights v2',
+        id: 'answer-business-question',
+        name: 'Insights Analyst',
         kind: 'code',
         deleted: false,
       }),
-    ).toBe('Questions to Insights v2');
+    ).toBe('Insights Analyst');
   });
 
   it('reads "<name> · agent deleted" once the agent is gone (R59)', () => {

@@ -1,18 +1,18 @@
 /**
- * The turn workflow of Questions to Insights v2 (ADR-0034; agents.md 5.11):
+ * The turn workflow of Insights Analyst (ADR-0034; agents.md 5.11):
  * its step ids and titles, the edges between them, the contract between its
  * model steps and the session code, and the pure code of its deterministic
- * steps. Plain data and functions (its schemas are ./qti-v2-turn.schemas.ts),
+ * steps. Plain data and functions (its schemas are ./answer-business-question.schemas.ts),
  * no framework import, so the session code and the tests can read it without
- * loading Mastra; the workflow itself is built in ./qti-v2-turn.workflow.ts.
+ * loading Mastra; the workflow itself is built in ./answer-business-question.workflow.ts.
  */
 import type { z } from 'zod';
 import { getDatasetToolServices } from '../tool-services';
 import {
-  QTI_V2_TURN_STEP_SCHEMAS,
+  ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   answerSchema,
   planSchema,
-  qtiV2TurnResultSchema,
+  answerBusinessQuestionResultSchema,
   type analyseCallSchema,
   type analyseOutcomeSchema,
   type analyseQuerySchema,
@@ -25,7 +25,7 @@ import {
   type turnSummarySchema,
   type validateOutcomeSchema,
   type validationFindingSchema,
-} from './qti-v2-turn.schemas';
+} from './answer-business-question.schemas';
 import {
   contractJsonSchema,
   schemaFieldNames,
@@ -36,14 +36,15 @@ import {
 export type { WorkflowEdge } from './workflow-contract';
 
 /** The workflow's registry key and id. */
-export const QTI_V2_TURN_WORKFLOW_ID = 'qti-v2-turn';
+export const ANSWER_BUSINESS_QUESTION_WORKFLOW_ID = 'answer-business-question';
 
 /**
  * The name the app shows for the workflow (workflows R1). Michael, the
- * `assistant-v2` agent, runs it; the agent and its prompts keep the name
- * Questions to Insights v2. A stored run keeps the name it ran under.
+ * `insights-analyst` agent, runs it; the agent and its prompts keep the name
+ * Insights Analyst. A stored run keeps the name it ran under.
  */
-export const QTI_V2_TURN_WORKFLOW_NAME = 'Answer a Business Question';
+export const ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME =
+  'Answer a Business Question';
 
 /** How a step can end other than by passing its output on. */
 export interface WorkflowStepExit {
@@ -107,7 +108,7 @@ export function contractStepEntry(
   };
 }
 
-const SCHEMAS = QTI_V2_TURN_STEP_SCHEMAS;
+const SCHEMAS = ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS;
 
 const MODEL_EXITS: readonly WorkflowStepExit[] = [
   { label: 'Model error', outcome: 'fails' },
@@ -117,9 +118,9 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
 /**
  * The steps, in catalogue order (Clarify after Plan): the session's
  * workflow bar shows them. Their field names and JSON Schemas come from
- * ./qti-v2-turn.schemas.ts; how they connect is `QTI_V2_TURN_EDGES`.
+ * ./answer-business-question.schemas.ts; how they connect is `ANSWER_BUSINESS_QUESTION_EDGES`.
  */
-export const QTI_V2_TURN_STEPS: readonly ContractStepEntry[] = [
+export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
   contractStepEntry(
     {
       id: 'receive-question',
@@ -229,7 +230,7 @@ export const QTI_V2_TURN_STEPS: readonly ContractStepEntry[] = [
 ];
 
 /** The edges of the workflow (api.md 117), from Start to End. */
-export const QTI_V2_TURN_EDGES: readonly WorkflowEdge[] = [
+export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
   { from: 'start', to: 'receive-question', kind: 'next' },
   { from: 'receive-question', to: 'load-catalog', kind: 'next' },
   { from: 'load-catalog', to: 'plan', kind: 'next' },
@@ -256,13 +257,14 @@ export const QTI_V2_TURN_EDGES: readonly WorkflowEdge[] = [
 ];
 
 /** The most attempts of the analysis loop: the first and one retry. */
-export const QTI_V2_MAX_ATTEMPTS = 2;
+export const ANALYSE_MAX_ATTEMPTS = 2;
 
-/** The run's RequestContext key holding the per-run `QtiV2TurnRuntime`. */
-export const QTI_V2_TURN_RUNTIME_KEY = 'qti-v2-turn-runtime';
+/** The run's RequestContext key holding the per-run `AnswerBusinessQuestionRuntime`. */
+export const ANSWER_BUSINESS_QUESTION_RUNTIME_KEY =
+  'answer-business-question-runtime';
 
 /** The workflow's input: the question and the session's dataset names. */
-export type QtiV2TurnInput = z.output<typeof turnInputSchema>;
+export type AnswerBusinessQuestionInput = z.output<typeof turnInputSchema>;
 
 /** One entity of the session's datasets, as the Load catalog step lists it. */
 export type CatalogEntity = z.output<typeof catalogEntitySchema>;
@@ -271,7 +273,7 @@ export type CatalogEntity = z.output<typeof catalogEntitySchema>;
 export type EntityColumns = z.output<typeof entityColumnsSchema>;
 
 /** The analysis plan (PlanOutput). */
-export type QtiV2Plan = z.output<typeof planSchema>;
+export type AnalysisPlan = z.output<typeof planSchema>;
 
 /** One tool call of the turn, as the Analyse step reports it. */
 export type AnalyseCall = z.output<typeof analyseCallSchema>;
@@ -292,7 +294,7 @@ export type ValidationFinding = z.output<typeof validationFindingSchema>;
 export type ValidateOutcome = z.output<typeof validateOutcomeSchema>;
 
 /** The answer (AnswerOutput). */
-export type QtiV2Answer = z.output<typeof answerSchema>;
+export type BusinessAnswer = z.output<typeof answerSchema>;
 
 /** What a waiting step (Clarify, Analyse) suspends the run with. */
 export type ClarifyingQuestion = z.output<typeof clarifyingQuestionSchema>;
@@ -303,7 +305,7 @@ export type AnsweredClarification = z.output<
 >;
 
 /** The Wrap up step's summary: the run's result. */
-export type QtiV2TurnSummary = z.output<typeof turnSummarySchema>;
+export type AnswerBusinessQuestionSummary = z.output<typeof turnSummarySchema>;
 
 /** What Check data quality measured (its output's `dataQuality`). */
 export type DataQualitySummary = z.output<typeof dataQualitySummarySchema>;
@@ -338,7 +340,7 @@ export type AnalyseAttempt = Pick<
  * RequestContext: the model steps call back into it, so the chat sees the
  * turn as today (agents.md 5.11).
  */
-export interface QtiV2TurnRuntime {
+export interface AnswerBusinessQuestionRuntime {
   /**
    * The Plan step's model call; `stopped` when the turn was stopped. After
    * Clarify, `clarification` holds its question and the user's answer.
@@ -348,7 +350,7 @@ export interface QtiV2TurnRuntime {
     catalog: CatalogEntity[];
     catalogBlock: string;
     clarification?: AnsweredClarification;
-  }): Promise<{ plan: QtiV2Plan; stopped: boolean }>;
+  }): Promise<{ plan: AnalysisPlan; stopped: boolean }>;
   /**
    * One attempt of the Analyse step: the agent turn with its tools. When
    * the step resumes after the agent's clarifying question, `answered`
@@ -358,7 +360,7 @@ export interface QtiV2TurnRuntime {
     question: string;
     catalog: CatalogEntity[];
     catalogBlock: string;
-    plan: QtiV2Plan;
+    plan: AnalysisPlan;
     attempt: number;
     planBlock: string;
     answered?: AnsweredClarification;
@@ -381,10 +383,10 @@ export interface QtiV2TurnRuntime {
   /** The Write answer step's model call; its text is the run's answer. */
   writeAnswer(input: {
     question: string;
-    plan: QtiV2Plan;
+    plan: AnalysisPlan;
     queries: AnalyseQuery[];
     findings: ValidationFinding[];
-  }): Promise<{ answer: QtiV2Answer; stopped: boolean }>;
+  }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
 }
 
 /**
@@ -514,7 +516,7 @@ export function jsonObjectOf(reply: unknown): unknown {
  * question and 2-4 options (else it is false and the clarification null).
  * A reply that is no JSON object plans nothing: the question as is.
  */
-export function planOf(reply: unknown, question: string): QtiV2Plan {
+export function planOf(reply: unknown, question: string): AnalysisPlan {
   const raw = (jsonObjectOf(reply) ?? {}) as Record<string, unknown>;
   const asked = (raw['clarification'] ?? null) as Record<
     string,
@@ -543,7 +545,7 @@ export function planOf(reply: unknown, question: string): QtiV2Plan {
  * the JSON object's `answer` (Markdown) and `headline` (its first line when
  * missing). A reply that is no JSON object is the answer text itself.
  */
-export function answerOf(reply: unknown): QtiV2Answer {
+export function answerOf(reply: unknown): BusinessAnswer {
   const raw = jsonObjectOf(reply) as Record<string, unknown> | undefined;
   const answer = text(raw?.['answer']) || (raw ? '' : text(reply));
   const headline =
@@ -581,7 +583,7 @@ export const VALIDATION_CHECKS = {
  * attempt.
  */
 export function validateAttempt(input: {
-  plan: QtiV2Plan;
+  plan: AnalysisPlan;
   calls: readonly AnalyseCall[];
   queries: readonly AnalyseQuery[];
 }): { ok: boolean; findings: ValidationFinding[] } {
@@ -661,9 +663,9 @@ export function validateAttempt(input: {
  * the model replied.
  */
 export function planAfterAnswer(
-  plan: QtiV2Plan,
+  plan: AnalysisPlan,
   answered: AnsweredClarification | undefined,
-): QtiV2Plan {
+): AnalysisPlan {
   if (!answered || !plan.needsClarification) return plan;
   return { ...plan, needsClarification: false, clarification: null };
 }
@@ -705,7 +707,7 @@ export function analysisLoopDone(outcome: {
   return (
     outcome.stopped === true ||
     outcome.ok === true ||
-    (outcome.attempt ?? 0) >= QTI_V2_MAX_ATTEMPTS
+    (outcome.attempt ?? 0) >= ANALYSE_MAX_ATTEMPTS
   );
 }
 
@@ -713,7 +715,7 @@ export function analysisLoopDone(outcome: {
 export function wrapUp(
   calls: readonly AnalyseCall[],
   answer: string,
-): QtiV2TurnSummary {
+): AnswerBusinessQuestionSummary {
   const sql = calls.filter((call) => call.tool === 'run_readonly_sql');
   const failed = sql.filter((call) => call.failed);
   return {
@@ -828,8 +830,10 @@ export function dataQualityFailure(reason: string): ValidationFinding {
 }
 
 /** The Wrap up summary of a run's result, when the run got that far. */
-export function turnSummaryOf(result: unknown): QtiV2TurnSummary | undefined {
-  const parsed = qtiV2TurnResultSchema.safeParse(result);
+export function turnSummaryOf(
+  result: unknown,
+): AnswerBusinessQuestionSummary | undefined {
+  const parsed = answerBusinessQuestionResultSchema.safeParse(result);
   return parsed.success
     ? parsed.data['analysis-path']?.['answer-path']
     : undefined;

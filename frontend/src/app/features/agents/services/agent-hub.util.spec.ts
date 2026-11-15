@@ -33,7 +33,7 @@ function agent(
 }
 
 const emily = agent('assistant', 'Emily', 'official', 'analysis');
-const michael = agent('assistant-v2', 'Michael', 'official', 'analysis');
+const michael = agent('insights-analyst', 'Michael', 'official', 'analysis');
 const sarah = agent('data-readiness', 'Sarah', 'official', 'data-foundations');
 const olivia = agent('analysis-planner', 'Olivia', 'system', 'analysis');
 const kevin = agent('knowledge-bootstrap', 'Kevin', 'system', 'data-foundations');
@@ -103,7 +103,7 @@ describe('buildHubSections', () => {
     // Official, then Mine, then System, each by name.
     expect(keys(sections[1].agents)).toEqual([
       'assistant',
-      'assistant-v2',
+      'insights-analyst',
       'u-health',
       'analysis-planner',
     ]);
@@ -123,7 +123,7 @@ describe('buildHubSections', () => {
     expect(keys(sections[0].agents)).toEqual([
       'analysis-planner',
       'assistant',
-      'assistant-v2',
+      'insights-analyst',
     ]);
   });
 
@@ -159,7 +159,7 @@ describe('buildHubSections', () => {
     expect(official.flatMap((s) => keys(s.agents))).toEqual([
       'data-readiness',
       'assistant',
-      'assistant-v2',
+      'insights-analyst',
     ]);
     const mine = buildHubSections(all, 'all', 'mine', '');
     expect(mine.flatMap((s) => keys(s.agents))).toEqual([

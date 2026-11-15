@@ -3,6 +3,7 @@ import {
   consolidateOwners,
   legacySnippetToOntologyItem,
   migrateKnowledgeToOntology,
+  renameLegacyAgentIds,
   renameLegacyFields,
   renameLegacyTables,
 } from './database.module';
@@ -591,6 +592,93 @@ describe('legacy datastore migrations', () => {
       expect(silent.warn).toHaveBeenCalledWith(
         expect.stringContaining('knowledge_snippets_legacy'),
       );
+    });
+  });
+
+  describe('M16: the v2 agent and workflow ids are renamed', () => {
+    const tablesM16 = [
+      'sessions',
+      'workflow_runs',
+      'eval_runs',
+      'agent_prompt_overrides',
+      'settings',
+    ];
+    const updatedAt = '2026-01-01T00:00:00.000Z';
+
+    beforeEach(() => tablesM16.forEach(createTable));
+
+    it('rewrites the stored agent key, name and workflow id, keeping updatedAt', () => {
+      insert('sessions', {
+        id: 's1',
+        agentKey: 'assistant-v2',
+        agentName: 'Questions to Insights v2',
+        workflowId: 'qti-v2-turn',
+        updatedAt,
+      });
+      insert('sessions', { id: 's2', agentKey: 'data-readiness', updatedAt });
+      insert('workflow_runs', {
+        id: 'r1',
+        workflowId: 'qti-v2-turn',
+        agentKey: 'assistant-v2',
+        agentName: 'Questions to Insights v2',
+        workflowName: 'Answer a Business Question',
+      });
+      insert('workflow_runs', { id: 'r2', workflowId: 'deep-analysis' });
+      insert('eval_runs', { jobId: 'e1', agentKey: 'assistant-v2' });
+      insert('agent_prompt_overrides', { key: 'assistant-v2', prompt: 'p' });
+      insert('agent_prompt_overrides', { key: 'sql-fixer', prompt: 'q' });
+      insert('settings', {
+        key: 'builtin-agent-pins',
+        pinned: ['data-readiness', 'assistant-v2', 'sql-fixer'],
+      });
+      insert('settings', { key: 'llm', model: 'assistant-v2' });
+
+      renameLegacyAgentIds(db);
+
+      expect(docs('sessions')).toEqual([
+        {
+          id: 's1',
+          agentKey: 'insights-analyst',
+          agentName: 'Insights Analyst',
+          workflowId: 'answer-business-question',
+          updatedAt,
+        },
+        { id: 's2', agentKey: 'data-readiness', updatedAt },
+      ]);
+      expect(docs('workflow_runs')).toEqual([
+        {
+          id: 'r1',
+          workflowId: 'answer-business-question',
+          agentKey: 'insights-analyst',
+          agentName: 'Insights Analyst',
+          workflowName: 'Answer a Business Question',
+        },
+        { id: 'r2', workflowId: 'deep-analysis' },
+      ]);
+      expect(docs('eval_runs')).toEqual([
+        { jobId: 'e1', agentKey: 'insights-analyst' },
+      ]);
+      expect(docs('agent_prompt_overrides').map((d) => d['key'])).toEqual([
+        'insights-analyst',
+        'sql-fixer',
+      ]);
+      expect(docs('settings')).toEqual([
+        {
+          key: 'builtin-agent-pins',
+          pinned: ['data-readiness', 'insights-analyst', 'sql-fixer'],
+        },
+        { key: 'llm', model: 'assistant-v2' },
+      ]);
+    });
+
+    it('is idempotent and skips missing tables', () => {
+      db.prepare(`DROP TABLE "eval_runs"`).run();
+      insert('sessions', { id: 's1', agentKey: 'assistant-v2' });
+      renameLegacyAgentIds(db);
+      const once = docs('sessions');
+      renameLegacyAgentIds(db);
+      expect(docs('sessions')).toEqual(once);
+      expect(once).toEqual([{ id: 's1', agentKey: 'insights-analyst' }]);
     });
   });
 });

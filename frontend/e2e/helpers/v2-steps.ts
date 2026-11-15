@@ -1,5 +1,5 @@
 /**
- * The structured model calls of Questions to Insights v2 (`qti-v2-turn`):
+ * The structured model calls of Insights Analyst (`answer-business-question`):
  * Plan and Write answer each call the model once with no tools and ask for
  * JSON, and their instructions start with a fixed first line. The LLM stubs
  * recognise them by that line and answer with a plan or an answer, so every
@@ -118,7 +118,8 @@ export function dataQualityReply(request: string): {
         issues: [
           {
             finding: 1,
-            impact: 'This finding could limit how far the answer can be trusted.',
+            impact:
+              'This finding could limit how far the answer can be trusted.',
           },
         ],
       }

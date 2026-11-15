@@ -88,13 +88,13 @@ describe('built-in agents with sessions of their own (ADR-0028)', () => {
     expect(builtinAgentSession('rfp')).toBeUndefined();
     expect(builtinAgentSession('assistant')).toBeUndefined();
     expect(builtinAgentSession('toString')).toBeUndefined();
-    // Questions to Insights v2 declares no dataset: it runs on picked ones.
-    expect(builtinAgentSession('assistant-v2')).toBeUndefined();
+    // Insights Analyst declares no dataset: it runs on picked ones.
+    expect(builtinAgentSession('insights-analyst')).toBeUndefined();
   });
 
-  it('runs Questions to Insights v2 sessions on picked datasets, and only it (BA-320)', () => {
-    expect(PICKED_DATASETS_AGENT_KEYS).toEqual(['assistant-v2']);
-    expect(runsOnPickedDatasets('assistant-v2')).toBe(true);
+  it('runs Insights Analyst sessions on picked datasets, and only it (BA-320)', () => {
+    expect(PICKED_DATASETS_AGENT_KEYS).toEqual(['insights-analyst']);
+    expect(runsOnPickedDatasets('insights-analyst')).toBe(true);
     for (const key of ['assistant', 'data-readiness', 'user-1']) {
       expect(runsOnPickedDatasets(key)).toBe(false);
     }

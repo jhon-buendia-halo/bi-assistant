@@ -25,7 +25,7 @@ import {
 
 /** The built-in agents' persona names, which the hub and their page show. */
 const ASSISTANT = 'Emily';
-const V2_KEY = 'assistant-v2';
+const V2_KEY = 'insights-analyst';
 const V2 = 'Michael';
 const V2_TOOLS = [
   'list_entities',
@@ -128,7 +128,7 @@ async function promptView(page: Page, key: string) {
 }
 
 /**
- * Runs Questions to Insights v2 on `question`; returns the turn's first model
+ * Runs Insights Analyst on `question`; returns the turn's first model
  * request.
  */
 async function askInRun(page: Page, question: string): Promise<StubRequest> {
@@ -136,7 +136,9 @@ async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const result = await runQuestionOk(page, question);
   expect(result.text).toContain(STUB_ANSWER);
   // The analysis turn's call, not v2's structured Plan or Write answer call.
-  const request = stub.requests.slice(from).find((r) => r.stream && r.step === undefined);
+  const request = stub.requests
+    .slice(from)
+    .find((r) => r.stream && r.step === undefined);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
   return request!;
 }
@@ -194,7 +196,7 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
   expect((await promptView(page, 'assistant')).modified).toBe(false);
 });
 
-test("I edit Questions to Insights v2's prompt, its runs read it, and Reset restores it", async ({
+test("I edit Insights Analyst's prompt, its runs read it, and Reset restores it", async ({
   page,
 }) => {
   // Given the World Cup dataset and the stub model.
@@ -214,10 +216,12 @@ test("I edit Questions to Insights v2's prompt, its runs read it, and Reset rest
   );
   await appendToEditor(page, DONE_LINE, true);
   await saveButton(page).click();
-  await expect(page.getByText(`Job description of "${V2}" saved`)).toBeVisible();
+  await expect(
+    page.getByText(`Job description of "${V2}" saved`),
+  ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
 
-  // Then a run of Questions to Insights v2 sends the edited prompt.
+  // Then a run of Answer a Business Question sends the edited prompt.
   const edited = systemTexts(await askInRun(page, QUESTION))[0];
   expect(edited.startsWith('You are Questions to Insights')).toBe(true);
   expect(edited).toContain(DONE_LINE);
@@ -231,7 +235,9 @@ test("I edit Questions to Insights v2's prompt, its runs read it, and Reset rest
   await openPromptTab(page);
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByTestId('agent-prompt-reset').click();
-  await expect(page.getByText(`Job description of "${V2}" reset`)).toBeVisible();
+  await expect(
+    page.getByText(`Job description of "${V2}" reset`),
+  ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
 
   const reset = systemTexts(await askInRun(page, QUESTION));
@@ -329,7 +335,7 @@ const workflowStep = (page: Page, id: string) =>
   page.getByTestId(`workflow-step-${id}`);
 
 test(
-  "Questions to Insights v2's Graph tab draws what happens on each message",
+  "Insights Analyst's Graph tab draws what happens on each message",
   { tag: ['@demo', '@story-1.23.1'] },
   async ({ page }) => {
     await scenarioStep(page, `When I open the "${V2}" agent`, async () => {
@@ -369,7 +375,9 @@ test(
       'And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and "≤ 15 steps"',
       async () => {
         const analyse = workflowStep(page, 'analyse');
-        await expect(analyse.getByTestId('workflow-step-kind')).toHaveText('LLM');
+        await expect(analyse.getByTestId('workflow-step-kind')).toHaveText(
+          'LLM',
+        );
         await expect(analyse.getByTestId('workflow-step-tool')).toHaveText(
           V2_TOOLS,
         );
@@ -378,13 +386,23 @@ test(
         );
       },
     );
-    await scenarioStep(page, 'And the code steps are marked "Code"', async () => {
-      for (const id of ['receive-question', 'load-catalog', 'clarify', 'validate', 'wrap-up']) {
-        await expect(
-          workflowStep(page, id).getByTestId('workflow-step-kind'),
-        ).toHaveText('Code');
-      }
-    });
+    await scenarioStep(
+      page,
+      'And the code steps are marked "Code"',
+      async () => {
+        for (const id of [
+          'receive-question',
+          'load-catalog',
+          'clarify',
+          'validate',
+          'wrap-up',
+        ]) {
+          await expect(
+            workflowStep(page, id).getByTestId('workflow-step-kind'),
+          ).toHaveText('Code');
+        }
+      },
+    );
     await scenarioStep(
       page,
       'And the arrow from "Load catalog" to "Plan" reads "question, catalog"',
@@ -423,20 +441,26 @@ test(
         ]);
       },
     );
-    await scenarioStep(page, 'When I click the "Load catalog" step', async () => {
-      await workflowStep(page, 'load-catalog').click();
-      await expect(workflowStep(page, 'load-catalog')).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
-    });
+    await scenarioStep(
+      page,
+      'When I click the "Load catalog" step',
+      async () => {
+        await workflowStep(page, 'load-catalog').click();
+        await expect(workflowStep(page, 'load-catalog')).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      },
+    );
     await scenarioStep(
       page,
       'Then the step details show Input "question, datasets" and Output "question, catalog, columns"',
       async () => {
         const details = page.getByTestId('workflow-step-details');
         await expect(details).toContainText('2. Load catalog');
-        await expect(details.getByTestId('workflow-detail-kind')).toHaveText('Code');
+        await expect(details.getByTestId('workflow-detail-kind')).toHaveText(
+          'Code',
+        );
         await expect(details.getByTestId('workflow-detail-input')).toHaveText(
           'question, datasets',
         );
@@ -445,14 +469,20 @@ test(
         );
       },
     );
-    await scenarioStep(page, 'And I see "Prompt links" with the agent\'s tools', async () => {
-      await expect(
-        page.getByRole('heading', { name: 'Prompt links' }),
-      ).toBeVisible();
-      for (const tool of V2_TOOLS) {
-        await expect(page.getByTestId(`graph-node-tool:${tool}`)).toBeVisible();
-      }
-    });
+    await scenarioStep(
+      page,
+      'And I see "Prompt links" with the agent\'s tools',
+      async () => {
+        await expect(
+          page.getByRole('heading', { name: 'Prompt links' }),
+        ).toBeVisible();
+        for (const tool of V2_TOOLS) {
+          await expect(
+            page.getByTestId(`graph-node-tool:${tool}`),
+          ).toBeVisible();
+        }
+      },
+    );
     await scenarioStep(
       page,
       `When I open the "${ASSISTANT}" agent and its Graph tab`,
@@ -467,15 +497,19 @@ test(
         await expect(page.getByTestId('agent-graph')).toBeVisible();
       },
     );
-    await scenarioStep(page, 'Then I do not see the workflow drawing', async () => {
-      await expect(page.getByTestId('agent-workflow')).toHaveCount(0);
-      await expect(
-        page.getByRole('heading', { name: 'Prompt links' }),
-      ).toHaveCount(0);
-      await expect(
-        page.getByRole('heading', { name: 'What happens on each message' }),
-      ).toBeVisible();
-    });
+    await scenarioStep(
+      page,
+      'Then I do not see the workflow drawing',
+      async () => {
+        await expect(page.getByTestId('agent-workflow')).toHaveCount(0);
+        await expect(
+          page.getByRole('heading', { name: 'Prompt links' }),
+        ).toHaveCount(0);
+        await expect(
+          page.getByRole('heading', { name: 'What happens on each message' }),
+        ).toBeVisible();
+      },
+    );
   },
 );
 

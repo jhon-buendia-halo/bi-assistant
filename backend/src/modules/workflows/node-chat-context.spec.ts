@@ -7,8 +7,8 @@ import type { WorkflowRunDoc } from './workflow-run-steps';
 
 const run = (overrides: Partial<WorkflowRunDoc> = {}): WorkflowRunDoc => ({
   id: 'r-1',
-  workflowId: 'qti-v2-turn',
-  workflowName: 'Questions to Insights v2',
+  workflowId: 'answer-business-question',
+  workflowName: 'Insights Analyst',
   input: { question: 'How many goals in 2022?', datasets: ['World Cup Core'] },
   status: 'success',
   steps: [

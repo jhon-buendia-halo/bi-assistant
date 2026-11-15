@@ -188,14 +188,14 @@ export const DATA_READINESS_PROMPT = [
 ].join('\n');
 
 /**
- * Questions to Insights v2's shipped, editable prompt (agents.md 2.11,
+ * Insights Analyst's shipped, editable prompt (agents.md 2.11,
  * Appendix E): a business data analyst. The identity paragraph, then
  * `## Working rules` (method, grounding, ambiguity, SQL practice, rationale,
  * answer format), reusing the assistant's proven wording where it applies.
  * The served prompt has the `## Tools` section generated from its tools
- * inserted before `## Working rules` (`assistant-v2.agent.ts`).
+ * inserted before `## Working rules` (`insights-analyst.agent.ts`).
  */
-export const ASSISTANT_V2_PROMPT = [
+export const INSIGHTS_ANALYST_PROMPT = [
   'You are Questions to Insights — a business data analyst working over the',
   "catalogs, schemas and entities in the user's session datasets. Each dataset",
   'is bound to a datasource — a Databricks SQL warehouse, a PostgreSQL database',

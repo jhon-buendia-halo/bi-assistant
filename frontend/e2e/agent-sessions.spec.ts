@@ -23,7 +23,7 @@ import { worldCupScalar } from './helpers/world-cup-db';
 /**
  * Mirrors the Feature "Sessions started from an agent" in
  * specs/capabilities/agent-answers/spec.md. Agents are a library with no Run:
- * the workflow this spec runs is Questions to Insights v2 (`qti-v2-turn`),
+ * the workflow this spec runs is Insights Analyst (`answer-business-question`),
  * whose model request equals a chat turn's. The model is a local
  * OpenAI-compatible stub that records what the backend sends it.
  */
@@ -93,7 +93,7 @@ async function matchRowCount(): Promise<number> {
   return Number(await worldCupScalar('select count(*) from world_cup.matches'));
 }
 
-test('only Questions to Insights v2 can be run, and no agent page offers a chat', async ({
+test('only Insights Analyst can be run, and no agent page offers a chat', async ({
   page,
 }) => {
   await createUserAgent(page, {
@@ -103,9 +103,13 @@ test('only Questions to Insights v2 can be run, and no agent page offers a chat'
 
   // Given a Live user agent and a draft one, Then Workflows lists only v2.
   await openWorkflows(page);
-  await expect(page.getByTestId('workflow-qti-v2-turn')).toBeVisible();
+  await expect(
+    page.getByTestId('workflow-answer-business-question'),
+  ).toBeVisible();
   await expect(page.getByTestId('workflow-agent:assistant')).toHaveCount(0);
-  await expect(page.getByTestId(`workflow-agent:${historianId}`)).toHaveCount(0);
+  await expect(page.getByTestId(`workflow-agent:${historianId}`)).toHaveCount(
+    0,
+  );
   await expect(page.getByText(HISTORIAN)).toHaveCount(0);
   await expect(page.getByText('Claims triage')).toHaveCount(0);
 
@@ -119,7 +123,7 @@ test('only Questions to Insights v2 can be run, and no agent page offers a chat'
   ).toHaveCount(0);
 });
 
-test("a Questions to Insights v2 run can't write: the read-only guard rejects a DELETE", async ({
+test("an Answer a Business Question run can't write: the read-only guard rejects a DELETE", async ({
   page,
 }) => {
   // The model tries a DELETE, then answers.
@@ -156,7 +160,7 @@ test("a Questions to Insights v2 run can't write: the read-only guard rejects a 
   expect(await matchRowCount()).toBe(rowsBefore);
 });
 
-test('a Questions to Insights v2 run runs v2 on every question', async ({
+test('an Answer a Business Question run runs v2 on every question', async ({
   page,
 }) => {
   // Its five tools and the framework's skill tools (agents.md 2.11, 3.9).
@@ -172,7 +176,7 @@ test('a Questions to Insights v2 run runs v2 on every question', async ({
   ];
 
   for (const question of ['How many matches are there?', 'And in 2014?']) {
-    const result = await runWorkflow(page, 'qti-v2-turn', {
+    const result = await runWorkflow(page, 'answer-business-question', {
       question,
       datasets: [WORLD_CUP_DATASET],
     });

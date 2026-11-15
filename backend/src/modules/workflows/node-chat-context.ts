@@ -27,7 +27,7 @@ export interface NodeChatMessage {
 
 /**
  * The longest context block, in characters. Measured (2026-11-12): the
- * Analyse step of a real-shaped Questions to Insights v2 run over the World
+ * Analyse step of a real-shaped Answer a Business Question run over the World
  * Cup dataset (15 entities, 7 tool calls of which 4 real SQL queries, a
  * 1 500-character answer) gives about 7 200 characters; the largest step a
  * run can store (20 000-character input and output, 50 calls of 2 000
@@ -38,6 +38,11 @@ export const NODE_CHAT_CONTEXT_CAP = 40_000;
 
 /** The most earlier messages of a node chat a turn replays. */
 export const NODE_CHAT_HISTORY_LIMIT = 20;
+
+/** The run host of a step's node chat: `run-<run id>-node-<step id>`. */
+export function nodeChatHostRunId(runId: string, stepId: string): string {
+  return `${runId}-node-${stepId}`;
+}
 
 /** The line that opens a block in which something was shortened. */
 export const SHORTENED_NOTE =

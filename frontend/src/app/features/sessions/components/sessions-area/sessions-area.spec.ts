@@ -133,14 +133,14 @@ describe('Chat header Workflow chip (past-chats R57, R59, roadmap 1.23.6)', () =
 
   it('names a code-defined workflow', () => {
     const el = header({
-      id: 'qti-v2-turn',
-      name: 'Questions to Insights v2',
+      id: 'answer-business-question',
+      name: 'Insights Analyst',
       kind: 'code',
       deleted: false,
     });
     expect(
       el.querySelector('[data-testid="session-workflow"]')?.textContent?.trim(),
-    ).toBe('Questions to Insights v2');
+    ).toBe('Insights Analyst');
   });
 
   it('marks a deleted agent\'s workflow', () => {

@@ -6,8 +6,8 @@ jest.mock('../tool-services', () => ({
 import { checkWorkflowContract } from './workflow-contract';
 import {
   DATA_QUALITY_CHECK,
-  QTI_V2_TURN_EDGES,
-  QTI_V2_TURN_STEPS,
+  ANSWER_BUSINESS_QUESTION_EDGES,
+  ANSWER_BUSINESS_QUESTION_STEPS,
   analysisLoopDone,
   answerOf,
   assessable,
@@ -28,8 +28,8 @@ import {
   validateAttempt,
   wrapUp,
   type AnalyseQuery,
-  type QtiV2Plan,
-} from './qti-v2-turn.steps';
+  type AnalysisPlan,
+} from './answer-business-question.steps';
 import {
   PLAN_FIRST_LINE,
   PLAN_INSTRUCTIONS,
@@ -38,9 +38,9 @@ import {
   analysePlanBlock,
   planMessages,
   writeAnswerRequest,
-} from './qti-v2-turn.prompts';
+} from './answer-business-question.prompts';
 
-const PLAN: QtiV2Plan = {
+const PLAN: AnalysisPlan = {
   question: 'Who scored the most goals in 2018?',
   measures: ['goals per player'],
   entities: ['world_cup.goals'],
@@ -59,10 +59,14 @@ const query = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery => ({
   ...partial,
 });
 
-describe('qti-v2-turn steps (agents.md 5.11)', () => {
+describe('answer-business-question steps (agents.md 5.11)', () => {
   it('lists the nine steps with their ids, titles and kinds, Clarify after Plan and Check data quality after Validate', () => {
     expect(
-      QTI_V2_TURN_STEPS.map(({ id, title, kind }) => ({ id, title, kind })),
+      ANSWER_BUSINESS_QUESTION_STEPS.map(({ id, title, kind }) => ({
+        id,
+        title,
+        kind,
+      })),
     ).toEqual([
       { id: 'receive-question', title: 'Receive question', kind: 'code' },
       { id: 'load-catalog', title: 'Load catalog', kind: 'code' },
@@ -75,13 +79,15 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
       { id: 'wrap-up', title: 'Wrap up', kind: 'code' },
     ]);
     expect(
-      QTI_V2_TURN_STEPS.filter((step) => step.modelOnly).map((s) => s.id),
+      ANSWER_BUSINESS_QUESTION_STEPS.filter((step) => step.modelOnly).map(
+        (s) => s.id,
+      ),
     ).toEqual(['plan', 'check-data-quality', 'write-answer']);
   });
 
   it('connects them with the edges of api.md 117: Clarify loops back to Plan once answered', () => {
     expect(
-      QTI_V2_TURN_EDGES.map(
+      ANSWER_BUSINESS_QUESTION_EDGES.map(
         (e) => `${e.from}->${e.to} ${e.kind}${e.label ? ` "${e.label}"` : ''}`,
       ),
     ).toEqual([
@@ -282,8 +288,8 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
           { name: 'question', label: 'Q', type: 'textarea', required: true },
           { name: 'datasets', label: 'D', type: 'datasets', required: true },
         ],
-        steps: QTI_V2_TURN_STEPS,
-        edges: QTI_V2_TURN_EDGES,
+        steps: ANSWER_BUSINESS_QUESTION_STEPS,
+        edges: ANSWER_BUSINESS_QUESTION_EDGES,
       }),
     ).toEqual([]);
   });
@@ -331,7 +337,7 @@ describe('qti-v2-turn steps (agents.md 5.11)', () => {
     );
 
     it('has no exit: Receive question cannot fail', () => {
-      const receive = QTI_V2_TURN_STEPS.find(
+      const receive = ANSWER_BUSINESS_QUESTION_STEPS.find(
         (step) => step.id === 'receive-question',
       );
       expect(receive?.exits).toEqual([]);

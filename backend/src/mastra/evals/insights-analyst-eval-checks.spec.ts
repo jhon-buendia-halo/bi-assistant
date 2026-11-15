@@ -9,10 +9,10 @@ import {
   numbersInText,
   ranSuccessfulSql,
   usesStoredValue,
-} from './analyst-v2-eval-checks';
+} from './insights-analyst-eval-checks';
 
 /**
- * The answers below are real: Questions to Insights v2 (3 tools) on
+ * The answers below are real: Insights Analyst (3 tools) on
  * claude-sonnet-5-5 over the seeded World Cup sample, baseline run of
  * 2026-11-13. Each check is run on the answer of the case it belongs to.
  */

@@ -8,8 +8,8 @@ import { RunDetail, runInputEntries } from './run-detail';
 
 const RUN: WorkflowRun = {
   id: 'r1',
-  workflowId: 'qti-v2-turn',
-  workflowName: 'Questions to Insights v2',
+  workflowId: 'answer-business-question',
+  workflowName: 'Insights Analyst',
   input: { question: 'Which team scored the most goals?', datasets: ['World Cup Core', 'Other'] },
   status: 'success',
   steps: [{ id: 'answer', title: 'Answer', status: 'success' }],
@@ -39,7 +39,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
   it('shows the workflow, status, input, steps and the answer, read-only', () => {
     const el = mount(RUN);
     expect(el.querySelector('[data-testid="run-detail-workflow"]')?.textContent).toContain(
-      'Questions to Insights v2',
+      'Insights Analyst',
     );
     expect(el.querySelector('[data-testid="run-detail-status"]')?.textContent).toContain(
       'Run succeeded',

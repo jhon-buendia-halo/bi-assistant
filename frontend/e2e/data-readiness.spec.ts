@@ -378,14 +378,18 @@ test('the Data Readiness Agent is an Official library agent used by Assess Data 
   await expect(
     page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
-  await expect(page.getByTestId('workflow-qti-v2-turn')).toBeVisible();
+  await expect(
+    page.getByTestId('workflow-answer-business-question'),
+  ).toBeVisible();
   await expect(page.getByTestId(`workflow-agent:${AGENT_KEY}`)).toHaveCount(0);
   expect(stub.requests, 'nothing reached the model').toHaveLength(0);
 });
 
 /** The Explain report step's turn: read the stored report, then answer. */
 function readReportThenAnswer(request: StubRequest): StubReply {
-  const tool = request.tools.find((name) => name.endsWith('get_readiness_report'));
+  const tool = request.tools.find((name) =>
+    name.endsWith('get_readiness_report'),
+  );
   if (tool === undefined) return { text: ASSESS_ANSWER };
   if (request.messages.at(-1)?.role === 'tool') return { text: ASSESS_ANSWER };
   const text = [
@@ -396,117 +400,122 @@ function readReportThenAnswer(request: StubRequest): StubReply {
   return { toolCall: { name: tool, arguments: { reportId } } };
 }
 
-test(
-  'Assess Data Readiness profiles, scores and explains one dataset @demo',
-  async ({ page }) => {
-    let datasourceId = '';
-    stub.reply = readReportThenAnswer;
-    const steps = [
-      'resolve-dataset',
-      'profile-source',
-      'score-readiness',
-      'save-report',
-      'explain-report',
-      'wrap-up',
-    ];
+test('Assess Data Readiness profiles, scores and explains one dataset @demo', async ({
+  page,
+}) => {
+  let datasourceId = '';
+  stub.reply = readReportThenAnswer;
+  const steps = [
+    'resolve-dataset',
+    'profile-source',
+    'score-readiness',
+    'save-report',
+    'explain-report',
+    'wrap-up',
+  ];
 
-    await scenarioStep(page, `Given the "${DATASET}" dataset exists`, async () => {
+  await scenarioStep(
+    page,
+    `Given the "${DATASET}" dataset exists`,
+    async () => {
       datasourceId = await seedWorldCup(page);
-    });
-    await scenarioStep(
-      page,
-      'When I open "Assess Data Readiness" from Workflows and click Execute',
-      async () => {
-        await openWorkflowPage(
-          page,
-          'data-readiness-assessment',
-          'Assess Data Readiness',
-        );
-        await openRunTab(page);
-      },
-    );
-    await scenarioStep(
-      page,
-      `And I pick "${DATASET}", leave the question empty and click Execute`,
-      async () => {
-        await page
-          .getByTestId('workflow-input-dataset')
-          .selectOption({ label: DATASET });
-        await page.getByTestId('workflow-run').click();
-      },
-    );
-    await scenarioStep(
-      page,
-      'Then its six steps end successfully, in that order',
-      async () => {
-        await expect(page.getByTestId('workflow-run-status')).toHaveText(
-          'Run succeeded',
-          { timeout: 60_000 },
-        );
-        for (const id of steps) {
-          await expect(
-            page
-              .getByTestId(`workflow-node-${id}`)
-              .getByTestId('workflow-node-status'),
-          ).toHaveText('Done');
-        }
-        // The Logs start folded to their header: unfold them to read their rows.
-        const logsToggle = page
-          .getByTestId('workflow-logs-dock')
-          .getByTestId('workflow-logs-toggle');
-        await logsToggle.click();
-        await expect(logsToggle).toHaveAttribute('aria-expanded', 'true');
-        const logged = await page
-          // The Logs sit under the canvas since the three-zone page.
-          .getByTestId('workflow-logs-dock')
-          .locator('[data-testid^="workflow-state-node-"]')
-          .evaluateAll((els) =>
-            els.map((e) =>
-              (e.getAttribute('data-testid') ?? '').replace(
-                'workflow-state-node-',
-                '',
-              ),
+    },
+  );
+  await scenarioStep(
+    page,
+    'When I open "Assess Data Readiness" from Workflows and click Execute',
+    async () => {
+      await openWorkflowPage(
+        page,
+        'data-readiness-assessment',
+        'Assess Data Readiness',
+      );
+      await openRunTab(page);
+    },
+  );
+  await scenarioStep(
+    page,
+    `And I pick "${DATASET}", leave the question empty and click Execute`,
+    async () => {
+      await page
+        .getByTestId('workflow-input-dataset')
+        .selectOption({ label: DATASET });
+      await page.getByTestId('workflow-run').click();
+    },
+  );
+  await scenarioStep(
+    page,
+    'Then its six steps end successfully, in that order',
+    async () => {
+      await expect(page.getByTestId('workflow-run-status')).toHaveText(
+        'Run succeeded',
+        { timeout: 60_000 },
+      );
+      for (const id of steps) {
+        await expect(
+          page
+            .getByTestId(`workflow-node-${id}`)
+            .getByTestId('workflow-node-status'),
+        ).toHaveText('Done');
+      }
+      // The Logs start folded to their header: unfold them to read their rows.
+      const logsToggle = page
+        .getByTestId('workflow-logs-dock')
+        .getByTestId('workflow-logs-toggle');
+      await logsToggle.click();
+      await expect(logsToggle).toHaveAttribute('aria-expanded', 'true');
+      const logged = await page
+        // The Logs sit under the canvas since the three-zone page.
+        .getByTestId('workflow-logs-dock')
+        .locator('[data-testid^="workflow-state-node-"]')
+        .evaluateAll((els) =>
+          els.map((e) =>
+            (e.getAttribute('data-testid') ?? '').replace(
+              'workflow-state-node-',
+              '',
             ),
-          );
-        expect(logged.filter((id) => steps.includes(id))).toEqual(steps);
-      },
-    );
-    await scenarioStep(
-      page,
-      'And one readiness report is stored with the run\'s id',
-      async () => {
-        const reports = await listReports(page, datasourceId);
-        expect(reports).toHaveLength(1);
-        const report = await getReport(page, reports[0].id);
-        expect(report.runId, 'the report keeps its run id').toBeTruthy();
-      },
-    );
-    await scenarioStep(
-      page,
-      'And the answer shows the agent explanation and a readiness card',
-      async () => {
-        await expect(runAnswer(page)).toContainText(ASSESS_ANSWER);
-        const card = runAnswer(page).getByTestId('readiness-card');
-        await expect(card).toBeVisible();
-        await expect(card).toContainText(WORLD_CUP_DATASOURCE);
-        await expect(card.getByTestId('readiness-card-score')).toContainText(/\d+\/100/);
-      },
-    );
-    await scenarioStep(
-      page,
-      'When I click Open scorecard, then the scorecard shows under the answer, and Close hides it',
-      async () => {
-        await runAnswer(page).getByTestId('readiness-open-scorecard').click();
-        const panel = page.getByTestId('workflow-run-scorecard');
-        await expect(panel.getByTestId('readiness-scorecard')).toContainText(
-          WORLD_CUP_DATASOURCE,
+          ),
         );
-        await panel.getByTestId('workflow-run-scorecard-close').click();
-        await expect(panel).toHaveCount(0);
-      },
-    );
-  },
-);
+      expect(logged.filter((id) => steps.includes(id))).toEqual(steps);
+    },
+  );
+  await scenarioStep(
+    page,
+    "And one readiness report is stored with the run's id",
+    async () => {
+      const reports = await listReports(page, datasourceId);
+      expect(reports).toHaveLength(1);
+      const report = await getReport(page, reports[0].id);
+      expect(report.runId, 'the report keeps its run id').toBeTruthy();
+    },
+  );
+  await scenarioStep(
+    page,
+    'And the answer shows the agent explanation and a readiness card',
+    async () => {
+      await expect(runAnswer(page)).toContainText(ASSESS_ANSWER);
+      const card = runAnswer(page).getByTestId('readiness-card');
+      await expect(card).toBeVisible();
+      await expect(card).toContainText(WORLD_CUP_DATASOURCE);
+      await expect(card.getByTestId('readiness-card-score')).toContainText(
+        /\d+\/100/,
+      );
+    },
+  );
+  await scenarioStep(
+    page,
+    'When I click Open scorecard, then the scorecard shows under the answer, and Close hides it',
+    async () => {
+      await runAnswer(page).getByTestId('readiness-open-scorecard').click();
+      const panel = page.getByTestId('workflow-run-scorecard');
+      await expect(panel.getByTestId('readiness-scorecard')).toContainText(
+        WORLD_CUP_DATASOURCE,
+      );
+      await panel.getByTestId('workflow-run-scorecard-close').click();
+      await expect(panel).toHaveCount(0);
+    },
+  );
+});
 
 test('A table too large to profile is listed as not profiled', async ({
   launchApp,

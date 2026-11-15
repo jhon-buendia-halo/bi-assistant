@@ -11,8 +11,8 @@ import { RunsState } from './runs-state';
 
 const RUN: WorkflowRun = {
   id: 'r1',
-  workflowId: 'qti-v2-turn',
-  workflowName: 'Questions to Insights v2',
+  workflowId: 'answer-business-question',
+  workflowName: 'Insights Analyst',
   input: { question: 'Most goals?', datasets: ['World Cup Core'] },
   status: 'success',
   steps: [],
@@ -29,8 +29,8 @@ const OLD_RUN: WorkflowRun = {
 };
 
 const V2_DETAIL = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: '',
   kind: 'code',
   owner: 'Official',
@@ -65,8 +65,8 @@ describe('RunsState (plan 1.24.11)', () => {
       runs: [
         {
           id: 'r1',
-          workflowId: 'qti-v2-turn',
-          workflowName: 'Questions to Insights v2',
+          workflowId: 'answer-business-question',
+          workflowName: 'Insights Analyst',
           status: 'success',
           title: 'Most goals?',
           startedAt: '2026-01-01T00:00:00Z',
@@ -93,7 +93,7 @@ describe('RunsState (plan 1.24.11)', () => {
     expect(state.activeRun()?.id).toBe('r1');
     expect(state.loadingRun()).toBeFalse();
     expect(state.canRunAgain()).toBeFalse();
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(V2_DETAIL);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
     expect(state.canRunAgain()).toBeTrue();
   });
 
@@ -114,7 +114,7 @@ describe('RunsState (plan 1.24.11)', () => {
   it('opening another run hides Run again until its own workflow is found', () => {
     state.openRun('r1');
     http.expectOne((r) => r.url.endsWith('/workflow-runs/r1')).flush(RUN);
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(V2_DETAIL);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
     expect(state.canRunAgain()).toBeTrue();
     state.openRun('r0');
     expect(state.canRunAgain()).toBeFalse();
@@ -141,8 +141,8 @@ describe('RunsState (plan 1.24.11)', () => {
     state.runAgain(RUN);
     expect(shell.mainView()).toBe('workflow-detail');
     const designer = TestBed.inject(WorkflowDesigner);
-    designer.load('qti-v2-turn');
-    http.expectOne((r) => r.url.endsWith('/workflows/qti-v2-turn')).flush(V2_DETAIL);
+    designer.load('answer-business-question');
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
     // The right panel (Run) focuses its form.
     expect(designer.runFormRequest()).toBe(1);

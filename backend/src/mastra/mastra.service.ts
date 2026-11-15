@@ -1,5 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { Agent } from '@mastra/core/agent';
+import {
+  agentThreadId,
+  copiedThreadId,
+  exchangeMessages,
+  type AgentExchange,
+} from './agent-threads';
 import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
@@ -7,7 +14,7 @@ import {
   checkDataQualityWithModel,
   planWithModel,
   writeAnswerWithModel,
-} from './workflows/qti-v2-turn.agents';
+} from './workflows/answer-business-question.agents';
 import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
@@ -74,31 +81,31 @@ export class MastraService {
   }
 
   /**
-   * Questions to Insights v2's Plan step model call (agents.md 5.11): the
+   * Insights Analyst's Plan step model call (agents.md 5.11): the
    * agent's model, no tools, the plan read from its reply.
    */
-  planV2Turn(
+  planAnalysis(
     ...args: Parameters<typeof planWithModel>
   ): ReturnType<typeof planWithModel> {
     return planWithModel(...args);
   }
 
   /**
-   * Questions to Insights v2's Write answer step model call (agents.md
+   * Insights Analyst's Write answer step model call (agents.md
    * 5.11): the agent's model, no tools, the answer streamed to `onText`.
    */
-  writeV2Answer(
+  writeAnswer(
     ...args: Parameters<typeof writeAnswerWithModel>
   ): ReturnType<typeof writeAnswerWithModel> {
     return writeAnswerWithModel(...args);
   }
 
   /**
-   * Questions to Insights v2's optional Check data quality step model call
+   * Insights Analyst's optional Check data quality step model call
    * (agents.md 5.11): Sarah's model, no tools, the issues read from her
    * reply.
    */
-  checkV2DataQuality(
+  checkDataQuality(
     ...args: Parameters<typeof checkDataQualityWithModel>
   ): ReturnType<typeof checkDataQualityWithModel> {
     return checkDataQualityWithModel(...args);
@@ -194,11 +201,111 @@ export class MastraService {
     await memory?.deleteThread(threadId);
   }
 
+  /** The ids of every memory thread whose resource is `resourceId`. */
+  private async threadIdsOf(resourceId: string): Promise<string[]> {
+    const memory = await this.getAgent('assistant').getMemory();
+    if (!memory) return [];
+    const listed = await memory.listThreads({
+      filter: { resourceId },
+      perPage: false,
+    });
+    return listed.threads.map((thread) => thread.id);
+  }
+
+  /**
+   * Delete every memory thread of one session or run host (data-model 5):
+   * its own and its step agents' (`agentThreadId`), all with the host id as
+   * their resource.
+   */
+  async deleteMemoryResource(resourceId: string): Promise<void> {
+    const memory = await this.getAgent('assistant').getMemory();
+    if (!memory) return;
+    const ids = new Set([resourceId, ...(await this.threadIdsOf(resourceId))]);
+    for (const id of ids) await memory.deleteThread(id);
+  }
+
+  /**
+   * Copy every memory thread of host `from` to host `to` (a follow-up run,
+   * agents.md 5.14): the same suffix (`copiedThreadId`), `to` as the
+   * resource. The copies are `to`'s own, so deleting `from` keeps them.
+   * Returns how many threads were copied.
+   */
+  async copyMemoryResource(from: string, to: string): Promise<number> {
+    const memory = await this.getAgent('assistant').getMemory();
+    if (!memory) return 0;
+    let copied = 0;
+    for (const sourceThreadId of await this.threadIdsOf(from)) {
+      const newThreadId = copiedThreadId(sourceThreadId, from, to);
+      if (!newThreadId) continue;
+      if (await memory.getThreadById({ threadId: newThreadId })) continue;
+      await memory.cloneThread({ sourceThreadId, newThreadId, resourceId: to });
+      copied += 1;
+    }
+    return copied;
+  }
+
+  /**
+   * Copy one thread to a new id and resource (a node chat that starts from
+   * its step's thread, agents.md 5.16). False when there is nothing to copy
+   * or the target exists.
+   */
+  async copyMemoryThread(
+    sourceThreadId: string,
+    newThreadId: string,
+  ): Promise<boolean> {
+    const memory = await this.getAgent('assistant').getMemory();
+    if (!memory) return false;
+    if (!(await memory.getThreadById({ threadId: sourceThreadId }))) {
+      return false;
+    }
+    if (await memory.getThreadById({ threadId: newThreadId })) return false;
+    await memory.cloneThread({
+      sourceThreadId,
+      newThreadId,
+      resourceId: newThreadId,
+    });
+    return true;
+  }
+
+  /**
+   * Record one exchange of a step agent that runs without memory (Plan,
+   * Check data quality, Write answer; agents.md 5.11) in its thread on the
+   * host (`agentThreadId`): the request and the reply as two text messages.
+   * The call itself is unchanged; the thread is created on first use.
+   */
+  async recordAgentExchange(
+    hostId: string,
+    agentKey: string,
+    exchange: AgentExchange,
+  ): Promise<void> {
+    const memory = await this.getAgent('assistant').getMemory();
+    if (!memory) return;
+    const threadId = agentThreadId(hostId, agentKey);
+    if (!(await memory.getThreadById({ threadId }))) {
+      await memory.createThread({
+        threadId,
+        resourceId: hostId,
+        title: agentKey,
+      });
+    }
+    await memory.saveMessages({
+      messages: exchangeMessages(
+        exchange,
+        { threadId, resourceId: hostId },
+        [randomUUID(), randomUUID()],
+        new Date(),
+      ),
+    });
+  }
+
   /** Remove the session's agent memory, registry entry, and workspace files. */
   async deleteSessionResources(sessionId: string): Promise<void> {
-    const memory = await this.getAgent('assistant').getMemory();
-    await memory?.deleteThread(sessionId);
+    await this.deleteMemoryResource(sessionId);
+    await this.deleteSessionWorkspace(sessionId);
+  }
 
+  /** Remove the session's workspace only; its memory threads stay. */
+  async deleteSessionWorkspace(sessionId: string): Promise<void> {
     const workspaceId = sessionWorkspaceId(sessionId);
     await this.mastra.removeWorkspace(workspaceId, { destroy: true });
     await deleteSessionWorkspaceDirectory(sessionId);

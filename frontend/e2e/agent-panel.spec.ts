@@ -18,8 +18,8 @@ import { worldCupKey } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Agent panel" in specs/capabilities/agent-panel/spec.md
- * (roadmap 1.14.18, BA-231), through runs of Questions to Insights v2
- * (`qti-v2-turn`, the one runnable workflow): a run's panel items and its
+ * (roadmap 1.14.18, BA-231), through runs of Insights Analyst
+ * (`answer-business-question`, the one runnable workflow): a run's panel items and its
  * code-defined steps are read from the stream and the stored run (api.md
  * 119, 121, 125-126, 130). The model is the recording OpenAI-compatible
  * stub: each scenario scripts the tool calls of its turn (`run_readonly_sql`).
@@ -36,7 +36,12 @@ const VISUAL_SPEC = {
   description: 'Matches played at each stage of the tournament.',
   spec: {
     spec: 1,
-    chart: { form: 'bar', select: ['stage', 'matches'], x: 'stage', y: 'matches' },
+    chart: {
+      form: 'bar',
+      select: ['stage', 'matches'],
+      x: 'stage',
+      y: 'matches',
+    },
   },
 };
 
@@ -89,7 +94,10 @@ function position(request: StubRequest): { question: string; step: number } {
   };
 }
 
-function turnOf(turns: TurnScript[], request: StubRequest): TurnScript | undefined {
+function turnOf(
+  turns: TurnScript[],
+  request: StubRequest,
+): TurnScript | undefined {
   const { question } = position(request);
   return turns.find((turn) => question.includes(turn.question));
 }
@@ -97,7 +105,9 @@ function turnOf(turns: TurnScript[], request: StubRequest): TurnScript | undefin
 /** Scripts every turn by its latest user message (never the whole history). */
 function script(turns: TurnScript[]): void {
   stub.reply = (request): StubReply => {
-    if (systemTexts(request).some((text) => text.includes(DESIGNER_SKILL_TAG))) {
+    if (
+      systemTexts(request).some((text) => text.includes(DESIGNER_SKILL_TAG))
+    ) {
       return { text: JSON.stringify(VISUAL_SPEC) };
     }
     if (!request.stream) return { text: STUB_ANSWER };
@@ -154,7 +164,7 @@ async function runOk(
   return { result, run: result.run as unknown as RunDoc };
 }
 
-/** A run of Questions to Insights v2 on `question` over the World Cup dataset. */
+/** A run of Insights Analyst on `question` over the World Cup dataset. */
 function runV2On(page: Page, question: string) {
   return runOk(page, V2_WORKFLOW_ID, {
     question,
@@ -202,7 +212,7 @@ const V2_STEP_TITLES = [
 test("a visual generated on a v2 answer is the run's panel item, kept on reopening and downloaded only through its own route", async ({
   page,
 }) => {
-  // Given a Questions to Insights v2 run with an answer.
+  // Given an Answer a Business Question run with an answer.
   script([STAGE_TURN]);
   const { run } = await runV2On(page, STAGE_TURN.question);
 
@@ -247,7 +257,7 @@ test("a visual generated on a v2 answer is the run's panel item, kept on reopeni
 test("a v2 run's workflow never appears among its panel items", async ({
   page,
 }) => {
-  // Given a Questions to Insights v2 run, whose steps are its workflow.
+  // Given an Answer a Business Question run, whose steps are its workflow.
   script([STAGE_TURN]);
   const { run } = await runV2On(page, STAGE_TURN.question);
 
@@ -265,7 +275,7 @@ test("a v2 run's workflow never appears among its panel items", async ({
   expect(await res.text()).toContain('Panel item \\"phases\\" not found');
 });
 
-// ------------------------------------------- Questions to Insights v2 (R8a)
+// ------------------------------------------- Insights Analyst (R8a)
 
 /** The steps a clear question runs, in order (Clarify is skipped). */
 const V2_STEPS = [
@@ -291,7 +301,7 @@ const V2_TOOLS = [
 const V2_QUESTION = 'How many matches were played in 2018?';
 const V2_ANSWER = 'There were 64 matches.';
 
-test('Questions to Insights v2 shows its code-defined steps advancing', async ({
+test('Insights Analyst shows its code-defined steps advancing', async ({
   page,
 }) => {
   const turn: TurnScript = {

@@ -1,6 +1,6 @@
 /**
  * The workflow catalogue (ADR-0040; agents.md 5.12): the workflows defined in
- * code (only Questions to Insights v2, `qti-v2-turn`, since 1.23.35), and the
+ * code (only Insights Analyst, `answer-business-question`, since 1.23.35), and the
  * turn routing of the agent-turn engine: the `agent:<key>` ids a run host, a
  * draft run or a stored session is bound to, and the rule that derives a
  * session's workflow from its stored agent binding. An `agent:` id names the
@@ -18,9 +18,9 @@ import {
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_DESCRIPTION,
-} from '../agents/assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_DESCRIPTION,
+} from '../agents/insights-analyst-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
 import {
   DATA_READINESS_ASSESSMENT_DESCRIPTION,
@@ -32,12 +32,12 @@ import {
 } from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
-  QTI_V2_TURN_EDGES,
-  QTI_V2_TURN_STEPS,
-  QTI_V2_TURN_WORKFLOW_ID,
-  QTI_V2_TURN_WORKFLOW_NAME,
+  ANSWER_BUSINESS_QUESTION_EDGES,
+  ANSWER_BUSINESS_QUESTION_STEPS,
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME,
   type ContractStepEntry,
-} from './qti-v2-turn.steps';
+} from './answer-business-question.steps';
 import {
   assertWorkflowContracts,
   contractHash,
@@ -152,17 +152,17 @@ export const QUESTION_MAX_LENGTH = 4000;
 export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
   assertWorkflowContracts<Omit<CodeWorkflowSource, 'contractHash'>>([
     {
-      id: QTI_V2_TURN_WORKFLOW_ID,
-      name: QTI_V2_TURN_WORKFLOW_NAME,
-      description: ASSISTANT_V2_DESCRIPTION,
-      primaryFor: ASSISTANT_V2_AGENT_KEY,
+      id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+      name: ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME,
+      description: INSIGHTS_ANALYST_DESCRIPTION,
+      primaryFor: INSIGHTS_ANALYST_AGENT_KEY,
       trigger: 'run',
       input: [
         { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
         DATASETS_FIELD,
         CHECK_DATA_QUALITY_FIELD,
       ],
-      steps: QTI_V2_TURN_STEPS,
+      steps: ANSWER_BUSINESS_QUESTION_STEPS,
       // Olivia plans and Jessica writes the answer; Michael analyses; Sarah
       // checks the data quality when the run asks for it.
       stepAgents: {
@@ -170,7 +170,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         'check-data-quality': DATA_READINESS_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,
       },
-      edges: QTI_V2_TURN_EDGES,
+      edges: ANSWER_BUSINESS_QUESTION_EDGES,
       bar: 'steps',
     },
     {
@@ -255,8 +255,8 @@ export const ASSISTANT_WORKFLOW_NAME = 'Assistant';
 
 /**
  * The catalogue workflows whose agent steps run an agent, as an agent's
- * detail lists them (api.md 34 `usedInWorkflows`): `qti-v2-turn` for
- * `assistant-v2`, `analysis-planner` and `answer-writer`, none for any
+ * detail lists them (api.md 34 `usedInWorkflows`): `answer-business-question` for
+ * `insights-analyst`, `analysis-planner` and `answer-writer`, none for any
  * other agent.
  */
 export function workflowsUsingAgent(

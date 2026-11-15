@@ -30,8 +30,8 @@ function sseResponse(...events: unknown[]): Response {
 
 const RUN: WorkflowRun = {
   id: 'run-1',
-  workflowId: 'qti-v2-turn',
-  workflowName: 'Questions to Insights v2',
+  workflowId: 'answer-business-question',
+  workflowName: 'Insights Analyst',
   input: { question: 'Q', datasets: ['World Cup Core'] },
   status: 'success',
   steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { calls: [], stopped: false } }],
@@ -56,12 +56,12 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
   it('posts the input and context to the encoded workflow id', async () => {
     fetchSpy.and.resolveTo(sseResponse({ type: 'done', run: RUN }));
     await service.streamRun(
-      'qti-v2-turn',
+      'answer-business-question',
       { input: { question: 'Q' }, context: { fromRunId: 'run-0' } },
       {},
     );
     const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
-    expect(url).toMatch(/\/workflows\/qti-v2-turn\/runs\/stream$/);
+    expect(url).toMatch(/\/workflows\/answer-business-question\/runs\/stream$/);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
       input: { question: 'Q' },
@@ -72,7 +72,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
   it('reports the run, its steps, the agent events and the stored run, in order', async () => {
     fetchSpy.and.resolveTo(
       sseResponse(
-        { type: 'run', runId: 'run-1', workflowId: 'qti-v2-turn' },
+        { type: 'run', runId: 'run-1', workflowId: 'answer-business-question' },
         { type: 'step', id: 'answer', title: 'Answer', status: 'running' },
         { type: 'reasoning', content: 'Thinking about goals' },
         { type: 'tool', content: JSON.stringify({ name: 'run_readonly_sql', input: 'SELECT 1' }) },
@@ -98,7 +98,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
       onDone: (run) => seen.push(`done:${run.id}`),
       onError: (m) => seen.push(`error:${m}`),
     };
-    await service.streamRun('qti-v2-turn', { input: {} }, handlers);
+    await service.streamRun('answer-business-question', { input: {} }, handlers);
     expect(seen).toEqual([
       'run:run-1',
       'step:running',
@@ -132,7 +132,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     };
     fetchSpy.and.resolveTo(sseResponse({ type: 'step', ...full }, { type: 'done', run: RUN }));
     const steps: WorkflowRunStep[] = [];
-    await service.streamRun('qti-v2-turn', { input: { question: 'Q' } }, {
+    await service.streamRun('answer-business-question', { input: { question: 'Q' } }, {
       onStep: (s) => steps.push(s),
     });
     expect(steps[0]).toEqual(full as WorkflowRunStep);
@@ -147,7 +147,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     );
     const onError = jasmine.createSpy('onError');
     const onRun = jasmine.createSpy('onRun');
-    await service.streamRun('qti-v2-turn', { input: {} }, { onError, onRun });
+    await service.streamRun('answer-business-question', { input: {} }, { onError, onRun });
     expect(onError).toHaveBeenCalledOnceWith('Select at least one dataset');
     expect(onRun).not.toHaveBeenCalled();
   });
@@ -166,31 +166,31 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
       ),
     );
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('qti-v2-turn', { input: {} }, { onError });
+    await service.streamRun('answer-business-question', { input: {} }, { onError });
     expect(onError).toHaveBeenCalledOnceWith('Question is required', errors.slice(0, 3));
   });
 
   it("reports the agent turn's error event", async () => {
     fetchSpy.and.resolveTo(
       sseResponse(
-        { type: 'run', runId: 'run-1', workflowId: 'qti-v2-turn' },
+        { type: 'run', runId: 'run-1', workflowId: 'answer-business-question' },
         { type: 'error', content: 'The endpoint rejected the API key (401)' },
       ),
     );
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('qti-v2-turn', { input: {} }, { onError });
+    await service.streamRun('answer-business-question', { input: {} }, { onError });
     expect(onError).toHaveBeenCalledOnceWith('The endpoint rejected the API key (401)');
   });
 
   it('reports an unreachable backend and a stream that ends without a terminal event', async () => {
     fetchSpy.and.rejectWith(new TypeError('Failed to fetch'));
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('qti-v2-turn', { input: {} }, { onError });
+    await service.streamRun('answer-business-question', { input: {} }, { onError });
     expect(onError).toHaveBeenCalledOnceWith('Backend unreachable');
 
     onError.calls.reset();
-    fetchSpy.and.resolveTo(sseResponse({ type: 'run', runId: 'r', workflowId: 'qti-v2-turn' }));
-    await service.streamRun('qti-v2-turn', { input: {} }, { onError });
+    fetchSpy.and.resolveTo(sseResponse({ type: 'run', runId: 'r', workflowId: 'answer-business-question' }));
+    await service.streamRun('answer-business-question', { input: {} }, { onError });
     expect(onError).toHaveBeenCalledOnceWith('Stream ended before completion');
   });
 
@@ -199,7 +199,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     controller.abort();
     fetchSpy.and.rejectWith(new DOMException('Aborted', 'AbortError'));
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('qti-v2-turn', { input: {} }, { onError }, controller.signal);
+    await service.streamRun('answer-business-question', { input: {} }, { onError }, controller.signal);
     expect(onError).not.toHaveBeenCalled();
   });
 });

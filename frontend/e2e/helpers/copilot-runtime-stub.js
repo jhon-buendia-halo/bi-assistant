@@ -24,7 +24,7 @@
  * JSON value of their schema, `"ok"` for strings (so the connection test's
  * `{status: "ok"}` passes).
  *
- * Questions to Insights v2's structured steps are told apart by their system
+ * Insights Analyst's structured steps are told apart by their system
  * message's first line (the same lines as helpers/v2-steps.ts): Plan gets a
  * clear plan, Write answer an answer whose Markdown is COPILOT_STUB_ANSWER.
  */

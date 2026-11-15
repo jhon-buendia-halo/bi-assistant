@@ -66,7 +66,7 @@ export type WorkflowInputValue = string | number | boolean | string[];
  */
 export interface WorkflowSummary {
   /**
-   * `qti-v2-turn`, the catalogue's only workflow. Agents are a library and
+   * `answer-business-question`, the catalogue's only workflow. Agents are a library and
    * have no workflow of their own.
    */
   id: string;
@@ -179,7 +179,7 @@ export interface WorkflowEdge {
 }
 
 /**
- * The Plan step's output (`qti-v2-turn`, `PlanOutput`): what the analysis
+ * The Plan step's output (`answer-business-question`, `PlanOutput`): what the analysis
  * answers, and the question to ask first when it can't start.
  */
 export interface PlanOutput {
@@ -199,7 +199,7 @@ export interface ValidateFinding {
   detail: string;
 }
 
-/** The Validate step's output (`qti-v2-turn`, `ValidateOutput`). */
+/** The Validate step's output (`answer-business-question`, `ValidateOutput`). */
 export interface ValidateOutput {
   ok: boolean;
   /** 1 or 2. */
@@ -207,7 +207,7 @@ export interface ValidateOutput {
   findings: ValidateFinding[];
 }
 
-/** The Write answer step's output (`qti-v2-turn`, `AnswerOutput`). */
+/** The Write answer step's output (`answer-business-question`, `AnswerOutput`). */
 export interface AnswerOutput {
   headline: string;
   /** Markdown, starting with the headline. */

@@ -10,8 +10,8 @@ const V2_TOOLS = [
 
 describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   it("returns v2's turn workflow with its nine steps in catalogue order", () => {
-    const workflow = agentWorkflow('assistant-v2');
-    expect(workflow?.id).toBe('qti-v2-turn');
+    const workflow = agentWorkflow('insights-analyst');
+    expect(workflow?.id).toBe('answer-business-question');
     expect(workflow?.steps.map((step) => [step.title, step.kind])).toEqual([
       ['Receive question', 'code'],
       ['Load catalog', 'code'],
@@ -26,7 +26,7 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   });
 
   it('gives Check data quality to Sarah, in one model call without tools', () => {
-    const steps = agentWorkflow('assistant-v2')!.steps;
+    const steps = agentWorkflow('insights-analyst')!.steps;
     expect(
       steps.find((step) => step.id === 'check-data-quality')?.agent,
     ).toEqual({
@@ -39,11 +39,11 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   });
 
   it('gives each agent step its own agent: Michael analyses with his tools, Olivia plans and Jessica writes in one model call without tools', () => {
-    const steps = agentWorkflow('assistant-v2')!.steps;
+    const steps = agentWorkflow('insights-analyst')!.steps;
     const agentOf = (id: string) => steps.find((step) => step.id === id)?.agent;
     // Each agent by its key and persona (agents.md 1.1, 5.11).
     expect(agentOf('analyse')).toEqual({
-      key: 'assistant-v2',
+      key: 'insights-analyst',
       name: 'Michael',
       role: 'Insights Analyst',
       tools: V2_TOOLS,
@@ -71,7 +71,7 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   });
 
   it('carries each step’s fields and other exits', () => {
-    const steps = agentWorkflow('assistant-v2')!;
+    const steps = agentWorkflow('insights-analyst')!;
     const step = (id: string) => steps.steps.find((s) => s.id === id)!;
     expect(step('load-catalog')).toMatchObject({
       input: ['question', 'datasets'],
@@ -115,10 +115,10 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   );
 
   it('returns a copy the caller can change safely', () => {
-    const first = agentWorkflow('assistant-v2')!;
+    const first = agentWorkflow('insights-analyst')!;
     first.steps[0].input.push('x');
     first.steps[4].agent!.tools.push('y');
-    const second = agentWorkflow('assistant-v2')!;
+    const second = agentWorkflow('insights-analyst')!;
     expect(second.steps[0].input).toEqual(['question', 'datasets']);
     expect(second.steps[4].agent!.tools).toHaveLength(5);
   });

@@ -58,7 +58,11 @@ export async function runQuestionInTab(
   question: string,
   dataset: string,
 ): Promise<void> {
-  await openWorkflowPage(page, 'qti-v2-turn', 'Answer a Business Question');
+  await openWorkflowPage(
+    page,
+    'answer-business-question',
+    'Answer a Business Question',
+  );
   await openRunTab(page);
   await fillRun(page, question, dataset);
   await page.getByTestId('workflow-run').click();
