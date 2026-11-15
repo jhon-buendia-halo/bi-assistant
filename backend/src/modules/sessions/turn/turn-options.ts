@@ -392,8 +392,13 @@ export class TurnOptions {
     const previous = session.messages.at(-2);
     if (thread && latest?.role === 'user') {
       // A clarification ends its turn before memory sees the question, so
-      // replay it alongside the user's answer.
-      if (previous?.role === 'assistant' && previous.clarification) {
+      // replay it alongside the user's answer. A follow-up run's copied
+      // thread holds the earlier analysis but not the answer Write answer
+      // gave, so replay that too (agents.md 5.14).
+      if (
+        previous?.role === 'assistant' &&
+        (previous.clarification || session.continuesThreads)
+      ) {
         return [
           { role: 'assistant' as const, content: previous.content },
           { role: 'user' as const, content: latest.content },
@@ -402,6 +407,14 @@ export class TurnOptions {
       return latest.content;
     }
 
+    return this.transcriptInput(session);
+  }
+
+  /**
+   * The whole transcript as plain text messages: a turn's input when its
+   * thread does not exist yet, and always the Plan step's (agents.md 5.11).
+   */
+  transcriptInput(session: SessionDoc) {
     return session.messages.map((message) =>
       message.role === 'user'
         ? { role: 'user' as const, content: message.content }

@@ -805,7 +805,7 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 
 #### 122. `DELETE /workflow-runs/:id`
 - Response `200`: `{ ok: true, message: "Run deleted" }`.
-- Side effects: for an agent run, deletes its workspace `workspaces/session-run-<id>/` (its visuals, panel files, synthetic scripts) and its memory thread `run-<id>`, then its node chats (136, 137; [data-model.md](data-model.md) 3.17), then the document. A code-only run has neither, so only the document goes. A run given as another run's `context` may be deleted; the later run keeps `context.fromRunId` as a dangling reference. A `suspended` run may be deleted: its waiting turn is dropped first (its host, memory thread and workflow snapshot, ADR-0043).
+- Side effects: for an agent run, deletes its workspace `workspaces/session-run-<id>/` (its visuals, panel files, synthetic scripts) and its memory threads (resource `run-<id>`: `run-<id>` and `run-<id>:<agent key>`; [agents.md](agents.md) 5.14), then its node chats with their threads `run-<id>-node-<step id>` (136, 137; [data-model.md](data-model.md) 3.17), then the document. A code-only run has neither, so only the document goes. A run given as another run's `context` may be deleted; the later run keeps `context.fromRunId` as a dangling reference. A `suspended` run may be deleted: its waiting turn is dropped first (its host, memory thread and workflow snapshot, ADR-0043).
 - Errors (Style B): `404 "Run \"<id>\" not found"`; `400 "Stop the run before deleting it"` for a run still `running`.
 
 #### 123. `GET /workflow-runs/:id/visualizations/:vid`

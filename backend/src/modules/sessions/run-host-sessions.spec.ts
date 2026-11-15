@@ -378,9 +378,21 @@ function build(options: BuildOptions = {}) {
     ),
     deleteMemoryThread: jest.fn().mockResolvedValue(undefined),
     deleteSessionResources: jest.fn().mockResolvedValue(undefined),
+    deleteSessionWorkspace: jest.fn().mockResolvedValue(undefined),
+    // The run's memory threads (agents.md 5.14).
+    copyMemoryResource: jest.fn().mockResolvedValue(0),
+    copyMemoryThread: jest.fn().mockResolvedValue(false),
+    recordAgentExchange: jest.fn().mockResolvedValue(undefined),
     // v2's Plan and Write answer model calls (agents.md 5.11).
-    planAnalysis: jest.fn(({ question }: { question: string }) =>
-      Promise.resolve({ plan: planOf({}, question), stopped: false }),
+    planAnalysis: jest.fn(
+      (
+        { question }: { question: string },
+        opts?: { onExchange?: (e: object) => Promise<void> },
+      ) => {
+        // The stand-in records nothing; a test may (`onExchange`).
+        void opts;
+        return Promise.resolve({ plan: planOf({}, question), stopped: false });
+      },
     ),
     writeAnswer: jest.fn(
       (_input: unknown, opts: { onText?: (delta: string) => void }) => {
@@ -689,7 +701,7 @@ describe('the run host (agents.md 5.14)', () => {
     ).rejects.toThrow('Add a PostgreSQL or Databricks dataset first');
   });
 
-  it('is created per run and discarded after it: never listed, its memory thread deleted, its workspace kept', async () => {
+  it('is created per run and discarded after it: never listed, its memory threads and workspace kept', async () => {
     const ctx = build();
     const { run } = await runOf(ctx, V2_INPUT);
     const hostId = `run-${run.id}`;
@@ -697,7 +709,8 @@ describe('the run host (agents.md 5.14)', () => {
       hostId,
       'Insights Analyst',
     );
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(hostId);
+    // The run keeps its agents' threads until it is deleted.
+    expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
     expect(ctx.mastra.deleteSessionResources).not.toHaveBeenCalled();
     await expect(ctx.sessions.get(hostId)).rejects.toThrow(
       `Session ${hostId} not found`,
@@ -705,8 +718,9 @@ describe('the run host (agents.md 5.14)', () => {
     // Each run gets its own host.
     const second = await runOf(ctx, V2_INPUT);
     expect(second.run.id).not.toBe(run.id);
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenLastCalledWith(
+    expect(ctx.mastra.ensureSessionWorkspace).toHaveBeenLastCalledWith(
       `run-${second.run.id}`,
+      'Insights Analyst',
     );
   });
 
@@ -741,6 +755,98 @@ describe('the run host (agents.md 5.14)', () => {
       { role: 'assistant', content: 'Brazil won.' },
       { role: 'user', content: 'And in 2014?' },
     ]);
+    // The earlier run had no thread to copy (the stand-in copies none).
+    expect(ctx.mastra.copyMemoryResource).toHaveBeenCalledWith(
+      `run-${first.run.id}`,
+      expect.stringMatching(/^run-/) as string,
+    );
+  });
+
+  it("a follow-up whose earlier run's threads were copied replays only the earlier answer and this question, and Plan still reads the whole transcript", async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    // The copies exist once the host is created.
+    ctx.mastra.copyMemoryResource.mockResolvedValueOnce(3);
+    ctx.registry['insights-analyst'].getMemory.mockResolvedValue({
+      getThreadById: jest.fn().mockResolvedValue({ id: 'copied' }),
+    });
+    await runOf(
+      ctx,
+      { question: 'And in 2014?', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    // The copied thread holds the earlier analysis; the answer it gave
+    // comes with the new question.
+    expect(ctx.calls['insights-analyst'][1].input).toEqual([
+      { role: 'assistant', content: 'Brazil won.' },
+      { role: 'user', content: 'And in 2014?' },
+    ]);
+    expect(ctx.mastra.planAnalysis).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messages: [
+          { role: 'user', content: 'Who won?' },
+          { role: 'assistant', content: 'Brazil won.' },
+          { role: 'user', content: 'And in 2014?' },
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("records Plan's and Write answer's exchanges in their threads on the run's host (agents.md 5.14)", async () => {
+    const ctx = build();
+    ctx.mastra.planAnalysis.mockImplementationOnce(
+      async (
+        { question }: { question: string },
+        opts: { onExchange?: (e: object) => Promise<void> },
+      ) => {
+        await opts.onExchange?.({ request: question, reply: '{"plan":1}' });
+        return { plan: planOf({}, question), stopped: false };
+      },
+    );
+    ctx.mastra.writeAnswer.mockImplementationOnce(
+      async (
+        _input: unknown,
+        opts: {
+          onText?: (delta: string) => void;
+          onExchange?: (e: object) => Promise<void>;
+        },
+      ) => {
+        opts.onText?.('Brazil won.');
+        await opts.onExchange?.({ request: 'rows', reply: 'Brazil won.' });
+        return {
+          answer: { headline: 'Brazil won.', answer: 'Brazil won.' },
+          stopped: false,
+        };
+      },
+    );
+    const { run } = await runOf(ctx, V2_INPUT);
+    expect(ctx.mastra.recordAgentExchange).toHaveBeenCalledWith(
+      `run-${run.id}`,
+      'analysis-planner',
+      { request: 'Who won?', reply: '{"plan":1}' },
+    );
+    expect(ctx.mastra.recordAgentExchange).toHaveBeenCalledWith(
+      `run-${run.id}`,
+      'answer-writer',
+      { request: 'rows', reply: 'Brazil won.' },
+    );
+  });
+
+  it('a failure to record an exchange never fails the run', async () => {
+    const ctx = build();
+    ctx.mastra.recordAgentExchange.mockRejectedValue(new Error('disk full'));
+    ctx.mastra.planAnalysis.mockImplementationOnce(
+      async (
+        { question }: { question: string },
+        opts: { onExchange?: (e: object) => Promise<void> },
+      ) => {
+        await opts.onExchange?.({ request: question, reply: 'x' });
+        return { plan: planOf({}, question), stopped: false };
+      },
+    );
+    const { run } = await runOf(ctx, V2_INPUT);
+    expect(run.status).toBe('success');
   });
 
   it('a node chat host sends its transcript before the message and its context block after the agent’s own (agents.md 5.16)', async () => {
@@ -802,7 +908,8 @@ describe('the run host (agents.md 5.14)', () => {
     expect(events.some((e) => e.type === 'done' || e.type === 'error')).toBe(
       false,
     );
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(`run-${run.id}`);
+    // A stopped run keeps what its agents recorded.
+    expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
   });
 
   it("careful: true on an agent host's turn runs the cross-check, as a careful chat turn does", async () => {
@@ -1482,10 +1589,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
         'stopped',
       );
       expect(ctx.discards.count).toBe(1);
-      // Its host left memory with its memory thread.
-      expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(
-        `run-${waiting.run.id}`,
-      );
+      // Its host left memory; its memory threads stay with the run.
+      expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
     }
@@ -1553,9 +1658,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(ctx.mastra.discardSuspendedWorkflowRuns).toHaveBeenCalledWith(
       'answer-business-question',
     );
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(
-      `run-${waiting.run.id}`,
-    );
+    // The run keeps its memory threads, as any finished run does.
+    expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
   });
 
   it('a chat session still ends on the question as a clarification card: its workflow run is dropped', async () => {

@@ -162,6 +162,11 @@ export interface RunHostSpec {
   /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
   checkDataQuality?: true;
   /**
+   * A follow-up run (agents.md 5.14): the earlier run's host id, whose
+   * memory threads the host starts from as copies of its own.
+   */
+  continuesThreadsOf?: string;
+  /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
    */
@@ -462,6 +467,20 @@ export class SessionsService implements OnModuleInit {
       createdAt: now,
       updatedAt: now,
     };
+    if (spec.continuesThreadsOf) {
+      try {
+        const copied = await this.mastra.copyMemoryResource(
+          spec.continuesThreadsOf,
+          id,
+        );
+        if (copied > 0) host.continuesThreads = true;
+      } catch (error) {
+        // The run still goes on, from the earlier run's transcript alone.
+        this.logger.warn(
+          `Could not copy the memory threads of ${spec.continuesThreadsOf} to ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
     this.memoryHosts.set(id, host);
     return { ...host };
   }
@@ -557,9 +576,9 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * End a run host (agents.md 5.14): answer it as the API shows a session
-   * (its messages, derived panel items and workflow view), then delete its
-   * memory thread and let it leave memory. Its workspace stays, owned by the
-   * run.
+   * (its messages, derived panel items and workflow view) and let it leave
+   * memory. Its workspace and its memory threads stay, owned by the run,
+   * until the run is deleted (`deleteRunHostResources`).
    */
   async finishRunHost(hostId: string): Promise<SessionView> {
     const host = this.memoryHosts.get(hostId);
@@ -568,18 +587,41 @@ export class SessionsService implements OnModuleInit {
       return await this.toView({ ...host });
     } finally {
       this.memoryHosts.delete(hostId);
-      try {
-        await this.mastra.deleteMemoryThread(hostId);
-      } catch (error) {
-        this.logger.warn(
-          `Could not delete the memory thread of ${hostId}: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
     }
   }
 
   /**
-   * Delete a run host's workspace and memory thread (agents.md 5.14): when
+   * Start a run host's memory thread as a copy of another thread (a node
+   * chat about the step that ran on its run's host, agents.md 5.16). False
+   * when there was nothing to copy or the copy failed; the turn then starts
+   * from its transcript alone.
+   */
+  async startRunHostThreadFrom(
+    hostId: string,
+    sourceThreadId: string,
+  ): Promise<boolean> {
+    try {
+      return await this.mastra.copyMemoryThread(sourceThreadId, hostId);
+    } catch (error) {
+      this.logger.warn(
+        `Could not copy the memory thread ${sourceThreadId} to ${hostId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Delete a run host's workspace only (a node chat's turn, agents.md 5.16):
+   * its memory thread stays for the chat's next turn.
+   */
+  async deleteRunHostWorkspace(hostId: string): Promise<void> {
+    if (!hostId.startsWith(RUN_HOST_ID_PREFIX)) return;
+    this.memoryHosts.delete(hostId);
+    await this.mastra.deleteSessionWorkspace(hostId);
+  }
+
+  /**
+   * Delete a run host's workspace and memory threads (agents.md 5.14): when
    * its run is deleted, or at start-up for a workspace no stored run owns.
    */
   async deleteRunHostResources(hostId: string): Promise<void> {

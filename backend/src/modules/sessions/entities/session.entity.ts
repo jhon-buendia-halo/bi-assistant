@@ -330,6 +330,13 @@ export interface SessionDoc {
    */
   contextBlock?: string;
   /**
+   * A follow-up run's host whose memory threads are copies of the earlier
+   * run's (agents.md 5.14): its turn's input replays the earlier run's
+   * answer with the new question, as the copied thread does not hold it.
+   * In memory only, like the host.
+   */
+  continuesThreads?: boolean;
+  /**
    * A run host of Answer a Business Question whose input ticked Check data
    * quality (agents.md 5.11): its turn takes the branch to that step. In
    * memory only, like the host.

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
+import { runHostThreadId } from '../../mastra/agent-threads';
 import {
   SessionsService,
   type StreamEvent,
@@ -15,6 +16,7 @@ import {
 import {
   NODE_CHAT_HISTORY_LIMIT,
   nodeChatContextBlock,
+  nodeChatHostRunId,
   type NodeChatMessage,
 } from './node-chat-context';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
@@ -52,10 +54,7 @@ export interface PreparedNodeChat {
   content: string;
 }
 
-/** The run host of a step's node chat: `run-<run id>-node-<step id>`. */
-export function nodeChatHostRunId(runId: string, stepId: string): string {
-  return `${runId}-node-${stepId}`;
-}
+export { nodeChatHostRunId };
 
 /**
  * Chat with a workflow step's agent about that step's data in one stored run
@@ -157,7 +156,7 @@ export class WorkflowNodeChatsService {
   }
 
   private async turn(
-    { run, step, content }: PreparedNodeChat,
+    { run, workflow, step, content }: PreparedNodeChat,
     emit: (event: NodeChatStreamEvent) => void,
     abortSignal?: AbortSignal,
   ): Promise<NodeChatMessage> {
@@ -197,6 +196,18 @@ export class WorkflowNodeChatsService {
         contextBlock: nodeChatContextBlock(run, step.id),
       });
       hostId = host.id;
+      // A chat's first turn about the step that ran on the run's own host
+      // (its agent is the run's, e.g. Analyse) starts from a copy of that
+      // thread, so the agent has its own work in the run (agents.md 5.16).
+      // Later turns go on in the chat's own thread.
+      const agentKey = workflow.steps.find((entry) => entry.id === step.id)
+        ?.agent?.key;
+      if (!earlier.length && agentKey && agentKey === run.agentKey) {
+        await this.sessions.startRunHostThreadFrom(
+          host.id,
+          runHostThreadId(run.id),
+        );
+      }
       await this.sessions.streamRunTurn(
         host.id,
         content,
@@ -237,8 +248,9 @@ export class WorkflowNodeChatsService {
 
   /**
    * End a node chat's host: its answer (the last message when it is an
-   * assistant message after the turn's own), then the host, its memory
-   * thread and its workspace are gone.
+   * assistant message after the turn's own), then the host and its
+   * workspace are gone. Its memory thread stays for the chat's next turn,
+   * until the run is deleted (agents.md 5.16).
    */
   private async endHost(hostId: string, earlier: number): Promise<string> {
     let answer = '';
@@ -251,7 +263,7 @@ export class WorkflowNodeChatsService {
       );
     }
     try {
-      await this.sessions.deleteRunHostResources(hostId);
+      await this.sessions.deleteRunHostWorkspace(hostId);
     } catch (failure) {
       this.logger.warn(
         `Could not delete the workspace of ${hostId}: ${runErrorMessage(failure)}`,

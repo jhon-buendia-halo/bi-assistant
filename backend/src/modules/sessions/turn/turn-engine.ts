@@ -7,6 +7,12 @@ import {
   parseClarification,
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
+import {
+  ANALYSIS_PLANNER_AGENT_KEY,
+  ANSWER_WRITER_AGENT_KEY,
+  DATA_READINESS_AGENT_KEY,
+} from '../../../mastra/agent-constants';
+import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
@@ -473,12 +479,38 @@ export class TurnEngine {
       // The model error a step reports, in the chat stream's words.
       const stepError = (error: unknown) =>
         chatTurnError(error, () => this.deps.llmService.getView());
-      const stepModel = {
+      const stepModelBase = {
         abortSignal: turn.signal,
         providerOptions: options.providerOptions as
           Record<string, unknown> | undefined,
         requestContext: options.requestContext,
       };
+      // A step agent of its own runs without memory; its exchange is
+      // recorded in its thread on this host (agents.md 5.14), and a
+      // failure to record never fails the step.
+      const stepModelOf = (stepAgentKey: string) => ({
+        ...stepModelBase,
+        onExchange: async (exchange: AgentExchange) => {
+          try {
+            await this.deps.mastra.recordAgentExchange(
+              session.id,
+              stepAgentKey,
+              exchange,
+            );
+          } catch (error) {
+            this.deps.logger.warn(
+              `Could not record the ${stepAgentKey} exchange of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        },
+      });
+      // Plan has no memory: on a host that continues an earlier run's
+      // threads, `input` is only the latest messages, so Plan reads the
+      // whole conversation as text, as it did before the threads were
+      // copied (agents.md 5.14).
+      const planInput = session.continuesThreads
+        ? this.deps.options.transcriptInput(session)
+        : input;
       ran = await this.runTurnWorkflow(
         session,
         workflow,
@@ -493,12 +525,12 @@ export class TurnEngine {
               // After Clarify, Plan plans with its question and the answer.
               const planned = await this.deps.mastra.planAnalysis(
                 {
-                  messages: input,
+                  messages: planInput,
                   question,
                   catalogBlock,
                   ...(answered ? { answered } : {}),
                 },
-                stepModel,
+                stepModelOf(ANALYSIS_PLANNER_AGENT_KEY),
               );
               return {
                 plan: planned.plan,
@@ -658,7 +690,7 @@ export class TurnEngine {
                       tables: measured.tables,
                       findings: shown,
                     },
-                    stepModel,
+                    stepModelOf(DATA_READINESS_AGENT_KEY),
                   )
                 : { issues: [], stopped: false };
               if (reply.stopped || turn.signal.aborted) return stop();
@@ -683,7 +715,7 @@ export class TurnEngine {
           writeAnswer: async (written) => {
             try {
               const result = await this.deps.mastra.writeAnswer(written, {
-                ...stepModel,
+                ...stepModelOf(ANSWER_WRITER_AGENT_KEY),
                 onText: (delta) => {
                   text += delta;
                   emit({ type: 'text', content: delta });

@@ -155,6 +155,8 @@ function build(script: Script = {}) {
       Promise.resolve({ id: 'host', messages: hostMessages }),
     ),
     deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
+    deleteRunHostWorkspace: jest.fn().mockResolvedValue(undefined),
+    startRunHostThreadFrom: jest.fn().mockResolvedValue(true),
   };
   const service = new WorkflowNodeChatsService(
     workflows,
@@ -368,13 +370,17 @@ describe('WorkflowNodeChatsService: a chat turn (api.md 136, 137; agents.md 5.16
     });
     expect(message.stopped).toBeUndefined();
     expect(events.at(-1)).toEqual({ type: 'done', message });
-    // The host, its memory thread and its workspace are gone.
+    // The host and its workspace are gone; its memory thread stays for the
+    // chat's next turn (agents.md 5.16).
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledWith(
       'run-r-1-node-analyse',
     );
-    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
+    expect(ctx.sessions.deleteRunHostWorkspace).toHaveBeenCalledWith(
       'run-r-1-node-analyse',
     );
+    expect(ctx.sessions.deleteRunHostResources).not.toHaveBeenCalled();
+    // A run with no agent of its own on record starts from no thread.
+    expect(ctx.sessions.startRunHostThreadFrom).not.toHaveBeenCalled();
     // Stored: the user message, then the assistant's; the run unchanged.
     const stored = await ctx.service.messages('r-1', 'analyse');
     expect(stored.map((m) => [m.role, m.content])).toEqual([
@@ -389,6 +395,20 @@ describe('WorkflowNodeChatsService: a chat turn (api.md 136, 137; agents.md 5.16
       createdAt: undefined,
       updatedAt: undefined,
     });
+  });
+
+  it("starts a chat about the run's own agent step from a copy of the run's thread, on its first turn only", async () => {
+    ctx = build();
+    await ctx.runs.insert({ ...RUN, agentKey: 'insights-analyst' });
+    await chat(ctx, 'First?');
+    expect(ctx.sessions.startRunHostThreadFrom).toHaveBeenCalledTimes(1);
+    expect(ctx.sessions.startRunHostThreadFrom).toHaveBeenCalledWith(
+      'run-r-1-node-analyse',
+      'run-r-1',
+    );
+    // The next turn goes on in the chat's own thread.
+    await chat(ctx, 'Second?');
+    expect(ctx.sessions.startRunHostThreadFrom).toHaveBeenCalledTimes(1);
   });
 
   it('replays the earlier messages as the transcript of the next turn', async () => {

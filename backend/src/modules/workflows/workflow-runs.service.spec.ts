@@ -149,9 +149,11 @@ function build(
     'data-readiness': fakeAgent('Data Readiness Agent', ['assess_readiness']),
   };
   const deleteMemoryThread = jest.fn().mockResolvedValue(undefined);
+  const deleteMemoryResource = jest.fn().mockResolvedValue(undefined);
   const mastra = {
     listAgents: () => registry,
     deleteMemoryThread,
+    deleteMemoryResource,
   } as unknown as MastraService;
   const agents = new AgentsService(mastra, userAgents);
   const workflows = new WorkflowsService(agents);
@@ -373,6 +375,7 @@ function build(
     repository,
     nodeChats,
     deleteMemoryThread,
+    deleteMemoryResource,
     /** The same store and collaborators after a backend restart. */
     restarted: () =>
       new WorkflowRunsService(
@@ -862,6 +865,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         question: 'Who won in 2002?',
         answer: 'Brazil won in 2002.',
       },
+      // Its agents go on from copies of the earlier run's threads.
+      continuesThreadsOf: `run-${first.run.id}`,
     });
     expect(second.run.context).toEqual({ fromRunId: first.run.id });
     // The answer is this run's, never the context's.
@@ -1357,7 +1362,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     await expect(ctx.repository.get('done')).resolves.toMatchObject({
       status: 'success',
     });
-    expect(ctx.deleteMemoryThread).toHaveBeenCalledWith('run-left');
+    // A failed run keeps its memory threads, as any finished run does.
+    expect(ctx.deleteMemoryThread).not.toHaveBeenCalled();
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledTimes(1);
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
       'run-orphan',
@@ -1676,7 +1682,14 @@ describe('WorkflowRunsService: the run history (api.md 120-127)', () => {
       `run-${run.id}`,
     );
     await expect(ctx.repository.get(run.id)).resolves.toBeNull();
-    // Its node chats go with it (data-model 3.17); another run's stay.
+    // Its node chats go with it (data-model 3.17), each with its memory
+    // thread (agents.md 5.16); another run's stay.
+    expect(ctx.deleteMemoryResource).toHaveBeenCalledWith(
+      `run-${run.id}-node-analyse`,
+    );
+    expect(ctx.deleteMemoryResource).not.toHaveBeenCalledWith(
+      'run-another-run-node-analyse',
+    );
     await expect(ctx.nodeChats.get(run.id, 'analyse')).resolves.toBeNull();
     expect(await ctx.nodeChats.get('another-run', 'analyse')).not.toBeNull();
     await expect(ctx.service.delete(run.id)).rejects.toThrow(

@@ -18,6 +18,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import {
   messageText,
@@ -35,6 +36,21 @@ const dataDir = mkdtempSync(join(tmpdir(), 'qti-node-chats-'));
 jest.setTimeout(180_000);
 
 const QUESTION = 'How many matches were played?';
+
+/** The ids of the memory threads in the app's Mastra store, read while it runs. */
+function threadIds(): string[] {
+  const db = new BetterSqlite3(join(dataDir, 'mastra.sqlite'), {
+    readonly: true,
+    fileMustExist: true,
+  });
+  try {
+    return (
+      db.prepare('SELECT id FROM "mastra_threads"').all() as { id: string }[]
+    ).map((row) => row.id);
+  } finally {
+    db.close();
+  }
+}
 const CHAT_ANSWER = 'The step listed one entity and answered from it.';
 
 interface NodeChatMessage {
@@ -287,12 +303,13 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
     expect(block).toContain('### Step output');
     expect(block).toContain('"stopped": false');
     expect(block).toContain(`## Final answer of the run\n${STUB_ANSWER}`);
-    // The run's own question and answer are not replayed as messages.
+    // The chat starts from a copy of the run's Analyse thread (agents.md
+    // 5.16): the run's question and Analyse's reply, then the message.
     expect(
       first.messages
         .filter((message) => message.role !== 'system')
         .map((message) => messageText(message)),
-    ).toEqual(['Chat: which entities did you see?']);
+    ).toEqual([QUESTION, STUB_ANSWER, 'Chat: which entities did you see?']);
 
     const stored = (
       await http().get(`/workflow-runs/${runId}/node-chats/analyse`).expect(200)
@@ -338,7 +355,7 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
     },
   );
 
-  it('replays the earlier messages on the next turn, and deleting the run deletes its chats', async () => {
+  it("goes on in the chat's own thread on the next turn, and deleting the run deletes its chats and their threads", async () => {
     const from = stub.requests.length;
     const res = await chatStream(runId, 'analyse', {
       content: 'Chat: and then?',
@@ -351,8 +368,12 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
       .filter(
         (message) => message.role === 'user' || message.role === 'assistant',
       )
-      .map((message) => [message.role, messageText(message)]);
+      .map((message) => [message.role, messageText(message)])
+      // The tool call of the first turn is an assistant message with no text.
+      .filter(([, text]) => text);
     expect(said).toEqual([
+      ['user', QUESTION],
+      ['assistant', STUB_ANSWER],
       ['user', 'Chat: which entities did you see?'],
       ['assistant', CHAT_ANSWER],
       ['user', 'Chat: and then?'],
@@ -361,8 +382,12 @@ describe('Node chats: chat with a step’s agent about its run data (API)', () =
       await http().get(`/workflow-runs/${runId}/node-chats/analyse`).expect(200)
     ).body as { messages: NodeChatMessage[] };
     expect(stored.messages).toHaveLength(4);
+    const chatThread = `run-${runId}-node-analyse`;
+    expect(threadIds()).toContain(chatThread);
 
     await http().delete(`/workflow-runs/${runId}`).expect(200);
     await http().get(`/workflow-runs/${runId}/node-chats/analyse`).expect(404);
+    expect(threadIds()).not.toContain(chatThread);
+    expect(threadIds()).not.toContain(`run-${runId}`);
   });
 });

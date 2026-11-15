@@ -21,6 +21,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import {
   messageText,
@@ -468,7 +469,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(again).toEqual(run);
   });
 
-  it("a follow-up run sends the earlier run's question and answer first", async () => {
+  it("a follow-up run goes on from a copy of the earlier run's Analyse thread, then its answer and this question", async () => {
     const first = await runStream('answer-business-question', {
       input: { question: 'Who hosted in 2002?', datasets: ['World Cup Core'] },
     });
@@ -484,10 +485,86 @@ describe('Streamed runs of agent workflows (API)', () => {
       .filter((message) => message.role !== 'system')
       .map((message) => [message.role, messageText(message)]);
     expect(dialogue).toEqual([
+      // From the copied thread: the earlier question and Analyse's reply.
       ['user', 'Who hosted in 2002?'],
+      ['assistant', STUB_ANSWER],
+      // Then the earlier run's answer (Write answer's), and this question.
       ['assistant', STUB_ANSWER],
       ['user', 'And in 2006?'],
     ]);
+  });
+
+  describe("a run's memory threads (agents.md 5.14; data-model 5)", () => {
+    /** Rows of one table of the app's Mastra store, read while it runs. */
+    const rowsOf = (table: string): Record<string, unknown>[] => {
+      const db = new BetterSqlite3(join(dataDir, 'mastra.sqlite'), {
+        readonly: true,
+        fileMustExist: true,
+      });
+      try {
+        return db.prepare(`SELECT * FROM "${table}"`).all() as Record<
+          string,
+          unknown
+        >[];
+      } finally {
+        db.close();
+      }
+    };
+    const threadsOf = (resource: string) =>
+      rowsOf('mastra_threads')
+        .filter((row) => (row['resourceId'] ?? row['resource_id']) === resource)
+        .map((row) => String(row['id']))
+        .sort();
+    const rolesIn = (threadId: string) =>
+      rowsOf('mastra_messages')
+        .filter((row) => (row['thread_id'] ?? row['threadId']) === threadId)
+        .sort((a, b) =>
+          String(a['createdAt']).localeCompare(String(b['createdAt'])),
+        )
+        .map((row) => String(row['role']));
+
+    it("keeps Analyse's, Plan's and Write answer's threads after the run, each exchange recorded; a follow-up starts from copies; deleting a run deletes its own", async () => {
+      const first = await runStream('answer-business-question', {
+        input: {
+          question: 'Who hosted in 2010?',
+          datasets: ['World Cup Core'],
+        },
+      });
+      const firstId = first.frames[0].runId!;
+      const host = `run-${firstId}`;
+      expect(threadsOf(host)).toEqual(
+        [host, `${host}:analysis-planner`, `${host}:answer-writer`].sort(),
+      );
+      // Plan and Write answer ran once each: the request, then the reply.
+      expect(rolesIn(`${host}:analysis-planner`)).toEqual([
+        'user',
+        'assistant',
+      ]);
+      expect(rolesIn(`${host}:answer-writer`)).toEqual(['user', 'assistant']);
+      // Analyse's first attempt is in its own thread.
+      expect(rolesIn(host)).toContain('assistant');
+
+      const second = await runStream('answer-business-question', {
+        input: { question: 'And in 2014?', datasets: ['World Cup Core'] },
+        context: { fromRunId: firstId },
+      });
+      const next = `run-${second.frames[0].runId!}`;
+      expect(threadsOf(next)).toEqual(
+        [next, `${next}:analysis-planner`, `${next}:answer-writer`].sort(),
+      );
+      // The copies go on: the earlier exchange, then this run's.
+      expect(rolesIn(`${next}:analysis-planner`)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'assistant',
+      ]);
+
+      await http().delete(`/workflow-runs/${firstId}`).expect(200);
+      expect(threadsOf(host)).toEqual([]);
+      // The follow-up's copies are its own.
+      expect(threadsOf(next)).toHaveLength(3);
+    });
   });
 
   it('a v2 run sends the analyst its five tools, its skills and the orientation, metrics, knowledge and catalog blocks, in order', async () => {

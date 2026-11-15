@@ -590,7 +590,11 @@ describe('Stored runs: the run history API (API)', () => {
         .filter((message) => message.role !== 'system')
         .map((message) => [message.role, messageText(message)]),
     ).toEqual([
+      // The earlier run's threads survived the restart: the follow-up goes
+      // on from a copy of its Analyse thread (agents.md 5.14), then its
+      // answer and this question.
       ['user', 'Who hosted in 2002?'],
+      ['assistant', STUB_ANSWER],
       ['assistant', STUB_ANSWER],
       ['user', 'And in 2006?'],
     ]);

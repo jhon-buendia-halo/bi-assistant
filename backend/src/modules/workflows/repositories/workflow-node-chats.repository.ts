@@ -58,6 +58,11 @@ export class WorkflowNodeChatsRepository {
     );
   }
 
+  /** Every node chat of a run. */
+  listByRun(runId: string): Promise<NodeChatDoc[]> {
+    return this.store.find({ runId });
+  }
+
   /** Delete every node chat of a run (api.md 122). */
   deleteByRun(runId: string): Promise<number> {
     return this.store.deleteMany({ runId });
