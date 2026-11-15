@@ -38,7 +38,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 ### Dev and branding helpers
 
 - `frontend/scripts/brand-electron.sh` renames `node_modules/electron/dist/Electron.app` to `Halo BI Assistant.app`, rewrites its `CFBundleName` / `CFBundleDisplayName` and the launcher's `path.txt`, and refreshes LaunchServices, so the macOS menu bar and Dock show the product name in unpackaged runs. Idempotent; a no-op off macOS. Packaged builds get the name from electron-builder's `productName`.
-- The app icon is `frontend/build/icon.png` (electron-builder derives `.icns` / `.ico`); a copy ships in the renderer bundle under `brand/`.
+- The app icon is `frontend/build/icon.png` (electron-builder derives `.icns` / `.ico`), rendered at 1024 px from `frontend/public/brand/halo-mark.svg` (ADR-0044); a copy ships in the renderer bundle as `brand/icon.png`.
 
 ## 2. npm scripts
 
