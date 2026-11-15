@@ -20,7 +20,7 @@ import { worldCupKey } from './helpers/world-cup-db';
 /** Mirrors the Feature "Workflows" in specs/capabilities/workflows/spec.md. */
 
 const V2 = 'Answer a Business Question';
-const V2_ID = 'qti-v2-turn';
+const V2_ID = 'answer-business-question';
 /**
  * Its steps in catalogue order: Plan, then a branch (Clarify waits for the answer),
  * then Analyse and Validate (retried once), Write answer and Wrap up.
@@ -318,7 +318,7 @@ test.describe('Feature: Workflows', () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
           const start = await openNode(page, 'start', 'Start');
-          await expect(start.getByTestId('workflow-agent-assistant-v2')).toContainText('Michael');
+          await expect(start.getByTestId('workflow-agent-insights-analyst')).toContainText('Michael');
           await closeNode(page);
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',

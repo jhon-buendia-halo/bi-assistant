@@ -101,10 +101,10 @@ import {
   streamTurnWorkflow,
 } from '../../mastra/testing/turn-workflow.stub';
 import {
-  QTI_V2_TURN_STEPS,
+  ANSWER_BUSINESS_QUESTION_STEPS,
   planOf,
-} from '../../mastra/workflows/qti-v2-turn.steps';
-import { qtiV2TurnWorkflow } from '../../mastra/workflows/qti-v2-turn.workflow';
+} from '../../mastra/workflows/answer-business-question.steps';
+import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
 import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-readiness-assessment.steps';
 import { dataReadinessAssessmentWorkflow } from '../../mastra/workflows/data-readiness-assessment.workflow';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
@@ -154,13 +154,13 @@ const DATASETS = [
  */
 type Workflow = 'assistant' | 'v2' | 'readiness';
 
-/** The workflow detail the fake catalogue answers for `qti-v2-turn`. */
+/** The workflow detail the fake catalogue answers for `answer-business-question`. */
 const V2_WORKFLOW = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   input: CODE_WORKFLOWS[0].input,
-  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
-  steps: QTI_V2_TURN_STEPS,
+  agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
+  steps: ANSWER_BUSINESS_QUESTION_STEPS,
   edges: CODE_WORKFLOWS[0].edges,
 };
 
@@ -212,7 +212,7 @@ const READINESS_REPORT: ReadinessReport = {
 /** The registry key of the agent each turn calls. */
 const AGENT_KEYS: Record<Workflow, string> = {
   assistant: 'assistant',
-  v2: 'assistant-v2',
+  v2: 'insights-analyst',
   readiness: 'data-readiness',
 };
 
@@ -221,8 +221,8 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
   assistant: { datasets: ['World Cup'] },
   v2: {
     datasets: ['World Cup'],
-    agentKey: 'assistant-v2',
-    agentName: 'Questions to Insights v2',
+    agentKey: 'insights-analyst',
+    agentName: 'Insights Analyst',
   },
   readiness: {
     datasets: ['World Cup'],
@@ -318,7 +318,7 @@ function build(options: BuildOptions = {}) {
           fullStream: streamOf(
             // v2's Analyse runs one successful query, so Validate passes.
             options.chunks ??
-              (key === 'assistant-v2' ? V2_ANALYSE_CHUNKS : undefined) ?? [
+              (key === 'insights-analyst' ? V2_ANALYSE_CHUNKS : undefined) ?? [
                 // A tool call, so the assistant's grounding guard stays quiet.
                 {
                   type: 'tool-call',
@@ -347,7 +347,7 @@ function build(options: BuildOptions = {}) {
   };
   const registry: Record<string, ReturnType<typeof agentFor>> = {
     assistant: agentFor('assistant', 'Questions to Insights Assistant'),
-    'assistant-v2': agentFor('assistant-v2', 'Questions to Insights v2'),
+    'insights-analyst': agentFor('insights-analyst', 'Insights Analyst'),
     'data-readiness': agentFor('data-readiness', 'Data Readiness Agent'),
   };
   // Suspended v2 runs dropped (their snapshots deleted, ADR-0043).
@@ -357,9 +357,9 @@ function build(options: BuildOptions = {}) {
     listAgents: () => registry,
     streamWorkflow: jest.fn(
       (key: string, inputData: unknown, requestContext: unknown) =>
-        key === 'qti-v2-turn'
+        key === 'answer-business-question'
           ? streamStubWorkflow(
-              qtiV2TurnWorkflow,
+              answerBusinessQuestionWorkflow,
               inputData,
               requestContext,
               discards,
@@ -378,11 +378,23 @@ function build(options: BuildOptions = {}) {
     ),
     deleteMemoryThread: jest.fn().mockResolvedValue(undefined),
     deleteSessionResources: jest.fn().mockResolvedValue(undefined),
+    deleteSessionWorkspace: jest.fn().mockResolvedValue(undefined),
+    // The run's memory threads (agents.md 5.14).
+    copyMemoryResource: jest.fn().mockResolvedValue(0),
+    copyMemoryThread: jest.fn().mockResolvedValue(false),
+    recordAgentExchange: jest.fn().mockResolvedValue(undefined),
     // v2's Plan and Write answer model calls (agents.md 5.11).
-    planV2Turn: jest.fn(({ question }: { question: string }) =>
-      Promise.resolve({ plan: planOf({}, question), stopped: false }),
+    planAnalysis: jest.fn(
+      (
+        { question }: { question: string },
+        opts?: { onExchange?: (e: object) => Promise<void> },
+      ) => {
+        // The stand-in records nothing; a test may (`onExchange`).
+        void opts;
+        return Promise.resolve({ plan: planOf({}, question), stopped: false });
+      },
     ),
-    writeV2Answer: jest.fn(
+    writeAnswer: jest.fn(
       (_input: unknown, opts: { onText?: (delta: string) => void }) => {
         opts.onText?.('Brazil won.');
         return Promise.resolve({
@@ -504,7 +516,7 @@ async function chatTurn(
   return events;
 }
 
-/** A run of `qti-v2-turn` on `input`. */
+/** A run of `answer-business-question` on `input`. */
 async function runOf(
   ctx: Ctx,
   input: Record<string, unknown>,
@@ -599,8 +611,8 @@ describe('a run sends the same model request as a chat turn (plan 1.24.2; agents
     await chatTurn(ctx, session.id, 'Who won?');
     const { run } = await runOf(ctx, V2_INPUT);
 
-    const [chatCall, runCall] = ctx.calls['assistant-v2'];
-    expect(ctx.calls['assistant-v2']).toHaveLength(2);
+    const [chatCall, runCall] = ctx.calls['insights-analyst'];
+    expect(ctx.calls['insights-analyst']).toHaveLength(2);
     expect(request(runCall)).toEqual(request(chatCall));
     // The host names itself where the session did.
     expect(runCall.options.requestContext.values.get('session-id')).toBe(
@@ -662,7 +674,12 @@ describe('the run host (agents.md 5.14)', () => {
         ctx.sessions.createRunHost({ runId: 'r', workflowId, name: 'x' }),
       ).rejects.toThrow(`Workflow "${workflowId}" not found`);
     }
-    for (const agentKey of ['sql-fixer', 'assistant-v2', 'rfp', 'agent-1']) {
+    for (const agentKey of [
+      'sql-fixer',
+      'insights-analyst',
+      'rfp',
+      'agent-1',
+    ]) {
       await expect(
         ctx.sessions.createRunHost({ runId: 'r', agentKey, name: 'x' }),
       ).rejects.toThrow(`Agent "${agentKey}" not found`);
@@ -684,15 +701,16 @@ describe('the run host (agents.md 5.14)', () => {
     ).rejects.toThrow('Add a PostgreSQL or Databricks dataset first');
   });
 
-  it('is created per run and discarded after it: never listed, its memory thread deleted, its workspace kept', async () => {
+  it('is created per run and discarded after it: never listed, its memory threads and workspace kept', async () => {
     const ctx = build();
     const { run } = await runOf(ctx, V2_INPUT);
     const hostId = `run-${run.id}`;
     expect(ctx.mastra.ensureSessionWorkspace).toHaveBeenCalledWith(
       hostId,
-      'Questions to Insights v2',
+      'Insights Analyst',
     );
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(hostId);
+    // The run keeps its agents' threads until it is deleted.
+    expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
     expect(ctx.mastra.deleteSessionResources).not.toHaveBeenCalled();
     await expect(ctx.sessions.get(hostId)).rejects.toThrow(
       `Session ${hostId} not found`,
@@ -700,8 +718,9 @@ describe('the run host (agents.md 5.14)', () => {
     // Each run gets its own host.
     const second = await runOf(ctx, V2_INPUT);
     expect(second.run.id).not.toBe(run.id);
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenLastCalledWith(
+    expect(ctx.mastra.ensureSessionWorkspace).toHaveBeenLastCalledWith(
       `run-${second.run.id}`,
+      'Insights Analyst',
     );
   });
 
@@ -731,19 +750,111 @@ describe('the run host (agents.md 5.14)', () => {
       { question: 'And in 2014?', datasets: ['World Cup'] },
       { context: { fromRunId: first.run.id } },
     );
-    expect(ctx.calls['assistant-v2'][1].input).toEqual([
+    expect(ctx.calls['insights-analyst'][1].input).toEqual([
       { role: 'user', content: 'Who won?' },
       { role: 'assistant', content: 'Brazil won.' },
       { role: 'user', content: 'And in 2014?' },
     ]);
+    // The earlier run had no thread to copy (the stand-in copies none).
+    expect(ctx.mastra.copyMemoryResource).toHaveBeenCalledWith(
+      `run-${first.run.id}`,
+      expect.stringMatching(/^run-/) as string,
+    );
+  });
+
+  it("a follow-up whose earlier run's threads were copied replays only the earlier answer and this question, and Plan still reads the whole transcript", async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    // The copies exist once the host is created.
+    ctx.mastra.copyMemoryResource.mockResolvedValueOnce(3);
+    ctx.registry['insights-analyst'].getMemory.mockResolvedValue({
+      getThreadById: jest.fn().mockResolvedValue({ id: 'copied' }),
+    });
+    await runOf(
+      ctx,
+      { question: 'And in 2014?', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    // The copied thread holds the earlier analysis; the answer it gave
+    // comes with the new question.
+    expect(ctx.calls['insights-analyst'][1].input).toEqual([
+      { role: 'assistant', content: 'Brazil won.' },
+      { role: 'user', content: 'And in 2014?' },
+    ]);
+    expect(ctx.mastra.planAnalysis).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messages: [
+          { role: 'user', content: 'Who won?' },
+          { role: 'assistant', content: 'Brazil won.' },
+          { role: 'user', content: 'And in 2014?' },
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("records Plan's and Write answer's exchanges in their threads on the run's host (agents.md 5.14)", async () => {
+    const ctx = build();
+    ctx.mastra.planAnalysis.mockImplementationOnce(
+      async (
+        { question }: { question: string },
+        opts: { onExchange?: (e: object) => Promise<void> },
+      ) => {
+        await opts.onExchange?.({ request: question, reply: '{"plan":1}' });
+        return { plan: planOf({}, question), stopped: false };
+      },
+    );
+    ctx.mastra.writeAnswer.mockImplementationOnce(
+      async (
+        _input: unknown,
+        opts: {
+          onText?: (delta: string) => void;
+          onExchange?: (e: object) => Promise<void>;
+        },
+      ) => {
+        opts.onText?.('Brazil won.');
+        await opts.onExchange?.({ request: 'rows', reply: 'Brazil won.' });
+        return {
+          answer: { headline: 'Brazil won.', answer: 'Brazil won.' },
+          stopped: false,
+        };
+      },
+    );
+    const { run } = await runOf(ctx, V2_INPUT);
+    expect(ctx.mastra.recordAgentExchange).toHaveBeenCalledWith(
+      `run-${run.id}`,
+      'analysis-planner',
+      { request: 'Who won?', reply: '{"plan":1}' },
+    );
+    expect(ctx.mastra.recordAgentExchange).toHaveBeenCalledWith(
+      `run-${run.id}`,
+      'answer-writer',
+      { request: 'rows', reply: 'Brazil won.' },
+    );
+  });
+
+  it('a failure to record an exchange never fails the run', async () => {
+    const ctx = build();
+    ctx.mastra.recordAgentExchange.mockRejectedValue(new Error('disk full'));
+    ctx.mastra.planAnalysis.mockImplementationOnce(
+      async (
+        { question }: { question: string },
+        opts: { onExchange?: (e: object) => Promise<void> },
+      ) => {
+        await opts.onExchange?.({ request: question, reply: 'x' });
+        return { plan: planOf({}, question), stopped: false };
+      },
+    );
+    const { run } = await runOf(ctx, V2_INPUT);
+    expect(run.status).toBe('success');
   });
 
   it('a node chat host sends its transcript before the message and its context block after the agent’s own (agents.md 5.16)', async () => {
     const ctx = build();
     const host = await ctx.sessions.createRunHost({
       runId: 'r-1-node-analyse',
-      workflowId: 'qti-v2-turn',
-      name: 'Questions to Insights v2: Analyse',
+      workflowId: 'answer-business-question',
+      name: 'Insights Analyst: Analyse',
       datasets: ['World Cup'],
       transcript: [
         { role: 'user', content: 'Why?' },
@@ -760,7 +871,7 @@ describe('the run host (agents.md 5.14)', () => {
       () => undefined,
     );
     await ctx.sessions.finishRunHost(host.id);
-    const call = ctx.calls['assistant-v2'][0];
+    const call = ctx.calls['insights-analyst'][0];
     expect(call.input).toEqual([
       { role: 'user', content: 'Why?' },
       { role: 'assistant', content: 'Because.' },
@@ -774,8 +885,8 @@ describe('the run host (agents.md 5.14)', () => {
     // The turn is the step's agent alone (agents.md 5.16): no plan, no
     // catalog or plan block, no answer step; the context block comes last.
     expect(at).toBe(system.length - 1);
-    expect(ctx.mastra.planV2Turn).not.toHaveBeenCalled();
-    expect(ctx.mastra.writeV2Answer).not.toHaveBeenCalled();
+    expect(ctx.mastra.planAnalysis).not.toHaveBeenCalled();
+    expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
     expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
       'agent-turn',
       expect.anything(),
@@ -788,7 +899,7 @@ describe('the run host (agents.md 5.14)', () => {
     const abort = new AbortController();
     const pending = runOf(ctx, V2_INPUT, {}, abort.signal);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    const call = ctx.calls['assistant-v2'][0];
+    const call = ctx.calls['insights-analyst'][0];
     expect(call.options.abortSignal?.aborted).toBe(false);
     abort.abort();
     const { run, events } = await pending;
@@ -797,7 +908,8 @@ describe('the run host (agents.md 5.14)', () => {
     expect(events.some((e) => e.type === 'done' || e.type === 'error')).toBe(
       false,
     );
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(`run-${run.id}`);
+    // A stopped run keeps what its agents recorded.
+    expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
   });
 
   it("careful: true on an agent host's turn runs the cross-check, as a careful chat turn does", async () => {
@@ -970,12 +1082,12 @@ describe('a v2 run that checks data quality (agents.md 5.11)', () => {
     const readiness = readinessService();
     const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
     await ctx.sessions.onModuleInit();
-    const checkV2DataQuality = jest.fn().mockResolvedValue({
+    const checkDataQuality = jest.fn().mockResolvedValue({
       issues: [{ finding: 1, impact: 'Some wins may be missing.' }],
       stopped: false,
     });
-    (ctx.mastra as Record<string, unknown>)['checkV2DataQuality'] =
-      checkV2DataQuality;
+    (ctx.mastra as Record<string, unknown>)['checkDataQuality'] =
+      checkDataQuality;
     const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
 
     expect(run.status).toBe('success');
@@ -990,7 +1102,7 @@ describe('a v2 run that checks data quality (agents.md 5.11)', () => {
     });
     expect(readiness.saveReport).toHaveBeenCalledTimes(1);
     // Sarah reads the SQL and the engine's findings, numbered.
-    expect(checkV2DataQuality).toHaveBeenCalledWith(
+    expect(checkDataQuality).toHaveBeenCalledWith(
       expect.objectContaining({
         sql: ['SELECT winner, count(*) FROM wc.public.matches GROUP BY winner'],
         tables: ['wc.public.matches'],
@@ -1005,7 +1117,7 @@ describe('a v2 run that checks data quality (agents.md 5.11)', () => {
       expect.anything(),
     );
     // Jessica gets the issue as a finding, after Validate's.
-    const written = ctx.mastra.writeV2Answer.mock.calls[0][0] as {
+    const written = ctx.mastra.writeAnswer.mock.calls[0][0] as {
       findings: { check: string; passed: boolean; detail: string }[];
     };
     expect(written.findings.at(-1)).toEqual({
@@ -1040,7 +1152,7 @@ describe('a v2 run that checks data quality (agents.md 5.11)', () => {
     await ctx.sessions.onModuleInit();
     const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
     expect(run.status).toBe('success');
-    const written = ctx.mastra.writeV2Answer.mock.calls[0][0] as {
+    const written = ctx.mastra.writeAnswer.mock.calls[0][0] as {
       findings: { check: string; passed: boolean; detail: string }[];
     };
     expect(written.findings.at(-1)).toEqual({
@@ -1197,7 +1309,7 @@ const stepLine = (s: { id: string; status: string; attempt?: number }) =>
 describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
   it('suspends at Clarify: the waiting step, input-required, then done with the run suspended', async () => {
     const ctx = build();
-    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
       stopped: false,
     });
@@ -1249,13 +1361,13 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       expect.objectContaining({ id: run.id }),
     ]);
     // No agent turn ran: Plan asked first.
-    expect(ctx.calls['assistant-v2']).toHaveLength(0);
+    expect(ctx.calls['insights-analyst']).toHaveLength(0);
     expect(ctx.discards.count).toBe(0);
   });
 
   it('resumes the same run with the answer: Clarify goes back to Plan, which plans with it, then the analysis and the answer', async () => {
     const ctx = build();
-    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
       stopped: false,
     });
@@ -1270,7 +1382,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(events[0]).toEqual({
       type: 'run',
       runId: started.run.id,
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
     });
     const steps = events.filter(
       (e): e is Extract<RunStreamEvent, { type: 'step' }> => e.type === 'step',
@@ -1309,8 +1421,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:success',
     ]);
     // Plan planned again with its question and the trimmed answer.
-    expect(ctx.mastra.planV2Turn).toHaveBeenCalledTimes(2);
-    expect(ctx.mastra.planV2Turn.mock.calls[1][0]).toMatchObject({
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
+    expect(ctx.mastra.planAnalysis.mock.calls[1][0]).toMatchObject({
       question: 'Which team was the most dominant?',
       answered: {
         question: 'Dominant by what measure?',
@@ -1331,10 +1443,10 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
 
   it('suspends at Analyse on ask_clarification, and resumes by running the agent again with its question and the answer', async () => {
     const ctx = build();
-    const agent = ctx.registry['assistant-v2'];
+    const agent = ctx.registry['insights-analyst'];
     const defaultStream = agent.stream.getMockImplementation()!;
     agent.stream.mockImplementationOnce((input, opts) => {
-      ctx.calls['assistant-v2'].push({ input, options: opts });
+      ctx.calls['insights-analyst'].push({ input, options: opts });
       return Promise.resolve({
         fullStream: streamOf(ASK_CHUNKS),
         text: Promise.resolve(''),
@@ -1355,7 +1467,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'analyse:suspended#1',
     ]);
     // The question stopped the agent's stream, not the run.
-    const firstCall = ctx.calls['assistant-v2'][0];
+    const firstCall = ctx.calls['insights-analyst'][0];
     expect(firstCall.options.abortSignal?.aborted).toBe(true);
 
     agent.stream.mockImplementation(defaultStream);
@@ -1383,8 +1495,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     ]);
     // The agent runs again (no memory thread) with the conversation so far:
     // the question, its clarifying question and the user's answer.
-    expect(ctx.calls['assistant-v2']).toHaveLength(2);
-    const second = ctx.calls['assistant-v2'][1];
+    expect(ctx.calls['insights-analyst']).toHaveLength(2);
+    const second = ctx.calls['insights-analyst'][1];
     expect(second.options.memory).toBeUndefined();
     expect(second.input).toEqual([
       { role: 'user', content: 'Who won?' },
@@ -1416,7 +1528,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       status: 409,
       message: `Run "${done.run.id}" is not waiting for an answer`,
     });
-    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
       stopped: false,
     });
@@ -1450,7 +1562,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     });
     try {
       const ctx = build();
-      ctx.mastra.planV2Turn.mockResolvedValueOnce({
+      ctx.mastra.planAnalysis.mockResolvedValueOnce({
         plan: ASKING_PLAN,
         stopped: false,
       });
@@ -1477,10 +1589,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
         'stopped',
       );
       expect(ctx.discards.count).toBe(1);
-      // Its host left memory with its memory thread.
-      expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(
-        `run-${waiting.run.id}`,
-      );
+      // Its host left memory; its memory threads stay with the run.
+      expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
     }
@@ -1488,7 +1598,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
 
   it('"Run again with my answer": a run whose context is the expired run plans with its question and clarifying question', async () => {
     const ctx = build();
-    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
       stopped: false,
     });
@@ -1516,7 +1626,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     const rerun = await ctx.runs.stream(prepared, () => undefined);
     expect(rerun.status).toBe('success');
     // Plan sees the original question, its clarifying question, the answer.
-    const planned = ctx.mastra.planV2Turn.mock.calls.at(-1)![0] as {
+    const planned = ctx.mastra.planAnalysis.mock.calls.at(-1)![0] as {
       messages: unknown;
       question: string;
     };
@@ -1533,7 +1643,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
 
   it('at start-up, a run stored suspended becomes stopped with waitingFor expired, and the leftover snapshots go', async () => {
     const ctx = build();
-    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
       stopped: false,
     });
@@ -1546,16 +1656,15 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       finishedAt: expect.any(String) as unknown,
     });
     expect(ctx.mastra.discardSuspendedWorkflowRuns).toHaveBeenCalledWith(
-      'qti-v2-turn',
+      'answer-business-question',
     );
-    expect(ctx.mastra.deleteMemoryThread).toHaveBeenCalledWith(
-      `run-${waiting.run.id}`,
-    );
+    // The run keeps its memory threads, as any finished run does.
+    expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
   });
 
   it('a chat session still ends on the question as a clarification card: its workflow run is dropped', async () => {
     const ctx = build();
-    ctx.mastra.planV2Turn.mockResolvedValueOnce({
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
       stopped: false,
     });

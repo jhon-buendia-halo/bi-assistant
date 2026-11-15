@@ -332,8 +332,8 @@ test('renderDemoTxt and storyTitle describe a story with no UI', () => {
   const roadmap = '#### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `🚧 In progress`\n';
   assert.equal(storyTitle(roadmap, '0.4.5'), 'Deterministic QA: impacted tests, demo video, test-run evidence');
   assert.equal(
-    storyTitle('#### 1.21.1 — Empty Questions to Insights v2 agent ([BA-321](https://x/BA-321))  `✅ Done`', '1.21.1'),
-    'Empty Questions to Insights v2 agent',
+    storyTitle('#### 1.21.1 — Empty Insights Analyst agent ([BA-321](https://x/BA-321))  `✅ Done`', '1.21.1'),
+    'Empty Insights Analyst agent',
   );
   const txt = renderDemoTxt('0.4.5', 'Deterministic QA', [
     { command: 'node --test scripts/qa-lib.test.mjs', exitCode: 0, status: 'passed', summary: ['# pass 9'] },

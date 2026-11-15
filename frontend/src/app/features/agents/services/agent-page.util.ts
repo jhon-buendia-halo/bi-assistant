@@ -46,7 +46,7 @@ export function hasChatTab(kind: AgentKind): boolean {
 
 /**
  * The Used in line's text when no workflow uses the agent (R109, plan 5.8):
- * every agent but Questions to Insights v2. A System agent is called by the
+ * every agent but Insights Analyst. A System agent is called by the
  * app itself.
  */
 export function usedInEmptyText(kind: AgentKind): string {

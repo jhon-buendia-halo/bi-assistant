@@ -6,7 +6,7 @@ import {
 
 /**
  * Reads a step's output as one of the analyst workflow's structured shapes
- * (Questions to Insights v2: Plan's `PlanOutput`, Validate's
+ * (Analysis Planner's `PlanOutput`, Validate's
  * `ValidateOutput`), so the node dialog can show it as a panel above the
  * raw data. By shape, not by step id; the shape may sit under its own key
  * (`{ plan: … }`), and the passed-on fields beside it are ignored. Null when

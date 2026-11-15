@@ -163,10 +163,10 @@ describe('AgentsService (built-in and user agents)', () => {
   );
 
   it(
-    'lists Questions to Insights v2 as Official, with no datasets or requirement, and details its tools (BA-320)',
+    'lists Insights Analyst as Official, with no datasets or requirement, and details its tools (BA-320)',
     asDemoUser(async () => {
       const v2 = build({
-        'assistant-v2': fakeAgent('Questions to Insights v2', [
+        'insights-analyst': fakeAgent('Insights Analyst', [
           'list_entities',
           'describe_entity',
           'sample_rows',
@@ -175,7 +175,7 @@ describe('AgentsService (built-in and user agents)', () => {
         ]),
       });
       const agents = await v2.service.list();
-      const entry = agents.find((agent) => agent.key === 'assistant-v2');
+      const entry = agents.find((agent) => agent.key === 'insights-analyst');
       expect(entry).toMatchObject({
         kind: 'official',
         owner: 'Official',
@@ -192,7 +192,7 @@ describe('AgentsService (built-in and user agents)', () => {
         starterQuestions: [],
       });
       expect(entry).not.toHaveProperty('chatRequirement');
-      const detail = await v2.service.get('assistant-v2');
+      const detail = await v2.service.get('insights-analyst');
       expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
         'ask_clarification',
         'describe_entity',
@@ -201,7 +201,7 @@ describe('AgentsService (built-in and user agents)', () => {
         'sample_rows',
       ]);
       // Its turn workflow, for the Graph tab (api.md 34, R108).
-      expect(detail?.workflow?.id).toBe('qti-v2-turn');
+      expect(detail?.workflow?.id).toBe('answer-business-question');
       expect(detail?.workflow?.steps.map((step) => step.title)).toEqual([
         'Receive question',
         'Load catalog',
@@ -215,7 +215,7 @@ describe('AgentsService (built-in and user agents)', () => {
       ]);
       expect((await v2.service.get('assistant'))?.workflow).toBeUndefined();
       // Its built-in skills, on demand (agents.md 7.4).
-      const skills = (await v2.service.skills('assistant-v2')).skills;
+      const skills = (await v2.service.skills('insights-analyst')).skills;
       expect(
         skills.map(({ name, level, loading }) => ({ name, level, loading })),
       ).toEqual(
@@ -305,7 +305,7 @@ describe('AgentsService (built-in and user agents)', () => {
       });
       await ctx.service.publish(created.id);
       await ctx.service.saveDraft(created.id, {
-        name: 'Analyst v2',
+        name: 'Insights Analyst',
         datasets: ['World Cup Core'],
       });
       const user = (await ctx.service.list()).find(

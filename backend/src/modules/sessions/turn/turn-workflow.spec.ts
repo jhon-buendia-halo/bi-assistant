@@ -14,7 +14,7 @@ const session = (partial: Partial<SessionDoc> = {}): SessionDoc => ({
   id: 's-1',
   name: 'Run',
   datasets: ['World Cup'],
-  agentKey: 'assistant-v2',
+  agentKey: 'insights-analyst',
   messages: [],
   visualizations: [],
   createdAt: 't',
@@ -23,10 +23,10 @@ const session = (partial: Partial<SessionDoc> = {}): SessionDoc => ({
 });
 
 describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
-  it("runs a v2 session's turn as qti-v2-turn, its steps driving the bar", () => {
+  it("runs a v2 session's turn as answer-business-question, its steps driving the bar", () => {
     expect(turnWorkflowOf(session())).toMatchObject({
-      id: 'qti-v2-turn',
-      engineId: 'qti-v2-turn',
+      id: 'answer-business-question',
+      engineId: 'answer-business-question',
       bar: 'steps',
       stepIds: [
         'receive-question',

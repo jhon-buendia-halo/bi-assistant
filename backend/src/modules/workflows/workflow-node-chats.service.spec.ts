@@ -7,7 +7,7 @@ jest.mock('./workflows.service', () => ({ WorkflowsService: class {} }));
 import { NotFoundException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
-import { QTI_V2_TURN_STEPS } from '../../mastra/workflows/qti-v2-turn.steps';
+import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
 import type { SessionsService } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
@@ -29,8 +29,8 @@ const ANALYSE_OUTPUT = {
 
 const RUN: WorkflowRunDoc = {
   id: 'r-1',
-  workflowId: 'qti-v2-turn',
-  workflowName: 'Questions to Insights v2',
+  workflowId: 'answer-business-question',
+  workflowName: 'Insights Analyst',
   input: { question: 'How many goals in 2022?', datasets: ['World Cup Core'] },
   status: 'success',
   steps: [
@@ -59,14 +59,14 @@ const RUN: WorkflowRunDoc = {
   finishedAt: '2026-11-12T10:00:10.000Z',
 };
 
-/** The catalogue as the runs see it: `qti-v2-turn`, Analyse its agent step. */
+/** The catalogue as the runs see it: `answer-business-question`, Analyse its agent step. */
 const workflows = {
   definition: jest.fn((id: string) =>
-    id === 'qti-v2-turn'
+    id === 'answer-business-question'
       ? Promise.resolve({
           id,
-          name: 'Questions to Insights v2',
-          steps: QTI_V2_TURN_STEPS.map((step) => ({
+          name: 'Insights Analyst',
+          steps: ANSWER_BUSINESS_QUESTION_STEPS.map((step) => ({
             ...step,
             input: [...step.input],
             output: [...step.output],
@@ -74,10 +74,10 @@ const workflows = {
             ...(step.kind === 'agent'
               ? {
                   agent: {
-                    name: 'Questions to Insights v2',
+                    name: 'Insights Analyst',
                     tools: ['run_readonly_sql'],
                     maxSteps: 8,
-                    key: 'assistant-v2',
+                    key: 'insights-analyst',
                   },
                 }
               : {}),
@@ -155,6 +155,8 @@ function build(script: Script = {}) {
       Promise.resolve({ id: 'host', messages: hostMessages }),
     ),
     deleteRunHostResources: jest.fn().mockResolvedValue(undefined),
+    deleteRunHostWorkspace: jest.fn().mockResolvedValue(undefined),
+    startRunHostThreadFrom: jest.fn().mockResolvedValue(true),
   };
   const service = new WorkflowNodeChatsService(
     workflows,
@@ -354,7 +356,7 @@ describe('WorkflowNodeChatsService: a chat turn (api.md 136, 137; agents.md 5.16
     };
     expect(spec).toMatchObject({
       runId: 'r-1-node-analyse',
-      workflowId: 'qti-v2-turn',
+      workflowId: 'answer-business-question',
       datasets: ['World Cup Core'],
       transcript: [],
     });
@@ -368,13 +370,17 @@ describe('WorkflowNodeChatsService: a chat turn (api.md 136, 137; agents.md 5.16
     });
     expect(message.stopped).toBeUndefined();
     expect(events.at(-1)).toEqual({ type: 'done', message });
-    // The host, its memory thread and its workspace are gone.
+    // The host and its workspace are gone; its memory thread stays for the
+    // chat's next turn (agents.md 5.16).
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledWith(
       'run-r-1-node-analyse',
     );
-    expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledWith(
+    expect(ctx.sessions.deleteRunHostWorkspace).toHaveBeenCalledWith(
       'run-r-1-node-analyse',
     );
+    expect(ctx.sessions.deleteRunHostResources).not.toHaveBeenCalled();
+    // A run with no agent of its own on record starts from no thread.
+    expect(ctx.sessions.startRunHostThreadFrom).not.toHaveBeenCalled();
     // Stored: the user message, then the assistant's; the run unchanged.
     const stored = await ctx.service.messages('r-1', 'analyse');
     expect(stored.map((m) => [m.role, m.content])).toEqual([
@@ -389,6 +395,20 @@ describe('WorkflowNodeChatsService: a chat turn (api.md 136, 137; agents.md 5.16
       createdAt: undefined,
       updatedAt: undefined,
     });
+  });
+
+  it("starts a chat about the run's own agent step from a copy of the run's thread, on its first turn only", async () => {
+    ctx = build();
+    await ctx.runs.insert({ ...RUN, agentKey: 'insights-analyst' });
+    await chat(ctx, 'First?');
+    expect(ctx.sessions.startRunHostThreadFrom).toHaveBeenCalledTimes(1);
+    expect(ctx.sessions.startRunHostThreadFrom).toHaveBeenCalledWith(
+      'run-r-1-node-analyse',
+      'run-r-1',
+    );
+    // The next turn goes on in the chat's own thread.
+    await chat(ctx, 'Second?');
+    expect(ctx.sessions.startRunHostThreadFrom).toHaveBeenCalledTimes(1);
   });
 
   it('replays the earlier messages as the transcript of the next turn', async () => {

@@ -14,7 +14,7 @@ import { worldCupKey } from './helpers/world-cup-db';
 /**
  * Mirrors the Feature "Chat and visuals" in
  * specs/capabilities/agent-answers/spec.md, now through the Run tab of
- * Questions to Insights v2: a run streams its reasoning and tool activity, renders the answer's
+ * Insights Analyst: a run streams its reasoning and tool activity, renders the answer's
  * Markdown and its SQL, and can be stopped. The model is the recording stub.
  */
 

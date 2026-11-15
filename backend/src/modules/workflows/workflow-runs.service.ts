@@ -23,7 +23,7 @@ import {
   validateWorkflowInput,
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
-import { QTI_V2_TURN_WORKFLOW_ID } from '../../mastra/workflows/qti-v2-turn.steps';
+import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { clarifyingQuestionText } from '../sessions/turn/turn-workflow';
@@ -41,6 +41,7 @@ import {
   type TurnSuspension,
 } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
+import { nodeChatHostRunId } from './node-chat-context';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import { SuspendedRuns } from './suspended-runs';
 import {
@@ -177,7 +178,7 @@ export interface RunAttachment {
 /**
  * Runs a workflow once on its typed input and keeps the run (ADR-0041;
  * api.md 118-127; agents.md 5.14; data-model 3.16). A run (of
- * `qti-v2-turn`, the one catalogue workflow, or a user agent's draft) runs
+ * `answer-business-question`, the one catalogue workflow, or a user agent's draft) runs
  * one agent turn on a run host, an in-memory session `SessionsService`
  * holds, through today's turn path unchanged, and the host is projected
  * into the run. Every run but a draft's is stored in `workflow_runs` when it
@@ -211,29 +212,25 @@ export class WorkflowRunsService implements OnModuleInit {
 
   /**
    * Start-up recovery (plan 5.1 step 5): a run still `running` was cut off
-   * when the app stopped, so it becomes `failed` (its memory thread deleted,
-   * its workspace kept); a run workspace no stored run owns is deleted with
-   * its memory thread.
+   * when the app stopped, so it becomes `failed` (its workspace and memory
+   * threads kept, as any finished run's); a run workspace no stored run
+   * owns is deleted with its memory threads.
    */
   async onModuleInit(): Promise<void> {
     const now = new Date().toISOString();
     for (const run of await this.repository.listRunning()) {
       await this.repository.update(run.id, interruptedRunPatch(run, now));
-      await this.quietly(`delete the memory thread of run ${run.id}`, () =>
-        this.mastra.deleteMemoryThread(`${RUN_HOST_ID_PREFIX}${run.id}`),
-      );
     }
     // A run that waited for an answer when the app stopped can't go on: its
     // turn lived in memory (ADR-0043). It is stopped, `waitingFor` expired,
     // and the workflow's leftover snapshots are deleted.
     for (const run of await this.repository.listSuspended()) {
       await this.repository.update(run.id, expiredRunPatch(run, now));
-      await this.quietly(`delete the memory thread of run ${run.id}`, () =>
-        this.mastra.deleteMemoryThread(`${RUN_HOST_ID_PREFIX}${run.id}`),
-      );
     }
     await this.quietly('delete the snapshots of suspended runs', async () => {
-      await this.mastra.discardSuspendedWorkflowRuns(QTI_V2_TURN_WORKFLOW_ID);
+      await this.mastra.discardSuspendedWorkflowRuns(
+        ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+      );
     });
     let hostIds: string[];
     try {
@@ -389,6 +386,8 @@ export class WorkflowRunsService implements OnModuleInit {
                 question: prepared.context.question,
                 answer: prepared.context.answer,
               },
+              // Its agents go on from copies of the earlier run's threads.
+              continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
             }
           : {}),
       });
@@ -620,6 +619,13 @@ export class WorkflowRunsService implements OnModuleInit {
     if (held) await this.expire(id, held);
     if (run.question !== undefined) {
       await this.sessions.deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${id}`);
+    }
+    // Each node chat keeps a memory thread of its own (agents.md 5.16).
+    for (const chat of await this.nodeChats.listByRun(id)) {
+      const hostId = `${RUN_HOST_ID_PREFIX}${nodeChatHostRunId(id, chat.stepId)}`;
+      await this.quietly(`delete the memory thread of ${hostId}`, () =>
+        this.mastra.deleteMemoryResource(hostId),
+      );
     }
     await this.nodeChats.deleteByRun(id);
     await this.repository.delete(id);

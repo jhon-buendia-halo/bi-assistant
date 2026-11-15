@@ -21,7 +21,7 @@ import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import { agentWorkflow } from '../../mastra/workflows/agent-workflows';
-import { QTI_V2_TURN_STEPS } from '../../mastra/workflows/qti-v2-turn.steps';
+import { ANSWER_BUSINESS_QUESTION_STEPS } from '../../mastra/workflows/answer-business-question.steps';
 import { CODE_WORKFLOWS } from '../../mastra/workflows/workflow-catalog';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import type { SkillDoc } from '../skills/entities/skill.entity';
@@ -98,8 +98,8 @@ function build(
       'run_readonly_sql',
       'ask_clarification',
     ]),
-    'assistant-v2': fakeAgent(
-      'Questions to Insights v2',
+    'insights-analyst': fakeAgent(
+      'Insights Analyst',
       ['list_entities', 'describe_entity', 'run_readonly_sql'],
       '',
       options.v2Prompt ?? 'You answer with the core data tools.',
@@ -112,13 +112,13 @@ function build(
     ),
     // The agents of v2's Plan and Write answer steps (agents.md 5.11).
     'analysis-planner': fakeAgent(
-      'Questions to Insights v2: Plan',
+      'Analysis Planner',
       [],
       '',
       'You plan a data analysis.',
     ),
     'answer-writer': fakeAgent(
-      'Questions to Insights v2: Write answer',
+      'Answer Writer',
       [],
       '',
       'You write the final answer.',
@@ -166,9 +166,9 @@ const READINESS_SUMMARY = expect.objectContaining({
   ],
 }) as unknown;
 
-/** Questions to Insights v2, as `GET /workflows` lists it. */
-const QTI_V2_SUMMARY = {
-  id: 'qti-v2-turn',
+/** Insights Analyst, as `GET /workflows` lists it. */
+const ANSWER_BUSINESS_QUESTION_SUMMARY = {
+  id: 'answer-business-question',
   name: 'Answer a Business Question',
   description: V2_DESCRIPTION,
   kind: 'code',
@@ -176,7 +176,7 @@ const QTI_V2_SUMMARY = {
   // Every agent its steps run: Michael, then Olivia (Plan), Sarah (Check
   // data quality) and Jessica (Write answer).
   agents: [
-    { key: 'assistant-v2', name: 'Michael' },
+    { key: 'insights-analyst', name: 'Michael' },
     { key: 'analysis-planner', name: 'Olivia' },
     { key: 'data-readiness', name: 'Sarah' },
     { key: 'answer-writer', name: 'Jessica' },
@@ -229,7 +229,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     await ctx.userAgents.create(agentConfig('Sketch', ['World Cup Core']));
 
     expect(await ctx.service.list()).toEqual([
-      QTI_V2_SUMMARY,
+      ANSWER_BUSINESS_QUESTION_SUMMARY,
       READINESS_SUMMARY,
     ]);
   });
@@ -259,15 +259,18 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   it('lists the same workflows while no dataset qualifies for the Data Readiness Agent', async () => {
     ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     const workflows = await ctx.service.list();
-    expect(workflows).toEqual([QTI_V2_SUMMARY, READINESS_SUMMARY]);
+    expect(workflows).toEqual([
+      ANSWER_BUSINESS_QUESTION_SUMMARY,
+      READINESS_SUMMARY,
+    ]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
     expect(workflows[0]).not.toHaveProperty('chatRequirement');
   });
 
   describe('get', () => {
-    it("qti-v2-turn's steps are agentWorkflow('assistant-v2')'s, with their declared schemas", async () => {
+    it("answer-business-question's steps are agentWorkflow('insights-analyst')'s, with their declared schemas", async () => {
       ctx = build();
-      const detail = await ctx.service.get('qti-v2-turn');
+      const detail = await ctx.service.get('answer-business-question');
       // Its agent steps name their own agent's key (Olivia plans, Michael
       // analyses, Jessica writes), and every step carries its declared input
       // and output schema (api.md 117; agents.md 5.11, 5.12).
@@ -275,20 +278,20 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
       ).toEqual([
         'analysis-planner',
-        'assistant-v2',
+        'insights-analyst',
         'data-readiness',
         'answer-writer',
       ]);
       expect(detail.steps).toEqual(
-        agentWorkflow('assistant-v2')!.steps.map((step, index) => ({
+        agentWorkflow('insights-analyst')!.steps.map((step, index) => ({
           ...step,
-          inputSchema: QTI_V2_TURN_STEPS[index].inputSchema,
-          outputSchema: QTI_V2_TURN_STEPS[index].outputSchema,
+          inputSchema: ANSWER_BUSINESS_QUESTION_STEPS[index].inputSchema,
+          outputSchema: ANSWER_BUSINESS_QUESTION_STEPS[index].outputSchema,
         })),
       );
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
-        id: 'qti-v2-turn',
+        id: 'answer-business-question',
         stepCount: 9,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
@@ -310,7 +313,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       // A run needs the hash and the edges too (data-model 3.16; the loop
       // steps keep one entry per attempt, api.md 3.6).
       await expect(
-        ctx.service.definition('qti-v2-turn'),
+        ctx.service.definition('answer-business-question'),
       ).resolves.toMatchObject({
         contractHash: CODE_WORKFLOWS[0].contractHash,
         edges: CODE_WORKFLOWS[0].edges,
@@ -322,10 +325,10 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
 
     it('details the agents its steps call: their key, name, model, system prompt and tools (as api.md 34 toolDetails); no model without an LLM', async () => {
       ctx = build();
-      const detail = await ctx.service.get('qti-v2-turn');
+      const detail = await ctx.service.get('answer-business-question');
       expect(detail.agents).toEqual([
         {
-          key: 'assistant-v2',
+          key: 'insights-analyst',
           // The agent's persona name, as the catalogue shows it.
           name: 'Michael',
           model: null,
@@ -375,18 +378,20 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       ]);
       ctx.db.close();
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
-      const withLlm = await ctx.service.get('qti-v2-turn');
+      const withLlm = await ctx.service.get('answer-business-question');
       expect(withLlm.agents[0].model).toBe('anthropic/claude-sonnet-4-6');
     });
 
     it('shortens a system prompt longer than 20 000 characters, and says so', async () => {
       ctx = build(undefined, { v2Prompt: 'p'.repeat(20_001) });
-      const [agent] = (await ctx.service.get('qti-v2-turn')).agents;
+      const [agent] = (await ctx.service.get('answer-business-question'))
+        .agents;
       expect(agent.systemPrompt).toHaveLength(20_000);
       expect(agent.systemPromptTruncated).toBe(true);
       ctx.db.close();
       ctx = build(undefined, { v2Prompt: 'p'.repeat(20_000) });
-      const [exact] = (await ctx.service.get('qti-v2-turn')).agents;
+      const [exact] = (await ctx.service.get('answer-business-question'))
+        .agents;
       expect(exact.systemPrompt).toHaveLength(20_000);
       expect(exact).not.toHaveProperty('systemPromptTruncated');
     });
@@ -395,7 +400,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
       const [v2] = await ctx.service.list();
       expect(v2.agents).toEqual([
-        { key: 'assistant-v2', name: 'Michael' },
+        { key: 'insights-analyst', name: 'Michael' },
         { key: 'analysis-planner', name: 'Olivia' },
         { key: 'data-readiness', name: 'Sarah' },
         { key: 'answer-writer', name: 'Jessica' },
@@ -410,7 +415,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       'seq-text-demo',
       'deep-analysis',
       'agent:sql-fixer',
-      'agent:assistant-v2',
+      'agent:insights-analyst',
       'agent:rfp',
       'nope',
       'agent-turn',
@@ -448,14 +453,14 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
 
   it.each([
     [
-      'assistant-v2',
-      [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
+      'insights-analyst',
+      [{ id: 'answer-business-question', name: 'Answer a Business Question' }],
     ],
     ['assistant', []],
     [
       'data-readiness',
       [
-        { id: 'qti-v2-turn', name: 'Answer a Business Question' },
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
         { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
       ],
     ],
@@ -491,7 +496,7 @@ describe('WorkflowsController (ids contain ":")', () => {
     const service = {
       list: jest.fn().mockResolvedValue([]),
       get: jest.fn((id: string) =>
-        id === 'qti-v2-turn'
+        id === 'answer-business-question'
           ? Promise.resolve({
               id,
               name: 'Answer a Business Question',
@@ -512,11 +517,11 @@ describe('WorkflowsController (ids contain ":")', () => {
     try {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       await request(server)
-        .get('/workflows/qti-v2-turn')
+        .get('/workflows/answer-business-question')
         .expect(200)
         .expect(({ body }) =>
           expect(body).toMatchObject({
-            id: 'qti-v2-turn',
+            id: 'answer-business-question',
             name: 'Answer a Business Question',
           }),
         );
@@ -541,10 +546,14 @@ describe('WorkflowsController (ids contain ":")', () => {
 
 describe('WorkflowsController POST /workflows/:id/runs (api.md 118)', () => {
   it('answers 200 with the stored run, and a refusal with its status', async () => {
-    const run = { id: 'r-1', workflowId: 'qti-v2-turn', status: 'failed' };
+    const run = {
+      id: 'r-1',
+      workflowId: 'answer-business-question',
+      status: 'failed',
+    };
     const service = {
       run: jest.fn((id: string, body: unknown) =>
-        id === 'qti-v2-turn'
+        id === 'answer-business-question'
           ? Promise.resolve({ ...run, body })
           : Promise.reject(new NotFoundException(`Workflow "${id}" not found`)),
       ),
@@ -562,7 +571,7 @@ describe('WorkflowsController POST /workflows/:id/runs (api.md 118)', () => {
       const server = app.getHttpServer() as Parameters<typeof request>[0];
       const input = { question: 'Hi', datasets: ['World Cup Core'] };
       await request(server)
-        .post('/workflows/qti-v2-turn/runs')
+        .post('/workflows/answer-business-question/runs')
         .send({ input })
         .expect(200)
         .expect(({ body }) =>

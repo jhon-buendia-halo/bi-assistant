@@ -5,7 +5,7 @@ import type {
   AnalyseQuery,
   AnsweredClarification,
   TurnCallsOutcome,
-} from '../../../mastra/workflows/qti-v2-turn.steps';
+} from '../../../mastra/workflows/answer-business-question.steps';
 import {
   AGENT_TURN_STEPS,
   AGENT_TURN_WORKFLOW_ID,
@@ -19,7 +19,7 @@ import type { SessionDoc, ToolDataRecord } from '../entities/session.entity';
 
 /** A session's workflow as its turn runs it (agents.md 5.12, ADR-0040). */
 export interface TurnWorkflow {
-  /** The catalogue id: `qti-v2-turn`, `agent:<key>` or `agent:<user-agent id>`. */
+  /** The catalogue id: `answer-business-question`, `agent:<key>` or `agent:<user-agent id>`. */
   id: string;
   /** The registered Mastra workflow the turn runs. */
   engineId: string;

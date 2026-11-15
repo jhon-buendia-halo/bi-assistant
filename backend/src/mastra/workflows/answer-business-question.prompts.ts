@@ -11,7 +11,7 @@ import type {
   analyseQuerySchema,
   planSchema,
   validationFindingSchema,
-} from './qti-v2-turn.schemas';
+} from './answer-business-question.schemas';
 
 /** The Plan step's instructions' first line (the stub model routes by it). */
 export const PLAN_FIRST_LINE =

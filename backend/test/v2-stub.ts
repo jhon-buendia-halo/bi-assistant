@@ -1,5 +1,5 @@
 /**
- * Questions to Insights v2's two tool-less steps (agents.md 5.11) on the
+ * Insights Analyst's two tool-less steps (agents.md 5.11) on the
  * shared stub model: the stub recognises Plan and Write answer by their
  * instructions' first lines (`frontend/e2e/helpers/v2-steps.ts`) and answers
  * them with `stub.plan` / `stub.answer`, never with `stub.reply`. These
@@ -20,7 +20,7 @@ import {
 import {
   PLAN_FIRST_LINE,
   WRITE_ANSWER_FIRST_LINE,
-} from '../src/mastra/workflows/qti-v2-turn.prompts';
+} from '../src/mastra/workflows/answer-business-question.prompts';
 
 export { PLAN_FIRST_LINE, WRITE_ANSWER_FIRST_LINE };
 

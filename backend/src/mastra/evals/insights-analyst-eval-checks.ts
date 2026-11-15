@@ -1,7 +1,7 @@
 import type { EvalCustomCheck, EvalRawToolCall } from './assistant.evals';
 
 /**
- * Custom checks of the `analyst-v2` set (agents.md 8.1): deterministic parts of
+ * Custom checks of the `insights-analyst` set (agents.md 8.1): deterministic parts of
  * what the data-analyst answer must do. The dataset tools hand the model their
  * raw output (no `toModelOutput`), so the checks read `rows` as the model saw
  * them. Judge rubrics grade the rest (headline, assumptions, no parametric

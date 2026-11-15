@@ -306,7 +306,7 @@ export interface SessionDoc {
   agentName?: string;
   /**
    * The registry key of the built-in agent the session is bound to
-   * (`assistant-v2`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
+   * (`insights-analyst`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
    * `agentId`.
    */
   agentKey?: string;
@@ -329,6 +329,13 @@ export interface SessionDoc {
    * only, like the host.
    */
   contextBlock?: string;
+  /**
+   * A follow-up run's host whose memory threads are copies of the earlier
+   * run's (agents.md 5.14): its turn's input replays the earlier run's
+   * answer with the new question, as the copied thread does not hold it.
+   * In memory only, like the host.
+   */
+  continuesThreads?: boolean;
   /**
    * A run host of Answer a Business Question whose input ticked Check data
    * quality (agents.md 5.11): its turn takes the branch to that step. In

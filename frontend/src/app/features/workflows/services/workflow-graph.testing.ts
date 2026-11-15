@@ -7,7 +7,7 @@ import {
 } from '../models/workflow.model';
 
 /**
- * Fixtures for the analyst workflow's graph (Questions to Insights v2,
+ * Fixtures for the analyst workflow's graph (Insights Analyst,
  * phase 2): a branch after Plan (Clarify ends the run) and a loop from
  * Validate back to Analyse. Shared by the layout, inspection, canvas,
  * dialog and Workflow state specs.
@@ -56,13 +56,13 @@ function agent(
 }
 
 export const GRAPH_WORKFLOW: WorkflowDetail = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: 'Answers a question over the datasets.',
   kind: 'code',
   owner: 'Official',
   agents: [
-    { key: 'qti', name: 'Questions to Insights v2', model: 'openai/gpt-5' },
+    { key: 'qti', name: 'Insights Analyst', model: 'openai/gpt-5' },
   ],
   stepCount: 8,
   trigger: 'run',

@@ -22,14 +22,14 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
-import { QTI_V2_TURN_STEP_SCHEMAS } from './qti-v2-turn.schemas';
+import { ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS } from './answer-business-question.schemas';
 import {
-  QTI_V2_TURN_RUNTIME_KEY,
-  QTI_V2_TURN_WORKFLOW_ID,
+  ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   planOf,
-  type QtiV2TurnRuntime,
-} from './qti-v2-turn.steps';
-import { qtiV2TurnWorkflow } from './qti-v2-turn.workflow';
+  type AnswerBusinessQuestionRuntime,
+} from './answer-business-question.steps';
+import { answerBusinessQuestionWorkflow } from './answer-business-question.workflow';
 import { DATA_READINESS_ASSESSMENT_STEP_SCHEMAS } from './data-readiness-assessment.schemas';
 import {
   DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
@@ -58,15 +58,16 @@ interface ContractFixture {
 }
 
 const FIXTURES: Record<string, ContractFixture> = {
-  [QTI_V2_TURN_WORKFLOW_ID]: {
-    workflow: qtiV2TurnWorkflow as unknown as ContractFixture['workflow'],
-    schemas: QTI_V2_TURN_STEP_SCHEMAS,
+  [ANSWER_BUSINESS_QUESTION_WORKFLOW_ID]: {
+    workflow:
+      answerBusinessQuestionWorkflow as unknown as ContractFixture['workflow'],
+    schemas: ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
     input: { question: 'How many matches?', datasets: ['World Cup'] },
     requestContext: () => {
       const context = new RequestContext();
       // The stubbed model: a plan, one SQL call that returned 4 rows, an
       // answer.
-      context.set(QTI_V2_TURN_RUNTIME_KEY, {
+      context.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
         plan: ({ question }) =>
           Promise.resolve({ plan: planOf({}, question), stopped: false }),
         analyse: () =>
@@ -109,7 +110,7 @@ const FIXTURES: Record<string, ContractFixture> = {
             answer: { headline: '4 matches.', answer: '4 matches.' },
             stopped: false,
           }),
-      } satisfies QtiV2TurnRuntime);
+      } satisfies AnswerBusinessQuestionRuntime);
       return context;
     },
   },

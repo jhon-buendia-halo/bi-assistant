@@ -732,7 +732,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 }
 `;
 
-exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) qti-v2-turn's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
   "contractHash": "09570fe7e004",
   "edges": [

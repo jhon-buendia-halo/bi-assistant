@@ -43,11 +43,11 @@ const THREE_STEPS: WorkflowDetail = {
 
 const V2: WorkflowDetail = {
   ...THREE_STEPS,
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   trigger: 'run',
   input: [],
-  agents: [{ key: 'assistant-v2', name: 'Questions to Insights v2' }],
+  agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
 };
 
 describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.4b)', () => {
@@ -129,7 +129,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.runResult()).toBeNull();
   });
 
-  it('Questions to Insights v2 with its input has Execute and no Start chat (workflows R21)', () => {
+  it('Insights Analyst with its input has Execute and no Start chat (workflows R21)', () => {
     open({
       ...V2,
       input: [

@@ -9,15 +9,15 @@ import { GRAPH_WORKFLOW } from '../../services/workflow-graph.testing';
 import { WorkflowCanvas } from './workflow-canvas';
 
 const V2: WorkflowDetail = {
-  id: 'qti-v2-turn',
-  name: 'Questions to Insights v2',
+  id: 'answer-business-question',
+  name: 'Insights Analyst',
   description: 'Four steps.',
   kind: 'code',
   owner: 'Official',
   agents: [
     {
-      key: 'assistant-v2',
-      name: 'Questions to Insights v2',
+      key: 'insights-analyst',
+      name: 'Insights Analyst',
       model: 'anthropic/claude-sonnet-5-5',
     },
   ],
@@ -57,7 +57,7 @@ const V2: WorkflowDetail = {
       input: ['question', 'catalog'],
       output: ['calls', 'stopped'],
       agent: {
-        key: 'assistant-v2',
+        key: 'insights-analyst',
         name: 'Michael',
         role: 'Insights Analyst',
         tools: ['list_entities', 'describe_entity', 'run_readonly_sql'],

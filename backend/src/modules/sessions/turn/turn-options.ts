@@ -3,9 +3,9 @@
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_MAX_STEPS,
-} from '../../../mastra/agents/assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_MAX_STEPS,
+} from '../../../mastra/agents/insights-analyst-catalog';
 import type { MastraService } from '../../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
@@ -256,8 +256,8 @@ export class TurnOptions {
     if (session.agentKey === DATA_READINESS_AGENT_KEY) {
       return this.readinessAgentOptions(session, question, abortSignal);
     }
-    if (session.agentKey === ASSISTANT_V2_AGENT_KEY) {
-      return this.assistantV2AgentOptions(session, question, abortSignal);
+    if (session.agentKey === INSIGHTS_ANALYST_AGENT_KEY) {
+      return this.insightsAnalystAgentOptions(session, question, abortSignal);
     }
     return {
       ...(await this.agentContext(
@@ -272,14 +272,14 @@ export class TurnOptions {
   }
 
   /**
-   * A turn of Questions to Insights v2 (agents.md 2.11, 4.1, 4.2): Block 1's
+   * A turn of Insights Analyst (agents.md 2.11, 4.1, 4.2): Block 1's
    * dataset half with the `sample_rows` hint (no visuals lines), then the
    * governed metrics, curated knowledge and verified-query blocks, built by
    * the same services and in the same order as the assistant's (no
    * agent-instructions block), and the `datasets`, `session-id`,
    * `turn-question` and `knowledge-used` keys.
    */
-  private async assistantV2AgentOptions(
+  private async insightsAnalystAgentOptions(
     session: SessionDoc,
     question?: string,
     abortSignal?: AbortSignal,
@@ -300,7 +300,7 @@ export class TurnOptions {
     // The answer records the knowledge the model saw (agents.md 4.1 Block 3).
     requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
     return {
-      maxSteps: ASSISTANT_V2_MAX_STEPS,
+      maxSteps: INSIGHTS_ANALYST_MAX_STEPS,
       providerOptions: await turnProviderOptions({ reasoningEffort }),
       context: [
         {
@@ -392,8 +392,13 @@ export class TurnOptions {
     const previous = session.messages.at(-2);
     if (thread && latest?.role === 'user') {
       // A clarification ends its turn before memory sees the question, so
-      // replay it alongside the user's answer.
-      if (previous?.role === 'assistant' && previous.clarification) {
+      // replay it alongside the user's answer. A follow-up run's copied
+      // thread holds the earlier analysis but not the answer Write answer
+      // gave, so replay that too (agents.md 5.14).
+      if (
+        previous?.role === 'assistant' &&
+        (previous.clarification || session.continuesThreads)
+      ) {
         return [
           { role: 'assistant' as const, content: previous.content },
           { role: 'user' as const, content: latest.content },
@@ -402,6 +407,14 @@ export class TurnOptions {
       return latest.content;
     }
 
+    return this.transcriptInput(session);
+  }
+
+  /**
+   * The whole transcript as plain text messages: a turn's input when its
+   * thread does not exist yet, and always the Plan step's (agents.md 5.11).
+   */
+  transcriptInput(session: SessionDoc) {
     return session.messages.map((message) =>
       message.role === 'user'
         ? { role: 'user' as const, content: message.content }

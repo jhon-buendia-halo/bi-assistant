@@ -37,7 +37,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
     for (const list of Object.values(byDomain)) list.sort();
     expect(byDomain).toEqual({
       'data-foundations': ['data-readiness', 'knowledge-bootstrap'],
-      analysis: ['analysis-planner', 'assistant', 'assistant-v2'],
+      analysis: ['analysis-planner', 'assistant', 'insights-analyst'],
       sql: ['sql-fixer', 'sql-verifier'],
       storytelling: ['answer-writer', 'visualization'],
       quality: ['assistant-eval-judge'],

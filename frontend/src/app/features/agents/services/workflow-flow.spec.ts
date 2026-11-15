@@ -2,7 +2,7 @@ import { AgentWorkflow } from './agents-api.service';
 import { workflowCards } from './workflow-flow';
 
 const WORKFLOW: AgentWorkflow = {
-  id: 'qti-v2-turn',
+  id: 'answer-business-question',
   steps: [
     {
       id: 'receive-question',

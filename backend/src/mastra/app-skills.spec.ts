@@ -408,15 +408,15 @@ describe('skill folders', () => {
 
   it('takes agents and loading mode from the two tables only', () => {
     const skills = loadAppSkills(skillsRoot());
-    // Shared by the assistant and Questions to Insights v2 (agents.md 7.4).
+    // Shared by the assistant and Insights Analyst (agents.md 7.4).
     expect(skills.get('curated-knowledge')).toMatchObject({
       loading: 'on-demand',
-      agents: ['assistant', 'assistant-v2'],
+      agents: ['assistant', 'insights-analyst'],
     });
     for (const name of ['sql-analysis', 'result-validation']) {
       expect(skills.get(name)).toMatchObject({
         loading: 'on-demand',
-        agents: ['assistant-v2'],
+        agents: ['insights-analyst'],
       });
     }
     expect(skills.get('interactive-visuals')).toMatchObject({
@@ -461,7 +461,7 @@ describe('skill folders', () => {
           fresh.catalogSkills('assistant').map((skill) => skill.name),
         ).toEqual(['curated-knowledge']);
         expect(
-          fresh.catalogSkills('assistant-v2').map((skill) => skill.name),
+          fresh.catalogSkills('insights-analyst').map((skill) => skill.name),
         ).toEqual(['curated-knowledge', 'result-validation', 'sql-analysis']);
       });
     } finally {

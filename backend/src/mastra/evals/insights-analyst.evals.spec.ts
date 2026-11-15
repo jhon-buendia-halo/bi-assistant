@@ -9,8 +9,8 @@ jest.mock('../agents/assistant.agent', () => ({
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessAgent: { id: 'data-readiness' },
 }));
-jest.mock('../agents/assistant-v2.agent', () => ({
-  assistantV2Agent: { id: 'questions-to-insights-v2' },
+jest.mock('../agents/insights-analyst.agent', () => ({
+  insightsAnalystAgent: { id: 'insights-analyst' },
 }));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},
@@ -27,10 +27,10 @@ import { RequestContext } from '@mastra/core/request-context';
 import { findFixture } from '../../modules/testing-data/fixtures/registry';
 import type { DatasetSnapshot } from '../tool-services';
 import {
-  ANALYST_V2_EVAL_SET,
-  analystV2EvalTarget,
-  v2OrientationSelection,
-} from './analyst-v2.evals';
+  INSIGHTS_ANALYST_EVAL_SET,
+  insightsAnalystEvalTarget,
+  insightsAnalystOrientationSelection,
+} from './insights-analyst.evals';
 import { EVAL_SETS, agentForCases, evalTargetFor, hasEvals } from './eval-sets';
 import { selectCliEvalCases } from './eval-cli-selection';
 
@@ -41,13 +41,13 @@ const SNAPSHOT: DatasetSnapshot = {
   datasourceId: 'ds-1',
 };
 
-describe('analyst-v2 eval set (agents.md 8.1)', () => {
-  const cases = ANALYST_V2_EVAL_SET.cases;
+describe('insights-analyst eval set (agents.md 8.1)', () => {
+  const cases = INSIGHTS_ANALYST_EVAL_SET.cases;
 
-  it('runs on assistant-v2 over the World Cup fixture', () => {
-    expect(ANALYST_V2_EVAL_SET.id).toBe('analyst-v2');
-    expect(ANALYST_V2_EVAL_SET.agentKey).toBe('assistant-v2');
-    expect(findFixture(ANALYST_V2_EVAL_SET.fixtureId)?.schema).toBe(
+  it('runs on insights-analyst over the World Cup fixture', () => {
+    expect(INSIGHTS_ANALYST_EVAL_SET.id).toBe('insights-analyst');
+    expect(INSIGHTS_ANALYST_EVAL_SET.agentKey).toBe('insights-analyst');
+    expect(findFixture(INSIGHTS_ANALYST_EVAL_SET.fixtureId)?.schema).toBe(
       'world_cup',
     );
   });
@@ -95,7 +95,7 @@ describe('analyst-v2 eval set (agents.md 8.1)', () => {
   it('asks the clarify case to ask and the fuzzy-scope case not to', () => {
     // The built-in scorers are stubs here; their wiring is read from the
     // case ids and rubrics, and the checks themselves are tested in
-    // analyst-v2-eval-checks.spec.ts.
+    // insights-analyst-eval-checks.spec.ts.
     const clarify = cases.find((c) => c.id.includes('-clarify-'));
     const noClarify = cases.find((c) => c.id.includes('-no-clarify-'));
     expect(clarify?.judgeRubric).toMatch(/ONE clarifying question/);
@@ -111,39 +111,46 @@ describe('analyst-v2 eval set (agents.md 8.1)', () => {
   });
 });
 
-describe('analyst-v2 registration', () => {
-  it('lists the set under the assistant-v2 agent only', () => {
-    expect(EVAL_SETS).toContain(ANALYST_V2_EVAL_SET);
-    expect(hasEvals('assistant-v2')).toBe(true);
-    const ownCases = EVAL_SETS.filter((set) => set.agentKey === 'assistant-v2');
-    expect(ownCases).toEqual([ANALYST_V2_EVAL_SET]);
+describe('insights-analyst registration', () => {
+  it('lists the set under the insights-analyst agent only', () => {
+    expect(EVAL_SETS).toContain(INSIGHTS_ANALYST_EVAL_SET);
+    expect(hasEvals('insights-analyst')).toBe(true);
+    const ownCases = EVAL_SETS.filter(
+      (set) => set.agentKey === 'insights-analyst',
+    );
+    expect(ownCases).toEqual([INSIGHTS_ANALYST_EVAL_SET]);
   });
 
-  it('selects the set by EVAL_SET=analyst-v2', () => {
-    const selection = selectCliEvalCases({ EVAL_SET: 'analyst-v2' }, EVAL_SETS);
+  it('selects the set by EVAL_SET=insights-analyst', () => {
+    const selection = selectCliEvalCases(
+      { EVAL_SET: 'insights-analyst' },
+      EVAL_SETS,
+    );
     expect(selection).toEqual({
-      caseIds: ANALYST_V2_EVAL_SET.cases.map((c) => c.id),
+      caseIds: INSIGHTS_ANALYST_EVAL_SET.cases.map((c) => c.id),
     });
   });
 
-  it('maps its cases to the assistant-v2 agent', () => {
-    expect(agentForCases(ANALYST_V2_EVAL_SET.cases.map((c) => c.id))).toEqual({
-      agentKey: 'assistant-v2',
+  it('maps its cases to the insights-analyst agent', () => {
+    expect(
+      agentForCases(INSIGHTS_ANALYST_EVAL_SET.cases.map((c) => c.id)),
+    ).toEqual({
+      agentKey: 'insights-analyst',
     });
   });
 
   it('builds its target through evalTargetFor', () => {
-    const target = evalTargetFor('assistant-v2');
-    expect(target.agentKey).toBe('assistant-v2');
-    expect(target.sets).toEqual([ANALYST_V2_EVAL_SET]);
+    const target = evalTargetFor('insights-analyst');
+    expect(target.agentKey).toBe('insights-analyst');
+    expect(target.sets).toEqual([INSIGHTS_ANALYST_EVAL_SET]);
     expect((target.agent as unknown as { id: string }).id).toBe(
-      'questions-to-insights-v2',
+      'insights-analyst',
     );
   });
 });
 
-describe('analyst-v2 eval target', () => {
-  const cases = () => ANALYST_V2_EVAL_SET.cases;
+describe('insights-analyst eval target', () => {
+  const cases = () => INSIGHTS_ANALYST_EVAL_SET.cases;
   const input = {
     datasets: ['World Cup'],
     snapshots: [SNAPSHOT],
@@ -152,17 +159,17 @@ describe('analyst-v2 eval target', () => {
 
   it('loads the agent only when it is read', () => {
     const load = jest.fn(() => ({}) as Agent);
-    const target = analystV2EvalTarget(load);
+    const target = insightsAnalystEvalTarget(load);
     expect(load).not.toHaveBeenCalled();
     void target.agent;
     void target.agent;
     expect(load).toHaveBeenCalledTimes(1);
   });
 
-  it('runs each case as the whole qti-v2-turn workflow on the agent (agents.md 8.1)', () => {
-    const agent = { id: 'questions-to-insights-v2' } as unknown as Agent;
+  it('runs each case as the whole answer-business-question workflow on the agent (agents.md 8.1)', () => {
+    const agent = { id: 'insights-analyst' } as unknown as Agent;
     const wholeTurn = jest.fn(() => ({ id: 'whole-turn' }) as unknown as Agent);
-    const target = analystV2EvalTarget(() => agent, undefined, wholeTurn);
+    const target = insightsAnalystEvalTarget(() => agent, undefined, wholeTurn);
     expect(wholeTurn).not.toHaveBeenCalled();
     expect(target.runTarget).toEqual({ id: 'whole-turn' });
     void target.runTarget;
@@ -182,7 +189,7 @@ describe('analyst-v2 eval target', () => {
   });
 
   it('gives the 3-tool agent the plain orientation and no knowledge block', async () => {
-    const target = analystV2EvalTarget(undefined, [
+    const target = insightsAnalystEvalTarget(undefined, [
       'list_entities',
       'describe_entity',
       'run_readonly_sql',
@@ -197,8 +204,8 @@ describe('analyst-v2 eval target', () => {
 
   it('gives an agent with sample_rows the hint and the knowledge block', async () => {
     const names = ['list_entities', 'sample_rows', 'run_readonly_sql'];
-    expect(v2OrientationSelection(names)).toEqual(['sample_rows']);
-    const target = analystV2EvalTarget(undefined, names);
+    expect(insightsAnalystOrientationSelection(names)).toEqual(['sample_rows']);
+    const target = insightsAnalystEvalTarget(undefined, names);
     expect(target.sendsKnowledge).toBe(true);
     expect(await target.orientation(input)).toContain(
       'describe_entity / sample_rows / run_readonly_sql',

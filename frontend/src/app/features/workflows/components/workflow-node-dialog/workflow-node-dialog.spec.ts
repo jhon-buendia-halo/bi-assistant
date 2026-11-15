@@ -63,7 +63,7 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-ndv-title')).toBe('Analyse');
     expect(dialog?.textContent).toContain('LLM');
     expect(dialog?.textContent).toContain(
-      'Questions to Insights v2 · ≤ 15 steps',
+      'Insights Analyst · ≤ 15 steps',
     );
     expect(byId('workflow-ndv-artifact')).not.toBeNull();
     expect(text('workflow-ndv-output-status')).toBe('Done');
@@ -173,7 +173,7 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-step-field-id')).toBe('analyse');
     expect(text('workflow-step-field-kind')).toBe('LLM (agent call)');
     expect(text('workflow-step-field-agent')).toContain(
-      'Questions to Insights v2',
+      'Insights Analyst',
     );
     expect(text('workflow-step-field-model')).toBe(
       'anthropic/claude-sonnet-5-5',
@@ -319,7 +319,7 @@ describe('WorkflowNodeDialog', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
       const pane = byId('workflow-ndv-chat-pane')!;
       expect(pane.getAttribute('aria-label')).toBe(
-        'Chat with Questions to Insights v2',
+        'Chat with Insights Analyst',
       );
       expect(
         pane.querySelector('[data-testid="workflow-node-chat"]'),
@@ -343,7 +343,7 @@ describe('WorkflowNodeDialog', () => {
     it('opens with what the step did, a card to its report and questions to ask', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
       expect(text('workflow-ndv-chat-intro')).toContain(
-        'Questions to Insights v2 made 3 tool calls and returned 2 fields.',
+        'Insights Analyst made 3 tool calls and returned 2 fields.',
       );
       expect(
         byId('workflow-ndv-artifact-card')!.getAttribute('aria-label'),
@@ -707,7 +707,7 @@ describe('WorkflowNodeDialog', () => {
       expect(header.textContent).toContain('TOOL');
       expect(header.textContent).not.toContain('LLM');
       expect(header.textContent).toContain(
-        'Tool of Questions to Insights v2 · Analyse',
+        'Tool of Insights Analyst · Analyse',
       );
       expect(byId('workflow-step-field-system-prompt')).toBeNull();
       expect(byId('workflow-step-field-id')).toBeNull();
@@ -721,7 +721,7 @@ describe('WorkflowNodeDialog', () => {
       );
       expect(text('workflow-tool-field-inputs')).toBe('sql, reason');
       expect(text('workflow-tool-field-agent')).toBe(
-        'Questions to Insights v2',
+        'Insights Analyst',
       );
       expect(text('workflow-tool-field-step')).toBe('Analyse');
       open({ ...FIXTURE_TOOL, tool: { ...FIXTURE_TOOL.tool!, inputs: [] } });

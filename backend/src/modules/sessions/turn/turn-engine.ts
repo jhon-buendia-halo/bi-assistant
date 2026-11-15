@@ -7,6 +7,12 @@ import {
   parseClarification,
 } from '../../../mastra/tools/clarification.tool';
 import type { MastraService } from '../../../mastra/mastra.service';
+import {
+  ANALYSIS_PLANNER_AGENT_KEY,
+  ANSWER_WRITER_AGENT_KEY,
+  DATA_READINESS_AGENT_KEY,
+} from '../../../mastra/agent-constants';
+import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
@@ -21,8 +27,8 @@ import {
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
   DATA_QUALITY_CHECK,
-  QTI_V2_TURN_RUNTIME_KEY,
-  QTI_V2_TURN_WORKFLOW_ID,
+  ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   assessable,
   clarifyingQuestionOf,
   dataQualityFailure,
@@ -30,10 +36,10 @@ import {
   turnSummaryOf,
   type AnsweredClarification,
   type QualityEngineFinding,
-  type QtiV2TurnInput,
-  type QtiV2TurnRuntime,
-} from '../../../mastra/workflows/qti-v2-turn.steps';
-import { DATA_QUALITY_FINDINGS_CAP } from '../../../mastra/workflows/qti-v2-turn.prompts';
+  type AnswerBusinessQuestionInput,
+  type AnswerBusinessQuestionRuntime,
+} from '../../../mastra/workflows/answer-business-question.steps';
+import { DATA_QUALITY_FINDINGS_CAP } from '../../../mastra/workflows/answer-business-question.prompts';
 import {
   AGENT_TURN_RUNTIME_KEY,
   AGENT_TURN_WORKFLOW_ID,
@@ -245,7 +251,7 @@ export class TurnEngine {
     const answers: AnsweredClarification[] = [];
     const workflow = turnWorkflowOf(session);
     // v2's answer is its Write answer step's only (agents.md 5.11).
-    const v2 = workflow.engineId === QTI_V2_TURN_WORKFLOW_ID;
+    const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -473,12 +479,38 @@ export class TurnEngine {
       // The model error a step reports, in the chat stream's words.
       const stepError = (error: unknown) =>
         chatTurnError(error, () => this.deps.llmService.getView());
-      const stepModel = {
+      const stepModelBase = {
         abortSignal: turn.signal,
         providerOptions: options.providerOptions as
           Record<string, unknown> | undefined,
         requestContext: options.requestContext,
       };
+      // A step agent of its own runs without memory; its exchange is
+      // recorded in its thread on this host (agents.md 5.14), and a
+      // failure to record never fails the step.
+      const stepModelOf = (stepAgentKey: string) => ({
+        ...stepModelBase,
+        onExchange: async (exchange: AgentExchange) => {
+          try {
+            await this.deps.mastra.recordAgentExchange(
+              session.id,
+              stepAgentKey,
+              exchange,
+            );
+          } catch (error) {
+            this.deps.logger.warn(
+              `Could not record the ${stepAgentKey} exchange of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        },
+      });
+      // Plan has no memory: on a host that continues an earlier run's
+      // threads, `input` is only the latest messages, so Plan reads the
+      // whole conversation as text, as it did before the threads were
+      // copied (agents.md 5.14).
+      const planInput = session.continuesThreads
+        ? this.deps.options.transcriptInput(session)
+        : input;
       ran = await this.runTurnWorkflow(
         session,
         workflow,
@@ -491,14 +523,14 @@ export class TurnEngine {
           plan: async ({ question, catalogBlock, clarification: answered }) => {
             try {
               // After Clarify, Plan plans with its question and the answer.
-              const planned = await this.deps.mastra.planV2Turn(
+              const planned = await this.deps.mastra.planAnalysis(
                 {
-                  messages: input,
+                  messages: planInput,
                   question,
                   catalogBlock,
                   ...(answered ? { answered } : {}),
                 },
-                stepModel,
+                stepModelOf(ANALYSIS_PLANNER_AGENT_KEY),
               );
               return {
                 plan: planned.plan,
@@ -651,14 +683,14 @@ export class TurnEngine {
               }
               const shown = engineFindings.slice(0, DATA_QUALITY_FINDINGS_CAP);
               const reply = shown.length
-                ? await this.deps.mastra.checkV2DataQuality(
+                ? await this.deps.mastra.checkDataQuality(
                     {
                       question,
                       sql: queries.map((query) => query.sql),
                       tables: measured.tables,
                       findings: shown,
                     },
-                    stepModel,
+                    stepModelOf(DATA_READINESS_AGENT_KEY),
                   )
                 : { issues: [], stopped: false };
               if (reply.stopped || turn.signal.aborted) return stop();
@@ -682,8 +714,8 @@ export class TurnEngine {
           },
           writeAnswer: async (written) => {
             try {
-              const result = await this.deps.mastra.writeV2Answer(written, {
-                ...stepModel,
+              const result = await this.deps.mastra.writeAnswer(written, {
+                ...stepModelOf(ANSWER_WRITER_AGENT_KEY),
                 onText: (delta) => {
                   text += delta;
                   emit({ type: 'text', content: delta });
@@ -964,7 +996,7 @@ export class TurnEngine {
 
   /**
    * Run one turn as a run of the session's workflow (agents.md 5.1, 5.11,
-   * 5.12; ADR-0034, ADR-0040): `qti-v2-turn` hands its Analyse step
+   * 5.12; ADR-0034, ADR-0040): `answer-business-question` hands its Analyse step
    * `runtime.analyse`, `agent-turn` hands its Answer step `runtime.answer`.
    * Only a workflow whose steps drive the bar (`bar: 'steps'`) writes the
    * session's workflow state from the run's step events and emits each
@@ -979,8 +1011,8 @@ export class TurnEngine {
     workflow: TurnWorkflow,
     question: string,
     emit: (event: StreamEvent) => void,
-    runtime: QtiV2TurnRuntime &
-      Required<Pick<QtiV2TurnRuntime, 'checkDataQuality'>> &
+    runtime: AnswerBusinessQuestionRuntime &
+      Required<Pick<AnswerBusinessQuestionRuntime, 'checkDataQuality'>> &
       AgentTurnRuntime &
       DataReadinessAssessmentRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
@@ -1019,7 +1051,7 @@ export class TurnEngine {
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
     } else {
-      requestContext.set(QTI_V2_TURN_RUNTIME_KEY, {
+      requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
         // Only a run host whose input ticked it (agents.md 5.11).
@@ -1027,10 +1059,11 @@ export class TurnEngine {
         checkDataQuality: (input) =>
           captured(() => runtime.checkDataQuality(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
-      } satisfies QtiV2TurnRuntime);
+      } satisfies AnswerBusinessQuestionRuntime);
     }
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
-    const turnInput: QtiV2TurnInput | { question: string; dataset: string } =
+    const turnInput:
+      AnswerBusinessQuestionInput | { question: string; dataset: string } =
       readiness
         ? { question, dataset: session.datasets[0] ?? '' }
         : { question, datasets: session.datasets };
@@ -1128,7 +1161,7 @@ export class TurnEngine {
       if (summary) {
         const { answer, ...counts } = summary;
         this.deps.logger.log(
-          `Questions to Insights v2 turn in session ${session.id}: ${JSON.stringify({ ...counts, answerLength: answer.length })}`,
+          `Insights Analyst turn in session ${session.id}: ${JSON.stringify({ ...counts, answerLength: answer.length })}`,
         );
       }
       return { status: 'done' };

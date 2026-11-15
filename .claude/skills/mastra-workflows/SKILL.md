@@ -33,7 +33,7 @@ ls backend/src/mastra/workflows backend/src/mastra/agents backend/src/mastra/too
 
 Read, in this order, only what the change can touch:
 
-- **Workflows.** [agent-turn.workflow.ts](../../../backend/src/mastra/workflows/agent-turn.workflow.ts) with [agent-turn.steps.ts](../../../backend/src/mastra/workflows/agent-turn.steps.ts) (the smallest complete example), then `qti-v2-turn.*` (branches, loops, nested workflows, suspend and resume; its header comment in [qti-v2-turn.workflow.ts](../../../backend/src/mastra/workflows/qti-v2-turn.workflow.ts) is the flow), the catalogue [workflow-catalog.ts](../../../backend/src/mastra/workflows/workflow-catalog.ts) and [agent-workflows.ts](../../../backend/src/mastra/workflows/agent-workflows.ts), and the contract helpers in `workflow-contract.ts`.
+- **Workflows.** [agent-turn.workflow.ts](../../../backend/src/mastra/workflows/agent-turn.workflow.ts) with [agent-turn.steps.ts](../../../backend/src/mastra/workflows/agent-turn.steps.ts) (the smallest complete example), then `answer-business-question.*` (branches, loops, nested workflows, suspend and resume; its header comment in [answer-business-question.workflow.ts](../../../backend/src/mastra/workflows/answer-business-question.workflow.ts) is the flow), the catalogue [workflow-catalog.ts](../../../backend/src/mastra/workflows/workflow-catalog.ts) and [agent-workflows.ts](../../../backend/src/mastra/workflows/agent-workflows.ts), and the contract helpers in `workflow-contract.ts`.
 - **Agents** in `backend/src/mastra/agents/`, **tools** in `backend/src/mastra/tools/`, and what is registered in [index.ts](../../../backend/src/mastra/index.ts).
 - **The test stand-in** [workflows.stub.ts](../../../backend/src/mastra/testing/workflows.stub.ts): its header lists the control flow it can run.
 - **The specs** (both large: `grep -n`, then read the range): [workflows/spec.md](../../../specs/capabilities/workflows/spec.md) (rules R1 to R28) and [agents.md](../../../specs/system/agents.md) (2 for the agents, 3 for the tools, 5.11 and 5.12 for the workflows).
@@ -88,7 +88,7 @@ Each rule is visible in the code named beside it; when the code has moved on, fo
 
 - `<name>.steps.ts`: the workflow id constant, the `RequestContext` key, the step catalogue entries (`WorkflowStepEntry`: id, title, kind `code` or `agent`, summary, input, output, exits), the edges, the runtime interface and the pure code of the deterministic steps. **No framework import.**
 - `<name>.workflow.ts`: the only file that imports `@mastra/core/workflows`. It builds `createStep` and `createWorkflow` from the ids and titles of `.steps.ts` (`id: STEP.id`, `description: STEP.title`), so nothing is written twice.
-- When the workflow grows, as `qti-v2-turn` did: `<name>.schemas.ts` (the Zod schema of every step, used by both the Mastra steps and the catalogue), `<name>.prompts.ts`, `<name>.agents.ts` (model calls).
+- When the workflow grows, as `answer-business-question` did: `<name>.schemas.ts` (the Zod schema of every step, used by both the Mastra steps and the catalogue), `<name>.prompts.ts`, `<name>.agents.ts` (model calls).
 - Step ids are kebab-case and unique in the whole workflow, nested ones included: the engine reports a nested step as `<workflow id>.<step id>` and the session code reads the last segment. Nested workflows and `.map()` steps are not catalogue steps.
 
 This split exists because Jest cannot load Mastra's ESM: catalogue data lives in a module with no framework import, and the Mastra objects are built in a second file ([lessons.md](../../../lessons.md), *Evals and agents*).
@@ -109,14 +109,14 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 **Agents and tools**
 
 - A new agent is a file in `backend/src/mastra/agents/`, registered in `index.ts`, with an entry in agents.md. Its `model` is `async () => resolveAgentModel()`; never a hardcoded provider. Its instructions go through `agentInstructions(<key>, <shipped text>)` as in [analysis-planner.agent.ts](../../../backend/src/mastra/agents/analysis-planner.agent.ts).
-- An agent's catalogue data (key, name, tool names, step limit) lives in a framework-free module, as `assistant-v2-catalog.ts` does.
+- An agent's catalogue data (key, name, tool names, step limit) lives in a framework-free module, as `insights-analyst-catalog.ts` does.
 - The existing workflows call their agents through the runtime or a function in `<name>.agents.ts`, inside `execute`. `createStep(agent)`, `.agent()` and `.tool()` exist in 1.66.0 but nothing here uses them, and the stub does not run them: choosing one is part of an approach, with its cost.
 
 **Tests**
 
 - A workflow spec starts with `jest.mock('@mastra/core/workflows', () => jest.requireActual('../testing/workflows.stub'))` and drives `createRun().stream({ inputData, requestContext })`, as [agent-turn.workflow.spec.ts](../../../backend/src/mastra/workflows/agent-turn.workflow.spec.ts) does. A spec that mocks `MastraService.streamWorkflow` uses `turn-workflow.stub.ts`.
 - The stub runs `.then`, `.branch`, `.dountil`, `.map`, nested workflows, `bail`, `suspend` and resume. A design that needs anything else (`.parallel`, `.foreach`, `.dowhile`, state, retries) must extend the stub in the same change and check the new behaviour against the real engine once; count that in the approach's size.
-- Pure step code is tested without the stub (`qti-v2-turn.steps.spec.ts`). Changing a step schema changes the workflow's `contractHash` and the snapshot of `workflow-contracts.spec.ts`: update it on purpose, never blindly.
+- Pure step code is tested without the stub (`answer-business-question.steps.spec.ts`). Changing a step schema changes the workflow's `contractHash` and the snapshot of `workflow-contracts.spec.ts`: update it on purpose, never blindly.
 - The stub validates no schema: a contract is only proven by `withContract` and by the catalogue check.
 
 **Specs, on the same branch**
@@ -126,7 +126,7 @@ This split exists because Jest cannot load Mastra's ESM: catalogue data lives in
 
 **Evals**
 
-- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) needs that agent's evals. Decide by hashing `getInstructions()` and the tool list on base and branch ([lessons.md](../../../lessons.md)); the `assistant-v2` eval target runs the whole `qti-v2-turn` (`backend/src/mastra/evals/analyst-v2-workflow-target.ts`), so a change to its steps reaches those evals even when no prompt changed.
+- A workflow change that alters what an agent receives (its prompt, tools, context blocks, the messages a step builds) needs that agent's evals. Decide by hashing `getInstructions()` and the tool list on base and branch ([lessons.md](../../../lessons.md)); the `insights-analyst` eval target runs the whole `answer-business-question` (`backend/src/mastra/evals/insights-analyst-workflow-target.ts`), so a change to its steps reaches those evals even when no prompt changed.
 - How to run and the pass bar: [`verify`](../verify/SKILL.md), *Evals*.
 
 ## 5. Checks

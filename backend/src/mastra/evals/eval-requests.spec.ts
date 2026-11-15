@@ -4,7 +4,7 @@
  * the requestContext entries, recorded against a mocked `runEvals` and held
  * in a snapshot. Moving evals from a throwaway chat session onto a run host
  * changed none of it; the host id is the only entry left out, as it names
- * the throwaway host and is never read by the model. Questions to Insights v2
+ * the throwaway host and is never read by the model. Insights Analyst
  * has no eval set, so its requests are covered by the run e2e instead.
  */
 jest.mock('@mastra/core/evals', () => ({
@@ -19,8 +19,8 @@ jest.mock('../agents/assistant.agent', () => ({
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessAgent: { id: 'data-readiness' },
 }));
-jest.mock('../agents/assistant-v2.agent', () => ({
-  assistantV2Agent: { id: 'questions-to-insights-v2' },
+jest.mock('../agents/insights-analyst.agent', () => ({
+  insightsAnalystAgent: { id: 'insights-analyst' },
 }));
 jest.mock('../agents/eval-judge.agent', () => ({
   evalJudgeAgent: {},

@@ -1,12 +1,12 @@
 /**
- * The model calls of the two tool-less steps of Questions to Insights v2
+ * The model calls of the two tool-less steps of Insights Analyst
  * (agents.md 5.11): Plan and Write answer. Each runs a registered System
  * agent (Olivia, `analysis-planner`; Jessica, `answer-writer`; agents.md
  * 1.1, 2.11) on v2's model (`resolveAgentModel`), with its own editable
  * instructions, no tools, no memory and structured output by JSON prompt
  * injection, so any provider answers it (a native response format is not
  * required). The session's turn and the eval runner call them through
- * `QtiV2TurnRuntime`.
+ * `AnswerBusinessQuestionRuntime`.
  */
 import type { MessageListInput } from '@mastra/core/agent/message-list';
 import type { RequestContext } from '@mastra/core/request-context';
@@ -17,12 +17,13 @@ import {
   dataQualityRequest,
   planMessages,
   writeAnswerRequest,
-} from './qti-v2-turn.prompts';
+} from './answer-business-question.prompts';
 import {
   answerSchema,
   dataQualityReplySchema,
   planSchema,
-} from './qti-v2-turn.schemas';
+} from './answer-business-question.schemas';
+import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from './workflow-run';
 import {
   answerOf,
@@ -30,20 +31,52 @@ import {
   planOf,
   type AnalyseQuery,
   type AnsweredClarification,
-  type QtiV2Answer,
-  type QtiV2Plan,
+  type BusinessAnswer,
+  type AnalysisPlan,
   type ValidationFinding,
-} from './qti-v2-turn.steps';
+} from './answer-business-question.steps';
 
 /** The agents of the two calls (agents.md 1.1): Olivia plans, Jessica writes. */
-const qtiV2PlanAgent = analysisPlannerAgent;
-const qtiV2WriteAnswerAgent = answerWriterAgent;
+const planAgent = analysisPlannerAgent;
+const writeAnswerAgent = answerWriterAgent;
 
 /** What both calls share with the turn: its stop, effort and context. */
 export interface StepModelOptions {
   abortSignal?: AbortSignal;
   providerOptions?: Record<string, unknown>;
   requestContext?: RequestContext;
+  /**
+   * Called once the agent replied (never on a stop or a failure) with the
+   * request it got and its reply, so the run records the exchange in the
+   * agent's thread (agents.md 5.14). The call itself has no memory.
+   */
+  onExchange?: (exchange: AgentExchange) => void | Promise<void>;
+}
+
+/** The text of a request: the message the call ends with. */
+function requestText(messages: unknown): string {
+  if (typeof messages === 'string') return messages;
+  const last = Array.isArray(messages)
+    ? (messages.at(-1) as { content?: unknown } | undefined)
+    : undefined;
+  const content = last?.content;
+  return typeof content === 'string' ? content : JSON.stringify(content ?? '');
+}
+
+/** The text of a reply: the model's text, else its object as JSON. */
+function replyText(object: unknown, text: string | undefined): string {
+  if (text?.trim()) return text;
+  return object === undefined ? '' : JSON.stringify(object);
+}
+
+/** Hand the exchange to `onExchange` unless the turn stopped. */
+async function noteExchange(
+  options: StepModelOptions,
+  request: string,
+  reply: string,
+): Promise<void> {
+  if (stoppedBy(options) || !options.onExchange) return;
+  await options.onExchange({ request, reply });
 }
 
 /** One model call, no tools, structured output by JSON prompt injection. */
@@ -80,13 +113,13 @@ export async function planWithModel(
     answered?: AnsweredClarification;
   },
   options: StepModelOptions,
-): Promise<{ plan: QtiV2Plan; stopped: boolean }> {
+): Promise<{ plan: AnalysisPlan; stopped: boolean }> {
   // The conversation before the question, then the question with the
   // catalog (after Clarify: the question, Plan's question and the answer).
   const planned = planMessages(input);
   const messages = planned.messages as MessageListInput;
   try {
-    const result = await qtiV2PlanAgent.generate(messages, {
+    const result = await planAgent.generate(messages, {
       ...callOptions(options),
       structuredOutput: {
         schema: planSchema,
@@ -106,6 +139,11 @@ export async function planWithModel(
         ? reply.error
         : new Error(runErrorMessage(reply.error));
     }
+    await noteExchange(
+      options,
+      requestText(planned.messages),
+      replyText(reply.object, reply.text),
+    );
     return {
       plan: planOf(reply.object ?? reply.text, planned.fallback),
       stopped: stoppedBy(options),
@@ -141,18 +179,16 @@ export async function checkDataQualityWithModel(
   issues: { finding: number; impact: string }[];
   stopped: boolean;
 }> {
+  const request = dataQualityRequest(input);
   try {
-    const result = await dataReadinessStepAgent.generate(
-      dataQualityRequest(input),
-      {
-        ...callOptions(options),
-        structuredOutput: {
-          schema: dataQualityReplySchema,
-          jsonPromptInjection: 'inline',
-          errorStrategy: 'warn',
-        },
+    const result = await dataReadinessStepAgent.generate(request, {
+      ...callOptions(options),
+      structuredOutput: {
+        schema: dataQualityReplySchema,
+        jsonPromptInjection: 'inline',
+        errorStrategy: 'warn',
       },
-    );
+    });
     const reply = result as {
       object?: unknown;
       text?: string;
@@ -163,6 +199,7 @@ export async function checkDataQualityWithModel(
         ? reply.error
         : new Error(runErrorMessage(reply.error));
     }
+    await noteExchange(options, request, replyText(reply.object, reply.text));
     return {
       issues: stoppedBy(options) ? [] : issuesOf(reply.object ?? reply.text),
       stopped: stoppedBy(options),
@@ -189,31 +226,29 @@ function partialAnswer(partial: unknown): string {
 export async function writeAnswerWithModel(
   input: {
     question: string;
-    plan: QtiV2Plan;
+    plan: AnalysisPlan;
     queries: readonly AnalyseQuery[];
     findings: readonly ValidationFinding[];
   },
   options: StepModelOptions & { onText?: (delta: string) => void },
-): Promise<{ answer: QtiV2Answer; stopped: boolean }> {
+): Promise<{ answer: BusinessAnswer; stopped: boolean }> {
   let sent = '';
   const send = (full: string) => {
     if (!options.onText || !full.startsWith(sent) || full === sent) return;
     options.onText(full.slice(sent.length));
     sent = full;
   };
+  const request = writeAnswerRequest(input);
   try {
-    const stream = await qtiV2WriteAnswerAgent.stream(
-      writeAnswerRequest(input),
-      {
-        ...callOptions(options),
-        structuredOutput: {
-          schema: answerSchema,
-          jsonPromptInjection: 'inline',
-          // A reply that is no JSON object is the answer text (`answerOf`).
-          errorStrategy: 'warn',
-        },
+    const stream = await writeAnswerAgent.stream(request, {
+      ...callOptions(options),
+      structuredOutput: {
+        schema: answerSchema,
+        jsonPromptInjection: 'inline',
+        // A reply that is no JSON object is the answer text (`answerOf`).
+        errorStrategy: 'warn',
       },
-    );
+    });
     if (options.onText) {
       for await (const partial of stream.objectStream as AsyncIterable<unknown>) {
         send(partialAnswer(partial));
@@ -230,6 +265,7 @@ export async function writeAnswerWithModel(
     if (stream.error && !stoppedBy(options)) throw stream.error;
     const answer = answerOf(object ?? text);
     send(answer.answer);
+    await noteExchange(options, request, replyText(object, text));
     return { answer, stopped: stoppedBy(options) };
   } catch (error) {
     if (stoppedBy(options)) {

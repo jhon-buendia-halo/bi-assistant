@@ -127,35 +127,55 @@ test(
     const { env, log } = stubEnv(appDataDir);
     const { page } = await launchApp(appDataDir, env);
 
-    await scenarioStep(page, 'Given this machine is signed in to GitHub with a Copilot seat', async () => {
-      await openLlmConfiguration(page);
-    });
-    await scenarioStep(page, 'When I choose the provider "GitHub Copilot" and leave the model empty', async () => {
-      await providerSelect(page).selectOption('copilot');
-      await expect(copilotStatus(page)).toHaveText(
-        copilotSignedInMessage('octo-dev'),
-      );
-      await expect(modelField(page)).toHaveValue('');
-    });
+    await scenarioStep(
+      page,
+      'Given this machine is signed in to GitHub with a Copilot seat',
+      async () => {
+        await openLlmConfiguration(page);
+      },
+    );
+    await scenarioStep(
+      page,
+      'When I choose the provider "GitHub Copilot" and leave the model empty',
+      async () => {
+        await providerSelect(page).selectOption('copilot');
+        await expect(copilotStatus(page)).toHaveText(
+          copilotSignedInMessage('octo-dev'),
+        );
+        await expect(modelField(page)).toHaveValue('');
+      },
+    );
     await scenarioStep(page, 'And I click "Test connection"', async () => {
       await testButton(page).click();
     });
-    await scenarioStep(page, 'Then I see a message starting "Connection successful — copilot/auto"', async () => {
-      await expect(
-        page.getByText(/Connection successful — copilot\/auto replied "ok" in \d+ms/),
-      ).toBeVisible();
-      // The probe went to the runtime with no model, so Copilot chose (R56),
-      // and as structured output (R58).
-      const probe = log().find((e) => e.method === 'session.create');
-      expect(probe?.model).toBeNull();
-      expect(log().some((e) => e.method === 'session.send' && e.structured)).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath('llm-copilot-tested.png') });
-    });
+    await scenarioStep(
+      page,
+      'Then I see a message starting "Connection successful — copilot/auto"',
+      async () => {
+        await expect(
+          page.getByText(
+            /Connection successful — copilot\/auto replied "ok" in \d+ms/,
+          ),
+        ).toBeVisible();
+        // The probe went to the runtime with no model, so Copilot chose (R56),
+        // and as structured output (R58).
+        const probe = log().find((e) => e.method === 'session.create');
+        expect(probe?.model).toBeNull();
+        expect(
+          log().some((e) => e.method === 'session.send' && e.structured),
+        ).toBe(true);
+        await page.screenshot({
+          path: testInfo.outputPath('llm-copilot-tested.png'),
+        });
+      },
+    );
     await scenarioStep(page, 'When I click "Save connection"', async () => {
       await saveButton(page).click();
     });
     await scenarioStep(page, 'Then I see "Configuration saved"', async () => {
-      await expect(page.getByText('Configuration saved', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText('Configuration saved', { exact: true }),
+      ).toBeVisible();
     });
 
     // The stored settings hold the provider and model only (R55).
@@ -225,7 +245,7 @@ test('a Copilot Free seat lists no models', async ({
   await expect(modelOptions(page)).toHaveCount(0);
 });
 
-test('a run of Questions to Insights v2 runs on GitHub Copilot', async ({
+test('a run of Answer a Business Question runs on GitHub Copilot', async ({
   appDataDir,
   launchApp,
 }) => {
@@ -246,14 +266,19 @@ test('a run of Questions to Insights v2 runs on GitHub Copilot', async ({
   const result = await runQuestionOk(page, question);
 
   // The answer streams (R62): it arrives in several pieces, not one.
-  expect(result.events.filter((e) => e.type === 'text').length).toBeGreaterThan(1);
+  expect(result.events.filter((e) => e.type === 'text').length).toBeGreaterThan(
+    1,
+  );
   expect(result.text).toContain(FINAL_ANSWER);
   expect(result.run?.status).toBe('success');
 
   // The thinking steps show the app's own tool call, run by the app (R61):
   // the SQL ran against the World Cup database and returned a row.
   expect(
-    result.events.some((e) => e.type === 'tool' && JSON.stringify(e).includes('run_readonly_sql')),
+    result.events.some(
+      (e) =>
+        e.type === 'tool' && JSON.stringify(e).includes('run_readonly_sql'),
+    ),
   ).toBe(true);
   const toolResult = log().find(
     (e) => e.method === 'session.tools.handlePendingToolCall',
@@ -263,11 +288,14 @@ test('a run of Questions to Insights v2 runs on GitHub Copilot', async ({
 
   // The run's turn offered the app's tools (R61).
   const turn = log().find(
-    (e) => e.method === 'session.create' && e.tools?.includes('run_readonly_sql'),
+    (e) =>
+      e.method === 'session.create' && e.tools?.includes('run_readonly_sql'),
   );
   expect(turn).toBeDefined();
   expect(
-    log().some((e) => e.method === 'session.send' && e.prompt?.includes(question)),
+    log().some(
+      (e) => e.method === 'session.send' && e.prompt?.includes(question),
+    ),
   ).toBe(true);
 });
 
@@ -295,15 +323,16 @@ test('a tool call written as text is never shown in a run', async ({
   // once for the real call (R66), so the answer follows a real tool run.
   expect(result.text).toContain(FINAL_ANSWER);
   expect(
-    result.events.some((e) => e.type === 'tool' && JSON.stringify(e).includes('run_readonly_sql')),
+    result.events.some(
+      (e) =>
+        e.type === 'tool' && JSON.stringify(e).includes('run_readonly_sql'),
+    ),
   ).toBe(true);
   expect(result.text).not.toContain('Count the matches"}');
   expect(result.text).not.toContain('{"sql":');
   const sends = log().filter((e) => e.method === 'session.send');
   expect(
-    sends.some(
-      (e) => e.prompt === copilotToolAsTextNudge('run_readonly_sql'),
-    ),
+    sends.some((e) => e.prompt === copilotToolAsTextNudge('run_readonly_sql')),
   ).toBe(true);
 });
 
@@ -327,7 +356,9 @@ test('switching from GitHub Copilot to OpenAI asks for an API key', async ({
   } finally {
     await endpoint.close();
   }
-  const before = await (await page.request.get(`${apiBase(page)}/llm/settings`)).json();
+  const before = await (
+    await page.request.get(`${apiBase(page)}/llm/settings`)
+  ).json();
   expect(before.apiKeyMasked).toMatch(/ilot$/);
   await putSettings(page, { provider: 'copilot', model: 'auto' });
   await page.reload();

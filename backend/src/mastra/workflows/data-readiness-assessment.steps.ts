@@ -19,7 +19,7 @@ import {
   contractStepEntry,
   type ContractStepEntry,
   type WorkflowStepExit,
-} from './qti-v2-turn.steps';
+} from './answer-business-question.steps';
 import type { WorkflowEdge } from './workflow-contract';
 
 /** The workflow's registry key and id. */

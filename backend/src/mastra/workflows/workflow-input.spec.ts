@@ -10,7 +10,7 @@ import {
 // data contract's check: workflow-contract.spec.ts (`missing`).
 
 describe('usedBy: the steps that read a field from the input (api.md 116)', () => {
-  it("qti-v2-turn's question and datasets are read by Receive question only, and checkDataQuality by no step (it picks a branch)", () => {
+  it("answer-business-question's question and datasets are read by Receive question only, and checkDataQuality by no step (it picks a branch)", () => {
     expect(
       inputFieldsWithUsage(CODE_WORKFLOWS[0]).map(({ name, usedBy }) => ({
         name,
@@ -377,7 +377,7 @@ describe('validateWorkflowInput (api.md 118, 119)', () => {
   });
 });
 
-describe("qti-v2-turn's input rules", () => {
+describe("answer-business-question's input rules", () => {
   it('caps the question at 4000 characters', () => {
     const workflow = CODE_WORKFLOWS[0];
     const datasets = [{ name: 'World Cup Core', datasourceKind: 'postgres' }];

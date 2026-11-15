@@ -249,21 +249,21 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ).resolves.toBe('Sarah');
     });
 
-    it("Questions to Insights v2's identity, then skills not its own, then tools not its own (BA-320)", async () => {
+    it("Insights Analyst's identity, then skills not its own, then tools not its own (BA-320)", async () => {
       const identity = 'You are Questions to Insights';
-      expect(await refusal('assistant-v2', 'Be brief.')).toBe(
-        `The Questions to Insights v2 prompt must start with "${identity}"`,
+      expect(await refusal('insights-analyst', 'Be brief.')).toBe(
+        `The Insights Analyst prompt must start with "${identity}"`,
       );
       // The assistant's identity is not v2's.
-      expect(await refusal('assistant-v2', `${IDENTITY}.`)).toBe(
-        `The Questions to Insights v2 prompt must start with "${identity}"`,
+      expect(await refusal('insights-analyst', `${IDENTITY}.`)).toBe(
+        `The Insights Analyst prompt must start with "${identity}"`,
       );
       const skillRefusal =
-        "Only Questions to Insights v2's own skills can be linked here: this prompt is shared by every user";
+        "Only Insights Analyst's own skills can be linked here: this prompt is shared by every user";
       for (const skill of ['x', 'data-readiness', 'readiness-drilldown']) {
         expect(
           await refusal(
-            'assistant-v2',
+            'insights-analyst',
             `${identity}. [[skill:${skill}]] [[tool:x]]`,
           ),
         ).toBe(skillRefusal);
@@ -280,33 +280,33 @@ describe('AgentPromptsService (ADR-0026)', () => {
       ]) {
         expect(
           await refusal(
-            'assistant-v2',
+            'insights-analyst',
             `${identity}. [[skill:sql-analysis]] [[tool:${tool}]]`,
           ),
         ).toBe(`Unknown tool "${tool}"`);
       }
     });
 
-    it("accepts Questions to Insights v2's own tools and skills in its prompt, and shows it with links allowed", async () => {
+    it("accepts Insights Analyst's own tools and skills in its prompt, and shows it with links allowed", async () => {
       const { service } = build();
-      expect(await service.view('assistant-v2')).toEqual({
-        editable: shippedAgentPrompt('assistant-v2'),
-        shipped: shippedAgentPrompt('assistant-v2'),
+      expect(await service.view('insights-analyst')).toEqual({
+        editable: shippedAgentPrompt('insights-analyst'),
+        shipped: shippedAgentPrompt('insights-analyst'),
         modified: false,
         builtInChanged: false,
         linksAllowed: true,
         updatedAt: null,
       });
-      await service.save('assistant-v2', {
+      await service.save('insights-analyst', {
         prompt:
           'You are Questions to Insights. Call [[tool:list_entities]], [[tool:describe_entity]], [[tool:sample_rows]], [[tool:run_readonly_sql]] and [[tool:ask_clarification]]. Load [[skill:curated-knowledge]], [[skill:sql-analysis]] and [[skill:result-validation]].',
       });
-      expect(agentPromptOverrideFor('assistant-v2')?.prompt).toContain(
+      expect(agentPromptOverrideFor('insights-analyst')?.prompt).toContain(
         '[[skill:result-validation]]',
       );
       await expect(
-        service.save('assistant-v2', {
-          prompt: shippedAgentPrompt('assistant-v2'),
+        service.save('insights-analyst', {
+          prompt: shippedAgentPrompt('insights-analyst'),
         }),
       ).resolves.toBe('Michael');
     });

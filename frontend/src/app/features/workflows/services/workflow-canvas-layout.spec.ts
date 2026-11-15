@@ -54,7 +54,7 @@ const agentStep = (
     role: 'Insights Analyst',
     tools,
     maxSteps,
-    key: 'assistant-v2',
+    key: 'insights-analyst',
   },
 });
 
@@ -67,13 +67,13 @@ const field = (name: string): WorkflowInputField => ({
 
 const AGENTS: WorkflowDetail['agents'] = [
   {
-    key: 'assistant-v2',
-    name: 'Questions to Insights v2',
+    key: 'insights-analyst',
+    name: 'Insights Analyst',
     model: 'anthropic/claude-sonnet-5-5',
   },
 ];
 
-/** Questions to Insights v2 before its graph: four steps, the third an agent with three tools. */
+/** Insights Analyst before its graph: four steps, the third an agent with three tools. */
 const V2: Source = {
   input: [field('question'), field('datasets')],
   agents: AGENTS,
@@ -94,13 +94,13 @@ const V2: Source = {
 };
 
 /**
- * `qti-v2-turn` as `GET /workflows/qti-v2-turn` returns it: Plan and Write
+ * `answer-business-question` as `GET /workflows/answer-business-question` returns it: Plan and Write
  * answer one model call each, Analyse five tools and three exits, the real
  * field lists (their counts set the gaps).
  */
 const REAL_V2: WorkflowDetail = {
   ...GRAPH_WORKFLOW,
-  agents: [{ key: 'qti', name: 'Questions to Insights v2', model: 'custom/claude-sonnet-5-5' }],
+  agents: [{ key: 'qti', name: 'Insights Analyst', model: 'custom/claude-sonnet-5-5' }],
   input: [field('question'), field('datasets')],
   steps: GRAPH_WORKFLOW.steps.map((step): WorkflowDetailStep => {
     const io: Record<string, [string[], string[]]> = {
@@ -306,7 +306,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(overlapping(layout)).toEqual([]);
   });
 
-  it('four steps (Questions to Insights v2): the agent is a wide node, exits above it', () => {
+  it('four steps (Insights Analyst): the agent is a wide node, exits above it', () => {
     const layout = workflowCanvasLayout(V2);
     // Two agent exit rows and their gap above the agent; the squares share its centre line.
     const cy = 40 + 2 * 16 + 12 + 44;
@@ -463,7 +463,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     });
     const nullModel = workflowCanvasLayout({
       input: [],
-      agents: [{ key: 'assistant-v2', name: 'x', model: null }],
+      agents: [{ key: 'insights-analyst', name: 'x', model: null }],
       steps: [agentStep('a', [])],
     });
     const unknown = workflowCanvasLayout({
@@ -478,7 +478,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     }
     const bare = workflowCanvasLayout({
       input: [],
-      agents: [{ key: 'assistant-v2', name: 'x', model: 'gpt-5' }],
+      agents: [{ key: 'insights-analyst', name: 'x', model: 'gpt-5' }],
       steps: [agentStep('a', [])],
     });
     expect(bare.nodes[1].subNodes[0].label).toBe('gpt-5');
@@ -641,7 +641,7 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
   });
 });
 
-describe('Questions to Insights v2 as the API returns it (roomy canvas)', () => {
+describe('Insights Analyst as the API returns it (roomy canvas)', () => {
   for (const [name, w] of [
     ['Clarify ends the run', REAL_V2],
     ['Clarify goes back to Plan', REAL_V2_CLARIFY_LOOP],
