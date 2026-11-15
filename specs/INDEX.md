@@ -459,7 +459,7 @@ specs/capabilities/agents-evals/spec.md:30-30  R6 The Job Description tab (the a
 specs/capabilities/agents-evals/spec.md:31-31  R7 The Memory tab SHALL show, for an agent with memory: "Recent messages
 specs/capabilities/agents-evals/spec.md:32-32  R8 Requesting an agent that does not exist SHALL fail with `Agent "<key>"
 specs/capabilities/agents-evals/spec.md:33-35  R9 The system SHALL tolerate an agent whose prompt, tools, memory or mode
-specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant, Insights Analyst and the Data Readiness Agent SHAL
+specs/capabilities/agents-evals/spec.md:36-36  R10 Only the assistant, Insights Analyst, the Query Explainer and the Data
 specs/capabilities/agents-evals/spec.md:37-37  R11 The system SHALL provide the sets below, each bound to one sample fixt
 specs/capabilities/agents-evals/spec.md:38-38  R12 Each set SHALL carry a name, a description of what it covers and what
 specs/capabilities/agents-evals/spec.md:39-39  R13 The Evals tab SHALL open on the list of sets, each showing its name, "
@@ -1759,23 +1759,23 @@ specs/system/agents.md:1652-1693  ### 7.2 The `interactive-visuals` skill
 specs/system/agents.md:1695-1721  ### 7.3 Skills: source, layout, loading and validation
 specs/system/agents.md:1723-1806  ### 7.4 Skills per agent
 specs/system/agents.md:1808-1812  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:1814-1926  ## 8. Evals
-specs/system/agents.md:1818-1883  ### 8.1 Case and set format
-specs/system/agents.md:1885-1892  ### 8.2 Data preflight
-specs/system/agents.md:1894-1905  ### 8.3 Executing a case
-specs/system/agents.md:1907-1912  ### 8.4 Runs, regression and report
-specs/system/agents.md:1914-1926  ### 8.5 Other entry points
-specs/system/agents.md:1928-1932  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:1934-1947  ## Open questions and gaps
-specs/system/agents.md:1949-2087  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2089-2125  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2127-2129  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2131-2208  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2210-2314  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2316-2364  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2322-2339  ### Plan
-specs/system/agents.md:2341-2364  ### Write answer
-specs/system/agents.md:2366-2382  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:1814-1929  ## 8. Evals
+specs/system/agents.md:1818-1886  ### 8.1 Case and set format
+specs/system/agents.md:1888-1895  ### 8.2 Data preflight
+specs/system/agents.md:1897-1908  ### 8.3 Executing a case
+specs/system/agents.md:1910-1915  ### 8.4 Runs, regression and report
+specs/system/agents.md:1917-1929  ### 8.5 Other entry points
+specs/system/agents.md:1931-1935  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:1937-1950  ## Open questions and gaps
+specs/system/agents.md:1952-2090  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2092-2128  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2130-2132  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2134-2211  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2213-2317  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2319-2367  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2325-2342  ### Plan
+specs/system/agents.md:2344-2367  ### Write answer
+specs/system/agents.md:2369-2385  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
