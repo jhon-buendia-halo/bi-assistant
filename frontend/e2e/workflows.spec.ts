@@ -1054,6 +1054,12 @@ test.describe('Feature: Workflows (the designer)', () => {
         async () => {
           const dialog = nodeDialog(page);
           await expect(dialog.getByTestId('workflow-ndv-title')).toHaveText('Analyse');
+          // An agent step opens on Chat; its fields are under Parameters.
+          await expect(dialog.getByTestId('workflow-ndv-tab-chat')).toHaveAttribute(
+            'aria-selected',
+            'true',
+          );
+          await dialog.getByTestId('workflow-ndv-tab-parameters').click();
           await expect(dialog.getByTestId('workflow-step-field-model')).toBeVisible();
           await expect(dialog.getByTestId('workflow-step-field-tools')).toHaveText(
             'list_entities, describe_entity, sample_rows, run_readonly_sql, ask_clarification',
@@ -1091,8 +1097,9 @@ test.describe('Feature: Workflows (the designer)', () => {
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
         },
       );
-      await scenarioStep(page, 'When I double-click "Analyse" again', async () => {
-        await openNode(page, 'analyse', 'Analyse');
+      await scenarioStep(page, 'When I double-click "Analyse" again and pick Parameters', async () => {
+        const dialog = await openNode(page, 'analyse', 'Analyse');
+        await dialog.getByTestId('workflow-ndv-tab-parameters').click();
       });
       await scenarioStep(
         page,

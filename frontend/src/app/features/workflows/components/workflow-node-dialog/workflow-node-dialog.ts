@@ -118,7 +118,8 @@ export class WorkflowNodeDialog {
 
   readonly triggerLabels = TRIGGER_LABELS;
   readonly tabLabels = TAB_LABELS;
-  readonly tab = signal<DialogTab>('parameters');
+  /** The tab the user picked; null until they pick one. */
+  readonly tab = signal<DialogTab | null>(null);
 
   /** An agent step offers Chat, unless the run's workflow is gone. */
   readonly hasChat = computed(
@@ -129,20 +130,27 @@ export class WorkflowNodeDialog {
       ? ['chat', 'parameters', 'settings']
       : ['parameters', 'settings'],
   );
-  /** The tab shown: Chat falls back to Parameters on a node without it. */
+  /**
+   * The tab shown: the one picked, else Chat when the node offers it, else
+   * Parameters. Chat falls back to Parameters on a node without it.
+   */
   readonly activeTab = computed<DialogTab>(() => {
-    const tab = this.tab();
+    const tab = this.tab() ?? (this.hasChat() ? 'chat' : 'parameters');
     return tab === 'chat' && !this.hasChat() ? 'parameters' : tab;
   });
   /** Input (above the tabs) and Output (below them) start collapsed. */
   readonly inputOpen = signal(false);
   readonly outputOpen = signal(false);
+  /** Whether Chat has shown; it stays mounted afterwards. */
+  private readonly chatShown = signal(false);
   /** The chat panel is created when Chat first shows, then kept while other tabs show. */
-  readonly chatMounted = signal(false);
+  readonly chatMounted = computed(
+    () => this.chatShown() || this.activeTab() === 'chat',
+  );
 
   selectTab(tab: DialogTab): void {
+    if (tab === 'chat' || this.activeTab() === 'chat') this.chatShown.set(true);
     this.tab.set(tab);
-    if (tab === 'chat') this.chatMounted.set(true);
   }
 
   private readonly dialog =

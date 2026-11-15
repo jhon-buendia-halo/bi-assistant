@@ -244,22 +244,36 @@ describe('WorkflowNodeDialog', () => {
       fixture.detectChanges();
     }
 
-    it('comes after Settings, as a tab like the others', () => {
+    it('comes first and is the tab shown when the dialog opens', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
       expect(tabs()).toEqual(['Chat', 'Parameters', 'Settings']);
       const chatTab = byId('workflow-ndv-tab-chat')!;
       expect(chatTab.getAttribute('role')).toBe('tab');
-      expect(chatTab.getAttribute('aria-selected')).toBe('false');
-      // Not read until the tab first shows.
-      expect(byId('workflow-node-chat')).toBeNull();
-      expect(api.getNodeChat).not.toHaveBeenCalled();
-
-      chatTab.click();
-      fixture.detectChanges();
       expect(chatTab.getAttribute('aria-selected')).toBe('true');
+      expect(
+        byId('workflow-ndv-tab-parameters')!.getAttribute('aria-selected'),
+      ).toBe('false');
       expect(byId('workflow-node-chat')).not.toBeNull();
       expect(api.getNodeChat).toHaveBeenCalledOnceWith('run_8f21c4', 'analyse');
       expect(byId('workflow-step-field-id')).toBeNull();
+
+      byId('workflow-ndv-tab-parameters')!.click();
+      fixture.detectChanges();
+      expect(chatTab.getAttribute('aria-selected')).toBe('false');
+      expect(text('workflow-step-field-id')).toBe('analyse');
+      // The chat stays mounted, hidden, so its conversation is kept.
+      expect(byId('workflow-node-chat')?.closest('[hidden]')).not.toBeNull();
+    });
+
+    it('leaves Parameters as the tab shown on a node without Chat', () => {
+      openWithChat(node('analyse'), { state: 'hidden' });
+      expect(
+        byId('workflow-ndv-tab-parameters')!.getAttribute('aria-selected'),
+      ).toBe('true');
+      openWithChat(node('start'), { state: 'ready', runId: 'run_8f21c4' });
+      expect(
+        byId('workflow-ndv-tab-parameters')!.getAttribute('aria-selected'),
+      ).toBe('true');
     });
 
     it('stays mounted while another tab shows, so the conversation is kept', () => {
