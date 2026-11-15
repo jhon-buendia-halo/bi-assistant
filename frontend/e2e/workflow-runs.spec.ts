@@ -379,10 +379,13 @@ test.describe('Feature: Workflow runs', () => {
       await scenarioStep(page, 'When I open that run from the Runs page', async () => {
         await railItem(page, 'Runs').click();
         await page.getByTestId(/^run-[0-9a-f]{8}-/).first().getByRole('button').first().click();
-        await expect(page.getByTestId('run-detail-answer')).toContainText('The data holds many matches.');
+        // A finished run opens on its workflow's page, drawn with that run (workflows R19).
+        await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
+        await expect(page.getByTestId('workflow-run-question')).toHaveText(question);
+        await expect(runAnswer(page)).toContainText('The data holds many matches.');
       });
       await scenarioStep(page, 'Then I see its coverage line and its query row', async () => {
-        const answer = page.getByTestId('run-detail-answer');
+        const answer = runAnswer(page);
         await expect(answer.getByTestId('query-coverage-line')).toContainText('table was read');
         await expect(answer.getByTestId('query-row-0')).toContainText('Counting all the matches.');
         await expect(answer.getByText(/Data used/)).toHaveCount(0);

@@ -303,8 +303,8 @@ roadmap.md:494-499  #### 1.25.2 — Answer view: figure chips, coverage line and
 roadmap.md:501-506  #### 1.25.3 — The query explainer and the step counts  `✅ Done`
 roadmap.md:508-513  #### 1.25.4 — The inspector and its Run panel host  `✅ Done`
 roadmap.md:515-520  #### 1.25.5 — The run detail page hosts the inspector  `✅ Done`
-roadmap.md:522-527  #### 1.25.6 — An answer that lists more than 50 rows shows all of them  `🚧 In progress`
-roadmap.md:529-534  #### 1.25.7 — Validate fails an attempt that rests on a sample  `🚧 In progress`
+roadmap.md:522-527  #### 1.25.6 — An answer that lists more than 50 rows shows all of them  `✅ Done`
+roadmap.md:529-534  #### 1.25.7 — Validate fails an attempt that rests on a sample  `✅ Done`
 roadmap.md:536-540  ## Release 2 — Multi-user  (no target date yet)
 roadmap.md:540-540  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
 roadmap.md:542-544  ## Backlog

@@ -1035,11 +1035,14 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
         '[[rows:2 | name=Driver, total_race_starts=Race starts]]',
       );
       expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
-        'when a query\'s line says that only its first rows are shown',
+        "when a query's line says that only its first rows are shown",
       );
       // Last, so the rules before it read in the order they always had.
       expect(
-        WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n').pop()?.startsWith('- Long lists:'),
+        WRITE_ANSWER_INSTRUCTIONS.trimEnd()
+          .split('\n')
+          .pop()
+          ?.startsWith('- Long lists:'),
       ).toBe(true);
     });
 
