@@ -1,5 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
 import { RunVisualsState } from '../../services/run-visuals-state';
@@ -176,5 +179,77 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       { name: 'b', value: 'y, z' },
       { name: 'c', value: 'true' },
     ]);
+  });
+
+  describe('the query inspector (workflows R31; plan 1.25.5)', () => {
+    const WITH_QUERIES: WorkflowRun = {
+      ...RUN,
+      answer: {
+        role: 'assistant',
+        content: 'The data holds 964 matches.',
+        at: '2026-01-01T00:00:01Z',
+        data: [
+          {
+            tool: 'run_readonly_sql',
+            input: 'select count(*) as n from matches',
+            columns: ['n'],
+            rows: [{ n: 964 }],
+            rowCount: 1,
+            rationale: 'Counting the matches.',
+          },
+        ],
+        evidence: [{ index: 0, coverage: 'whole-table', datasourceKind: 'postgres' }],
+      },
+    };
+
+    function mountWithHttp(run: WorkflowRun) {
+      const state = TestBed.inject(RunsState);
+      state.activeRun.set(run);
+      const http = TestBed.inject(HttpTestingController);
+      const fixture = TestBed.createComponent(RunDetail);
+      fixture.detectChanges();
+      return { fixture, http, el: fixture.nativeElement as HTMLElement };
+    }
+    const evidence = (r: { url: string; method: string }) =>
+      r.method === 'POST' && r.url.endsWith('/workflow-runs/r1/answer/evidence');
+
+    it('shows the query rows and a chip, builds the evidence once, and opens the inspector from a row', () => {
+      const { fixture, http, el } = mountWithHttp(WITH_QUERIES);
+      http.expectOne(evidence).flush({ ok: true, run: WITH_QUERIES });
+      fixture.detectChanges();
+      expect(el.textContent).not.toContain('Data used');
+      expect(el.querySelector('[data-testid="query-coverage-line"]')).not.toBeNull();
+      const row = el.querySelector<HTMLElement>('[data-testid="query-row-0"]')!;
+      expect(row.textContent).toContain('Counting the matches.');
+      expect(el.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('Q1');
+      expect(el.querySelector('[data-testid="query-inspector"]')).toBeNull();
+
+      row.click();
+      fixture.detectChanges();
+      const sheet = el.querySelector('[data-testid="query-inspector-sheet"]')!;
+      expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain(
+        'Query 1 of 1',
+      );
+      // Showing the run again builds nothing a second time.
+      fixture.detectChanges();
+      http.expectNone(evidence);
+
+      el.querySelector<HTMLElement>('[data-testid="query-inspector-close"]')!.click();
+      fixture.detectChanges();
+      expect(el.querySelector('[data-testid="query-inspector"]')).toBeNull();
+      // Opening the query asked for its steps; that is the only call left.
+      http.expectOne((r) => r.url.endsWith('/answer/queries/0/explanation'));
+      http.verify();
+    });
+
+    it('renders a run of another workflow as before: Data used, no query rows, no evidence call', () => {
+      const other: WorkflowRun = { ...WITH_QUERIES, workflowId: 'other-workflow' };
+      const { http, el } = mountWithHttp(other);
+      http.expectNone(evidence);
+      expect(el.querySelector('[data-testid="query-row-0"]')).toBeNull();
+      expect(el.querySelector('[data-testid="figure-ref"]')).toBeNull();
+      expect(el.textContent).toContain('Data used');
+      http.verify();
+    });
   });
 });

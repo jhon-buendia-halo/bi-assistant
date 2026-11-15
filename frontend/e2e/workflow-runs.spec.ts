@@ -343,6 +343,62 @@ test.describe('Feature: Workflow runs', () => {
   );
 
   test(
+    'I open the query of a stored run from the Runs page',
+    { tag: ['@demo', '@story-1.25.5'] },
+    async ({ page }) => {
+      const sql = `SELECT COUNT(*) AS total_matches FROM ${worldCupKey('matches')}`;
+      const question = 'How many matches does the data hold?';
+      stub.reply = (request) => {
+        if (!isTurn(request, question)) return { text: 'The stub model answered this question.' };
+        return afterToolResult(request)
+          ? { text: 'The data holds many matches.' }
+          : {
+              toolCall: {
+                name: toolName(request, 'run_readonly_sql'),
+                arguments: { sql, rationale: 'Counting all the matches.' },
+              },
+            };
+      };
+
+      await scenarioStep(page, `Given I ran "${question}" on "${WORLD_CUP_DATASET}"`, async () => {
+        await openWorkflowPage(page, V2_ID, V2);
+        await openRunTab(page);
+        await fillRun(page, question, WORLD_CUP_DATASET);
+        await page.getByTestId('workflow-run').click();
+        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      });
+      await scenarioStep(page, 'When I open that run from the Runs page', async () => {
+        await railItem(page, 'Runs').click();
+        await page.getByTestId(/^run-[0-9a-f]{8}-/).first().getByRole('button').first().click();
+        await expect(page.getByTestId('run-detail-answer')).toContainText('The data holds many matches.');
+      });
+      await scenarioStep(page, 'Then I see its coverage line and its query row', async () => {
+        const answer = page.getByTestId('run-detail-answer');
+        await expect(answer.getByTestId('query-coverage-line')).toContainText('table was read');
+        await expect(answer.getByTestId('query-row-0')).toContainText('Counting all the matches.');
+        await expect(answer.getByText(/Data used/)).toHaveCount(0);
+      });
+      await scenarioStep(page, 'When I open the query from its row', async () => {
+        await page.getByTestId('query-row-0').click();
+      });
+      await scenarioStep(page, 'Then the inspector shows its steps and the focus is on its close button', async () => {
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-funnel-step').last()).toHaveAttribute('data-verb', 'show');
+        await expect(page.getByTestId('query-inspector-close')).toBeFocused();
+        const sheet = (await page.getByTestId('query-inspector-sheet').boundingBox())!;
+        expect(sheet.width).toBeLessThanOrEqual(720);
+      });
+      await scenarioStep(page, 'When I press Escape', async () => {
+        await page.keyboard.press('Escape');
+      });
+      await scenarioStep(page, 'Then it closes and the focus is back on the row', async () => {
+        await expect(page.getByTestId('query-inspector')).toHaveCount(0);
+        await expect(page.getByTestId('query-row-0')).toBeFocused();
+      });
+    },
+  );
+
+  test(
     'Answer a Business Question checks data quality with Sarah when asked',
     { tag: ['@demo'] },
     async ({ page }) => {
