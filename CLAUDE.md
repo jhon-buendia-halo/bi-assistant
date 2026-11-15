@@ -23,6 +23,15 @@ Right after reading `lessons.md` in a new session, settle which workflow the ses
 
 Subagents that work from a brief (`builder`, `reviewer`) skip this.
 
+## Choose the brand
+
+**Every session asks which brand it works on, even when an earlier answer exists.** Right after the workflow is settled (in the same picker when the workflow question is asked too), ask: **Halo Powered** (`halo`, the default build) or **Agentic Hub** (`mercer`, the pre-rebrand look). Offer the value in `.context/brand`, if any, as the recommended option.
+
+- Write the answer to `.context/brand` and say it in one line.
+- Use it for every build, app run and E2E run of the session: `BRAND=<id>` on `build:all`, `build:web`, `electron`, `electron:dist` and `test:e2e` (ADR-0045, [delivery.md](specs/system/delivery.md)).
+- The E2E suite targets the Halo build. On `mercer`, run only `e2e/brand-mercer.spec.ts`, then rebuild without `BRAND` before any other suite.
+- Subagents get the brand in their brief and skip the question.
+
 ## Rules for both workflows
 
 - **Never on `main`.** Work on a branch; nothing goes directly on `main`.
