@@ -1128,7 +1128,7 @@ specs/capabilities/monitoring/spec.md:145-312  ## Flows
 specs/capabilities/monitoring/spec.md:314-325  ## Acceptance
 
 specs/capabilities/past-chats/spec.md:5-7  ## Concepts
-specs/capabilities/past-chats/spec.md:9-36  ## Rules
+specs/capabilities/past-chats/spec.md:9-37  ## Rules
 specs/capabilities/past-chats/spec.md:11-20  ### Stored sessions
 specs/capabilities/past-chats/spec.md:13-13  R1 Retired (1.24.12, removed 1.23.27). A session was created only with a
 specs/capabilities/past-chats/spec.md:14-14  R2 A stored session keeps its unique id, its transcript, its visual list
@@ -1142,18 +1142,19 @@ specs/capabilities/past-chats/spec.md:22-26  ### Which workflow a past chat name
 specs/capabilities/past-chats/spec.md:24-24  R57 Every session SHALL name the workflow it ran (R65) in the page header'
 specs/capabilities/past-chats/spec.md:25-25  R59 When the agent is deleted, its sessions SHALL keep their transcript, m
 specs/capabilities/past-chats/spec.md:26-26  R65 A session bound to Answer a Business Question reads its workflow `answ
-specs/capabilities/past-chats/spec.md:28-32  ### The Past chats list and the read-only chat
+specs/capabilities/past-chats/spec.md:28-33  ### The Past chats list and the read-only chat
 specs/capabilities/past-chats/spec.md:30-30  R62 While a past chat is open, the page header's session context SHALL end
 specs/capabilities/past-chats/spec.md:31-31  R63 In the **Past chats** tab of the Runs page (app-shell R46) the system
 specs/capabilities/past-chats/spec.md:32-32  R66 A session opened from the **Past chats** tab SHALL open **read-only**
-specs/capabilities/past-chats/spec.md:34-36  ### Ownership
-specs/capabilities/past-chats/spec.md:36-36  R60 A session, with its transcript, visuals, reports, workspace files and
-specs/capabilities/past-chats/spec.md:38-50  ## Edge cases and errors
-specs/capabilities/past-chats/spec.md:52-56  ## Contracts
-specs/capabilities/past-chats/spec.md:58-71  ## UI
-specs/capabilities/past-chats/spec.md:73-158  ## Flows
-specs/capabilities/past-chats/spec.md:75-158  ### Feature: Session management
-specs/capabilities/past-chats/spec.md:160-168  ## Acceptance
+specs/capabilities/past-chats/spec.md:33-33  R67 In a past chat, every assistant message that has `data` SHALL show its
+specs/capabilities/past-chats/spec.md:35-37  ### Ownership
+specs/capabilities/past-chats/spec.md:37-37  R60 A session, with its transcript, visuals, reports, workspace files and
+specs/capabilities/past-chats/spec.md:39-51  ## Edge cases and errors
+specs/capabilities/past-chats/spec.md:53-57  ## Contracts
+specs/capabilities/past-chats/spec.md:59-72  ## UI
+specs/capabilities/past-chats/spec.md:74-159  ## Flows
+specs/capabilities/past-chats/spec.md:76-159  ### Feature: Session management
+specs/capabilities/past-chats/spec.md:161-169  ## Acceptance
 
 specs/capabilities/synthetic-data/spec.md:7-18  ## Concepts
 specs/capabilities/synthetic-data/spec.md:20-126  ## Rules
