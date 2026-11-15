@@ -246,7 +246,7 @@ describe('WorkflowNodeDialog', () => {
 
     it('comes after Settings, as a tab like the others', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-      expect(tabs()).toEqual(['Parameters', 'Settings', 'Chat']);
+      expect(tabs()).toEqual(['Chat', 'Parameters', 'Settings']);
       const chatTab = byId('workflow-ndv-tab-chat')!;
       expect(chatTab.getAttribute('role')).toBe('tab');
       expect(chatTab.getAttribute('aria-selected')).toBe('false');

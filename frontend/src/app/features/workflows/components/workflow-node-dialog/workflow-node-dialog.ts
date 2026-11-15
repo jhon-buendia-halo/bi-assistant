@@ -126,7 +126,7 @@ export class WorkflowNodeDialog {
   );
   readonly tabs = computed<DialogTab[]>(() =>
     this.hasChat()
-      ? ['parameters', 'settings', 'chat']
+      ? ['chat', 'parameters', 'settings']
       : ['parameters', 'settings'],
   );
   /** The tab shown: Chat falls back to Parameters on a node without it. */

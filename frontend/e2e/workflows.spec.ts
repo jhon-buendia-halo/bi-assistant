@@ -1297,7 +1297,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         'When I open "Analyse" before any run, its Chat tab says to execute the workflow first',
         async () => {
           const dialog = await openNode(page, 'analyse', 'Analyse');
-          await expect(dialog.getByRole('tab')).toHaveText(['Parameters', 'Settings', 'Chat']);
+          await expect(dialog.getByRole('tab')).toHaveText(['Chat', 'Parameters', 'Settings']);
           await dialog.getByRole('tab', { name: 'Chat', exact: true }).click();
           await expect(dialog.getByTestId('workflow-ndv-tab-chat')).toHaveAttribute(
             'aria-selected',
