@@ -57,6 +57,12 @@ export interface WorkflowInputError {
 }
 
 /** One value of a run's input (api.md 118). */
+/**
+ * The catalogue's Answer a Business Question workflow (api.md 116). Its run
+ * is the first host of the query inspector (M1-25).
+ */
+export const ANSWER_BUSINESS_QUESTION_WORKFLOW_ID = 'answer-business-question';
+
 export type WorkflowInputValue = string | number | boolean | string[];
 
 /**

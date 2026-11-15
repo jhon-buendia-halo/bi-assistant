@@ -103,7 +103,7 @@ export class WorkflowRunDock {
   private readonly room = signal(0);
   /** The dock's share of that room's width, as last dragged (kept across pages). */
   private readonly ratio = signal(readDockRatio(RUN_DOCK));
-  protected readonly maximized = signal(false);
+  protected readonly maximized = this.designer.runDockMaximized;
   protected readonly resizing = signal(false);
 
   protected readonly bounds = computed(() => dockBounds(this.room(), RUN_DOCK));

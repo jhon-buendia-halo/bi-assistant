@@ -292,4 +292,50 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(el.querySelector('header')!.classList).toContain('px-6');
     expect('openPanel' in fixture.componentInstance).toBe(false);
   });
+
+  it('opens a query in the sheet beside the Run panel; Escape closes it and the focus returns to what opened it', fakeAsync(() => {
+    open(THREE_STEPS);
+    designer.run.set({
+      id: 'run-1',
+      workflowId: 'three-steps',
+      workflowName: 'Three steps',
+      input: {},
+      status: 'success',
+      steps: [],
+      datasets: [],
+      startedAt: '2026-11-15T10:00:00.000Z',
+      answer: {
+        role: 'assistant',
+        content: 'Done',
+        at: '2026-11-15T10:00:01.000Z',
+        data: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, rows: [{ n: 1 }] }],
+      },
+    });
+    fixture.detectChanges();
+    expect(q('query-inspector')).toBeNull();
+
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    designer.runDockMaximized.set(true);
+    designer.openQuery(0, opener);
+    fixture.detectChanges();
+    tick();
+    fixture.detectChanges();
+    expect(designer.runDockMaximized()).toBe(false);
+    const sheet = q('query-inspector-sheet')!;
+    expect(sheet.contains(q('query-inspector'))).toBe(true);
+    expect(sheet.parentElement).toBe(el.querySelector('app-workflow-canvas')!.parentElement);
+    expect(q('query-inspector')!.getAttribute('role')).toBe('dialog');
+
+    q('query-inspector')!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    fixture.detectChanges();
+    tick();
+    expect(q('query-inspector')).toBeNull();
+    expect(designer.openQueryIndex()).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  }));
 });
