@@ -45,54 +45,74 @@
       No artifacts match "{{ query().trim() }}"
     </p>
   } @else {
-    <div data-testid="artifacts-list" class="mt-6 grid grid-cols-3 gap-3">
-      @for (artifact of shown(); track artifact.id) {
-        <div
-          [attr.data-testid]="'artifact-card-' + artifact.id"
-          class="card flex flex-col gap-2.5 p-4"
+    <div data-testid="artifacts-list" class="mt-6 flex flex-col gap-8">
+      @for (group of groups(); track group.kind) {
+        <section
+          [attr.data-testid]="'artifacts-section-' + group.kind"
+          [attr.aria-labelledby]="'artifacts-section-heading-' + group.kind"
         >
-          @if (artifact.hasImage) {
-            <img
-              [src]="imageUrl(artifact.id)"
-              alt=""
-              [attr.data-testid]="'artifact-image-' + artifact.id"
-              class="h-28 w-full rounded-md border border-border object-cover object-top"
-            />
-          } @else {
-            <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
-            >
-              <lucide-angular [img]="Boxes" [size]="15" />
-            </span>
-          }
-          <button
-            type="button"
-            [attr.data-testid]="'artifact-open-' + artifact.id"
-            (click)="openArtifact.emit(artifact.id)"
-            class="min-w-0 rounded text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          <h3
+            [id]="'artifacts-section-heading-' + group.kind"
+            class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
           >
+            {{ group.label }}
             <span
-              [attr.data-testid]="'artifact-name-' + artifact.id"
-              class="block truncate text-[14px] font-medium text-fg-strong"
-              >{{ artifact.name }}</span
+              [attr.data-testid]="'artifacts-section-count-' + group.kind"
+              class="ml-1 font-normal"
+              >{{ group.artifacts.length }}</span
             >
-          </button>
-          @if (artifact.description) {
-            <span class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted">{{
-              artifact.description
-            }}</span>
-          }
-          <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
-            <span
-              [attr.data-testid]="'artifact-kind-' + artifact.id"
-              class="chip chip-info"
-              >{{ kind(artifact) }}</span
-            >
-            <span class="min-w-0 text-[12px] text-fg-muted">{{
-              counts(artifact)
-            }}</span>
-          </span>
-        </div>
+          </h3>
+          <div class="mt-3 grid grid-cols-3 gap-3">
+            @for (artifact of group.artifacts; track artifact.id) {
+              <div
+                [attr.data-testid]="'artifact-card-' + artifact.id"
+                class="card flex flex-col gap-2.5 p-4"
+              >
+                @if (artifact.hasImage) {
+                  <img
+                    [src]="imageUrl(artifact.id)"
+                    alt=""
+                    [attr.data-testid]="'artifact-image-' + artifact.id"
+                    class="h-28 w-full rounded-md border border-border object-cover object-top"
+                  />
+                } @else {
+                  <span
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
+                  >
+                    <lucide-angular [img]="Boxes" [size]="15" />
+                  </span>
+                }
+                <button
+                  type="button"
+                  [attr.data-testid]="'artifact-open-' + artifact.id"
+                  (click)="openArtifact.emit(artifact.id)"
+                  class="min-w-0 rounded text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                >
+                  <span
+                    [attr.data-testid]="'artifact-name-' + artifact.id"
+                    class="block truncate text-[14px] font-medium text-fg-strong"
+                    >{{ artifact.name }}</span
+                  >
+                </button>
+                @if (artifact.description) {
+                  <span class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted">{{
+                    artifact.description
+                  }}</span>
+                }
+                <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                  <span
+                    [attr.data-testid]="'artifact-kind-' + artifact.id"
+                    class="chip chip-info"
+                    >{{ kind(artifact) }}</span
+                  >
+                  <span class="min-w-0 text-[12px] text-fg-muted">{{
+                    counts(artifact)
+                  }}</span>
+                </span>
+              </div>
+            }
+          </div>
+        </section>
       }
     </div>
   }

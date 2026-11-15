@@ -62,6 +62,18 @@ describe('ArtifactsPage', () => {
     expect(el.querySelector('[data-testid="artifact-image-a-2"]')).toBeNull();
   });
 
+  it('groups the cards by kind, each section with its heading and count', () => {
+    const { el } = setup();
+    const section = el.querySelector('[data-testid="artifacts-section-dashboard"]');
+    expect(section?.querySelector('h3')?.textContent?.replace(/\s+/g, ' ').trim())
+      .toBe('Dashboards 2');
+    expect(text(el, 'artifacts-section-count-dashboard')).toBe('2');
+    expect(section?.querySelectorAll('[data-testid^="artifact-card-"]').length)
+      .toBe(2);
+    expect(el.querySelectorAll('[data-testid^="artifacts-section-"]:not([data-testid*="count"])').length)
+      .toBe(1);
+  });
+
   it('opens an artifact from its name', () => {
     const { fixture, el } = setup();
     const opened: string[] = [];

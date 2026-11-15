@@ -13,11 +13,12 @@ import {
   artifactCountsLabel,
   artifactKindLabel,
   filterArtifacts,
+  groupArtifacts,
 } from '../../services/artifacts.util';
 
 /**
- * The Artifacts page: reusable context saved from workflow runs, newest
- * first, with search. The search resets each time the page opens.
+ * The Artifacts page: reusable context saved from workflow runs, grouped
+ * by kind (Dashboards, ...) and newest first within each, with search. The search resets each time the page opens.
  */
 @Component({
   selector: 'app-artifacts-page',
@@ -42,6 +43,9 @@ export class ArtifactsPage implements OnInit {
   readonly shown = computed(() =>
     filterArtifacts(this.artifacts(), this.query()),
   );
+
+  /** The shown artifacts in sections, one per kind (Dashboards, ...). */
+  readonly groups = computed(() => groupArtifacts(this.shown()));
 
   ngOnInit(): void {
     this.api.list().subscribe({
