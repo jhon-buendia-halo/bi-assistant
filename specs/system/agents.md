@@ -38,6 +38,7 @@ An **agent** is a named, stateless-by-default LLM wrapper with:
 | `assistant-eval-judge` | Laura | QA Evaluator | `quality` |
 | `analysis-planner` | Olivia | Analysis Lead | `analysis` |
 | `answer-writer` | Jessica | Insights Writer | `storytelling` |
+| `query-explainer` | Hannah | Query Explainer | `sql` |
 
 Each persona also carries a **domain**, the specialty that groups the agent in the Agent Hub. The six ids, in the order the hub shows them: `data-foundations` (Data Foundations), `analysis` (Analysis), `sql` (SQL Engineering), `storytelling` (Storytelling), `quality` (Quality & Evals) and `general` (General). `general` is the default (`DEFAULT_AGENT_DOMAIN`) and belongs to no built-in agent: it is where user agents with no domain chosen sit. The ids and the check `isAgentDomain` live in `agent-personas.ts` (`AGENT_DOMAINS`, `AgentDomain`).
 
@@ -70,8 +71,9 @@ All agents are registered once in a single framework instance and looked up by *
 | `data-readiness` | `data-readiness-agent` | Data Readiness Agent | Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings. |
 | `analysis-planner` | `analysis-planner` | Analysis Planner | Plans an analysis before any SQL runs: the measures, the entities, the scope, the assumptions, and whether to ask the user first. Runs the Plan step of Answer a Business Question. |
 | `answer-writer` | `answer-writer` | Answer Writer | Writes the answer of a run from the rows its queries returned and the findings of its checks. Runs the Write answer step of Answer a Business Question. |
+| `query-explainer` | `query-explainer` | Query Explainer | Explains one stored query step by step in business words, with a count statement per step. Runs when a query is opened in the query inspector (2.12). |
 
-The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `insights-analyst` (2.11) and `data-readiness` (2.10) as Official, and the other seven (`analysis-planner`, `answer-writer`, `visualization`, `sql-fixer`, `sql-verifier`, `assistant-eval-judge`, `knowledge-bootstrap`) as System ([api.md](api.md) 33). The four showcase agents (2.9) were removed in 1.23.8.
+The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name. It shows `assistant`, `insights-analyst` (2.11) and `data-readiness` (2.10) as Official, and the other eight (`analysis-planner`, `answer-writer`, `query-explainer`, `visualization`, `sql-fixer`, `sql-verifier`, `assistant-eval-judge`, `knowledge-bootstrap`) as System ([api.md](api.md) 33). The four showcase agents (2.9) were removed in 1.23.8.
 
 **User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the ten registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: agent-answers R52-R59. A session can also be bound to a **built-in** agent: one that declares a dataset, today `data-readiness` (2.10), or `insights-analyst` (2.11), which takes the user's own datasets. It stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, agent-answers R61).
 
@@ -748,6 +750,20 @@ Its streamed turn is a workflow defined in code, not one agent call (5.11, ADR-0
 - Exact shipped text: Appendix E.
 
 > Implementation note: `mastra/agents/insights-analyst.agent.ts` (`insightsAnalystAgent`, registered as `insights-analyst`), built from the assistant's dataset and clarification tools; its skills come from `catalogFrameworkSkills('insights-analyst')` (`AGENT_SKILLS` in `app-skills.ts`); its tool names, in order, are `INSIGHTS_ANALYST_TOOL_NAMES` in `insights-analyst-catalog.ts`; its context is `insightsAnalystAgentOptions` in `modules/sessions/turn/turn-options.ts`. The shipped text without `## Tools` is `INSIGHTS_ANALYST_PROMPT` in `agents/system-prompts.ts` and `SHIPPED['insights-analyst']` in `shipped-agent-prompts.ts`. A turn of a session with `agentKey: 'insights-analyst'` runs this agent in place of the `assistant` through the session code's per-agent branch (ADR-0028); a streamed turn runs it from the workflow `answer-business-question` (5.11).
+
+### 2.12 `query-explainer` — Query Explainer
+
+Hannah (1.1), the agent of the query inspector's Step by step tab (roadmap 1.25, plan `docs/plans/m1-25-query-inspector.md`). A System agent, called by the app when a query is first opened: `POST /workflow-runs/:id/answer/queries/:index/explanation` ([api.md](api.md) 140) and, for the row counts, `.../stage-counts` (141). One model call (`MastraService.explainQuery`), `maxSteps: 1`, `toolChoice: 'none'`, no tools, no skills, no memory, `resolveAgentModel()`, structured output by JSON prompt injection (`jsonPromptInjection: 'inline'`). Its Mastra id is `query-explainer`, its technical name `Query Explainer`; its job description is the shipped wording of Appendix G or an in-app override (ADR-0026). It has no eval set: its count statements are checked at run time.
+
+- **Request** (`explainRequest`): the dialect (`PostgreSQL`, `Databricks SQL`, `SQLite (REST API datasource)`), the rationale, the tables the query reads with their sizes, the columns of the result and the SQL. **Never result rows.**
+- **Reply** (`explainReplySchema`): `{ steps: [{ verb, text, table?, unit?, countSql? }] }`, one step per verb of `start`, `keep`, `add`, `combine`, `group`, `count`, `compute`, `sort`. It writes no step for the LIMIT or the final list: code adds the **Show** step (`showStep`, copy in plan 2.5).
+- **Reading the reply** (`explanationOf`, lenient): an unknown verb becomes `compute`; a `show` or `limit` step is dropped; a `start` is put first when missing (built from the first table), and a second one becomes `compute`; at most 8 steps before Show; `text` at most 160 characters; a `countSql` is dropped when it does not start with `select` or `with`, contains `;`, or is over 4 000 characters. The start step takes its `rows` from the table's measured size. A reply that is no JSON object, or holds no step, gives `fallbackExplanation`: the start and the Show step built by code, `fallback: true`.
+- **Records without SQL to model.** A `sample_rows` record is explained by code (`sampleExplanation`: its entity, then `Show <n> sample rows`), with no model call.
+- **Step counts** (141, `checkStageCounts`). Each step's `countSql` runs only through `QueryEvidenceService.countRows` (the connector's read-only guard applies), in turn, and only if every statement reads tables the original query reads (`foreignTable`; a CTE, `EXTRACT(... FROM col)` and the query's own tables, by any of their names, are fine). The counts are stored (each step's `rows`, `stageCounts.status` `verified`) only when every rule holds: each count is a whole number of 0 or more; the start's count equals the table size measured in code; `sort` and `compute` keep the previous count; `keep` and `group` do not raise it; `count` does not raise it above `max(previous, 1)`; `add` and `combine` may; and `min(outerLimit ?? infinity, last count)` equals `totalRows ?? (truncated ? unknown : rowCount)`. If any rule fails, a statement fails, a step has no `countSql` or a statement names a foreign table, nothing is stored on the steps except the start and Show counts, and `stageCounts` is `unverified` with the reason. A wrong count is worse than none.
+- **Calls.** The same run and index while a call is in flight share its result. Explanation and counts are written through the run's answer lock (`patchEvidence`).
+- Exact shipped text: Appendix G.
+
+> Implementation note: `mastra/agents/query-explainer.agent.ts` (`queryExplainerAgent`, `explainQueryWithModel`) and the framework-free `mastra/agents/query-explainer.prompts.ts` (`QUERY_EXPLAINER_INSTRUCTIONS`, `explainReplySchema`, `explainRequest`, `explanationOf`, `showStep`, `fallbackExplanation`, `sampleExplanation`, `foreignTable`, `checkStageCounts`), registered in `mastra/index.ts`, `agent-constants.ts` (`QUERY_EXPLAINER_AGENT_KEY`, `SYSTEM_AGENT_KEYS`), `agent-personas.ts` and `shipped-agent-prompts.ts`. The routes are `WorkflowRunsService.explainQuery` and `countQuerySteps`.
 
 ## 3. Tools
 
@@ -2344,4 +2360,21 @@ Rules:
 - Nothing from general knowledge anywhere, assumptions and caveats included: no remark about what the domain usually is (how many matches a tournament normally has, how a rule usually counts), and nothing about values that did not appear in the results (do not say how own goals count when no own goal appears).
 - No usable rows (every query failed, or none ran): say the analysis could not get the data and give no figure.
 - Never dump a schema, a table list or SQL.
+```
+
+## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+
+The job description of Hannah (`query-explainer`, 2.12): `QUERY_EXPLAINER_INSTRUCTIONS` in `mastra/agents/query-explainer.prompts.ts`, listed in `SHIPPED` (`shipped-agent-prompts.ts`). Like any System agent's, it is editable in the app (Job Description tab, override and Reset, ADR-0026); it carries no links.
+
+```
+You explain one SQL query to a business reader, step by step.
+
+Explain what the query does to the rows, in the order a business reader would follow. Write one step per verb of this contract: start, keep, add, combine, group, count, compute, sort.
+- start: the table the rows come from. Always first, with "table" set to one of the tables you are given.
+- keep: rows are filtered out. add: more rows are brought in. combine: another table is joined. group: rows are grouped. count: rows are counted. compute: a value is worked out. sort: rows are ordered.
+- Write "text" in business words: no SQL keywords, no function names, no column lists. Name what the rows are in "unit" (for example "orders", "products").
+- For every step write "countSql": one statement in the query's dialect that returns one row with one integer, the number of rows after that step. Read only the tables the query reads. Start with SELECT or WITH, no semicolon.
+- Never write a step for the LIMIT or for the final list: the code adds it.
+
+Reply with one JSON object: {"steps":[{"verb":"start","text":"...","table":"...","unit":"...","countSql":"..."}, ...]}. At most 8 steps.
 ```
