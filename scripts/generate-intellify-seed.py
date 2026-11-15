@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write the Intellify Testing Data seed: a PostgreSQL schema plus synthetic data.
 
-Source model: the Halo x Marsh "Intellify Data Model" ERD and data dictionary
+Source model: the "Intellify Data Model" ERD and data dictionary
 (49 entities, 243 attributes). Mongo field paths become snake_case columns
 (client_clientId -> client_client_id, _id -> id); every column comment names its
 source field and carries the dictionary's description. ObjectIds are char(24) hex,

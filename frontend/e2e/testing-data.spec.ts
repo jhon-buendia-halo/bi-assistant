@@ -73,7 +73,7 @@ test('lists the bundled samples and what is loaded', async ({
     );
   }
   await expect(card(page, 'intellify')).toContainText(
-    'Intellify employee-benefits data model (Halo × Marsh), synthetic data',
+    'Intellify employee-benefits data model, synthetic data',
   );
   await expect(card(page, 'us-health')).toContainText(
     'A US health & benefits consultancy, synthetic data',
