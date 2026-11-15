@@ -1,5 +1,5 @@
 /**
- * A small dashboard for the tests of Recreate a Dashboard: what Read
+ * A small dashboard for the tests of Dashboard Image to Artifact: what Read
  * dashboard and Map data reply for it, and the catalog it is mapped to.
  * Test data only; nothing at run time reads it.
  */

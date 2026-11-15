@@ -1,5 +1,5 @@
 /**
- * The prompts of the two model steps of Recreate a Dashboard (agents.md
+ * The prompts of the two model steps of Dashboard Image to Artifact (agents.md
  * 5.17): the shipped instructions of the Dashboard Reader and the Data
  * Mapper, and the request each step sends. Plain strings, no framework
  * import.

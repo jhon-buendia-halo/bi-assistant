@@ -507,7 +507,7 @@ export class TurnEngine {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
     };
-    // Recreate a Dashboard's image, once Load image read it (agents.md 5.17).
+    // Dashboard Image to Artifact's image, once Load image read it (agents.md 5.17).
     let dashboardImage: { data: Buffer; mediaType: string } | undefined;
     const loadedImage = async (path: string) => {
       dashboardImage ??= await this.deps.readImage(id, path);
@@ -880,7 +880,7 @@ export class TurnEngine {
               stopped: turn.signal.aborted || clarification !== null,
             };
           },
-          // Recreate a Dashboard (agents.md 5.17): Read dashboard calls its
+          // Dashboard Image to Artifact (agents.md 5.17): Read dashboard calls its
           // agent's model with the image, which the run keeps meanwhile.
           loadImage: async ({ image }) => {
             const loaded = await loadedImage(image);
@@ -1196,7 +1196,7 @@ export class TurnEngine {
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
-    // Recreate a Dashboard runs on the run's image (agents.md 5.17); Map a
+    // Dashboard Image to Artifact runs on the run's image (agents.md 5.17); Map a
     // Dashboard to Data on a saved dashboard and the run's datasets (5.18).
     const turnInput:
       | AnswerBusinessQuestionInput

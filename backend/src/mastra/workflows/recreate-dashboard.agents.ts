@@ -1,5 +1,5 @@
 /**
- * The model calls of the two agent steps of Recreate a Dashboard (agents.md
+ * The model calls of the two agent steps of Dashboard Image to Artifact (agents.md
  * 5.17): Read dashboard and Map data. Each runs a registered System agent
  * (`dashboard-reader`, `data-mapper`; agents.md 2.12, 2.13) on the app's
  * model (`resolveAgentModel`), with its own editable instructions, no

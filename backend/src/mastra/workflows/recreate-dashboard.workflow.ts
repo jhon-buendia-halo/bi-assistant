@@ -22,7 +22,7 @@ import {
 } from './recreate-dashboard.steps';
 import { engineInputSchema, withContract } from './workflow-contract';
 
-// The Recreate a Dashboard workflow, defined in code (agents.md 5.17), on
+// The Dashboard Image to Artifact workflow, defined in code (agents.md 5.17), on
 // Mastra's sequential control flow
 // (https://mastra.ai/docs/workflows/control-flow):
 //

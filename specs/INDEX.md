@@ -1373,7 +1373,7 @@ specs/capabilities/workflows/spec.md:40-42  R17 A run MAY name one earlier run a
 specs/capabilities/workflows/spec.md:43-43  R18 Every run of a workflow on an input, streamed (119) or not (118), SHAL
 specs/capabilities/workflows/spec.md:44-44  R19 The Runs page's **Runs** tab (app-shell R46) SHALL show the run histor
 specs/capabilities/workflows/spec.md:45-47  R20 Deleting a run SHALL remove it, its workspace and its files, its agent
-specs/capabilities/workflows/spec.md:48-48  R21 Every workflow (Answer a Business Question, Assess Data Readiness, Rec
+specs/capabilities/workflows/spec.md:48-48  R21 Every workflow (Answer a Business Question, Assess Data Readiness, Das
 specs/capabilities/workflows/spec.md:49-51  R22 The answer in the Run panel's Chat SHALL offer the same rating as a ch
 specs/capabilities/workflows/spec.md:52-54  R23 A stored run whose workflow is no longer in the catalogue (the one-ste
 specs/capabilities/workflows/spec.md:55-57  R24 A workflow's input (its Start node) SHALL hold everything its steps ne
@@ -1383,7 +1383,7 @@ specs/capabilities/workflows/spec.md:64-64  R27 Answer a Business Question SHALL
 specs/capabilities/workflows/spec.md:66-68  R29 Assess Data Readiness SHALL run, fixed in code ([../../system/agents.m
 specs/capabilities/workflows/spec.md:69-71  R28 A run that needs the user's answer (Clarify, or Analyse's clarifying q
 specs/capabilities/workflows/spec.md:72-72  R30 Each agent of a run SHALL keep its conversation in a memory thread of
-specs/capabilities/workflows/spec.md:73-77  R31 Recreate a Dashboard SHALL run, fixed in code ([../../system/agents.md
+specs/capabilities/workflows/spec.md:73-77  R31 Dashboard Image to Artifact SHALL run, fixed in code ([../../system/ag
 specs/capabilities/workflows/spec.md:78-80  R32 **Artifacts** SHALL be reusable context saved from workflow runs, kept
 specs/capabilities/workflows/spec.md:81-86  R33 Map a Dashboard to Data SHALL run, fixed in code ([../../system/agents
 specs/capabilities/workflows/spec.md:88-105  ## Edge cases and errors
@@ -1711,7 +1711,7 @@ specs/system/agents.md:1398-1417  ### 5.13 Workflow: `data-readiness-assessment`
 specs/system/agents.md:1419-1451  ### 5.14 Runs of Answer a Business Question
 specs/system/agents.md:1453-1455  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
 specs/system/agents.md:1457-1478  ### 5.16 Node chats: chatting with a run step's agent
-specs/system/agents.md:1480-1521  ### 5.17 Workflow: `recreate-dashboard` (Recreate a Dashboard)
+specs/system/agents.md:1480-1521  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
 specs/system/agents.md:1523-1553  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
 specs/system/agents.md:1555-1728  ## 6. Visual designer pipeline
 specs/system/agents.md:1559-1569  ### 6.1 Entry points

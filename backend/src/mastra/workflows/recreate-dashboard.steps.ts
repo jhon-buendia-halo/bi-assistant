@@ -1,5 +1,5 @@
 /**
- * The step catalogue of the Recreate a Dashboard workflow (agents.md 5.17):
+ * The step catalogue of the Dashboard Image to Artifact workflow (agents.md 5.17):
  * its id and name, the steps and edges the workflow page shows and the
  * runtime a run hands its steps. It also holds the dashboard's own pure
  * code, shared with Map a Dashboard to Data (5.18): the lenient readers of
@@ -42,11 +42,11 @@ import type { WorkflowEdge } from './workflow-contract';
 export const RECREATE_DASHBOARD_WORKFLOW_ID = 'recreate-dashboard';
 
 /** The name the app shows for the workflow (workflows R1). */
-export const RECREATE_DASHBOARD_WORKFLOW_NAME = 'Recreate a Dashboard';
+export const RECREATE_DASHBOARD_WORKFLOW_NAME = 'Dashboard Image to Artifact';
 
 /** What the catalogue says the workflow does. */
 export const RECREATE_DASHBOARD_DESCRIPTION =
-  'Reads the image of a dashboard into its filters, widgets and the data they read, draws it as an interactive mock and saves it in Artifacts, ready to be mapped to your data.';
+  'Turns a dashboard screenshot into a reusable artifact: an interactive mock on invented data that you can later map to your datasets.';
 
 /** What a run asks when its instructions are left empty. */
 export const RECREATE_DASHBOARD_DEFAULT_QUESTION =
@@ -690,7 +690,7 @@ export function mappingExplanation(input: {
 }
 
 /**
- * Recreate a Dashboard's answer (agents.md 5.17): fixed text, not model
+ * Dashboard Image to Artifact's answer (agents.md 5.17): fixed text, not model
  * output. What was read, where it was saved and what to do with it next.
  */
 export function savedDashboardAnswer(input: {

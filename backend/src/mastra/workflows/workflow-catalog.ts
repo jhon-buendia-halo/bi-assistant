@@ -263,7 +263,7 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           type: 'artifact',
           required: true,
           artifactKinds: ['dashboard'],
-          help: 'A dashboard saved in Artifacts by Recreate a Dashboard.',
+          help: 'A dashboard saved in Artifacts by Dashboard Image to Artifact.',
         },
         { ...DATASETS_FIELD, help: 'The data the dashboard is mapped to.' },
         {

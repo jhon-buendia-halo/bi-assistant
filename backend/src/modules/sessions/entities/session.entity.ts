@@ -343,13 +343,13 @@ export interface SessionDoc {
    */
   checkDataQuality?: true;
   /**
-   * A run host of Recreate a Dashboard (agents.md 5.17): the path of the
+   * A run host of Dashboard Image to Artifact (agents.md 5.17): the path of the
    * run's input image in the host's workspace. In memory only, like the
    * host.
    */
   inputImage?: string;
   /**
-   * A run host of Recreate a Dashboard on a saved dashboard (agents.md
+   * A run host of Dashboard Image to Artifact on a saved dashboard (agents.md
    * 5.17): the artifact's id. In memory only, like the host.
    */
   inputArtifact?: string;

@@ -164,11 +164,11 @@ export interface RunHostSpec {
   /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
   checkDataQuality?: true;
   /**
-   * Recreate a Dashboard's input image (agents.md 5.17): written to the
+   * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
    * host's workspace at `path` before the turn.
    */
   image?: { path: string; data: Buffer };
-  /** Recreate a Dashboard's saved dashboard: the artifact's id. */
+  /** Dashboard Image to Artifact's saved dashboard: the artifact's id. */
   artifact?: string;
   /**
    * A follow-up run (agents.md 5.14): the earlier run's host id, whose
@@ -211,7 +211,7 @@ export class SessionsService implements OnModuleInit {
     @Optional()
     @Inject(SYNTHETIC_DATA_SERVICE)
     private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
-    // The saved dashboards a Recreate a Dashboard run takes (agents.md 5.17).
+    // The saved dashboards a Dashboard Image to Artifact run takes (agents.md 5.17).
     @Optional() private readonly artifacts?: ArtifactsService,
   ) {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this

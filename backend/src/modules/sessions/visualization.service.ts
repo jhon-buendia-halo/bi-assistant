@@ -261,7 +261,7 @@ export class VisualizationService {
 
   /**
    * New visual (v1) from a bundle that is already written (agents.md 5.17:
-   * the mock a Recreate a Dashboard run built). No designer call and no
+   * the mock a Dashboard Image to Artifact run built). No designer call and no
    * source answer: the frame shows the visual and its description only.
    */
   async createFromBundle(

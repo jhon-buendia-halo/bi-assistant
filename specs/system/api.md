@@ -672,7 +672,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   |---|---|---|---|---|---|---|
   | `answer-business-question` | `Answer a Business Question` | code | `insights-analyst` | 9 | steps | none |
   | `data-readiness-assessment` | `Assess Data Readiness` | code | `data-readiness` | 6 | steps | the Data Readiness Agent's (its PostgreSQL and Databricks datasets) |
-  | `recreate-dashboard` | `Recreate a Dashboard` | code | `dashboard-reader` | 3 | steps | none |
+  | `recreate-dashboard` | `Dashboard Image to Artifact` | code | `dashboard-reader` | 3 | steps | none |
   | `map-dashboard-data` | `Map a Dashboard to Data` | code | `data-mapper` | 4 | steps | none |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33), except the description, which is the workflow's own; v2's starter questions are empty, as in its AgentSummary; Assess Data Readiness's are the Data Readiness Agent's three.
@@ -683,7 +683,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   | `answer-business-question` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`, `maxLength` 4000, `usedBy` `['receive-question']`); `datasets` (`Datasets`, datasets, required, `usedBy` `['receive-question']`); `checkDataQuality` (`Check data quality: Sarah reviews the tables the analysis used`, boolean, optional, `default` false, `usedBy` `[]`: it picks the branch to Check data quality, [agents.md](agents.md) 5.11) |
   | `data-readiness-assessment` | `dataset` (`Dataset`, dataset, required, `datasourceKinds` `['postgres', 'databricks']`, `usedBy` `['resolve-dataset']`); `question` (`Question`, textarea, optional, placeholder and default `Assess the readiness of this dataset`, `maxLength` 4000, `usedBy` `['resolve-dataset']`) |
   | `recreate-dashboard` | `image` (`Dashboard image`, image, required, `help` `A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.`, `usedBy` `['load-image']`); `question` (`Instructions`, textarea, optional, placeholder and default `Recreate this dashboard as an interactive mock`, `maxLength` 4000, `usedBy` `['load-image']`) |
-  | `map-dashboard-data` | `artifact` (`Saved dashboard`, artifact, required, `artifactKinds` `['dashboard']`, `help` `A dashboard saved in Artifacts by Recreate a Dashboard.`, `usedBy` `['load-dashboard']`); `datasets` (`Datasets`, datasets, required, `help` `The data the dashboard is mapped to.`, `usedBy` `['load-dashboard']`); `question` (`Instructions`, textarea, optional, placeholder and default `Map this dashboard to the datasets`, `maxLength` 4000, `usedBy` `['load-dashboard']`) |
+  | `map-dashboard-data` | `artifact` (`Saved dashboard`, artifact, required, `artifactKinds` `['dashboard']`, `help` `A dashboard saved in Artifacts by Dashboard Image to Artifact.`, `usedBy` `['load-dashboard']`); `datasets` (`Datasets`, datasets, required, `help` `The data the dashboard is mapped to.`, `usedBy` `['load-dashboard']`); `question` (`Instructions`, textarea, optional, placeholder and default `Map this dashboard to the datasets`, `maxLength` 4000, `usedBy` `['load-dashboard']`) |
 
 - **Order:** `answer-business-question`, `data-readiness-assessment`, `recreate-dashboard`, then `map-dashboard-data`. No agent (System, Official or user) is listed.
 
@@ -909,7 +909,7 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 
 ### 2.6.4 Artifacts
 
-Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R32; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Recreate a Dashboard ([agents.md](agents.md) 5.17), with no route of its own, and taken by Map a Dashboard to Data (5.18).
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R32; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own, and taken by Map a Dashboard to Data (5.18).
 
 ```ts
 type ArtifactSummary = {

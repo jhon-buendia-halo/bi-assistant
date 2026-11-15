@@ -79,7 +79,7 @@ const STEP_AGENTS: Record<
     ],
     maxSteps: DATA_READINESS_MAX_STEPS,
   },
-  // Recreate a Dashboard (agents.md 5.17) and Map a Dashboard to Data
+  // Dashboard Image to Artifact (agents.md 5.17) and Map a Dashboard to Data
   // (5.18): the agent step of each is one model call without tools.
   [DASHBOARD_READER_AGENT_KEY]: {
     name: DASHBOARD_READER_AGENT_NAME,

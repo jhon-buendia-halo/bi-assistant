@@ -1,5 +1,5 @@
 /**
- * The data contract of the Recreate a Dashboard workflow (agents.md 5.17),
+ * The data contract of the Dashboard Image to Artifact workflow (agents.md 5.17),
  * and the two shapes it shares with Map a Dashboard to Data (5.18): the
  * dashboard as data (the blueprint) and its mapping to datasets. The Zod
  * schema of the workflow's input and of every step's input and output is

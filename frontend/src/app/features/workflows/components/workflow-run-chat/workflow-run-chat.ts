@@ -389,7 +389,7 @@ export class WorkflowRunChat {
   }
 
   /**
-   * The artifact the shown run saved (Recreate a Dashboard saves the
+   * The artifact the shown run saved (Dashboard Image to Artifact saves the
    * dashboard it read); null for a run that saved none.
    */
   protected readonly savedArtifactId = computed(() => {

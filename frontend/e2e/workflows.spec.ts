@@ -57,7 +57,7 @@ const READINESS = 'Assess Data Readiness';
 const OFFICIAL = [
   [V2_ID, V2],
   [READINESS_ID, READINESS],
-  ['recreate-dashboard', 'Recreate a Dashboard'],
+  ['recreate-dashboard', 'Dashboard Image to Artifact'],
   ['map-dashboard-data', 'Map a Dashboard to Data'],
 ] as const;
 
@@ -292,7 +292,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question", "Assess Data Readiness", "Recreate a Dashboard" and "Map a Dashboard to Data" under Official, and no Mine section',
+        'Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',

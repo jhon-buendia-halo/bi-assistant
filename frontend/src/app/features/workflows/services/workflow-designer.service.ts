@@ -413,7 +413,7 @@ export class WorkflowDesigner {
 
   /**
    * The next workflow opened starts with these form values over its initial
-   * ones (an artifact opened in Recreate a Dashboard). A name the workflow
+   * ones (an artifact opened in Dashboard Image to Artifact). A name the workflow
    * has no field for is ignored.
    */
   prefillOnLoad(values: Record<string, WorkflowInputValue>): void {

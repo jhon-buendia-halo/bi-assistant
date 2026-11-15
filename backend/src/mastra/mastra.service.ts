@@ -116,7 +116,7 @@ export class MastraService {
   }
 
   /**
-   * Recreate a Dashboard's Read dashboard step model call (agents.md
+   * Dashboard Image to Artifact's Read dashboard step model call (agents.md
    * 5.17): the Dashboard Reader over the image, the blueprint read from
    * its reply.
    */
@@ -127,7 +127,7 @@ export class MastraService {
   }
 
   /**
-   * Recreate a Dashboard's Map data step model call (agents.md 5.17): the
+   * Dashboard Image to Artifact's Map data step model call (agents.md 5.17): the
    * Data Mapper over the blueprint and the catalog, the mapping read from
    * its reply and checked against the catalog.
    */

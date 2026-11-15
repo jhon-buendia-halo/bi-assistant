@@ -43,7 +43,7 @@ export const mastra = new Mastra({
     // The agents of v2's Plan and Write answer steps (agents.md 2.11).
     'analysis-planner': analysisPlannerAgent,
     'answer-writer': answerWriterAgent,
-    // The agents of Recreate a Dashboard's two model steps (agents.md 5.17).
+    // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
     'data-mapper': dataMapperAgent,
   },
