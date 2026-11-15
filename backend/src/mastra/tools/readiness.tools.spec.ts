@@ -192,6 +192,16 @@ describe('the readiness tools (agents.md 3.13)', () => {
       expect(readinessReportFromToolResult(result)).toBe(REPORT);
     });
 
+    it('refuses once an Assess Data Readiness run has assessed, pointing at its report (agents.md 5.13)', async () => {
+      const context = contextWith();
+      context.set('readiness-assessed-report', 'rep-9');
+      await expect(run('assess_data_readiness', {}, context)).resolves.toEqual({
+        error:
+          'This run has already assessed the dataset. Call get_readiness_report with reportId "rep-9" instead.',
+      });
+      expect(assess).not.toHaveBeenCalled();
+    });
+
     it('passes the abort signal and a progress listener that writes data-readiness-progress chunks', async () => {
       const custom = jest.fn().mockResolvedValue(undefined);
       const signal = new AbortController().signal;

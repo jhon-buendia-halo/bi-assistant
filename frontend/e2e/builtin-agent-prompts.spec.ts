@@ -341,7 +341,7 @@ test(
     });
     await scenarioStep(
       page,
-      'Then I see "What happens on each message" with its eight steps from "Receive question" to "Wrap up", numbered 1 to 8',
+      'Then I see "What happens on each message" with its nine steps from "Receive question" to "Wrap up", numbered 1 to 9',
       async () => {
         await expect(
           page.getByRole('heading', { name: 'What happens on each message' }),
@@ -355,11 +355,12 @@ test(
           'Clarify',
           'Analyse',
           'Validate',
+          'Check data quality',
           'Write answer',
           'Wrap up',
         ]);
         await expect(workflowStep(page, 'wrap-up')).toHaveAccessibleName(
-          /^Step 8: Wrap up/,
+          /^Step 9: Wrap up/,
         );
       },
     );
@@ -403,7 +404,7 @@ test(
     );
     await scenarioStep(
       page,
-      `And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", "Clarify" shows "Waits for an answer → waits for the user's answer", and "Analyse" also "Clarifying question → waits for the user's answer"`,
+      `And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", "Check data quality" shows "Stop → ends the turn here", "Clarify" shows "Waits for an answer → waits for the user's answer", and "Analyse" also "Clarifying question → waits for the user's answer"`,
       async () => {
         // "Receive question" has no exit: its input is checked before the run.
         // Clarify pauses the run until the user answers.
@@ -416,6 +417,7 @@ test(
           fails,
           stops,
           "Clarifying question → waits for the user's answer",
+          stops,
           fails,
           stops,
         ]);

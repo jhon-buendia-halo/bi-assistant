@@ -4,6 +4,7 @@ import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
 import {
+  checkDataQualityWithModel,
   planWithModel,
   writeAnswerWithModel,
 } from './workflows/qti-v2-turn.agents';
@@ -90,6 +91,17 @@ export class MastraService {
     ...args: Parameters<typeof writeAnswerWithModel>
   ): ReturnType<typeof writeAnswerWithModel> {
     return writeAnswerWithModel(...args);
+  }
+
+  /**
+   * Questions to Insights v2's optional Check data quality step model call
+   * (agents.md 5.11): Sarah's model, no tools, the issues read from her
+   * reply.
+   */
+  checkV2DataQuality(
+    ...args: Parameters<typeof checkDataQualityWithModel>
+  ): ReturnType<typeof checkDataQualityWithModel> {
+    return checkDataQualityWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

@@ -719,7 +719,7 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in no workflow',
+      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in both workflows',
       async () => {
         await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
         await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
@@ -729,11 +729,15 @@ test(
         await expect(page.getByTestId('agent-prompt-view')).toContainText(
           'You are the Data Readiness Agent',
         );
-        // Its one-step workflow is gone: it can no longer be run.
-        await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
+        // Her steps: Check data quality in Answer a Business Question, and
+        // Explain report in Assess Data Readiness.
+        const usedIn = page.getByTestId('agent-used-in');
+        await expect(usedIn).toContainText('Used in');
+        await expect(usedIn).not.toContainText(NOT_USED);
+        await expect(usedIn.getByTestId('agent-used-in-qti-v2-turn')).toHaveText(V2);
         await expect(
-          page.getByTestId('agent-used-in').getByRole('button'),
-        ).toHaveCount(0);
+          usedIn.getByTestId('agent-used-in-data-readiness-assessment'),
+        ).toHaveText('Assess Data Readiness');
         await expect(
           page.getByTestId('agent-used-in-agent:data-readiness'),
         ).toHaveCount(0);

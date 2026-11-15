@@ -35,6 +35,7 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
         'clarify',
         'analyse',
         'validate',
+        'check-data-quality',
         'write-answer',
         'wrap-up',
       ],

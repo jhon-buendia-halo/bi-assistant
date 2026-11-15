@@ -32,18 +32,32 @@ const V2_STEP_IDS = [
   ['clarify', 'Clarify'],
   ['analyse', 'Analyse'],
   ['validate', 'Validate'],
+  ['check-data-quality', 'Check data quality'],
   ['write-answer', 'Write answer'],
   ['wrap-up', 'Wrap up'],
 ] as const;
-/** The steps a clear question runs: the canvas's main path, left to right. */
-const V2_MAIN_STEP_IDS = V2_STEP_IDS.filter(([id]) => id !== 'clarify');
+/**
+ * The steps a clear question runs: the canvas's main path, left to right.
+ * Clarify and Check data quality (ticked only) are branches off it.
+ */
+const V2_MAIN_STEP_IDS = V2_STEP_IDS.filter(
+  ([id]) => id !== 'clarify' && id !== 'check-data-quality',
+);
 /** The steps a question that needs clarification skips. */
 const V2_ANALYSIS_STEP_IDS = ['analyse', 'validate', 'write-answer'] as const;
 /** The step titles as the canvas lists them: the main path, then Clarify below it. */
-const V2_STEPS = [...V2_MAIN_STEP_IDS.map(([, title]) => title), 'Clarify'];
+const V2_STEPS = [
+  ...V2_STEP_IDS.filter(([id]) => id !== 'clarify').map(([, title]) => title),
+  'Clarify',
+];
 const V2_STEP_COUNT = `${V2_STEP_IDS.length} steps`;
-/** The Official workflows in catalogue order (workflows R1): v2 only. */
-const OFFICIAL = [[V2_ID, V2]] as const;
+const READINESS_ID = 'data-readiness-assessment';
+const READINESS = 'Assess Data Readiness';
+/** The Official workflows in catalogue order (workflows R1). */
+const OFFICIAL = [
+  [V2_ID, V2],
+  [READINESS_ID, READINESS],
+] as const;
 
 const QUESTION = 'How many matches were played in each stage?';
 const ANSWER = 'The stages hold the matches counted by the query.';
@@ -250,7 +264,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see only "Answer a Business Question" under Official, and no Mine section',
+        'Then I see "Answer a Business Question" and "Assess Data Readiness" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -267,7 +281,12 @@ test.describe('Feature: Workflows', () => {
           await expect(official.getByTestId(`workflow-kind-${V2_ID}`)).toHaveText(
             V2_STEP_COUNT,
           );
-          await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(1);
+          await expect(official.getByTestId(`workflow-kind-${READINESS_ID}`)).toHaveText(
+            '6 steps',
+          );
+          await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
+            OFFICIAL.length,
+          );
           await expect(section(page, 'mine')).toHaveCount(0);
         },
       );
@@ -276,7 +295,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its eight steps on the canvas and the agent "Michael" under Agents in its Start node',
+        'Then I see its nine steps on the canvas and the agent "Michael" under Agents in its Start node',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
@@ -398,7 +417,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question" with "8 steps" and no Start chat',
+        'Then I see "Answer a Business Question" with "9 steps" and no Start chat',
         async () => {
           const card = page.getByTestId(`workflow-card-${V2_ID}`);
           await expect(card).toBeVisible();
@@ -418,7 +437,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its eight steps on the canvas, Execute and no Start chat',
+        'Then I see its nine steps on the canvas, Execute and no Start chat',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
@@ -922,6 +941,7 @@ test.describe('Feature: Workflows (the designer)', () => {
             'LLM',
             'CODE',
             'LLM',
+            'LLM',
             'CODE',
             'CODE',
           ]);
@@ -1119,11 +1139,11 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       });
       await test.step(
-        'Then every connector of the main path is done, the branch to "Clarify" is muted, and the Run panel reads "9 of 10 nodes ran"',
+        'Then every connector of the main path is done, the branch to "Clarify" is muted, and the Run panel reads "9 of 11 nodes ran"',
         async () => {
           const canvas = page.getByTestId('workflow-canvas');
           const connectors = canvas.locator('path[data-testid^="workflow-connector-"]');
-          await expect(connectors).toHaveCount(11);
+          await expect(connectors).toHaveCount(13);
           const main = ['start', ...V2_MAIN_STEP_IDS.map(([id]) => id), 'end'];
           for (const [i, from] of main.slice(0, -1).entries()) {
             await expect(canvas.getByTestId(`workflow-connector-${from}-${main[i + 1]}`)).toHaveAttribute(
@@ -1141,7 +1161,7 @@ test.describe('Feature: Workflows (the designer)', () => {
             'false',
           );
           await expect(page.getByTestId('workflow-state-progress')).toHaveText(
-            '9 of 10 nodes ran',
+            '9 of 11 nodes ran',
           );
           await expect(page.getByTestId('workflow-state-status')).toHaveText('success');
         },

@@ -283,7 +283,7 @@ flowchart LR
 
   subgraph mastra["mastra/"]
     mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
-    turnwf["workflows/<br/>(qti-v2-turn; ADR-0034, ADR-0040, ADR-0042)"]
+    turnwf["workflows/<br/>(qti-v2-turn, data-readiness-assessment; ADR-0034, ADR-0040, ADR-0042)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
@@ -1084,7 +1084,7 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
 
 #### ADR-0042 — Workflows and agents are separate; only Questions to Insights v2 is a workflow
-- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041.
+- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041. Amended 2026-11-13: the catalogue gains a second code workflow, **Assess Data Readiness** (`data-readiness-assessment`, agents.md 5.13), with real steps (four code steps run the deterministic engine, one step runs the Data Readiness Agent); agents stay a library and no one-step workflow comes back. The Data Readiness Agent's sessions and evals keep its agent turn.
 - **Date:** 2026-11-12
 - **Context:**
   - ADR-0040 gave every agent without a workflow of its own an automatic one-step workflow (`agent:<key or id>`), so the Workflows area listed the assistant, the Data Readiness Agent and every Live user agent next to Questions to Insights v2. The agent page also ran that workflow (**Run**).

@@ -303,6 +303,21 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     // Focus is shared browser state: start from none.
     beforeEach(() => (document.activeElement as HTMLElement | null)?.blur());
 
+    it('stays open on a scroll event at the position it opened at, and closes once the canvas moves', fakeAsync(() => {
+      const viewport = q('workflow-canvas')!;
+      let left = 0;
+      spyOnProperty(viewport, 'scrollLeft').and.callFake(() => left);
+      open('click');
+      // The scroll that brought the sub-node into view, reported late.
+      viewport.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+      expect(menu()).not.toBeNull();
+      left = 120;
+      viewport.dispatchEvent(new Event('scroll'));
+      fixture.detectChanges();
+      expect(menu()).toBeNull();
+    }));
+
     it('a click opens it, its first tool focused; picking a tool opens that tool and closes it', fakeAsync(() => {
       expect(menu()).toBeNull();
       open('click');

@@ -214,6 +214,12 @@ test.describe('Feature: Workflow runs', () => {
             await expect(runStep(page, id)).toHaveAttribute('data-state', 'done');
           }
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
+          // The data-quality check runs only when asked for.
+          await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Skipped');
+          await expect(runStep(page, 'check-data-quality')).toHaveAttribute(
+            'data-state',
+            'skipped',
+          );
         },
       );
       await scenarioStep(page, `When I follow up with "${FOLLOW_UP}"`, async () => {
@@ -242,6 +248,57 @@ test.describe('Feature: Workflow runs', () => {
           expect(question, 'the earlier question').toBeGreaterThanOrEqual(0);
           expect(answer, 'the earlier answer').toBeGreaterThan(question);
           expect(next, 'the follow-up after both').toBeGreaterThan(answer);
+        },
+      );
+    },
+  );
+
+  test(
+    'Answer a Business Question checks data quality with Sarah when asked',
+    { tag: ['@demo'] },
+    async ({ page }) => {
+      stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+
+      await scenarioStep(page, `Given I open "${V2}" and its Run tab`, async () => {
+        await openWorkflowPage(page, V2_ID, V2);
+        await openRunTab(page);
+      });
+      await scenarioStep(
+        page,
+        `When I tick "Check data quality", pick "${WORLD_CUP_DATASET}", ask "${QUESTION}" and click Execute`,
+        async () => {
+          await page.getByTestId('workflow-input-checkDataQuality').check();
+          await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+          await page.getByTestId('workflow-run').click();
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then "Check data quality" ends Done, after Validate and before Write answer in the Logs',
+        async () => {
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Done');
+          await expect(runStep(page, 'check-data-quality')).toHaveAttribute('data-state', 'done');
+          const order = await page
+            .getByTestId('workflow-logs-dock')
+            .locator('[data-testid^="workflow-state-node-"]')
+            .evaluateAll((els) =>
+              els.map((e) =>
+                (e.getAttribute('data-testid') ?? '').replace('workflow-state-node-', ''),
+              ),
+            );
+          expect(order.indexOf('check-data-quality')).toBeGreaterThan(order.indexOf('validate'));
+          expect(order.indexOf('check-data-quality')).toBeLessThan(order.indexOf('write-answer'));
+        },
+      );
+      await scenarioStep(
+        page,
+        "And Sarah's model call reached the stub, and the answer shows a readiness card",
+        async () => {
+          const asked = stub.requests.filter((request) => request.step === 'quality');
+          expect(asked.length, "Sarah's structured call").toBeGreaterThan(0);
+          await expect(runAnswer(page)).toContainText(ANSWER);
+          await expect(runAnswer(page).getByTestId('readiness-card')).toBeVisible();
         },
       );
     },

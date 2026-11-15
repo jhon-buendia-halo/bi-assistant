@@ -255,6 +255,67 @@ export const writeAnswerInputSchema = z.object({
     .describe("The last attempt's tool calls, for Wrap up."),
 });
 
+/**
+ * What Check data quality receives (agents.md 5.11; the run's optional
+ * quality check): Write answer's input, and the catalog its tables are
+ * looked up in.
+ */
+export const dataQualityInputSchema = writeAnswerInputSchema.extend({
+  catalog: z
+    .array(catalogEntitySchema)
+    .describe("The entities of the run's datasets."),
+});
+
+/** What Check data quality measured: the scope, the reports and the issues. */
+export const dataQualitySummarySchema = z.object({
+  tables: z
+    .array(z.string())
+    .describe('The tables the queries read that were assessed.'),
+  reportIds: z
+    .array(z.string())
+    .describe('The readiness reports stored for them, one per datasource.'),
+  findingCount: z
+    .number()
+    .describe('Engine findings on those tables, of any severity.'),
+  issues: z
+    .number()
+    .describe('Of those, the ones Sarah judged to affect this answer.'),
+  skipped: z
+    .array(z.string())
+    .describe(
+      'Tables read that could not be assessed (not PostgreSQL or Databricks).',
+    ),
+  error: z
+    .string()
+    .optional()
+    .describe('Why the check could not run; the answer is still written.'),
+});
+
+/**
+ * What Check data quality passes on: Write answer's input, its findings
+ * ending with the data-quality ones, and what it measured.
+ */
+export const qualityCheckedSchema = writeAnswerInputSchema.extend({
+  dataQuality: dataQualitySummarySchema.describe('What the check measured.'),
+});
+
+/**
+ * Sarah's reply in Check data quality: the engine findings (by their number
+ * in the request) that could change or limit this answer, each with how.
+ */
+export const dataQualityReplySchema = z.object({
+  issues: z
+    .array(
+      z.object({
+        finding: z.number().describe('The finding number from the request.'),
+        impact: z
+          .string()
+          .describe('One sentence: how it could change or limit this answer.'),
+      }),
+    )
+    .describe('Only the findings that affect this answer; empty when none.'),
+});
+
 /** The answer the Write answer step's model writes (AnswerOutput). */
 export const answerSchema = z.object({
   headline: z
@@ -322,6 +383,12 @@ export const QTI_V2_TURN_STEP_SCHEMAS = {
     resume: clarificationAnswerSchema,
   },
   validate: { input: analyseOutcomeSchema, output: validateOutcomeSchema },
+  // Optional (the input's `checkDataQuality`): Sarah's review of the data
+  // the analysis read.
+  'check-data-quality': {
+    input: dataQualityInputSchema,
+    output: qualityCheckedSchema,
+  },
   'write-answer': {
     input: writeAnswerInputSchema,
     output: writtenAnswerSchema,

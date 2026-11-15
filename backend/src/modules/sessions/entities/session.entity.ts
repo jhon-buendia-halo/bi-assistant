@@ -329,6 +329,12 @@ export interface SessionDoc {
    * only, like the host.
    */
   contextBlock?: string;
+  /**
+   * A run host of Answer a Business Question whose input ticked Check data
+   * quality (agents.md 5.11): its turn takes the branch to that step. In
+   * memory only, like the host.
+   */
+  checkDataQuality?: true;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */

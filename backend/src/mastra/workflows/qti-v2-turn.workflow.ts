@@ -13,7 +13,7 @@ import {
   qtiV2TurnResultSchema,
   turnInputSchema,
   turnSummarySchema,
-  writeAnswerInputSchema,
+  dataQualityInputSchema,
 } from './qti-v2-turn.schemas';
 import {
   QTI_V2_TURN_RUNTIME_KEY,
@@ -26,6 +26,7 @@ import {
   planAfterAnswer,
   planCatalogBlock,
   planLoopDone,
+  queriedTables,
   receiveQuestion,
   validateAttempt,
   wrapUp,
@@ -43,7 +44,9 @@ import { engineInputSchema, withContract } from './workflow-contract';
 //              → plan-round-outcome, until a plan needs no clarification)
 //   → .branch(not stopped → analysis-path:
 //       .dountil(analysis-attempt: analyse → validate, ok or 2 attempts)
-//       → .branch(not stopped → answer-path: write-answer → wrap-up))
+//       → .branch(not stopped → answer-path:
+//           .branch(the run checks data quality → check-data-quality)
+//           → quality-outcome → write-answer → wrap-up))
 //
 // Clarify suspends the run with the plan's question; resumed with the
 // user's answer, it hands Plan's input back with the answer, and the loop
@@ -53,8 +56,8 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // back unchanged to `run.resumeStream`.
 //
 // The nested workflows (`plan-round`, `analysis-path`, `analysis-attempt`,
-// `answer-path`) and the mapping step `plan-round-outcome` are not
-// catalogue steps: the engine reports their steps as
+// `answer-path`) and the mapping steps `plan-round-outcome` and
+// `quality-outcome` are not catalogue steps: the engine reports their steps as
 // `<parent>.<child>.<step>`, and the session code reads the last segment.
 // A step's bail ends only the sequence it is in, so a stopped Analyse ends
 // its attempt, the loop's condition sees `stopped`, and the answer path is
@@ -289,6 +292,51 @@ const validateStep = createStep({
   ),
 });
 
+/** Whether the run checks data quality: its runtime says so (the input). */
+function checksDataQuality(requestContext: unknown): boolean {
+  const context = requestContext as { get(key: string): unknown } | undefined;
+  const runtime = context?.get(QTI_V2_TURN_RUNTIME_KEY) as
+    QtiV2TurnRuntime | undefined;
+  return runtime?.checksDataQuality === true;
+}
+
+// Optional: the engine assesses the tables the queries read, and Sarah
+// picks the findings that affect the answer; they reach Write answer as
+// findings. A check that cannot run says so in a finding: it never fails
+// the run. A stop leaves the findings as they were (Write answer stops).
+const checkDataQualityStep = createStep({
+  id: STEP['check-data-quality'].id,
+  description: STEP['check-data-quality'].title,
+  inputSchema: engineInputSchema(SCHEMAS['check-data-quality'].input),
+  outputSchema: SCHEMAS['check-data-quality'].output,
+  execute: withContract(
+    STEP['check-data-quality'].title,
+    SCHEMAS['check-data-quality'],
+    async (params: StepParams<(typeof SCHEMAS)['check-data-quality']>) => {
+      const { inputData } = params;
+      const runtime = runtimeOf(params, STEP['check-data-quality'].title);
+      if (!runtime.checkDataQuality) {
+        throw new Error('The Check data quality step has no check to run');
+      }
+      const checked = await runtime.checkDataQuality({
+        question: inputData.question,
+        queries: inputData.queries,
+        tables: queriedTables(inputData.queries, inputData.catalog),
+      });
+      return {
+        question: inputData.question,
+        plan: inputData.plan,
+        queries: inputData.queries,
+        findings: checked.stopped
+          ? inputData.findings
+          : [...inputData.findings, ...checked.findings],
+        calls: inputData.calls,
+        dataQuality: checked.dataQuality,
+      };
+    },
+  ),
+});
+
 const writeAnswerStep = createStep({
   id: STEP['write-answer'].id,
   description: STEP['write-answer'].title,
@@ -375,10 +423,28 @@ const analysisAttemptWorkflow = createWorkflow({
 // The answer: written from the last attempt, then summed up.
 const answerPathWorkflow = createWorkflow({
   id: 'answer-path',
-  inputSchema: engineInputSchema(writeAnswerInputSchema),
+  // Write answer's input and the catalog Check data quality reads.
+  inputSchema: engineInputSchema(dataQualityInputSchema),
   outputSchema: turnSummarySchema,
   options: { shouldPersistSnapshot: persistWhileWaiting },
 })
+  // Check data quality when the run asks for it (its input's
+  // `checkDataQuality`); either way Write answer gets Write answer's input.
+  .branch([
+    [
+      async ({ requestContext }) =>
+        Promise.resolve(checksDataQuality(requestContext)),
+      checkDataQualityStep,
+    ],
+  ])
+  .map(
+    async (params) =>
+      Promise.resolve(
+        ((params.inputData as Record<string, unknown>)['check-data-quality'] ??
+          params.getInitData()) as Record<string, unknown>,
+      ),
+    { id: 'quality-outcome' },
+  )
   .then(writeAnswerStep)
   .then(wrapUpStep)
   .commit();

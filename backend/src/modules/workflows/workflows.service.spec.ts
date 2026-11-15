@@ -147,20 +147,41 @@ const agentConfig = (name: string, datasets: string[]) => ({
   starterQuestions: [`Ask ${name}`],
 });
 
-/** The one catalogue workflow, as `GET /workflows` lists it. */
+/**
+ * Assess Data Readiness as `GET /workflows` lists it (agents.md 5.13): its
+ * datasets are the qualifying ones of the fixture, so only the fixed fields.
+ */
+const READINESS_SUMMARY = expect.objectContaining({
+  id: 'data-readiness-assessment',
+  name: 'Assess Data Readiness',
+  kind: 'code',
+  owner: 'Official',
+  stepCount: 6,
+  bar: 'steps',
+  trigger: 'run',
+  starterQuestions: [
+    'Assess the readiness of this dataset',
+    'What are the worst data-quality problems?',
+    'Show my past assessments',
+  ],
+}) as unknown;
+
+/** Questions to Insights v2, as `GET /workflows` lists it. */
 const QTI_V2_SUMMARY = {
   id: 'qti-v2-turn',
   name: 'Answer a Business Question',
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
-  // Every agent its steps run: Michael, then Olivia (Plan) and Jessica (Write answer).
+  // Every agent its steps run: Michael, then Olivia (Plan), Sarah (Check
+  // data quality) and Jessica (Write answer).
   agents: [
     { key: 'assistant-v2', name: 'Michael' },
     { key: 'analysis-planner', name: 'Olivia' },
+    { key: 'data-readiness', name: 'Sarah' },
     { key: 'answer-writer', name: 'Jessica' },
   ],
-  stepCount: 8,
+  stepCount: 9,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -180,6 +201,15 @@ const QTI_V2_SUMMARY = {
       required: true,
       usedBy: ['receive-question'],
     },
+    {
+      // Picks the branch to Check data quality; no step reads it.
+      name: 'checkDataQuality',
+      label: 'Check data quality: Sarah reviews the tables the analysis used',
+      type: 'boolean',
+      required: false,
+      default: false,
+      usedBy: [],
+    },
   ],
   datasets: [],
   missingDatasets: [],
@@ -190,7 +220,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
 
-  it('lists only Questions to Insights v2: agents, Live user agents included, get no workflow (1.23.35)', async () => {
+  it('lists only the code workflows: agents, Live user agents included, get no workflow (1.23.35)', async () => {
     ctx = build();
     const zeta = await ctx.userAgents.create(
       agentConfig('Zeta', ['World Cup Core']),
@@ -198,13 +228,38 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     await ctx.userAgents.publish(zeta.id);
     await ctx.userAgents.create(agentConfig('Sketch', ['World Cup Core']));
 
-    expect(await ctx.service.list()).toEqual([QTI_V2_SUMMARY]);
+    expect(await ctx.service.list()).toEqual([
+      QTI_V2_SUMMARY,
+      READINESS_SUMMARY,
+    ]);
   });
 
-  it('lists the same one workflow while no dataset qualifies for the Data Readiness Agent', async () => {
+  it('lists Assess Data Readiness on one PostgreSQL or Databricks dataset, its Explain report run by the Data Readiness Agent (agents.md 5.13)', async () => {
+    ctx = build();
+    const [, readiness] = await ctx.service.list();
+    expect(readiness.agents.map((agent) => agent.key)).toEqual([
+      'data-readiness',
+    ]);
+    expect(readiness.input.map((field) => field.name)).toEqual([
+      'dataset',
+      'question',
+    ]);
+    expect(readiness.input[0]).toMatchObject({
+      type: 'dataset',
+      required: true,
+      datasourceKinds: ['postgres', 'databricks'],
+    });
+    expect(readiness.input[1]).toMatchObject({
+      type: 'textarea',
+      required: false,
+      default: 'Assess the readiness of this dataset',
+    });
+  });
+
+  it('lists the same workflows while no dataset qualifies for the Data Readiness Agent', async () => {
     ctx = build([{ name: 'Orders API', datasourceKind: 'rest' }]);
     const workflows = await ctx.service.list();
-    expect(workflows).toEqual([QTI_V2_SUMMARY]);
+    expect(workflows).toEqual([QTI_V2_SUMMARY, READINESS_SUMMARY]);
     expect(workflows[0]).not.toHaveProperty('runRequirement');
     expect(workflows[0]).not.toHaveProperty('chatRequirement');
   });
@@ -218,7 +273,12 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       // and output schema (api.md 117; agents.md 5.11, 5.12).
       expect(
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
-      ).toEqual(['analysis-planner', 'assistant-v2', 'answer-writer']);
+      ).toEqual([
+        'analysis-planner',
+        'assistant-v2',
+        'data-readiness',
+        'answer-writer',
+      ]);
       expect(detail.steps).toEqual(
         agentWorkflow('assistant-v2')!.steps.map((step, index) => ({
           ...step,
@@ -229,7 +289,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'qti-v2-turn',
-        stepCount: 8,
+        stepCount: 9,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
@@ -296,6 +356,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           systemPrompt: 'You plan a data analysis.',
           toolDetails: [],
         },
+        // Sarah checks data quality in one model call: none of her tools
+        // here, though she has some.
+        {
+          key: 'data-readiness',
+          name: 'Sarah',
+          model: null,
+          systemPrompt: 'You assess readiness.',
+          toolDetails: [],
+        },
         {
           key: 'answer-writer',
           name: 'Jessica',
@@ -328,6 +397,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(v2.agents).toEqual([
         { key: 'assistant-v2', name: 'Michael' },
         { key: 'analysis-planner', name: 'Olivia' },
+        { key: 'data-readiness', name: 'Sarah' },
         { key: 'answer-writer', name: 'Jessica' },
       ]);
     });
@@ -382,7 +452,13 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
       [{ id: 'qti-v2-turn', name: 'Answer a Business Question' }],
     ],
     ['assistant', []],
-    ['data-readiness', []],
+    [
+      'data-readiness',
+      [
+        { id: 'qti-v2-turn', name: 'Answer a Business Question' },
+        { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
+      ],
+    ],
     ['sql-fixer', []],
   ])('%s is used in %p', async (key, expected) => {
     ctx = build();

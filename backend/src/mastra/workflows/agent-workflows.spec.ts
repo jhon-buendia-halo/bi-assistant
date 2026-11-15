@@ -9,7 +9,7 @@ const V2_TOOLS = [
 ];
 
 describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
-  it("returns v2's turn workflow with its eight steps in catalogue order", () => {
+  it("returns v2's turn workflow with its nine steps in catalogue order", () => {
     const workflow = agentWorkflow('assistant-v2');
     expect(workflow?.id).toBe('qti-v2-turn');
     expect(workflow?.steps.map((step) => [step.title, step.kind])).toEqual([
@@ -19,9 +19,23 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       ['Clarify', 'code'],
       ['Analyse', 'agent'],
       ['Validate', 'code'],
+      ['Check data quality', 'agent'],
       ['Write answer', 'agent'],
       ['Wrap up', 'code'],
     ]);
+  });
+
+  it('gives Check data quality to Sarah, in one model call without tools', () => {
+    const steps = agentWorkflow('assistant-v2')!.steps;
+    expect(
+      steps.find((step) => step.id === 'check-data-quality')?.agent,
+    ).toEqual({
+      key: 'data-readiness',
+      name: 'Sarah',
+      role: 'Data Quality Analyst',
+      tools: [],
+      maxSteps: 1,
+    });
   });
 
   it('gives each agent step its own agent: Michael analyses with his tools, Olivia plans and Jessica writes in one model call without tools', () => {
@@ -83,7 +97,17 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     ]);
   });
 
-  it.each(['assistant', 'rfp', 'data-readiness', 'constructor', 'nope'])(
+  it('is Assess Data Readiness for data-readiness: its one agent step is Explain report (agents.md 5.13)', () => {
+    const workflow = agentWorkflow('data-readiness')!;
+    expect(workflow.id).toBe('data-readiness-assessment');
+    expect(
+      workflow.steps.flatMap((step) =>
+        step.agent ? [[step.id, step.agent.key, step.agent.maxSteps]] : [],
+      ),
+    ).toEqual([['explain-report', 'data-readiness', 10]]);
+  });
+
+  it.each(['assistant', 'rfp', 'constructor', 'nope'])(
     'is undefined for %p, which is not workflow-backed',
     (key) => {
       expect(agentWorkflow(key)).toBeUndefined();

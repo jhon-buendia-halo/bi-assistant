@@ -13,6 +13,7 @@ import {
   ANALYSIS_PLANNER_AGENT_KEY,
   ANSWER_WRITER_AGENT_KEY,
   ASSISTANT_MAX_STEPS,
+  DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
@@ -21,6 +22,14 @@ import {
   ASSISTANT_V2_DESCRIPTION,
 } from '../agents/assistant-v2-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
+import {
+  DATA_READINESS_ASSESSMENT_DESCRIPTION,
+  DATA_READINESS_ASSESSMENT_EDGES,
+  DATA_READINESS_ASSESSMENT_STEPS,
+  DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
+  DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
+  READINESS_DEFAULT_QUESTION,
+} from './data-readiness-assessment.steps';
 import type { AgentWorkflow } from './agent-workflows';
 import {
   QTI_V2_TURN_EDGES,
@@ -85,6 +94,19 @@ const CAREFUL_FIELD: WorkflowInputField = {
 };
 
 /**
+ * Answer a Business Question's optional data-quality check (agents.md
+ * 5.11): the branch to Check data quality, where Sarah reviews the tables
+ * the analysis read. Off unless ticked.
+ */
+const CHECK_DATA_QUALITY_FIELD: WorkflowInputField = {
+  name: 'checkDataQuality',
+  label: 'Check data quality: Sarah reviews the tables the analysis used',
+  type: 'boolean',
+  required: false,
+  default: false,
+};
+
+/**
  * The input of a draft run (Try it, api.md R12): the question, and careful
  * mode; its datasets are the draft's.
  */
@@ -138,14 +160,46 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       input: [
         { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
         DATASETS_FIELD,
+        CHECK_DATA_QUALITY_FIELD,
       ],
       steps: QTI_V2_TURN_STEPS,
-      // Olivia plans and Jessica writes the answer; Michael analyses.
+      // Olivia plans and Jessica writes the answer; Michael analyses; Sarah
+      // checks the data quality when the run asks for it.
       stepAgents: {
         plan: ANALYSIS_PLANNER_AGENT_KEY,
+        'check-data-quality': DATA_READINESS_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,
       },
       edges: QTI_V2_TURN_EDGES,
+      bar: 'steps',
+    },
+    {
+      id: DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
+      name: DATA_READINESS_ASSESSMENT_WORKFLOW_NAME,
+      description: DATA_READINESS_ASSESSMENT_DESCRIPTION,
+      // Its Explain report step runs the Data Readiness Agent.
+      primaryFor: DATA_READINESS_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        {
+          name: 'dataset',
+          label: 'Dataset',
+          type: 'dataset',
+          required: true,
+          datasourceKinds: ['postgres', 'databricks'],
+        },
+        {
+          name: 'question',
+          label: 'Question',
+          type: 'textarea',
+          required: false,
+          placeholder: READINESS_DEFAULT_QUESTION,
+          default: READINESS_DEFAULT_QUESTION,
+          maxLength: QUESTION_MAX_LENGTH,
+        },
+      ],
+      steps: DATA_READINESS_ASSESSMENT_STEPS,
+      edges: DATA_READINESS_ASSESSMENT_EDGES,
       bar: 'steps',
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
@@ -158,6 +212,8 @@ export interface AgentRunTurn {
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
+  /** Answer a Business Question's `checkDataQuality`: Check data quality runs. */
+  checkDataQuality?: true;
 }
 
 /** The agent turn a run's checked input asks for (plan 4.2). */
@@ -173,6 +229,9 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     question: text(values['question']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
+    ...(values['checkDataQuality'] === true
+      ? { checkDataQuality: true as const }
+      : {}),
   };
 }
 
@@ -291,13 +350,16 @@ export function sessionWorkflowId(session: SessionWorkflowFields): string {
     return session.workflowId;
   }
   if (session.agentKey) {
+    // A wrapped agent's own turn first: the Data Readiness Agent also runs
+    // a code workflow's step, but its sessions and the eval runner's host
+    // stay on its agent turn (a run host names its workflow itself).
+    if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
+      return agentWorkflowId(session.agentKey);
+    }
     const code = CODE_WORKFLOWS.find(
       (workflow) => workflow.primaryFor === session.agentKey,
     );
     if (code) return code.id;
-    if (WRAPPED_AGENT_KEYS.includes(session.agentKey)) {
-      return agentWorkflowId(session.agentKey);
-    }
     return ASSISTANT_WORKFLOW_ID;
   }
   if (session.agentId) return agentWorkflowId(session.agentId);

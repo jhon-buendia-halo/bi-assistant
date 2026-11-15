@@ -159,6 +159,8 @@ export interface RunHostSpec {
   transcript?: { role: 'user' | 'assistant'; content: string }[];
   /** A system block every turn of the host gets (agents.md 5.16). */
   contextBlock?: string;
+  /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
+  checkDataQuality?: true;
   /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
@@ -397,6 +399,7 @@ export class SessionsService implements OnModuleInit {
   async createRunHost(spec: RunHostSpec): Promise<SessionDoc> {
     if (spec.draftAgentId) return this.createDraftRunHost(spec);
     let binding: Pick<SessionDoc, 'agentKey' | 'agentId' | 'agentName'> = {};
+    let codeWorkflowId: string | undefined;
     let datasets = spec.datasets ?? [];
     if (spec.agentKey !== undefined) {
       const key = spec.agentKey;
@@ -429,6 +432,9 @@ export class SessionsService implements OnModuleInit {
         throw new NotFoundException(`Workflow "${spec.workflowId}" not found`);
       }
       binding = { agentKey: primary, agentName: agent.name ?? primary };
+      // The run's own workflow: an agent can run more than one (the Data
+      // Readiness Agent's sessions stay on its agent turn).
+      codeWorkflowId = parsed?.kind === 'code' ? parsed.source.id : undefined;
     }
     const id = `${RUN_HOST_ID_PREFIX}${spec.runId}`;
     const name = spec.name.slice(0, 64);
@@ -440,7 +446,7 @@ export class SessionsService implements OnModuleInit {
       workspaceId: workspace.id,
       datasets,
       ...binding,
-      workflowId: sessionWorkflowId(binding),
+      workflowId: codeWorkflowId ?? sessionWorkflowId(binding),
       run: true,
       messages: spec.transcript
         ? spec.transcript.map((message) => ({ ...message, at: now }))
@@ -451,6 +457,7 @@ export class SessionsService implements OnModuleInit {
             ]
           : [],
       ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
+      ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,

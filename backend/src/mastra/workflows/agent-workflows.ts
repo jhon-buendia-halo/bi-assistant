@@ -11,6 +11,11 @@ import {
   ASSISTANT_V2_NAME,
   ASSISTANT_V2_TOOL_NAMES,
 } from '../agents/assistant-v2-catalog';
+import {
+  DATA_READINESS_AGENT_KEY,
+  DATA_READINESS_AGENT_NAME,
+  DATA_READINESS_MAX_STEPS,
+} from '../agent-constants';
 import { builtinAgentPersona } from '../agent-personas';
 import type { WorkflowStepExit } from './qti-v2-turn.steps';
 import { CODE_WORKFLOWS, stepAgentKey } from './workflow-catalog';
@@ -51,6 +56,24 @@ const STEP_AGENTS: Record<
     name: ASSISTANT_V2_NAME,
     tools: ASSISTANT_V2_TOOL_NAMES,
     maxSteps: ASSISTANT_V2_MAX_STEPS,
+  },
+  // Assess Data Readiness's Explain report step (agents.md 5.13): the
+  // agent's tools as agents.md 2.10 lists them; `assess_data_readiness`
+  // refuses there, the run has assessed already.
+  [DATA_READINESS_AGENT_KEY]: {
+    name: DATA_READINESS_AGENT_NAME,
+    tools: [
+      'assess_data_readiness',
+      'get_readiness_report',
+      'list_readiness_reports',
+      'profile_data_sample',
+      'generate_synthetic_data',
+      'describe_entity',
+      'run_readonly_sql',
+      'show_in_panel',
+      'ask_clarification',
+    ],
+    maxSteps: DATA_READINESS_MAX_STEPS,
   },
 };
 

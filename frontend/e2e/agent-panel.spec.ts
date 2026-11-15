@@ -192,6 +192,7 @@ const V2_STEP_TITLES = [
   'Clarify',
   'Analyse',
   'Validate',
+  'Check data quality',
   'Write answer',
   'Wrap up',
 ];
@@ -329,9 +330,11 @@ test('Questions to Insights v2 shows its code-defined steps advancing', async ({
   expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
     V2_STEP_TITLES,
   );
-  // Every step but Clarify (4), the branch a clear question skips.
-  expect(run.workflow?.done).toEqual([1, 2, 3, 5, 6, 7, 8]);
+  // Every step but Clarify (4) and Check data quality (7), the branches a
+  // clear question without the data-quality box skips.
+  expect(run.workflow?.done).toEqual([1, 2, 3, 5, 6, 8, 9]);
   expect(stepStatuses(result, 'clarify').at(-1)).toBe('skipped');
+  expect(stepStatuses(result, 'check-data-quality').at(-1)).toBe('skipped');
 });
 
 test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
@@ -350,6 +353,7 @@ test('a failing step of the v2 workflow is marked failed', async ({ page }) => {
   expect(stepStatuses(result, 'plan').at(-1)).toBe('success');
   expect(stepStatuses(result, 'analyse').at(-1)).toBe('failed');
   expect(stepStatuses(result, 'validate').at(-1)).toBe('skipped');
+  expect(stepStatuses(result, 'check-data-quality').at(-1)).toBe('skipped');
   expect(stepStatuses(result, 'write-answer').at(-1)).toBe('skipped');
   expect(stepStatuses(result, 'wrap-up').at(-1)).toBe('skipped');
   expect(turnRequests(stub, V2_QUESTION).length).toBeGreaterThan(0);
