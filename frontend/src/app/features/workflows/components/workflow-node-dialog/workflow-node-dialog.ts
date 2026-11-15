@@ -12,7 +12,10 @@ import {
 } from '@angular/core';
 import {
   Braces,
+  Check,
   ChevronRight,
+  Copy,
+  FileText,
   Flag,
   LucideAngularModule,
   Sparkles,
@@ -46,19 +49,35 @@ import {
   runStatusLine,
   runStepStatusLabel,
 } from '../../services/workflows.util';
+import {
+  buildStepNarrative,
+  narrativeMarkdown,
+} from '../../services/workflow-step-narrative';
 import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
+import { WorkflowStepNarrative } from '../workflow-step-narrative/workflow-step-narrative';
 import { formatNodeDuration, nodeStatusChip } from './workflow-node-format';
 
-type DialogTab = 'parameters' | 'settings' | 'chat';
+type DialogTab = 'parameters' | 'settings';
 
 const TAB_LABELS: Record<DialogTab, string> = {
   parameters: 'Parameters',
   settings: 'Settings',
-  chat: 'Chat',
 };
+
+/** The views of an agent step's artifact (ui.md 4.4b). */
+type ArtifactView = 'preview' | 'data' | 'config';
+
+const VIEW_LABELS: Record<ArtifactView, string> = {
+  preview: 'Preview',
+  data: 'Data',
+  config: 'Config',
+};
+
+/** The chat's opening note quotes at most this much of the step's own words. */
+const INTRO_MAX = 280;
 
 const NOT_RUN =
   'This node has not run yet. Execute the workflow to see its data.';
@@ -78,10 +97,12 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * The node dialog (ui.md 4.4b): a node's input, its parameters and settings
- * (and, for an agent step, a chat about its run data), and its output,
- * stacked top to bottom; Input and Output start collapsed. The parent
- * returns focus on `close`.
+ * The node dialog (ui.md 4.4b). An agent step shows a chat with its agent
+ * beside an artifact of its run: a Preview that tells what it received, did
+ * and returned, its Data (input and output) and its Config (parameters and
+ * settings). Any other node shows its input, its parameters and settings,
+ * and its output, stacked top to bottom, Input and Output collapsed. The
+ * parent returns focus on `close`.
  */
 @Component({
   selector: 'app-workflow-node-dialog',
@@ -91,6 +112,7 @@ const FOCUSABLE =
     WorkflowAttemptSwitcher,
     WorkflowDataView,
     WorkflowNodeChat,
+    WorkflowStepNarrative,
     WorkflowStepOutputView,
   ],
   templateUrl: './workflow-node-dialog.html',
@@ -101,6 +123,9 @@ const FOCUSABLE =
 export class WorkflowNodeDialog {
   readonly X = X;
   readonly ChevronRight = ChevronRight;
+  readonly Check = Check;
+  readonly Copy = Copy;
+  readonly FileText = FileText;
 
   readonly node = input.required<NodeInspection>();
   readonly workflow = input.required<WorkflowDetail>();
@@ -118,40 +143,34 @@ export class WorkflowNodeDialog {
 
   readonly triggerLabels = TRIGGER_LABELS;
   readonly tabLabels = TAB_LABELS;
-  /** The tab the user picked; null until they pick one. */
-  readonly tab = signal<DialogTab | null>(null);
-
-  /** An agent step offers Chat, unless the run's workflow is gone. */
-  readonly hasChat = computed(
-    () => this.node().kind === 'agent' && this.chat().state !== 'hidden',
-  );
-  readonly tabs = computed<DialogTab[]>(() =>
-    this.hasChat()
-      ? ['chat', 'parameters', 'settings']
-      : ['parameters', 'settings'],
-  );
-  /**
-   * The tab shown: the one picked, else Chat when the node offers it, else
-   * Parameters. Chat falls back to Parameters on a node without it.
-   */
-  readonly activeTab = computed<DialogTab>(() => {
-    const tab = this.tab() ?? (this.hasChat() ? 'chat' : 'parameters');
-    return tab === 'chat' && !this.hasChat() ? 'parameters' : tab;
-  });
+  readonly tabs: readonly DialogTab[] = ['parameters', 'settings'];
+  readonly tab = signal<DialogTab>('parameters');
   /** Input (above the tabs) and Output (below them) start collapsed. */
   readonly inputOpen = signal(false);
   readonly outputOpen = signal(false);
-  /** Whether Chat has shown; it stays mounted afterwards. */
-  private readonly chatShown = signal(false);
-  /** The chat panel is created when Chat first shows, then kept while other tabs show. */
-  readonly chatMounted = computed(
-    () => this.chatShown() || this.activeTab() === 'chat',
-  );
 
-  selectTab(tab: DialogTab): void {
-    if (tab === 'chat' || this.activeTab() === 'chat') this.chatShown.set(true);
-    this.tab.set(tab);
+  /** An agent step: the chat beside an artifact of its run. */
+  readonly artifact = computed(() => this.node().kind === 'agent');
+  /** An agent step offers its chat, unless the run's workflow is gone. */
+  readonly hasChat = computed(
+    () => this.artifact() && this.chat().state !== 'hidden',
+  );
+  readonly viewLabels = VIEW_LABELS;
+  readonly views: readonly ArtifactView[] = ['preview', 'data', 'config'];
+  readonly view = signal<ArtifactView>('preview');
+  readonly copied = signal(false);
+
+  /** Show another view of the artifact, from its top. */
+  selectView(view: ArtifactView): void {
+    this.view.set(view);
+    const panel = this.artifactPanel()?.nativeElement;
+    if (panel) panel.scrollTop = 0;
   }
+
+  private readonly artifactPanel =
+    viewChild<ElementRef<HTMLElement>>('artifactPanel');
+
+  private readonly nodeChat = viewChild(WorkflowNodeChat);
 
   private readonly dialog =
     viewChild.required<ElementRef<HTMLElement>>('dialog');
@@ -235,6 +254,82 @@ export class WorkflowNodeDialog {
   readonly inputEmpty = computed(() =>
     this.run() ? 'No input recorded for this run.' : NOT_RUN,
   );
+
+  /** The agent of an agent step, by name. */
+  readonly agentName = computed(
+    () =>
+      this.node().agent?.name ?? this.node().step?.agent?.name ?? 'the agent',
+  );
+  /** The Preview of an agent step's artifact: built from the attempt shown. */
+  readonly narrative = computed(() => {
+    const attempts = this.attemptNumbers();
+    return buildStepNarrative({
+      title: this.node().title,
+      agentName: this.artifact() ? this.agentName() : null,
+      run: this.run(),
+      attempt: attempts.length ? this.selectedAttempt() : 1,
+      attempts: Math.max(attempts.length, 1),
+      duration: this.run()?.durationMs != null ? this.duration() : '',
+    });
+  });
+  readonly artifactTitle = computed(() => `How ${this.node().title} ran`);
+  readonly artifactCaption = computed(() => {
+    if (!this.run()) return 'Report · not run yet';
+    const calls = this.narrative().actions.length;
+    return `Report · ${calls === 1 ? '1 tool call' : `${calls} tool calls`}`;
+  });
+  /** The chat's opening note: the step's own words, else what it did. */
+  readonly introText = computed(() => {
+    const n = this.narrative();
+    if (n.error) return `This step failed: ${n.error}`;
+    // The summary's first paragraph of prose: no heading, table or list.
+    const paragraph = (n.summary ?? '')
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .find((p) => p && !/^(\||#|[-*] |\d+\. )/.test(p));
+    if (paragraph) {
+      const flat = paragraph
+        .replace(/[#*_`>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return flat.length > INTRO_MAX
+        ? `${flat.slice(0, INTRO_MAX - 1)}…`
+        : flat;
+    }
+    const calls = n.actions.length;
+    const fields = n.returned.length;
+    return `${this.agentName()} made ${calls === 1 ? '1 tool call' : `${calls} tool calls`} and returned ${fields === 1 ? '1 field' : `${fields} fields`}. Ask about any of it below.`;
+  });
+  /** Questions to start the chat with, from what the step did. */
+  readonly suggestions = computed(() => {
+    const n = this.narrative();
+    const out: string[] = [];
+    const failed = n.actions.find((a) => a.error);
+    if (failed) out.push(`Why did tool call ${failed.index} fail?`);
+    if (n.table) out.push('Explain the result of the last query');
+    if (n.received.some((f) => f.name === 'plan')) {
+      out.push('Did it follow the plan?');
+    }
+    if (out.length < 3) out.push('What did this step do, step by step?');
+    return out.slice(0, 3);
+  });
+
+  /** Put a suggested question in the chat's box, ready to send. */
+  suggest(question: string): void {
+    this.nodeChat()?.prefill(question);
+  }
+
+  /** Copy the Preview as Markdown. */
+  copyNarrative(): void {
+    const text = narrativeMarkdown(this.artifactTitle(), this.narrative());
+    void navigator.clipboard?.writeText(text).then(
+      () => {
+        this.copied.set(true);
+        setTimeout(() => this.copied.set(false), 2000);
+      },
+      () => this.copied.set(false),
+    );
+  }
   readonly outputEmpty = computed(() =>
     this.run() ? 'No output recorded for this run.' : NOT_RUN,
   );

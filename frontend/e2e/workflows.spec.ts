@@ -215,6 +215,14 @@ async function expandNodeSection(page: Page, section: 'input' | 'output'): Promi
   return dialog.getByTestId(`workflow-ndv-${section}`);
 }
 
+/** An agent step's artifact (ui.md 4.4b): show its Preview, Data or Config. */
+async function showArtifactView(page: Page, view: 'preview' | 'data' | 'config'): Promise<Locator> {
+  const tab = nodeDialog(page).getByTestId(`workflow-ndv-view-${view}`);
+  await tab.click();
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  return nodeDialog(page).getByTestId('workflow-ndv-artifact');
+}
+
 async function closeNode(page: Page): Promise<void> {
   await nodeDialog(page).getByTestId('workflow-ndv-close').click();
   await expect(nodeDialog(page)).toHaveCount(0);
@@ -556,10 +564,15 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then its Output shows the question, the measures, the entities, the scope and the assumptions',
+        'Then its report shows the question, the measures, the entities, the scope and the assumptions',
         async () => {
-          await expandNodeSection(page, 'output');
-          const view = nodeDialog(page).getByTestId('workflow-plan-view');
+          await expect(nodeDialog(page).getByTestId('workflow-ndv-view-preview')).toHaveAttribute(
+            'aria-selected',
+            'true',
+          );
+          const view = nodeDialog(page)
+            .getByTestId('workflow-narrative')
+            .getByTestId('workflow-plan-view');
           await expect(view).toBeVisible();
           await expect(view.getByTestId('workflow-plan-question')).toHaveText(QUESTION);
           await expect(view.getByTestId('workflow-plan-measures').getByRole('listitem')).toHaveText([
@@ -573,7 +586,8 @@ test.describe('Feature: Workflows (run workflows)', () => {
             'Every match in the data counts once',
           ]);
           await expect(view.getByTestId('workflow-plan-clarification')).toHaveCount(0);
-          // The raw data stays under it.
+          // The raw data is in Data.
+          await showArtifactView(page, 'data');
           await expect(
             nodeDialog(page).getByTestId('workflow-ndv-output').getByTestId('workflow-data-json'),
           ).toContainText('"measures"');
@@ -1054,12 +1068,12 @@ test.describe('Feature: Workflows (the designer)', () => {
         async () => {
           const dialog = nodeDialog(page);
           await expect(dialog.getByTestId('workflow-ndv-title')).toHaveText('Analyse');
-          // An agent step opens on Chat; its fields are under Parameters.
-          await expect(dialog.getByTestId('workflow-ndv-tab-chat')).toHaveAttribute(
+          // An agent step opens on its report; its fields are under Config.
+          await expect(dialog.getByTestId('workflow-ndv-view-preview')).toHaveAttribute(
             'aria-selected',
             'true',
           );
-          await dialog.getByTestId('workflow-ndv-tab-parameters').click();
+          await showArtifactView(page, 'config');
           await expect(dialog.getByTestId('workflow-step-field-model')).toBeVisible();
           await expect(dialog.getByTestId('workflow-step-field-tools')).toHaveText(
             'list_entities, describe_entity, sample_rows, run_readonly_sql, ask_clarification',
@@ -1097,9 +1111,9 @@ test.describe('Feature: Workflows (the designer)', () => {
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
         },
       );
-      await scenarioStep(page, 'When I double-click "Analyse" again and pick Parameters', async () => {
-        const dialog = await openNode(page, 'analyse', 'Analyse');
-        await dialog.getByTestId('workflow-ndv-tab-parameters').click();
+      await scenarioStep(page, 'When I double-click "Analyse" again and pick Config', async () => {
+        await openNode(page, 'analyse', 'Analyse');
+        await showArtifactView(page, 'config');
       });
       await scenarioStep(
         page,
@@ -1118,7 +1132,8 @@ test.describe('Feature: Workflows (the designer)', () => {
         page,
         'And its Output in Schema mode shows the declared contract',
         async () => {
-          const output = await expandNodeSection(page, 'output');
+          await showArtifactView(page, 'data');
+          const output = nodeDialog(page).getByTestId('workflow-ndv-output');
           await output.getByTestId('workflow-data-mode-schema').click();
           await expect(output.getByTestId('workflow-data-schema-declared')).toHaveText(
             'Declared contract',
@@ -1133,7 +1148,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         'And its Settings show the contract the run used',
         async () => {
           const dialog = nodeDialog(page);
-          await dialog.getByTestId('workflow-ndv-tab-settings').click();
+          await showArtifactView(page, 'config');
           await expect(dialog.getByText('Contract', { exact: true })).toBeVisible();
           await expect(dialog.getByTestId('workflow-ndv-setting-contract')).toHaveText(
             /^\s*[0-9a-f]{12}\s*$/,
@@ -1219,7 +1234,8 @@ test.describe('Feature: Workflows (the designer)', () => {
       await test.step('Then the "Analyse" dialog shows the error in its Output', async () => {
         const dialog = await openNode(page, 'analyse', 'Analyse');
         await expect(dialog.getByTestId('workflow-ndv-output-status')).toHaveText('Failed');
-        await expandNodeSection(page, 'output');
+        await expect(dialog.getByTestId('workflow-narrative-error')).toBeVisible();
+        await showArtifactView(page, 'data');
         await expect(dialog.getByTestId('workflow-ndv-output-error')).toBeVisible();
         await expect(dialog.getByTestId('workflow-ndv-output-error')).not.toBeEmpty();
         await closeNode(page);
@@ -1301,15 +1317,11 @@ test.describe('Feature: Workflows (the designer)', () => {
       });
       await scenarioStep(
         page,
-        'When I open "Analyse" before any run, its Chat tab says to execute the workflow first',
+        'When I open "Analyse" before any run, its chat says to execute the workflow first',
         async () => {
           const dialog = await openNode(page, 'analyse', 'Analyse');
-          await expect(dialog.getByRole('tab')).toHaveText(['Chat', 'Parameters', 'Settings']);
-          await dialog.getByRole('tab', { name: 'Chat', exact: true }).click();
-          await expect(dialog.getByTestId('workflow-ndv-tab-chat')).toHaveAttribute(
-            'aria-selected',
-            'true',
-          );
+          await expect(dialog.getByTestId('workflow-ndv-chat-pane')).toBeVisible();
+          await expect(dialog.getByTestId('workflow-narrative-not-run')).toBeVisible();
           await expect(dialog.getByTestId('workflow-node-chat-unavailable')).toHaveText(
             "Execute the workflow, then chat with this agent about this step's data.",
           );
@@ -1322,9 +1334,10 @@ test.describe('Feature: Workflows (the designer)', () => {
         await runOnQuestion(page, QUESTION);
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       });
-      await scenarioStep(page, 'And I open "Analyse" on its Chat tab', async () => {
+      await scenarioStep(page, 'And I open "Analyse", its chat beside its report', async () => {
         const dialog = await openNode(page, 'analyse', 'Analyse');
-        await dialog.getByTestId('workflow-ndv-tab-chat').click();
+        await expect(dialog.getByTestId('workflow-ndv-chat-intro')).toBeVisible();
+        await expect(dialog.getByTestId('workflow-narrative-action')).not.toHaveCount(0);
         await expect(dialog.getByTestId('workflow-node-chat-note')).toHaveText(
           /^\s*Chatting about run \S{8}: this step's input, output and tool calls\.\s*$/,
         );
@@ -1379,7 +1392,6 @@ test.describe('Feature: Workflows (the designer)', () => {
         async () => {
           await closeNode(page);
           const dialog = await openNode(page, 'analyse', 'Analyse');
-          await dialog.getByTestId('workflow-ndv-tab-chat').click();
           const messages = dialog.getByTestId('workflow-node-chat-message');
           await expect(messages).toHaveCount(2);
           await expect(messages.nth(0)).toHaveText(CHAT_QUESTION);
@@ -1488,9 +1500,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
 
   // Plan's and Validate's outputs as panels (ui.md 4.4b).
   await openNode(page, 'plan', 'Plan');
-  await expect(
-    (await expandNodeSection(page, 'output')).getByTestId('workflow-plan-view'),
-  ).toBeVisible();
+  await expect(nodeDialog(page).getByTestId('workflow-plan-view')).toBeVisible();
   await scan('Answer a Business Question page, Plan dialog after a run');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
@@ -1505,12 +1515,17 @@ test('the Workflows pages have no detectable accessibility violations in either 
   // The Analyse dialog's Chat tab, with a question, its answer and a tool call.
   stub.reply = chatOrRun;
   const chatDialog = await openNode(page, 'analyse', 'Analyse');
-  await chatDialog.getByTestId('workflow-ndv-tab-chat').click();
   await chatDialog.getByTestId('workflow-node-chat-input').fill(CHAT_QUESTION);
   await chatDialog.getByTestId('workflow-node-chat-send').click();
   await expect(chatDialog.getByTestId('workflow-node-chat-message')).toHaveCount(2);
   await expect(chatDialog.getByTestId('workflow-node-chat-tool-call')).toHaveCount(1);
-  await scan('Answer a Business Question page, Analyse dialog on its Chat tab');
+  await chatDialog.getByTestId('workflow-narrative-sql-toggle').first().click();
+  await expect(chatDialog.getByTestId('workflow-narrative-sql')).toBeVisible();
+  await scan('Answer a Business Question page, Analyse dialog: chat and report');
+  await showArtifactView(page, 'data');
+  await scan('Answer a Business Question page, Analyse dialog: Data');
+  await showArtifactView(page, 'config');
+  await scan('Answer a Business Question page, Analyse dialog: Config');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 

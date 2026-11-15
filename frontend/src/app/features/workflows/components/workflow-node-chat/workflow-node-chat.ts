@@ -122,6 +122,8 @@ export class WorkflowNodeChat {
   readonly liveToolCalls = computed(() => this.liveCalls().map(liveCallView));
 
   private readonly list = viewChild<ElementRef<HTMLElement>>('list');
+  private readonly composer =
+    viewChild<ElementRef<HTMLTextAreaElement>>('composer');
   private readonly key = computed(() => {
     const id = this.runId();
     return id === null ? null : { runId: id, stepId: this.stepId() };
@@ -155,6 +157,13 @@ export class WorkflowNodeChat {
   callMeta(call: ChatToolCall): string {
     if (call.running) return call.progress ?? 'Running…';
     return call.rowCount !== undefined ? `${call.rowCount} rows` : '';
+  }
+
+  /** Put a question in the box (a suggestion), focused, without sending it. */
+  prefill(text: string): void {
+    if (this.runId() === null || this.streaming()) return;
+    this.draft.set(text);
+    setTimeout(() => this.composer()?.nativeElement.focus());
   }
 
   onInput(event: Event): void {

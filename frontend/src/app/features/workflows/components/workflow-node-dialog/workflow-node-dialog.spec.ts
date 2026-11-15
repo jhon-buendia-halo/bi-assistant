@@ -45,6 +45,11 @@ describe('WorkflowNodeDialog', () => {
     fixture.componentRef.setInput('runId', runId);
     fixture.detectChanges();
   }
+  /** An agent step's artifact: show its Preview, Data or Config. */
+  function showView(view: 'preview' | 'data' | 'config') {
+    byId(`workflow-ndv-view-${view}`)!.click();
+    fixture.detectChanges();
+  }
 
   beforeEach(() =>
     TestBed.configureTestingModule({ imports: [WorkflowNodeDialog] }),
@@ -60,13 +65,65 @@ describe('WorkflowNodeDialog', () => {
     expect(dialog?.textContent).toContain(
       'Questions to Insights v2 · ≤ 15 steps',
     );
+    expect(byId('workflow-ndv-artifact')).not.toBeNull();
+    expect(text('workflow-ndv-output-status')).toBe('Done');
+  });
+
+  it('shows an agent step as an artifact: Preview first, then Data and Config', () => {
+    open(node('analyse'));
+    const views = Array.from(
+      byId('workflow-ndv-artifact')!.querySelectorAll<HTMLElement>(
+        '[role="tab"]',
+      ),
+    );
+    expect(views.map((v) => v.textContent?.trim())).toEqual([
+      'Preview',
+      'Data',
+      'Config',
+    ]);
+    expect(views[0].getAttribute('aria-selected')).toBe('true');
+    expect(byId('workflow-narrative')).not.toBeNull();
+    expect(byId('workflow-ndv-input')).toBeNull();
+    expect(byId('workflow-ndv-params')).toBeNull();
+
+    showView('data');
+    expect(views[1].getAttribute('aria-selected')).toBe('true');
     expect(byId('workflow-ndv-input')).not.toBeNull();
-    expect(byId('workflow-ndv-params')).not.toBeNull();
     expect(byId('workflow-ndv-output')).not.toBeNull();
+    expect(byId('workflow-narrative')).toBeNull();
+
+    showView('config');
+    expect(byId('workflow-ndv-params')).not.toBeNull();
+    expect(text('workflow-step-field-id')).toBe('analyse');
+    expect(text('workflow-ndv-setting-status')).toBe('Done');
+    // No stacked layout and no tabs of its own.
+    expect(byId('workflow-ndv-input-toggle')).toBeNull();
+    expect(byId('workflow-ndv-tab-parameters')).toBeNull();
+  });
+
+  it("tells the agent step's run in the Preview", () => {
+    open(node('analyse'));
+    expect(text('workflow-narrative-heading')).toBe('Top 5 states?');
+    const actions = Array.from(
+      el().querySelectorAll<HTMLElement>(
+        '[data-testid="workflow-narrative-action"]',
+      ),
+    );
+    expect(actions.length).toBe(3);
+    expect(actions[2].getAttribute('data-failed')).toBe('true');
+    expect(actions[2].textContent).toContain('No such entity');
+    const toggle = actions[1].querySelector<HTMLElement>(
+      '[data-testid="workflow-narrative-sql-toggle"]',
+    )!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    toggle.click();
+    fixture.detectChanges();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(text('workflow-narrative-sql')).toBe('SELECT state FROM claims');
   });
 
   it('stacks Input, the tabs and Output, with Input and Output collapsed until toggled', () => {
-    open(node('analyse'));
+    open(node('receive'));
     const sections = Array.from(
       byId('workflow-ndv')!.querySelectorAll<HTMLElement>(
         '[data-testid="workflow-ndv-input"], [data-testid="workflow-ndv-params"], [data-testid="workflow-ndv-output"]',
@@ -97,7 +154,22 @@ describe('WorkflowNodeDialog', () => {
 
   it('shows an agent step: input, parameters, tool calls and output', () => {
     open(node('analyse'));
+    showView('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain('Top 5 states?');
+    expect(text('workflow-ndv-output-status')).toBe('Done');
+    const calls = el().querySelectorAll(
+      '[data-testid="workflow-ndv-tool-call"]',
+    );
+    expect(calls.length).toBe(3);
+    expect(calls[0].textContent).toContain('list_entities');
+    expect(calls[0].textContent).toContain('200 ms');
+    expect(calls[1].textContent).toContain('SELECT state FROM claims');
+    expect(calls[1].textContent).toContain('1.1 s');
+    expect(calls[1].textContent).toContain('5 rows');
+    expect(calls[2].textContent).toContain('No such entity');
+    expect(byId('workflow-ndv-output')?.textContent).toContain('"calls": 3');
+
+    showView('config');
     expect(text('workflow-step-field-id')).toBe('analyse');
     expect(text('workflow-step-field-kind')).toBe('LLM (agent call)');
     expect(text('workflow-step-field-agent')).toContain(
@@ -126,24 +198,15 @@ describe('WorkflowNodeDialog', () => {
       "The agent's job description; each run adds its own context.",
     );
     expect(el().textContent).not.toContain('Shortened to 20 000 characters.');
-
-    expect(text('workflow-ndv-output-status')).toBe('Done');
-    const calls = el().querySelectorAll(
-      '[data-testid="workflow-ndv-tool-call"]',
-    );
-    expect(calls.length).toBe(3);
-    expect(calls[0].textContent).toContain('list_entities');
-    expect(calls[0].textContent).toContain('200 ms');
-    expect(calls[1].textContent).toContain('SELECT state FROM claims');
-    expect(calls[1].textContent).toContain('1.1 s');
-    expect(calls[1].textContent).toContain('5 rows');
-    expect(calls[2].textContent).toContain('No such entity');
-    expect(byId('workflow-ndv-output')?.textContent).toContain('"calls": 3');
   });
 
   it('says so when an agent step recorded no tool calls', () => {
     const analyse = node('analyse');
     open({ ...analyse, run: { ...analyse.run!, toolCalls: [] } });
+    expect(byId('workflow-narrative-actions')?.textContent).toContain(
+      'No tool calls recorded.',
+    );
+    showView('data');
     expect(byId('workflow-ndv-output')?.textContent).toContain(
       'No tool calls recorded.',
     );
@@ -173,11 +236,13 @@ describe('WorkflowNodeDialog', () => {
       ...analyse,
       agent: { ...analyse.agent!, systemPromptTruncated: true },
     });
+    showView('config');
     expect(el().textContent).toContain('Shortened to 20 000 characters.');
   });
 
   it('opens the agent from its link', () => {
     open(node('analyse'));
+    showView('config');
     const keys: string[] = [];
     fixture.componentInstance.openAgent.subscribe((k) => keys.push(k));
     byId('workflow-step-field-agent')?.querySelector('button')?.click();
@@ -206,25 +271,31 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-step-field-exits')).toBe('No catalog → fails');
   });
 
-  it('switches to Settings: status, duration and run id', () => {
+  it("lists an agent step's settings under its Config: status, duration and run id", () => {
     open(node('analyse'));
+    showView('config');
+    expect(text('workflow-ndv-setting-status')).toBe('Done');
+    expect(text('workflow-ndv-setting-duration')).toBe('13.9 s');
+    expect(text('workflow-ndv-setting-run-id')).toBe('run_8f21c4');
+  });
+
+  it("switches a code step's tabs to Settings: status, duration and run id", () => {
+    open(node('receive'));
+    expect(
+      byId('workflow-ndv-tab-parameters')?.getAttribute('aria-selected'),
+    ).toBe('true');
     byId('workflow-ndv-tab-settings')?.click();
     fixture.detectChanges();
     expect(
       byId('workflow-ndv-tab-settings')?.getAttribute('aria-selected'),
     ).toBe('true');
     expect(text('workflow-ndv-setting-status')).toBe('Done');
-    expect(text('workflow-ndv-setting-duration')).toBe('13.9 s');
     expect(text('workflow-ndv-setting-run-id')).toBe('run_8f21c4');
     expect(byId('workflow-step-field-id')).toBeNull();
   });
 
   describe('the Chat tab of an agent step (api.md 136, 137)', () => {
     let api: jasmine.SpyObj<WorkflowRunsApiService>;
-    const tabs = () =>
-      Array.from(el().querySelectorAll<HTMLElement>('[role="tab"]')).map(
-        (tab) => tab.textContent?.trim(),
-      );
 
     beforeEach(() => {
       api = jasmine.createSpyObj<WorkflowRunsApiService>(
@@ -244,84 +315,97 @@ describe('WorkflowNodeDialog', () => {
       fixture.detectChanges();
     }
 
-    it('comes first and is the tab shown when the dialog opens', () => {
+    it('sits beside the artifact and reads the conversation at once', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-      expect(tabs()).toEqual(['Chat', 'Parameters', 'Settings']);
-      const chatTab = byId('workflow-ndv-tab-chat')!;
-      expect(chatTab.getAttribute('role')).toBe('tab');
-      expect(chatTab.getAttribute('aria-selected')).toBe('true');
+      const pane = byId('workflow-ndv-chat-pane')!;
+      expect(pane.getAttribute('aria-label')).toBe(
+        'Chat with Questions to Insights v2',
+      );
       expect(
-        byId('workflow-ndv-tab-parameters')!.getAttribute('aria-selected'),
-      ).toBe('false');
-      expect(byId('workflow-node-chat')).not.toBeNull();
+        pane.querySelector('[data-testid="workflow-node-chat"]'),
+      ).not.toBeNull();
       expect(api.getNodeChat).toHaveBeenCalledOnceWith('run_8f21c4', 'analyse');
-      expect(byId('workflow-step-field-id')).toBeNull();
-
-      byId('workflow-ndv-tab-parameters')!.click();
-      fixture.detectChanges();
-      expect(chatTab.getAttribute('aria-selected')).toBe('false');
-      expect(text('workflow-step-field-id')).toBe('analyse');
-      // The chat stays mounted, hidden, so its conversation is kept.
-      expect(byId('workflow-node-chat')?.closest('[hidden]')).not.toBeNull();
-    });
-
-    it('leaves Parameters as the tab shown on a node without Chat', () => {
-      openWithChat(node('analyse'), { state: 'hidden' });
+      expect(byId('workflow-ndv-tab-chat')).toBeNull();
       expect(
-        byId('workflow-ndv-tab-parameters')!.getAttribute('aria-selected'),
-      ).toBe('true');
-      openWithChat(node('start'), { state: 'ready', runId: 'run_8f21c4' });
-      expect(
-        byId('workflow-ndv-tab-parameters')!.getAttribute('aria-selected'),
+        byId('workflow-ndv-view-preview')!.getAttribute('aria-selected'),
       ).toBe('true');
     });
 
-    it('stays mounted while another tab shows, so the conversation is kept', () => {
+    it('stays mounted while the artifact changes view, so the conversation is kept', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-      byId('workflow-ndv-tab-chat')!.click();
-      fixture.detectChanges();
       const panel = byId('workflow-node-chat')!;
-      byId('workflow-ndv-tab-settings')!.click();
-      fixture.detectChanges();
-      expect(panel.isConnected).toBe(true);
-      expect(panel.closest('[hidden]')).not.toBeNull();
-      expect(text('workflow-ndv-setting-status')).toBe('Done');
-      byId('workflow-ndv-tab-chat')!.click();
-      fixture.detectChanges();
+      showView('data');
+      showView('config');
       expect(byId('workflow-node-chat')).toBe(panel);
-      expect(panel.closest('[hidden]')).toBeNull();
       expect(api.getNodeChat).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens with what the step did, a card to its report and questions to ask', () => {
+      openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
+      expect(text('workflow-ndv-chat-intro')).toContain(
+        'Questions to Insights v2 made 3 tool calls and returned 2 fields.',
+      );
+      expect(
+        byId('workflow-ndv-artifact-card')!.getAttribute('aria-label'),
+      ).toBe('How Analyse ran, Report · 3 tool calls');
+      const suggestions = Array.from(
+        el().querySelectorAll<HTMLElement>(
+          '[data-testid="workflow-ndv-suggestion"]',
+        ),
+      );
+      expect(suggestions.map((b) => b.textContent?.trim())).toEqual([
+        'Why did tool call 3 fail?',
+        'What did this step do, step by step?',
+      ]);
+
+      suggestions[0].click();
+      fixture.detectChanges();
+      const box = byId('workflow-node-chat-input') as HTMLTextAreaElement;
+      expect(box.value).toBe('Why did tool call 3 fail?');
+      expect(api.streamNodeChat).not.toHaveBeenCalled();
+
+      showView('data');
+      byId('workflow-ndv-artifact-card')!.click();
+      fixture.detectChanges();
+      expect(
+        byId('workflow-ndv-view-preview')!.getAttribute('aria-selected'),
+      ).toBe('true');
     });
 
     it('explains why it cannot chat yet before a run', () => {
       openWithChat(node('analyse'), { state: 'no-run' });
-      byId('workflow-ndv-tab-chat')!.click();
-      fixture.detectChanges();
       expect(text('workflow-node-chat-unavailable')).toBe(
         "Execute the workflow, then chat with this agent about this step's data.",
       );
+      expect(byId('workflow-ndv-suggestion')).toBeNull();
     });
 
     it('is hidden for a run of a removed workflow, and on any node but an agent step', () => {
       openWithChat(node('analyse'), { state: 'hidden' });
-      expect(byId('workflow-ndv-tab-chat')).toBeNull();
+      expect(byId('workflow-ndv-chat-pane')).toBeNull();
+      expect(byId('workflow-ndv-artifact')).not.toBeNull();
       for (const id of ['start', 'receive', 'end']) {
         openWithChat(node(id), { state: 'ready', runId: 'run_8f21c4' });
-        expect(byId('workflow-ndv-tab-chat')).withContext(id).toBeNull();
+        expect(byId('workflow-ndv-chat-pane')).withContext(id).toBeNull();
+        expect(byId('workflow-ndv-artifact')).withContext(id).toBeNull();
       }
       openWithChat(FIXTURE_TOOL, { state: 'ready', runId: 'run_8f21c4' });
-      expect(byId('workflow-ndv-tab-chat')).toBeNull();
+      expect(byId('workflow-ndv-chat-pane')).toBeNull();
+      expect(byId('workflow-ndv-artifact')).toBeNull();
     });
   });
 
   it('shows the not-run states', () => {
     open(FIXTURE_NODES_NOT_RUN[2], null);
+    expect(text('workflow-narrative-not-run')).toBe(
+      'This node has not run yet. Execute the workflow to see its data.',
+    );
+    showView('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain(
       'This node has not run yet. Execute the workflow to see its data.',
     );
     expect(byId('workflow-ndv-output-status')).toBeNull();
-    byId('workflow-ndv-tab-settings')?.click();
-    fixture.detectChanges();
+    showView('config');
     expect(text('workflow-ndv-setting-status')).toBe('Not run yet');
     expect(text('workflow-ndv-setting-run-id')).toBe('Not run yet');
   });
@@ -437,13 +521,20 @@ describe('WorkflowNodeDialog', () => {
       fixture.componentRef.setInput('runContractHash', runContractHash);
       fixture.detectChanges();
     }
+    /** Settings: an agent step's Config view, any other node's Settings tab. */
     const settings = () => {
-      byId('workflow-ndv-tab-settings')?.click();
+      const config = byId('workflow-ndv-view-config');
+      (config ?? byId('workflow-ndv-tab-settings'))?.click();
+      fixture.detectChanges();
+    };
+    const data = () => {
+      byId('workflow-ndv-view-data')?.click();
       fixture.detectChanges();
     };
 
     it('lists Receives and Returns with their types and required markers', () => {
       openContract(FIXTURE_CONTRACT_ANALYSE);
+      settings();
       expect(fields('workflow-step-field-input')).toEqual([
         'question* (required): string',
         'catalog* (required): object[]',
@@ -478,6 +569,7 @@ describe('WorkflowNodeDialog', () => {
 
     it("shows the declared contract in the Output's Schema mode", () => {
       openContract(FIXTURE_CONTRACT_ANALYSE);
+      data();
       const output = byId('workflow-ndv-output')!;
       output
         .querySelector<HTMLElement>('[data-testid="workflow-data-mode-schema"]')
@@ -538,6 +630,10 @@ describe('WorkflowNodeDialog', () => {
     it('shows an input contract violation with its field path highlighted', () => {
       openContract(FIXTURE_INPUT_VIOLATION);
       expect(text('workflow-ndv-output-status')).toBe('Failed');
+      expect(text('workflow-narrative-error')).toBe(
+        'Failed: Contract violation in Analyse (input): question Required',
+      );
+      data();
       expect(text('workflow-ndv-output-error')).toBe(
         'Contract violation in Analyse (input): question Required',
       );
@@ -551,6 +647,7 @@ describe('WorkflowNodeDialog', () => {
 
     it('shows an output contract violation with its field path highlighted', () => {
       openContract(FIXTURE_OUTPUT_VIOLATION);
+      data();
       expect(text('workflow-ndv-contract-violation-path')).toBe('calls');
       expect(text('workflow-ndv-output-error')).toBe(
         'Contract violation in Analyse: calls Expected number, received string',
@@ -566,6 +663,7 @@ describe('WorkflowNodeDialog', () => {
           error: 'Boom',
         },
       });
+      data();
       expect(text('workflow-ndv-output-error')).toBe('Boom');
       expect(byId('workflow-ndv-contract-violation')).toBeNull();
     });
@@ -709,6 +807,19 @@ describe('WorkflowNodeDialog', () => {
     expect(closed).toBe(2);
   });
 
+  it('skips the controls of a collapsed section when Tab wraps', () => {
+    open(node('receive'));
+    const focusable = Array.from(
+      byId('workflow-ndv')!.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((e) => e.closest('[hidden]') === null);
+    // Output starts collapsed: its toggle is the last control Tab reaches.
+    expect(focusable[focusable.length - 1]).toBe(
+      byId('workflow-ndv-output-toggle')!,
+    );
+  });
+
   it('focuses Close first and keeps Tab inside the dialog', async () => {
     open(node('analyse'));
     await fixture.whenStable();
@@ -721,8 +832,8 @@ describe('WorkflowNodeDialog', () => {
       ),
     ).filter((e) => e.closest('[hidden]') === null);
     const last = focusable[focusable.length - 1];
-    // Output starts collapsed: its toggle is the last control Tab reaches.
-    expect(last).toBe(byId('workflow-ndv-output-toggle')!);
+    // The Preview's last control is the last that Tab reaches.
+    expect(byId('workflow-ndv-artifact')!.contains(last)).toBeTrue();
     last.focus();
     const tab = new KeyboardEvent('keydown', {
       key: 'Tab',
@@ -751,6 +862,11 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
       liveToolCalls: [],
       running: false,
     });
+
+  function showView(view: 'preview' | 'data' | 'config') {
+    byId(`workflow-ndv-view-${view}`)!.click();
+    fixture.detectChanges();
+  }
 
   function open(
     id: string,
@@ -784,12 +900,15 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     open('analyse');
     const one = byId('workflow-attempt-1')!;
     const two = byId('workflow-attempt-2')!;
+    const header = () => el().querySelector('header')!.textContent;
     expect(one.textContent?.trim()).toBe('Attempt 1');
     expect(two.getAttribute('aria-pressed')).toBe('true');
     expect(one.getAttribute('aria-pressed')).toBe('false');
+    expect(text('workflow-narrative-meta')).toContain('attempt 2 of 2');
+    showView('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain('second');
     expect(text('workflow-ndv-tool-call')).toContain('select 2');
-    expect(byId('workflow-ndv-output')?.textContent).toContain('9.0 s');
+    expect(header()).toContain('9.0 s');
 
     one.click();
     fixture.detectChanges();
@@ -797,7 +916,9 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     expect(byId('workflow-ndv-input')?.textContent).toContain('first');
     expect(text('workflow-ndv-tool-call')).toContain('select 1');
     expect(text('workflow-ndv-tool-call')).toContain('boom');
-    expect(byId('workflow-ndv-output')?.textContent).toContain('6.0 s');
+    expect(header()).toContain('6.0 s');
+    showView('preview');
+    expect(text('workflow-narrative-meta')).toContain('attempt 1 of 2');
   });
 
   it('shows no attempt switcher for a step that ran once', () => {
@@ -807,6 +928,11 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
 
   it("shows Plan's output as a plan above the data", () => {
     open('plan');
+    // The Preview shows it under What it returned.
+    expect(
+      byId('workflow-narrative')!.contains(byId('workflow-plan-view')),
+    ).toBeTrue();
+    showView('data');
     const view = byId('workflow-plan-view')!;
     expect(view).not.toBeNull();
     expect(text('workflow-plan-question')).toBe('How many matches per stage?');
@@ -891,11 +1017,11 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     const ready: NodeChatAvailability = { state: 'ready', runId: 'run-retry' };
     for (const id of ['plan', 'analyse', 'write-answer']) {
       open(id, GRAPH_RETRY_RUN, ready);
-      expect(byId('workflow-ndv-tab-chat')).withContext(id).not.toBeNull();
+      expect(byId('workflow-ndv-chat-pane')).withContext(id).not.toBeNull();
     }
     for (const id of ['clarify', 'validate']) {
       open(id, GRAPH_RETRY_RUN, ready);
-      expect(byId('workflow-ndv-tab-chat')).withContext(id).toBeNull();
+      expect(byId('workflow-ndv-chat-pane')).withContext(id).toBeNull();
     }
   });
 });
