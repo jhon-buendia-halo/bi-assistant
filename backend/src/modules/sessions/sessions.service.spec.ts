@@ -2365,6 +2365,38 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       ).rejects.toThrow('Select at least one dataset to preview');
     });
   });
+
+  describe('saveMessage (api.md 144-146: what the query inspector caches)', () => {
+    it('writes one message back through the repository, keeping the recency; 404 for an unknown session', async () => {
+      const { service, repository } = build(null, []);
+      const stored: SessionDoc = {
+        id: 's-1',
+        name: 'Past chat',
+        datasets: [],
+        messages: [
+          { role: 'user', content: 'Q', at: 'a' },
+          { role: 'assistant', content: 'A', at: 'b' },
+        ],
+      };
+      const updateMessages = jest.fn().mockResolvedValue(stored);
+      Object.assign(repository, { updateMessages });
+      repository.get.mockImplementation((id: string) =>
+        Promise.resolve(id === 's-1' ? stored : null),
+      );
+      const answer = { ...stored.messages[1], evidence: [{ index: 0 }] };
+
+      await service.saveMessage('s-1', 1, answer);
+
+      expect(updateMessages).toHaveBeenCalledWith('s-1', [
+        stored.messages[0],
+        answer,
+      ]);
+      expect(repository.update).not.toHaveBeenCalled();
+      await expect(service.saveMessage('nope', 1, answer)).rejects.toThrow(
+        'Session nope not found',
+      );
+    });
+  });
 });
 
 describe('SessionsService panel items (ADR-0029)', () => {

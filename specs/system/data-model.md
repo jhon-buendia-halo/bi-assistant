@@ -281,7 +281,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `report` | `AnalysisReport` | no | Legacy (Deep analysis removed 2026-11-12): `{jobId: string, title: string, path: string, angles: number}`, set on the message a finished deep-analysis job appended and on a `deep-analysis` run's `answer`. Stored data stays and is read as before; nothing writes it any more, and the report file (`reports/…`) is no longer reachable from the app. |
 | `rfpPackage` | object | no | Legacy (the RFP Builder was removed 2026-11-12): older assistant messages may still carry an RFP package reference; nothing writes it and it is ignored, so such a message reads as a plain answer. |
 | `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
-| `evidence` | `QueryEvidence[]` | no | The query inspector's facts (3.4.2a): one entry per `run_readonly_sql` or `sample_rows` record of `data`, failed ones included, in `data` order. Derived at persist time from `data` and the facts the tools passed beside their results, on the answer and on a clarification card alike; omitted when `data` holds no such record. Kept **beside** `data`, never on a `ToolDataRecord`, because whole records are fed to models. Older messages lack it; a run's answer gets it from [api.md](api.md) 139. Additive, no migration. |
+| `evidence` | `QueryEvidence[]` | no | The query inspector's facts (3.4.2a): one entry per `run_readonly_sql` or `sample_rows` record of `data`, failed ones included, in `data` order. Derived at persist time from `data` and the facts the tools passed beside their results, on the answer and on a clarification card alike; omitted when `data` holds no such record. Kept **beside** `data`, never on a `ToolDataRecord`, because whole records are fed to models. Older messages lack it; a run's answer gets it from [api.md](api.md) 139, a past chat's message from 144 (written into the stored message without changing the session's `updatedAt`), and `GET /sessions/:id` (2) shows it derived from `data` until then. Additive, no migration. |
 
 Messages never carry an id; user messages have only `role`, `content`, `at`.
 
@@ -319,7 +319,7 @@ How much data one query of an answer stands for (the query inspector, roadmap 1.
 | `tables` | `QueryTableSize[]` | no | Filled by api.md 139: `{entity, rows: number \| null, error?}` per table the query reads, an exact `COUNT(*)`; `rows: null` with the error when the count failed. |
 | `explanation` | `QueryExplanation` | no | Filled when the inspector first opens the query (api.md 140, 141): `{steps: QueryStep[], fallback?: true, at, stageCounts?: {status: 'verified' \| 'unverified', at, reason?}}`. |
 
-Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143). A re-run (142) never changes it.
+Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143), and to a past chat message's `evidence` through the lock of that session and message (144-146). A re-run (142, 147) never changes it.
 
 #### 3.4.3 `SessionVisualization` (session metadata for a visual)
 
@@ -665,6 +665,8 @@ One document per assessment ([data-readiness](../capabilities/data-readiness/spe
 ### 3.16 `workflow_runs` — workflow runs
 
 One document per run of a workflow on an input ([workflows](../capabilities/workflows/spec.md) R18-R20, ADR-0041; since 1.23.14): every run of 118 and 119 ([api.md](api.md)), a code-only workflow's (`seq-text-demo`) as well as an agent workflow's. It is inserted as `running` when the run starts (before the stream's `run` event) and updated when it ends; a run that waits for the user is updated to `suspended` when it starts waiting, to `running` when it is answered (api.md 138) and again when it ends (ADR-0043); nothing else writes it. Deleted only by `DELETE /workflow-runs/:id` (api.md 122), which also deletes the run's workspace. No retention limit. Additive collection, no migration (section 6).
+
+A **draft run** (Try it, api.md 129) is never a document here and is not stored data: its finished run is held only in the backend's memory (`HeldDraftRuns` in `modules/workflows/held-draft-runs.ts`), for 30 minutes from its end and at most 20 of them, the oldest dropped first, so the query inspector (api.md 139-143) can write its evidence to that copy. A restart forgets it (since 1.25.9).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|

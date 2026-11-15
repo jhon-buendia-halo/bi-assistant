@@ -66,7 +66,13 @@ export class SqliteDocStore<T extends object> implements DocStore<T> {
       if (options?.setOnInsertOnly) {
         return Promise.resolve(match.parsed as T);
       }
-      const updated = { ...match.parsed, ...patch, updatedAt: now };
+      const updated = {
+        ...match.parsed,
+        ...patch,
+        updatedAt: options?.keepUpdatedAt
+          ? (match.parsed as { updatedAt?: string }).updatedAt
+          : now,
+      };
       this.db
         .prepare(`UPDATE "${this.table}" SET doc = ? WHERE rid = ?`)
         .run(JSON.stringify(updated), match.rid);

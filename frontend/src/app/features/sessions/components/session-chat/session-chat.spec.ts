@@ -102,7 +102,7 @@ describe('SessionChat past chat (past-chats R66)', () => {
   });
 });
 
-describe('SessionChat query inspector (past-chats R67; plan 1.25.10)', () => {
+describe('SessionChat query inspector (past-chats R70; plan 1.25.10)', () => {
   const sqlRecord = (rationale: string) => ({
     tool: 'run_readonly_sql',
     input: 'select count(*) as n from matches',
