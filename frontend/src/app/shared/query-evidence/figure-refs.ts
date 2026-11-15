@@ -139,8 +139,30 @@ function matches(cell: number, shown: number, decimals: number, scale: number, p
   return percent && Math.abs((cell * 100) / scale - shown) <= tolerance;
 }
 
-/** Every figure of `text` that one or two of the indexed queries hold. */
-export function findFigures(text: string, index: FigureIndex): Figure[] {
+/**
+ * The whole numbers a question names ("the top 100", "in 2018"). An answer
+ * that repeats one is echoing the question, not reporting a result, so it
+ * gets no chip.
+ */
+export function questionNumbers(question: string | null | undefined): number[] {
+  const numbers: number[] = [];
+  for (const m of (question ?? '').matchAll(NUMBER_TOKEN)) {
+    const [, , , whole, fraction, suffix] = m;
+    if (fraction === undefined && !suffix) numbers.push(Number(whole.replace(/,/g, '')));
+  }
+  return numbers;
+}
+
+/**
+ * Every figure of `text` that an indexed query holds. `asked` are the whole
+ * numbers of the question (`questionNumbers`): a bare whole number equal to
+ * one of them is skipped.
+ */
+export function findFigures(
+  text: string,
+  index: FigureIndex,
+  asked: readonly number[] = [],
+): Figure[] {
   if (!text || !index.length) return [];
   const figures: Figure[] = [];
   const dates = findDates(text);
@@ -161,6 +183,7 @@ export function findFigures(text: string, index: FigureIndex): Figure[] {
     const bare = !currency && !suffix && fraction === undefined && !whole.includes(',');
     const magnitude = Number(whole.replace(/,/g, '') + (fraction !== undefined ? `.${fraction}` : ''));
     if (bare && magnitude < 10) continue;
+    if (fraction === undefined && !suffix && !currency && asked.includes(magnitude)) continue;
     const shown = sign === '-' || sign === '−' ? -magnitude : magnitude;
     const decimals = fraction?.length ?? 0;
     const scale = suffix && suffix !== '%' ? SCALES[suffix] : 1;
@@ -185,12 +208,14 @@ const SKIPPED_ANCESTORS = 'code, pre, a, th, .figure-ref';
  * query that is not a sample first, then the query that holds the most
  * figures of this answer, then the earliest; the chip's title names the
  * others. `sampleQueries` are the queries whose result is only a sample: a
- * figure whose every match is one gets the warning tone.
+ * figure whose every match is one gets the warning tone. `asked` are the
+ * question's own numbers, which get no chip.
  */
 export function linkFigures(
   sanitizedHtml: string,
   index: FigureIndex,
   sampleQueries: ReadonlySet<number> = new Set(),
+  asked: readonly number[] = [],
 ): string {
   if (!index.length) return sanitizedHtml;
   const template = document.createElement('template');
@@ -202,7 +227,7 @@ export function linkFigures(
     if (parent && parent.closest(SKIPPED_ANCESTORS)) continue;
     nodes.push(node as Text);
   }
-  const found = nodes.map((node) => ({ node, figures: findFigures(node.data, index) }));
+  const found = nodes.map((node) => ({ node, figures: findFigures(node.data, index, asked) }));
   const held = new Map<number, number>();
   for (const { figures } of found) {
     for (const figure of figures) {

@@ -45,6 +45,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import {
   figureIndex,
   linkFigures,
+  questionNumbers,
   sampleQueriesOf,
 } from '../../../../shared/query-evidence/figure-refs';
 import { QueryEvidenceSummary } from '../../../../shared/query-evidence/query-evidence-summary/query-evidence-summary';
@@ -125,6 +126,11 @@ export class AnswerView {
    * "Data used". Off, the answer renders exactly as before.
    */
   readonly queryInspector = input(false);
+  /**
+   * The question this answer replies to, when the host knows it. A number the
+   * answer repeats from it ("the top 100") gets no figure chip.
+   */
+  readonly question = input<string | null>(null);
 
   /** The answer body with a chip after each figure (inspector mode only). */
   readonly inspectorBody = computed<SafeHtml>(() => {
@@ -133,6 +139,7 @@ export class AnswerView {
       renderMarkdown(msg.content),
       figureIndex(msg.data),
       sampleQueriesOf(msg.evidence),
+      questionNumbers(this.question()),
     );
     // Sanitized first; only code-made integers and labels were added after.
     return this.sanitizer.bypassSecurityTrustHtml(html);

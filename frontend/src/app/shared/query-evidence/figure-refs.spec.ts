@@ -1,5 +1,5 @@
 import { ToolDataRecord } from '../../features/sessions/models/session.model';
-import { figureIndex, findFigures, linkFigures } from './figure-refs';
+import { figureIndex, findFigures, linkFigures, questionNumbers } from './figure-refs';
 
 function rec(rows: Record<string, unknown>[], extra: Partial<ToolDataRecord> = {}): ToolDataRecord {
   return { tool: 'run_readonly_sql', rows, rowCount: rows.length, ...extra };
@@ -50,6 +50,17 @@ describe('figure-refs', () => {
   it('finds every query that holds a value, in Q order', () => {
     const data = [rec([{ n: 1204 }]), rec([{ n: 1204 }])];
     expect(queriesFor('1,204', data)).toEqual([[0, 1]]);
+  });
+
+  it('gives no chip to a whole number the question named', () => {
+    const data = [rec([{ starts: 100 }, { starts: 440 }, { year: 2018 }])];
+    const index = figureIndex(data);
+    const asked = questionNumbers('Which 100 drivers had the most starts in 2018?');
+    expect(asked).toEqual([100, 2018]);
+    expect(findFigures('the top 100 in 2018: 440 starts', index, asked).map((f) => f.text)).toEqual(['440']);
+    expect(findFigures('the top 100', index).map((f) => f.text)).toEqual(['100']);
+    // Only a bare whole number is an echo of the question.
+    expect(findFigures('100% and 100.0', index, asked).map((f) => f.text)).toEqual(['100%', '100.0']);
   });
 
   it('never matches an identifier or a rank column', () => {
