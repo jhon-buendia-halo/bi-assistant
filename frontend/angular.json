@@ -30,10 +30,12 @@
               }
             ],
             "styles": [
-              "@fontsource/noto-sans/latin-400.css",
-              "@fontsource/noto-sans/latin-500.css",
-              "@fontsource/noto-sans/latin-600.css",
-              "@fontsource/noto-sans/latin-700.css",
+              "@fontsource/inter-tight/latin-300.css",
+              "@fontsource/inter-tight/latin-400.css",
+              "@fontsource/inter-tight/latin-500.css",
+              "@fontsource/inter-tight/latin-600.css",
+              "@fontsource/inter-tight/latin-700.css",
+              "@fontsource/fraunces/latin-800.css",
               "src/styles.scss"
             ]
           },
@@ -92,10 +94,12 @@
               }
             ],
             "styles": [
-              "@fontsource/noto-sans/latin-400.css",
-              "@fontsource/noto-sans/latin-500.css",
-              "@fontsource/noto-sans/latin-600.css",
-              "@fontsource/noto-sans/latin-700.css",
+              "@fontsource/inter-tight/latin-300.css",
+              "@fontsource/inter-tight/latin-400.css",
+              "@fontsource/inter-tight/latin-500.css",
+              "@fontsource/inter-tight/latin-600.css",
+              "@fontsource/inter-tight/latin-700.css",
+              "@fontsource/fraunces/latin-800.css",
               "src/styles.scss"
             ]
           }

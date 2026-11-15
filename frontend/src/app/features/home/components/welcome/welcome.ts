@@ -34,9 +34,9 @@ interface WelcomeStep {
         <header>
           <h2
             id="welcome-title"
-            class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+            class="display-title text-[28px] leading-9 text-fg-strong"
           >
-            Welcome to Agentic Hub
+            Welcome to <span class="display-accent">Halo Powered</span>
           </h2>
           <p class="mt-1 text-[14px] leading-5 text-fg-muted">
             Run a workflow on your data and read the result, with the steps and

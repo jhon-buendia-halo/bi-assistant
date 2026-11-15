@@ -13,6 +13,7 @@ import {
   BadgeCheck,
   BarChart3,
   Copy,
+  Database,
   FileArchive,
   Info,
   Loader2,
@@ -73,6 +74,7 @@ export class AnswerView {
   readonly BadgeCheck = BadgeCheck;
   readonly BarChart3 = BarChart3;
   readonly Copy = Copy;
+  readonly Database = Database;
   readonly FileArchive = FileArchive;
   readonly Info = Info;
   readonly Loader2 = Loader2;

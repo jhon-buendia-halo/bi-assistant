@@ -182,11 +182,11 @@ test('has no automatically detectable accessibility violations on any screen in 
 });
 
 test('text in the app can be selected', async ({ page }) => {
-  const heading = page.getByRole('heading', { name: 'Welcome to Agentic Hub' });
+  const heading = page.getByRole('heading', { name: 'Welcome to Halo Powered' });
   await heading.click({ clickCount: 3 });
   expect(
     await page.evaluate(() => window.getSelection()?.toString()),
-  ).toContain('Welcome to Agentic Hub');
+  ).toContain('Welcome to Halo Powered');
   await evidence(page, '1.20.5', 'text-selected.png');
   expect(
     await heading.evaluate((el) => getComputedStyle(el).userSelect),

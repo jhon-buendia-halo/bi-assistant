@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   HostListener,
+  computed,
   effect,
   inject,
   signal,
@@ -43,6 +44,7 @@ import { SessionsState } from './features/sessions/services/sessions-state';
 import { SettingsContent } from './features/settings/components/settings-content/settings-content';
 import { SettingsNav } from './features/settings/components/settings-nav/settings-nav';
 import { WorkflowsArea } from './features/workflows/components/workflows-area/workflows-area';
+import { AppLogo } from './shared/components/app-logo/app-logo';
 import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
@@ -55,7 +57,7 @@ const RIGHT_PANEL_RESIZE_STEP = 24;
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 
 /**
- * The shell: the navigation rail, the banner, the right-panel host and the
+ * The shell: the navigation rail, the header, the right-panel host and the
  * switch between the area containers (each area's state, handlers and template
  * live under features/<area>/, see specs/system/tech-stack.md).
  */
@@ -64,6 +66,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
   imports: [
     NgTemplateOutlet,
     LucideAngularModule,
+    AppLogo,
     BackendStatusBanner,
     ToastContainer,
     SystemLogsPanel,
@@ -125,6 +128,13 @@ export class App {
    * Expanded unless the user last collapsed it (R2, R50).
    */
   readonly navExpanded = this.uiPreferences.navExpanded;
+
+  /** The open area's name, shown after "Halo Powered" in the header; none on the home view. */
+  readonly areaLabel = computed(() => {
+    const area = this.shell.currentArea();
+    if (area === 'settings') return 'Settings';
+    return this.railItems.find((item) => item.area === area)?.label ?? null;
+  });
 
   constructor() {
     // Selecting a datasource element reveals its details in the right panel.

@@ -17,9 +17,9 @@ const {
 } = require("./stale-backend.cjs");
 
 const APP_DISPLAY_NAME = "Halo BI Assistant";
-// The window shows the Agentic Hub product name; the OS app name, installers
+// The window shows the Halo Powered product name; the OS app name, installers
 // and data directory keep APP_DISPLAY_NAME (app-shell R33).
-const WINDOW_TITLE = "Agentic Hub";
+const WINDOW_TITLE = "Halo Powered";
 // The productName every release before the rename shipped with.
 const LEGACY_APP_NAME = "Questions to Insights";
 const DEV_URL = process.env.ELECTRON_DEV_URL;
@@ -759,8 +759,8 @@ function resolveAppIcon() {
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
-// Frame colour per theme, under the gradient (specs/system/ui.md §6.0).
-const THEME_CANVAS = { light: "#0077a0", dark: "#003a52" };
+// Canvas colour per theme (specs/system/ui.md §6.0).
+const THEME_CANVAS = { light: "#f2f2f0", dark: "#1c1c1c" };
 
 function createWindow() {
   const win = new BrowserWindow({

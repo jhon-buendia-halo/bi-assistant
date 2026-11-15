@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import {
   Copy,
   Database,
+  FolderKanban,
   LucideAngularModule,
   PanelRight,
   Workflow,
@@ -24,6 +25,7 @@ export class SessionsHeader {
 
   readonly Copy = Copy;
   readonly Database = Database;
+  readonly FolderKanban = FolderKanban;
   readonly PanelRight = PanelRight;
   readonly Workflow = Workflow;
   readonly datasourceKindLabel = kindLabel;
