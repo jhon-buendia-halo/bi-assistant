@@ -512,6 +512,13 @@ A user of Answer a Business Question could not tell how its queries were built a
 - **Acceptance:** `workflow-runs.spec.ts` with `@demo @story-1.25.4`: run a question, see a chip after a figure and the coverage line, open the query from the chip, read its last step, switch to Result and SQL, copy the SQL, close with Escape and get the focus back on the chip; the Playwright specs listed in plan section 4 pass with the new copy; the designer and inspector unit tests of plan 1.25.4.
 - **Notes:** UI story. Wave 2, after 1.25.2, parallel with 1.25.3. The stub model's reply to the explainer is no JSON object, so the scenario reads the code-built steps (Start from, Show).
 
+#### 1.25.5 — The run detail page hosts the inspector  `📋 Planned`
+- **Intent:** a stored run of Answer a Business Question opened from the Runs page shows the same figure chips, coverage line, query rows and inspector as the Run panel, so a past answer can be checked the same way.
+- **Scope:** `features/runs/components/run-detail/`: the answer view in inspector mode for a run of Answer a Business Question (with its question), `prepare()` once when the run is shown, an adapter of `QUERY_EVIDENCE_API` over the run shown (the same endpoints 139 to 143), and the inspector as a sheet at the right of the page (at most 720 px, the rules of plan section 3b for focus and Escape); ui.md (the run detail page), the workflows spec's rule for the inspector.
+- **Out of scope:** the backend; a user agent's Try it, past chats and the Data Readiness Agent; any change to the inspector component beyond what a second host needs.
+- **Acceptance:** `run-detail.spec.ts`: a stored run of Answer a Business Question shows chips and query rows and opens the inspector from a row; a run of another workflow renders as before; `prepare` is called once per run shown.
+- **Notes:** found on 2026-11-15 while checking the real app: the Runs page opens a stored run on this page, not on the workflow page. UI story; its Playwright check is one step added to 1.25.4's scenario (open the run from the Runs page and see a chip).
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
