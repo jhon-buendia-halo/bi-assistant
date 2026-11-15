@@ -10,11 +10,25 @@
       Chat
     </h3>
     @if (designer.runResult() !== null && !designer.running()) {
+      <!-- Run again: the composer opens with the shown run's whole input -->
+      @if (designer.canRunAgain()) {
+        <button
+          type="button"
+          data-testid="workflow-run-again"
+          title="Run again with this run's input"
+          (click)="designer.runAgain()"
+          class="btn btn-ghost px-2.5 py-1 ml-auto"
+        >
+          <lucide-angular [img]="RotateCcw" [size]="13" />
+          <span>Run again</span>
+        </button>
+      }
       <button
         type="button"
         data-testid="workflow-run-new"
         (click)="designer.newQuestion()"
-        class="btn btn-ghost px-2.5 py-1 ml-auto"
+        class="btn btn-ghost px-2.5 py-1"
+        [class.ml-auto]="!designer.canRunAgain()"
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
         <span>New question</span>
@@ -351,13 +365,22 @@
                     [attr.aria-required]="field.required ? 'true' : null"
                     [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
                     [attr.aria-describedby]="describedBy(field.name)"
-                    [value]="designer.inputValue(field.name)"
                     (change)="onInput(field.name, $event)"
                     class="field"
                   >
-                    <option value="">Select a dataset</option>
+                    <!-- Each option marks itself selected: a [value] on the
+                         select would apply before its options exist (a form
+                         opened already holding a dataset, e.g. Run again). -->
+                    <option value="" [selected]="designer.inputValue(field.name) === ''">
+                      Select a dataset
+                    </option>
                     @for (dataset of datasetChoices(field); track dataset.name) {
-                      <option [value]="dataset.name">{{ dataset.name }}</option>
+                      <option
+                        [value]="dataset.name"
+                        [selected]="dataset.name === designer.inputValue(field.name)"
+                      >
+                        {{ dataset.name }}
+                      </option>
                     }
                   </select>
                   @if (fieldError(field.name); as message) {

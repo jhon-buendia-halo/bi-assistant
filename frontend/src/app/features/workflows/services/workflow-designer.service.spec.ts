@@ -151,24 +151,68 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.execute();
   }
 
-  it('asks for the run form with an earlier run\'s input after Run again (plan 1.24.11)', () => {
-    designer.prefillRunAgain({
-      question: 'Which team scored the most goals?',
-      datasets: ['World Cup Core'],
-      verbose: true,
-    });
+  it('shows a run opened from Runs with its input in the form, without asking for the form (R19)', () => {
+    designer.showRunOnLoad(
+      storedRun({
+        input: {
+          question: 'Which team scored the most goals?',
+          datasets: ['World Cup Core'],
+          verbose: true,
+        },
+      }),
+    );
     designer.load(ASSISTANT.id);
     http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(designer.runFormRequest()).toBe(1);
+    expect(designer.runResult()?.runId).toBe('run-1');
+    expect(designer.runFormRequest()).toBe(0);
     expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
     expect(designer.picked('datasets')).toEqual(['World Cup Core']);
     expect(designer.checked('verbose')).toBeTrue();
-    // A second open starts from the defaults again.
+    // A second open starts from the defaults again, with no run.
     designer.load(ASSISTANT.id);
     http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    expect(designer.runResult()).toBeNull();
+    expect(designer.inputValues()).toEqual({ verbose: false });
+  });
+
+  it('Run again drops the run shown and opens the form with its whole input (R19)', () => {
+    expect(designer.canRunAgain()).toBeFalse();
+    designer.showRunOnLoad(
+      storedRun({
+        input: { question: 'Goals by team?', datasets: ['World Cup Core'], verbose: true },
+      }),
+    );
+    designer.load(ASSISTANT.id);
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
+    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    // Its fields were changed meanwhile: Run again restores the run's input.
+    designer.setInput('question', 'Something else');
+    designer.toggleDataset('datasets', 'World Cup Core');
+    expect(designer.canRunAgain()).toBeTrue();
+    designer.runAgain();
+    expect(designer.runResult()).toBeNull();
+    expect(designer.run()).toBeNull();
+    expect(designer.canRunAgain()).toBeFalse();
+    expect(designer.inputValue('question')).toBe('Goals by team?');
+    expect(designer.picked('datasets')).toEqual(['World Cup Core']);
+    expect(designer.checked('verbose')).toBeTrue();
+    expect(designer.runFormRequest()).toBe(1);
+  });
+
+  it('Run again after a run started here uses that run\'s input; never while a run is going', () => {
+    executeQuestion();
+    expect(designer.canRunAgain()).toBeFalse();
+    designer.runAgain();
+    expect(designer.running()).toBeTrue();
     expect(designer.runFormRequest()).toBe(0);
+    runs.last.handlers.onDone!(storedRun());
+    designer.setInput('question', 'Changed');
+    designer.runAgain();
+    expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
+    expect(designer.picked('datasets')).toEqual(['World Cup Core']);
+    expect(designer.runFormRequest()).toBe(1);
   });
 
   it('starts the form from the defaults and loads the datasets to pick from', () => {
@@ -647,11 +691,10 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     designer.newQuestion();
     expect(designer.stateOpen()).toBeTrue();
 
+    executeQuestion();
+    runs.last.handlers.onDone!(storedRun());
     designer.stateOpen.set(false);
-    designer.prefillRunAgain({ question: 'Q', datasets: ['World Cup Core'] });
-    designer.load(ASSISTANT.id);
-    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
-    http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    designer.runAgain();
     expect(designer.stateOpen()).toBeTrue();
   });
 

@@ -16,6 +16,7 @@ import {
   LucideAngularModule,
   MessageSquare,
   MessageSquareReply,
+  RotateCcw,
   SendHorizontal,
   Square,
   SquarePen,
@@ -136,6 +137,7 @@ export class WorkflowRunChat {
   protected readonly Loader2 = Loader2;
   protected readonly MessageSquare = MessageSquare;
   protected readonly MessageSquareReply = MessageSquareReply;
+  protected readonly RotateCcw = RotateCcw;
   protected readonly SendHorizontal = SendHorizontal;
   protected readonly Square = Square;
   protected readonly SquarePen = SquarePen;

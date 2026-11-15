@@ -15,8 +15,8 @@ import { WorkflowsNavState } from '../../workflows/services/workflows-nav-state'
 export type RunsTab = 'runs' | 'past-chats';
 
 /**
- * The Runs area's state: the run history, the open run, and Run again. Past
- * chats keep `SessionsState`.
+ * The Runs area's state: the run history and opening a run (on its
+ * workflow's page, else read-only). Past chats keep `SessionsState`.
  */
 @Injectable({ providedIn: 'root' })
 export class RunsState {
@@ -35,11 +35,8 @@ export class RunsState {
   readonly activeRun = signal<WorkflowRun | null>(null);
   readonly loadingRun = signal(false);
   readonly runError = signal<string | null>(null);
-  /**
-   * Run again is offered only once the open run's workflow is found in the
-   * catalogue (api.md 117): a run of a removed workflow reads as a plain run.
-   */
-  readonly canRunAgain = signal(false);
+  /** The run being opened, until it shows; a newer open or view replaces it. */
+  private opening: string | null = null;
 
   /** The open run's title as the Runs list shows it. */
   readonly activeTitle = computed(() => {
@@ -75,39 +72,60 @@ export class RunsState {
       });
   }
 
-  /** A row of the Runs list, or a Monitoring run, opens its stored run. */
+  /**
+   * A row of the Runs list, or a Monitoring run, opens its stored run
+   * (workflows R19): on its workflow's page, drawn with that run, while the
+   * workflow is in the catalogue and the run has ended; read-only here
+   * otherwise (a removed workflow's run, R23, or one still running).
+   */
   openRun(id: string): void {
     if (!this.shell.confirmLeaveAgentEditor()) return;
     this.shell.settingsOpen.set(false);
     this.activeRun.set(null);
     this.runError.set(null);
-    this.canRunAgain.set(false);
     this.loadingRun.set(true);
+    this.opening = id;
     this.tab.set('runs');
     this.shell.mainView.set('run-detail');
     this.api.getRun(id).subscribe({
       next: (run) => {
-        this.activeRun.set(run);
-        this.loadingRun.set(false);
-        this.checkWorkflow(run);
+        if (!this.stillOpening(id)) return;
+        if (run.status === 'running') this.showReadOnly(run);
+        else this.openInWorkflow(run);
       },
       error: (err) => {
+        if (!this.stillOpening(id)) return;
+        this.opening = null;
         this.runError.set(err?.error?.message ?? 'Backend unreachable');
         this.loadingRun.set(false);
       },
     });
   }
 
-  /** Whether the run's workflow is still in the catalogue: Run again shows. */
-  private checkWorkflow(run: WorkflowRun): void {
+  private stillOpening(id: string): boolean {
+    return this.opening === id && this.shell.mainView() === 'run-detail';
+  }
+
+  /** Its workflow's page shows the run, if the catalogue still has it. */
+  private openInWorkflow(run: WorkflowRun): void {
     this.workflowsApi.getWorkflow(run.workflowId).subscribe({
       next: () => {
-        if (this.activeRun()?.id === run.id) this.canRunAgain.set(true);
+        if (!this.stillOpening(run.id)) return;
+        this.opening = null;
+        this.loadingRun.set(false);
+        this.designer.showRunOnLoad(run);
+        this.workflowsNav.openWorkflow(run.workflowId);
       },
       error: () => {
-        if (this.activeRun()?.id === run.id) this.canRunAgain.set(false);
+        if (this.stillOpening(run.id)) this.showReadOnly(run);
       },
     });
+  }
+
+  private showReadOnly(run: WorkflowRun): void {
+    this.opening = null;
+    this.activeRun.set(run);
+    this.loadingRun.set(false);
   }
 
   /** Back to the Runs list. */
@@ -142,23 +160,5 @@ export class RunsState {
         this.toast.error(err?.error?.message ?? 'Backend unreachable');
       },
     });
-  }
-
-  /**
-   * A run waiting for the user's answer (api.md 138): its workflow opens with
-   * that run loaded, where the waiting card is.
-   */
-  answerInWorkflow(run: WorkflowRun): void {
-    this.designer.showRunOnLoad(run);
-    this.workflowsNav.openWorkflow(run.workflowId);
-  }
-
-  /**
-   * Run again with this input: the run's workflow opens on its Run tab with
-   * the form filled in; the user presses Run.
-   */
-  runAgain(run: WorkflowRun): void {
-    this.designer.prefillRunAgain(run.input);
-    this.workflowsNav.openWorkflow(run.workflowId);
   }
 }

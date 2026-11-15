@@ -315,7 +315,8 @@ test(
         .getByRole('button', { name: 'Runs', exact: true })
         .click();
       await page.getByTestId(`run-${runId}`).getByRole('button').first().click();
-      await expect(page.getByTestId('run-detail-answer')).toContainText(ANSWER);
+      // The run opens on its workflow's page, its answer in the Run panel's Chat.
+      await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
     });
     await scenarioStep(page, 'When I click Generate interactive visuals', async () => {
       await page
@@ -325,7 +326,7 @@ test(
     await scenarioStep(page, 'Then the visual opens under the answer at version 1', async () => {
       await expect(runVisual.locator('iframe[title="Interactive visualization"]')).toBeVisible();
       await expect(versionButton).toHaveText(/v1/);
-      await expect(page.getByTestId('run-detail-answer')).toContainText(
+      await expect(page.getByTestId('workflow-run-chat-log')).toContainText(
         `Created ${VISUAL_TITLE}`,
       );
     });
@@ -336,7 +337,7 @@ test(
     });
     await scenarioStep(page, 'Then it is version 2', async () => {
       await expect(versionButton).toHaveText(/v2/);
-      await expect(page.getByTestId('run-detail-answer')).toContainText(
+      await expect(page.getByTestId('workflow-run-chat-log')).toContainText(
         `Updated ${VISUAL_TITLE}`,
       );
     });
@@ -350,7 +351,7 @@ test(
     });
     await scenarioStep(page, 'Then version 1 is current again', async () => {
       await expect(versionButton).toHaveText(/v1/);
-      await expect(page.getByTestId('run-detail-answer')).toContainText(
+      await expect(page.getByTestId('workflow-run-chat-log')).toContainText(
         `Reverted ${VISUAL_TITLE}`,
       );
     });
