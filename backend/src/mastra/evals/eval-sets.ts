@@ -33,6 +33,8 @@ import {
   dataQualityCheckEvalTarget,
   imageReaderEvalTarget,
 } from './isolated-call-targets';
+import { DATA_QUALITY_CHECK_EVAL_SET } from './data-quality-check.evals';
+import { READINESS_WORKFLOW_EVAL_SET } from './readiness-workflow.evals';
 import {
   READINESS_WORKFLOW_EVAL_TARGET,
   readinessWorkflowEvalTarget,
@@ -47,6 +49,8 @@ import {
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...ASSISTANT_EVAL_SETS,
   DATA_READINESS_EVAL_SET,
+  DATA_QUALITY_CHECK_EVAL_SET,
+  READINESS_WORKFLOW_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
   QUERY_EXPLAINER_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
