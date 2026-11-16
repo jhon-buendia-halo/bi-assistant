@@ -305,11 +305,11 @@ roadmap.md:508-513  #### 1.25.4 — The inspector and its Run panel host  `✅ D
 roadmap.md:515-520  #### 1.25.5 — The run detail page hosts the inspector  `✅ Done`
 roadmap.md:522-527  #### 1.25.6 — An answer that lists more than 50 rows shows all of them  `✅ Done`
 roadmap.md:529-534  #### 1.25.7 — Validate fails an attempt that rests on a sample  `✅ Done`
-roadmap.md:536-541  #### 1.25.8 — The SQL bridge flags a result as cut only when rows were dropped  `🚧 In progress`
-roadmap.md:543-548  #### 1.25.9 — Answer evidence for a session's message and for a draft run  `🚧 In progress`
-roadmap.md:550-555  #### 1.25.10 — Past chats host the inspector  `🚧 In progress`
-roadmap.md:557-562  #### 1.25.11 — Try it hosts the inspector  `🚧 In progress`
-roadmap.md:564-569  #### 1.25.12 — Evals for the query explainer  `🚧 In progress`
+roadmap.md:536-541  #### 1.25.8 — The SQL bridge flags a result as cut only when rows were dropped  `✅ Done`
+roadmap.md:543-548  #### 1.25.9 — Answer evidence for a session's message and for a draft run  `✅ Done`
+roadmap.md:550-555  #### 1.25.10 — Past chats host the inspector  `✅ Done`
+roadmap.md:557-562  #### 1.25.11 — Try it hosts the inspector  `✅ Done`
+roadmap.md:564-569  #### 1.25.12 — Evals for the query explainer  `✅ Done`
 roadmap.md:571-575  ## Release 2 — Multi-user  (no target date yet)
 roadmap.md:575-575  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
 roadmap.md:577-579  ## Backlog
