@@ -551,6 +551,7 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'formula-1',
       'intellify',
       'us-health',
+      'edge-cases',
       'world-cup-rest',
       'register-only',
     ]);

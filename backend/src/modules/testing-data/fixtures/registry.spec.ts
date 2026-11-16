@@ -108,4 +108,109 @@ describe('sample fixture catalogue', () => {
       expect(new Set(names).size).toBe(names.length);
     });
   });
+
+  describe('edge-cases', () => {
+    const fixture = findFixture('edge-cases')!;
+    const sql = seedSql(fixture.seedFile as string);
+    const statements = splitSqlStatements(sql);
+
+    it('owns schema edge_cases in its own database, as a plain SQL seed', () => {
+      expect(fixture).toMatchObject({
+        name: 'Edge Cases',
+        schema: 'edge_cases',
+        seedFile: '005_edge_cases.sql',
+        datasourceName: 'Edge Cases PostgreSQL',
+        datasetName: 'Edge Cases',
+      });
+      expect(fixture.defaults.database).toBe('edge_cases');
+      expect(fixture.requiredTables).toHaveLength(19);
+      expect(sql).toMatch(/^DROP SCHEMA IF EXISTS edge_cases CASCADE;$/m);
+    });
+
+    it('sits after US Health and before the register-only REST sample', () => {
+      const ids = SAMPLE_FIXTURES.map((sample) => sample.id);
+      expect(ids.indexOf('edge-cases')).toBe(ids.indexOf('us-health') + 1);
+      expect(ids[ids.length - 1]).toBe('world-cup-rest');
+    });
+
+    it('generates the data in SQL, identically on every load', () => {
+      // No clock and no unseeded randomness: rows come from generate_series
+      // and md5-based expressions, so two loads hold the same data.
+      expect(sql).not.toMatch(
+        /\b(?:random|now|clock_timestamp|statement_timestamp|transaction_timestamp|gen_random_uuid)\s*\(|\b(?:current_date|current_timestamp|localtimestamp)\b/i,
+      );
+      expect(sql).toMatch(/generate_series\(1, 1000000\)/);
+    });
+
+    it('splits cleanly: no dollar quoting and no backslash-escaped quotes', () => {
+      expect(sql).not.toMatch(/\$[A-Za-z_]*\$/);
+      expect(sql).not.toMatch(/\\'/);
+      // Every statement starts with a known keyword, so a quote the splitter
+      // misread would show up as a fragment here.
+      const bare = statements.map((statement) =>
+        statement.replace(/^(?:\s*--[^\n]*\n)+/, '').trim(),
+      );
+      const odd = bare.filter(
+        (statement) =>
+          !/^(?:DROP|CREATE|INSERT|ALTER|COMMENT|REFRESH|ANALYZE|UPDATE)\s/i.test(
+            statement,
+          ),
+      );
+      expect(odd).toEqual([]);
+    });
+
+    it('qualifies every statement, so it does not depend on search_path', () => {
+      const unqualified = statements.filter((statement) => {
+        const match =
+          /^(?:CREATE (?:OR REPLACE )?(?:MATERIALIZED )?(?:TABLE|VIEW|TYPE|INDEX \S+ ON|FUNCTION)|INSERT INTO|ALTER TABLE|REFRESH MATERIALIZED VIEW|COMMENT ON (?:TABLE|COLUMN|VIEW|MATERIALIZED VIEW))\s+("?[\w]+"?)(\.)?/i.exec(
+            statement.replace(/^(?:\s*--[^\n]*\n)+/, '').trim(),
+          );
+        return (
+          match !== null &&
+          (match[1].replace(/"/g, '') !== 'edge_cases' || !match[2])
+        );
+      });
+      expect(unqualified).toEqual([]);
+      expect(statements.some((s) => /^SET\s+search_path/im.test(s))).toBe(
+        false,
+      );
+    });
+
+    it('carries the awkward names the spec documents', () => {
+      for (const name of [
+        '"Order Notes"',
+        '"CustomerTier"',
+        '"order"',
+        '"group"',
+        '"select"',
+        '"user"',
+        '"año"',
+        '"región"',
+        '"discount_%"',
+        '"ship-to"',
+        'matching_rows',
+        'edge_cases."LegacyOrders"',
+      ]) {
+        expect(sql).toContain(name);
+      }
+      expect(sql).toMatch(/CREATE TYPE edge_cases\.order_status AS ENUM/);
+      expect(sql).toMatch(
+        /REFRESH MATERIALIZED VIEW edge_cases\.mv_daily_sales/,
+      );
+      // A declared foreign key that existing rows violate (orphans).
+      expect(sql).toMatch(/FOREIGN KEY \(order_id\)[\s\S]*?NOT VALID/);
+    });
+
+    it('has a wide table of at least 60 columns', () => {
+      const body =
+        /CREATE TABLE edge_cases\.customer_profile_wide \(([\s\S]*?)\n\);/.exec(
+          sql,
+        )?.[1];
+      const columns =
+        (body ?? '').match(
+          /(?:^|,)\s*[a-z][a-z_0-9]* (?:text|integer|bigint|smallint|boolean|date|timestamptz|double precision|numeric\(\d+,\d+\))/g,
+        ) ?? [];
+      expect(columns.length).toBeGreaterThanOrEqual(60);
+    });
+  });
 });

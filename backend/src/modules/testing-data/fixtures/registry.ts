@@ -339,12 +339,64 @@ const US_HEALTH: SampleFixture = {
   ],
 };
 
+/**
+ * A retail store built to break things: a million-row table, awkward names,
+ * awkward values and every data-quality problem the readiness engine scores.
+ * Each edge case and where it lives is listed in the testing-data spec.
+ */
+const EDGE_CASES: SampleFixture = {
+  id: 'edge-cases',
+  name: 'Edge Cases',
+  description:
+    'An e-commerce store built to break things, synthetic data — ' +
+    '1,000,000 order lines, a 65-column table, an empty and a one-row table, ' +
+    'odd column names (spaces, MixedCase, reserved words, accents, %), ' +
+    'NULLs, NaN, huge numbers, far dates, duplicates, orphans, invalid ' +
+    'emails and phones, inconsistent spellings, outliers and ranking ties.',
+  // Plain SQL that generates its rows with generate_series and md5-based
+  // expressions, so every load holds the same data; hand-maintained.
+  seedFile: '005_edge_cases.sql',
+  schema: 'edge_cases',
+  defaults: {
+    host: SAMPLE_HOST,
+    port: SAMPLE_PORT,
+    database: 'edge_cases',
+    user: SAMPLE_USER,
+    password: SAMPLE_PASSWORD,
+    ssl: false,
+  },
+  datasourceName: 'Edge Cases PostgreSQL',
+  datasetName: 'Edge Cases',
+  requiredTables: [
+    'store_settings',
+    'categories',
+    'customers',
+    'customer_profile_wide',
+    'products',
+    'promotions',
+    'orders',
+    'order_lines',
+    'payments',
+    'shipments',
+    'returns',
+    'reviews',
+    'inventory_snapshots',
+    'gift_cards',
+    'LegacyOrders',
+    'v_order_totals',
+    'v_customer_ltv',
+    'v_product_revenue',
+    'mv_daily_sales',
+  ],
+};
+
 /** Every sample the app knows how to provision, in panel order. */
 export const SAMPLE_FIXTURES: SampleFixture[] = [
   WORLD_CUP,
   FORMULA_1,
   INTELLIFY,
   US_HEALTH,
+  EDGE_CASES,
   WORLD_CUP_REST,
 ];
 

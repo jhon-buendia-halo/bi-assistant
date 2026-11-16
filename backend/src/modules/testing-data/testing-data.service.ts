@@ -26,7 +26,7 @@ const UNDEFINED_DATABASE = '3D000';
 const MAINTENANCE_DATABASE = 'postgres';
 
 /** The seed is a few hundred statements; give it room but not forever. */
-const SEED_TIMEOUT_MS = 120_000;
+export const SEED_TIMEOUT_MS = 120_000;
 const CONNECT_TIMEOUT_MS = 8_000;
 
 /** Connection the panel submits. `password` never leaves the backend again. */
@@ -380,7 +380,7 @@ function describeFixture(
  * `modules/testing-data/fixtures/**` into `dist`), so the same relative path
  * resolves from `src` under ts-jest and from `dist` in a packaged app.
  */
-function readFixtureSql(fixture: SampleFixture): string {
+export function readFixtureSql(fixture: SampleFixture): string {
   const seedFile = fixture.seedFile as string;
   const raw = readFileSync(join(__dirname, 'fixtures', seedFile));
   // Large samples ship gzipped — a full dump is an order of magnitude smaller
@@ -425,7 +425,10 @@ const SEED_BATCH_STATEMENTS = 50;
  * own output with BEGIN/COMMIT, which would nest here — those are dropped and
  * the transaction is managed once, around everything.
  */
-async function seedInBatches(client: Client, sql: string): Promise<void> {
+export async function seedInBatches(
+  client: Client,
+  sql: string,
+): Promise<void> {
   const statements = splitSqlStatements(sql).filter(
     (statement) => !isTransactionControl(statement),
   );
