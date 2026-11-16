@@ -246,6 +246,26 @@ describe('result-view: preparePage validates against the stored record', () => {
     }
   });
 
+  it('takes the empty text as a value of a text column for is, is not and lists', () => {
+    for (const filter of [
+      { column: 'country', op: 'eq', value: '' },
+      { column: 'country', op: 'neq', value: '' },
+      { column: 'country', op: 'in', values: ['', 'Brazil'] },
+    ] as const) {
+      expect(
+        preparePage(SOURCE, { filters: [filter as never] }).statement.filters,
+      ).toEqual([filter]);
+    }
+    // A number column has no empty text.
+    expect(
+      errorOf(() =>
+        preparePage(SOURCE, {
+          filters: [{ column: 'goals', op: 'eq', value: '' }],
+        }),
+      ),
+    ).toBe('Filter on goals: eq needs a value');
+  });
+
   it('coerces each value by its column kind', () => {
     const { statement } = preparePage(SOURCE, {
       filters: [

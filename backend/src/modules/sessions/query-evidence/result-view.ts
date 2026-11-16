@@ -272,9 +272,22 @@ function coerce(
   }
 }
 
-/** A filter's value is there: a plain value, not an empty string. */
-function present(value: unknown): value is FilterValue {
-  return isFilterValue(value) && value !== '';
+/** The ops for which an empty string is a value of its own (not NULL). */
+const EMPTY_TEXT_OPS: readonly FilterOp[] = ['eq', 'neq', 'in', 'not_in'];
+
+/**
+ * A filter's value is there: a plain value; an empty string only where it
+ * means a value of its own, the empty text of a text column (`gift_message
+ * is ""` differs from `is empty`, NULL).
+ */
+function present(
+  value: unknown,
+  op: FilterOp,
+  kind: ColumnKind,
+): value is FilterValue {
+  if (!isFilterValue(value)) return false;
+  if (value !== '') return true;
+  return (kind === 'text' || kind === 'unknown') && EMPTY_TEXT_OPS.includes(op);
 }
 
 function checkFilter(
@@ -288,7 +301,8 @@ function checkFilter(
   if (VALUELESS_FILTER_OPS.includes(op)) return { column, op };
   if (LIST_OPS.includes(op)) {
     const values = filter.values ?? [];
-    if (!values.length || !values.every(present)) needsValue();
+    if (!values.length || !values.every((v) => present(v, op, kind)))
+      needsValue();
     if (values.length > FILTER_VALUES_MAX) {
       bad(
         `Filter on ${column}: ${op} takes at most ${FILTER_VALUES_MAX} values`,
@@ -300,10 +314,10 @@ function checkFilter(
       values: values.map((v) => coerce(column, op, kind, v)),
     };
   }
-  if (!present(filter.value)) needsValue();
+  if (!present(filter.value, op, kind)) needsValue();
   const value = coerce(column, op, kind, filter.value as FilterValue);
   if (op !== 'between') return { column, op, value };
-  if (!present(filter.valueTo)) needsValue();
+  if (!present(filter.valueTo, op, kind)) needsValue();
   return {
     column,
     op,
