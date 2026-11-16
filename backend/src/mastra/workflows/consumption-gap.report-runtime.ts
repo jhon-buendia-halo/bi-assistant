@@ -72,7 +72,9 @@ export const GAP_REPORT_RUNTIME = `(function () {
   }
 
   function plural(count, noun) {
-    return count + ' ' + noun + (count === 1 ? '' : 's');
+    // A noun ending in s, x, z, ch or sh takes 'es' (fix → fixes).
+    var suffix = /(s|x|z|ch|sh)$/.test(noun) ? 'es' : 's';
+    return count + ' ' + noun + (count === 1 ? '' : suffix);
   }
 
   function statusChip(status) {

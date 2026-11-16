@@ -62,6 +62,25 @@ describe('gapReportTitle', () => {
   });
 });
 
+describe('the runtime plural', () => {
+  it('writes fixes, edges and checks, and one of each', () => {
+    const source = /function plural\(count, noun\) \{[\s\S]*?\n {2}\}/.exec(
+      GAP_REPORT_RUNTIME,
+    )?.[0];
+    expect(source).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const make = new Function(`${source}; return plural;`) as () => (
+      count: number,
+      noun: string,
+    ) => string;
+    const plural = make();
+    expect(plural(5, 'fix')).toBe('5 fixes');
+    expect(plural(43, 'edge')).toBe('43 edges');
+    expect(plural(1, 'fix')).toBe('1 fix');
+    expect(plural(2, 'check')).toBe('2 checks');
+  });
+});
+
 describe('renderGapReportBundle', () => {
   const bundle = renderGapReportBundle(SAMPLE_GAP_REPORT);
 
