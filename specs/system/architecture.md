@@ -1129,7 +1129,7 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs a workflow engine that pauses a step on a typed payload and continues the same run with a typed answer, and a store of the paused run (in memory, with an expiry, or persisted).
 
 #### ADR-0044 — Halo Powered rebrand: n8n-style flat shell, halopowered.com palette and type, HALO wordmark
-- **Status:** Accepted; supersedes the token values and the Noto Sans choice of ADR-0007 (the token mechanism and the System / Light / Dark preference stay)
+- **Status:** Accepted; supersedes the token values and the Noto Sans choice of ADR-0007 (the token mechanism and the System / Light / Dark preference stay); its *Name* superseded by ADR-0046
 - **Date:** 2026-11-15
 - **Context:**
   - Ownership of the app moved from Mercer to Halo. Mercer branding (the "US Health Agentic Hub" name, the teal textured frame and photo banner, the LenAI badge, the Figma-exported brand assets) must not ship.
@@ -1159,8 +1159,8 @@ flowchart LR
   - The previous Mercer look (the "Agentic Hub" framed shell) must stay available alongside the Halo rebrand, for example for delivery to that client, without either brand leaking into the other's product: no names, images or assets of one in the other's bundle, installer or npm package.
 - **Decision:**
   - **One build, one brand.** `BRAND=halo|mercer` (default `halo`) picks the brand for every build: web bundle, Electron app and installer. The brand is not a runtime setting.
-  - **One folder per brand:** `frontend/brands/<id>/` holds `brand.json` (`id`, `osName`, `legacyOsName`, `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}`, `publishNpm`), `tokens.css` (the brand's Light and Dark values, including `--qti-font-sans`, `--qti-font-display`, `--qti-radius-card`, `--qti-radius-frame`, and for mercer the frame, banner and logo gradient tokens), `public/` (`favicon.ico`, `brand/favicon.svg`, `brand/icon.png`, and for mercer `brand/agentic-hub/`) and `art/app-icon.svg` (the source of `icon.png`). `frontend/public/` no longer exists; `src/styles/tokens.css` keeps only the shared `@theme inline` mapping.
-  - **Halo** ("Halo Powered"): the flat n8n-style shell of ADR-0044; OS name "Halo BI Assistant".
+  - **One folder per brand:** `frontend/brands/<id>/` holds `brand.json` (`id`, `osName`, `legacyOsName` (since ADR-0046 `legacyOsNames`, a list), `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}`, `publishNpm`), `tokens.css` (the brand's Light and Dark values, including `--qti-font-sans`, `--qti-font-display`, `--qti-radius-card`, `--qti-radius-frame`, and for mercer the frame, banner and logo gradient tokens), `public/` (`favicon.ico`, `brand/favicon.svg`, `brand/icon.png`, and for mercer `brand/agentic-hub/`) and `art/app-icon.svg` (the source of `icon.png`). `frontend/public/` no longer exists; `src/styles/tokens.css` keeps only the shared `@theme inline` mapping.
+  - **Halo** ("Halo Powered"): the flat n8n-style shell of ADR-0044; OS name "Halo BI Assistant" (product renamed "Halo Workbench" by ADR-0046).
   - **Mercer** ("Agentic Hub"): the pre-rebrand look restored exactly: framed shell (textured teal gradient frame, photo banner titled "US Health Agentic Hub", rounded panels), gradient logo circle and "Agentic Hub" in the rail, the "Powered by LenAI" badge, Noto Sans and the ADR-0007 token values. OS name "Agentic Hub", appId `com.halopowered.agentic-hub`, installer `Agentic-Hub-<version>-<os>-<arch>.<ext>`, its own userData folder so both apps install side by side, no legacy data migration. In both brands the Runs header icon, answer mark and Data used icon are lucide.
   - **Renderer:** `src/app/core/brand/` holds the `Brand` model (`id`, `productName`, `headerTitle`, `welcomeLead`, `welcomeName`, `shell` `flat|framed`, `poweredByLenai`, `art`), `brand.ts` (Halo, default) and `brand.mercer.ts`. The `mercer` Angular build configuration swaps `brand.ts` by `fileReplacements`, the styles (fonts and `brands/mercer/tokens.css`) and the assets (`brands/mercer/public`); `ng build -c production,mercer`. The shell template draws the flat or framed shell from `brand.shell`; `main.ts` sets the document title from the brand.
   - **Electron:** `scripts/brand.mjs` builds the web bundle (also writing `dist/frontend/browser/brand.json`) and copies the brand's `brand.json` to `frontend/electron/brand.json` (gitignored); `main.cjs` reads it for the app name, window title, legacy migration, per-theme window background and icon. `scripts/electron-dist.mjs` passes appId, product name, artifact name and icons to electron-builder.
@@ -1173,6 +1173,28 @@ flowchart LR
 - **Alternatives considered:**
   - **Brand chosen at runtime in Appearance:** rejected; every build would ship both brands' assets and four brand and theme combinations would need testing.
   - **The old palette as an extra colour theme only:** rejected; it does not restore the old look (framed shell, banner, names, badge, installer identity).
+
+#### ADR-0046 — The product is "Halo Workbench" in the app and the operating system
+- **Status:** Accepted; supersedes the *Name* of ADR-0044 and the halo OS name of ADR-0045
+- **Date:** 2026-11-15
+- **Context:**
+  - "Halo BI Assistant" described the first product: a chat that answers questions about data. The product has become a place to design and run agent workflows on one's own data (workflow designer, runs, agents as building blocks, data readiness, dashboard recreation), with every figure linked to its query. "BI" ties it to dashboards, which the product deliberately is not, and "Assistant" to the chat, which is retired.
+  - The UI said "Halo Powered" (the company) while the operating system said "Halo BI Assistant", so the product had two names.
+- **Decision:**
+  - **One name.** The `halo` brand's product is "Halo Workbench" everywhere: window and document title, header heading, rail brand (HALO wordmark, divider, "Workbench"), Settings build identity, welcome heading, OS app name (`osName`, electron-builder `productName`), executable, installer (`Halo-Workbench-<version>-<os>-<arch>.<ext>`) and data directory. "Halo Powered" stays the company and brand name (`BRAND=halo`, the Labs site).
+  - **Same identity.** The `appId` stays `com.halopowered.questions-to-insights`, so the one-click installer replaces an existing install instead of adding a second app.
+  - **Data stays where it is.** `brand.json` `legacyOsName` becomes `legacyOsNames`, newest first (`Halo BI Assistant`, `Questions to Insights`). When the profile (`userData`) or the Windows local data directory of the current name does not exist, the app uses the first earlier-named one that exists, in place; nothing is moved or copied.
+  - **Old backends still stop.** At startup the stale-backend check accepts the current executable name and each legacy name, so a backend orphaned by the previous release (`Halo BI Assistant.exe`) is stopped after the upgrade.
+  - **Unchanged:** the npm package (`@jhon-buendia-halo/questions-to-insights`), the web data directory (`~/.questions-to-insights`), the internal name "Questions to Insights", the Labs page's copy and subdomain.
+- **Consequences:**
+  - Specs, unit tests, E2E selectors and the application-shell screenshot that named "Halo Powered" or "Halo BI Assistant" as the product change with this ADR (app-shell R1, R7, R32, R33, R51, R57).
+  - An upgraded install keeps a data directory named after an earlier product name; it is invisible to the user and avoids a move that could fail half-way.
+  - The Start menu shortcut and install folder follow the new name; the previous release's uninstaller, which the installer runs first, removes the old ones.
+  - **Stack-neutral:** a rebuild needs a packaging identity that survives renames and a data-directory lookup that falls back to earlier names.
+- **Alternatives considered:**
+  - **Move the data to a folder of the new name:** rejected; a cross-device or locked-file failure half-way would split or lose data for no visible gain.
+  - **Rename only the UI and keep "Halo BI Assistant" in the OS:** rejected by the user; the product would keep two names.
+  - **New `appId`:** rejected; the new app would install beside the old one and start with an empty profile.
 
 ## Level 4 — Code
 

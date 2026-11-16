@@ -11,7 +11,7 @@ describe('Welcome', () => {
   it('explains the product in four steps', () => {
     const el: HTMLElement = create().nativeElement;
     expect(el.querySelector('h2')?.textContent).toContain(
-      'Welcome to Halo Powered',
+      'Welcome to Halo Workbench',
     );
     const steps = [...el.querySelectorAll('ol[aria-label="How it works"] li')];
     expect(steps.map((s) => s.querySelector('p')?.textContent?.trim())).toEqual(

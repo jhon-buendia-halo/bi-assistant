@@ -12,7 +12,7 @@ name: Build desktop installers
 #
 # The brand is chosen at build time (ADR-0045): the `brand` input (halo or
 # mercer) becomes BRAND for the build, which sets the app name, app id, icon and
-# installer name (Questions-to-Insights-*.exe or Agentic-Hub-*.exe). The
+# installer name (Halo-Workbench-*.exe or Agentic-Hub-*.exe). The
 # uploaded artifact carries the brand in its name. Tag pushes build halo.
 #
 # Publishing never needs a tag to exist up front. When the ref is not a v* tag
@@ -34,7 +34,7 @@ on:
         required: false
         default: false
       brand:
-        description: Brand to build (ADR-0045) — halo ships as "Halo BI Assistant", mercer as "Agentic Hub"
+        description: Brand to build (ADR-0045) — halo ships as "Halo Workbench", mercer as "Agentic Hub"
         type: choice
         options:
           - halo
@@ -85,7 +85,7 @@ jobs:
 
           # The only shipped installer (BA-302). Manual runs and tag pushes
           # both build exactly this. The installer glob matches every brand's
-          # artifactName (Questions-to-Insights-*.exe, Agentic-Hub-*.exe).
+          # artifactName (Halo-Workbench-*.exe, Agentic-Hub-*.exe).
           selected='[
             {"id":"windows-x64","name":"Windows x64","os":"windows-2022","target":"win","format":"nsis","arch":"x64","artifact":"questions-to-insights-windows-x64","installer":"frontend/release/*.exe"}
           ]'

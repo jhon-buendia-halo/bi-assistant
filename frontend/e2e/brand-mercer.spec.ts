@@ -3,7 +3,7 @@ import { builtBrand } from './helpers/brand';
 
 /**
  * The Agentic Hub (Mercer) build (ADR-0045). The rest of the suite runs on the
- * default Halo Powered build; this spec runs only on a BRAND=mercer web build:
+ * default Halo Workbench build; this spec runs only on a BRAND=mercer web build:
  *   BRAND=mercer npm run test:e2e -- e2e/brand-mercer.spec.ts
  * (then rebuild without BRAND before running anything else).
  */
@@ -20,7 +20,7 @@ test('@brand-mercer shows the Agentic Hub shell, names and badge', async ({ app,
   await expect(rail.getByRole('img', { name: 'Powered by LenAI' })).toBeVisible();
   // The framed shell: no Halo header crumb, no HALO wordmark.
   await expect(page.getByTestId('header-area')).toHaveCount(0);
-  await expect(page.getByRole('img', { name: 'Halo Powered' })).toHaveCount(0);
+  await expect(page.getByRole('img', { name: 'Halo Workbench' })).toHaveCount(0);
 
   await rail.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByTestId('app-version')).toHaveText(/^Agentic Hub v\d+\.\d+\.\d+$/);

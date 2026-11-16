@@ -1,6 +1,6 @@
 # App shell
 
-The app shell is the frame every other capability lives in: a navigation rail, a "Halo Powered" header, a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
+The app shell is the frame every other capability lives in: a navigation rail, a "Halo Workbench" header, a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
 
 ## Concepts
 
@@ -16,7 +16,7 @@ Capability-local vocabulary, used only for UI words:
 ## Rules
 
 Layout and navigation
-- R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Halo Powered" header above the main area and, when open, the details panel. In the default `halo` brand the shell is flat (ADR-0044; a `mercer` build differs, R56): the rail runs the full height beside the column, with no frame, gaps or rounded panels.
+- R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Halo Workbench" header above the main area and, when open, the details panel. In the default `halo` brand the shell is flat (ADR-0044; a `mercer` build differs, R56): the rail runs the full height beside the column, with no frame, gaps or rounded panels.
 - R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
 - R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Workflows**, **Agents**, **Artifacts**, **Runs** and **Monitoring**, in that order (**Runs** replaced **Sessions** on 2026-11-11, roadmap 1.23.21; **Artifacts** was added on 2026-11-15, [../workflows/spec.md](../workflows/spec.md) R33). Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Runs**, in a run or a past chat: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Workflows while a workflow's page is open, Datasets while the dataset editor is open, and Runs while a run, the composer or a chat is open. Choosing **Workflows** on a workflow's page SHALL return to the Workflows page ([workflows](../workflows/spec.md) R5, R7). Choosing **Runs** SHALL open the Runs page (R46), also from an open run, past chat or composer, and SHALL NOT change the drawer.
 - R3a. (Removed 2026-11-15.) The rail's **Context** item and its page are gone, with the User personas and Visuals library sections. Ontologies are edited only in the dataset editor's **Ontology** tab ([../dataset-ontology/spec.md](../dataset-ontology/spec.md)).
@@ -24,7 +24,7 @@ Layout and navigation
 - R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**; in the `halo` brand nothing follows them (the LenAI mark and "Powered by LenAI" were removed, ADR-0044; the `mercer` brand keeps the badge, R56). The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
 - R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
 - R6. Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: the Collapse sidebar and Expand sidebar controls.)
-- R7. In the `halo` brand the header (the `banner` landmark, above the main area) SHALL hold the page's only level-one heading, which SHALL read "Halo Powered" (a `mercer` build reads "US Health Agentic Hub", R56; since 2026-11-15, ADR-0044; it read "US Health Agentic Hub" before). While an area is open (Datasets, Workflows, Agents, Runs, Monitoring or Settings) the heading SHALL be followed by "/" and the area's name (`data-testid="header-area"`), the heading muted and the area name strong; on the home view there SHALL be no area name. The window and document title (R33), the Settings build identity (R32), the welcome heading (R51) and the rail's brand (the HALO wordmark, named "Halo Powered", with "Powered" beside it; only the "O" mark when the rail is collapsed) SHALL all read "Halo Powered". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
+- R7. In the `halo` brand the header (the `banner` landmark, above the main area) SHALL hold the page's only level-one heading, which SHALL read "Halo Workbench" (a `mercer` build reads "US Health Agentic Hub", R56; since 2026-11-15, ADR-0044; it read "US Health Agentic Hub" before). While an area is open (Datasets, Workflows, Agents, Runs, Monitoring or Settings) the heading SHALL be followed by "/" and the area's name (`data-testid="header-area"`), the heading muted and the area name strong; on the home view there SHALL be no area name. The window and document title (R33), the Settings build identity (R32), the welcome heading (R51) and the rail's brand (the HALO wordmark, named "Halo Workbench", with "Powered" beside it; only the "O" mark when the rail is collapsed) SHALL all read "Halo Workbench". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
 - R8. The sidebar and details panel SHALL keep a fixed minimum usable width for the main area (see R12) so the main content is never squeezed to nothing.
 
 Details panel: collapse and resize
@@ -45,7 +45,7 @@ Backend status banner
 - R21. When the app runs without the desktop shell (a plain browser, as in web mode or a dev server), the system SHALL assume the backend is externally managed: status stays `ready` and the banner SHALL never show.
 - R22. The desktop shell SHALL run the backend as a supervised child process and publish status changes to the window: `starting` when the app opens, `ready` once the backend answers its readiness probe, `restarting` while a crashed backend is being relaunched, `down` once relaunching is abandoned. It SHALL re-send the current status every time the window finishes loading, so a reloaded window is never stale.
 - R54. The desktop app SHALL run as a single instance per profile: launching it again SHALL NOT open a second window or start a second backend, and SHALL bring the running window to the front (restored if minimised).
-- R56. The brand SHALL be fixed at build time (`BRAND=halo|mercer`, default `halo`; ADR-0045). The rules above that name "Halo Powered" (R1, R4, R7, R32, R33, R51) describe the `halo` build. A `BRAND=mercer` build SHALL instead show: the document title and Settings build identity "Agentic Hub" (R32, R33); the welcome heading "Welcome to Agentic Hub" (R51); the level-one heading "US Health Agentic Hub" in a photo banner with no area crumb (R7); the framed shell (textured gradient frame, rounded panels, gaps; R1); in the rail the text "Agentic Hub" and, after Settings, the "Powered by LenAI" badge (R4); and no HALO wordmark. It SHALL NOT contain any Halo name or image, and a halo build SHALL NOT contain Agentic Hub or LenAI-badge imagery. The Agentic Hub brand is distributed as a desktop installer, never in the npm package. Screens, navigation and behaviour are identical in both brands.
+- R56. The brand SHALL be fixed at build time (`BRAND=halo|mercer`, default `halo`; ADR-0045). The rules above that name "Halo Workbench" (R1, R4, R7, R32, R33, R51) describe the `halo` build. A `BRAND=mercer` build SHALL instead show: the document title and Settings build identity "Agentic Hub" (R32, R33); the welcome heading "Welcome to Agentic Hub" (R51); the level-one heading "US Health Agentic Hub" in a photo banner with no area crumb (R7); the framed shell (textured gradient frame, rounded panels, gaps; R1); in the rail the text "Agentic Hub" and, after Settings, the "Powered by LenAI" badge (R4); and no HALO wordmark. It SHALL NOT contain any Halo name or image, and a halo build SHALL NOT contain Agentic Hub or LenAI-badge imagery. The Agentic Hub brand is distributed as a desktop installer, never in the npm package. Screens, navigation and behaviour are identical in both brands.
 - R55. The desktop shell SHALL NOT report `ready` for a server it did not start: a backend left running by an earlier launch SHALL be stopped at startup, a backend SHALL exit once its desktop shell is gone, and another process answering on the backend port SHALL keep the status off `ready` and record an error diagnostic ([api.md](../../system/api.md) 4.3).
 - R23. The readiness probe SHALL be an HTTP GET of the sessions list on the loopback address at the backend port (default 3000, overridable by the backend-port environment variable), counted ready only on a 200 response. It SHALL be retried every 100 ms, each attempt timing out after 500 ms, until 30 seconds have passed.
 - R24. The window SHALL open as soon as the backend is ready, or after the 30-second probe deadline expires. If the deadline expires the shell SHALL record an error diagnostic ("Backend did not become ready before timeout"), SHALL keep probing in the background, and SHALL publish `ready` if the backend answers later.
@@ -60,8 +60,9 @@ Toasts
 - R31. Every error toast SHALL also be recorded as an error entry with source `user-visible` in diagnostics (see [../diagnostics/spec.md](../diagnostics/spec.md)).
 
 App identity and version
-- R32. The Settings list pane SHALL end with the build identity: the brand's product name followed by `v` and the shipped version, for example "Halo Powered v0.24.3" ("Agentic Hub v0.24.3" in a `mercer` build, R56). The version SHALL be the same number the installer and release tag carry.
-- R33. In the `halo` brand the window title and the document title SHALL be "Halo Powered". The operating-system app name (the macOS menu bar and Dock, the installers and the data directory) SHALL stay "Halo BI Assistant". (A `mercer` build uses "Agentic Hub" for all of them, R56.)
+- R32. The Settings list pane SHALL end with the build identity: the brand's product name followed by `v` and the shipped version, for example "Halo Workbench v0.24.3" ("Agentic Hub v0.24.3" in a `mercer` build, R56). The version SHALL be the same number the installer and release tag carry.
+- R33. In the `halo` brand the window title and the document title SHALL be "Halo Workbench". The operating-system app name (the macOS menu bar and Dock, the installers and the data directory) SHALL be "Halo Workbench" too (since ADR-0046; it was "Halo BI Assistant", and "Questions to Insights" before that). An install made under an earlier name SHALL keep its data directory (R57). (A `mercer` build uses "Agentic Hub" for all of them, R56.)
+- R57. The desktop app SHALL keep the data of an install made under an earlier product name ("Halo BI Assistant", then "Questions to Insights"): when the profile or Windows local data directory of the current name does not exist, it SHALL use the newest earlier-named one that does, in place, without moving it; and at startup it SHALL stop a backend recorded in that directory that still runs as the app's executable under an earlier name (ADR-0046).
 - R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
 
 Sessions area
@@ -70,7 +71,7 @@ Sessions area
 - R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon. Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
 - R49. In the Runs area the page SHALL start with a header: an icon, then the title — the open past chat's name, or "Runs" — with the past chat's context under the title while one is open (its agent, when it was started from one, then its datasources; past-chats R57). It has no button that starts a conversation (the **Start New Conversation** button is gone since 1.23.22).
 - R50. Clicking **Expand navigation** or **Collapse navigation** SHALL remember the new state in the backend's `ui-preferences` document (ADR-0009), with a browser-local copy under `questions-to-insights:nav-expanded` (`true` / `false`) applied before the first paint. Nothing remembered means expanded; the backend wins over the copy.
-- R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230; steps 2 and 3 replaced in 1.23.22): the heading "Welcome to Halo Powered" ("Welcome to Agentic Hub" in a `mercer` build, R56), the line "Run a workflow on your data and read the result, with the steps and agents behind it.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Run a workflow" (button "Workflows", opens the Workflows area), 3 "Agents are the building blocks" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
+- R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230; steps 2 and 3 replaced in 1.23.22): the heading "Welcome to Halo Workbench" ("Welcome to Agentic Hub" in a `mercer` build, R56), the line "Run a workflow on your data and read the result, with the steps and agents behind it.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Run a workflow" (button "Workflows", opens the Workflows area), 3 "Agents are the building blocks" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
 
 Single user
 - R52. The shell SHALL appear at once on launch, with no sign-in page, and every control SHALL be shown: the Settings area offers **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** and **Appearance** to the one user (the built-in super admin).
@@ -153,8 +154,8 @@ Feature: Layout and accessibility
 
   Scenario: Text in the app can be selected
     Given the app is open on the home view
-    When I triple-click the heading "Welcome to Halo Powered"
-    Then the selection contains "Welcome to Halo Powered"
+    When I triple-click the heading "Welcome to Halo Workbench"
+    Then the selection contains "Welcome to Halo Workbench"
     When I expand the right panel and press on its resize separator and move the pointer
     Then nothing is selected while the page is being resized
 
@@ -189,7 +190,7 @@ Feature: Navigation rail
 
   Scenario: The start page explains how the product works
     When I open the app
-    Then I see "Welcome to Halo Powered" and the four steps "Pick your data", "Run a workflow", "Agents are the building blocks" and "Read, refine, download"
+    Then I see "Welcome to Halo Workbench" and the four steps "Pick your data", "Run a workflow", "Agents are the building blocks" and "Read, refine, download"
     When I click "Datasets" in the first step
     Then I see the "Datasets" page
 
@@ -247,12 +248,12 @@ Feature: Navigation rail
     Then the "Appearance" section is still shown
 
   Scenario: Shows the product name
-    Then the page's level-one heading reads "Halo Powered" and no area name follows it
-    And the document title is "Halo Powered"
-    And the rail shows the "Halo Powered" wordmark
+    Then the page's level-one heading reads "Halo Workbench" and no area name follows it
+    And the document title is "Halo Workbench"
+    And the rail shows the "Halo Workbench" wordmark
     When I click "Settings" on the rail
     Then the header shows the area name "Settings" after the heading
-    And the settings list ends with "Halo Powered v" followed by the version
+    And the settings list ends with "Halo Workbench v" followed by the version
 
   Scenario: The app opens straight into the shell
     When I open the app
@@ -325,7 +326,7 @@ Feature: Agentic Hub brand build
     And the document title is "Agentic Hub"
     And I see the heading "Welcome to Agentic Hub"
     And the navigation rail shows "Agentic Hub" and the image "Powered by LenAI"
-    And there is no header area crumb and no "Halo Powered" image
+    And there is no header area crumb and no "Halo Workbench" image
     When I open Settings
     Then the build identity reads "Agentic Hub v" followed by the version
 ```
@@ -393,7 +394,8 @@ Feature: App shell behaviour not yet covered by Playwright
 ## Open questions
 
 - Toast messages carry no live-region announcement and the toast dismiss button has no accessible name, so a screen reader neither announces a toast nor labels its close control. The axe scan does not catch this because it runs with no toast on screen. Decide whether R37 and the accessibility rules should cover toasts.
-- Resolved 2026-11-15 (ADR-0044): the product's display name in the UI is "Halo Powered" (window and document title, header heading, rail brand, Settings build identity, welcome heading). The operating-system app name, installers and data directory stay "Halo BI Assistant" (R33); the diagnostics report title and package keep "Questions to Insights".
+- Resolved 2026-11-15 (ADR-0046, superseding the name in ADR-0044): the product is "Halo Workbench" in the UI and in the operating system alike (window and document title, header heading, rail brand, Settings build identity, welcome heading, OS app name, installers, data directory). "Halo Powered" stays the company and brand name; the diagnostics report title and package keep "Questions to Insights".
+- Superseded 2026-11-15 (ADR-0044): the product's display name in the UI was "Halo Powered" (window and document title, header heading, rail brand, Settings build identity, welcome heading). The operating-system app name, installers and data directory stay "Halo BI Assistant" (R33); the diagnostics report title and package keep "Questions to Insights".
 - The `starting` status is published but never shown. If the backend does not become ready within 30 seconds the window opens with no banner at all, and nothing tells the user why requests fail until the first error toast. Should `starting` (or a timeout state) get a banner?
 
 <!-- sources: frontend/src/app/app.ts, frontend/src/app/app.html, frontend/src/app/app.scss, frontend/src/app/core/backend-status/, frontend/src/app/core/toast/toast.service.ts, frontend/src/app/core/config/, frontend/src/app/shared/components/{backend-status-banner,toast-container,app-logo}/, frontend/electron/main.cjs, frontend/electron/preload.cjs, frontend/e2e/layout-accessibility.spec.ts, frontend/e2e/brand-mercer.spec.ts, frontend/src/app/core/brand/, frontend/brands/ -->

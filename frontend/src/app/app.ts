@@ -137,7 +137,7 @@ export class App {
   readonly framed = BRAND.shell === 'framed';
   readonly art = BRAND.art;
 
-  /** The open area's name, shown after "Halo Powered" in the header; none on the home view. */
+  /** The open area's name, shown after the product name in the header; none on the home view. */
   readonly areaLabel = computed(() => {
     const area = this.shell.currentArea();
     if (area === 'settings') return 'Settings';

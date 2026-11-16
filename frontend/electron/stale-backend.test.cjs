@@ -46,10 +46,10 @@ test("stops a live backend running as the app's executable", async () => {
   let alive = true;
   const killed = [];
   const result = await stopStaleBackend(dir, {
-    expectedImage: "Halo BI Assistant.exe",
+    expectedImage: "Halo Workbench.exe",
     ownPid: 1,
     isAlive: () => alive,
-    imageName: () => "Halo BI Assistant.exe",
+    imageName: () => "Halo Workbench.exe",
     kill: (pid) => {
       killed.push(pid);
       alive = false;
@@ -61,12 +61,34 @@ test("stops a live backend running as the app's executable", async () => {
   assert.equal(readBackendPid(dir), null);
 });
 
+test("stops a backend left by the app under an earlier name", async () => {
+  // After an upgrade that renamed the app, the recorded PID runs the old
+  // executable (ADR-0046).
+  const dir = tempDir();
+  writeBackendPid(dir, 500);
+  let alive = true;
+  const killed = [];
+  const result = await stopStaleBackend(dir, {
+    expectedImage: ["Halo Workbench.exe", "Halo BI Assistant.exe", "Questions to Insights.exe"],
+    ownPid: 1,
+    isAlive: () => alive,
+    imageName: () => "Halo BI Assistant.exe",
+    kill: (pid) => {
+      killed.push(pid);
+      alive = false;
+    },
+    sleep: noSleep,
+  });
+  assert.deepEqual(killed, [500]);
+  assert.deepEqual(result, { pid: 500, stopped: true });
+});
+
 test("leaves a reused PID that belongs to another program", async () => {
   const dir = tempDir();
   writeBackendPid(dir, 500);
   const killed = [];
   const result = await stopStaleBackend(dir, {
-    expectedImage: "Halo BI Assistant.exe",
+    expectedImage: "Halo Workbench.exe",
     ownPid: 1,
     isAlive: () => true,
     imageName: () => "chrome.exe",
@@ -85,7 +107,7 @@ test("only clears the file when the recorded backend is already gone", async () 
   const result = await stopStaleBackend(dir, {
     ownPid: 1,
     isAlive: () => false,
-    imageName: () => "Halo BI Assistant.exe",
+    imageName: () => "Halo Workbench.exe",
     kill: (pid) => killed.push(pid),
   });
   assert.deepEqual(killed, []);
@@ -126,16 +148,16 @@ test("reads the image name from tasklist on Windows", () => {
   const run = (cmd, args) => {
     assert.equal(cmd, "tasklist");
     assert.deepEqual(args, ["/FI", "PID eq 1234", "/FO", "CSV", "/NH"]);
-    return '"Halo BI Assistant.exe","1234","Console","1","180,512 K"\r\n';
+    return '"Halo Workbench.exe","1234","Console","1","180,512 K"\r\n';
   };
-  assert.equal(processImageName(1234, "win32", run), "Halo BI Assistant.exe");
+  assert.equal(processImageName(1234, "win32", run), "Halo Workbench.exe");
   const none = () => "INFO: No tasks are running which match the specified criteria.\r\n";
   assert.equal(processImageName(1234, "win32", none), null);
 });
 
 test("reads the image name from ps elsewhere", () => {
-  const run = () => "/Applications/Halo BI Assistant.app/Contents/MacOS/Halo BI Assistant\n";
-  assert.equal(processImageName(9, "darwin", run), "Halo BI Assistant");
+  const run = () => "/Applications/Halo Workbench.app/Contents/MacOS/Halo Workbench\n";
+  assert.equal(processImageName(9, "darwin", run), "Halo Workbench");
   const fails = () => {
     throw new Error("exit 1");
   };
@@ -143,7 +165,7 @@ test("reads the image name from ps elsewhere", () => {
 });
 
 test("matches image names case-insensitively and Linux-truncated", () => {
-  assert.equal(imageMatches("halo bi assistant.exe", "Halo BI Assistant.exe"), true);
+  assert.equal(imageMatches("halo workbench.exe", "Halo Workbench.exe"), true);
   assert.equal(imageMatches("halo-bi-assist", "halo-bi-assistant"), false);
   assert.equal(imageMatches("halo-bi-assista", "halo-bi-assistant"), true);
   assert.equal(imageMatches(null, "Electron"), false);

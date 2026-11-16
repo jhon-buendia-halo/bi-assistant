@@ -11,6 +11,7 @@ export const BRAND: Brand = {
   welcomeLead: 'Welcome to',
   welcomeName: 'Agentic Hub',
   shell: 'framed',
+  wordmarkLabel: null,
   poweredByLenai: true,
   art: {
     frameTexture: 'brand/agentic-hub/frame-texture.webp',

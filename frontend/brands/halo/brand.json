@@ -1,10 +1,10 @@
 {
   "id": "halo",
-  "osName": "Halo BI Assistant",
-  "legacyOsName": "Questions to Insights",
-  "windowTitle": "Halo Powered",
+  "osName": "Halo Workbench",
+  "legacyOsNames": ["Halo BI Assistant", "Questions to Insights"],
+  "windowTitle": "Halo Workbench",
   "appId": "com.halopowered.questions-to-insights",
-  "artifactName": "Questions-to-Insights-${version}-${os}-${arch}.${ext}",
+  "artifactName": "Halo-Workbench-${version}-${os}-${arch}.${ext}",
   "icon": "brands/halo/public/brand/icon.png",
   "canvas": { "light": "#f2f2f0", "dark": "#1c1c1c" },
   "publishNpm": true

@@ -156,6 +156,8 @@ and the chart runtime ships as a sibling file:
 
 ## Filename note
 
-Installers are named `Questions-to-Insights-<version>-<os>-<arch>.<ext>` while
-the product is branded *Halo BI Assistant*. Change `build.artifactName` in
-`frontend/package.json` if the downloaded file should carry the product name.
+Since the rename (ADR-0046) the desktop app is *Halo Workbench* and installers are named
+`Halo-Workbench-<version>-<os>-<arch>.<ext>` (earlier releases:
+`Questions-to-Insights-…`). The download resolver matches only the
+`-<os>-<arch>.<ext>` suffix, so both names resolve. This page's copy still
+says *Halo BI Assistant* until it is rewritten for the new name.

@@ -26,8 +26,8 @@ describe('AppLogo', () => {
   });
 
   it('is an image named by its label', () => {
-    const svg = render({ label: 'Halo Powered' });
+    const svg = render({ label: 'Halo Workbench' });
     expect(svg.getAttribute('role')).toBe('img');
-    expect(svg.getAttribute('aria-label')).toBe('Halo Powered');
+    expect(svg.getAttribute('aria-label')).toBe('Halo Workbench');
   });
 });

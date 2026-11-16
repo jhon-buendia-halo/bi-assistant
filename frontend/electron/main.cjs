@@ -34,9 +34,12 @@ const APP_DISPLAY_NAME = BRAND.osName;
 // The window shows the brand's product name; the OS app name, installers and
 // data directory keep APP_DISPLAY_NAME (app-shell R33).
 const WINDOW_TITLE = BRAND.windowTitle;
-// The productName every release before a rename shipped with (null when the
-// brand never had another name, so there is nothing to migrate).
-const LEGACY_APP_NAME = BRAND.legacyOsName || null;
+// The productNames earlier releases shipped with, newest first (empty when the
+// brand never had another name, so there is nothing to migrate). Halo:
+// "Halo BI Assistant", then "Questions to Insights" (ADR-0046).
+const LEGACY_APP_NAMES = Array.isArray(BRAND.legacyOsNames)
+  ? BRAND.legacyOsNames.filter((name) => typeof name === "string" && name.trim() !== "")
+  : [];
 const DEV_URL = process.env.ELECTRON_DEV_URL;
 const BACKEND_PORT = process.env.BACKEND_PORT || "3000";
 const BACKEND_READY_TIMEOUT_MS = 30_000;
@@ -63,14 +66,34 @@ if (process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR) {
   app.setPath("userData", process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR);
 } else {
   // Renaming the app moves `userData`, which is where the profile lives
-  // (app.sqlite, workspaces, diagnostics). Installs made under the old name
-  // keep theirs: prefer the current directory, fall back to the legacy one
-  // when only that exists.
+  // (app.sqlite, workspaces, diagnostics). Installs made under an old name
+  // keep theirs in place: prefer the current directory, else the newest
+  // legacy one that exists.
   const current = app.getPath("userData");
-  if (LEGACY_APP_NAME && !fs.existsSync(current)) {
-    const legacy = path.join(path.dirname(current), LEGACY_APP_NAME);
-    if (fs.existsSync(legacy)) app.setPath("userData", legacy);
+  if (!fs.existsSync(current)) {
+    const legacy = existingLegacyDir(path.dirname(current));
+    if (legacy) app.setPath("userData", legacy);
   }
+}
+
+/** `<parent>/<legacy name>` for the newest legacy name that exists there, or null. */
+function existingLegacyDir(parent) {
+  for (const name of LEGACY_APP_NAMES) {
+    const candidate = path.join(parent, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Executable names a backend left by an earlier release may run as: the
+ * current one, then one per legacy name (".exe" on Windows). After an upgrade
+ * that renamed the app, the recorded PID belongs to the old executable.
+ */
+function ownImageNames() {
+  const current = path.basename(process.execPath);
+  const ext = path.extname(current);
+  return [current, ...LEGACY_APP_NAMES.map((name) => `${name}${ext}`)];
 }
 
 // One instance per profile (app-shell R54): the lock is keyed by `userData`,
@@ -449,6 +472,9 @@ function computeAppDataDir() {
 
   const localDir = path.join(process.env.LOCALAPPDATA, APP_DISPLAY_NAME);
   if (fs.existsSync(localDir)) return localDir;
+  // An install made under an old name keeps its local data where it is.
+  const legacyLocalDir = existingLegacyDir(process.env.LOCALAPPDATA);
+  if (legacyLocalDir) return legacyLocalDir;
 
   const hasLegacyData = LEGACY_DATA_MARKERS.some((name) =>
     fs.existsSync(path.join(roamingDir, name)),
@@ -874,7 +900,7 @@ app.whenReady().then(async () => {
   if (!isPrimaryInstance) return;
   initializeDiagnostics();
   // Unpackaged macOS runs keep Electron's own dock icon unless we set it; the
-  // packaged bundle already carries the Halo BI icon.
+  // packaged bundle already carries the brand's icon.
   if (process.platform === "darwin" && !app.isPackaged) {
     const icon = resolveAppIcon();
     if (icon) app.dock?.setIcon(icon);
@@ -885,7 +911,9 @@ app.whenReady().then(async () => {
   setBackendStatus("starting");
   // A backend left running by an earlier launch (crash, End task) would keep
   // the port and answer for this one (api.md 4.3 Stale backend).
-  const stale = await stopStaleBackend(resolvedAppDataDir);
+  const stale = await stopStaleBackend(resolvedAppDataDir, {
+    expectedImage: ownImageNames(),
+  });
   if (stale.stopped) {
     recordDiagnostic(
       "warn",

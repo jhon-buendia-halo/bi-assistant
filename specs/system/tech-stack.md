@@ -1,6 +1,6 @@
 # Tech stack
 
-The current implementation profile of Questions to Insights (product name in the UI and installers: **Halo BI Assistant**). This file describes **the current implementation**; the behaviour, contracts and rules live in the other specs and hold on any stack. Why the stack is shaped this way: [architecture.md](architecture.md) (ADR-0001 to ADR-0005). How it is built, packaged and released: [delivery.md](delivery.md).
+The current implementation profile of Questions to Insights (product name in the UI and installers: **Halo Workbench**). This file describes **the current implementation**; the behaviour, contracts and rules live in the other specs and hold on any stack. Why the stack is shaped this way: [architecture.md](architecture.md) (ADR-0001 to ADR-0005). How it is built, packaged and released: [delivery.md](delivery.md).
 
 Versions are taken from `frontend/package.json` and `backend/package.json`. A bare number is pinned exactly; `^`/`~` means the range in the manifest.
 

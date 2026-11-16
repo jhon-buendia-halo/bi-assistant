@@ -2,10 +2,12 @@ import { BRAND } from './brand';
 import { BRAND as MERCER } from './brand.mercer';
 
 describe('brands (ADR-0045)', () => {
-  it('builds Halo Powered by default, with the flat shell and no LenAI badge', () => {
+  it('builds Halo Workbench by default, with the flat shell and no LenAI badge', () => {
     expect(BRAND.id).toBe('halo');
-    expect(BRAND.productName).toBe('Halo Powered');
-    expect(BRAND.headerTitle).toBe('Halo Powered');
+    expect(BRAND.productName).toBe('Halo Workbench');
+    expect(BRAND.headerTitle).toBe('Halo Workbench');
+    expect(BRAND.welcomeName).toBe('Halo Workbench');
+    expect(BRAND.wordmarkLabel).toBe('Workbench');
     expect(BRAND.shell).toBe('flat');
     expect(BRAND.poweredByLenai).toBeFalse();
     expect(BRAND.art).toBeNull();
@@ -16,6 +18,7 @@ describe('brands (ADR-0045)', () => {
     expect(MERCER.productName).toBe('Agentic Hub');
     expect(MERCER.headerTitle).toBe('US Health Agentic Hub');
     expect(MERCER.shell).toBe('framed');
+    expect(MERCER.wordmarkLabel).toBeNull();
     expect(MERCER.poweredByLenai).toBeTrue();
     const art = MERCER.art;
     expect(art).not.toBeNull();
