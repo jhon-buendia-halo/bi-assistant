@@ -17,7 +17,7 @@ import type {
   QueryTableSize,
 } from './query-evidence.types';
 import { countStatement, tablesOfQuery } from './query-tables';
-import { pageResultOf, preparePage } from './result-view';
+import { pageResultOf, preparePage, type PageSource } from './result-view';
 
 /** Table counts in flight at once (api.md 139). */
 export const TABLE_COUNT_CONCURRENCY = 3;
@@ -198,7 +198,7 @@ export class QueryEvidenceService {
    * datasource. 400 when there are several, or none.
    */
   async datasourceFor(
-    evidence: QueryEvidence | undefined,
+    evidence: Pick<QueryEvidence, 'datasourceId'> | undefined,
     datasetNames: string[],
   ): Promise<QueryDatasource> {
     return this.resolve(evidence, await this.datasets(datasetNames));
@@ -302,15 +302,55 @@ export class QueryEvidenceService {
         `Query ${evidence.index} is a sample; it has no full result to page`,
       );
     }
-    const prepared = preparePage(
-      { sql: record.input ?? '', columns: record.columns, rows: record.rows },
+    const { result } = await this.pageRun(
+      {
+        sql: record.input ?? '',
+        columns: record.columns,
+        rows: record.rows,
+        datasourceId: evidence.datasourceId,
+      },
+      datasetNames,
       request,
     );
-    const source = await this.datasourceFor(evidence, datasetNames);
-    const paged = await this.guarded(() =>
-      this.datasources.runPagedSql(source.id, prepared.statement),
+    return result;
+  }
+
+  /**
+   * One page of a query known by its SQL, columns and kinds (api.md 151,
+   * 153; the `explore_result` tool, agents.md 3.15): the same checks, caps
+   * and datasource choice as `page`, and the datasource it ran on. Nothing
+   * is stored.
+   */
+  async pageOf(
+    source: PageSource & { datasourceId?: string },
+    datasetNames: string[],
+    request: PageRequest,
+  ): Promise<PageResult & { datasourceId: string }> {
+    const { result, datasourceId } = await this.pageRun(
+      source,
+      datasetNames,
+      request,
     );
-    return pageResultOf(prepared, paged);
+    return { ...result, datasourceId };
+  }
+
+  private async pageRun(
+    source: PageSource & { datasourceId?: string },
+    datasetNames: string[],
+    request: PageRequest,
+  ): Promise<{ result: PageResult; datasourceId: string }> {
+    const prepared = preparePage(source, request);
+    const datasource = await this.datasourceFor(
+      { datasourceId: source.datasourceId },
+      datasetNames,
+    );
+    const paged = await this.guarded(() =>
+      this.datasources.runPagedSql(datasource.id, prepared.statement),
+    );
+    return {
+      result: pageResultOf(prepared, paged),
+      datasourceId: datasource.id,
+    };
   }
 
   /**
@@ -331,7 +371,7 @@ export class QueryEvidenceService {
   }
 
   private async resolve(
-    evidence: QueryEvidence | undefined,
+    evidence: Pick<QueryEvidence, 'datasourceId'> | undefined,
     datasets: BoundDataset[],
   ): Promise<QueryDatasource> {
     const kinds = new Map<string, DatasourceKind | undefined>();

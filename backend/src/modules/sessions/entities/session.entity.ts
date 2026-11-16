@@ -1,6 +1,7 @@
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { Maturity } from '../../data-readiness/engine/types';
 import type { QueryEvidence } from '../query-evidence/query-evidence.types';
+import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 
 export type { KnowledgeUse };
 
@@ -336,6 +337,11 @@ export interface SessionDoc {
    * only, like the host.
    */
   contextBlock?: string;
+  /**
+   * A run host's earlier queries, which its turn may explore with
+   * `explore_result` (agents.md 3.15, 4.2). In memory only, like the host.
+   */
+  contextQueries?: ExplorableQuery[];
   /**
    * A follow-up run's host whose memory threads are copies of the earlier
    * run's (agents.md 5.14): its turn's input replays the earlier run's

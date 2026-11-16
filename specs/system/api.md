@@ -1630,7 +1630,7 @@ type WorkflowRun = {
   // Answer a Business Question runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text (a run stored before 2026-11-13 may hold a clarifying question with its `clarification`); absent while it waits, and when it stopped or failed before answering
-                                   // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql or sample_rows record of answer.data, failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
+                                   // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql, sample_rows or explore_result record of answer.data (an explore_result entry carries its view: ResultView), failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;
   agent?: SessionAgentRef;         // as a session's (2.1)

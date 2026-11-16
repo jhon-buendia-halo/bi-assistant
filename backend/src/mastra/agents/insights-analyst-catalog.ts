@@ -23,12 +23,14 @@ export const INSIGHTS_ANALYST_MAX_STEPS = 15;
 
 /**
  * Its tools, in the order its prompt lists them: the assistant's dataset
- * tools, then its clarification tool.
+ * tools (`explore_result` included, agents.md 3.15), then its clarification
+ * tool.
  */
 export const INSIGHTS_ANALYST_TOOL_NAMES: readonly string[] = [
   'list_entities',
   'describe_entity',
   'sample_rows',
   'run_readonly_sql',
+  'explore_result',
   'ask_clarification',
 ];

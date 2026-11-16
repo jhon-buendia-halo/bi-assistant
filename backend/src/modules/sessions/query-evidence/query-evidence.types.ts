@@ -7,6 +7,7 @@
  * eval harness), so a new field there would change those agents' input.
  * No framework imports: Jest and the pure modules share this file.
  */
+import type { ResultView } from '../../datasources/connectors/paged-sql.types';
 
 /** How much of the data a query's result stands for. */
 export type QueryCoverage = 'whole-table' | 'top-n' | 'sample' | 'partial';
@@ -21,6 +22,8 @@ export interface QueryFacts {
   totalRows?: number;
   /** The tool's cap for this call: `run_readonly_sql` limit ?? 100, `sample_rows` limit ?? 10. */
   rowLimit?: number;
+  /** `explore_result` only: the view its page was read with (roadmap 1.27.7). */
+  view?: ResultView;
 }
 
 export interface QueryTableSize {
@@ -87,4 +90,10 @@ export interface QueryEvidence {
   tables?: QueryTableSize[];
   /** Filled later, when the inspector first opens the query. */
   explanation?: QueryExplanation;
+  /**
+   * Set on an `explore_result` record only: the view (filters, sort, page)
+   * its rows were read with; the inspector opens the query on it (roadmap
+   * 1.27.7, agent-answers R83, R84). Never on the record, which models read.
+   */
+  view?: ResultView;
 }

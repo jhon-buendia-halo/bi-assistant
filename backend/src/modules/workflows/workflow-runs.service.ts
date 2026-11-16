@@ -56,6 +56,10 @@ import type {
 import { QUERY_EVIDENCE_SERVICE } from '../sessions/query-evidence/query-evidence.token';
 import type { QueryEvidence } from '../sessions/query-evidence/query-evidence.types';
 import {
+  explorableQueriesOf,
+  type ExplorableQuery,
+} from '../sessions/query-evidence/explorable-queries';
+import {
   RUN_HOST_ID_PREFIX,
   SessionsService,
   type RunVisualAction,
@@ -173,6 +177,11 @@ export interface PreparedRun {
     fromRunId: string;
     question: string;
     answer: string;
+    /**
+     * The earlier answer's queries, for `explore_result` (agents.md 3.15;
+     * plan m1-27 2); absent when it ran none.
+     */
+    queries?: ExplorableQuery[];
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -576,6 +585,10 @@ export class WorkflowRunsService implements OnModuleInit {
               },
               // Its agents go on from copies of the earlier run's threads.
               continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
+              // "Next page" or "only Brazil" explores its queries.
+              ...(prepared.context.queries?.length
+                ? { contextQueries: prepared.context.queries }
+                : {}),
             }
           : {}),
       });
@@ -1295,10 +1308,15 @@ export class WorkflowRunsService implements OnModuleInit {
         `Run "${earlier.id}" has no answer to continue from`,
       );
     }
+    const queries = explorableQueriesOf(
+      earlier.answer.data ?? [],
+      earlier.answer.evidence,
+    );
     return {
       fromRunId: earlier.id,
       question: earlier.question,
       answer: earlier.answer.content,
+      ...(queries.length ? { queries } : {}),
     };
   }
 

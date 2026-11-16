@@ -89,6 +89,12 @@ import {
 } from '../turn-data';
 import { evidenceOf } from '../query-evidence/query-evidence';
 import {
+  EXPLORABLE_QUERIES_CONTEXT_KEY,
+  explorableQueryOf,
+  sessionExplorableQueries,
+  type ExplorableQuery,
+} from '../query-evidence/explorable-queries';
+import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
   type QueryFactsMap,
@@ -276,6 +282,14 @@ export class TurnEngine {
     const factsOf = (record: ToolDataRecord) =>
       recordFacts.get(record) ??
       queryFacts.get(queryFactsKey(record.tool, record.input));
+    // What `explore_result` may page (agents.md 3.15, 4.2): the host's
+    // context queries and the session's earlier answers' queries, then each
+    // successful query of this turn as it is captured.
+    const explorable: ExplorableQuery[] = sessionExplorableQueries(
+      session.contextQueries,
+      session.messages,
+    );
+    options.requestContext.set(EXPLORABLE_QUERIES_CONTEXT_KEY, explorable);
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
@@ -504,6 +518,13 @@ export class TurnEngine {
                 ? queryFacts.get(payload.toolCallId)
                 : undefined;
               if (facts) recordFacts.set(record, facts);
+              const known = factsOf(record);
+              const query = explorableQueryOf(
+                record,
+                `Q${explorable.length + 1}`,
+                { datasourceId: known?.datasourceId, view: known?.view },
+              );
+              if (query) explorable.push(query);
               emit({
                 type: 'tool-result',
                 content: JSON.stringify({

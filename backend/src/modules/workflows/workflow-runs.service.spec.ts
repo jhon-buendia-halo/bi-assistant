@@ -896,6 +896,52 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     expect(second.run.question).toBe('And in 2014?');
   });
 
+  it("hands a later run the earlier answer's queries to explore (agents.md 3.15; plan 2)", async () => {
+    ctx = build(DATASETS, {
+      answer: 'Brazil won in 2002.',
+      data: [
+        {
+          tool: 'run_readonly_sql',
+          input: 'SELECT year, winner FROM wc.public.cups',
+          columns: ['year', 'winner'],
+          rows: [
+            { year: 2002, winner: 'Brazil' },
+            { year: 2006, winner: 'Italy' },
+          ],
+          rowCount: 2,
+          rationale: 'Every winner.',
+        },
+        { tool: 'run_readonly_sql', input: 'SELECT nope', error: 'boom' },
+        {
+          tool: 'sample_rows',
+          input: 'wc.public.cups',
+          columns: ['year'],
+          rows: [{ year: 1930 }],
+        },
+      ],
+    });
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    await streamed(ctx, 'answer-business-question', {
+      input: { question: 'Only Italy', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.run.id },
+    });
+    const spec = ctx.sessions.createRunHost.mock.lastCall?.[0] as {
+      contextQueries?: unknown[];
+    };
+    expect(spec.contextQueries).toEqual([
+      {
+        ref: 'Q1',
+        sql: 'SELECT year, winner FROM wc.public.cups',
+        columns: ['year', 'winner'],
+        kinds: { year: 'number', winner: 'text' },
+        sampleValues: { year: [2002, 2006], winner: ['Brazil', 'Italy'] },
+        rationale: 'Every winner.',
+      },
+    ]);
+  });
+
   it('rates the stored answer of a run (api.md 128)', async () => {
     ctx = build(DATASETS, { answer: 'Brazil won in 2002.' });
     const first = await streamed(ctx, 'answer-business-question', {

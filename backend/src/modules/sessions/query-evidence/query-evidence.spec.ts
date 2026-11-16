@@ -60,6 +60,59 @@ describe('evidenceOf (plan 2.1)', () => {
   });
 });
 
+describe('evidenceOf: an explore_result record (agents.md 3.15)', () => {
+  const view = {
+    filters: [{ column: 'country', op: 'eq' as const, value: 'Brazil' }],
+    sort: [],
+    page: 2,
+    pageSize: 2,
+    matchedRows: 5,
+    capped: false,
+  };
+  const explored: ToolDataRecord = {
+    tool: 'explore_result',
+    input: 'SELECT country, goals FROM wc.public.scorers',
+    columns: ['country', 'goals'],
+    rows: [
+      { country: 'Brazil', goals: 3 },
+      { country: 'Brazil', goals: 2 },
+    ],
+    rowCount: 2,
+    truncated: true,
+  };
+
+  it('carries its view, and is partial when more rows matched than the page holds', () => {
+    expect(
+      evidenceOf([explored], () => ({
+        datasourceId: 'ds-1',
+        totalRows: 5,
+        rowLimit: 2,
+        view,
+      })),
+    ).toEqual([
+      {
+        index: 0,
+        coverage: 'partial',
+        datasourceId: 'ds-1',
+        totalRows: 5,
+        rowLimit: 2,
+        view,
+      },
+    ]);
+  });
+
+  it('is partial from its view alone, for a record with no total', () => {
+    const [entry] = evidenceOf([explored], () => ({ view }));
+    expect(entry.coverage).toBe('partial');
+    expect(entry.view).toEqual(view);
+  });
+
+  it('never puts a view on another query', () => {
+    const [entry] = evidenceOf([ranked], () => ({ view }));
+    expect(entry).not.toHaveProperty('view');
+  });
+});
+
 describe('csvOf (api.md 143)', () => {
   it('writes a header row and quotes per RFC 4180', () => {
     expect(

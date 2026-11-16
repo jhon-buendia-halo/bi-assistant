@@ -35,6 +35,11 @@ export interface PageSource {
   columns?: string[];
   /** The stored rows, read only to infer each column's kind. */
   rows?: Record<string, unknown>[];
+  /**
+   * Each column's kind, already read from the stored rows (an explorable
+   * query keeps them instead of its rows); wins over what `rows` give.
+   */
+  kinds?: Record<string, ColumnKind>;
 }
 
 /** A checked request: the connector's statement and the view it reads. */
@@ -351,7 +356,7 @@ export function preparePage(
       );
     }
   };
-  const kinds = columnKindsOf(columns, rows);
+  const kinds = { ...columnKindsOf(columns, rows), ...source.kinds };
   const checkedFilters = filters.map((filter) => {
     usable(filter.column);
     return checkFilter(filter, kinds);
