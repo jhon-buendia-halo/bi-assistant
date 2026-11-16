@@ -278,7 +278,7 @@ SELECT COUNT(*) AS n FROM calls ${where.sql}`,
   }
 
   /**
-   * What the Dashboard sums of every call started at or after `since` (all
+   * What the Costs page sums of every call started at or after `since` (all
    * calls when null): start, agent, thread, model and tokens.
    */
   usageRows(since: Date | null): Promise<UsageCallRecord[]> {

@@ -105,7 +105,7 @@ export class MonitoringService {
   }
 
   /**
-   * `GET /monitoring/usage`: the Dashboard's cost summary. Reads the calls of
+   * `GET /monitoring/usage`: the Costs page's cost summary. Reads the calls of
    * the period and of the last 12 calendar months (the monthly series and
    * this month), and the stored runs to name each run's workflow.
    */

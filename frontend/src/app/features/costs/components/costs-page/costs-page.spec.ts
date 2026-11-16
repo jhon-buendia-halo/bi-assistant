@@ -7,7 +7,7 @@ import {
 import { ShellState } from '../../../../core/shell/shell-state';
 import { MonitoringStateService } from '../../../monitoring/services/monitoring-state.service';
 import { UsageSummary, periodStart } from '../../models/usage.model';
-import { DashboardPage, niceCeiling } from './dashboard-page';
+import { CostsPage, niceCeiling } from './costs-page';
 
 const SUMMARY: UsageSummary = {
   from: '2026-10-17T05:00:00.000Z',
@@ -64,16 +64,16 @@ const SUMMARY: UsageSummary = {
   byAgent: [{ id: 'assistant', name: 'Assistant', costUsd: 20, calls: 61 }],
 };
 
-describe('DashboardPage', () => {
+describe('CostsPage', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [DashboardPage],
+      imports: [CostsPage],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
   });
 
   function render() {
-    const fixture = TestBed.createComponent(DashboardPage);
+    const fixture = TestBed.createComponent(CostsPage);
     const http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
     const req = http.expectOne((r) => r.url.endsWith('/monitoring/usage'));
@@ -101,19 +101,19 @@ describe('DashboardPage', () => {
       el.querySelector('[data-testid="kpi-period"]')?.textContent,
     ).toContain('61 calls');
     expect(
-      el.querySelector('[data-testid="dashboard-unpriced"]')?.textContent,
+      el.querySelector('[data-testid="costs-unpriced"]')?.textContent,
     ).toContain('1 call ');
     expect(
-      el.querySelectorAll('[data-testid^="dashboard-daily-bar-"]').length,
+      el.querySelectorAll('[data-testid^="costs-daily-bar-"]').length,
     ).toBe(2);
     expect(
-      el.querySelectorAll('[data-testid^="dashboard-monthly-bar-"]').length,
+      el.querySelectorAll('[data-testid^="costs-monthly-bar-"]').length,
     ).toBe(12);
     expect(
-      el.querySelectorAll('[data-testid="dashboard-workflow-row"]').length,
+      el.querySelectorAll('[data-testid="costs-workflow-row"]').length,
     ).toBe(2);
     expect(
-      el.querySelector('[data-testid="dashboard-by-model"]')?.textContent,
+      el.querySelector('[data-testid="costs-by-model"]')?.textContent,
     ).toContain('No price');
   });
 
@@ -121,7 +121,7 @@ describe('DashboardPage', () => {
     const { fixture, http, req } = render();
     req.flush(SUMMARY);
     const select = fixture.nativeElement.querySelector(
-      '[data-testid="dashboard-period"]',
+      '[data-testid="costs-period"]',
     ) as HTMLSelectElement;
     select.value = 'all';
     select.dispatchEvent(new Event('change'));
@@ -136,13 +136,11 @@ describe('DashboardPage', () => {
     fixture.detectChanges();
     (
       el.querySelector(
-        '[data-testid="dashboard-daily-toggle"]',
+        '[data-testid="costs-daily-toggle"]',
       ) as HTMLButtonElement
     ).click();
     fixture.detectChanges();
-    const rows = el.querySelectorAll(
-      '[data-testid="dashboard-daily"] tbody tr',
-    );
+    const rows = el.querySelectorAll('[data-testid="costs-daily"] tbody tr');
     expect(rows.length).toBe(2);
     expect(rows[0].textContent).toContain('$4.00');
   });
@@ -152,9 +150,7 @@ describe('DashboardPage', () => {
     req.flush(SUMMARY);
     fixture.detectChanges();
     (
-      el.querySelector(
-        '[data-testid="dashboard-agent-row"]',
-      ) as HTMLButtonElement
+      el.querySelector('[data-testid="costs-agent-row"]') as HTMLButtonElement
     ).click();
 
     const monitoring = TestBed.inject(MonitoringStateService);
@@ -183,12 +179,12 @@ describe('DashboardPage', () => {
     });
     fixture.detectChanges();
     expect(
-      el.querySelector('[data-testid="dashboard-empty"]')?.textContent?.trim(),
+      el.querySelector('[data-testid="costs-empty"]')?.textContent?.trim(),
     ).toBe('No LLM calls in this period.');
     expect(
-      el.querySelector('[data-testid="dashboard-monthly-chart"]'),
+      el.querySelector('[data-testid="costs-monthly-chart"]'),
     ).not.toBeNull();
-    expect(el.querySelector('[data-testid="dashboard-by-model"]')).toBeNull();
+    expect(el.querySelector('[data-testid="costs-by-model"]')).toBeNull();
   });
 
   it('shows the backend reason when the load fails', () => {

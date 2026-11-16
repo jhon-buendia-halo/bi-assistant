@@ -90,17 +90,17 @@ function ranking(items: Omit<RankRow, 'width'>[]): RankRow[] {
 }
 
 /**
- * The Dashboard (rail item): the estimated LLM cost of the app's agents
+ * The Costs (rail item): the estimated LLM cost of the app's agents
  * today, this month and over a chosen period, by day, by month and ranked by
  * model, workflow and agent. A model or agent opens Monitoring's LLM calls
  * filtered to it.
  */
 @Component({
-  selector: 'app-dashboard-page',
+  selector: 'app-costs-page',
   imports: [LucideAngularModule, NgTemplateOutlet],
-  templateUrl: './dashboard-page.html',
+  templateUrl: './costs-page.html',
 })
-export class DashboardPage {
+export class CostsPage {
   readonly ChartColumnIncreasing = ChartColumnIncreasing;
   readonly ChevronRight = ChevronRight;
   readonly Loader2 = Loader2;
@@ -256,7 +256,7 @@ export class DashboardPage {
 
   /**
    * Opens Monitoring's LLM calls filtered to a model or an agent, over the
-   * Dashboard's period (Custom from its start; Any time for All time).
+   * Costs page's period (Custom from its start; Any time for All time).
    */
   openInMonitoring(row: RankRow): void {
     if (!row.filter) return;

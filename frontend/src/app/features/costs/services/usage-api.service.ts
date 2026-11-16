@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import { UsageSummary } from '../models/usage.model';
 
-/** The Dashboard's API: `GET /monitoring/usage`. */
+/** The Costs page's API: `GET /monitoring/usage`. */
 @Injectable({ providedIn: 'root' })
 export class UsageApiService {
   private readonly http = inject(HttpClient);

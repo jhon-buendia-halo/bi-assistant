@@ -1,4 +1,4 @@
-<div class="@container flex flex-col gap-4" data-testid="dashboard-content">
+<div class="@container flex flex-col gap-4" data-testid="costs-content">
   <!-- Period and the price-table note -->
   <div class="flex flex-wrap items-end justify-between gap-3">
     <p class="max-w-[640px] text-[13px] text-fg-muted">
@@ -8,7 +8,7 @@
     <label class="flex w-44 flex-col gap-1">
       <span class="field-label">Period</span>
       <select
-        data-testid="dashboard-period"
+        data-testid="costs-period"
         class="field"
         (change)="onPeriod($event)"
       >
@@ -27,7 +27,7 @@
 
   @if (error(); as err) {
     <p
-      data-testid="dashboard-error"
+      data-testid="costs-error"
       role="alert"
       class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
     >
@@ -97,7 +97,7 @@
       </div>
 
       @if (unpricedCalls() > 0) {
-        <p data-testid="dashboard-unpriced" class="text-[12px] text-fg-muted">
+        <p data-testid="costs-unpriced" class="text-[12px] text-fg-muted">
           {{ callsText(unpricedCalls()) }} in this period use a model with no
           price or with unknown tokens; they count as calls but add no cost.
         </p>
@@ -105,7 +105,7 @@
 
       @if (s.totals.calls === 0) {
         <div
-          data-testid="dashboard-empty"
+          data-testid="costs-empty"
           class="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-6 py-8"
         >
           <span
@@ -119,14 +119,14 @@
         <!-- Daily cost -->
         <section
           class="card flex flex-col gap-3 px-4 py-3"
-          data-testid="dashboard-daily"
+          data-testid="costs-daily"
         >
           <div class="flex items-center justify-between gap-3">
             <h3 class="text-[14px] font-medium text-fg-strong">Daily cost</h3>
             <button
               type="button"
               class="btn btn-ghost px-2 py-1 text-[12px]"
-              data-testid="dashboard-daily-toggle"
+              data-testid="costs-daily-toggle"
               [attr.aria-pressed]="showDailyTable()"
               (click)="showDailyTable.set(!showDailyTable())"
             >
@@ -159,7 +159,7 @@
       <!-- Monthly cost: the 12 months ending with this one, whatever the period -->
       <section
         class="card flex flex-col gap-3 px-4 py-3"
-        data-testid="dashboard-monthly"
+        data-testid="costs-monthly"
       >
         <div class="flex items-center justify-between gap-3">
           <h3 class="text-[14px] font-medium text-fg-strong">
@@ -169,7 +169,7 @@
           <button
             type="button"
             class="btn btn-ghost px-2 py-1 text-[12px]"
-            data-testid="dashboard-monthly-toggle"
+            data-testid="costs-monthly-toggle"
             [attr.aria-pressed]="showMonthlyTable()"
             (click)="showMonthlyTable.set(!showMonthlyTable())"
           >
@@ -229,7 +229,7 @@
   } @else if (loading()) {
     <div
       class="mt-6 flex items-center gap-2.5 text-fg-muted"
-      data-testid="dashboard-loading"
+      data-testid="costs-loading"
     >
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
       <span>Loading usage…</span>
@@ -260,7 +260,7 @@
         class="relative h-40 border-b border-border-strong"
         role="img"
         [attr.aria-label]="label"
-        [attr.data-testid]="'dashboard-' + chart + '-chart'"
+        [attr.data-testid]="'costs-' + chart + '-chart'"
       >
         <!-- Recessive grid lines -->
         <div
@@ -282,7 +282,7 @@
           ) {
             <div
               class="relative flex h-full min-w-0 flex-1 items-end"
-              [attr.data-testid]="'dashboard-' + chart + '-bar-' + bar.key"
+              [attr.data-testid]="'costs-' + chart + '-bar-' + bar.key"
               (mouseenter)="hovered.set(chart + ':' + bar.key)"
               (mouseleave)="hovered.set(null)"
             >
@@ -369,7 +369,7 @@
 <ng-template #rankCard let-rows let-title="title" let-id="id">
   <section
     class="card flex min-w-0 flex-col gap-2 px-4 py-3"
-    [attr.data-testid]="'dashboard-by-' + id"
+    [attr.data-testid]="'costs-by-' + id"
   >
     <h3 class="text-[14px] font-medium text-fg-strong">
       {{ title }}
@@ -382,7 +382,7 @@
             <button
               type="button"
               class="group flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
-              [attr.data-testid]="'dashboard-' + id + '-row'"
+              [attr.data-testid]="'costs-' + id + '-row'"
               [attr.aria-label]="
                 'Open the LLM calls of ' +
                 row.name +
@@ -403,7 +403,7 @@
           } @else {
             <div
               class="flex flex-col gap-1 px-2 py-1.5"
-              [attr.data-testid]="'dashboard-' + id + '-row'"
+              [attr.data-testid]="'costs-' + id + '-row'"
             >
               <ng-container
                 *ngTemplateOutlet="

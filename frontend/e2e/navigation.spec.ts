@@ -97,25 +97,25 @@ test('Opens the empty Monitoring page from the rail', async ({ page }) => {
   );
 });
 
-test('Opens the empty Dashboard from the rail', async ({ page }) => {
-  await scenarioStep(page, 'When I click "Dashboard" on the rail', async () => {
-    await railItem(page, 'Dashboard').click();
+test('Opens the empty Costs page from the rail', async ({ page }) => {
+  await scenarioStep(page, 'When I click "Costs" on the rail', async () => {
+    await railItem(page, 'Costs').click();
   });
   await scenarioStep(
     page,
-    'Then I see the "Dashboard" page with $0.00 today and this month, the monthly chart and "No LLM calls in this period."',
+    'Then I see the "Costs" page with $0.00 today and this month, the monthly chart and "No LLM calls in this period."',
     async () => {
       await expect(
-        page.getByRole('heading', { name: 'Dashboard', exact: true }),
+        page.getByRole('heading', { name: 'Costs', exact: true }),
       ).toBeVisible();
-      await expectCurrent(page, 'Dashboard');
+      await expectCurrent(page, 'Costs');
       await expect(page.getByTestId('kpi-today')).toContainText('$0.00');
       await expect(page.getByTestId('kpi-month')).toContainText('$0.00');
-      await expect(page.getByTestId('dashboard-empty')).toHaveText(
+      await expect(page.getByTestId('costs-empty')).toHaveText(
         'No LLM calls in this period.',
       );
-      await expect(page.getByTestId('dashboard-monthly-chart')).toBeVisible();
-      await expect(page.getByTestId('dashboard-period')).toHaveValue('30d');
+      await expect(page.getByTestId('costs-monthly-chart')).toBeVisible();
+      await expect(page.getByTestId('costs-period')).toHaveValue('30d');
     },
   );
 });
@@ -294,13 +294,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   const workspace = page.getByRole('navigation', {
     name: 'Workspace navigation',
   });
-  for (const label of [
-    'Datasets',
-    'Agents',
-    'Runs',
-    'Dashboard',
-    'Monitoring',
-  ]) {
+  for (const label of ['Datasets', 'Agents', 'Runs', 'Costs', 'Monitoring']) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(

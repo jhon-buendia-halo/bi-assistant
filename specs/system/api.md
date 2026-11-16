@@ -1021,7 +1021,7 @@ Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monito
 | 113 | `GET /monitoring/sessions` | List sessions with recorded agent runs, filtered and paged, most recent first | yes |
 | 114 | `GET /monitoring/sessions/:id` | One session with its turns and each turn's trajectory | yes |
 | 115 | `GET /monitoring/traces/:traceId` | One turn's spans as a depth-first tree for the waterfall | yes |
-| 144 | `GET /monitoring/usage` | The Dashboard's estimated cost by day, month, model, workflow and agent | yes |
+| 144 | `GET /monitoring/usage` | The Costs page's estimated cost by day, month, model, workflow and agent | yes |
 
 #### 111. `GET /monitoring/llm-calls`
 - Query (all optional): `page` (whole number >= 1, default 1); `pageSize` (25, 50 or 100, default 25); `agent` (agent id); `model` and `provider` (exact match); `status` (`succeeded`, `failed` or `running`); `session` (session id); `from` and `to` (ISO date-times, inclusive, on the call's start time).
@@ -1058,7 +1058,7 @@ Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monito
 - `404 "Trace not found"`.
 
 #### 144. `GET /monitoring/usage`
-- Query (all optional): `from` (ISO date-time; the period's start, inclusive; absent = since the first call); `to` (ISO date-time, inclusive, default now); `tz` (an IANA time zone for the day and month buckets, default `UTC`). The Dashboard sends the browser's time zone and local midnight of the period's first day ([monitoring](../capabilities/monitoring/spec.md) R48).
+- Query (all optional): `from` (ISO date-time; the period's start, inclusive; absent = since the first call); `to` (ISO date-time, inclusive, default now); `tz` (an IANA time zone for the day and month buckets, default `UTC`). The Costs sends the browser's time zone and local midnight of the period's first day ([monitoring](../capabilities/monitoring/spec.md) R48).
 - Response `200`: `UsageSummary` = `{ from: ISO|null, to: ISO, timeZone, today: Amount, thisMonth: Amount, totals: Amount & { pricedCalls, inputTokens, outputTokens }, daily: (Amount & { date: 'YYYY-MM-DD' })[], monthly: (Amount & { month: 'YYYY-MM' })[], byModel: (Amount & { model, provider, inputTokens, outputTokens, priced: boolean })[], byWorkflow: (Amount & { id: string|null, name, kind: 'workflow'|'none' })[], byAgent: (Amount & { id: string|null, name })[] }` with `Amount` = `{ costUsd: number, calls: number }`.
 - Every call of `GET /monitoring/llm-calls` counts once; `costUsd` sums the calls' estimates (monitoring R5) and a call without one adds 0 (`totals.calls - totals.pricedCalls` of them). `today`, `thisMonth` and `monthly` (the 12 calendar months ending with the current one) ignore the period; `totals`, `daily` (every day of the period, zero-filled, from the first call when `from` is absent) and the three rankings cover it. Rankings are sorted by cost, then calls, descending. `byWorkflow`: a `run-<runId>` thread is that run's workflow (`id` = `workflowId`, `name` = the run's `workflowName`, from `workflow_runs`), a deleted run is `{ id: null, name: 'Deleted workflow run', kind: 'workflow' }`, and every other call is `{ id: null, name: 'No workflow', kind: 'none' }`. `byAgent` names a call with no agent `No agent`.
 - Validation `400` (messages exact): `"From is not a valid date"`, `"To is not a valid date"`, `"From must not be after To"`, `"Time zone is not valid"`.

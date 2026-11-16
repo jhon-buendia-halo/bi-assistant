@@ -1,5 +1,5 @@
 /**
- * The Dashboard's usage summary (`GET /monitoring/usage`): the estimated LLM
+ * The Costs page's usage summary (`GET /monitoring/usage`): the estimated LLM
  * cost of the app's agents by day, month, model, workflow and agent. Costs
  * are USD estimates from the Monitoring price table (monitoring R5).
  */

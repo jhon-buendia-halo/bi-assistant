@@ -125,7 +125,7 @@ describe('MonitoringService: runs (ADR-0041)', () => {
     expect(flow.turns).toBeGreaterThan(0);
   });
 
-  it('sums the Dashboard usage by workflow, agent and model (GET /monitoring/usage)', async () => {
+  it('sums the Costs page usage by workflow, agent and model (GET /monitoring/usage)', async () => {
     const page = await service.listCalls({ pageSize: '100' });
     const usage = await service.getUsage({ tz: 'UTC' });
     const priced = page.items.filter((i) => i.costUsd !== null);

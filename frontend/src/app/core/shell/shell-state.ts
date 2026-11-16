@@ -19,7 +19,7 @@ export type MainView =
   | 'runs'
   | 'run-detail'
   | 'session-chat'
-  | 'dashboard'
+  | 'costs'
   | 'monitoring'
   | 'monitoring-session'
   | 'llm-call';
@@ -30,7 +30,7 @@ export type Area =
   | 'workflows'
   | 'agents'
   | 'runs'
-  | 'dashboard'
+  | 'costs'
   | 'monitoring'
   | 'settings';
 
@@ -40,7 +40,7 @@ export const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   workflows: 'workflows',
   agents: 'agents',
   runs: 'runs',
-  dashboard: 'dashboard',
+  costs: 'costs',
   monitoring: 'monitoring',
 };
 
@@ -58,7 +58,7 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   runs: 'runs',
   'run-detail': 'runs',
   'session-chat': 'runs',
-  dashboard: 'dashboard',
+  costs: 'costs',
   monitoring: 'monitoring',
   'monitoring-session': 'monitoring',
   'llm-call': 'monitoring',

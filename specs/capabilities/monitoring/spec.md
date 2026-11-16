@@ -107,8 +107,8 @@ Workflow runs
 - R45. A workflow run's agent turn runs on a temporary host `run-<runId>` (ADR-0041, amending ADR-0038), so its calls carry that id as their thread. Monitoring SHALL treat such a thread like a session: it SHALL read the run `<runId>` from `workflow_runs` and name the thread `<workflow name>: <run title>` (the run's question, else its workflow's name, as the history titles it). The calls table (R3), the Session filter (R6), the call page (R14), the Sessions tab (R28) and the session page (R32) use that name. The call page's Session link for a run SHALL open the run's session page (its execution flow), not a chat, and the session page of a run SHALL show a **Run** chip instead of **Open chat**. A run that was deleted, or an unknown `run-` id, has no name and no link, like a deleted chat. Sessions already listed are unchanged.
 - R46. The Plan and Write answer steps of Answer a Business Question run two registered System agents, so their model calls SHALL appear in the LLM calls list like any agent's, under the agents `Analysis Planner` and `Answer Writer` (their technical names, [../../system/agents.md](../../system/agents.md) 2.11). The Agent filter (R6) offers both once such a call exists. Runs stored before this change have no such calls.
 
-Dashboard (usage and cost)
-- R47. The **Dashboard** (its own rail item, [../app-shell/spec.md](../app-shell/spec.md) R3c) SHALL summarise the estimated cost of the LLM calls of R1: every call counts once, priced as in R5. A call whose model has no price, or whose tokens are not known, SHALL count as a call and add its known tokens but no cost. The page records nothing and reads the same trace store (ADR-0038); it changes nothing (R24).
+Costs (usage and cost)
+- R47. The **Costs** page (its own rail item, [../app-shell/spec.md](../app-shell/spec.md) R3c) SHALL summarise the estimated cost of the LLM calls of R1: every call counts once, priced as in R5. A call whose model has no price, or whose tokens are not known, SHALL count as a call and add its known tokens but no cost. The page records nothing and reads the same trace store (ADR-0038); it changes nothing (R24).
 - R48. A **Period** choice SHALL offer This month, Last 30 days (the default), Last 90 days, This year and All time. A period starts at local midnight of its first day (Last 30 days: today and the 29 days before) and ends now; All time has no start. Days and months SHALL follow the time zone of the computer that shows the page.
 - R49. Four tiles SHALL show: **Today** and **This month** (cost and number of calls of the current day and calendar month, whatever the period), the period's cost and calls (titled with the period's name), and the period's **Tokens** (input plus output, with each below). When some calls of the period have no cost (R47), a line SHALL say how many.
 - R50. **Daily cost** SHALL show one bar per day of the period, days without calls at zero; for All time the days start at the first call. **Monthly cost** SHALL show the 12 calendar months ending with the current one, whatever the period. Both are single-series column charts on a scale from $0 to a round ceiling, with a tooltip per bar (`<day or month>`, cost, calls) and a **Show table** control that shows the same values as a table (**Show chart** returns).
@@ -133,12 +133,12 @@ Dashboard (usage and cost)
 - A session whose chat was deleted: "Unnamed session" with its short id, and no **Open chat** link (R28, R32).
 - A very long answer: clamped to 6 lines with **Show more** (R35).
 - A turn with only framework spans besides its agent run: the waterfall shows the agent row and "(N hidden)" (R40).
-- Dashboard with calls of a model that has no price: they count in the calls, the tiles say how many have no cost, and the model ranks with "No price" (R47, R49, R51).
-- Dashboard on a period with no calls: the tiles at $0.00, "No LLM calls in this period." and the monthly chart (R53).
+- Costs page with calls of a model that has no price: they count in the calls, the tiles say how many have no cost, and the model ranks with "No price" (R47, R49, R51).
+- Costs page on a period with no calls: the tiles at $0.00, "No LLM calls in this period." and the monthly chart (R53).
 
 ## Contracts
 
-- Endpoints: `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, `GET /monitoring/sessions`, `GET /monitoring/sessions/:id`, `GET /monitoring/traces/:traceId` and `GET /monitoring/usage` (the Dashboard). See [../../system/api.md](../../system/api.md) (section 2.8c).
+- Endpoints: `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, `GET /monitoring/sessions`, `GET /monitoring/sessions/:id`, `GET /monitoring/traces/:traceId` and `GET /monitoring/usage` (the Costs page). See [../../system/api.md](../../system/api.md) (section 2.8c).
 - Source data: the `span_events` table of `observability.duckdb`, read in-process, no new collection. See [../../system/data-model.md](../../system/data-model.md) (1.2).
 - Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0038.
 - Related: [../app-shell/spec.md](../app-shell/spec.md) R3b (the rail item and the page), [../../system/agents.md](../../system/agents.md) 4.1 (the per-turn context blocks that fill the Dataset box), [../developer-settings/spec.md](../developer-settings/spec.md) (the opt-in trace viewers this area does not depend on).
@@ -152,7 +152,7 @@ Placement: the **Monitoring** item on the navigation rail opens the Monitoring p
 - Call page: heading, the facts grid, the error box when failed, **Context window** (caption, stacked bar, legend, seven boxes), **Steps**.
 - Runs tab: a filter bar (Agent, Date, **Clear filters**), the table and the same footer.
 - Session page: heading, the totals strip, **Open chat**, then each turn (question, meta line, path, answer, **Open timeline**) and the waterfall under the turn that opened it.
-- Dashboard (rail **Dashboard**, [../../system/ui.md](../../system/ui.md) 4.8i): heading "Dashboard", the note and **Period**, the four tiles, **Daily cost**, **Monthly cost**, then **By model**, **By workflow** and **By agent** side by side on a wide window.
+- Costs page (rail **Costs**, [../../system/ui.md](../../system/ui.md) 4.8i): heading "Costs", the note and **Period**, the four tiles, **Daily cost**, **Monthly cost**, then **By model**, **By workflow** and **By agent** side by side on a wide window.
 
 ## Flows
 
@@ -332,7 +332,7 @@ Feature: Runs in Monitoring
 - After two chat turns in one session the Runs tab lists it with 2 turns and totals (tokens, cost, tool calls) equal to the sum of its LLM calls (R27–R29).
 - The session page shows both questions, each model request and tool group in order, and both answers (R32–R34). **Open timeline** shows the waterfall with bars to scale, and the framework switch adds the housekeeping spans (R37–R40).
 - A run's call is listed under `<workflow>: <title>`, offered in the Session filter, and its link opens the run's session page with one turn, its path and its waterfall (R45).
-- The Dashboard's totals, daily, model, workflow and agent sums each equal the sum of the LLM calls of the period, and a workflow run's calls rank under its workflow (R47–R51); backend unit tests cover them on the real-shape fixture and pin the time-zone bucketing.
+- The Costs page's totals, daily, model, workflow and agent sums each equal the sum of the LLM calls of the period, and a workflow run's calls rank under its workflow (R47–R51); backend unit tests cover them on the real-shape fixture and pin the time-zone bucketing.
 - Back keeps the tab, filters and page, and a call opened from a session returns to it (R26, R43). Backend unit tests cover R27–R30, R33, R34, R36 and R38–R41 at service and controller level, pinned to the same real-shape fixture.
 
-<!-- sources: backend/src/modules/monitoring/**, backend/src/mastra/storage.ts, frontend/src/app/features/monitoring/**, frontend/src/app/features/dashboard/**, frontend/src/app/app.html (monitoring, llm-call and dashboard views) -->
+<!-- sources: backend/src/modules/monitoring/**, backend/src/mastra/storage.ts, frontend/src/app/features/monitoring/**, frontend/src/app/features/costs/**, frontend/src/app/app.html (monitoring, llm-call and costs views) -->

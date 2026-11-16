@@ -1116,7 +1116,7 @@ specs/capabilities/monitoring/spec.md:103-103  R43 The back control of the call 
 specs/capabilities/monitoring/spec.md:104-106  R44 Viewing a session page or a waterfall SHALL NOT start any model call a
 specs/capabilities/monitoring/spec.md:107-107  R45 A workflow run's agent turn runs on a temporary host `run-<runId>` (AD
 specs/capabilities/monitoring/spec.md:108-110  R46 The Plan and Write answer steps of Answer a Business Question run two
-specs/capabilities/monitoring/spec.md:111-111  R47 The **Dashboard** (its own rail item, [../app-shell/spec.md](../app-sh
+specs/capabilities/monitoring/spec.md:111-111  R47 The **Costs** page (its own rail item, [../app-shell/spec.md](../app-s
 specs/capabilities/monitoring/spec.md:112-112  R48 A **Period** choice SHALL offer This month, Last 30 days (the default)
 specs/capabilities/monitoring/spec.md:113-113  R49 Four tiles SHALL show: **Today** and **This month** (cost and number o
 specs/capabilities/monitoring/spec.md:114-114  R50 **Daily cost** SHALL show one bar per day of the period, days without
@@ -2089,7 +2089,7 @@ specs/system/ui.md:617-625  ### 4.8e Monitoring: LLM call page
 specs/system/ui.md:627-634  ### 4.8f Monitoring: Runs tab
 specs/system/ui.md:636-648  ### 4.8g Monitoring: session page
 specs/system/ui.md:650-660  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:662-670  ### 4.8i Dashboard
+specs/system/ui.md:662-670  ### 4.8i Costs
 specs/system/ui.md:672-676  ### 4.9 LLM configuration (settings)
 specs/system/ui.md:678-689  ### 4.10 Datasource configuration (settings)
 specs/system/ui.md:691-695  ### 4.11 Testing data (settings)

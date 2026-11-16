@@ -46,7 +46,7 @@ const RUNS = new Map([
   ],
 ]);
 
-describe('summarizeUsage (Dashboard)', () => {
+describe('summarizeUsage (Costs)', () => {
   it('prices the test model', () => {
     expect(ONE_CALL).toBeGreaterThan(0);
   });

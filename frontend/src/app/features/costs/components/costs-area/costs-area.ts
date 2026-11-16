@@ -1,27 +1,27 @@
 import { Component } from '@angular/core';
-import { DashboardPage } from '../dashboard-page/dashboard-page';
+import { CostsPage } from '../costs-page/costs-page';
 
-/** The Dashboard area: the usage and cost overview of the app's agents. */
+/** The Costs area: the usage and cost overview of the app's agents. */
 @Component({
-  selector: 'app-dashboard-area',
-  imports: [DashboardPage],
+  selector: 'app-costs-area',
+  imports: [CostsPage],
   template: `
     <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
       <div
         class="flex w-full max-w-[1120px] min-w-0 flex-col gap-3"
-        data-testid="dashboard-page"
+        data-testid="costs-page"
       >
         <h2
           class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
         >
-          Dashboard
+          Costs
         </h2>
         @defer (on immediate) {
-          <app-dashboard-page />
+          <app-costs-page />
         }
       </div>
     </div>
   `,
   styles: ':host { display: contents; }',
 })
-export class DashboardArea {}
+export class CostsArea {}

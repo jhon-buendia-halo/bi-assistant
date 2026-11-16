@@ -102,7 +102,7 @@ function byCost<T extends UsageAmount & { name?: string; model?: string }>(
 }
 
 /**
- * Sums the calls into the Dashboard's buckets. A call counts in the period
+ * Sums the calls into the Costs page's buckets. A call counts in the period
  * when it started inside [from, to]; today, this month and the monthly
  * series ignore the period and use `now` in the time zone.
  */
