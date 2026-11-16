@@ -38,8 +38,10 @@ import type {
   VisualEvent,
 } from '../sessions/entities/session.entity';
 import type {
+  FilterInterpretation,
   PageRequest,
   PageResult,
+  ResultView,
 } from '../datasources/connectors/paged-sql.types';
 import {
   AnswerEvidenceService,
@@ -862,6 +864,19 @@ export class WorkflowRunsService implements OnModuleInit {
     request: PageRequest,
   ): Promise<PageResult> {
     return this.answers.page(this.answerHost(id), index, request);
+  }
+
+  /**
+   * The user's words read as a view of one of the answer's queries (api.md
+   * 152); nothing is stored.
+   */
+  async interpretFilter(
+    id: string,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Promise<FilterInterpretation> {
+    return this.answers.interpretFilter(this.answerHost(id), index, text, view);
   }
 
   /**

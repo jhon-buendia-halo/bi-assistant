@@ -141,6 +141,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       'I explain a SQL query step by step in business words, with how many rows are left after each step.',
   },
+  'result-explorer': {
+    name: 'Nathan',
+    role: 'Result Explorer',
+    domain: 'analysis',
+    intro:
+      "Tell me how to narrow a result, like only Brazil or newest first, and I'll turn it into filters, a sort and a page.",
+  },
 };
 
 /** The persona of a built-in agent, or undefined for an unknown key. */
