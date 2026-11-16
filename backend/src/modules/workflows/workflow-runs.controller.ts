@@ -26,12 +26,18 @@ import {
   type RunAttachment,
   type RunVisualResult,
 } from './workflow-runs.service';
-import { streamSse } from './workflows.controller';
+import { followSse, streamSse } from './workflows.controller';
 
 /** A positive integer `version` query, else undefined (as api.md 9, 14). */
 function parseVersion(value?: string): number | undefined {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+/** The `after` query of 149: a whole number of at least 0, else 0. */
+function parseAfter(value?: string): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 /**
@@ -177,8 +183,9 @@ export class WorkflowRunsController {
   /**
    * Answer a run that waits for the user and continue it, streamed (api.md
    * 138; ADR-0043): the same run's events as 119. Refusals answer their
-   * real status before the stream starts (Style B); closing the connection
-   * stops the run.
+   * real status before the stream starts (Style B). The run is detached
+   * from the connection as 119's (ADR-0048): closing it stops only the
+   * stream.
    */
   @Post(':id/resume/stream')
   @HttpCode(200)
@@ -188,9 +195,42 @@ export class WorkflowRunsController {
     @Res() res: Response,
   ): Promise<void> {
     const prepared = await this.runs.prepareResume(id, body);
-    await streamSse(res, (send, signal) =>
-      this.runs.resume(prepared, send, signal),
-    );
+    const runId = this.runs.resumeDetached(prepared);
+    await followSse(res, this.runs.live, runId);
+  }
+
+  /**
+   * Follow a live run again (api.md 149; ADR-0048): its events after
+   * `after` (a frame's `seq`; 0 or absent for all), then the live ones,
+   * ending with the run. 404 before any frame for an unknown run or one no
+   * longer held (read it with 121).
+   */
+  @Get(':id/events/stream')
+  async events(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Query('after') after?: string,
+  ): Promise<void> {
+    await this.runs.checkLive(id);
+    await followSse(res, this.runs.live, id, parseAfter(after));
+  }
+
+  /**
+   * Stop a run (api.md 150): stored `stopped` with any partial answer, and
+   * answered as stored. Idempotent: a run that already ended answers as it
+   * is.
+   */
+  @Post(':id/stop')
+  @HttpCode(200)
+  async stop(
+    @Param('id') id: string,
+  ): Promise<{ ok: true; message: string; run: WorkflowRun }> {
+    const run = await this.runs.stop(id);
+    return {
+      ok: true,
+      message: run.status === 'stopped' ? 'Run stopped' : 'Run already ended',
+      run,
+    };
   }
 
   /** Delete a run with its workspace (api.md 122). */

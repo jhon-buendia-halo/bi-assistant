@@ -19,6 +19,16 @@
         }
       }
       <p class="min-w-0 flex-1 text-[13px] leading-5 text-fg">{{ toast.message }}</p>
+      @if (toast.action; as action) {
+        <button
+          type="button"
+          class="btn btn-outline shrink-0 px-2.5 py-0.5 text-[12px]"
+          data-testid="toast-action"
+          (click)="toastService.runAction(toast)"
+        >
+          {{ action.label }}
+        </button>
+      }
       <button
         type="button"
         (click)="toastService.dismiss(toast.id)"

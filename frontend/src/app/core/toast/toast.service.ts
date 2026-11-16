@@ -3,10 +3,17 @@ import { DiagnosticsService } from '../diagnostics/diagnostics.service';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
+/** A button in the toast (Open, Retry); clicking it also dismisses the toast. */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface Toast {
   id: number;
   kind: ToastKind;
   message: string;
+  action?: ToastAction;
 }
 
 const DEFAULT_DURATION_MS = 4000;
@@ -19,13 +26,13 @@ export class ToastService {
   private seq = 0;
   readonly toasts = signal<Toast[]>([]);
 
-  success(message: string): void {
-    this.show('success', message, DEFAULT_DURATION_MS);
+  success(message: string, action?: ToastAction): void {
+    this.show('success', message, DEFAULT_DURATION_MS, action);
   }
 
-  error(message: string): void {
+  error(message: string, action?: ToastAction): void {
     this.diagnostics.record('error', 'user-visible', message);
-    this.show('error', message, ERROR_DURATION_MS);
+    this.show('error', message, ERROR_DURATION_MS, action);
   }
 
   info(message: string): void {
@@ -36,8 +43,21 @@ export class ToastService {
     this.toasts.set(this.toasts().filter((t) => t.id !== id));
   }
 
-  private show(kind: ToastKind, message: string, durationMs: number): void {
-    const toast: Toast = { id: ++this.seq, kind, message };
+  /** Runs a toast's action, then dismisses the toast. */
+  runAction(toast: Toast): void {
+    this.dismiss(toast.id);
+    toast.action?.run();
+  }
+
+  private show(
+    kind: ToastKind,
+    message: string,
+    durationMs: number,
+    action?: ToastAction,
+  ): void {
+    const toast: Toast = action
+      ? { id: ++this.seq, kind, message, action }
+      : { id: ++this.seq, kind, message };
     this.toasts.set([...this.toasts(), toast]);
     setTimeout(() => this.dismiss(toast.id), durationMs);
   }

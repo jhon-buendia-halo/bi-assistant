@@ -8,8 +8,8 @@
  * each `step` with what it received, its output, its times and, in the loop,
  * its attempt, the turn's events and `done { run }`, refuses a bad request
  * (and every removed workflow) with its real status before any stream, and
- * stops when the connection closes. `POST /workflows/:id/runs` (118)
- * answers the stored run.
+ * keeps running when the connection closes until Stop (150, ADR-0048).
+ * `POST /workflows/:id/runs` (118) answers the stored run.
  *
  * Needs no Postgres: the datasources point at closed ports, and the stub
  * model never calls a tool, so Validate always finds no query and the
@@ -726,6 +726,8 @@ describe('Streamed runs of agent workflows (API)', () => {
           attempt: 1,
         });
         expect(required).toEqual({
+          // Every frame carries its number in the run's log (ADR-0048).
+          seq: expect.any(Number) as unknown,
           type: 'input-required',
           runId,
           stepId: 'clarify',
@@ -780,6 +782,8 @@ describe('Streamed runs of agent workflows (API)', () => {
         });
         expect(second.status).toBe(200);
         expect(second.frames[0]).toEqual({
+          // The resume's fresh log goes on numbering (ADR-0048).
+          seq: expect.any(Number) as unknown,
           type: 'run',
           runId,
           workflowId: 'answer-business-question',
@@ -1037,7 +1041,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     }
   });
 
-  it('closing the connection stops the run: no terminal event, and it has no answer to continue from', async () => {
+  it('closing the connection leaves the run running (ADR-0048); Stop (150) stops it with no answer to continue from', async () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
     stub.hold = (req) =>
@@ -1075,8 +1079,29 @@ describe('Streamed runs of agent workflows (API)', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     controller.abort();
+    // Leaving is not stopping: the run still runs, and can be followed again.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(
+      (
+        (await http().get(`/workflow-runs/${runId}`).expect(200)).body as {
+          status?: string;
+        }
+      ).status,
+    ).toBe('running');
+    // Stop answers once the run is stored stopped (sent now, read below).
+    const stop = http()
+      .post(`/workflow-runs/${runId}/stop`)
+      .then((res) => res);
+    await new Promise((resolve) => setTimeout(resolve, 100));
     release();
     stub.hold = undefined;
+    const stopped = await stop;
+    expect(stopped.status).toBe(200);
+    expect(stopped.body).toMatchObject({
+      ok: true,
+      message: 'Run stopped',
+      run: { id: runId, status: 'stopped' },
+    });
     // The stopped run is stored without an answer.
     let refusal: { status: number; message?: string } = { status: 0 };
     for (let i = 0; i < 40; i++) {

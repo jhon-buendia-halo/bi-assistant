@@ -23,6 +23,15 @@ export interface OntologyBootstrapProgress {
   message: string;
 }
 
+/**
+ * What a bootstrap run has reported so far: every step (oldest first), and
+ * `created` once the run is done.
+ */
+export interface OntologyBootstrapRun {
+  steps: OntologyBootstrapProgress[];
+  created?: OntologyItem[];
+}
+
 function datasetBase(dataset: string): string {
   return `${API_BASE_URL}/datasets/${encodeURIComponent(dataset)}/ontology`;
 }
@@ -57,6 +66,45 @@ export class OntologyApiService {
     return this.http.delete(
       `${API_BASE_URL}/ontology/${encodeURIComponent(id)}`,
     );
+  }
+
+  /**
+   * The bootstrap stream as an Observable: it emits the run so far at every
+   * stage, then once more with `created` and completes; an error event
+   * errors it. Unsubscribing aborts the fetch, so Stop on a background task
+   * ends the request.
+   */
+  bootstrap(dataset: string): Observable<OntologyBootstrapRun> {
+    return new Observable<OntologyBootstrapRun>((subscriber) => {
+      const controller = new AbortController();
+      let steps: OntologyBootstrapProgress[] = [];
+      void this.bootstrapStream(
+        dataset,
+        {
+          onProgress: (progress) => {
+            const last = steps[steps.length - 1];
+            // A stage that counts up rewrites its own line.
+            steps =
+              last?.key === progress.key
+                ? [...steps.slice(0, -1), progress]
+                : [...steps, progress];
+            subscriber.next({ steps });
+          },
+          onDone: (created) => {
+            subscriber.next({ steps, created });
+            subscriber.complete();
+          },
+          onError: (message) =>
+            subscriber.error(
+              new Error(
+                message || 'Could not generate suggestions — try again shortly',
+              ),
+            ),
+        },
+        controller.signal,
+      );
+      return () => controller.abort();
+    });
   }
 
   /**
