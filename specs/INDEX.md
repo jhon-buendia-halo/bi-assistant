@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-681  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-687  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -317,7 +317,7 @@ roadmap.md:588-592  #### 1.26.2 — Saving a dataset and loading an inventory ru
 roadmap.md:594-598  #### 1.26.3 — Testing Data, ontology suggestions and the synthetic profile run in the background  `🚧 In progress`
 roadmap.md:600-604  #### 1.26.4 — Visual tailor and refresh, and eval runs, run in the background  `🚧 In progress`
 roadmap.md:606-611  #### 1.26.5 — Workflow runs keep running when the user leaves their page  `🚧 In progress`
-roadmap.md:613-681  ### Milestone 1.27 — Explore a query's full result: page, filter, sort (M1-27)
+roadmap.md:613-687  ### Milestone 1.27 — Explore a query's full result: page, filter, sort (M1-27)
 roadmap.md:617-621  #### 1.27.1 — Paged SQL builder and the connectors' paged read  `🚧 In progress`
 roadmap.md:623-627  #### 1.27.2 — Page engine and the page routes  `🚧 In progress`
 roadmap.md:629-633  #### 1.27.3 — Query inspector: pager, sort and column filters  `🚧 In progress`
@@ -329,9 +329,10 @@ roadmap.md:659-663  #### 1.27.8 — A follow-up over an earlier result pages it 
 roadmap.md:665-669  #### 1.27.9 — Sources a reader can understand: numbered, described, one per table  `🚧 In progress`
 roadmap.md:671-675  #### 1.27.10 — Every workflow whose answer ran queries gets the query inspector  `🚧 In progress`
 roadmap.md:677-681  #### 1.27.11 — Each readiness finding opens the rows behind it  `🚧 In progress`
-roadmap.md:683-687  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:687-687  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:689-691  ## Backlog
+roadmap.md:683-687  #### 1.27.12 — The Data Readiness agent lists every finding of a dimension from the report  `🚧 In progress`
+roadmap.md:689-693  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:693-693  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:695-697  ## Backlog
 
 specs/README.md:7-89  ## Layout
 specs/README.md:28-52  ### Capabilities
@@ -1700,10 +1701,10 @@ specs/epics/M1-26/spec.md:50-54  ## Dependencies, risks and open questions
 specs/epics/M1-27/spec.md:5-12  ## Goal
 specs/epics/M1-27/spec.md:14-18  ## Scope
 specs/epics/M1-27/spec.md:20-24  ## Out of scope
-specs/epics/M1-27/spec.md:26-40  ## Stories
-specs/epics/M1-27/spec.md:42-46  ## Specs touched
-specs/epics/M1-27/spec.md:48-53  ## Acceptance
-specs/epics/M1-27/spec.md:55-59  ## Dependencies, risks and open questions
+specs/epics/M1-27/spec.md:26-41  ## Stories
+specs/epics/M1-27/spec.md:43-47  ## Specs touched
+specs/epics/M1-27/spec.md:49-54  ## Acceptance
+specs/epics/M1-27/spec.md:56-60  ## Dependencies, risks and open questions
 
 specs/product/non-functional.md:5-19  ## 1. Platforms and delivery
 specs/product/non-functional.md:21-33  ## 2. Local-first data

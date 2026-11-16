@@ -680,6 +680,12 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 - **Out of scope:** changing how findings are scored; what the Data Readiness agent receives.
 - **Acceptance:** Jest tests of the SQL builder per check kind and dialect and of the step on the stub; a Playwright check that an Assess Data Readiness run lists a source per finding and opens it on its rows.
 
+#### 1.27.12 — The Data Readiness agent lists every finding of a dimension from the report  `🚧 In progress`
+- **Intent:** asked "what are all the completeness issues" (execution `129ad364`, Formula 1), the agent saw only the report's top 20 of 284 findings, recounted nulls with its own SQL over base tables only, missed the 17 views the engine profiles, and reported a false mismatch (140 vs 284). It now reads every finding of a dimension from the stored report and never recounts.
+- **Scope:** option A of three picked by the user on 2026-11-16 (rejected: B, instructions only; C, A plus a recount rule): `get_readiness_report` takes an optional `dimension` (and `page`) and returns that dimension's findings from the stored report, paged, with their total; the agent's instructions say to use it for "all the … issues" requests; data-readiness evals gain the case. agents.md 2.10, 3.13; data-readiness spec.
+- **Out of scope:** changing scores or the engine.
+- **Acceptance:** Jest tests of the bridge paging and the tool input; the new eval case passes 3 of 3 and the set shows no regression against main.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

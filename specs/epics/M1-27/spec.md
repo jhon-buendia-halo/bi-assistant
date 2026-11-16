@@ -38,6 +38,7 @@ A dataset query can return thousands of rows, but an answer kept at most 200 and
 | 1.27.9 | Sources a reader can understand: numbered, described, one per table (added 2026-11-16 at the user's request) | In progress |
 | 1.27.10 | Every workflow whose answer ran queries gets the query inspector (added 2026-11-16) | In progress |
 | 1.27.11 | Each readiness finding opens the rows behind it (added 2026-11-16) | In progress |
+| 1.27.12 | The Data Readiness agent lists every finding of a dimension from the report (added 2026-11-16, execution 129ad364) | In progress |
 
 ## Specs touched
 
