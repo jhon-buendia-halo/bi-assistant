@@ -253,11 +253,6 @@ export function noInvented(words: RegExp, label: string): EvalCustomCheck {
   );
 }
 
-/** Where the plan says it: assumptions, scope, clarification, restated question. */
-function where(plan: PlanView): string {
-  return planText(plan);
-}
-
 /**
  * The plan states the gap: the text matches `topic` and a word of absence,
  * in the assumptions, the scope or the clarification.
