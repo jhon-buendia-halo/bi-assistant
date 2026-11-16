@@ -135,6 +135,56 @@ export function parsePageRequest(body: unknown): PageRequest {
   return request;
 }
 
+/** The longest text 152 and 154 read. */
+export const INTERPRET_TEXT_MAX = 500;
+
+/** The body of 152 and 154: the user's words and the view they see now. */
+export interface InterpretFilterRequest {
+  text: string;
+  /** Null when the user sees the answer's stored rows. */
+  view: ResultView | null;
+}
+
+/**
+ * The body of 152 and 154 read: `text` the user's words (not blank, at
+ * most 500 characters), `view` the current view, its filters and sort
+ * read as 151 reads them.
+ */
+export function parseInterpretRequest(body: unknown): InterpretFilterRequest {
+  if (!isRecord(body)) bad('The body must be a JSON object');
+  const text = typeof body.text === 'string' ? body.text.trim() : '';
+  if (!text) bad('Write what to filter, sort or page');
+  if (text.length > INTERPRET_TEXT_MAX) {
+    bad(`The text is longer than ${INTERPRET_TEXT_MAX} characters`);
+  }
+  if (body.view === undefined || body.view === null)
+    return { text, view: null };
+  if (!isRecord(body.view)) bad('view must be a JSON object');
+  const raw = body.view;
+  const read = parsePageRequest({ filters: raw.filters, sort: raw.sort });
+  const page =
+    Number.isSafeInteger(raw.page) && (raw.page as number) >= 1
+      ? (raw.page as number)
+      : 1;
+  const pageSize =
+    Number.isInteger(raw.pageSize) &&
+    (raw.pageSize as number) >= 1 &&
+    (raw.pageSize as number) <= PAGE_SIZE_MAX
+      ? (raw.pageSize as number)
+      : PAGE_SIZE_DEFAULT;
+  const view: ResultView = {
+    filters: read.filters ?? [],
+    sort: read.sort ?? [],
+    page,
+    pageSize,
+  };
+  if (typeof raw.matchedRows === 'number' && raw.matchedRows >= 0) {
+    view.matchedRows = Math.floor(raw.matchedRows);
+  }
+  if (typeof raw.capped === 'boolean') view.capped = raw.capped;
+  return { text, view };
+}
+
 function parseFilter(raw: unknown): FilterSpec {
   if (!isRecord(raw) || typeof raw.column !== 'string' || !raw.column) {
     bad('Each filter names a column');

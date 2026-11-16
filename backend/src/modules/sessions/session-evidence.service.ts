@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type {
+  FilterInterpretation,
   PageRequest,
   PageResult,
+  ResultView,
 } from '../datasources/connectors/paged-sql.types';
 import type { ChatMessage } from './entities/session.entity';
 import {
@@ -57,6 +59,22 @@ export class SessionEvidenceService {
     request: PageRequest,
   ): Promise<PageResult> {
     return this.answers.page(this.host(id, message), index, request);
+  }
+
+  /** 154: the user's words read as a view of one query; nothing is stored. */
+  interpretFilter(
+    id: string,
+    message: number,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Promise<FilterInterpretation> {
+    return this.answers.interpretFilter(
+      this.host(id, message),
+      index,
+      text,
+      view,
+    );
   }
 
   /**

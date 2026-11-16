@@ -47,8 +47,15 @@ const DOMAIN_SECTIONS = [
   'quality',
   'general',
 ];
-/** The Analysis section: Official by name, then System (R1). */
-const ANALYSIS_KEYS = ['assistant', V2_KEY, 'analysis-planner'];
+/** The Analysis section: Official by name, then System by name (R1). */
+const ANALYSIS_KEYS = [
+  'assistant',
+  V2_KEY,
+  'result-explorer',
+  'analysis-planner',
+];
+/** Every card under All: 14 built-in agents and the Background's 2. */
+const ALL_CARDS = 16;
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -140,7 +147,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   await expect(button(page, 'New agent')).toBeEnabled();
   // Every card shows: no section hides a row behind Show more (R3).
   await expect(page.getByText(/^Show more/)).toHaveCount(0);
-  await expect(cards(page)).toHaveCount(15);
+  await expect(cards(page)).toHaveCount(ALL_CARDS);
 
   const analysis = section(page, 'analysis');
   await expect(
@@ -314,7 +321,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
 
   await owner.selectOption({ label: 'Any owner' });
   await filter(page, 'All').click();
-  await expect(cards(page)).toHaveCount(15);
+  await expect(cards(page)).toHaveCount(ALL_CARDS);
   await expect.poll(() => sectionIds(page)).toEqual(DOMAIN_SECTIONS);
 });
 

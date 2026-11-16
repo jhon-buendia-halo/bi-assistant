@@ -11,6 +11,7 @@ import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
 import { explainQueryWithModel } from './agents/query-explainer.agent';
+import { interpretResultWithModel } from './agents/result-explorer.agent';
 import {
   checkDataQualityWithModel,
   planWithModel,
@@ -113,6 +114,17 @@ export class MastraService {
     ...args: Parameters<typeof explainQueryWithModel>
   ): ReturnType<typeof explainQueryWithModel> {
     return explainQueryWithModel(...args);
+  }
+
+  /**
+   * A user's words read as a view of a query's result (api.md 152, 154;
+   * agents.md 2.15): one `result-explorer` call, no tools, the reply turned
+   * into `{ action, query, interpretation }` by `specOf`.
+   */
+  interpretResult(
+    ...args: Parameters<typeof interpretResultWithModel>
+  ): ReturnType<typeof interpretResultWithModel> {
+    return interpretResultWithModel(...args);
   }
 
   /**

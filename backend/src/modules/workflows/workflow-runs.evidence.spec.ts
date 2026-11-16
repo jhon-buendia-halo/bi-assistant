@@ -20,6 +20,8 @@ import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import type { InterpretResultInput } from '../../mastra/agents/result-explorer.agent';
+import { specOf } from '../../mastra/agents/result-explorer.prompts';
 import type { PagedStatement } from '../datasources/connectors/paged-sql.types';
 import type { DatasourcesService } from '../datasources/datasources.service';
 import type { ChatMessage } from '../sessions/entities/session.entity';
@@ -139,11 +141,31 @@ function build() {
   const repository = new WorkflowRunsRepository(
     new SqliteDocStore(db, 'workflow_runs'),
   );
+  // The result explorer, stubbed: its reply read by the real `specOf`.
+  const interpretResult = jest.fn((input: InterpretResultInput) =>
+    Promise.resolve(
+      specOf(
+        {
+          action: 'explore',
+          query: 1,
+          filters: [
+            { column: 'N', op: 'gte', value: '5', valueTo: null, values: null },
+          ],
+          sort: [],
+          page: { move: 'first', to: null },
+          understood: '',
+        },
+        input.candidates,
+        input.view,
+        input.pageCount,
+      ),
+    ),
+  );
   const service = new WorkflowRunsService(
     {} as never,
     sessions as unknown as SessionsService,
     {} as never,
-    {} as never,
+    { interpretResult } as never,
     repository,
     new WorkflowNodeChatsRepository(
       new SqliteDocStore(db, 'workflow_run_node_chats'),
@@ -152,7 +174,14 @@ function build() {
     // No stored artifact: no workflow here takes one.
     { list: () => Promise.resolve([]) } as never,
   );
-  return { service, repository, runReadOnlySql, runPagedSql, sessions };
+  return {
+    service,
+    repository,
+    runReadOnlySql,
+    runPagedSql,
+    sessions,
+    interpretResult,
+  };
 }
 
 describe('Workflow runs: the query evidence (api.md 139-143, 151)', () => {
@@ -280,6 +309,91 @@ describe('Workflow runs: the query evidence (api.md 139-143, 151)', () => {
     expect(ctx.runPagedSql).toHaveBeenCalledTimes(1);
   });
 
+  it('152 reads the words as a view of the stored query and stores nothing', async () => {
+    const ctx = build();
+    await ctx.repository.insert(
+      runDoc({
+        answer: {
+          ...ANSWER,
+          data: [
+            { ...ANSWER.data![0], rationale: 'Returns per product' },
+            ANSWER.data![1],
+            { tool: 'sample_rows', input: 'shop.public.returns', rows: [] },
+          ],
+        },
+      }),
+    );
+    const before = await ctx.repository.get(RUN_ID);
+    const view = {
+      filters: [],
+      sort: [],
+      page: 3,
+      pageSize: 10,
+      matchedRows: 95,
+    };
+
+    const interpretation = await ctx.service.interpretFilter(
+      RUN_ID,
+      0,
+      'at least 5 returns',
+      view,
+    );
+
+    expect(interpretation).toEqual({
+      request: {
+        page: 1,
+        pageSize: 10,
+        filters: [{ column: 'n', op: 'gte', value: 5 }],
+        sort: [],
+      },
+      understood: 'n at least 5',
+    });
+    expect(ctx.interpretResult).toHaveBeenCalledWith({
+      text: 'at least 5 returns',
+      candidates: [
+        {
+          ref: 'Q1',
+          rationale: 'Returns per product',
+          columns: [
+            { name: 'product', kind: 'text', values: ['a'] },
+            { name: 'n', kind: 'number', values: [9] },
+          ],
+        },
+      ],
+      view,
+      pageCount: 10,
+    });
+    expect(JSON.stringify(ctx.interpretResult.mock.calls)).not.toContain(
+      'SELECT',
+    );
+    expect(ctx.runPagedSql).not.toHaveBeenCalled();
+    expect(ctx.runReadOnlySql).not.toHaveBeenCalled();
+    expect(await ctx.repository.get(RUN_ID)).toEqual(before);
+
+    ctx.interpretResult.mockResolvedValueOnce({
+      action: 'new-question',
+      query: 0,
+      interpretation: { request: {}, understood: 'Average returns' },
+    });
+    await expect(
+      ctx.service.interpretFilter(RUN_ID, 0, 'average returns', null),
+    ).rejects.toThrow('That asks a new question, not a filter on this result');
+    ctx.interpretResult.mockRejectedValueOnce(new Error('model is down'));
+    await expect(
+      ctx.service.interpretFilter(RUN_ID, 0, 'only a', null),
+    ).rejects.toThrow('The filter could not be understood: model is down');
+    await expect(
+      ctx.service.interpretFilter(RUN_ID, 2, 'only a', null),
+    ).rejects.toThrow('Query 2 is a sample; it has no full result to page');
+    await expect(
+      ctx.service.interpretFilter(RUN_ID, 1, 'only a', null),
+    ).rejects.toThrow('Query 1 has no SQL to run');
+    await expect(
+      ctx.service.interpretFilter('missing', 0, 'only a', null),
+    ).rejects.toThrow('Run "missing" not found');
+    expect(ctx.interpretResult).toHaveBeenCalledTimes(3);
+  });
+
   it('128 rates the answer through the lock, keeping evidence written meanwhile', async () => {
     const ctx = build();
     await ctx.repository.insert(runDoc());
@@ -379,6 +493,36 @@ describe('Workflow runs: the query evidence (api.md 139-143, 151)', () => {
             expect((error as { message: string }).message).toBe(message),
           );
       }
+      const interpreted = await request(server)
+        .post(`/workflow-runs/${RUN_ID}/answer/queries/0/interpret-filter`)
+        .send({ text: 'n of 5 or more' })
+        .expect(201);
+      expect(interpreted.body).toEqual({
+        ok: true,
+        interpretation: {
+          request: {
+            page: 1,
+            filters: [{ column: 'n', op: 'gte', value: 5 }],
+            sort: [],
+          },
+          understood: 'n at least 5',
+        },
+      });
+      for (const [body, message] of [
+        [{}, 'Write what to filter, sort or page'],
+        [{ text: '   ' }, 'Write what to filter, sort or page'],
+        [{ text: 'x'.repeat(501) }, 'The text is longer than 500 characters'],
+        [{ text: 'only a', view: 'p2' }, 'view must be a JSON object'],
+      ] as const) {
+        await request(server)
+          .post(`/workflow-runs/${RUN_ID}/answer/queries/0/interpret-filter`)
+          .send(body)
+          .expect(400)
+          .expect(({ body: error }) =>
+            expect((error as { message: string }).message).toBe(message),
+          );
+      }
+      expect(ctx.interpretResult).toHaveBeenCalledTimes(1);
       await request(server)
         .post(`/workflow-runs/${RUN_ID}/answer/evidence`)
         .expect(201)
