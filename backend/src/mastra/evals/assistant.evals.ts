@@ -1411,6 +1411,14 @@ async function runJudgeCheck(
  * keys and averages scores across the data items of a single call — one call
  * for all ten questions would collapse them into one set of numbers.
  */
+/**
+ * The scorer of a case with custom checks only: it passes every answer, so
+ * the verdict is the custom checks' (Mastra's runEvals needs one scorer).
+ */
+function anyAnswer() {
+  return checks.includes('');
+}
+
 export async function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
   datasets: string[],
@@ -1485,7 +1493,9 @@ export async function runAssistantEvalCase(
           requestContext,
         },
       ],
-      scorers: evalCase.scorers,
+      // Mastra wants one scorer at least: a case judged only by custom
+      // checks (the isolated-call sets) gets one that any answer passes.
+      scorers: evalCase.scorers.length ? evalCase.scorers : [anyAnswer()],
       target: target.runTarget ?? target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from TurnOptions.agentContext — without this the model
