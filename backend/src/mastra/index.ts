@@ -15,6 +15,7 @@ import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
+import { siteReviewerAgent } from './agents/site-reviewer.agent';
 import { developerTraceExporters } from './developer-exporters';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
@@ -24,6 +25,7 @@ import { answerBusinessQuestionWorkflow } from './workflows/answer-business-ques
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
 import { recreateDashboardWorkflow } from './workflows/recreate-dashboard.workflow';
+import { reviewWebsiteWorkflow } from './workflows/review-website.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -53,6 +55,8 @@ export const mastra = new Mastra({
     'image-reader': imageReaderAgent,
     // The query inspector's explainer (agents.md 2.12).
     'query-explainer': queryExplainerAgent,
+    // Review a Website's agent (agents.md 2.16, 5.19).
+    'site-reviewer': siteReviewerAgent,
   },
   // The turn workflows (agents.md 1.2, 5.1): `answer-business-question`, the one
   // catalogue workflow (5.11, ADR-0034; api.md 118, 119), and `agent-turn`,
@@ -64,6 +68,7 @@ export const mastra = new Mastra({
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,
+    'review-website': reviewWebsiteWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

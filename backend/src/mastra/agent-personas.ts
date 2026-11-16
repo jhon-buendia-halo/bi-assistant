@@ -141,6 +141,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       "Attach a chart, a table or a screenshot to your question and I'll describe what it shows, so the team can work with it.",
   },
+  'site-reviewer': {
+    name: 'Iris',
+    role: 'Website Reviewer',
+    domain: 'quality',
+    intro:
+      'I walk through your website on every screen size and show you what is broken, with the element, what I measured and a picture of it.',
+  },
   'query-explainer': {
     name: 'Hannah',
     role: 'Query Explainer',

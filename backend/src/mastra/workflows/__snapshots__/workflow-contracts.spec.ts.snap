@@ -7634,3 +7634,3446 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
   ],
 }
 `;
+
+exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) review-website's contract (JSON Schemas and hash) is the reviewed one 1`] = `
+{
+  "contractHash": "a5df78788eda",
+  "edges": [
+    {
+      "from": "start",
+      "kind": "next",
+      "to": "prepare-session",
+    },
+    {
+      "from": "prepare-session",
+      "kind": "next",
+      "to": "discover-pages",
+    },
+    {
+      "from": "discover-pages",
+      "kind": "next",
+      "to": "group-templates",
+    },
+    {
+      "from": "group-templates",
+      "kind": "next",
+      "label": "Ten templates or fewer",
+      "to": "capture-and-check",
+    },
+    {
+      "from": "group-templates",
+      "kind": "branch",
+      "label": "More than ten templates",
+      "to": "confirm-review",
+    },
+    {
+      "from": "confirm-review",
+      "kind": "next",
+      "to": "capture-and-check",
+    },
+    {
+      "from": "capture-and-check",
+      "kind": "next",
+      "label": "No visual review",
+      "to": "save-report",
+    },
+    {
+      "from": "capture-and-check",
+      "kind": "branch",
+      "label": "Templates to review",
+      "to": "review-templates",
+    },
+    {
+      "from": "review-templates",
+      "kind": "next",
+      "to": "save-report",
+    },
+    {
+      "from": "save-report",
+      "kind": "next",
+      "to": "end",
+    },
+  ],
+  "input": [
+    {
+      "name": "url",
+      "required": true,
+      "type": "text",
+    },
+    {
+      "name": "maxPages",
+      "required": false,
+      "type": "number",
+    },
+    {
+      "name": "maxDepth",
+      "required": false,
+      "type": "number",
+    },
+    {
+      "name": "mobile",
+      "required": false,
+      "type": "boolean",
+    },
+    {
+      "name": "tablet",
+      "required": false,
+      "type": "boolean",
+    },
+    {
+      "name": "laptop",
+      "required": false,
+      "type": "boolean",
+    },
+    {
+      "name": "desktop",
+      "required": false,
+      "type": "boolean",
+    },
+    {
+      "name": "exclude",
+      "required": false,
+      "type": "text",
+    },
+    {
+      "name": "visualReview",
+      "required": false,
+      "type": "boolean",
+    },
+    {
+      "name": "needsSignIn",
+      "required": false,
+      "type": "boolean",
+    },
+    {
+      "name": "loginUrl",
+      "required": false,
+      "type": "text",
+    },
+  ],
+  "steps": [
+    {
+      "id": "prepare-session",
+      "inputSchema": {
+        "properties": {
+          "desktop": {
+            "description": "Review each page at 1920 px.",
+            "type": "boolean",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "laptop": {
+            "description": "Review each page at 1440 px.",
+            "type": "boolean",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "mobile": {
+            "description": "Review each page at 390 px.",
+            "type": "boolean",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "tablet": {
+            "description": "Review each page at 768 px.",
+            "type": "boolean",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "mobile",
+          "tablet",
+          "laptop",
+          "desktop",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "visualReview",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "discover-pages",
+      "inputSchema": {
+        "properties": {
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "group-templates",
+      "inputSchema": {
+        "properties": {
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "askBeforeReview": {
+            "description": "Whether the review is big enough to ask the user first.",
+            "type": "boolean",
+          },
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews: all, some or none.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "templates": {
+            "description": "The page templates, biggest first.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "representative": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "pages",
+                "representative",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+          "templates",
+          "reviewTemplates",
+          "askBeforeReview",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "confirm-review",
+      "inputSchema": {
+        "properties": {
+          "askBeforeReview": {
+            "description": "Whether the review is big enough to ask the user first.",
+            "type": "boolean",
+          },
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews: all, some or none.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "templates": {
+            "description": "The page templates, biggest first.",
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "representative": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "pages",
+                "representative",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+          "templates",
+          "reviewTemplates",
+          "askBeforeReview",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+        },
+        "required": [
+          "reviewTemplates",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "capture-and-check",
+      "inputSchema": {
+        "properties": {
+          "askBeforeReview": {
+            "description": "Whether the review is big enough to ask the user first.",
+            "type": "boolean",
+          },
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews: all, some or none.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "templates": {
+            "description": "The page templates, biggest first.",
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "representative": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "pages",
+                "representative",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+          "templates",
+          "reviewTemplates",
+          "askBeforeReview",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "askBeforeReview": {
+            "description": "Whether the review is big enough to ask the user first.",
+            "type": "boolean",
+          },
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "captures": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "group": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "screenshot": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "thumbnail": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "screen",
+                "group",
+                "screenshot",
+                "thumbnail",
+                "status",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "findings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "clip": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "crop": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "expected": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "helpUrl": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "id": {
+                  "type": "string",
+                },
+                "measured": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "rect": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "height": {
+                          "type": "number",
+                        },
+                        "width": {
+                          "type": "number",
+                        },
+                        "x": {
+                          "type": "number",
+                        },
+                        "y": {
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "rule": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "selector": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "severity": {
+                  "enum": [
+                    "critical",
+                    "major",
+                    "minor",
+                  ],
+                  "type": "string",
+                },
+                "source": {
+                  "enum": [
+                    "measured",
+                    "iris",
+                  ],
+                  "type": "string",
+                },
+                "title": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "rule",
+                "severity",
+                "title",
+                "screen",
+                "selector",
+                "measured",
+                "expected",
+                "rect",
+                "helpUrl",
+                "id",
+                "group",
+                "pages",
+                "crop",
+                "context",
+                "source",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewShots": {
+            "description": "The marked screenshots of the templates Iris reviews.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "clean": {
+                  "type": "string",
+                },
+                "clip": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
+                "marked": {
+                  "type": "string",
+                },
+                "marks": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "crop": {
+                        "type": [
+                          "string",
+                          "null",
+                        ],
+                      },
+                      "n": {
+                        "type": "number",
+                      },
+                      "rect": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "height": {
+                            "type": "number",
+                          },
+                          "width": {
+                            "type": "number",
+                          },
+                          "x": {
+                            "type": "number",
+                          },
+                          "y": {
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                        ],
+                        "type": "object",
+                      },
+                      "selector": {
+                        "type": "string",
+                      },
+                      "tag": {
+                        "type": "string",
+                      },
+                      "text": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "n",
+                      "selector",
+                      "tag",
+                      "text",
+                      "rect",
+                      "crop",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "template": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "template",
+                "url",
+                "screen",
+                "clean",
+                "marked",
+                "clip",
+                "marks",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews: all, some or none.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "templates": {
+            "description": "The page templates, biggest first.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "representative": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "pages",
+                "representative",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+          "templates",
+          "reviewTemplates",
+          "askBeforeReview",
+          "captures",
+          "findings",
+          "reviewShots",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "review-templates",
+      "inputSchema": {
+        "properties": {
+          "askBeforeReview": {
+            "description": "Whether the review is big enough to ask the user first.",
+            "type": "boolean",
+          },
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "captures": {
+            "items": {
+              "properties": {
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "group": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "screenshot": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "thumbnail": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "screen",
+                "group",
+                "screenshot",
+                "thumbnail",
+                "status",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "findings": {
+            "items": {
+              "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "clip": {
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "crop": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "expected": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "helpUrl": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "id": {
+                  "type": "string",
+                },
+                "measured": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "rect": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "height": {
+                          "type": "number",
+                        },
+                        "width": {
+                          "type": "number",
+                        },
+                        "x": {
+                          "type": "number",
+                        },
+                        "y": {
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "rule": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "selector": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "severity": {
+                  "enum": [
+                    "critical",
+                    "major",
+                    "minor",
+                  ],
+                  "type": "string",
+                },
+                "source": {
+                  "enum": [
+                    "measured",
+                    "iris",
+                  ],
+                  "type": "string",
+                },
+                "title": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "rule",
+                "severity",
+                "title",
+                "screen",
+                "selector",
+                "measured",
+                "expected",
+                "rect",
+                "helpUrl",
+                "id",
+                "group",
+                "pages",
+                "crop",
+                "context",
+                "source",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewShots": {
+            "description": "The marked screenshots of the templates Iris reviews.",
+            "items": {
+              "properties": {
+                "clean": {
+                  "type": "string",
+                },
+                "clip": {
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
+                "marked": {
+                  "type": "string",
+                },
+                "marks": {
+                  "items": {
+                    "properties": {
+                      "crop": {
+                        "type": [
+                          "string",
+                          "null",
+                        ],
+                      },
+                      "n": {
+                        "type": "number",
+                      },
+                      "rect": {
+                        "properties": {
+                          "height": {
+                            "type": "number",
+                          },
+                          "width": {
+                            "type": "number",
+                          },
+                          "x": {
+                            "type": "number",
+                          },
+                          "y": {
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                        ],
+                        "type": "object",
+                      },
+                      "selector": {
+                        "type": "string",
+                      },
+                      "tag": {
+                        "type": "string",
+                      },
+                      "text": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "n",
+                      "selector",
+                      "tag",
+                      "text",
+                      "rect",
+                      "crop",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "template": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "template",
+                "url",
+                "screen",
+                "clean",
+                "marked",
+                "clip",
+                "marks",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews: all, some or none.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "templates": {
+            "description": "The page templates, biggest first.",
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "representative": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "pages",
+                "representative",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+          "templates",
+          "reviewTemplates",
+          "askBeforeReview",
+          "captures",
+          "findings",
+          "reviewShots",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "askBeforeReview": {
+            "description": "Whether the review is big enough to ask the user first.",
+            "type": "boolean",
+          },
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "captures": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "group": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "screenshot": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "thumbnail": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "screen",
+                "group",
+                "screenshot",
+                "thumbnail",
+                "status",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "findings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "clip": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "crop": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "expected": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "helpUrl": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "id": {
+                  "type": "string",
+                },
+                "measured": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "rect": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "height": {
+                          "type": "number",
+                        },
+                        "width": {
+                          "type": "number",
+                        },
+                        "x": {
+                          "type": "number",
+                        },
+                        "y": {
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "rule": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "selector": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "severity": {
+                  "enum": [
+                    "critical",
+                    "major",
+                    "minor",
+                  ],
+                  "type": "string",
+                },
+                "source": {
+                  "enum": [
+                    "measured",
+                    "iris",
+                  ],
+                  "type": "string",
+                },
+                "title": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "rule",
+                "severity",
+                "title",
+                "screen",
+                "selector",
+                "measured",
+                "expected",
+                "rect",
+                "helpUrl",
+                "id",
+                "group",
+                "pages",
+                "crop",
+                "context",
+                "source",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewShots": {
+            "description": "The marked screenshots of the templates Iris reviews.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "clean": {
+                  "type": "string",
+                },
+                "clip": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
+                "marked": {
+                  "type": "string",
+                },
+                "marks": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "crop": {
+                        "type": [
+                          "string",
+                          "null",
+                        ],
+                      },
+                      "n": {
+                        "type": "number",
+                      },
+                      "rect": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "height": {
+                            "type": "number",
+                          },
+                          "width": {
+                            "type": "number",
+                          },
+                          "x": {
+                            "type": "number",
+                          },
+                          "y": {
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                        ],
+                        "type": "object",
+                      },
+                      "selector": {
+                        "type": "string",
+                      },
+                      "tag": {
+                        "type": "string",
+                      },
+                      "text": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "n",
+                      "selector",
+                      "tag",
+                      "text",
+                      "rect",
+                      "crop",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "template": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "template",
+                "url",
+                "screen",
+                "clean",
+                "marked",
+                "clip",
+                "marks",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews: all, some or none.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "reviewed": {
+            "default": [],
+            "description": "Each template Iris reviewed, with her one-line summary; none when Review templates did not run.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "findingCount": {
+                  "type": "number",
+                },
+                "summary": {
+                  "type": "string",
+                },
+                "template": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "template",
+                "summary",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "stopped": {
+            "default": false,
+            "description": "Whether the run was stopped during the review.",
+            "type": "boolean",
+          },
+          "templates": {
+            "description": "The page templates, biggest first.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "representative": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "pages",
+                "representative",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+          "templates",
+          "reviewTemplates",
+          "askBeforeReview",
+          "captures",
+          "findings",
+          "reviewShots",
+          "reviewed",
+          "stopped",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "save-report",
+      "inputSchema": {
+        "properties": {
+          "askBeforeReview": {
+            "description": "Whether the review is big enough to ask the user first.",
+            "type": "boolean",
+          },
+          "capped": {
+            "description": "Whether the crawl stopped at the page limit.",
+            "type": "boolean",
+          },
+          "captures": {
+            "items": {
+              "properties": {
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "group": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "screenshot": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "thumbnail": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "screen",
+                "group",
+                "screenshot",
+                "thumbnail",
+                "status",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "exclude": {
+            "description": "A pattern of links never to follow (sign-out, delete).",
+            "type": "string",
+          },
+          "findings": {
+            "items": {
+              "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "clip": {
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "crop": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "expected": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "helpUrl": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "id": {
+                  "type": "string",
+                },
+                "measured": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "rect": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "height": {
+                          "type": "number",
+                        },
+                        "width": {
+                          "type": "number",
+                        },
+                        "x": {
+                          "type": "number",
+                        },
+                        "y": {
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
+                "rule": {
+                  "type": "string",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "selector": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "severity": {
+                  "enum": [
+                    "critical",
+                    "major",
+                    "minor",
+                  ],
+                  "type": "string",
+                },
+                "source": {
+                  "enum": [
+                    "measured",
+                    "iris",
+                  ],
+                  "type": "string",
+                },
+                "title": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "rule",
+                "severity",
+                "title",
+                "screen",
+                "selector",
+                "measured",
+                "expected",
+                "rect",
+                "helpUrl",
+                "id",
+                "group",
+                "pages",
+                "crop",
+                "context",
+                "source",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "loginUrl": {
+            "description": "Where the sign-in starts, else the entry URL.",
+            "type": "string",
+          },
+          "maxDepth": {
+            "description": "How many clicks away from the entry URL.",
+            "type": "number",
+          },
+          "maxPages": {
+            "description": "The most pages to review.",
+            "type": "number",
+          },
+          "needsSignIn": {
+            "description": "Whether the site needs a sign-in.",
+            "type": "boolean",
+          },
+          "origin": {
+            "description": "The site's origin: scheme, host and port.",
+            "type": "string",
+          },
+          "pages": {
+            "description": "Every page reached, in crawl order.",
+            "items": {
+              "properties": {
+                "depth": {
+                  "type": "number",
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "finalUrl": {
+                  "type": "string",
+                },
+                "fingerprint": {
+                  "type": "string",
+                },
+                "group": {
+                  "type": "string",
+                },
+                "parent": {
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
+                "status": {
+                  "type": [
+                    "number",
+                    "null",
+                  ],
+                },
+                "title": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "url",
+                "finalUrl",
+                "status",
+                "title",
+                "depth",
+                "parent",
+                "group",
+                "fingerprint",
+                "error",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewShots": {
+            "description": "The marked screenshots of the templates Iris reviews.",
+            "items": {
+              "properties": {
+                "clean": {
+                  "type": "string",
+                },
+                "clip": {
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
+                "marked": {
+                  "type": "string",
+                },
+                "marks": {
+                  "items": {
+                    "properties": {
+                      "crop": {
+                        "type": [
+                          "string",
+                          "null",
+                        ],
+                      },
+                      "n": {
+                        "type": "number",
+                      },
+                      "rect": {
+                        "properties": {
+                          "height": {
+                            "type": "number",
+                          },
+                          "width": {
+                            "type": "number",
+                          },
+                          "x": {
+                            "type": "number",
+                          },
+                          "y": {
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                        ],
+                        "type": "object",
+                      },
+                      "selector": {
+                        "type": "string",
+                      },
+                      "tag": {
+                        "type": "string",
+                      },
+                      "text": {
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "n",
+                      "selector",
+                      "tag",
+                      "text",
+                      "rect",
+                      "crop",
+                    ],
+                    "type": "object",
+                  },
+                  "type": "array",
+                },
+                "screen": {
+                  "enum": [
+                    "mobile",
+                    "tablet",
+                    "laptop",
+                    "desktop",
+                  ],
+                  "type": "string",
+                },
+                "template": {
+                  "type": "string",
+                },
+                "url": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "template",
+                "url",
+                "screen",
+                "clean",
+                "marked",
+                "clip",
+                "marks",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "reviewTemplates": {
+            "description": "The ids of the templates Iris reviews: all, some or none.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "reviewed": {
+            "default": [],
+            "description": "Each template Iris reviewed, with her one-line summary; none when Review templates did not run.",
+            "items": {
+              "properties": {
+                "findingCount": {
+                  "type": "number",
+                },
+                "summary": {
+                  "type": "string",
+                },
+                "template": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "template",
+                "summary",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "screens": {
+            "description": "The screens each page is reviewed on, narrowest first.",
+            "items": {
+              "enum": [
+                "mobile",
+                "tablet",
+                "laptop",
+                "desktop",
+              ],
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "sessionLost": {
+            "description": "The page that landed on the sign-in page, else null.",
+            "type": [
+              "string",
+              "null",
+            ],
+          },
+          "signedIn": {
+            "description": "Whether the crawl runs with a saved sign-in.",
+            "type": "boolean",
+          },
+          "skippedLinks": {
+            "description": "Same-site links the exclusion pattern kept the crawl from.",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "stopped": {
+            "default": false,
+            "description": "Whether the run was stopped during the review.",
+            "type": "boolean",
+          },
+          "templates": {
+            "description": "The page templates, biggest first.",
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string",
+                },
+                "pages": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "representative": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "pages",
+                "representative",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "url": {
+            "description": "The entry URL: where the crawl starts.",
+            "type": "string",
+          },
+          "visualReview": {
+            "description": "Whether Iris reviews one page per template with vision.",
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "url",
+          "maxPages",
+          "maxDepth",
+          "screens",
+          "exclude",
+          "needsSignIn",
+          "loginUrl",
+          "origin",
+          "signedIn",
+          "visualReview",
+          "pages",
+          "skippedLinks",
+          "capped",
+          "sessionLost",
+          "templates",
+          "reviewTemplates",
+          "askBeforeReview",
+          "captures",
+          "findings",
+          "reviewShots",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The run's answer.",
+            "type": "string",
+          },
+          "counts": {
+            "additionalProperties": false,
+            "properties": {
+              "critical": {
+                "type": "number",
+              },
+              "major": {
+                "type": "number",
+              },
+              "minor": {
+                "type": "number",
+              },
+            },
+            "required": [
+              "critical",
+              "major",
+              "minor",
+            ],
+            "type": "object",
+          },
+          "findingCount": {
+            "type": "number",
+          },
+          "groupCount": {
+            "type": "number",
+          },
+          "origin": {
+            "type": "string",
+          },
+          "pageCount": {
+            "type": "number",
+          },
+          "reportFile": {
+            "description": "The findings JSON's path in the run's workspace.",
+            "type": "string",
+          },
+          "visualId": {
+            "description": "The report's id: a visual of the run.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "visualId",
+          "reportFile",
+          "origin",
+          "pageCount",
+          "groupCount",
+          "findingCount",
+          "counts",
+          "answer",
+        ],
+        "type": "object",
+      },
+    },
+  ],
+}
+`;

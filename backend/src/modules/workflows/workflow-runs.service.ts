@@ -28,6 +28,7 @@ import {
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
 import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
+import { REVIEW_WEBSITE_WORKFLOW_ID } from '../../mastra/workflows/review-website.steps';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { ArtifactsService } from '../artifacts/artifacts.service';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
@@ -597,6 +598,10 @@ export class WorkflowRunsService implements OnModuleInit {
             }
           : {}),
         ...(prepared.turn.artifact ? { artifact: prepared.turn.artifact } : {}),
+        // Review a Website's steps read the whole form (agents.md 5.19).
+        ...(workflow.id === REVIEW_WEBSITE_WORKFLOW_ID
+          ? { inputValues: prepared.values }
+          : {}),
         ...(prepared.context
           ? {
               context: {

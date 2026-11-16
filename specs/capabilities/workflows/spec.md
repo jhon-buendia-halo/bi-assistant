@@ -1,6 +1,6 @@
 # Workflows
 
-Every run runs a **workflow**: a fixed sequence of steps defined in code, each one deterministic code or a call to an agent. The catalogue holds four workflows: **Answer a Business Question** (`answer-business-question`; since 2026-11-13 eight steps, ten since 2026-11-15 with the optional Check data quality and Read images: it reads the reference images when the run has any, plans, then clarifies or analyses, validates, retries once and writes its answer) and, since 2026-11-13, **Assess Data Readiness** (`data-readiness-assessment`: it profiles one PostgreSQL or Databricks dataset, scores it with the deterministic engine, stores the report and has the Data Readiness Agent explain it) and, since 2026-11-15, **Dashboard Image to Artifact** (`recreate-dashboard`: it reads the uploaded image of a dashboard into an interactive mock and saves it in Artifacts; R32) and **Map a Dashboard to Data** (`map-dashboard-data`: it maps a saved dashboard to the datasets the user picks and marks what the data cannot feed; R34). Agents are no longer workflows: they are a library ([../agents-evals/spec.md](../agents-evals/spec.md)) that workflow steps call (workflows → agents → skills → tools), and they cannot be run from the Workflows area or from their own page. Workflows are read-only: the app never creates, edits or deletes one (ADR-0040, partly superseded by ADR-0042).
+Every run runs a **workflow**: a fixed sequence of steps defined in code, each one deterministic code or a call to an agent. The catalogue holds five workflows: **Answer a Business Question** (`answer-business-question`; since 2026-11-13 eight steps, ten since 2026-11-15 with the optional Check data quality and Read images: it reads the reference images when the run has any, plans, then clarifies or analyses, validates, retries once and writes its answer) and, since 2026-11-13, **Assess Data Readiness** (`data-readiness-assessment`: it profiles one PostgreSQL or Databricks dataset, scores it with the deterministic engine, stores the report and has the Data Readiness Agent explain it) and, since 2026-11-15, **Dashboard Image to Artifact** (`recreate-dashboard`: it reads the uploaded image of a dashboard into an interactive mock and saves it in Artifacts; R32) and **Map a Dashboard to Data** (`map-dashboard-data`: it maps a saved dashboard to the datasets the user picks and marks what the data cannot feed; R34) and, since 2026-11-16, **Review a Website** (`review-website`: it crawls a website and measures the visual and usability defects of every page on each screen size in a real browser, with the evidence of each finding; [../../system/agents.md](../../system/agents.md) 5.19). Agents are no longer workflows: they are a library ([../agents-evals/spec.md](../agents-evals/spec.md)) that workflow steps call (workflows → agents → skills → tools), and they cannot be run from the Workflows area or from their own page. Workflows are read-only: the app never creates, edits or deletes one (ADR-0040, partly superseded by ADR-0042).
 
 Every workflow is a **run workflow**: it runs once on a typed input defined in code and shows each step's result on its page; no chat can start (ADR-0041). Every run is stored: it is listed, reopened with its result and files, and deleted with them. A workflow's page is a designer: its graph on a canvas and one Run panel beside it (the Chat), with no right panel. The Run panel streams the run live and shows the answer with its provenance, and the user can stop it, follow up on it and answer its clarifying question. The one-step agent workflows (`agent:*`), the Sequential test workflow (`seq-text-demo`) and Deep analysis (`deep-analysis`) were removed on 2026-11-12; the runs they stored stay readable (R23).
 
@@ -13,8 +13,8 @@ Capability-local vocabulary: a workflow's **id** (`answer-business-question`), t
 ## Rules
 
 The catalogue
-- R1. The workflow catalogue SHALL list exactly four workflows, in this order: **Answer a Business Question** (`answer-business-question`, owner `Official`), **Assess Data Readiness** (`data-readiness-assessment`, owner `Official`, since 2026-11-13), **Dashboard Image to Artifact** (`recreate-dashboard`, owner `Official`, since 2026-11-15) and **Map a Dashboard to Data** (`map-dashboard-data`, owner `Official`, since 2026-11-15). It SHALL NOT list any agent: no System, Official, draft-only or Live user agent has a workflow of its own (the Data Readiness Agent runs a step of Assess Data Readiness; it is not that workflow). Each entry SHALL carry its name, description, kind, owner, the agents its steps call, its number of steps, whether it takes the datasets the user picks, the datasets a session would take, the missing ones and the starter questions ([../../system/api.md](../../system/api.md) 116). The workflow is shown as "Answer a Business Question" (until 2026-11-13, "Questions to Insights v2", then the name of its agent, renamed on 2026-11-15 to Insights Analyst `insights-analyst`; the workflow's id was `qti-v2-turn` until then, data-model M16); a stored run keeps the workflow name it ran under, so an older run still reads "Questions to Insights v2" while sessions, whose `workflowRef.name` comes from the catalogue, show the new one.
-- R2. The workflows' ids SHALL be `answer-business-question`, `data-readiness-assessment`, `recreate-dashboard` and `map-dashboard-data`. Any other id SHALL NOT resolve to a workflow, including the removed one-step ids `agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>` and `agent:rfp`, and the removed `seq-text-demo` and `deep-analysis` (2026-11-12).
+- R1. The workflow catalogue SHALL list exactly five workflows, in this order: **Answer a Business Question** (`answer-business-question`, owner `Official`), **Assess Data Readiness** (`data-readiness-assessment`, owner `Official`, since 2026-11-13), **Dashboard Image to Artifact** (`recreate-dashboard`, owner `Official`, since 2026-11-15) **Map a Dashboard to Data** (`map-dashboard-data`, owner `Official`, since 2026-11-15) and **Review a Website** (`review-website`, owner `Official`, since 2026-11-16; [../../system/agents.md](../../system/agents.md) 5.19). It SHALL NOT list any agent: no System, Official, draft-only or Live user agent has a workflow of its own (the Data Readiness Agent runs a step of Assess Data Readiness; it is not that workflow). Each entry SHALL carry its name, description, kind, owner, the agents its steps call, its number of steps, whether it takes the datasets the user picks, the datasets a session would take, the missing ones and the starter questions ([../../system/api.md](../../system/api.md) 116). The workflow is shown as "Answer a Business Question" (until 2026-11-13, "Questions to Insights v2", then the name of its agent, renamed on 2026-11-15 to Insights Analyst `insights-analyst`; the workflow's id was `qti-v2-turn` until then, data-model M16); a stored run keeps the workflow name it ran under, so an older run still reads "Questions to Insights v2" while sessions, whose `workflowRef.name` comes from the catalogue, show the new one.
+- R2. The workflows' ids SHALL be `answer-business-question`, `data-readiness-assessment`, `recreate-dashboard`, `map-dashboard-data` and `review-website`. Any other id SHALL NOT resolve to a workflow, including the removed one-step ids `agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>` and `agent:rfp`, and the removed `seq-text-demo` and `deep-analysis` (2026-11-12).
 - R3. Workflows SHALL be defined in code. The app SHALL NOT offer any control that creates, edits, reorders or deletes a workflow or a step, and the API SHALL have no write route for workflows. Publishing, editing or deleting a user agent SHALL NOT change the catalogue.
 
 Sessions
@@ -144,7 +144,7 @@ Feature: Workflows
   @demo @story-1.23.5
   Scenario: Open a workflow and run it from its page
     When I click "Workflows" on the rail
-    Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Official, and no Mine section
+    Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact", "Map a Dashboard to Data" and "Review a Website" under Official, and no Mine section
     When I open "Answer a Business Question"
     Then I see its ten steps on the canvas and the agents Michael, Zoe, Olivia, Sarah and Jessica under Agents in its Start node
     When I click "Execute workflow"
@@ -310,6 +310,35 @@ Feature: Workflow runs
     When I follow up with "And the fewest?"
     Then the follow-up form shows the image's thumbnail
     And the second run reads the same image again and answers
+```
+
+### Feature: Review a Website
+
+E2E: `frontend/e2e/review-website.spec.ts`
+
+```gherkin
+Feature: Review a Website
+
+  Background:
+    Given a local website with known defects: a page wider than a phone, an item template with a broken image and "Hi Forename", a cookie bar over a submit button, a 500 page and a sign-out link
+
+  @demo @story-1.27.1
+  Scenario: I review a website and every defect comes with its evidence
+    When I open "Review a Website" from Workflows, enter the site's URL, untick "Visual review with Iris" and click Execute
+    Then I see the running step and its progress, page by page
+    And the run succeeds with no model call
+    And the short answer puts the covered "Buy now" button first, as critical
+    And the answer's coverage says 1 link was skipped and 1 page failed
+    And the sign-out link was never opened
+    When I open the report in full screen
+    Then the problems come first, worst first; "Tap target too small" groups its elements, each framed in its page, with Previous and Next
+
+  @story-1.27.2
+  Scenario: Iris reviews one page per template and her findings join the report
+    Given the stub model answers as Iris with one visual finding
+    When I review the site with "Visual review with Iris" ticked
+    Then the run succeeds and Iris reviewed each page template that loaded, one call each, with its screenshots
+    And the report tags her finding "Iris", with what she observed and her suggestion
 ```
 
 ## Acceptance
