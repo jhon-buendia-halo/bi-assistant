@@ -573,7 +573,7 @@ export class WorkflowDesigner {
 
   /** The datasets a `datasets` field offers; then, with `thenExecute`, the run starts. */
   private loadDatasets(thenExecute = false): void {
-    this.datasetsSubscription = this.datasetsApi.getDatasets().subscribe({
+    this.datasetsSubscription = this.datasetsApi.getDatasetSummaries().subscribe({
       next: (response) => {
         this.datasets.set(response.datasets ?? []);
         this.datasetsLoaded.set(true);

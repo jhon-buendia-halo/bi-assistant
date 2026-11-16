@@ -93,6 +93,20 @@ describe('DatasetPicker', () => {
     expect(chip.querySelector('button')!.getAttribute('aria-label')).toBe('Remove Formula 1');
   });
 
+  it('marks a picked name no dataset has any more as missing, and removes it', () => {
+    render(FEW, ['World Cup', 'Gone']);
+    const chips = all('[data-testid="dataset-picker-chip"]');
+    expect(chips.map((c) => c.textContent!.replace(/\s+/g, ' ').trim())).toEqual([
+      'World Cup',
+      'Gone (missing)',
+    ]);
+    expect(chips[0].classList).not.toContain('picker-chip-missing');
+    expect(chips[1].classList).toContain('picker-chip-missing');
+    chips[1].querySelector('button')!.click();
+    fixture.detectChanges();
+    expect(emitted).toEqual([['World Cup']]);
+  });
+
   it('shows no suggestions for a large catalogue, only Add dataset', () => {
     render(MANY);
     expect(all('[data-testid="dataset-picker-suggestion"]').length).toBe(0);

@@ -128,7 +128,8 @@ export class Welcome {
       next: (res) => this.workflows.set(res.workflows ?? []),
       error: () => this.workflows.set([]),
     });
-    this.datasetsApi.getDatasets().subscribe({
+    // The light listing (api.md 21, view=summary) is all the picker needs.
+    this.datasetsApi.getDatasetSummaries().subscribe({
       next: (res) => {
         const datasets = res.datasets ?? [];
         this.datasets.set(datasets);

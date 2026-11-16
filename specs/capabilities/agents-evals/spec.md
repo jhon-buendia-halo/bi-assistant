@@ -147,7 +147,7 @@ User agents (definitions)
   - **Domain** (optional), after Job title: a `select` (`agent-editor-domain`) with the six domain labels (R1), default General, and the hint `The Agents screen groups agents by domain.`. General is sent and stored as no domain ([data-model.md](../../system/data-model.md) 3.10);
   - **Description** (at most 280);
   - **Job description** (the agent's instructions; at most 4,000 characters, counting the saved text): the link editor (R81), with the hint `Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.`, and under it `Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.`;
-  - **Datasets**: one checkbox per existing dataset, by name. A dataset in the draft that no longer exists SHALL stay listed, ticked, as `<name> (missing)`, so the user can untick it. With no datasets at all: `No datasets yet — create one in Datasets first.`;
+  - **Datasets**: the dataset picker (chips for the picked datasets, **Add dataset** opening a searchable list of the existing ones; ui.md 4.4b). A dataset in the draft that no longer exists SHALL stay shown, picked, as `<name> (missing)`, so the user can remove it. With no datasets at all and none picked: `No datasets yet — create one in Datasets first.`;
   - **Starter questions**: up to 5 single-line fields of at most 200 characters, each with a **Remove starter question** button, and **Add starter question**, disabled at 5;
   - **Model**: free text, a model or deployment name of the configured provider, with the placeholder `Default (<configured model>)`, or `Default` when no LLM is configured;
   - **Reasoning effort**: `Default`, `Low`, `Medium` or `High`;
@@ -902,8 +902,8 @@ Feature: Agent editor
   Scenario: A dataset that no longer exists stays visible in the editor
     Given a draft user agent "Cup historian" over "World Cup Core" and "Gone"
     When I open "Cup historian" from "Agents" and click "Edit"
-    Then "World Cup Core" and "Gone (missing)" are ticked
-    When I untick "Gone (missing)" and click "Save"
+    Then "World Cup Core" and "Gone (missing)" are picked
+    When I remove "Gone (missing)" and click "Save"
     Then the "Cup historian" card no longer shows a missing-dataset note
 
   Scenario: Editing the Job Description in place saves a draft with the link
