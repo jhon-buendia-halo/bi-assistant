@@ -18,10 +18,7 @@ import type { SqlTruthComparator } from './sql-truth-check';
 
 /** Lower-case, accents removed, for matching. */
 function fold(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase();
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
 /** The SQL texts of the run: Analyse's queries from the steps, else its tool calls. */
@@ -42,7 +39,10 @@ export function sqlOfRun(
 }
 
 /** A successful query mentions one of the fragments (case-insensitive). */
-export function sqlUsesAny(fragments: string[], label: string): EvalCustomCheck {
+export function sqlUsesAny(
+  fragments: string[],
+  label: string,
+): EvalCustomCheck {
   return {
     id: 'sql-uses-' + label,
     description: `A query uses ${fragments.join(' or ')}`,
@@ -68,7 +68,8 @@ const STRICT_ORDER = /\b(first place|1st|second place|2nd|runner[- ]up)\b/i;
 export function answerKeepsTie(): EvalCustomCheck {
   return {
     id: 'keeps-the-tie',
-    description: 'The answer says the products tie and ranks none above another',
+    description:
+      'The answer says the products tie and ranks none above another',
     run: ({ answer }) => {
       if (!TIE_WORDS.test(answer)) return 'the answer does not say they tie';
       return STRICT_ORDER.test(answer)
@@ -89,9 +90,7 @@ const NON_FINITE_EXPLAINED =
  * Infinity as the average, and states the finite average (within 0.01) or
  * explains why it cannot.
  */
-export function averageHandlesNonFinite(
-  column = 'avg',
-): SqlTruthComparator {
+export function averageHandlesNonFinite(column = 'avg'): SqlTruthComparator {
   return (rows, { answer }) => {
     if (NON_FINITE_VALUE.test(answer)) {
       return 'the answer reports NaN or Infinity as the average';
@@ -169,7 +168,8 @@ export function answerSaysNoRows(subject: string): EvalCustomCheck {
     id: 'says-there-are-none',
     description: `The answer says there are no ${subject} and invents no row`,
     run: ({ answer }) => {
-      if (!NONE_WORDS.test(answer)) return `the answer does not say there are no ${subject}`;
+      if (!NONE_WORDS.test(answer))
+        return `the answer does not say there are no ${subject}`;
       return markdownTableRows(answer) > 0
         ? 'the answer shows a table of rows for an empty result'
         : undefined;
@@ -180,7 +180,10 @@ export function answerSaysNoRows(subject: string): EvalCustomCheck {
 /** The table name an entity or a SQL reference names: last part, no quotes. */
 function bareName(entity: string): string {
   const last = entity.split('.').pop() ?? entity;
-  return last.replace(/["`[\]]/g, '').trim().toLowerCase();
+  return last
+    .replace(/["`[\]]/g, '')
+    .trim()
+    .toLowerCase();
 }
 
 /**
@@ -194,7 +197,8 @@ export function planEntitiesInSql(): EvalCustomCheck {
     description: "Every entity of Plan's plan appears in a query of Analyse",
     run: ({ details, toolCalls }) => {
       const plan = (
-        details?.steps?.['plan'] as { plan?: { entities?: unknown } } | undefined
+        details?.steps?.['plan'] as
+          { plan?: { entities?: unknown } } | undefined
       )?.plan;
       if (!plan) return 'the run has no Plan step output to compare';
       const entities = Array.isArray(plan.entities)
@@ -206,7 +210,9 @@ export function planEntitiesInSql(): EvalCustomCheck {
         .toLowerCase();
       const unread = entities.filter((entity) => {
         const name = bareName(entity);
-        return name !== '' && !new RegExp(`\\b${escapeRegExp(name)}\\b`).test(sql);
+        return (
+          name !== '' && !new RegExp(`\\b${escapeRegExp(name)}\\b`).test(sql)
+        );
       });
       return unread.length
         ? `Plan names ${unread.join(', ')} but no query of Analyse reads it`
@@ -232,10 +238,10 @@ const SCALES: Record<string, number> = {
 /** The figures of a headline; "2.5 million" is 2,500,000 as well as 2.5. */
 export function headlineFigures(headline: string): number[] {
   const scaled = [
-    ...headline.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(thousand|million|billion|bn|k|m|b)\b/gi),
-  ].map(
-    (m) => Number(m[1].replace(/,/g, '')) * SCALES[m[2].toLowerCase()],
-  );
+    ...headline.matchAll(
+      /(\d[\d,]*(?:\.\d+)?)\s*(thousand|million|billion|bn|k|m|b)\b/gi,
+    ),
+  ].map((m) => Number(m[1].replace(/,/g, '')) * SCALES[m[2].toLowerCase()]);
   return [...numbersInText(headline), ...scaled];
 }
 
