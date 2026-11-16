@@ -70,7 +70,7 @@ export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
       kind: 'code',
       summary:
         "Finds the uploaded image in the run's workspace and checks its format and size. No LLM.",
-      exits: [{ label: 'Image missing', outcome: 'fails' }],
+      exits: [{ label: 'the image is missing', outcome: 'fails' }],
     },
     SCHEMAS['load-image'],
   ),
@@ -82,9 +82,9 @@ export const RECREATE_DASHBOARD_STEPS: readonly ContractStepEntry[] = [
       summary:
         'The Dashboard Reader looks at the image and returns the dashboard as data: its filters, its widgets with their measures and breakdowns, and the columns of one mock dataset behind them.',
       exits: [
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
-        { label: 'No dashboard in the image', outcome: 'fails' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
+        { label: 'the image has no dashboard', outcome: 'fails' },
       ],
       modelOnly: true,
     },

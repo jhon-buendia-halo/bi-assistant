@@ -410,8 +410,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
           input: ['question', 'datasets'],
           output: ['calls', 'stopped'],
           exits: [
-            { label: 'Model error', outcome: 'fails' },
-            { label: 'Stop', outcome: 'stops' },
+            { label: 'the model returns an error', outcome: 'fails' },
+            { label: 'you stop it', outcome: 'stops' },
           ],
         },
       ]);
@@ -442,14 +442,14 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
             maxSteps: 10,
           },
           exits: [
-            { label: 'Model error', outcome: 'fails' },
-            { label: 'Stop', outcome: 'stops' },
+            { label: 'the model returns an error', outcome: 'fails' },
+            { label: 'you stop it', outcome: 'stops' },
           ],
         },
       ]);
     });
 
-    it('adds the Clarifying question exit when the agent can ask one', () => {
+    it('adds the exit of a clarifying question when the agent can ask one', () => {
       const [step] = oneStepWorkflowSteps({
         key: 'assistant',
         name: 'Emily',
@@ -457,9 +457,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         maxSteps: 15,
       });
       expect(step.exits).toEqual([
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
-        { label: 'Clarifying question', outcome: 'stops' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
+        { label: 'it asks you a question', outcome: 'stops' },
       ]);
     });
 

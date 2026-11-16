@@ -57,7 +57,9 @@ export const MAP_DASHBOARD_DATA_STEPS: readonly ContractStepEntry[] = [
       kind: 'code',
       summary:
         'Reads the saved dashboard of the artifact the run names: its filters, its widgets and the columns they read. No LLM.',
-      exits: [{ label: 'Artifact missing', outcome: 'fails' }],
+      exits: [
+        { label: 'the saved dashboard no longer exists', outcome: 'fails' },
+      ],
     },
     SCHEMAS['load-dashboard'],
   ),
@@ -80,8 +82,8 @@ export const MAP_DASHBOARD_DATA_STEPS: readonly ContractStepEntry[] = [
       summary:
         'The Data Mapper ties every column the dashboard reads to a column of the datasets, or says what is missing. Each proposed source is then checked against the catalog.',
       exits: [
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
       ],
       modelOnly: true,
     },

@@ -270,7 +270,7 @@ The Job Description tab (the system prompt) of the Official and System agents, e
     - The agent step is marked `LLM` and drawn open, with the agent's name, its tools and `≤ <n> steps`.
     - A legend names `Code` and `LLM`.
   - Between two cards, an arrow is labelled with the fields the first step passes on, comma-separated.
-  - Under a card, each of its other exits is listed as `<label> → fails the turn` or `<label> → ends the turn here`.
+  - Under a card, each of its other exits is listed as one sentence, the outcome first: `Fails the turn if <label>`, `Ends the turn if <label>` or `Waits <label>` (for example `Fails the turn if the model returns an error`, `Ends the turn if you stop it`, `Waits if it asks you a question`).
   - Hovering or focusing a card SHALL highlight it.
   - Clicking a card, or pressing Enter or Space on it, SHALL select it and show a details card under the drawing:
     - its number and title, its kind, its summary, `Input` and `Output` (the field names, comma-separated);
@@ -1167,7 +1167,7 @@ Feature: Built-in agent prompts
     And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and "≤ 15 steps"
     And the code steps are marked "Code"
     And the arrow from "Load catalog" to "Plan" reads "question, catalog"
-    And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", "Clarify" shows "Waits for an answer → waits for the user's answer", and "Analyse" also "Clarifying question → waits for the user's answer"
+    And "Plan", "Analyse" and "Write answer" show "Fails the turn if the model returns an error" and "Ends the turn if you stop it", "Clarify" shows "Waits until you answer", and "Analyse" also "Waits if it asks you a question"
     When I click the "Load catalog" step
     Then the step details show Input "question, datasets" and Output "question, catalog, columns"
     And I see "Prompt links" with the agent's tools

@@ -461,7 +461,7 @@ const CLARIFICATION_TOOL = 'ask_clarification';
 
 /**
  * The steps of a one-step workflow: `agent-turn`'s `answer` step running
- * `agent`, with a `Clarifying question` exit when the agent can ask one.
+ * `agent`, with an `it asks you a question` exit when the agent can ask one.
  */
 export function oneStepWorkflowSteps(agent: {
   /** The agent's registry key or user-agent id. */
@@ -489,7 +489,7 @@ export function oneStepWorkflowSteps(agent: {
     exits: [
       ...step.exits.map((exit) => ({ ...exit })),
       ...(agent.tools.includes(CLARIFICATION_TOOL)
-        ? [{ label: 'Clarifying question', outcome: 'stops' as const }]
+        ? [{ label: 'it asks you a question', outcome: 'stops' as const }]
         : []),
     ],
   }));

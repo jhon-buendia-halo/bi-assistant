@@ -48,6 +48,12 @@ export const ANSWER_BUSINESS_QUESTION_WORKFLOW_NAME =
 
 /** How a step can end other than by passing its output on. */
 export interface WorkflowStepExit {
+  /**
+   * The rest of the sentence the app writes about the exit, after `Fails
+   * if`, `Ends if` or `Waits`: a condition in lower case with no
+   * full stop (`the model returns an error`, `you stop it`); a `waits`
+   * exit brings its own connector (`if it asks you a question`).
+   */
   label: string;
   /**
    * `fails`: the run stops with an error; `stops`: it ends early; `waits`:
@@ -111,8 +117,8 @@ export function contractStepEntry(
 const SCHEMAS = ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS;
 
 const MODEL_EXITS: readonly WorkflowStepExit[] = [
-  { label: 'Model error', outcome: 'fails' },
-  { label: 'Stop', outcome: 'stops' },
+  { label: 'the model returns an error', outcome: 'fails' },
+  { label: 'you stop it', outcome: 'stops' },
 ];
 
 /**
@@ -161,7 +167,7 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       kind: 'code',
       summary:
         "Waits for the user's answer to the plan's clarifying question, then hands it back to Plan. No LLM.",
-      exits: [{ label: 'Waits for an answer', outcome: 'waits' }],
+      exits: [{ label: 'until you answer', outcome: 'waits' }],
     },
     SCHEMAS.clarify,
   ),
@@ -176,7 +182,7 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       // the agent then goes on with it (agents.md 5.11, api.md 138).
       exits: [
         ...MODEL_EXITS,
-        { label: 'Clarifying question', outcome: 'waits' },
+        { label: 'if it asks you a question', outcome: 'waits' },
       ],
     },
     SCHEMAS.analyse,
@@ -199,7 +205,7 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
       kind: 'agent',
       summary:
         "Optional (Check data quality): the deterministic engine assesses the tables the queries read, then Sarah's model picks the findings that affect this answer. No tools. They reach Write answer as findings.",
-      exits: [{ label: 'Stop', outcome: 'stops' }],
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
       modelOnly: true,
     },
     SCHEMAS['check-data-quality'],
