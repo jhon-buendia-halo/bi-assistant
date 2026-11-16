@@ -103,7 +103,7 @@ Summary:
 | Collection (table) | Purpose | Identity | Default order | Capability |
 |---|---|---|---|---|
 | `connections` | Saved datasources (data platform connections) | `id` | `updatedAt` desc | [datasources](../capabilities/datasources/spec.md) |
-| `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`, `"personas-seed"`, `"visuals-seed"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
+| `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
 | `datasets` | Named selections of entities with a schema snapshot | `name` (unique, upsert key) | `updatedAt` desc | [datasets](../capabilities/datasets/spec.md) |
 | `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [agent-answers](../capabilities/agent-answers/spec.md), [visuals](../capabilities/visuals/spec.md) |
 | `datasource_inventories` | Cached catalog/schema/table walk per datasource | `id` = datasource id | n/a | [datasources](../capabilities/datasources/spec.md) |
@@ -111,8 +111,6 @@ Summary:
 | `metrics` | Curated metric definitions | `id`; `name` unique | `updatedAt` desc | [metrics](../capabilities/metrics/spec.md) |
 | `eval_runs` | Past and in-flight eval runs | `jobId` | `startedAt` desc (per agent) | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `ontology_items` | Per-dataset ontology: concepts, relations, constraints and instructions, plus shared items | `id` | `updatedAt` desc | [dataset-ontology](../capabilities/dataset-ontology/spec.md) |
-| `user_personas` | User personas: who asks the questions | `id`; `name` unique ignoring case | `name` asc, ignoring case | [user-personas](../capabilities/user-personas/spec.md) |
-| `visual_charts` | The visuals library: chart types grouped by category, with a seeded default catalog | `id`; `name` unique ignoring case | category (shipped order, then alphabetical), then `name` asc, ignoring case | [visuals-library](../capabilities/visuals-library/spec.md) |
 | `agents` | User-built agents (a draft, an optional Live version, pin) | `id` | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skills` | In-app skills a user writes and assigns to their agents | `id`; `name` unique | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skill_overrides` | Org-wide overrides of built-in skills, edited in the app | `name` (a built-in skill's name) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
@@ -121,7 +119,7 @@ Summary:
 | `workflow_runs` | Every run of a workflow on an input: its input, steps, outcome and, for an agent workflow, its answer and files | `id` | `startedAt` desc | [workflows](../capabilities/workflows/spec.md) |
 | `workflow_run_node_chats` | The chats with a stored run's agent steps (node chats), one per run and step | `id`; `(runId, stepId)` unique | n/a (read by run and step) | [workflows](../capabilities/workflows/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints** between collections, and no cascading deletes but one (a run's node chats go with it, 3.17); references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints** between collections, and no cascading deletes but one (a run's node chats go with it, 3.17); references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -473,46 +471,6 @@ Bootstrap-created items are always `{source: "mined", enabled: false, dataset: <
 
 `KnowledgeUse` (embedded in messages, not a collection; the name is kept): `id`, `kind` (`term` for a concept, `default_filter` for a constraint, `instruction`, `relation`), `title` (the item's `name`), `body` (exactly as it appeared in the block: the description for a concept or instruction, the predicate for a constraint, `"<from name> <type> <to name or metric label>"` for a relation), `datasetId` (string, no; the item's `dataset`, absent for a shared item). Context assembly: enabled items whose `dataset` is `null` or among the session's datasets, ordered dataset items before shared then `updatedAt` desc, accumulated into a 2000-character block until the next line would not fit; only those that fit are recorded as `knowledge`. A relation whose endpoint no longer resolves is skipped.
 
-### 3.9a `user_personas`
-
-Profiles of the people who ask the questions (capability [user-personas](../capabilities/user-personas/spec.md)). Manage-only: nothing reads them yet. (The table name is `user_personas`; the store token is `PERSONAS_STORE`.) New collection: no migration. Like `ontology_items` it is a private table, so new documents are stamped with the inert `ownerId` `local` (3.14).
-
-**Default persona.** On backend start, `PersonasService.onModuleInit` seeds **Demo Finance Analyst** ([user-personas](../capabilities/user-personas/spec.md) R13) unless the `settings` document `{ key: "personas-seed", seededAt }` exists. It adds the persona through the normal create path when no persona of that name (ignoring case) exists, then upserts the marker either way, so the seed runs once per data dir and a deleted demo persona stays deleted. Not a migration: it adds a document and changes no existing one.
-
-| Field | Type | Req | Meaning |
-|---|---|---|---|
-| `id` | uuid | yes | |
-| `name` | string | yes | Trimmed, 1 to 80 characters, unique ignoring case. |
-| `role` | string | yes | Trimmed, at most 80 characters; `""` when not given. |
-| `description` | string | yes | Trimmed, at most 2,000 characters; `""` when not given. |
-| `goals` | string | yes | Trimmed, at most 2,000 characters; `""` when not given. |
-| `typicalQuestions` | string[] | yes | Trimmed, blanks dropped, at most 10 entries of at most 300 characters; `[]` when not given. |
-| `expertise` | enum | yes | `novice` \| `intermediate` \| `expert`; default `intermediate`. |
-| `answerStyle` | string | yes | Trimmed, at most 500 characters; `""` when not given. |
-| `createdAt`, `updatedAt` | ISO | yes | Maintained by the store; `updatedAt` is restamped on every update. |
-| `ownerId` | string | no | Legacy and inert: `local` or absent (section 3.14). |
-
-### 3.9b `visual_charts`
-
-Chart types for data visualization, grouped by category (capability [visuals-library](../capabilities/visuals-library/spec.md)). Manage-only: nothing reads them yet. (The table name is `visual_charts`; the store token is `VISUALS_STORE`.) New collection: no migration. Unlike `user_personas` it is not a private table, so its documents carry no legacy `ownerId` (3.14).
-
-**Default catalog.** On backend start, `VisualsService.onModuleInit` seeds the 30 default charts ([visuals-library](../capabilities/visuals-library/spec.md) R14; text in `backend/src/modules/visuals/default-visuals.ts`) unless the `settings` document `{ key: "visuals-seed", seededAt }` exists. It adds each default whose name (ignoring case) is not taken, through the normal create path, marked `builtIn: true`, then upserts the marker, so the seed runs once per data dir and a deleted default stays deleted. A failed seed logs a warning and does not stop the backend. Not a migration: it adds documents and changes no existing one.
-
-| Field | Type | Req | Meaning |
-|---|---|---|---|
-| `id` | uuid | yes | |
-| `name` | string | yes | Trimmed, 1 to 80 characters, unique ignoring case. |
-| `category` | string | yes | Trimmed, 1 to 60 characters, free text; the defaults use `Comparison`, `Change over time`, `Part-to-whole`, `Distribution`, `Relationship`, `Ranking`, `Flow`, `Spatial` and `Numbers and tables`. |
-| `previewKey` | string | yes | One of the 30 thumbnail keys (the Preview column of the catalog in [visuals-library](../capabilities/visuals-library/spec.md) R14) or `none`; default `none`. |
-| `rendererForm` | string \| null | yes | The chart form the app draws it with: `bar`, `line`, `scatter`, `heatmap`, `metric-cards`, `table` or `donut` (the visual spec forms, [visuals](../capabilities/visuals/spec.md)); `null` when the app does not draw it (default). |
-| `description` | string | yes | Trimmed, at most 1,000 characters; `""` when not given. |
-| `whenToUse` | string | yes | Trimmed, at most 1,000 characters; `""` when not given. |
-| `whenToAvoid` | string | yes | Trimmed, at most 1,000 characters; `""` when not given. |
-| `dataShape` | string | yes | Trimmed, at most 200 characters, e.g. `1 category + 1 measure`; `""` when not given. |
-| `enabled` | boolean | yes | Default `true`. A disabled chart is shown faded. |
-| `builtIn` | boolean | yes | `true` for a seeded default, `false` otherwise; set by the server only. |
-| `createdAt`, `updatedAt` | ISO | yes | Maintained by the store; `updatedAt` is restamped on every update. |
-
 ### 3.10 `agents` — user agents
 
 User-built agents: a stored configuration of the assistant, with a working draft and an optional published (Live) version. Built-in agents are not stored here. Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) (R43-R52); decision: ADR-0008 in [architecture.md](architecture.md).
@@ -634,7 +592,7 @@ Removed with ADR-0042: no deep-analysis job exists. The report files and the ass
 
 The app is single-user (ADR-0030): one built-in super admin, id `local`, is always the caller, so nothing is scoped, filtered or checked by owner.
 
-- `ownerId` stays on the documents of `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `user_personas`, `agents`, `skills` and `workflow_runs` as an **inert legacy attribute**. Its only value is `local`: M14 (section 6) sets it on every existing document, and new documents are stamped `local` when created. No reader filters by it and no write depends on it.
+- `ownerId` stays on the documents of `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `agents`, `skills` and `workflow_runs` as an **inert legacy attribute**. Its only value is `local`: M14 (section 6) sets it on every existing document, and new documents are stamped `local` when created. No reader filters by it and no write depends on it.
 - A document with no `ownerId` (written by code that predates the stamp) is read exactly like one with `local`.
 - **Uniqueness** that was per owner (agent names, skill names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`) is now unique across the collection; M14 renames clashing skills (`-2`, `-3`, …).
 - No identity or access data is stored: the tables `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` of earlier versions are dropped by M14.
@@ -890,6 +848,7 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 | M14 | Single user: every owner becomes `local`, identity data is dropped (ADR-0030) | Backend start, after M1-M3, before stores are created | Raw SQL, so `updatedAt` is untouched. (1) For each of `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` (when it still exists), `agents` and `skills` that exists: `UPDATE <table> SET doc = json_set(doc, '$.ownerId', 'local') WHERE json_extract(doc, '$.ownerId') IS NULL OR json_extract(doc, '$.ownerId') != 'local'`. (2) In `settings`: rename `ui-preferences:local` to `ui-preferences` and `builtin-agent-pins:local` to `builtin-agent-pins`, each only when the bare key is absent; then delete every other `ui-preferences:*` and `builtin-agent-pins:*` key (other users' preferences and pins, and the leftover `:local` ones) and the `local-seed` document. (3) Drop the tables `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` when they exist. (4) Skills that several owners named alike now share one owner: keep the first (oldest `createdAt`) as is and suffix the others `-2`, `-3`, … (cut before the suffix so the name stays within 64 characters), then rewrite every `[[skill:<old name>]]` link in the draft and Live instructions of the agents that named the renamed skill, and the matching `liveSkills` copy's name (ADR-0024). Idempotent (a second run finds only `local` owners, no suffix clashes and no identity tables). Covered by `database.module.spec.ts`. |
 | M15 | Knowledge snippets become ontology items (ADR-0036) | Backend start, after M14, before stores are created | Raw SQL, idempotent. When table `knowledge_snippets` exists: create `ontology_items` if missing (the same table shape as any collection), copy each snippet whose `id` is not already in `ontology_items`, then rename `knowledge_snippets` to `knowledge_snippets_legacy` (only when that name is free; otherwise leave both and log a warning). Mapping: `term` becomes `concept` (title to `name`, body to `description`, synonyms kept, each entity to a mapping `{entity}` in order); `default_filter` becomes `constraint` (title to `name`, body to `predicate`, `description` `""`, entities kept); `instruction` stays `instruction` (title to `name`, body to `description`, entities kept). `scope.datasetId` becomes `dataset`; no scope becomes `dataset: null` (a shared item); a scope with only `datasourceId` becomes `dataset: null` **and** `enabled: false`. `id`, `enabled` (except that case), `source`, `ownerId`, `createdAt` and `updatedAt` are kept, so a migrated install gets the same block per session. `knowledge_snippets_legacy` is kept for one release and read by nothing. Covered by `database.module.spec.ts`. |
 | M16 | The v2 ids renamed (2026-11-15): agent key `assistant-v2` → `insights-analyst` (name "Questions to Insights v2" → "Insights Analyst"), workflow id `qti-v2-turn` → `answer-business-question` | Backend start, after M15, before stores are created | Raw SQL in one transaction, idempotent, `updatedAt` untouched (`renameLegacyAgentIds`). Each field equal to an old value gets the new one: `sessions` and `workflow_runs` `agentKey`, `agentName` and `workflowId`; `eval_runs.agentKey`; `agent_prompt_overrides.key`; and the old key inside `pinned` of the `settings` document `builtin-agent-pins`. A run's `workflowName` is kept (a run keeps the name it ran under). Tables not created yet are skipped. Nothing reads the old ids afterwards. Covered by `database.module.spec.ts`. |
+| M17 | The Context area's collections dropped (2026-11-15): user personas and the visuals library are gone | Backend start, after M16, before stores are created | Raw SQL in one transaction, idempotent (`dropRemovedCollections`). Drops the tables `user_personas` and `visual_charts` when they exist, and deletes the `settings` documents with key `personas-seed` and `visuals-seed`. Nothing reads them afterwards. Covered by `database.module.spec.ts`. |
 
 None for `agents`: it is a new collection, and the store creates the table on first open. The built-in pins document is a new `settings` key and needs no migration.
 
@@ -901,7 +860,7 @@ None for `workflow_run_node_chats` (2026-11-12): it is a new collection, and the
 
 None for the agent panel (BA-231, ADR-0029): `panelItems` and `workflowState` on sessions are new optional fields; visuals made before are synthesized into the item list at read time (3.4.4), so no stored document is rewritten.
 
-Tests: the table/field renames (M1-M3), M14, M15, M16 and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
+Tests: the table/field renames (M1-M3), M14, M15, M16, M17 and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 
 ---
 

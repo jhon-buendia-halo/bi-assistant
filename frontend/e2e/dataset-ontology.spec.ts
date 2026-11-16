@@ -14,8 +14,8 @@ import { worldCupKey } from './helpers/world-cup-db';
 /**
  * Feature: Dataset ontology (specs/capabilities/dataset-ontology/spec.md,
  * roadmap 1.21.7–1.21.11). Every scenario drives the Ontology tab of a saved
- * dataset, the Graph view or the Context → Ontologies card, none of which
- * exist on `main` (it had a flat Knowledge screen), so each fails there.
+ * dataset or its Graph view, neither of which existed when `main` had a
+ * flat Knowledge screen.
  *
  * The World Cup dataset is seeded through the API over `matches` with one
  * column (`match_number`); items the scenario's Given names are seeded with
@@ -50,7 +50,7 @@ function rail(page: Page, name: string): Locator {
 async function openDatasets(page: Page): Promise<void> {
   // The rail keeps an area's current view when it is already shown (the
   // dataset editor included), so leave the area first to land on the list.
-  await rail(page, 'Context').click();
+  await rail(page, 'Agents').click();
   await rail(page, 'Datasets').click();
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
 }
@@ -706,73 +706,5 @@ test('sees the ontology as a graph and edits a concept from it', async ({ page }
     await page.getByTestId('ontology-filter-all').click();
     await expect(page.getByTestId('ontology-graph')).toHaveCount(0);
     await expect(row(section(page, 'concept'), 'Match')).toBeVisible();
-  });
-});
-
-test("reviews every dataset's ontology from Context", async ({ page }) => {
-  await test.step('Given "World Cup Core" has 2 concepts and 1 relation, a shared item exists, and "Formula 1" has none', async () => {
-    const match = await seedConcept(page, 'Match', 'One played fixture');
-    const goal = await seedConcept(page, 'Goal', 'A goal scored in a match');
-    await createOntologyItem(page, WORLD_CUP_DATASET, {
-      kind: 'relation',
-      from: match,
-      type: 'has-many',
-      to: goal,
-    });
-    await createOntologyItem(page, WORLD_CUP_DATASET, {
-      kind: 'instruction',
-      name: 'Currency',
-      description: 'All amounts are in USD',
-      shared: true,
-    });
-    await seedDataset(page, OTHER_DATASET, datasourceId);
-  });
-
-  await test.step('When I open "Context" and click the "Ontologies" card', async () => {
-    await rail(page, 'Context').click();
-    await page.getByTestId('context-section-ontologies').click();
-    await expect(page.getByTestId('ontology-overview')).toBeVisible();
-  });
-
-  await test.step('Then each dataset shows the size of its own ontology, shared items counted once', async () => {
-    await expect(page.getByTestId('ontologies-shared')).toContainText(
-      '1 shared item applies to every dataset.',
-    );
-    await expect(page.getByTestId(`ontology-dataset-${WORLD_CUP_DATASET}`)).toContainText(
-      '2 concepts · 1 relation',
-    );
-    await expect(page.getByTestId(`ontology-dataset-${WORLD_CUP_DATASET}`)).not.toContainText(
-      'instruction',
-    );
-    await expect(page.getByTestId(`ontology-dataset-${OTHER_DATASET}`)).toContainText(
-      'No ontology yet',
-    );
-    // Sorted by name.
-    await expect(page.getByTestId('ontologies-list').locator('button')).toHaveText([
-      new RegExp(OTHER_DATASET),
-      new RegExp(WORLD_CUP_DATASET),
-    ]);
-  });
-
-  await test.step('When I click "World Cup Core", I see its Ontology panel under an "Ontologies" back control', async () => {
-    await page.getByTestId(`ontology-dataset-${WORLD_CUP_DATASET}`).click();
-    await expect(page.getByTestId('ontologies-back')).toHaveText('Ontologies');
-    await expect(page.getByTestId('ontology-panel')).toBeVisible();
-    await expect(row(section(page, 'concept'), 'Match')).toBeVisible();
-    await expect(row(section(page, 'instruction'), 'Currency')).toContainText(
-      'All datasets',
-    );
-  });
-
-  await test.step('And the back control returns to the list with fresh counts', async () => {
-    await createOntologyItem(page, WORLD_CUP_DATASET, {
-      kind: 'constraint',
-      name: 'Exclude friendlies',
-      predicate: "stage <> 'friendly'",
-    });
-    await page.getByTestId('ontologies-back').click();
-    await expect(page.getByTestId(`ontology-dataset-${WORLD_CUP_DATASET}`)).toContainText(
-      '2 concepts · 1 relation · 1 constraint',
-    );
   });
 });

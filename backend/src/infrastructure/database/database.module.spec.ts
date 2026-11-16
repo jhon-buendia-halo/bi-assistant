@@ -1,6 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import {
   consolidateOwners,
+  dropRemovedCollections,
   legacySnippetToOntologyItem,
   migrateKnowledgeToOntology,
   renameLegacyAgentIds,
@@ -679,6 +680,38 @@ describe('legacy datastore migrations', () => {
       renameLegacyAgentIds(db);
       expect(docs('sessions')).toEqual(once);
       expect(once).toEqual([{ id: 's1', agentKey: 'insights-analyst' }]);
+    });
+  });
+
+  describe('M17: the personas and visuals library tables are dropped', () => {
+    const tableNames = () =>
+      (
+        db
+          .prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`)
+          .all() as { name: string }[]
+      ).map((r) => r.name);
+
+    it('drops both tables and their seed markers, keeping other settings', () => {
+      ['user_personas', 'visual_charts', 'settings'].forEach(createTable);
+      insert('user_personas', { id: 'p1', name: 'Demo Finance Analyst' });
+      insert('visual_charts', { id: 'v1', name: 'Bar chart' });
+      insert('settings', { key: 'personas-seed', seededAt: 'x' });
+      insert('settings', { key: 'visuals-seed', seededAt: 'x' });
+      insert('settings', { key: 'llm', model: 'm' });
+
+      dropRemovedCollections(db);
+
+      expect(tableNames()).not.toContain('user_personas');
+      expect(tableNames()).not.toContain('visual_charts');
+      expect(docs('settings')).toEqual([{ key: 'llm', model: 'm' }]);
+    });
+
+    it('is a no-op on a fresh database and idempotent', () => {
+      expect(() => dropRemovedCollections(db)).not.toThrow();
+      createTable('settings');
+      dropRemovedCollections(db);
+      dropRemovedCollections(db);
+      expect(tableNames()).toContain('settings');
     });
   });
 });

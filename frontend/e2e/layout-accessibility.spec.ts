@@ -130,16 +130,6 @@ test('has no automatically detectable accessibility violations on any screen in 
       },
     ],
     [
-      'User personas',
-      async () => {
-        await rail('Context').click();
-        await page.getByTestId('context-section-personas').click();
-        await expect(
-          page.getByRole('heading', { name: 'User personas' }),
-        ).toBeVisible();
-      },
-    ],
-    [
       'Runs',
       async () => {
         await rail('Runs').click();
