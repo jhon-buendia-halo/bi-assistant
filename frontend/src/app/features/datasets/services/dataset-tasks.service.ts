@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { BackgroundTasksService } from '../../../core/background-tasks/background-tasks.service';
 import type { BackgroundTask } from '../../../core/background-tasks/background-tasks.service';
 import { ShellState } from '../../../core/shell/shell-state';
+import type { DatasetTab } from '../components/catalog-browser/catalog-browser';
 import { DatasourcesApiService } from '../../datasources/services/datasources-api.service';
 import {
   DatasourceKind,
@@ -51,6 +52,21 @@ export class DatasetTasksService {
   readonly pendingInfo = signal<ReadonlyMap<string, PendingSaveInfo>>(
     new Map(),
   );
+
+  /** The editor tab to show when the catalog browser next opens a dataset. */
+  readonly requestedTab = signal<DatasetTab | null>(null);
+
+  /**
+   * Opens a saved dataset in the editor on one tab (Open on an ontology or
+   * profile task).
+   */
+  openDatasetTab(dataset: Dataset, tab: DatasetTab): void {
+    if (!this.shell.confirmLeaveAgentEditor()) return;
+    this.editing.set(dataset);
+    this.requestedTab.set(tab);
+    this.shell.settingsOpen.set(false);
+    this.shell.mainView.set('dataset-new');
+  }
 
   /** Starts saving a dataset (or returns the save already running). */
   save(req: SaveDatasetRequest): BackgroundTask {

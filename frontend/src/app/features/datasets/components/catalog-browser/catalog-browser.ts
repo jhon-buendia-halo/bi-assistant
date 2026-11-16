@@ -169,6 +169,13 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     effect(() =>
       this.datasetTasks.shownDatasourceId.set(this.datasourceId() || null),
     );
+    // Open on an ontology or profile task lands on that tab of the dataset.
+    effect(() => {
+      const tab = this.datasetTasks.requestedTab();
+      if (!tab || !this.initial()) return;
+      this.activeTab.set(tab);
+      this.datasetTasks.requestedTab.set(null);
+    });
     this.datasetTasks.tasks.finished$
       .pipe(takeUntilDestroyed())
       .subscribe((task) => {

@@ -11,7 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { LucideAngularModule, Loader2 } from 'lucide-angular';
 import { BackgroundTasksService } from '../../../../core/background-tasks/background-tasks.service';
-import { ShellState } from '../../../../core/shell/shell-state';
+import { DatasetTasksService } from '../../../datasets/services/dataset-tasks.service';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { SyntheticDataApiService } from '../../services/synthetic-data-api.service';
 import {
@@ -41,7 +41,7 @@ export class SyntheticDataPanel implements OnInit {
 
   private readonly api = inject(SyntheticDataApiService);
   private readonly tasks = inject(BackgroundTasksService);
-  private readonly shell = inject(ShellState);
+  private readonly datasetTasks = inject(DatasetTasksService);
 
   constructor() {
     // A profile that ends while this tab is shown appears at once. Leaving
@@ -150,7 +150,8 @@ export class SyntheticDataPanel implements OnInit {
   runProfile(): void {
     if (!this.canProfile()) return;
     const tables = this.selected();
-    const name = this.dataset().name;
+    const dataset = this.dataset();
+    const name = dataset.name;
     this.expired.set(false);
     // A root task: leaving the tab does not stop the sampling or lose the
     // profile, and the service toasts the end (app-shell R58–R63).
@@ -168,18 +169,11 @@ export class SyntheticDataPanel implements OnInit {
         ok: true,
         message: `Profile of "${name}" ready — ${profile?.tables.length ?? tables.length} ${profile?.tables.length === 1 ? 'table' : 'tables'} sampled`,
       }),
-      open: () => this.openDatasets(),
+      open: () => this.datasetTasks.openDatasetTab(dataset, 'synthesize'),
     });
     this.tasks.update(task.id, {
       detail: `Sampling ${tables.length} ${tables.length === 1 ? 'table' : 'tables'}`,
     });
-  }
-
-  /** Where the result is: the Datasets list, to open the dataset's Profile & synthesize tab. */
-  private openDatasets(): void {
-    if (!this.shell.confirmLeaveAgentEditor()) return;
-    this.shell.settingsOpen.set(false);
-    this.shell.mainView.set('dataset');
   }
 
   /** Stops the sampling: the task is dropped, which aborts the HTTP request. */

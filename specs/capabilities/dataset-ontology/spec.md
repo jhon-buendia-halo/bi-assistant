@@ -72,7 +72,7 @@ Graph view
 - R40. (Removed 2026-11-15.) The Context page and its Ontologies overview are gone. A dataset's ontology is edited only in its **Ontology** tab (R1-R39 apply unchanged).
 
 Background task
-- R41. Generating suggestions SHALL run as a background task of kind `ontology-bootstrap`, keyed by the dataset name and titled `Suggesting ontology for "<dataset>"` ([app-shell](../app-shell/spec.md) R58–R63). The stream is read at the root, so leaving the Ontology tab SHALL NOT stop the run; its stages SHALL be the task's steps, and stopping the task SHALL abort the stream request. A re-created Ontology tab SHALL show the live steps and, when the run ends while it is shown, reload the items and switch to Pending suggestions. The outcome toast comes from the service, with **Open** (the Datasets list) on success and **Retry** on failure.
+- R41. Generating suggestions SHALL run as a background task of kind `ontology-bootstrap`, keyed by the dataset name and titled `Suggesting ontology for "<dataset>"` ([app-shell](../app-shell/spec.md) R58–R63). The stream is read at the root, so leaving the Ontology tab SHALL NOT stop the run; its stages SHALL be the task's steps, and stopping the task SHALL abort the stream request. A re-created Ontology tab SHALL show the live steps and, when the run ends while it is shown, reload the items and switch to Pending suggestions. The outcome toast comes from the service, with **Open** (the dataset in the editor, on its Ontology tab) on success and **Retry** on failure.
 
 ## Edge cases and errors
 

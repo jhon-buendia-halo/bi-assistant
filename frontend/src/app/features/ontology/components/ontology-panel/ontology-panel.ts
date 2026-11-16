@@ -34,7 +34,7 @@ import {
   OntologyBootstrapRun,
 } from '../../services/ontology-api.service';
 import { BackgroundTasksService } from '../../../../core/background-tasks/background-tasks.service';
-import { ShellState } from '../../../../core/shell/shell-state';
+import { DatasetTasksService } from '../../../datasets/services/dataset-tasks.service';
 import {
   ONTOLOGY_KINDS,
   OntologyItem,
@@ -91,7 +91,7 @@ export class OntologyPanel implements OnInit {
   private readonly metricsApi = inject(MetricsApiService);
   private readonly toast = inject(ToastService);
   private readonly tasks = inject(BackgroundTasksService);
-  private readonly shell = inject(ShellState);
+  private readonly datasetTasks = inject(DatasetTasksService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
 
@@ -407,7 +407,8 @@ export class OntologyPanel implements OnInit {
 
   generateSuggestions(): void {
     if (this.generating()) return;
-    const name = this.dataset().name;
+    const dataset = this.dataset();
+    const name = dataset.name;
     // A root task: leaving the tab neither stops the run nor loses its
     // result, and the service toasts the end (app-shell R58–R63).
     this.tasks.start<OntologyBootstrapRun>({
@@ -429,14 +430,7 @@ export class OntologyPanel implements OnInit {
               : `${count} suggestion${count === 1 ? '' : 's'} generated — review in Pending suggestions`,
         };
       },
-      open: () => this.openDatasets(),
+      open: () => this.datasetTasks.openDatasetTab(dataset, 'ontology'),
     });
-  }
-
-  /** Where the result is: the Datasets list, to open the dataset's Ontology tab. */
-  private openDatasets(): void {
-    if (!this.shell.confirmLeaveAgentEditor()) return;
-    this.shell.settingsOpen.set(false);
-    this.shell.mainView.set('dataset');
   }
 }

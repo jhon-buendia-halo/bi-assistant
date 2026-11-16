@@ -7,11 +7,14 @@
     />
   </div>
 } @else if (shell.mainView() === "dataset-new") {
-  <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
-    <app-catalog-browser
-      class="w-full max-w-[960px]"
-      [initial]="editingDataset()"
-      (saved)="shell.mainView.set('dataset')"
-    />
-  </div>
+  <!-- Keyed by the dataset's name: Open on a task for another dataset re-creates the editor on it. -->
+  @for (editing of [editingDataset()]; track editing?.name ?? "") {
+    <div class="flex flex-1 justify-center overflow-y-auto px-6 py-6">
+      <app-catalog-browser
+        class="w-full max-w-[960px]"
+        [initial]="editing"
+        (saved)="shell.mainView.set('dataset')"
+      />
+    </div>
+  }
 }

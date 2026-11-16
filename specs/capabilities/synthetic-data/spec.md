@@ -126,7 +126,7 @@ Agent tools (roadmap 1.22.4)
 - R44. A tool call with no `profileId` SHALL profile the tables first; with a `profileId` from `profile_data_sample` of the same dataset it SHALL reuse that profile, cut to `tables` when given.
 
 Background task
-- R45. Profiling a dataset SHALL run as a background task of kind `synthetic-profile`, keyed by the dataset name and titled `Profiling "<dataset>"` ([app-shell](../app-shell/spec.md) R58–R63). Leaving the tab or the Datasets area SHALL NOT cancel the request; **Cancel** (Stop) SHALL abort it. When the profile ends the service toasts the outcome with **Open** (the Datasets list), and a re-created tab SHALL show the running state, or the profile of the latest finished task for that dataset while it has not expired.
+- R45. Profiling a dataset SHALL run as a background task of kind `synthetic-profile`, keyed by the dataset name and titled `Profiling "<dataset>"` ([app-shell](../app-shell/spec.md) R58–R63). Leaving the tab or the Datasets area SHALL NOT cancel the request; **Cancel** (Stop) SHALL abort it. When the profile ends the service toasts the outcome with **Open** (the dataset in the editor, on its Profile & synthesize tab), and a re-created tab SHALL show the running state, or the profile of the latest finished task for that dataset while it has not expired.
 
 ## Edge cases and errors
 
