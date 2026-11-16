@@ -19,6 +19,8 @@ import {
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_AGENT_NAME,
   DATA_READINESS_MAX_STEPS,
+  GAP_ADVISOR_AGENT_KEY,
+  GAP_ADVISOR_AGENT_NAME,
   SITE_REVIEWER_AGENT_KEY,
   SITE_REVIEWER_AGENT_NAME,
 } from '../agent-constants';
@@ -97,6 +99,13 @@ const STEP_AGENTS: Record<
   // Review a Website (agents.md 5.19): no step calls the agent in phase 1.
   [SITE_REVIEWER_AGENT_KEY]: {
     name: SITE_REVIEWER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+  // Consumption Gap Analysis (agents.md 5.20): every model step is one call
+  // without tools.
+  [GAP_ADVISOR_AGENT_KEY]: {
+    name: GAP_ADVISOR_AGENT_NAME,
     tools: [],
     maxSteps: 1,
   },

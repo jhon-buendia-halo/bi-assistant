@@ -17,7 +17,10 @@ import {
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
+  GAP_ADVISOR_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
+  LAYER_MAPPER_AGENT_KEY,
+  REQUIREMENTS_ANALYST_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
@@ -27,6 +30,14 @@ import {
   INSIGHTS_ANALYST_DESCRIPTION,
 } from '../agents/insights-analyst-catalog';
 import { AGENT_TURN_STEPS } from './agent-turn.steps';
+import {
+  CONSUMPTION_GAP_DESCRIPTION,
+  CONSUMPTION_GAP_EDGES,
+  CONSUMPTION_GAP_STEPS,
+  CONSUMPTION_GAP_WORKFLOW_ID,
+  CONSUMPTION_GAP_WORKFLOW_NAME,
+  GAP_MAX_QUESTIONS,
+} from './consumption-gap-analysis.steps';
 import {
   DATA_READINESS_ASSESSMENT_DESCRIPTION,
   DATA_READINESS_ASSESSMENT_EDGES,
@@ -104,6 +115,10 @@ export type WorkflowTrigger = 'run';
 
 /** The placeholder of a run's question. */
 const QUESTION_PLACEHOLDER = 'Ask a question about your data';
+
+/** Consumption Gap Analysis's placeholder: two questions, one per line. */
+const CONSUMPTION_GAP_PLACEHOLDER =
+  'Which team won the most matches in each World Cup?\nWhat share of the goals were penalties?';
 
 const QUESTION_FIELD: WorkflowInputField = {
   name: 'question',
@@ -424,6 +439,52 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       ],
       steps: REVIEW_WEBSITE_STEPS,
       edges: REVIEW_WEBSITE_EDGES,
+      bar: 'steps',
+    },
+    {
+      id: CONSUMPTION_GAP_WORKFLOW_ID,
+      name: CONSUMPTION_GAP_WORKFLOW_NAME,
+      description: CONSUMPTION_GAP_DESCRIPTION,
+      // The Gap Advisor recommends the fixes (agents.md 2.20, 5.20).
+      primaryFor: GAP_ADVISOR_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        {
+          ...DATASETS_FIELD,
+          help: 'Datasets whose schemas are tagged Landing, Normalized and Consumption.',
+        },
+        {
+          name: 'question',
+          label: 'Business questions',
+          type: 'textarea',
+          required: true,
+          placeholder: CONSUMPTION_GAP_PLACEHOLDER,
+          help: `One question per line, up to ${GAP_MAX_QUESTIONS}.`,
+          maxLength: QUESTION_MAX_LENGTH,
+        },
+        {
+          ...IMAGES_FIELD,
+          label: 'Reference dashboards',
+          help: 'Screenshots of the dashboards the model must support.',
+        },
+        {
+          name: 'artifact',
+          label: 'Saved dashboard',
+          type: 'artifact',
+          required: false,
+          artifactKinds: ['dashboard'],
+        },
+      ],
+      steps: CONSUMPTION_GAP_STEPS,
+      // Grace reads the reference dashboards, the Requirements Analyst
+      // derives the requirements and the Layer Mapper maps them; the Gap
+      // Advisor (`primaryFor`) recommends the fixes.
+      stepAgents: {
+        'read-dashboards': DASHBOARD_READER_AGENT_KEY,
+        'derive-requirements': REQUIREMENTS_ANALYST_AGENT_KEY,
+        'map-requirements': LAYER_MAPPER_AGENT_KEY,
+      },
+      edges: CONSUMPTION_GAP_EDGES,
       bar: 'steps',
     },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));

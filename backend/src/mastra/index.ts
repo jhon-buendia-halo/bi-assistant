@@ -23,6 +23,7 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
+import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
 import { recreateDashboardWorkflow } from './workflows/recreate-dashboard.workflow';
@@ -72,6 +73,7 @@ export const mastra = new Mastra({
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,
     'review-website': reviewWebsiteWorkflow,
+    'consumption-gap-analysis': consumptionGapAnalysisWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

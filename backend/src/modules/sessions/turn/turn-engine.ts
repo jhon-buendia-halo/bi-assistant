@@ -14,10 +14,14 @@ import {
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
+  GAP_ADVISOR_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
+  LAYER_MAPPER_AGENT_KEY,
+  REQUIREMENTS_ANALYST_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
+import { getDatasetToolServices } from '../../../mastra/tool-services';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
 import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
@@ -31,6 +35,11 @@ import {
   explainReportBlock,
   type DataReadinessAssessmentRuntime,
 } from '../../../mastra/workflows/data-readiness-assessment.steps';
+import {
+  CONSUMPTION_GAP_RUNTIME_KEY,
+  CONSUMPTION_GAP_WORKFLOW_ID,
+  type ConsumptionGapRuntime,
+} from '../../../mastra/workflows/consumption-gap-analysis.steps';
 import {
   MAP_DASHBOARD_DATA_RUNTIME_KEY,
   MAP_DASHBOARD_DATA_WORKFLOW_ID,
@@ -108,6 +117,7 @@ import {
   SYNTHETIC_DATA_TOOLS,
   syntheticPanelItemId,
 } from '../synthetic-data-bridge';
+import { runGapQueries } from '../gap-queries';
 import {
   groundingNudge,
   statedRationale,
@@ -1260,6 +1270,155 @@ export class TurnEngine {
             progress: (line) =>
               emit({ type: 'reasoning', content: `${line}\n` }),
           }),
+          // Consumption Gap Analysis (agents.md 5.20): its model steps on
+          // their own agents, its read-only queries recorded as sources.
+          consumptionGap: {
+            // Read dashboards: Grace over each stored image, one call each.
+            readDashboard: async ({ image }) => {
+              try {
+                const read = await this.deps.mastra.readDashboard(
+                  {
+                    question: 'Read this reference dashboard',
+                    image: await this.deps.readImage(id, image),
+                  },
+                  stepModelOf(DASHBOARD_READER_AGENT_KEY),
+                );
+                return {
+                  blueprint: read.blueprint,
+                  stopped: read.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
+            // Resolve layers and Load layer catalogs: the dataset tools'
+            // own services (names, types and schema notes; no rows).
+            datasetLayers: async ({ datasets }) =>
+              (await getDatasetToolServices().getDatasets(datasets)).map(
+                (dataset) => ({
+                  dataset: dataset.name,
+                  datasourceId: dataset.datasourceId ?? null,
+                  datasourceKind: dataset.datasourceKind ?? null,
+                  schemas: (dataset.schemas ?? []).map((note) => ({
+                    ...note,
+                  })),
+                  entities: dataset.tables.map((key) => {
+                    const known = dataset.entities?.find(
+                      (entity) => entity.key === key,
+                    )?.columns;
+                    return {
+                      key,
+                      columns: known
+                        ? known.map((column) => ({
+                            name: column.name,
+                            type: column.type ?? '',
+                          }))
+                        : null,
+                    };
+                  }),
+                }),
+              ),
+            // Infer lineage and Probe evidence (ADR-0051): each statement
+            // on the guarded read-only path, one after the other, recorded
+            // as a `run_readonly_sql` source as Rows behind findings does
+            // (agent-answers R67-R78). A failed one is a result.
+            runQueries: ({ queries }) =>
+              runGapQueries({
+                queries,
+                run: (datasourceId, sql, limit) =>
+                  this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+                signal: turn.signal,
+                record: (args, result, facts) => {
+                  emit({
+                    type: 'tool',
+                    content: JSON.stringify({
+                      name: 'run_readonly_sql',
+                      rationale: args.rationale,
+                      input: toolCallInput('run_readonly_sql', args),
+                    }),
+                  });
+                  const callId = `gap-query-${randomUUID()}`;
+                  queryFacts.set(callId, facts);
+                  const record = toolDataRecord(
+                    'run_readonly_sql',
+                    args,
+                    result,
+                  );
+                  if (record) captureRecord(record, callId);
+                },
+              }),
+            deriveRequirements: async (input) => {
+              try {
+                const derived = await this.deps.mastra.deriveRequirements(
+                  input,
+                  stepModelOf(REQUIREMENTS_ANALYST_AGENT_KEY),
+                );
+                return {
+                  ...derived,
+                  stopped: derived.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            // Confirm requirements: the same agent applies the user's edits.
+            reviseRequirements: async (input) => {
+              try {
+                const revised = await this.deps.mastra.reviseRequirements(
+                  input,
+                  stepModelOf(REQUIREMENTS_ANALYST_AGENT_KEY),
+                );
+                return {
+                  ...revised,
+                  stopped: revised.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            mapRequirements: async (input) => {
+              try {
+                const mapped = await this.deps.mastra.mapRequirements(
+                  input,
+                  stepModelOf(LAYER_MAPPER_AGENT_KEY),
+                );
+                return {
+                  ...mapped,
+                  stopped: mapped.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            recommendFixes: async (input) => {
+              try {
+                const advised = await this.deps.mastra.recommendFixes(
+                  input,
+                  stepModelOf(GAP_ADVISOR_AGENT_KEY),
+                );
+                return {
+                  ...advised,
+                  stopped: advised.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            // Render report: the drawn report is the run's visual, and the
+            // answer built in code is its answer.
+            saveReport: async ({ bundle, answer, title }) => {
+              const metadata = await this.deps.saveMock(
+                id,
+                { ...bundle, title },
+                trimmed,
+              );
+              showVisual(metadata);
+              text = answer;
+              emit({ type: 'text', content: text });
+              return { visualId: metadata.id, title: metadata.title };
+            },
+          },
         },
         (event) => onStepEvent?.(event),
       );
@@ -1488,7 +1647,10 @@ export class TurnEngine {
       RecreateDashboardRuntime &
       MapDashboardDataRuntime &
       ReadImagesRuntime &
-      ReviewWebsiteRuntime,
+      ReviewWebsiteRuntime & {
+        /** Its names overlap the others' (readDashboard, saveReport): kept apart. */
+        consumptionGap: ConsumptionGapRuntime;
+      },
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
     // The agent step's own failure, kept so the turn reports it as is.
@@ -1507,6 +1669,7 @@ export class TurnEngine {
     const recreate = workflow.engineId === RECREATE_DASHBOARD_WORKFLOW_ID;
     const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
+    const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
     if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
@@ -1558,6 +1721,22 @@ export class TurnEngine {
         // Synchronous and never throws: a progress line only.
         progress: (line) => runtime.progress(line),
       } satisfies ReviewWebsiteRuntime);
+    } else if (gap) {
+      const parts = runtime.consumptionGap;
+      requestContext.set(CONSUMPTION_GAP_RUNTIME_KEY, {
+        readDashboard: (input) => captured(() => parts.readDashboard(input)),
+        loadDashboard: (input) => captured(() => parts.loadDashboard(input)),
+        datasetLayers: (input) => captured(() => parts.datasetLayers(input)),
+        runQueries: (input) => captured(() => parts.runQueries(input)),
+        deriveRequirements: (input) =>
+          captured(() => parts.deriveRequirements(input)),
+        reviseRequirements: (input) =>
+          captured(() => parts.reviseRequirements(input)),
+        mapRequirements: (input) =>
+          captured(() => parts.mapRequirements(input)),
+        recommendFixes: (input) => captured(() => parts.recommendFixes(input)),
+        saveReport: (input) => captured(() => parts.saveReport(input)),
+      } satisfies ConsumptionGapRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
@@ -1576,9 +1755,10 @@ export class TurnEngine {
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Read images, the optional first step of every workflow but the
-    // agent turn and Dashboard Image to Artifact (agents.md 2.15).
+    // agent turn, Dashboard Image to Artifact and Consumption Gap Analysis,
+    // whose Read dashboards hands its images to Grace (agents.md 2.15, 5.20).
     const readsImages =
-      workflow.engineId !== AGENT_TURN_WORKFLOW_ID && !recreate;
+      workflow.engineId !== AGENT_TURN_WORKFLOW_ID && !recreate && !gap;
     if (readsImages) {
       requestContext.set(READ_IMAGES_RUNTIME_KEY, {
         readImages: (input) => captured(() => runtime.readImages(input)),
@@ -1593,6 +1773,8 @@ export class TurnEngine {
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
     // Dashboard Image to Artifact runs on the run's image (agents.md 5.17); Map a
     // Dashboard to Data on a saved dashboard and the run's datasets (5.18).
+    // Consumption Gap Analysis on the run's questions and datasets, its
+    // saved dashboard ('' when none) and its reference dashboards (5.20).
     const turnInput:
       | AnswerBusinessQuestionInput
       | { question: string; dataset: string; images?: string[] }
@@ -1606,18 +1788,25 @@ export class TurnEngine {
       | ReviewWebsiteInput = review
       ? // Review a Website reads the whole form (agents.md 5.19).
         reviewWebsiteInputOf(session.inputValues ?? { url: question })
-      : recreate
-        ? { question, image: session.inputImage ?? '' }
-        : mapping
-          ? {
-              question,
-              artifact: session.inputArtifact ?? '',
-              datasets: session.datasets,
-              ...images,
-            }
-          : readiness
-            ? { question, dataset: session.datasets[0] ?? '', ...images }
-            : { question, datasets: session.datasets, ...images };
+      : gap
+        ? {
+            question,
+            datasets: session.datasets,
+            artifact: session.inputArtifact ?? '',
+            images: [...(session.inputImages ?? [])],
+          }
+        : recreate
+          ? { question, image: session.inputImage ?? '' }
+          : mapping
+            ? {
+                question,
+                artifact: session.inputArtifact ?? '',
+                datasets: session.datasets,
+                ...images,
+              }
+            : readiness
+              ? { question, dataset: session.datasets[0] ?? '', ...images }
+              : { question, datasets: session.datasets, ...images };
     let state = session.workflowState;
     // A new run starts the bar over at its first step event, whichever step
     // that is: Read images, step 1, is optional, so a run without images

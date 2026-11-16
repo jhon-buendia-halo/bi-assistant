@@ -1285,6 +1285,30 @@ flowchart LR
   - **Let a model write the filtered SQL:** rejected; an injection surface and no stable evidence link.
   - **Page only on the client:** rejected; limited to the 200 stored rows.
 
+#### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
+- **Status:** Accepted
+- **Date:** 2026-11-16
+- **Context:**
+  - Consumption Gap Analysis ([agents.md](agents.md) 5.20; workflows R37) must say, for every gap of the Consumption layer, whether the data sits in Normalized or Landing, so the fix starts in the right layer (roadmap 1.30).
+  - No declared lineage can be assumed: the medallion models users bring have no dbt manifest, no catalog lineage and no naming convention shared across teams; the only facts are the datasets' schema notes (which schema is which layer, datasets R40-R47), the entities and columns the dataset tools list, and the rows a read-only query can read.
+  - A model asked for lineage invents plausible edges, and a run cannot afford one query per column pair: a model of 80 entities has thousands of pairs.
+- **Decision:**
+  - **Candidates in code:** pairs of columns in adjacent layers (Landing → Normalized, Normalized → Consumption; Landing → Consumption only when the run has no Normalized table) whose names match once normalised (lower case, layer prefixes such as `raw_`, `stg_`, `fct_`, `agg_` and storage suffixes such as `_str`, `_txt` removed) with a compatible type family, each with a method (`name` or `similar-name`) and a confidence.
+  - **Bounded value checks:** one read-only statement per candidate worth checking whose two entities share a Postgres or Databricks datasource, at most 40 per run, measuring the share of the target's distinct values found in the source; a match upgrades the edge to `values` with its `overlap`, a failed check keeps the name edge. Each check runs on the guarded read-only path and is recorded as a `run_readonly_sql` source of the answer, so the query inspector shows it.
+  - **The mapper's sources as edges:** when the Layer Mapper names the same requirement field in two layers, Trace gaps adds a `mapped` edge between those columns, with the expression that computes it.
+  - **Every edge carries its method and confidence** (`name`, `similar-name`, `values`, `mapped`), so the report says how each was found. <!-- TODO(1.30.2): the confidence of each method and the overlap threshold. -->
+- **Consequences:**
+  - A gap is traced through lineage the run can show and re-run, never through a model's guess; the report and the answer never name a column the catalogs lack.
+  - A renamed or reshaped column (a split, a pivot, a code mapped to a label) can be missed; the mapper's `mapped` edges cover some of it, and the report shows the method so a reader can weigh it.
+  - Pairs on different datasources and REST datasets are never value-checked: their edges stay name edges.
+  - The checks add up to 40 queries to a run, one after another, each with the datasource's timeout; a stop ends the step between two queries.
+  - **Stack-neutral:** a rebuild needs the schema notes, the column catalog and a guarded read-only query path; no lineage store.
+- **Alternatives considered:**
+  - **Declared lineage (dbt manifest, catalog lineage, user hints):** rejected for this version; no source is common to the models users bring. Hints are a follow-up.
+  - **Ask a model for the lineage:** rejected; unverifiable edges.
+  - **Check every column pair by query:** rejected; thousands of queries per run.
+  - **Parse the views' and jobs' SQL:** rejected; Landing and Normalized are often loaded by tools outside the database.
+
 ## Level 4 — Code
 
 ```mermaid

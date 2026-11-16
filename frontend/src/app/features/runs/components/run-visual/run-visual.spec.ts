@@ -103,6 +103,15 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
     ).toBe('true');
   });
 
+  it('is read-only for the report of Consumption Gap Analysis, drawn by code', () => {
+    const gap = render('consumption-gap-analysis');
+    expect(
+      gap.el
+        .querySelector('[data-testid="panel"]')
+        ?.getAttribute('data-read-only'),
+    ).toBe('true');
+  });
+
   it("keeps Tailor and Refresh for any other workflow's visual", () => {
     const other = render('answer-business-question');
     expect(
