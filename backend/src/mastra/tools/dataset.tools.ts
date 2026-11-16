@@ -286,9 +286,16 @@ export const runReadOnlySqlTool = createTool({
           ? (result as { correctedSql: string }).correctedSql
           : sql;
       const rows = (result as { rows?: Record<string, unknown>[] }).rows ?? [];
-      const warnings = inspectResult(executed, rows, rowLimit).map(
-        (warning) => warning.message,
-      );
+      // The call's own cap is a reason to warn only when it dropped rows:
+      // the connector's count of what the statement produced says so.
+      const produced = (result as { totalRows?: unknown }).totalRows;
+      const capHeldRows =
+        typeof produced !== 'number' || produced > rows.length;
+      const warnings = inspectResult(
+        executed,
+        rows,
+        capHeldRows ? rowLimit : undefined,
+      ).map((warning) => warning.message);
       const shown = withoutFacts(
         result,
         {

@@ -9,7 +9,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Answer an out-of-band question in the very next reply, before any status update.
 - Hand over the running app after the wave check (`node scripts/qa.mjs --wave <ids> --base <ref>`; add `--demo <id>` and `node scripts/demo-page.mjs <id>` for the wave's user-visible milestone), and after a restart tell the user to hard-reload the open tab (Ctrl+Shift+R / Cmd+Shift+R).
 - Before an L epic or an unclear M feature, show a cheap prototype, then ask one batched confirmation per epic (spec, ADR, questions with recommendations, branch); re-plan a direction change once, not story by story.
-- Never read a file over 500 lines whole (`grep -n` or `specs/INDEX.md`, then the range); run tests quietly (Playwright `--reporter=dot`, Jest `--silent`, a log file) and read back only the summary or failure block.
+- Before planning a change to a shared component, list its hosts (`grep -rn "<app-<name>" frontend/src`) and open the real app on each entry point: a stored item may open on another page than the one you are changing.
 - Before hand-over, look at the first screen a viewer sees, in both themes and with the right panel open (nothing behind Show more, no overlap), and look at every evidence screenshot.
 - Commit each story as soon as its related tests are green; never start a second story on top of uncommitted work.
 - Measure before designing: prompt sizes from the compiled agent (`getInstructions()`, `evidence/1.14.1/measure-prompt.cjs`), SQL or profiling changes timed live on one small and one large real table.
@@ -17,7 +17,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Before blaming a change for a failing test, count its flake rate on unchanged code (run it alone 5–10 times); after making test steps concurrent, run the real gate several times.
 
 ## Subagents and parallel units
-- Give parallel units one written contract first (types, routes copied from `specs/system/api.md`, test ids, copy); a helper or Feature file two units might both add belongs to exactly one of them, and each unit that adds endpoints gets its own `api.md` number range.
+- Give parallel units one written contract first (types, routes copied from `specs/system/api.md`, test ids, copy); a helper or Feature file two units might both add belongs to exactly one of them, and each unit that adds endpoints gets its own `api.md` number range. In a roadmap entry cite the plan by story id (`plan 1.25.3`) or link, never `plan section 2`: that pulls section 2 of every plan file into the story pack.
 - Brief every subagent: Edit/Write tools only, a private scratch subfolder (never shared `/tmp` names), never kill a process it did not start, and "if a build or budget blocks you, report it; do not change build config".
 - Do not trust a subagent's report: the lead's wave check (`qa.mjs --wave`) re-runs the gates (build, related unit tests, the Features' E2E, `check-specs`) once over the merged wave, especially after a builder was stopped and resumed.
 - On "keep going" with no context, check for another live session on the epic (commits in the last minutes, files changing under you) and ask who owns the work.
@@ -25,7 +25,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 
 ## Shell and tooling
 - Before moving or renaming a section of `CLAUDE.md` or a skill, grep `.claude/mods`, `scripts/` and `.claude/agents` for code that parses it (the `workflow-steps` pane reads `## Workflow`).
-- Write multi-line scripts and every regex edit with the Write/Edit tools, never `sed`, a heredoc or a scripted replace; pipe-test regexes with real Windows (`\`) and POSIX paths; if a multi-file edit must be scripted, assert every anchor's count before writing any file.
+- Write multi-line scripts and every regex edit with the Write/Edit tools, never `sed`, a heredoc or a scripted replace; pipe-test regexes with real Windows (`\`) and POSIX paths; if a multi-file edit must be scripted, assert every anchor's count before writing any file. Run `npx prettier --check` on a source file you did edit through a script.
 - Use absolute worktree paths in every command and scripted edit; the shell's cwd resets between calls.
 - Stop processes only by the PID you captured (`$!`, `ps -eo pid,args`); never `pkill -f` or `pgrep -f` with a pattern that matches your own command line; after `TaskStop` on a looping script (e.g. `run-assistant-evals`), kill its leftover node children by PID.
 - zsh: brace variables before a colon (`"${sha}:refs/…"`), never start an echoed separator with `=`, and don't word-split a command held in a variable.
@@ -43,7 +43,7 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - A unit test resets the shared browser state it reads (`localStorage`, document focus) in its own `beforeEach`: Jasmine shuffles spec order on every run.
 
 ## E2E and Playwright
-- Before the first Playwright run of a session: `npx playwright install chromium chromium-headless-shell` in `frontend/`, `docker ps`, and `E2E_SKIP_DOCKER=1` if a Postgres already listens on 55432.
+- Before the first Playwright run of a session: `npx playwright install chromium chromium-headless-shell` in `frontend/`, `docker ps`, and `E2E_SKIP_DOCKER=1` if a Postgres already listens on 55432. Run Playwright by hand with `--project=web` (the desktop project needs its own build), and never chain a command after a test run whose exit code you read.
 - After every Playwright run: `git status -- evidence/ frontend/e2e/*-snapshots/`; restore evidence other stories own and delete new baselines unless a visual change was intended.
 - Never put your own files under `frontend/test-results` (Playwright empties it); use `.qa-reports/`.
 - In a wave check, pass `--base <ref>` (the epic branch before the wave, or `HEAD` when a shared fixture changed on the epic); the default base makes `--only-changed` select most of the suite.
@@ -60,6 +60,8 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - Before an eval run, print the copy's saved provider and model, agree the model with the user, check its key and credit (about 3 × cases × 2 turns), and use `EVAL_LLM_*` for any other target; never baseline on the env fallback model.
 - For a failed case, read `toolCalls[].input/output` and decide model fault vs check or rubric fault before touching code; stop a 3-run round at the first failed run.
 - Decide whether an agent's evals must run by hashing `getInstructions()` and its tool list on base and branch; when they run, compare with at least 3 runs per case per build; for a judge failure, compare with base's answer and make the rubric state one pass condition.
+- Before an eval comparison, build the base in its own worktree (`git worktree add`, a symlink to `backend/node_modules`, `npx nest build`) and keep it until the comparison is closed; when a judged case differs by one run, run it 6 times or more on both builds before calling it noise or a regression; keep eval processes at 6 or fewer on the local endpoint.
+- Put a new rule last in an agent's instructions and make it fire on a cue the request itself carries; a rule in the middle of the list changes answers it is not about.
 - Write custom checks and the judge input against the model-facing projection (`toModelOutput`) and the rule's exact wording; unit-test each check on one real answer.
 - Keep agent catalogue data in a module with no framework imports and build the Mastra objects in a second file (Jest cannot load Mastra's ESM).
 - Check what a unit test pins against real data (a real session, a real request) before trusting it, especially derived text.
@@ -72,11 +74,10 @@ Read this before every task. It holds the distilled, still-valid rules from [ret
 - In Angular templates compare a signal's value with null explicitly, not through `?.`; never call DOM methods detached from `window`.
 
 ## Git and worktrees
-- Merge `origin/main` into the epic branch at the start of each story and before the last story's fast loop, then run `build:all`; take ADR numbers from `main`'s architecture.md at that moment and grep every ADR id after renumbering.
+- Merge `origin/main` into the epic branch at the start of each story and before the last story's fast loop, then run `build:all`; take ADR numbers from `main`'s architecture.md at that moment and grep every ADR id after renumbering. Fetch first: in a Conductor workspace the ref moves without you. After a late merge of `main`, run by hand the E2E specs `main` changed (the `--free` selection drops them).
 - Write every new file under the worktree root; run `git -C <main checkout> status --short` after creating files.
 - Run destructive git commands alone after `git status`; read another ref with `git show <ref>:<path>`, never `git checkout <ref> -- .`.
 - After every merge, check `git diff --name-only --diff-filter=U` and that no `MERGE_HEAD` is left before running any test: a merge can stop on a conflict silently.
-- Confirm the end state with the user (a 10-minute mock) before launching a multi-story build; a direction change after builders start costs whole stories.
 - Call a failure "pre-existing" only after the same suite fails on a `git archive` or detached `main` copy (on Windows, CRLF makes ~10 backend suites fail on `main` too).
 - Create PRs with `GH_TOKEN=$(gh auth token --user jhon-buendia-halo)`; after a push, `gh pr list --head <branch> --state all` and start a new branch from `main` if its PR already merged.
 - `docker compose up` from a worktree recreates the shared Postgres container: never `down` or `--remove-orphans` on it, and check `docker ps` and the data afterwards.

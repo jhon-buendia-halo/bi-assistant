@@ -40,7 +40,7 @@ Explain what the query does to the rows, in the order a business reader would fo
 - keep: rows are filtered out. add: details are looked up in another table, set "table" to it (a join). combine: two sets of rows are put together into one (a union). group: rows are grouped. count: rows are counted or totalled within each group. compute: a value is worked out for each row (a ratio, a rank). sort: rows are ordered.
 - Write "text" as one short sentence of at most 90 characters that continues the verb, in business words: no SQL keywords, no function names, no column lists. For example, for start: "every return on record"; for keep: "returns from 1 Jul to 30 Sep 2025"; for count: "returns for each product". Leave detail out rather than write a second sentence.
 - Name what the rows are after the step in "unit", in the plural (for example "orders", "products").
-- For every step write "countSql": one statement in the query's dialect that returns one row with one integer, the number of rows after that step. Read only the tables the query reads. Start with SELECT or WITH, no semicolon.
+- For every step write "countSql": one statement in the query's dialect that returns one row with one integer, the number of rows after that step. A step that totals all the rows without groups leaves one row: its count is 1, not the total. Read only the tables the query reads. Start with SELECT or WITH, no semicolon.
 - Never write a step for the LIMIT or for the final list: the code adds it.
 
 Reply with one JSON object: {"steps":[{"verb":"start","text":"...","table":"...","unit":"...","countSql":"..."}, ...]}. At most ${MAX_EXPLAINED_STEPS} steps.`;
@@ -170,7 +170,10 @@ export function showStep(
         note: `(the query tool stops at ${evidence.rowLimit ?? rows} rows: the rest of the result was not read)`,
       };
     default:
-      return { ...base, text: `Show all ${rows} rows` };
+      return {
+        ...base,
+        text: rows === 1 ? 'Show the 1 row' : `Show all ${rows} rows`,
+      };
   }
 }
 

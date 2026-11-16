@@ -19,6 +19,9 @@ import { AppModule } from './app.module';
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
 import { installNestLogRedaction } from './infrastructure/logging/redacting-nest-logger';
 
+/** The largest JSON request body the API reads. */
+export const JSON_BODY_LIMIT = '8mb';
+
 export interface CreateAppOptions {
   port: number;
   /** Interface to bind; omitted = all interfaces (Node default). */
@@ -109,6 +112,10 @@ export async function createApp(
   installNestLogRedaction();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   if (options.cors) app.enableCors();
+  // A run's input can carry one image of up to 5 MB as a base64 `data:` URL
+  // (api.md 118, 119), which is about 6.7 MB of JSON; Express stops at
+  // 100 KB by default.
+  app.useBodyParser('json', { limit: JSON_BODY_LIMIT });
   const instanceId = options.instanceId;
   if (instanceId) {
     app.use((_req: Request, res: Response, next: () => void) => {

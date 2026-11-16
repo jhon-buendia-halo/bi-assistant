@@ -118,6 +118,7 @@ Summary:
 | `readiness_reports` | Stored data-readiness assessments, one per run, never edited | `id` | `generatedAt` desc (per datasource) | [data-readiness](../capabilities/data-readiness/spec.md) |
 | `workflow_runs` | Every run of a workflow on an input: its input, steps, outcome and, for an agent workflow, its answer and files | `id` | `startedAt` desc | [workflows](../capabilities/workflows/spec.md) |
 | `workflow_run_node_chats` | The chats with a stored run's agent steps (node chats), one per run and step | `id`; `(runId, stepId)` unique | n/a (read by run and step) | [workflows](../capabilities/workflows/spec.md) |
+| `artifacts` | Reusable context saved from workflow runs: today, dashboards read from an image | `id` | `createdAt` desc | [workflows](../capabilities/workflows/spec.md) R33 |
 
 Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `ontology_items`, `agents`, `skills` and `workflow_runs` carry a legacy, inert `ownerId` (section 3.14). There are **no foreign-key constraints** between collections, and no cascading deletes but one (a run's node chats go with it, 3.17); references are by value (`name`, `id`) and may dangle (section 3.13).
 
@@ -279,7 +280,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `report` | `AnalysisReport` | no | Legacy (Deep analysis removed 2026-11-12): `{jobId: string, title: string, path: string, angles: number}`, set on the message a finished deep-analysis job appended and on a `deep-analysis` run's `answer`. Stored data stays and is read as before; nothing writes it any more, and the report file (`reports/…`) is no longer reachable from the app. |
 | `rfpPackage` | object | no | Legacy (the RFP Builder was removed 2026-11-12): older assistant messages may still carry an RFP package reference; nothing writes it and it is ignored, so such a message reads as a plain answer. |
 | `readinessReport` | `ReadinessReportRef` | no | `{reportId: string, datasourceName: string, overallScore: number, maturity: Maturity, generatedAt: ISO}`, the last report a turn's `assess_data_readiness` or `get_readiness_report` returned ([data-readiness](../capabilities/data-readiness/spec.md) R5, R25). Drives the readiness card. Data Readiness Agent sessions only. Additive, no migration. |
-| `evidence` | `QueryEvidence[]` | no | The query inspector's facts (3.4.2a): one entry per `run_readonly_sql` or `sample_rows` record of `data`, failed ones included, in `data` order. Derived at persist time from `data` and the facts the tools passed beside their results, on the answer and on a clarification card alike; omitted when `data` holds no such record. Kept **beside** `data`, never on a `ToolDataRecord`, because whole records are fed to models. Older messages lack it; a run's answer gets it from [api.md](api.md) 139. Additive, no migration. |
+| `evidence` | `QueryEvidence[]` | no | The query inspector's facts (3.4.2a): one entry per `run_readonly_sql` or `sample_rows` record of `data`, failed ones included, in `data` order. Derived at persist time from `data` and the facts the tools passed beside their results, on the answer and on a clarification card alike; omitted when `data` holds no such record. Kept **beside** `data`, never on a `ToolDataRecord`, because whole records are fed to models. Older messages lack it; a run's answer gets it from [api.md](api.md) 139, a past chat's message from 144 (written into the stored message without changing the session's `updatedAt`), and `GET /sessions/:id` (2) shows it derived from `data` until then. Additive, no migration. |
 
 Messages never carry an id; user messages have only `role`, `content`, `at`.
 
@@ -317,7 +318,7 @@ How much data one query of an answer stands for (the query inspector, roadmap 1.
 | `tables` | `QueryTableSize[]` | no | Filled by api.md 139: `{entity, rows: number \| null, error?}` per table the query reads, an exact `COUNT(*)`; `rows: null` with the error when the count failed. |
 | `explanation` | `QueryExplanation` | no | Filled when the inspector first opens the query (api.md 140, 141): `{steps: QueryStep[], fallback?: true, at, stageCounts?: {status: 'verified' \| 'unverified', at, reason?}}`. |
 
-Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143). A re-run (142) never changes it.
+Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143), and to a past chat message's `evidence` through the lock of that session and message (144-146). A re-run (142, 147) never changes it.
 
 #### 3.4.3 `SessionVisualization` (session metadata for a visual)
 
@@ -624,13 +625,15 @@ One document per assessment ([data-readiness](../capabilities/data-readiness/spe
 
 One document per run of a workflow on an input ([workflows](../capabilities/workflows/spec.md) R18-R20, ADR-0041; since 1.23.14): every run of 118 and 119 ([api.md](api.md)), a code-only workflow's (`seq-text-demo`) as well as an agent workflow's. It is inserted as `running` when the run starts (before the stream's `run` event) and updated when it ends; a run that waits for the user is updated to `suspended` when it starts waiting, to `running` when it is answered (api.md 138) and again when it ends (ADR-0043); nothing else writes it. Deleted only by `DELETE /workflow-runs/:id` (api.md 122), which also deletes the run's workspace. No retention limit. Additive collection, no migration (section 6).
 
+A **draft run** (Try it, api.md 129) is never a document here and is not stored data: its finished run is held only in the backend's memory (`HeldDraftRuns` in `modules/workflows/held-draft-runs.ts`), for 30 minutes from its end and at most 20 of them, the oldest dropped first, so the query inspector (api.md 139-143) can write its evidence to that copy. A restart forgets it (since 1.25.9).
+
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | The run id. The run host is `run-<id>` and the workspace `workspaces/session-run-<id>/` (4.1). |
 | `workflowId` | string | yes | The workflow: `answer-business-question`, or on a legacy run the id of a removed workflow (`seq-text-demo`, `deep-analysis`, `agent:<key or id>`; [agents.md](agents.md) 5.12). |
 | `workflowName` | string | yes | Its name when the run started, so a deleted user agent's run still names it. |
 | `contractHash` | string | no | The workflow's data-contract hash when the run started (12 hex; api.md 117, [agents.md](agents.md) 5.12). Written on insert. Runs stored before 2026-11-13 lack it; readers treat it as absent, no migration. |
-| `input` | object | yes | The checked input (api.md 118: declared fields only, defaults filled), as `Record<string, string \| number \| boolean \| string[]>`. |
+| `input` | object | yes | The checked input (api.md 118: declared fields only, defaults filled), as `Record<string, string \| number \| boolean \| string[]>`. An `image` field holds the path of the file in the run's workspace (`inputs/<field name>.<png\|jpg\|webp>`), never the image. |
 | `context` | `{ fromRunId: string }` | no | The earlier run whose question and answer the agent was given (api.md 3.6). |
 | `status` | `running` \| `suspended` \| `success` \| `failed` \| `stopped` | yes | `running` until it ends; `suspended` while it waits for the user's answer (api.md 138, ADR-0043). |
 | `waitingFor` | `{ stepId, title, question, options: string[], since, expiresAt, expired?: true }` (api.md 3.6) | no | A `suspended` run: the waiting step (`clarify` or `analyse`), its title, its clarifying question and options, when it started waiting and when it stops being answerable (30 minutes later). Removed when the run is answered; kept with `expired: true` on a run that could no longer be answered (it expired, or the app restarted), which is then `stopped`. Runs stored before 2026-11-13 have none; no migration. |
@@ -674,6 +677,25 @@ One document per stored run and agent step that someone chatted with ([workflows
 No `ownerId`: the collection is newer than ownership (3.14).
 
 > Implementation note: `modules/workflows/repositories/workflow-node-chats.repository.ts` (`WorkflowNodeChatsRepository`, token `WORKFLOW_RUN_NODE_CHATS_STORE`); the message shape and the context block are framework-free in `node-chat-context.ts`.
+
+### 3.18 `artifacts` — saved artifacts
+
+One document per artifact ([workflows](../capabilities/workflows/spec.md) R33; [api.md](api.md) 144-148; since 2026-11-15). Inserted by the Save dashboard step of a Dashboard Image to Artifact run ([agents.md](agents.md) 5.17); only `name` changes afterwards (147).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | The artifact's id: what a run's `artifact` input names. |
+| `kind` | `dashboard` | yes | The kind of context it holds. |
+| `name` | string | yes | 1 to 80 characters; by default the dashboard's title. |
+| `description` | string | yes | The blueprint's summary (may be empty). |
+| `blueprint` | `DashboardBlueprint` ([agents.md](agents.md) 5.17) | yes | The dashboard as data, checked against the blueprint's schema when stored. It holds no mapping. |
+| `image` | `{ file: string; mediaType: string }` | no | The image the dashboard was read from: the file `<app data dir>/artifacts/<file>` (`<id>.png`, `.jpg` or `.webp`), written before the document and deleted with it. Absent when the run read no image or the file could not be written. |
+| `source` | `{ runId: string; workflowId: string }` | no | The run it was saved from. By value: it may dangle once the run is deleted. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+No `ownerId`: the collection is newer than ownership (3.14). Nothing refers to an artifact by a stored key: a run that used one keeps the blueprint in its own `output`, and its `input.artifact` id may dangle.
+
+> Implementation note: `modules/artifacts/repositories/artifacts.repository.ts` (`ArtifactsRepository`, token `ARTIFACTS_STORE`); `ArtifactsService` writes and deletes the image file.
 
 ## 4. Files on disk
 

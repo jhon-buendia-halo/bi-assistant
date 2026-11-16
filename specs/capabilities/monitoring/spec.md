@@ -156,7 +156,7 @@ Placement: the **Monitoring** item on the navigation rail opens the Monitoring p
 - Call page: heading, the facts grid, the error box when failed, **Context window** (caption, stacked bar, legend, seven boxes), **Steps**.
 - Runs tab: a filter bar (Agent, Date, **Clear filters**), the table and the same footer.
 - Session page: heading, the totals strip, **Open chat**, then each turn (question, meta line, path, answer, **Open timeline**) and the waterfall under the turn that opened it.
-- Costs page (rail **Costs**, [../../system/ui.md](../../system/ui.md) 4.8i): heading "Costs", the note and **Period**, the five tiles, **Daily cost**, **Monthly cost**, **Cost per workflow run**, then **Most expensive runs** beside **Where the cost goes**, then **By model** beside **By agent** on a wide window.
+- Costs page (rail **Costs**, [../../system/ui.md](../../system/ui.md) 4.8j): heading "Costs", the note and **Period**, the five tiles, **Daily cost**, **Monthly cost**, **Cost per workflow run**, then **Most expensive runs** beside **Where the cost goes**, then **By model** beside **By agent** on a wide window.
 
 ## Flows
 

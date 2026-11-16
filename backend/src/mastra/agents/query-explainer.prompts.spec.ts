@@ -258,6 +258,7 @@ describe('showStep and the code-built explanations', () => {
       '(the query tool stops at 500 rows: the rest of the result was not read)',
     ],
     [{ coverage: 'whole-table' }, 37, 'Show all 37 rows', undefined],
+    [{ coverage: 'whole-table' }, 1, 'Show the 1 row', undefined],
   ] as const)('%j', (patch, rows, text, note) => {
     const s = showStep(
       { index: 0, ...patch },

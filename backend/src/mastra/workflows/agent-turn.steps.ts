@@ -26,8 +26,8 @@ export const AGENT_TURN_STEPS = [
     input: ['question', 'datasets'],
     output: ['calls', 'stopped'],
     exits: [
-      { label: 'Model error', outcome: 'fails' },
-      { label: 'Stop', outcome: 'stops' },
+      { label: 'the model returns an error', outcome: 'fails' },
+      { label: 'you stop it', outcome: 'stops' },
     ],
   },
 ] as const satisfies readonly WorkflowStepEntry[];

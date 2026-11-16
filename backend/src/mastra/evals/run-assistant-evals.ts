@@ -46,8 +46,8 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  // The agent the questions run on: the assistant, or the Data Readiness
-  // Agent for EVAL_SET=data-readiness (agents.md 8.1).
+  // The agent the questions run on: the assistant, or the agent of the set,
+  // e.g. the Query Explainer for EVAL_SET=query-explainer (agents.md 8.1).
   const agent = agentForCases(selection.caseIds);
   if ('error' in agent) {
     console.error(agent.error);

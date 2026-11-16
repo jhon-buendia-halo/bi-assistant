@@ -2,7 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
+import { QueryRerunResult } from '../../../shared/query-evidence/query-evidence.model';
 import {
+  ChatMessage,
   InteractiveVisualization,
   PanelFileContent,
   PanelItemEvent,
@@ -251,6 +253,65 @@ export class SessionsApiService {
     return this.http.get<Session>(
       `${API_BASE_URL}/sessions/${encodeURIComponent(id)}`,
     );
+  }
+
+  /** Build the evidence of a message's answer and size its tables (api.md 144). */
+  prepareEvidence(
+    id: string,
+    message: number,
+  ): Observable<{ ok: boolean; message: ChatMessage }> {
+    return this.http.post<{ ok: boolean; message: ChatMessage }>(
+      `${this.answerUrl(id, message)}/evidence`,
+      {},
+    );
+  }
+
+  /** Explain one query of a message step by step (api.md 145). */
+  explainQuery(
+    id: string,
+    message: number,
+    index: number,
+  ): Observable<{ ok: boolean; message: ChatMessage }> {
+    return this.http.post<{ ok: boolean; message: ChatMessage }>(
+      `${this.answerUrl(id, message)}/queries/${index}/explanation`,
+      {},
+    );
+  }
+
+  /** Count the rows after each step of one query (api.md 146). */
+  countQueryStages(
+    id: string,
+    message: number,
+    index: number,
+  ): Observable<{ ok: boolean; message: ChatMessage }> {
+    return this.http.post<{ ok: boolean; message: ChatMessage }>(
+      `${this.answerUrl(id, message)}/queries/${index}/stage-counts`,
+      {},
+    );
+  }
+
+  /** Run one query again, storing nothing (api.md 147). */
+  rerunQuery(
+    id: string,
+    message: number,
+    index: number,
+  ): Observable<{ ok: boolean; result: QueryRerunResult }> {
+    return this.http.post<{ ok: boolean; result: QueryRerunResult }>(
+      `${this.answerUrl(id, message)}/queries/${index}/rerun`,
+      {},
+    );
+  }
+
+  /** One query's rows as a CSV file, up to 50,000 rows (api.md 148). */
+  queryCsv(id: string, message: number, index: number): Observable<Blob> {
+    return this.http.get(
+      `${this.answerUrl(id, message)}/queries/${index}/csv`,
+      { responseType: 'blob' },
+    );
+  }
+
+  private answerUrl(id: string, message: number): string {
+    return `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages/${message}/answer`;
   }
 
   delete(id: string): Observable<SessionActionResult> {

@@ -249,6 +249,13 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
 - **Acceptance:** the staged backend has at least 40% fewer files; every production dependency still loads and the staged backend answers its API under Electron-as-Node; unit tests cover what is pruned and what is kept.
 - **Notes:** measured 2026-11-11 on a local `--win nsis` build of 0.48.1: 46,955 files, 45,804 of them in `resources/backend/node_modules`. The first upgrade still runs the old uninstaller over the old file set.
 
+#### 1.7.23 — Windows install still takes over 5 minutes: bundle the backend  `🚧 In progress`
+- **Intent:** after 1.7.22 the installer still writes about 21,300 files, 20,176 of them the backend's pruned `node_modules` (839 packages). Bundling the backend into one file leaves only the packages that cannot be bundled.
+- **Scope:** `frontend/scripts/bundle-backend.mjs`, run by `stage-backend.sh` before the prune: esbuild bundles `dist/main.js` with its pure-JS dependencies, keeps first-party `__dirname` paths and assets working, keeps native addons and packages that read their own files outside the bundle (with their dependency closure), keeps the data files `@mastra/core` and `@mastra/observability` resolve at runtime, and writes `THIRD_PARTY_LICENSES.txt`. esbuild becomes an exact-pinned backend devDependency.
+- **Out of scope:** the CLI and the npm package (unbundled as before); trimming `@github/copilot-sdk` (919 files, left whole); code signing; NSIS settings.
+- **Acceptance:** the installed app has at least 80% fewer files than with pruning alone; the staged backend answers its API under Electron-as-Node, loads every Testing Data fixture, runs Answer a Business Question end to end with a real LLM, and exports XLSX and PDF; the build fails when a native addon is left inside the bundle; unit tests cover the closure, the prune, the path rewrite, the asset copy and the licence file.
+- **Notes:** measured 2026-11-15 on a local `--win nsis --x64` build of 0.61.0 (mercer, macOS host): 2,844 installed files, 2,765 of them in `resources/backend`. Install time on Windows is not measured yet. Developer observability in the packaged app loses the Express, NestJS and `pg` instrumentations (bundled code can't be patched); HTTP, undici and Pino keep theirs. The first upgrade still runs the old uninstaller over the old file set.
+
 ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) — archived, see roadmap-archive.md
 
 ### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) — archived, see roadmap-archive.md
@@ -532,6 +539,41 @@ A user of Answer a Business Question could not tell how its queries were built a
 - **Out of scope:** the bridge's `truncated` flag (it still reads a result that lands exactly on the tool's row limit as cut; see the plan's note); the `sample_rows` tool, which is exploration and never fails the check.
 - **Acceptance:** the cases of plan 1.25.7; the insights-analyst evals of 1.25.6's run cover it.
 - **Notes:** confirmed in code on 2026-11-15: `SELECT … LIMIT 50` with no sort, under the tool's limit of 100, passed Validate with only a warning to the model.
+
+#### 1.25.8 — The SQL bridge flags a result as cut only when rows were dropped  `✅ Done`
+- **Intent:** a result that lands exactly on the row limit with nothing dropped (a `LIMIT 100` under the default limit of 100) is no longer told `row limit reached` nor warned as cut short.
+- **Scope:** per plan 1.25.8: `truncated`, the note and the `row-cap-reached` warning follow the connector's `totalRows`; agents.md 3.4, agent-answers R28.
+- **Out of scope:** a connector that reports no `totalRows` (a full page still reads as cut).
+- **Acceptance:** the bridge and tool tests of plan 1.25.8; the evals of `assistant`, `insights-analyst` and `data-readiness` compared with base, 3 runs per case per build.
+- **Notes:** no UI. It changes a tool result three agents' models read.
+
+#### 1.25.9 — Answer evidence for a session's message and for a draft run  `✅ Done`
+- **Intent:** the inspector's backend works for any answer the app can show, not only a stored run's: a past chat's message and a Try it run.
+- **Scope:** per plan 1.25.9 on the decisions of plan section 5: `AnswerEvidenceService` over an answer host; the draft run kept in memory for 30 minutes behind 139 to 143; endpoints 144 to 148 for a session's message; `evidence` derived on read of a session; api.md, data-model.md, past-chats and agents-evals specs.
+- **Out of scope:** the frontend; any model input; the workflow files; storing a draft run.
+- **Acceptance:** the tests of plan 1.25.9, the existing tests of 139 to 143 unchanged and green, and a negative test for each access rule.
+- **Notes:** no UI. Opus: it moves code every stored run's evidence goes through.
+
+#### 1.25.10 — Past chats host the inspector  `✅ Done`
+- **Intent:** an answer in a past chat, of any agent, shows its figure chips, coverage and queries and opens the inspector, as a run does.
+- **Scope:** per plan 1.25.10: the session chat in inspector mode, the adapter over 144 to 148, the sheet; ui.md, past-chats and agent-answers specs.
+- **Out of scope:** the backend; Try it; any change to a past chat being read-only for the user.
+- **Acceptance:** `session-chat.spec.ts` (chips and query rows on an assistant message with data, the question passed, the inspector opens from a row and closes with Escape, prepare on the last answer once); then, in round 2, a Playwright scenario tagged `@story-1.25.10` on a stored session.
+- **Notes:** UI story. The Data Readiness Agent's stored sessions are past chats: covered here.
+
+#### 1.25.11 — Try it hosts the inspector  `✅ Done`
+- **Intent:** a user agent's answer in Try it, the only place such an agent runs, shows its evidence through the same inspector.
+- **Scope:** per plan 1.25.11: Try it in inspector mode on the draft's run id, the expired-preview message, the sheet over the editor; ui.md 4.5.1, agents-evals R60 and R61.
+- **Out of scope:** the backend; storing a draft run.
+- **Acceptance:** `agent-try-it.spec.ts` (inspector mode on an answer with data, the run id from the stream drives the calls, a 404 shows the expired message); then, in round 2, a Playwright scenario tagged `@story-1.25.11`.
+- **Notes:** UI story.
+
+#### 1.25.12 — Evals for the query explainer  `✅ Done`
+- **Intent:** a change to Hannah's instructions or model can be measured: her steps are checked on real statements, and her counts against real data.
+- **Scope:** per plan 1.25.12: the eval set `query-explainer` on the World Cup fixture, its target and checks, its listing under the agent's Evals tab and in the CLI; agents.md 2.12 and 8.
+- **Out of scope:** Hannah's instructions; any other agent's set.
+- **Acceptance:** each check unit-tested on one real answer; `EVAL_SET=query-explainer` runs from the CLI; the set passes 3 of 3 runs on the code checks and at least 2 of 3 on each judged case, or the failing case is reported with its reason.
+- **Notes:** no UI of its own.
 
 ## Release 2 — Multi-user  (no target date yet)
 

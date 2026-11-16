@@ -64,8 +64,8 @@ const V2: WorkflowDetail = {
         maxSteps: 15,
       },
       exits: [
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
       ],
     },
     {
@@ -199,9 +199,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       'sqlQueries, failedQueries, rows',
     ]);
     expect(all('workflow-node-exit').map(text)).toEqual([
-      'Invalid input → not started',
-      'Model error → fails',
-      'Stop → ends here',
+      'Not started if the input is invalid',
+      'Fails if the model returns an error',
+      'Ends if you stop it',
     ]);
     // Exits sit inside their node: above the agent, under a square's label.
     const agentExit = q('workflow-node-analyse')!.querySelector<HTMLElement>(

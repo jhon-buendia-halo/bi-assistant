@@ -354,3 +354,60 @@ describe('Runs list helpers (plan 1.24.11)', () => {
     });
   });
 });
+
+describe('runAgainValues with an image field', () => {
+  it("leaves the image out: a stored run holds the file's path, not the image", () => {
+    expect(
+      runAgainValues(
+        [
+          {
+            name: 'image',
+            label: 'Dashboard image',
+            type: 'image',
+            required: true,
+          },
+          {
+            name: 'question',
+            label: 'Instructions',
+            type: 'textarea',
+            required: false,
+          },
+        ],
+        { image: 'inputs/image.png', question: 'Dark theme' },
+      ),
+    ).toEqual({ question: 'Dark theme' });
+  });
+});
+
+describe('runInput and runAgainValues with an artifact field', () => {
+  const fields: WorkflowInputField[] = [
+    {
+      name: 'image',
+      label: 'Dashboard image',
+      type: 'image',
+      required: false,
+      requiredWithout: 'artifact',
+    },
+    {
+      name: 'artifact',
+      label: 'Saved dashboard',
+      type: 'artifact',
+      required: false,
+      requiredWithout: 'image',
+      artifactKinds: ['dashboard'],
+    },
+  ];
+
+  it('sends the artifact id as a string and nothing for an empty one', () => {
+    expect(runInput(fields, { image: '', artifact: 'a-1' })).toEqual({
+      artifact: 'a-1',
+    });
+    expect(runInput(fields, { image: '', artifact: '' })).toEqual({});
+  });
+
+  it('keeps the artifact id for Run again and drops the image', () => {
+    expect(
+      runAgainValues(fields, { artifact: 'a-1', image: 'inputs/image.png' }),
+    ).toEqual({ artifact: 'a-1' });
+  });
+});

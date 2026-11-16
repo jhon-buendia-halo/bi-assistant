@@ -294,7 +294,14 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   const workspace = page.getByRole('navigation', {
     name: 'Workspace navigation',
   });
-  for (const label of ['Datasets', 'Agents', 'Runs', 'Costs', 'Monitoring']) {
+  for (const label of [
+    'Datasets',
+    'Agents',
+    'Artifacts',
+    'Runs',
+    'Costs',
+    'Monitoring',
+  ]) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(

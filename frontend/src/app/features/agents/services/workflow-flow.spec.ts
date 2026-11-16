@@ -22,8 +22,8 @@ const WORKFLOW: AgentWorkflow = {
       output: ['calls', 'stopped'],
       agent: { name: 'v2', tools: ['run_readonly_sql'], maxSteps: 15 },
       exits: [
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
       ],
     },
     {
@@ -65,8 +65,8 @@ describe('workflowCards (agents-evals R108)', () => {
     expect(workflowCards(WORKFLOW).map((card) => card.exits)).toEqual([
       [],
       [
-        { text: 'Model error → fails the turn', outcome: 'fails' },
-        { text: 'Stop → ends the turn here', outcome: 'stops' },
+        { text: 'Fails the turn if the model returns an error', outcome: 'fails' },
+        { text: 'Ends the turn if you stop it', outcome: 'stops' },
       ],
       [],
     ]);
@@ -78,13 +78,13 @@ describe('workflowCards (agents-evals R108)', () => {
       steps: [
         {
           ...WORKFLOW.steps[0],
-          exits: [{ label: 'Clarifying question', outcome: 'waits' as const }],
+          exits: [{ label: 'if it asks you a question', outcome: 'waits' as const }],
         },
       ],
     };
     expect(workflowCards(waiting)[0].exits).toEqual([
       {
-        text: "Clarifying question → waits for the user's answer",
+        text: "Waits if it asks you a question",
         outcome: 'waits',
       },
     ]);

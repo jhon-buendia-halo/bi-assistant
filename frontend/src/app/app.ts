@@ -11,6 +11,7 @@ import {
   LucideAngularModule,
   LucideIconData,
   Activity,
+  Boxes,
   CircleDollarSign,
   Bot,
   FlaskConical,
@@ -29,8 +30,10 @@ import { AgentEditorService } from './features/agents/services/agent-editor.serv
 import { AgentsNavState } from './features/agents/services/agents-nav-state';
 import { EvalSelectionService } from './features/agents/services/eval-selection.service';
 import { AgentsArea } from './features/agents/components/agents-area/agents-area';
+import { AgentTryItSheet } from './features/agents/components/agent-try-it-sheet/agent-try-it-sheet';
 import { AgentTryIt } from './features/agents/components/agent-try-it/agent-try-it';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
+import { ArtifactsArea } from './features/artifacts/components/artifacts-area/artifacts-area';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
 import { DatasetsArea } from './features/datasets/components/datasets-area/datasets-area';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
@@ -77,12 +80,14 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     DatasetsArea,
     WorkflowsArea,
     AgentsArea,
+    ArtifactsArea,
     SessionsArea,
     SessionsHeader,
     CostsArea,
     MonitoringArea,
     SessionsPanel,
     AgentTryIt,
+    AgentTryItSheet,
     EvalTrace,
     EntityDetails,
   ],
@@ -119,6 +124,7 @@ export class App {
     { area: 'datasets', label: 'Datasets', icon: FlaskConical },
     { area: 'workflows', label: 'Workflows', icon: Workflow },
     { area: 'agents', label: 'Agents', icon: Bot },
+    { area: 'artifacts', label: 'Artifacts', icon: Boxes },
     { area: 'runs', label: 'Runs', icon: FolderKanban },
     { area: 'costs', label: 'Costs', icon: CircleDollarSign },
     { area: 'monitoring', label: 'Monitoring', icon: Activity },
