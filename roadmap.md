@@ -686,6 +686,12 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 - **Out of scope:** changing scores or the engine.
 - **Acceptance:** Jest tests of the bridge paging and the tool input; the new eval case passes 3 of 3 and the set shows no regression against main.
 
+#### 1.27.13 — An Edge Cases testing dataset  `🚧 In progress`
+- **Intent:** a Testing Data sample built to break things: a million-row table, awkward names, every awkward value and every data-quality problem the readiness engine scores, so paging, filters, sources, explore_result and readiness can be tried on border cases.
+- **Scope:** requested on 2026-11-16; the user picked a repo fixture, a 1-million-row largest table and an e-commerce domain. Seed `005_edge_cases.sql` generated in SQL (`generate_series`, a fixed seed, so every load is identical), registry entry, the "Edge Cases PostgreSQL" datasource and "Edge Cases" dataset; testing-data spec lists each edge case and where it lives.
+- **Out of scope:** new eval sets on it.
+- **Acceptance:** `registry.spec.ts` passes; the seed loads on the shared Postgres within the seed timeout; a smoke script shows every documented edge case present.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
