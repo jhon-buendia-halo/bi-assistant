@@ -1,142 +1,217 @@
-import { Component, output } from '@angular/core';
-import { BRAND } from '../../../../core/brand/brand';
 import {
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import {
+  ArrowRight,
   Bot,
-  FlaskConical,
+  CircleAlert,
   LucideAngularModule,
-  PanelRight,
-  SquarePen,
-  type LucideIconData,
+  SendHorizontal,
+  Workflow,
 } from 'lucide-angular';
+import { BRAND } from '../../../../core/brand/brand';
+import { ShellState } from '../../../../core/shell/shell-state';
+import { DatasetPicker } from '../../../datasets/components/dataset-picker/dataset-picker';
+import {
+  Dataset,
+  DatasetsApiService,
+} from '../../../datasets/services/datasets-api.service';
+import { LlmApiService } from '../../../llm/services/llm-api.service';
+import { RunsState } from '../../../runs/services/runs-state';
+import { sessionActivityLabel } from '../../../sessions/components/sessions-list/sessions-list';
+import { SettingsState } from '../../../settings/services/settings-state';
+import {
+  WorkflowRunSummary,
+  WorkflowSummary,
+} from '../../../workflows/models/workflow.model';
+import { WorkflowDesigner } from '../../../workflows/services/workflow-designer.service';
+import { WorkflowsApiService } from '../../../workflows/services/workflows-api.service';
+import { WorkflowsNavState } from '../../../workflows/services/workflows-nav-state';
+import { runRowStatus } from '../../../workflows/services/workflows.util';
 
-type WelcomeAction = 'datasets' | 'workflows' | 'agents';
+/** The workflow the home's question box runs (app-shell R51). */
+export const ASK_WORKFLOW_ID = 'answer-business-question';
 
-interface WelcomeStep {
-  title: string;
-  text: string;
-  icon: LucideIconData;
-  action?: { label: string; target: WelcomeAction };
-}
+/** How many runs the home lists; the rest are one click away in Runs. */
+export const HOME_RECENT_RUNS = 5;
+
+/** What still blocks a first question, in the order to fix it. */
+export type SetupGap = 'llm' | 'datasets';
 
 /**
- * The start page: what the product does and where to begin (ui.md 4.1,
- * app-shell R51). Each step opens the place it describes.
+ * The start page (ui.md 4.1, app-shell R51): a question box that runs
+ * Answer a Business Question on the picked datasets, the latest runs, the
+ * other workflows, and what is still missing before a first question.
  */
 @Component({
   selector: 'app-welcome',
-  imports: [LucideAngularModule],
-  template: `
-    <section
-      class="flex h-full min-h-0 flex-col overflow-y-auto"
-      aria-labelledby="welcome-title"
-      data-testid="welcome"
-    >
-      <div class="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-6 py-6">
-        <header>
-          <h2
-            id="welcome-title"
-            [class]="
-              flat
-                ? 'display-title text-[28px] leading-9 text-fg-strong'
-                : 'text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong'
-            "
-          >
-            {{ brand.welcomeLead }} <span [class.display-accent]="flat">{{ brand.welcomeName }}</span>
-          </h2>
-          <p class="mt-1 text-[14px] leading-5 text-fg-muted">
-            Run a workflow on your data and read the result, with the steps and
-            agents behind it.
-          </p>
-        </header>
-
-        <ol class="flex flex-col gap-2" aria-label="How it works">
-          @for (step of steps; track step.title; let i = $index) {
-            <li
-              class="card flex items-start gap-3 p-3"
-              [attr.data-testid]="'welcome-step-' + (i + 1)"
-            >
-              <span
-                class="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-on-primary-soft"
-                aria-hidden="true"
-              >
-                <lucide-angular [img]="step.icon" [size]="18" />
-              </span>
-              <div class="min-w-0 flex-1">
-                <p class="text-[13px] font-semibold text-fg-strong">
-                  <span class="text-fg-muted">{{ i + 1 }}</span>
-                  {{ step.title }}
-                </p>
-                <p class="mt-0.5 text-[13px] leading-5 text-fg-muted">
-                  {{ step.text }}
-                </p>
-              </div>
-              @if (step.action; as action) {
-                <button
-                  type="button"
-                  class="btn btn-secondary shrink-0"
-                  (click)="act(action.target)"
-                >
-                  {{ action.label }}
-                </button>
-              }
-            </li>
-          }
-        </ol>
-
-        <div class="flex justify-center">
-          <button
-            type="button"
-            class="btn btn-primary"
-            data-testid="welcome-agents"
-            (click)="act('agents')"
-          >
-            <lucide-angular [img]="Bot" [size]="18" />
-            Explore agents
-          </button>
-        </div>
-      </div>
-    </section>
-  `,
+  imports: [LucideAngularModule, DatasetPicker],
+  templateUrl: './welcome.html',
+  host: { class: 'flex min-h-0 flex-col' },
 })
 export class Welcome {
+  protected readonly ArrowRight = ArrowRight;
+  protected readonly Bot = Bot;
+  protected readonly CircleAlert = CircleAlert;
+  protected readonly SendHorizontal = SendHorizontal;
+  protected readonly Workflow = Workflow;
+
   /** The welcome heading's words and look follow the brand (app-shell R51, ADR-0045). */
   readonly brand = BRAND;
   readonly flat = BRAND.shell === 'flat';
-  readonly Bot = Bot;
 
-  readonly openDatasets = output<void>();
-  readonly openWorkflows = output<void>();
-  readonly openAgents = output<void>();
+  private readonly shell = inject(ShellState);
+  private readonly settings = inject(SettingsState);
+  private readonly designer = inject(WorkflowDesigner);
+  private readonly workflowsNav = inject(WorkflowsNavState);
+  private readonly workflowsApi = inject(WorkflowsApiService);
+  private readonly datasetsApi = inject(DatasetsApiService);
+  private readonly llmApi = inject(LlmApiService);
+  protected readonly runsState = inject(RunsState);
 
-  readonly steps: WelcomeStep[] = [
-    {
-      title: 'Pick your data',
-      text: 'A dataset is the set of tables a workflow can use. Create one from a datasource, or use an existing one.',
-      icon: FlaskConical,
-      action: { label: 'Datasets', target: 'datasets' },
-    },
-    {
-      title: 'Run a workflow',
-      text: 'Each workflow runs on an input. Its steps call agents, which explore the data with read-only queries and show how they worked the answer out.',
-      icon: SquarePen,
-      action: { label: 'Workflows', target: 'workflows' },
-    },
-    {
-      title: 'Agents are the building blocks',
-      text: 'Agents use skills and tools. Open one to read how it works, or build your own.',
-      icon: Bot,
-      action: { label: 'Agents', target: 'agents' },
-    },
-    {
-      title: 'Read, refine, download',
-      text: 'Tables, documents and visuals open in the right panel beside a run; download them as PDF or CSV.',
-      icon: PanelRight,
-    },
-  ];
+  private readonly questionBox =
+    viewChild<ElementRef<HTMLTextAreaElement>>('questionBox');
 
-  act(target: WelcomeAction): void {
-    if (target === 'datasets') this.openDatasets.emit();
-    else if (target === 'agents') this.openAgents.emit();
-    else this.openWorkflows.emit();
+  /** The catalogue; null until it loads. */
+  readonly workflows = signal<WorkflowSummary[] | null>(null);
+  /** The datasets; null until they load (or when they can't be read). */
+  readonly datasets = signal<Dataset[] | null>(null);
+  /** Whether a model is configured; null until known. */
+  readonly llmConfigured = signal<boolean | null>(null);
+
+  readonly question = signal('');
+  readonly picked = signal<string[]>([]);
+  /** The field Ask refused, with its message; null when none. */
+  readonly refused = signal<{
+    field: 'question' | 'datasets';
+    message: string;
+  } | null>(null);
+  readonly error = computed(() => this.refused()?.message ?? null);
+  readonly errorField = computed(() => this.refused()?.field ?? null);
+
+  /** Answer a Business Question, as the catalogue lists it. */
+  readonly askWorkflow = computed(
+    () => this.workflows()?.find((w) => w.id === ASK_WORKFLOW_ID) ?? null,
+  );
+
+  /** Every other workflow, in catalogue order. */
+  readonly otherWorkflows = computed(
+    () => this.workflows()?.filter((w) => w.id !== ASK_WORKFLOW_ID) ?? [],
+  );
+
+  /** What still blocks a first question; empty while unknown. */
+  readonly setupGaps = computed<SetupGap[]>(() => {
+    const gaps: SetupGap[] = [];
+    if (this.llmConfigured() === false) gaps.push('llm');
+    if (this.datasets()?.length === 0) gaps.push('datasets');
+    return gaps;
+  });
+
+  /** Why Ask can't run now, else null. */
+  readonly blocked = computed(() => {
+    if (this.setupGaps().length > 0) return 'Finish the setup above first.';
+    return this.askWorkflow()?.runRequirement ?? null;
+  });
+
+  readonly recentRuns = computed(() =>
+    this.runsState.runs().slice(0, HOME_RECENT_RUNS),
+  );
+
+  constructor() {
+    this.runsState.loadRuns();
+    this.workflowsApi.getWorkflows().subscribe({
+      next: (res) => this.workflows.set(res.workflows ?? []),
+      error: () => this.workflows.set([]),
+    });
+    this.datasetsApi.getDatasets().subscribe({
+      next: (res) => {
+        const datasets = res.datasets ?? [];
+        this.datasets.set(datasets);
+        // With one dataset there is nothing to choose.
+        if (datasets.length === 1) this.picked.set([datasets[0].name]);
+      },
+      error: () => this.datasets.set(null),
+    });
+    this.llmApi.getSettings().subscribe({
+      next: (view) =>
+        this.llmConfigured.set(view.configured && view.keyUnreadable !== true),
+      error: () => this.llmConfigured.set(null),
+    });
+  }
+
+  onQuestion(event: Event): void {
+    this.question.set((event.target as HTMLTextAreaElement).value);
+    if (this.errorField() === 'question') this.refused.set(null);
+  }
+
+  onPicked(names: string[]): void {
+    this.picked.set(names);
+    if (this.errorField() === 'datasets') this.refused.set(null);
+  }
+
+  /** Enter asks; Shift+Enter starts a new line. */
+  onEnter(event: Event): void {
+    const key = event as KeyboardEvent;
+    if (key.shiftKey || key.isComposing) return;
+    event.preventDefault();
+    this.ask();
+  }
+
+  /**
+   * Ask: Answer a Business Question opens on its page and runs on the
+   * question and the picked datasets, with its Run panel and query
+   * inspector (workflows R31). Nothing runs from this page itself.
+   */
+  ask(): void {
+    if (this.blocked() !== null) return;
+    const question = this.question().trim();
+    if (question === '') {
+      this.refused.set({
+        field: 'question',
+        message: 'Type a question first.',
+      });
+      this.questionBox()?.nativeElement.focus();
+      return;
+    }
+    if (this.picked().length === 0) {
+      this.refused.set({
+        field: 'datasets',
+        message: 'Pick at least one dataset to ask about.',
+      });
+      return;
+    }
+    this.designer.prefillOnLoad(
+      { question, datasets: [...this.picked()] },
+      { execute: true },
+    );
+    this.workflowsNav.openWorkflow(ASK_WORKFLOW_ID);
+  }
+
+  openRun(run: WorkflowRunSummary): void {
+    this.runsState.openRun(run.id);
+  }
+
+  openWorkflow(workflow: WorkflowSummary): void {
+    this.workflowsNav.openWorkflow(workflow.id);
+  }
+
+  openLlmSettings(): void {
+    this.settings.settingsSection.set('llm');
+    this.shell.selectArea('settings');
+  }
+
+  openArea(area: 'datasets' | 'workflows' | 'agents' | 'runs'): void {
+    this.shell.selectArea(area);
+  }
+
+  protected status = runRowStatus;
+
+  protected when(run: WorkflowRunSummary): string {
+    return sessionActivityLabel(run.startedAt);
   }
 }

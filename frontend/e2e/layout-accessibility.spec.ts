@@ -83,6 +83,17 @@ test('has no automatically detectable accessibility violations on any screen in 
   };
   const screens: [string, () => Promise<void>][] = [
     [
+      // Home has no rail item: a reload opens it (and drops axe, added again).
+      // No model is set here, so its setup notice is scanned too.
+      'Home',
+      async () => {
+        await page.reload();
+        await page.addScriptTag({ content: axe.source });
+        await expect(page.getByTestId('welcome-ask')).toBeVisible();
+        await expect(page.getByTestId('welcome-setup')).toBeVisible();
+      },
+    ],
+    [
       'Datasets',
       async () => {
         await rail('Datasets').click();

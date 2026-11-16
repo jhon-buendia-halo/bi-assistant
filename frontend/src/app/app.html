@@ -290,14 +290,9 @@
                     <app-monitoring-area />
                   }
                   @default {
-                    <!-- Start page: what the product does and where to begin. -->
+                    <!-- Start page: ask a question, recent runs, other workflows. -->
                     @defer (on immediate) {
-                      <app-welcome
-                        class="block min-h-0 flex-1"
-                        (openDatasets)="shell.selectArea('datasets')"
-                        (openWorkflows)="shell.selectArea('workflows')"
-                        (openAgents)="shell.selectArea('agents')"
-                      />
+                      <app-welcome class="min-h-0 flex-1" />
                     }
                   }
                 }

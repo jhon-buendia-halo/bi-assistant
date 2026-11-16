@@ -242,6 +242,61 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.inputValues()).toEqual({ verbose: false });
   });
 
+  describe("the home's Ask (app-shell R51)", () => {
+    const datasets = {
+      datasets: [
+        { name: 'World Cup Core', tables: ['a'], datasourceKind: 'postgres' },
+      ],
+    };
+
+    function open(): void {
+      designer.load(ASSISTANT.id);
+      http
+        .expectOne((r) => r.url.endsWith('/workflows/answer-business-question'))
+        .flush(ASSISTANT);
+    }
+
+    it('runs on the held values once the datasets have loaded', () => {
+      designer.prefillOnLoad(
+        { question: 'Goals by team?', datasets: ['World Cup Core'] },
+        { execute: true },
+      );
+      open();
+      expect(runs.calls.length).toBe(0);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(1);
+      expect(runs.last.workflowId).toBe(ASSISTANT.id);
+      expect(runs.last.body.input).toEqual(
+        jasmine.objectContaining({
+          question: 'Goals by team?',
+          datasets: ['World Cup Core'],
+        }),
+      );
+      expect(designer.running()).toBeTrue();
+    });
+
+    it('only fills the form without execute, and runs once at most', () => {
+      designer.prefillOnLoad({ question: 'Goals by team?' });
+      open();
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(0);
+      expect(designer.inputValue('question')).toBe('Goals by team?');
+      // A later open does not run either.
+      open();
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(0);
+    });
+
+    it('does not run when the page shows a stored run', () => {
+      designer.showRunOnLoad(storedRun());
+      designer.prefillOnLoad({ question: 'Goals by team?' }, { execute: true });
+      open();
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush(datasets);
+      expect(runs.calls.length).toBe(0);
+      expect(designer.runResult()?.runId).toBe('run-1');
+    });
+  });
+
   it('Run again drops the run shown and opens the form with its whole input (R19)', () => {
     expect(designer.canRunAgain()).toBeFalse();
     designer.showRunOnLoad(

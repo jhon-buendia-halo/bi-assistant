@@ -528,6 +528,38 @@ test.describe('Feature: Workflow runs', () => {
     });
   });
 
+  test('Asking on home runs Answer a Business Question on its page', async ({ page }) => {
+    stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+    const ask = page.getByTestId('welcome-ask');
+    await test.step(`Given I am on home with "${WORLD_CUP_DATASET}" as the only dataset`, async () => {
+      await page.reload();
+      await expect(ask.getByLabel('What do you want to know?')).toBeVisible();
+      await expect(page.getByTestId('welcome-setup')).toHaveCount(0);
+    });
+    await test.step('Then that dataset is already picked', async () => {
+      await expect(
+        ask.getByRole('button', { name: `Remove ${WORLD_CUP_DATASET}`, exact: true }),
+      ).toBeVisible();
+    });
+    await test.step('When I type the question and press Enter', async () => {
+      const question = page.getByTestId('welcome-question');
+      await question.fill(QUESTION);
+      await question.press('Enter');
+    });
+    await test.step(`Then "${V2}" opens, runs on my question and I see the answer`, async () => {
+      await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
+      await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      await expect(runAnswer(page)).toContainText(ANSWER);
+      await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+    });
+    await test.step('And home lists the run under Recent runs', async () => {
+      await page.reload();
+      await expect(
+        page.getByTestId('welcome-runs').getByRole('button', { name: new RegExp(V2) }),
+      ).toBeVisible();
+    });
+  });
+
   test('The Run panel maximizes, folds and resizes from the keyboard', async ({ page }) => {
     const dock = runDock(page);
     const maximize = dock.getByTestId('workflow-run-dock-maximize');
