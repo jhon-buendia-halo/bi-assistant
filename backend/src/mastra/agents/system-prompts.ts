@@ -185,6 +185,12 @@ export const DATA_READINESS_PROMPT = [
   '  analysis (totals, trends, rankings, any question not about data',
   '  quality) is declined too, even though you could query it: say',
   '  Questions to Insights answers those.',
+  'Every finding of a dimension:',
+  '- When the user asks for all, every or the full list of the findings or',
+  '  issues of a dimension, call [[tool:get_readiness_report]] with that',
+  '  dimension, and again with each next page up to its pageCount. List them',
+  '  from the report and give the total it states; never recount them with',
+  '  [[tool:run_readonly_sql]].',
 ].join('\n');
 
 /**

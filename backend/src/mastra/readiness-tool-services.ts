@@ -5,14 +5,42 @@
 
 import type { ReadinessProgressListener } from '../modules/data-readiness/progress';
 import type {
+  Dimension,
+  Finding,
   ReadinessReport,
   ReadinessSummary,
 } from '../modules/data-readiness/engine/types';
 
+/**
+ * One page of every finding of a dimension, read from the stored report
+ * (`get_readiness_report` with `dimension`, agents.md 3.13, story 1.27.12):
+ * most severe first, then in report order; never recomputed.
+ */
+export interface ReadinessFindingsPage {
+  dimension: Dimension;
+  /** Findings of the dimension in the report. */
+  total: number;
+  /** 1-based. */
+  page: number;
+  /** At least 1, even with no finding. */
+  pageCount: number;
+  pageSize: number;
+  items: Pick<
+    Finding,
+    | 'severity'
+    | 'entity'
+    | 'field'
+    | 'measured'
+    | 'description'
+    | 'recommendation'
+  >[];
+}
+
 /** A report plus what the model may see; only `summary` reaches the model. */
 export interface ReadinessToolReport {
   report: ReadinessReport;
-  summary: ReadinessSummary;
+  /** `findings` only when `get_readiness_report` was given a dimension. */
+  summary: ReadinessSummary & { findings?: ReadinessFindingsPage };
 }
 
 /** `list_readiness_reports` output (agents.md 3.13). */
@@ -46,6 +74,10 @@ export interface ReadinessToolServices {
     sessionId: string;
     reportId?: string;
     datasetName?: string;
+    /** Adds that dimension's findings page to the summary (story 1.27.12). */
+    dimension?: string;
+    /** 1-based page of those findings; the first when absent. */
+    page?: number;
   }): Promise<ReadinessToolReport>;
   listReadinessReports(input: {
     sessionId: string;
