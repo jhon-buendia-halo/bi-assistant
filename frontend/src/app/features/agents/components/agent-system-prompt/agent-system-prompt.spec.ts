@@ -55,6 +55,9 @@ describe('AgentSystemPrompt', () => {
     fixture.componentRef.setInput('agent', agent);
     fixture.componentRef.setInput('library', library);
     fixture.detectChanges();
+    // The CV view loads on its own (`@defer`).
+    await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   afterEach(() => http.verify());

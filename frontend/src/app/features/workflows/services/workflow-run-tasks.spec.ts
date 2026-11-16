@@ -1,14 +1,16 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { EMPTY, of } from 'rxjs';
+import { EMPTY, of, throwError } from 'rxjs';
 import { BackgroundTasksService } from '../../../core/background-tasks/background-tasks.service';
 import { ToastService } from '../../../core/toast/toast.service';
 import { RunsState } from '../../runs/services/runs-state';
-import { WorkflowRun } from '../models/workflow.model';
+import { WorkflowDetail, WorkflowRun } from '../models/workflow.model';
 import { WorkflowRunsApiService } from './workflow-runs-api.service';
+import { WorkflowsApiService } from './workflows-api.service';
 import {
   RUN_TASK_POLL_MS,
   WorkflowRunTasks,
   runTaskDetail,
+  runTaskTeam,
   runTaskTitle,
 } from './workflow-run-tasks';
 
@@ -51,6 +53,11 @@ describe('WorkflowRunTasks (ADR-0048; plan 1.26.5)', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: WorkflowRunsApiService, useValue: api },
+        // No catalogue in these tests: the rows keep their plain detail.
+        {
+          provide: WorkflowsApiService,
+          useValue: { getWorkflow: () => throwError(() => new Error('none')) },
+        },
         { provide: ToastService, useValue: toast },
         { provide: RunsState, useValue: runs },
       ],
@@ -210,4 +217,94 @@ describe('WorkflowRunTasks (ADR-0048; plan 1.26.5)', () => {
     tick(RUN_TASK_POLL_MS);
     expect(background.runningCount()).toBe(0);
   }));
+});
+
+describe('runTaskTeam (ui.md 3.7)', () => {
+  const workflow = {
+    id: 'answer-business-question',
+    steps: [
+      { id: 'load-catalog', title: 'Load catalog', kind: 'code', output: [] },
+      {
+        id: 'plan',
+        title: 'Plan',
+        kind: 'agent',
+        output: ['plan'],
+        agent: {
+          key: 'analysis-planner',
+          name: 'Olivia',
+          role: 'Analysis Lead',
+        },
+      },
+      {
+        id: 'analyse',
+        title: 'Analyse',
+        kind: 'agent',
+        output: ['answer'],
+        agent: {
+          key: 'insights-analyst',
+          name: 'Michael',
+          role: 'Insights Analyst',
+        },
+      },
+      {
+        id: 'write-answer',
+        title: 'Write answer',
+        kind: 'agent',
+        output: ['answer'],
+        agent: {
+          key: 'answer-writer',
+          name: 'Jessica',
+          role: 'Insights Writer',
+        },
+      },
+    ],
+  } as unknown as WorkflowDetail;
+
+  const run = {
+    id: 'r1',
+    workflowId: 'answer-business-question',
+    workflowName: 'Answer a Business Question',
+    status: 'running',
+    steps: [
+      { id: 'load-catalog', title: 'Load catalog', status: 'success' },
+      { id: 'plan', title: 'Plan', status: 'success' },
+      {
+        id: 'analyse',
+        title: 'Analyse',
+        status: 'running',
+        toolCalls: [{ tool: 'run_readonly_sql' }],
+      },
+    ],
+  } as unknown as WorkflowRun;
+
+  it("shows the run's agents, who works now and how far it is", () => {
+    expect(runTaskTeam(run, workflow)).toEqual({
+      detail: 'Michael is running query 1 · step 3 of 4',
+      progress: { done: 2, total: 4 },
+      people: [
+        { key: 'analysis-planner', name: 'Olivia', state: 'done' },
+        { key: 'insights-analyst', name: 'Michael', state: 'active' },
+        { key: 'answer-writer', name: 'Jessica', state: 'waiting' },
+      ],
+    });
+  });
+
+  it('marks no one active while the stored run has no steps yet', () => {
+    const early = { ...run, steps: [] } as unknown as WorkflowRun;
+    const team = runTaskTeam(early, workflow);
+    expect(team.progress).toBeNull();
+    expect(team.people?.map((p) => p.state)).toEqual([
+      'unknown',
+      'unknown',
+      'unknown',
+    ]);
+  });
+
+  it('keeps the plain detail while the catalogue is unknown', () => {
+    expect(runTaskTeam(run, null)).toEqual({
+      detail: 'Analyse',
+      progress: null,
+      people: null,
+    });
+  });
 });

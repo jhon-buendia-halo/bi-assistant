@@ -116,16 +116,18 @@
           <!-- A branch's condition or the loop's: on its edge, muted with it -->
           <span
             class="edge-branch-label absolute -translate-x-1/2 -translate-y-1/2 rounded border border-border bg-surface px-1.5 text-center text-[11px] leading-[14px] font-medium whitespace-nowrap text-fg"
-            [attr.data-testid]="'workflow-edge-label-' + edge.from + '-' + edge.to"
+            [attr.data-testid]="
+              'workflow-edge-label-' + edge.from + '-' + edge.to
+            "
             [attr.data-kind]="edge.kind"
             [attr.data-skipped]="edgeSkipped(edge) ? 'true' : null"
             [style.left.px]="edge.branchLabelX"
             [style.top.px]="edge.branchLabelY"
-            >@for (line of edge.branchLabelLines; track $index) {<span
-                class="block"
-                >{{ $first ? "" : " " }}{{ line }}</span
-              >}</span
           >
+            @for (line of edge.branchLabelLines; track $index) {
+              <span class="block">{{ $first ? "" : " " }}{{ line }}</span>
+            }
+          </span>
         }
       }
 
@@ -157,16 +159,27 @@
             <span class="sr-only">Step {{ node.number }}:</span>
           }
 
-          <span
-            class="node-icon"
-            [attr.data-kind]="node.kind"
-            aria-hidden="true"
-          >
-            <lucide-angular
-              [img]="nodeIcons[node.kind]"
-              [size]="node.kind === 'agent' ? 18 : 20"
+          @if (node.agent?.key) {
+            <!-- An agent step shows who does it: its portrait (ui.md 4.4b). -->
+            <app-agent-avatar
+              class="flex-none"
+              data-testid="workflow-node-portrait"
+              [agentKey]="node.agent!.key"
+              [name]="node.agent!.name"
+              [size]="40"
             />
-          </span>
+          } @else {
+            <span
+              class="node-icon"
+              [attr.data-kind]="node.kind"
+              aria-hidden="true"
+            >
+              <lucide-angular
+                [img]="nodeIcons[node.kind]"
+                [size]="node.kind === 'agent' ? 18 : 20"
+              />
+            </span>
+          }
 
           <!-- The agent's text sits inside it, beside its icon tile; a square's label hangs below it. -->
           <span
@@ -204,12 +217,38 @@
               >
             }
             @if (node.agent; as agent) {
-              <span
-                class="max-w-full truncate text-[12px] leading-4 text-fg"
-                data-testid="workflow-node-agent"
-                >{{ agent.name }}</span
-              >
-              @if (agent.role) {
+              <span class="flex max-w-full min-w-0 items-center gap-1">
+                <span
+                  class="min-w-0 truncate text-[12px] leading-4 text-fg"
+                  data-testid="workflow-node-agent"
+                  >{{ agent.name }}</span
+                >
+                <!-- Agents look human; the badge says it is AI. -->
+                <span
+                  class="flex-none rounded-[3px] border border-border-strong px-[3px] text-[9px] leading-[12px] font-semibold tracking-wide text-fg-muted"
+                  data-testid="workflow-node-ai"
+                  >AI</span
+                >
+              </span>
+              @if (activity(node.id); as story) {
+                <!-- During a run, what the agent is doing instead of its title. -->
+                <span
+                  class="max-w-full truncate text-[11px] leading-[14px]"
+                  data-testid="workflow-node-activity"
+                  [attr.data-state]="story.state"
+                  [class.text-primary]="story.state === 'active'"
+                  [class.italic]="story.state === 'active'"
+                  [class.text-on-success-soft]="story.state === 'done'"
+                  [class.text-on-danger-soft]="story.state === 'failed'"
+                  [class.text-on-warning-soft]="story.state === 'asking'"
+                  [class.text-fg-muted]="
+                    story.state === 'waiting' ||
+                    story.state === 'stopped' ||
+                    story.state === 'skipped'
+                  "
+                  >{{ story.line }}</span
+                >
+              } @else if (agent.role) {
                 <span
                   class="max-w-full truncate text-[11px] leading-[14px] text-fg-muted"
                   data-testid="workflow-node-agent-role"
@@ -233,7 +272,13 @@
             >
               <lucide-angular
                 class="mt-[2.5px] flex-none"
-                [img]="exit.outcome === 'fails' ? CircleX : exit.outcome === 'waits' ? Hourglass : Square"
+                [img]="
+                  exit.outcome === 'fails'
+                    ? CircleX
+                    : exit.outcome === 'waits'
+                      ? Hourglass
+                      : Square
+                "
                 [size]="11"
                 aria-hidden="true"
               /><span>{{ exit.text }}</span>

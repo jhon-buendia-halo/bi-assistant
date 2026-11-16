@@ -2,7 +2,7 @@ import { Component, computed, input } from '@angular/core';
 import { AgentDetail } from '../../services/agents-api.service';
 import { agentDomain, domainInfo } from '../../services/agent-domains';
 import { jobDescriptionCv } from '../../services/job-description-cv';
-import { AgentAvatar } from '../agent-avatar/agent-avatar';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { LinkedText } from '../linked-text/linked-text';
 
 /**

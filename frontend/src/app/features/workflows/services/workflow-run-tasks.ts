@@ -2,14 +2,31 @@ import { Injectable, Injector, inject } from '@angular/core';
 import { Observable, exhaustMap, retry, takeWhile, timer } from 'rxjs';
 import {
   BackgroundTask,
+  BackgroundTaskHandle,
+  BackgroundTaskPerson,
+  BackgroundTaskProgress,
   BackgroundTasksService,
 } from '../../../core/background-tasks/background-tasks.service';
 import { RunsState } from '../../runs/services/runs-state';
-import { WorkflowRun } from '../models/workflow.model';
+import {
+  LiveToolCall,
+  WorkflowDetail,
+  WorkflowRun,
+  WorkflowRunStep,
+} from '../models/workflow.model';
 import { WorkflowRunsApiService } from './workflow-runs-api.service';
+import { WorkflowsApiService } from './workflows-api.service';
+import {
+  StoryRunStep,
+  agentStepStories,
+  teamActivity,
+} from './agent-step-story';
 
 /** How often a run's task reads the run (api.md 121) until it ends. */
 export const RUN_TASK_POLL_MS = 3000;
+
+/** A live team told by the page this recently wins over the stored run. */
+const LIVE_FRESH_MS = 10_000;
 
 /** The longest run title in a task's title, in characters. */
 const TITLE_MAX = 80;
@@ -39,6 +56,82 @@ export function runTaskDetail(run: WorkflowRun): string | null {
   return step ? step.title : null;
 }
 
+/** What a running run's task row shows of its agents (ui.md 3.7). */
+export interface RunTaskTeam {
+  /** `Michael is running query 2 · step 4 of 9`; the plain detail when no agent works. */
+  detail: string | null;
+  progress: BackgroundTaskProgress | null;
+  people: BackgroundTaskPerson[] | null;
+}
+
+/**
+ * The run's agents for its task row: their faces and states, who works now
+ * and how far the run is, told from the run's steps and its workflow's
+ * catalogue (`agentStepStories`). With no catalogue, the plain detail.
+ */
+export function runTaskTeam(
+  run: WorkflowRun,
+  workflow: WorkflowDetail | null,
+): RunTaskTeam {
+  const lastAttempt = new Map<string, WorkflowRunStep>();
+  for (const step of run.steps ?? []) lastAttempt.set(step.id, step);
+  return teamFromSteps(
+    workflow,
+    [...lastAttempt.values()],
+    ACTIVE.has(run.status),
+    runTaskDetail(run),
+  );
+}
+
+/**
+ * The same, from the steps the workflow page streams: who works now is
+ * known there, while the stored run has its steps only once it ends.
+ */
+export function teamFromSteps(
+  workflow: WorkflowDetail | null,
+  steps: readonly StoryRunStep[],
+  running: boolean,
+  plain: string | null,
+  liveToolCalls?: readonly LiveToolCall[],
+): RunTaskTeam {
+  if (!workflow) return { detail: plain, progress: null, people: null };
+  const byId = new Map(steps.map((step) => [step.id, step]));
+  const stories = agentStepStories({
+    steps: workflow.steps,
+    runSteps: steps,
+    running,
+    liveToolCalls,
+  });
+  const told = steps.some((step) => step.status !== null);
+  const total = workflow.steps.length;
+  const done = workflow.steps.filter((step) => {
+    const status = byId.get(step.id)?.status;
+    return status === 'success' || status === 'skipped' || status === 'failed';
+  }).length;
+  const people = [...stories.values()]
+    .filter((story) => story.state !== 'skipped')
+    .map<BackgroundTaskPerson>((story) => ({
+      key: story.agent.key,
+      name: story.agent.name,
+      state: !told
+        ? 'unknown'
+        : story.state === 'active' || story.state === 'asking'
+          ? 'active'
+          : story.state === 'done' ||
+              story.state === 'failed' ||
+              story.state === 'stopped'
+            ? 'done'
+            : 'waiting',
+    }));
+  const who = teamActivity(stories.values());
+  const at = Math.min(done + 1, total);
+  return {
+    detail: who ? `${who} · step ${at} of ${total}` : plain,
+    progress: told && total > 0 ? { done, total } : null,
+    people: people.length > 0 ? people : null,
+  };
+}
+
 const ACTIVE: ReadonlySet<WorkflowRun['status']> = new Set([
   'running',
   'suspended',
@@ -57,6 +150,14 @@ const ACTIVE: ReadonlySet<WorkflowRun['status']> = new Set([
 export class WorkflowRunTasks {
   private readonly tasks = inject(BackgroundTasksService);
   private readonly api = inject(WorkflowRunsApiService);
+  private readonly workflows = inject(WorkflowsApiService);
+  /** Each workflow's catalogue, read once, for its runs' agents; null when it cannot be read. */
+  private readonly catalogue = new Map<
+    string,
+    WorkflowDetail | null | 'loading'
+  >();
+  /** When the workflow page last told a run's team live, by run id. */
+  private readonly liveAt = new Map<string, number>();
   private readonly injector = inject(Injector);
   /** Runs being stopped through `stop`: their task's Stop sends nothing more. */
   private readonly stopping = new Set<string>();
@@ -83,7 +184,7 @@ export class WorkflowRunTasks {
       key: id,
       title: runTaskTitle(run.workflowName, run.title),
       work: () => this.poll(id),
-      onValue: (value, task) => task.update({ detail: runTaskDetail(value) }),
+      onValue: (value, task) => this.showTeam(value, task),
       outcome: (last) =>
         last?.status === 'success'
           ? { ok: true }
@@ -151,6 +252,47 @@ export class WorkflowRunTasks {
         },
         error: () => undefined,
       });
+  }
+
+  /**
+   * The task row's agents (ui.md 3.7): from the run and its workflow's
+   * catalogue, which is read the first time; until then, the plain detail.
+   */
+  private showTeam(run: WorkflowRun, task: BackgroundTaskHandle): void {
+    // The page streams this run: its live team is truer than the stored run.
+    const live = this.liveAt.get(run.id);
+    if (live !== undefined && Date.now() - live < LIVE_FRESH_MS) return;
+    const known = this.catalogue.get(run.workflowId);
+    if (known === undefined) {
+      this.catalogue.set(run.workflowId, 'loading');
+      this.workflows.getWorkflow(run.workflowId).subscribe({
+        next: (detail) => {
+          this.catalogue.set(run.workflowId, detail);
+          task.update(runTaskTeam(run, detail));
+        },
+        error: () => this.catalogue.set(run.workflowId, null),
+      });
+    }
+    task.update(runTaskTeam(run, known && known !== 'loading' ? known : null));
+  }
+
+  /**
+   * The workflow page streams a run: its task row shows the live team (who
+   * works now, how far), which the stored run cannot tell before it ends.
+   */
+  showLive(
+    runId: string,
+    workflow: WorkflowDetail,
+    steps: readonly StoryRunStep[],
+    liveToolCalls: readonly LiveToolCall[],
+  ): void {
+    const task = this.tasks.active('workflow-run', runId);
+    if (!task) return;
+    this.liveAt.set(runId, Date.now());
+    this.tasks.update(
+      task.id,
+      teamFromSteps(workflow, steps, true, task.detail, liveToolCalls),
+    );
   }
 
   /** The run, every 3 s, until it ends (its last read included). */

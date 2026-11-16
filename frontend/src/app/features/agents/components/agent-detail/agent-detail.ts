@@ -69,7 +69,7 @@ import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
 import { AgentTryIt } from '../agent-try-it/agent-try-it';
 import { AgentSkillsInline } from '../agent-skills-inline/agent-skills-inline';
 import { AgentSystemPrompt } from '../agent-system-prompt/agent-system-prompt';
-import { AgentAvatar } from '../agent-avatar/agent-avatar';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { agentActivity } from '../../services/agent-activity';
 import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
 import { WorkflowRunSummary } from '../../../workflows/models/workflow.model';

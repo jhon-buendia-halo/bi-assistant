@@ -78,7 +78,11 @@ const V2: Source = {
   input: [field('question'), field('datasets')],
   agents: AGENTS,
   steps: [
-    code('receive-question', ['question', 'datasets'], ['question', 'datasets']),
+    code(
+      'receive-question',
+      ['question', 'datasets'],
+      ['question', 'datasets'],
+    ),
     code('load-catalog', ['question', 'datasets'], ['question', 'catalog']),
     agentStep('analyse', [
       'list_entities',
@@ -100,27 +104,71 @@ const V2: Source = {
  */
 const REAL_V2: WorkflowDetail = {
   ...GRAPH_WORKFLOW,
-  agents: [{ key: 'qti', name: 'Insights Analyst', model: 'custom/claude-sonnet-5-5' }],
+  agents: [
+    { key: 'qti', name: 'Insights Analyst', model: 'custom/claude-sonnet-5-5' },
+  ],
   input: [field('question'), field('datasets')],
   steps: GRAPH_WORKFLOW.steps.map((step): WorkflowDetailStep => {
     const io: Record<string, [string[], string[]]> = {
-      'receive-question': [['question', 'datasets'], ['question', 'datasets']],
-      'load-catalog': [['question', 'datasets'], ['question', 'catalog', 'columns']],
-      plan: [['question', 'catalog', 'columns'], ['question', 'catalog', 'plan']],
-      clarify: [['question', 'catalog', 'plan'], ['question', 'options']],
+      'receive-question': [
+        ['question', 'datasets'],
+        ['question', 'datasets'],
+      ],
+      'load-catalog': [
+        ['question', 'datasets'],
+        ['question', 'catalog', 'columns'],
+      ],
+      plan: [
+        ['question', 'catalog', 'columns'],
+        ['question', 'catalog', 'plan'],
+      ],
+      clarify: [
+        ['question', 'catalog', 'plan'],
+        ['question', 'options'],
+      ],
       analyse: [
         ['question', 'catalog', 'plan', 'attempt', 'findings'],
-        ['question', 'catalog', 'plan', 'attempt', 'calls', 'queries', 'text', 'stopped'],
+        [
+          'question',
+          'catalog',
+          'plan',
+          'attempt',
+          'calls',
+          'queries',
+          'text',
+          'stopped',
+        ],
       ],
       validate: [
-        ['question', 'catalog', 'plan', 'attempt', 'calls', 'queries', 'text', 'stopped'],
-        ['ok', 'attempt', 'findings', 'question', 'catalog', 'plan', 'calls', 'queries'],
+        [
+          'question',
+          'catalog',
+          'plan',
+          'attempt',
+          'calls',
+          'queries',
+          'text',
+          'stopped',
+        ],
+        [
+          'ok',
+          'attempt',
+          'findings',
+          'question',
+          'catalog',
+          'plan',
+          'calls',
+          'queries',
+        ],
       ],
       'write-answer': [
         ['question', 'plan', 'queries', 'findings', 'calls'],
         ['headline', 'answer', 'calls'],
       ],
-      'wrap-up': [['answer', 'calls'], ['sqlQueries', 'failedQueries', 'rows', 'answer']],
+      'wrap-up': [
+        ['answer', 'calls'],
+        ['sqlQueries', 'failedQueries', 'rows', 'answer'],
+      ],
     };
     const [input, output] = io[step.id];
     if (step.kind !== 'agent') return { ...step, input, output };
@@ -132,12 +180,21 @@ const REAL_V2: WorkflowDetail = {
       agent: {
         ...step.agent!,
         tools: analyse
-          ? ['list_entities', 'describe_entity', 'sample_rows', 'run_readonly_sql', 'ask_clarification']
+          ? [
+              'list_entities',
+              'describe_entity',
+              'sample_rows',
+              'run_readonly_sql',
+              'ask_clarification',
+            ]
           : [],
         maxSteps: analyse ? 15 : 1,
       },
       exits: analyse
-        ? [...MODEL_EXITS, { label: 'it asks you a question', outcome: 'stops' }]
+        ? [
+            ...MODEL_EXITS,
+            { label: 'it asks you a question', outcome: 'stops' },
+          ]
         : MODEL_EXITS,
     };
   }),
@@ -151,19 +208,25 @@ const REAL_V2_CLARIFY_LOOP: WorkflowDetail = {
   ...REAL_V2,
   steps: REAL_V2.steps.map((step): WorkflowDetailStep => {
     if (step.id === 'clarify') {
-      return { ...step, exits: [{ label: 'until you answer', outcome: 'waits' }] };
+      return {
+        ...step,
+        exits: [{ label: 'until you answer', outcome: 'waits' }],
+      };
     }
     if (step.id === 'analyse') {
       return {
         ...step,
-        exits: [...MODEL_EXITS, { label: 'if it asks you a question', outcome: 'waits' }],
+        exits: [
+          ...MODEL_EXITS,
+          { label: 'if it asks you a question', outcome: 'waits' },
+        ],
       };
     }
     return step;
   }),
-  edges: REAL_V2.edges!
-    .filter((e) => !(e.from === 'clarify' && e.to === 'end'))
-    .concat([{ from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' }]),
+  edges: REAL_V2.edges!.filter(
+    (e) => !(e.from === 'clarify' && e.to === 'end'),
+  ).concat([{ from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' }]),
 };
 
 const overlaps = (a: CanvasBox, b: CanvasBox) =>
@@ -258,7 +321,12 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       agents: [],
       steps: [
         code('a', ['text'], ['text']),
-        code('b', ['text'], ['n'], [{ label: 'it is too long', outcome: 'fails' }]),
+        code(
+          'b',
+          ['text'],
+          ['n'],
+          [{ label: 'it is too long', outcome: 'fails' }],
+        ),
         code('c', ['n'], ['result']),
       ],
     });
@@ -324,7 +392,11 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(new Set(layout.nodes.map((n) => n.centerY))).toEqual(new Set([cy]));
 
     const analyse = layout.nodes[3];
-    expect(analyse.agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
+    expect(analyse.agent).toEqual({
+      name: 'Michael',
+      role: 'Insights Analyst',
+      key: jasmine.any(String),
+    });
     expect(analyse.exits).toEqual([
       {
         text: 'Fails if the model returns an error',
@@ -441,6 +513,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(one.nodes[1].agent).toEqual({
       name: 'Michael',
       role: 'Insights Analyst',
+      key: jasmine.any(String),
     });
     const many = workflowCanvasLayout({
       input: [],
@@ -450,6 +523,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(many.nodes[1].agent).toEqual({
       name: 'Michael',
       role: 'Insights Analyst',
+      key: jasmine.any(String),
     });
   });
 
@@ -537,11 +611,23 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
   const edge = (id: string) => layout.edges.find((e) => e.id === id)!;
 
   it('every linear edge is `next`', () => {
-    expect(workflowCanvasLayout(V2).edges.every((e) => e.kind === 'next')).toBeTrue();
+    expect(
+      workflowCanvasLayout(V2).edges.every((e) => e.kind === 'next'),
+    ).toBeTrue();
   });
 
   it('puts the main path left to right on one centre line, Clarify below Plan', () => {
-    const main = ['start', 'receive-question', 'load-catalog', 'plan', 'analyse', 'validate', 'write-answer', 'wrap-up', 'end'];
+    const main = [
+      'start',
+      'receive-question',
+      'load-catalog',
+      'plan',
+      'analyse',
+      'validate',
+      'write-answer',
+      'wrap-up',
+      'end',
+    ];
     const xs = main.map((id) => node(id).x);
     expect([...xs].sort((a, b) => a - b)).toEqual(xs);
     const cy = node('start').centerY;
@@ -550,11 +636,15 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
     expect(clarify.y).toBeGreaterThan(node('plan').y + CANVAS.nodeHeight);
     // Below the sub-nodes hanging under the agents, and their labels.
     const subBottom = Math.max(
-      ...layout.nodes.flatMap((n) => n.subNodes.map((s) => s.y + s.size + CANVAS.subLabelHeight)),
+      ...layout.nodes.flatMap((n) =>
+        n.subNodes.map((s) => s.y + s.size + CANVAS.subLabelHeight),
+      ),
     );
     expect(clarify.y).toBe(subBottom + CANVAS.sideGap);
     // Between Plan and Analyse.
-    expect(clarify.x + clarify.width / 2).toBeGreaterThan(node('plan').x + node('plan').width);
+    expect(clarify.x + clarify.width / 2).toBeGreaterThan(
+      node('plan').x + node('plan').width,
+    );
     expect(clarify.x + clarify.width / 2).toBeLessThan(node('analyse').x);
     expect(layout.height).toBeGreaterThan(clarify.y + clarify.height);
   });
@@ -579,14 +669,19 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
     const valid = edge('validate-write-answer');
     expect(valid.branchLabelLines).toEqual(['Valid or retried']);
     expect(edge('plan-analyse').branchLabelLines).toEqual(['Clear']);
-    expect(edge('plan-clarify').branchLabelLines).toEqual(['Needs clarification']);
+    expect(edge('plan-clarify').branchLabelLines).toEqual([
+      'Needs clarification',
+    ]);
     // `Valid or retried` (102 px) with 16 px each side.
-    const gap = node('write-answer').x - (node('validate').x + node('validate').width);
+    const gap =
+      node('write-answer').x - (node('validate').x + node('validate').width);
     expect(gap).toBe(134);
     const box = canvasBoxes(layout).find(
       (b) => b.owner === 'validate-write-answer' && b.part === 'branch-label',
     )!;
-    expect(box.x).toBeGreaterThanOrEqual(node('validate').x + node('validate').width + 16);
+    expect(box.x).toBeGreaterThanOrEqual(
+      node('validate').x + node('validate').width + 16,
+    );
     expect(box.x + box.w).toBeLessThanOrEqual(node('write-answer').x - 16);
   });
 
@@ -600,30 +695,48 @@ describe('workflowCanvasLayout from edges (a branch and a loop)', () => {
     // The gap holds it right of the drop, clear of Analyse.
     expect(clear.x + clear.w).toBeLessThanOrEqual(node('analyse').x - 16);
     // The drop runs down the middle of the gap.
-    expect(gx).toBe((node('plan').x + node('plan').width + node('analyse').x) / 2);
+    expect(gx).toBe(
+      (node('plan').x + node('plan').width + node('analyse').x) / 2,
+    );
   });
 
   it('runs the branch down to Clarify, its label beside the drop, and Clarify on to End', () => {
     const clarify = node('clarify');
     const branch = edge('plan-clarify');
     const gx = clarify.x + clarify.width / 2;
-    expect(branch.path.startsWith(`M ${node('plan').x + node('plan').width} ${node('plan').centerY}`)).toBeTrue();
+    expect(
+      branch.path.startsWith(
+        `M ${node('plan').x + node('plan').width} ${node('plan').centerY}`,
+      ),
+    ).toBeTrue();
     expect(branch.path.endsWith(`L ${gx} ${clarify.y}`)).toBeTrue();
     expect(branch.branchLabelX).toBeGreaterThan(gx);
     expect(branch.branchLabelY).toBeLessThan(clarify.y);
     expect(branch.branchLabelY).toBeGreaterThan(clarify.y - CANVAS.sideGap);
     const toEnd = edge('clarify-end');
-    expect(toEnd.path.startsWith(`M ${clarify.x + clarify.width} ${clarify.centerY}`)).toBeTrue();
-    expect(toEnd.path.endsWith(`${node('end').x} ${node('end').centerY + 12}`)).toBeTrue();
+    expect(
+      toEnd.path.startsWith(
+        `M ${clarify.x + clarify.width} ${clarify.centerY}`,
+      ),
+    ).toBeTrue();
+    expect(
+      toEnd.path.endsWith(`${node('end').x} ${node('end').centerY + 12}`),
+    ).toBeTrue();
   });
 
   it('draws the loop as a curve above the row, from Validate back into Analyse', () => {
     const loop = edge('validate-analyse');
     const validate = node('validate');
     const analyse = node('analyse');
-    expect(loop.path.startsWith(`M ${validate.x + validate.width / 2} ${validate.y}`)).toBeTrue();
+    expect(
+      loop.path.startsWith(
+        `M ${validate.x + validate.width / 2} ${validate.y}`,
+      ),
+    ).toBeTrue();
     expect(loop.path).toContain(' C ');
-    expect(loop.path.endsWith(`${analyse.x + analyse.width} ${analyse.y + 18}`)).toBeTrue();
+    expect(
+      loop.path.endsWith(`${analyse.x + analyse.width} ${analyse.y + 18}`),
+    ).toBeTrue();
     expect(loop.branchLabelY).toBeLessThan(validate.y);
     expect(loop.branchLabelY).toBeGreaterThan(0);
     expect(loop.label).toBe('');
@@ -664,10 +777,18 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
       it('overlaps nothing: nodes, labels, exit notes, ports, sub-nodes, edge labels and the Clarify row', () => {
         expect(overlapping(layout)).toEqual([]);
         for (const box of canvasBoxes(layout)) {
-          expect(box.x).withContext(`${box.owner} ${box.part}`).toBeGreaterThanOrEqual(0);
-          expect(box.y).withContext(`${box.owner} ${box.part}`).toBeGreaterThanOrEqual(0);
-          expect(box.x + box.w).withContext(`${box.owner} ${box.part}`).toBeLessThanOrEqual(layout.width);
-          expect(box.y + box.h).withContext(`${box.owner} ${box.part}`).toBeLessThanOrEqual(layout.height);
+          expect(box.x)
+            .withContext(`${box.owner} ${box.part}`)
+            .toBeGreaterThanOrEqual(0);
+          expect(box.y)
+            .withContext(`${box.owner} ${box.part}`)
+            .toBeGreaterThanOrEqual(0);
+          expect(box.x + box.w)
+            .withContext(`${box.owner} ${box.part}`)
+            .toBeLessThanOrEqual(layout.width);
+          expect(box.y + box.h)
+            .withContext(`${box.owner} ${box.part}`)
+            .toBeLessThanOrEqual(layout.height);
         }
       });
 
@@ -675,7 +796,14 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
         const plan = node('plan');
         const clarify = node('clarify');
         const gx = clarify.x + clarify.width / 2;
-        const drop: CanvasBox = { owner: 'drop', part: 'node', x: gx - 1, y: plan.y + plan.height, w: 2, h: clarify.y - plan.y - plan.height };
+        const drop: CanvasBox = {
+          owner: 'drop',
+          part: 'node',
+          x: gx - 1,
+          y: plan.y + plan.height,
+          w: 2,
+          h: clarify.y - plan.y - plan.height,
+        };
         const crossed = canvasBoxes(layout).filter(
           (b) => b.part !== 'branch-label' && overlaps(drop, b),
         );
@@ -691,15 +819,31 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
       });
 
       it('one Model and one Tools sub-node under Analyse; only the Model under Plan and Write answer, which show the agent name alone', () => {
-        expect(node('analyse').subNodes.map((s) => [s.id, s.subtitle])).toEqual([
-          ['analyse-model', 'model'],
-          ['analyse-tools', '5 tools'],
-        ]);
+        expect(node('analyse').subNodes.map((s) => [s.id, s.subtitle])).toEqual(
+          [
+            ['analyse-model', 'model'],
+            ['analyse-tools', '5 tools'],
+          ],
+        );
         expect(node('plan').subNodes.map((s) => s.id)).toEqual(['plan-model']);
-        expect(node('write-answer').subNodes.map((s) => s.id)).toEqual(['write-answer-model']);
-        expect(node('plan').agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
-        expect(node('write-answer').agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
-        expect(node('analyse').agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
+        expect(node('write-answer').subNodes.map((s) => s.id)).toEqual([
+          'write-answer-model',
+        ]);
+        expect(node('plan').agent).toEqual({
+          name: 'Michael',
+          role: 'Insights Analyst',
+          key: jasmine.any(String),
+        });
+        expect(node('write-answer').agent).toEqual({
+          name: 'Michael',
+          role: 'Insights Analyst',
+          key: jasmine.any(String),
+        });
+        expect(node('analyse').agent).toEqual({
+          name: 'Michael',
+          role: 'Insights Analyst',
+          key: jasmine.any(String),
+        });
         // As wide as the agent: every exit note takes one row.
         expect(node('analyse').exits.map((e) => e.lines)).toEqual([1, 1, 1]);
       });
@@ -712,7 +856,9 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
         expect(node('analyse').x - (plan.x + plan.width)).toBe(127);
         // `Valid or retried` on one line, 16 px each side.
         expect(writeAnswer.x - (validate.x + validate.width)).toBe(134);
-        expect(node('validate').x - (node('analyse').x + node('analyse').width)).toBe(93);
+        expect(
+          node('validate').x - (node('analyse').x + node('analyse').width),
+        ).toBe(93);
       });
 
       it('edge labels sit on no line and no node', () => {
@@ -725,11 +871,16 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
         for (const b of labels) {
           // Not across the drop to Clarify.
           const onDrop =
-            b.x < gx && gx < b.x + b.w && b.y + b.h > plan.centerY && b.y < clarify.y;
+            b.x < gx &&
+            gx < b.x + b.w &&
+            b.y + b.h > plan.centerY &&
+            b.y < clarify.y;
           expect(onDrop).withContext(b.owner).toBeFalse();
           // Labels under the centre line start below it; above it, end above it.
           const cy = plan.centerY;
-          expect(b.y < cy && cy < b.y + b.h).withContext(`${b.owner} ${b.part}`).toBeFalse();
+          expect(b.y < cy && cy < b.y + b.h)
+            .withContext(`${b.owner} ${b.part}`)
+            .toBeFalse();
         }
       });
     });
@@ -743,10 +894,14 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
     it('keeps Clarify on the row below, between Plan and Analyse, with no edge to End', () => {
       const clarify = node('clarify');
       expect(clarify.y).toBeGreaterThan(node('plan').y + node('plan').height);
-      expect(clarify.x + clarify.width / 2).toBeGreaterThan(node('plan').x + node('plan').width);
+      expect(clarify.x + clarify.width / 2).toBeGreaterThan(
+        node('plan').x + node('plan').width,
+      );
       expect(clarify.x + clarify.width / 2).toBeLessThan(node('analyse').x);
       expect(edge('clarify-end')).toBeUndefined();
-      expect(node('end').subtitle).toBe('sqlQueries, failedQueries, rows, answer');
+      expect(node('end').subtitle).toBe(
+        'sqlQueries, failedQueries, rows, answer',
+      );
     });
 
     it("puts Clarify's exit note right under its own label, and the canvas below it", () => {
@@ -767,14 +922,16 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
     });
 
     it("Analyse's clarifying question waits for the user, on one row", () => {
-      expect(node('analyse').exits.map((e) => [e.text, e.outcome, e.lines])).toEqual([
+      expect(
+        node('analyse').exits.map((e) => [e.text, e.outcome, e.lines]),
+      ).toEqual([
         ['Fails if the model returns an error', 'fails', 1],
         ['Ends if you stop it', 'stops', 1],
         ['Waits if it asks you a question', 'waits', 1],
       ]);
     });
 
-    it('draws the way back as a short line up beside the drop, into Plan\'s right side', () => {
+    it("draws the way back as a short line up beside the drop, into Plan's right side", () => {
       const back = edge('clarify-plan')!;
       const plan = node('plan');
       const clarify = node('clarify');

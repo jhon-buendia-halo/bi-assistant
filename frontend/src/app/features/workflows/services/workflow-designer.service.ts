@@ -1,4 +1,11 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import {
+  Injectable,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { Subscription } from 'rxjs';
 import {
   Dataset,
@@ -24,6 +31,7 @@ import {
   WorkflowRunStep,
   WorkflowWaitingFor,
 } from '../models/workflow.model';
+import { AgentStepStory, agentStepStories } from './agent-step-story';
 import {
   NodeInspection,
   WorkflowNodeStatus,
@@ -97,6 +105,15 @@ export class WorkflowDesigner {
   constructor() {
     // The run shown ends here, not in a toast.
     this.runTasks.watchShown(() => this.runId());
+    // While the page streams a run, its task row shows the live team (ui.md 3.7).
+    effect(() => {
+      const id = this.runId();
+      const workflow = this.workflow();
+      if (!id || !workflow || !this.running()) return;
+      const steps = this.runPanelSteps();
+      const calls = this.toolCalls();
+      untracked(() => this.runTasks.showLive(id, workflow, steps, calls));
+    });
   }
 
   readonly loading = signal(true);
@@ -360,6 +377,22 @@ export class WorkflowDesigner {
       byId.set(step.id, { ...step, attempts: (seen?.attempts ?? 0) + 1 });
     }
     return [...byId.values()];
+  });
+
+  /**
+   * What each agent of the run shown is doing (ui.md 4.4b, *Agents at work*):
+   * its state, the canvas line and the Run panel's sentence, by step id.
+   */
+  readonly agentStories = computed(() => {
+    const workflow = this.workflow();
+    if (workflow === null) return new Map<string, AgentStepStory>();
+    const status = this.runResult()?.status;
+    return agentStepStories({
+      steps: workflow.steps,
+      runSteps: this.runPanelSteps(),
+      running: this.running() || status === 'running' || status === 'suspended',
+      liveToolCalls: this.toolCalls(),
+    });
   });
 
   /** How many times each step ran in the run shown (a loop's retry runs one twice); empty with no run. */

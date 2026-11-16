@@ -61,7 +61,9 @@ describe('validateRunForm (the run form checks its input before Execute)', () =>
     ).toEqual([
       { field: 'question', message: 'Question must be at most 10 characters' },
     ]);
-    expect(validateRunForm([question], { question: ' 1234567890 ' }, store)).toEqual([]);
+    expect(
+      validateRunForm([question], { question: ' 1234567890 ' }, store),
+    ).toEqual([]);
   });
 
   it('checks a number: type, min and max; an empty optional number passes', () => {
@@ -78,9 +80,9 @@ describe('validateRunForm (the run form checks its input before Execute)', () =>
   });
 
   it('checks a dataset exists and is of the field kinds, when the list is known', () => {
-    expect(
-      validateRunForm([datasets], { datasets: ['Gone'] }, store),
-    ).toEqual([{ field: 'datasets', message: 'Dataset "Gone" not found' }]);
+    expect(validateRunForm([datasets], { datasets: ['Gone'] }, store)).toEqual([
+      { field: 'datasets', message: 'Dataset "Gone" not found' },
+    ]);
     expect(
       validateRunForm([datasets], { datasets: ['Weather'] }, store),
     ).toEqual([
@@ -89,7 +91,9 @@ describe('validateRunForm (the run form checks its input before Execute)', () =>
         message: 'Dataset "Weather" is not a PostgreSQL or Databricks dataset',
       },
     ]);
-    expect(validateRunForm([datasets], { datasets: ['Gone'] }, null)).toEqual([]);
+    expect(validateRunForm([datasets], { datasets: ['Gone'] }, null)).toEqual(
+      [],
+    );
   });
 
   it('a required field with a default, a hidden field and a boolean never fail', () => {
@@ -166,7 +170,10 @@ describe('the Start dialog Parameters rows', () => {
       { id: 'answer', title: 'Answer' },
     ];
     expect(
-      usedByTitles({ ...question, usedBy: ['receive-question', 'gone'] }, steps),
+      usedByTitles(
+        { ...question, usedBy: ['receive-question', 'gone'] },
+        steps,
+      ),
     ).toEqual(['Receive question', 'gone']);
     expect(usedByTitles(question, steps)).toEqual([]);
   });
@@ -250,7 +257,9 @@ describe('requiredWithout (an image or a saved artifact)', () => {
   });
 
   it('accepts only an image', () => {
-    expect(validateRunForm([image, artifact], { image: png }, null)).toEqual([]);
+    expect(validateRunForm([image, artifact], { image: png }, null)).toEqual(
+      [],
+    );
   });
 
   it('accepts only an artifact, without checking it', () => {

@@ -1,5 +1,5 @@
 import { Component, computed, effect, input, signal } from '@angular/core';
-import { agentPortrait, portraitInitial } from '../../services/agent-portrait';
+import { agentPortrait, portraitInitial } from '../../utils/agent-portrait';
 
 /**
  * An agent's face (ui.md 4.4, 4.5): its illustrated portrait in a round

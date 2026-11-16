@@ -125,12 +125,14 @@
     </div>
   } @else if (instructions()) {
     @if (view() === "cv") {
-      <app-agent-cv
-        [agent]="agent()"
-        [text]="instructions()"
-        [known]="known()"
-        bodyTestId="agent-instructions"
-      />
+      @defer (on immediate) {
+        <app-agent-cv
+          [agent]="agent()"
+          [text]="instructions()"
+          [known]="known()"
+          bodyTestId="agent-instructions"
+        />
+      }
     } @else {
       <pre
         data-testid="agent-instructions"
@@ -299,12 +301,14 @@
     </div>
   } @else if (prompt.linksAllowed) {
     @if (view() === "cv") {
-      <app-agent-cv
-        [agent]="agent()"
-        [text]="prompt.editable"
-        [known]="builtInKnown()"
-        bodyTestId="agent-prompt-view"
-      />
+      @defer (on immediate) {
+        <app-agent-cv
+          [agent]="agent()"
+          [text]="prompt.editable"
+          [known]="builtInKnown()"
+          bodyTestId="agent-prompt-view"
+        />
+      }
     } @else {
       <pre
         data-testid="agent-prompt-view"
@@ -329,12 +333,14 @@
     }
   } @else if (agent().instructions) {
     @if (view() === "cv") {
-      <app-agent-cv
-        [agent]="agent()"
-        [text]="agent().instructions"
-        [known]="builtInKnown()"
-        bodyTestId="agent-prompt-view"
-      />
+      @defer (on immediate) {
+        <app-agent-cv
+          [agent]="agent()"
+          [text]="agent().instructions"
+          [known]="builtInKnown()"
+          bodyTestId="agent-prompt-view"
+        />
+      }
     } @else {
       <pre
         data-testid="agent-prompt-view"

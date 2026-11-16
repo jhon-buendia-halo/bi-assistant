@@ -73,9 +73,24 @@ describe('workflow contract helpers (ui.md 4.4b)', () => {
           required: true,
           description: 'What the user asked.',
         },
-        { name: 'catalog', type: 'object[]', required: true, description: null },
-        { name: 'datasets', type: 'string[]', required: false, description: null },
-        { name: 'note', type: 'string | null', required: false, description: null },
+        {
+          name: 'catalog',
+          type: 'object[]',
+          required: true,
+          description: null,
+        },
+        {
+          name: 'datasets',
+          type: 'string[]',
+          required: false,
+          description: null,
+        },
+        {
+          name: 'note',
+          type: 'string | null',
+          required: false,
+          description: null,
+        },
       ]);
     });
 
@@ -91,17 +106,36 @@ describe('workflow contract helpers (ui.md 4.4b)', () => {
         flattenContractFields(contractFields(ANALYSE_INPUT)).map(
           (r) => `${r.depth}:${r.name}`,
         ),
-      ).toEqual(['0:question', '0:catalog', '1:entity', '1:rows', '0:datasets', '0:note']);
+      ).toEqual([
+        '0:question',
+        '0:catalog',
+        '1:entity',
+        '1:rows',
+        '0:datasets',
+        '0:note',
+      ]);
     });
 
     it('falls back to the names without types when no schema is declared', () => {
       expect(contractFields(undefined, ['calls', 'stopped'])).toEqual([
-        { name: 'calls', type: null, required: false, description: null, children: [] },
-        { name: 'stopped', type: null, required: false, description: null, children: [] },
+        {
+          name: 'calls',
+          type: null,
+          required: false,
+          description: null,
+          children: [],
+        },
+        {
+          name: 'stopped',
+          type: null,
+          required: false,
+          description: null,
+          children: [],
+        },
       ]);
-      expect(contractFields({ type: 'object' }, ['a']).map((f) => f.name)).toEqual(
-        ['a'],
-      );
+      expect(
+        contractFields({ type: 'object' }, ['a']).map((f) => f.name),
+      ).toEqual(['a']);
       expect(contractFields(null)).toEqual([]);
     });
   });
@@ -111,9 +145,9 @@ describe('workflow contract helpers (ui.md 4.4b)', () => {
       expect(passesOnText(contractFields(ANALYSE_INPUT).slice(0, 3))).toBe(
         'Passes on: question (string), catalog (object[]), datasets (string[])',
       );
-      expect(passesOnText(contractFields(undefined, ['calls', 'stopped']))).toBe(
-        'Passes on: calls, stopped',
-      );
+      expect(
+        passesOnText(contractFields(undefined, ['calls', 'stopped'])),
+      ).toBe('Passes on: calls, stopped');
     });
   });
 
@@ -166,7 +200,8 @@ describe('workflow contract helpers (ui.md 4.4b)', () => {
           {
             id: 'wrap-up',
             status: 'failed',
-            error: 'Contract violation in Wrap up: rows Expected array, received string',
+            error:
+              'Contract violation in Wrap up: rows Expected array, received string',
           },
           { id: 'other', status: 'failed', error: 'Boom' },
           {

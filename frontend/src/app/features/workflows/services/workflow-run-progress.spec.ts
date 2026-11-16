@@ -13,7 +13,12 @@ const W = {
     { from: 'start', to: 'receive-question', kind: 'next' as const },
     { from: 'receive-question', to: 'load-catalog', kind: 'next' as const },
     { from: 'load-catalog', to: 'plan', kind: 'next' as const },
-    { from: 'plan', to: 'clarify', kind: 'branch' as const, label: 'Needs clarification' },
+    {
+      from: 'plan',
+      to: 'clarify',
+      kind: 'branch' as const,
+      label: 'Needs clarification',
+    },
     { from: 'clarify', to: 'plan', kind: 'loop' as const, label: 'Answered' },
     { from: 'plan', to: 'analyse', kind: 'branch' as const, label: 'Clear' },
     { from: 'analyse', to: 'validate', kind: 'next' as const },

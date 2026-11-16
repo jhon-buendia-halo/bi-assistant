@@ -33,6 +33,21 @@ export interface BackgroundTaskProgress {
   total: number;
 }
 
+/**
+ * Someone working on a task: an agent of a workflow run, with what it is
+ * doing now (ui.md 3.7). Shown as faces on the task's row.
+ */
+export interface BackgroundTaskPerson {
+  /** The agent's registry key: its portrait's seed. */
+  key: string;
+  name: string;
+  /**
+   * `active` works now, `done` finished its part, `waiting` has not started;
+   * `unknown` when the work cannot tell (a run read from the server mid-run).
+   */
+  state: 'active' | 'done' | 'waiting' | 'unknown';
+}
+
 export interface BackgroundTask {
   readonly id: number;
   readonly kind: BackgroundTaskKind;
@@ -45,6 +60,8 @@ export interface BackgroundTask {
   readonly detail: string | null;
   /** Known only when the work reports it; otherwise the bar is indeterminate. */
   readonly progress: BackgroundTaskProgress | null;
+  /** Who works on it (a workflow run's agents), when the work says; else null. */
+  readonly people: readonly BackgroundTaskPerson[] | null;
   readonly startedAt: number;
   readonly finishedAt: number | null;
   /** The last value the work emitted (the response, the final event…). */
@@ -66,6 +83,7 @@ export interface BackgroundTaskHandle {
   update(patch: {
     detail?: string | null;
     progress?: BackgroundTaskProgress | null;
+    people?: readonly BackgroundTaskPerson[] | null;
     title?: string;
   }): void;
 }
@@ -175,6 +193,7 @@ export class BackgroundTasksService {
       status: 'running',
       detail: null,
       progress: null,
+      people: null,
       startedAt: Date.now(),
       finishedAt: null,
       result: undefined,
@@ -216,6 +235,7 @@ export class BackgroundTasksService {
     patch: {
       detail?: string | null;
       progress?: BackgroundTaskProgress | null;
+      people?: readonly BackgroundTaskPerson[] | null;
       title?: string;
     },
   ): void {

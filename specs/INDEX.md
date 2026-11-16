@@ -590,7 +590,7 @@ specs/capabilities/agents-evals/spec.md:1228-1234  ## Acceptance
 specs/capabilities/agents-evals/spec.md:1236-1245  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
-specs/capabilities/app-shell/spec.md:16-103  ## Rules
+specs/capabilities/app-shell/spec.md:16-104  ## Rules
 specs/capabilities/app-shell/spec.md:19-19  R1 The system SHALL present, left to right: the navigation rail (expandab
 specs/capabilities/app-shell/spec.md:20-20  R2 On launch the navigation drawer SHALL be expanded unless the user last
 specs/capabilities/app-shell/spec.md:21-23  R3 The rail SHALL offer, under "Workspace navigation", one icon button ea
@@ -630,36 +630,36 @@ specs/capabilities/app-shell/spec.md:65-65  R33 In the `halo` brand the window t
 specs/capabilities/app-shell/spec.md:66-68  R57 The desktop app SHALL keep the data of an install made under an earlie
 specs/capabilities/app-shell/spec.md:69-69  R58 Long work the user starts (saving a dataset, loading a datasource inve
 specs/capabilities/app-shell/spec.md:70-70  R59 The rail SHALL show a **Background tasks** button above **System logs*
-specs/capabilities/app-shell/spec.md:71-71  R60 The button SHALL open a panel named "Background tasks" listing the run
-specs/capabilities/app-shell/spec.md:72-72  R61 When a task ends, the app SHALL toast its outcome with the server's me
-specs/capabilities/app-shell/spec.md:73-73  R62 Starting work that is already running for the same object (the same da
-specs/capabilities/app-shell/spec.md:74-74  R63 The task list SHALL live only in the running app: it starts empty on l
-specs/capabilities/app-shell/spec.md:76-78  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
-specs/capabilities/app-shell/spec.md:79-79  R46 In the Runs area the content shows an open run of a removed workflow (
-specs/capabilities/app-shell/spec.md:80-80  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
-specs/capabilities/app-shell/spec.md:81-81  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
-specs/capabilities/app-shell/spec.md:82-82  R49 In the Runs area the page SHALL start with a header: an icon, then the
-specs/capabilities/app-shell/spec.md:83-83  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
-specs/capabilities/app-shell/spec.md:84-86  R51 The home view (R2) SHALL welcome the user and explain how the product
-specs/capabilities/app-shell/spec.md:87-87  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
-specs/capabilities/app-shell/spec.md:88-90  R53 All text in the app SHALL be selectable and copyable with the mouse an
-specs/capabilities/app-shell/spec.md:91-91  R39 The Appearance section SHALL offer a single choice labelled **Theme**
-specs/capabilities/app-shell/spec.md:92-92  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
-specs/capabilities/app-shell/spec.md:93-93  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
-specs/capabilities/app-shell/spec.md:94-94  R42 The resolved theme SHALL be applied before the page first paints, so t
-specs/capabilities/app-shell/spec.md:95-95  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
-specs/capabilities/app-shell/spec.md:96-96  R44 In the desktop app, the window's own background (shown while resizing
-specs/capabilities/app-shell/spec.md:97-99  R45 Both themes SHALL produce zero violations in the automated accessibili
-specs/capabilities/app-shell/spec.md:100-100  R35 The application shell, in its initial state, SHALL produce zero violat
-specs/capabilities/app-shell/spec.md:101-101  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
-specs/capabilities/app-shell/spec.md:102-102  R37 Every icon-only control in the shell SHALL have an accessible name (a
-specs/capabilities/app-shell/spec.md:103-103  R38 The application shell in its initial state SHALL match the approved `a
-specs/capabilities/app-shell/spec.md:105-115  ## Edge cases and errors
-specs/capabilities/app-shell/spec.md:117-124  ## Contracts
-specs/capabilities/app-shell/spec.md:126-133  ## UI
-specs/capabilities/app-shell/spec.md:135-420  ## Flows
-specs/capabilities/app-shell/spec.md:422-426  ## Acceptance
-specs/capabilities/app-shell/spec.md:428-435  ## Open questions
+specs/capabilities/app-shell/spec.md:71-72  R60 The button SHALL open a panel named "Background tasks" listing the run
+specs/capabilities/app-shell/spec.md:73-73  R61 When a task ends, the app SHALL toast its outcome with the server's me
+specs/capabilities/app-shell/spec.md:74-74  R62 Starting work that is already running for the same object (the same da
+specs/capabilities/app-shell/spec.md:75-75  R63 The task list SHALL live only in the running app: it starts empty on l
+specs/capabilities/app-shell/spec.md:77-79  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
+specs/capabilities/app-shell/spec.md:80-80  R46 In the Runs area the content shows an open run of a removed workflow (
+specs/capabilities/app-shell/spec.md:81-81  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
+specs/capabilities/app-shell/spec.md:82-82  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
+specs/capabilities/app-shell/spec.md:83-83  R49 In the Runs area the page SHALL start with a header: an icon, then the
+specs/capabilities/app-shell/spec.md:84-84  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
+specs/capabilities/app-shell/spec.md:85-87  R51 The home view (R2) SHALL welcome the user and explain how the product
+specs/capabilities/app-shell/spec.md:88-88  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
+specs/capabilities/app-shell/spec.md:89-91  R53 All text in the app SHALL be selectable and copyable with the mouse an
+specs/capabilities/app-shell/spec.md:92-92  R39 The Appearance section SHALL offer a single choice labelled **Theme**
+specs/capabilities/app-shell/spec.md:93-93  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
+specs/capabilities/app-shell/spec.md:94-94  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
+specs/capabilities/app-shell/spec.md:95-95  R42 The resolved theme SHALL be applied before the page first paints, so t
+specs/capabilities/app-shell/spec.md:96-96  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
+specs/capabilities/app-shell/spec.md:97-97  R44 In the desktop app, the window's own background (shown while resizing
+specs/capabilities/app-shell/spec.md:98-100  R45 Both themes SHALL produce zero violations in the automated accessibili
+specs/capabilities/app-shell/spec.md:101-101  R35 The application shell, in its initial state, SHALL produce zero violat
+specs/capabilities/app-shell/spec.md:102-102  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
+specs/capabilities/app-shell/spec.md:103-103  R37 Every icon-only control in the shell SHALL have an accessible name (a
+specs/capabilities/app-shell/spec.md:104-104  R38 The application shell in its initial state SHALL match the approved `a
+specs/capabilities/app-shell/spec.md:106-116  ## Edge cases and errors
+specs/capabilities/app-shell/spec.md:118-125  ## Contracts
+specs/capabilities/app-shell/spec.md:127-134  ## UI
+specs/capabilities/app-shell/spec.md:136-421  ## Flows
+specs/capabilities/app-shell/spec.md:423-427  ## Acceptance
+specs/capabilities/app-shell/spec.md:429-436  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
 specs/capabilities/data-readiness/spec.md:24-226  ## Rules
@@ -1376,7 +1376,7 @@ specs/capabilities/visuals/spec.md:408-430  ### Feature: Skills the designer is 
 specs/capabilities/visuals/spec.md:432-444  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
-specs/capabilities/workflows/spec.md:13-87  ## Rules
+specs/capabilities/workflows/spec.md:13-88  ## Rules
 specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly four workflows, in this orde
 specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `answer-business-question`, `data-readines
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
@@ -1391,33 +1391,33 @@ specs/capabilities/workflows/spec.md:32-32  R11 Every workflow SHALL have the tr
 specs/capabilities/workflows/spec.md:33-33  R12 A workflow's card SHALL show its kind (R5) and **Run**, which opens it
 specs/capabilities/workflows/spec.md:34-36  R13 After a run, the Run panel's Chat SHALL show the question asked, then
 specs/capabilities/workflows/spec.md:37-37  R14 The workflow SHALL declare its input in code, with the field types `te
-specs/capabilities/workflows/spec.md:38-38  R15 A run of Answer a Business Question SHALL run its steps on the run's i
-specs/capabilities/workflows/spec.md:39-39  R16 A streamed run SHALL report, in order: that it started (its run id), e
-specs/capabilities/workflows/spec.md:40-42  R17 A run MAY name one earlier run as its context: that run's question and
-specs/capabilities/workflows/spec.md:43-43  R18 Every run of a workflow on an input, streamed (119) or not (118), SHAL
-specs/capabilities/workflows/spec.md:44-44  R19 The Runs page's **Runs** tab (app-shell R46) SHALL show the run histor
-specs/capabilities/workflows/spec.md:45-47  R20 Deleting a run SHALL remove it, its workspace and its files, its agent
-specs/capabilities/workflows/spec.md:48-48  R21 Every workflow (Answer a Business Question, Assess Data Readiness, Das
-specs/capabilities/workflows/spec.md:49-51  R22 The answer in the Run panel's Chat SHALL offer the same rating as a ch
-specs/capabilities/workflows/spec.md:52-54  R23 A stored run whose workflow is no longer in the catalogue (the one-ste
-specs/capabilities/workflows/spec.md:55-57  R24 A workflow's input (its Start node) SHALL hold everything its steps ne
-specs/capabilities/workflows/spec.md:58-60  R25 After a run, the user SHALL be able to chat with an **agent step's** a
-specs/capabilities/workflows/spec.md:61-63  R26 Every step's input and output SHALL be validated against its declared
-specs/capabilities/workflows/spec.md:64-64  R27 Answer a Business Question SHALL run, fixed in code ([../../system/age
-specs/capabilities/workflows/spec.md:66-68  R29 Assess Data Readiness SHALL run, fixed in code ([../../system/agents.m
-specs/capabilities/workflows/spec.md:69-71  R28 A run that needs the user's answer (Clarify, or Analyse's clarifying q
-specs/capabilities/workflows/spec.md:72-72  R30 Each agent of a run SHALL keep its conversation in a memory thread of
-specs/capabilities/workflows/spec.md:73-73  R31 The answer of a run of Answer a Business Question SHALL turn on the qu
-specs/capabilities/workflows/spec.md:74-78  R32 Dashboard Image to Artifact SHALL run, fixed in code ([../../system/ag
-specs/capabilities/workflows/spec.md:79-81  R33 **Artifacts** SHALL be reusable context saved from workflow runs, kept
-specs/capabilities/workflows/spec.md:82-87  R34 Map a Dashboard to Data SHALL run, fixed in code ([../../system/agents
-specs/capabilities/workflows/spec.md:89-106  ## Edge cases and errors
-specs/capabilities/workflows/spec.md:108-112  ## Contracts
-specs/capabilities/workflows/spec.md:114-121  ## UI
-specs/capabilities/workflows/spec.md:123-275  ## Flows
-specs/capabilities/workflows/spec.md:125-224  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:226-275  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:277-294  ## Acceptance
+specs/capabilities/workflows/spec.md:38-39  R15 A run of Answer a Business Question SHALL run its steps on the run's i
+specs/capabilities/workflows/spec.md:40-40  R16 A streamed run SHALL report, in order: that it started (its run id), e
+specs/capabilities/workflows/spec.md:41-43  R17 A run MAY name one earlier run as its context: that run's question and
+specs/capabilities/workflows/spec.md:44-44  R18 Every run of a workflow on an input, streamed (119) or not (118), SHAL
+specs/capabilities/workflows/spec.md:45-45  R19 The Runs page's **Runs** tab (app-shell R46) SHALL show the run histor
+specs/capabilities/workflows/spec.md:46-48  R20 Deleting a run SHALL remove it, its workspace and its files, its agent
+specs/capabilities/workflows/spec.md:49-49  R21 Every workflow (Answer a Business Question, Assess Data Readiness, Das
+specs/capabilities/workflows/spec.md:50-52  R22 The answer in the Run panel's Chat SHALL offer the same rating as a ch
+specs/capabilities/workflows/spec.md:53-55  R23 A stored run whose workflow is no longer in the catalogue (the one-ste
+specs/capabilities/workflows/spec.md:56-58  R24 A workflow's input (its Start node) SHALL hold everything its steps ne
+specs/capabilities/workflows/spec.md:59-61  R25 After a run, the user SHALL be able to chat with an **agent step's** a
+specs/capabilities/workflows/spec.md:62-64  R26 Every step's input and output SHALL be validated against its declared
+specs/capabilities/workflows/spec.md:65-65  R27 Answer a Business Question SHALL run, fixed in code ([../../system/age
+specs/capabilities/workflows/spec.md:67-69  R29 Assess Data Readiness SHALL run, fixed in code ([../../system/agents.m
+specs/capabilities/workflows/spec.md:70-72  R28 A run that needs the user's answer (Clarify, or Analyse's clarifying q
+specs/capabilities/workflows/spec.md:73-73  R30 Each agent of a run SHALL keep its conversation in a memory thread of
+specs/capabilities/workflows/spec.md:74-74  R31 The answer of a run of Answer a Business Question SHALL turn on the qu
+specs/capabilities/workflows/spec.md:75-79  R32 Dashboard Image to Artifact SHALL run, fixed in code ([../../system/ag
+specs/capabilities/workflows/spec.md:80-82  R33 **Artifacts** SHALL be reusable context saved from workflow runs, kept
+specs/capabilities/workflows/spec.md:83-88  R34 Map a Dashboard to Data SHALL run, fixed in code ([../../system/agents
+specs/capabilities/workflows/spec.md:90-107  ## Edge cases and errors
+specs/capabilities/workflows/spec.md:109-113  ## Contracts
+specs/capabilities/workflows/spec.md:115-122  ## UI
+specs/capabilities/workflows/spec.md:124-276  ## Flows
+specs/capabilities/workflows/spec.md:126-225  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:227-276  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:278-295  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -2135,65 +2135,66 @@ specs/system/ui.md:194-196  ### 3.4 App logo
 specs/system/ui.md:198-200  ### 3.5 Markdown rendering
 specs/system/ui.md:202-226  ### 3.6 Shared component classes
 specs/system/ui.md:228-237  ### 3.7 Background tasks panel
-specs/system/ui.md:239-866  ## 4. Screens and panels
+specs/system/ui.md:239-875  ## 4. Screens and panels
 specs/system/ui.md:243-251  ### 4.1 Home (welcome)
 specs/system/ui.md:253-259  ### 4.2 Datasets list
 specs/system/ui.md:261-275  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
 specs/system/ui.md:277-330  ### 4.3a Profile & synthesize tab (dataset editor)
 specs/system/ui.md:332-345  ### 4.4 Agent Hub
 specs/system/ui.md:347-358  ### 4.4a Workflows
-specs/system/ui.md:360-426  ### 4.4b Workflow page
-specs/system/ui.md:428-552  ### 4.5 Agent detail
-specs/system/ui.md:457-468  #### 4.5.1 Agent editor and Try it
-specs/system/ui.md:470-477  #### 4.5.2 Skills library
-specs/system/ui.md:479-486  #### 4.5.3 Skill editor
-specs/system/ui.md:488-495  #### 4.5.4 Built-in skill editor
-specs/system/ui.md:497-505  #### 4.5.5 Link editor and chips
-specs/system/ui.md:507-509  #### 4.5.6 Graph tab (removed)
-specs/system/ui.md:511-513  #### 4.5.7 LLM Config tab
-specs/system/ui.md:515-520  #### 4.5.8 Try it tab
-specs/system/ui.md:522-529  #### 4.5.9 Job Description tab, user agent
-specs/system/ui.md:531-542  #### 4.5.11 Job Description tab, built-in agent
-specs/system/ui.md:544-552  #### 4.5.10 Skills tab, user agent
-specs/system/ui.md:554-556  ### 4.6 Eval trace (right panel)
-specs/system/ui.md:558-560  ### 4.7 New-session composer
-specs/system/ui.md:562-577  ### 4.7.1 Runs page and Past chats
-specs/system/ui.md:579-590  ### 4.8i Artifacts
-specs/system/ui.md:592-611  ### 4.8 Ontology tab (dataset editor)
-specs/system/ui.md:613-623  ### 4.8d Monitoring: tabs and the LLM calls table
-specs/system/ui.md:625-633  ### 4.8e Monitoring: LLM call page
-specs/system/ui.md:635-642  ### 4.8f Monitoring: Runs tab
-specs/system/ui.md:644-656  ### 4.8g Monitoring: session page
-specs/system/ui.md:658-668  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:670-680  ### 4.8j Costs
-specs/system/ui.md:682-686  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:688-699  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:701-705  ### 4.11 Testing data (settings)
-specs/system/ui.md:708-720  ### 4.12 Developer (settings)
-specs/system/ui.md:721-789  ### 4.12 Past chat (read-only transcript)
-specs/system/ui.md:743-756  #### 4.12.1 Workflow bar
-specs/system/ui.md:758-789  #### 4.12.2 Query inspector (M1-25)
-specs/system/ui.md:791-849  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:804-811  #### 4.13.1 Visual view
-specs/system/ui.md:813-815  #### 4.13.2 Document view
-specs/system/ui.md:817-819  #### 4.13.3 File view
-specs/system/ui.md:821-823  #### 4.13.4 Table view
-specs/system/ui.md:825-849  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:851-853  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:855-857  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:859-866  ### 4.16 Appearance (settings)
-specs/system/ui.md:868-880  ## 5. Cross-cutting behaviour
-specs/system/ui.md:870-872  ### 5.1 State that survives view changes
-specs/system/ui.md:874-876  ### 5.2 Selection state
-specs/system/ui.md:878-880  ### 5.3 Toast policy
-specs/system/ui.md:882-971  ## 6. Design tokens
-specs/system/ui.md:886-929  ### 6.0 Theme tokens
-specs/system/ui.md:931-936  ### 6.1 Colour usage
-specs/system/ui.md:938-943  ### 6.2 Typography
-specs/system/ui.md:945-950  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:952-959  ### 6.4 Icons
-specs/system/ui.md:961-971  ### 6.5 Theming
-specs/system/ui.md:973-1015  ## 7. Copy that tests or users rely on
-specs/system/ui.md:1017-1028  ## 8. Accessibility
-specs/system/ui.md:1030-1032  ## 9. Visual baseline
-specs/system/ui.md:1035-1042  ## 10. Open questions and gaps
+specs/system/ui.md:360-435  ### 4.4b Workflow page
+specs/system/ui.md:429-435  #### Agents at work
+specs/system/ui.md:437-561  ### 4.5 Agent detail
+specs/system/ui.md:466-477  #### 4.5.1 Agent editor and Try it
+specs/system/ui.md:479-486  #### 4.5.2 Skills library
+specs/system/ui.md:488-495  #### 4.5.3 Skill editor
+specs/system/ui.md:497-504  #### 4.5.4 Built-in skill editor
+specs/system/ui.md:506-514  #### 4.5.5 Link editor and chips
+specs/system/ui.md:516-518  #### 4.5.6 Graph tab (removed)
+specs/system/ui.md:520-522  #### 4.5.7 LLM Config tab
+specs/system/ui.md:524-529  #### 4.5.8 Try it tab
+specs/system/ui.md:531-538  #### 4.5.9 Job Description tab, user agent
+specs/system/ui.md:540-551  #### 4.5.11 Job Description tab, built-in agent
+specs/system/ui.md:553-561  #### 4.5.10 Skills tab, user agent
+specs/system/ui.md:563-565  ### 4.6 Eval trace (right panel)
+specs/system/ui.md:567-569  ### 4.7 New-session composer
+specs/system/ui.md:571-586  ### 4.7.1 Runs page and Past chats
+specs/system/ui.md:588-599  ### 4.8i Artifacts
+specs/system/ui.md:601-620  ### 4.8 Ontology tab (dataset editor)
+specs/system/ui.md:622-632  ### 4.8d Monitoring: tabs and the LLM calls table
+specs/system/ui.md:634-642  ### 4.8e Monitoring: LLM call page
+specs/system/ui.md:644-651  ### 4.8f Monitoring: Runs tab
+specs/system/ui.md:653-665  ### 4.8g Monitoring: session page
+specs/system/ui.md:667-677  ### 4.8h Monitoring: waterfall
+specs/system/ui.md:679-689  ### 4.8j Costs
+specs/system/ui.md:691-695  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:697-708  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:710-714  ### 4.11 Testing data (settings)
+specs/system/ui.md:717-729  ### 4.12 Developer (settings)
+specs/system/ui.md:730-798  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:752-765  #### 4.12.1 Workflow bar
+specs/system/ui.md:767-798  #### 4.12.2 Query inspector (M1-25)
+specs/system/ui.md:800-858  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:813-820  #### 4.13.1 Visual view
+specs/system/ui.md:822-824  #### 4.13.2 Document view
+specs/system/ui.md:826-828  #### 4.13.3 File view
+specs/system/ui.md:830-832  #### 4.13.4 Table view
+specs/system/ui.md:834-858  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:860-862  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:864-866  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:868-875  ### 4.16 Appearance (settings)
+specs/system/ui.md:877-889  ## 5. Cross-cutting behaviour
+specs/system/ui.md:879-881  ### 5.1 State that survives view changes
+specs/system/ui.md:883-885  ### 5.2 Selection state
+specs/system/ui.md:887-889  ### 5.3 Toast policy
+specs/system/ui.md:891-980  ## 6. Design tokens
+specs/system/ui.md:895-938  ### 6.0 Theme tokens
+specs/system/ui.md:940-945  ### 6.1 Colour usage
+specs/system/ui.md:947-952  ### 6.2 Typography
+specs/system/ui.md:954-959  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:961-968  ### 6.4 Icons
+specs/system/ui.md:970-980  ### 6.5 Theming
+specs/system/ui.md:982-1024  ## 7. Copy that tests or users rely on
+specs/system/ui.md:1026-1037  ## 8. Accessibility
+specs/system/ui.md:1039-1041  ## 9. Visual baseline
+specs/system/ui.md:1044-1051  ## 10. Open questions and gaps

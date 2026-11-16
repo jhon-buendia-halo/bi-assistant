@@ -151,10 +151,18 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     ]);
     expect(q('workflow-node-analyse')?.style.width).toBe('220px');
     expect(q('workflow-node-start')?.style.width).toBe('88px');
-    // Every node has its icon tile, the agent's beside its text.
+    // Every node has its icon tile; the agent shows its portrait instead,
+    // beside its text, with an AI badge after its name.
     expect(nodes.map((n) => n.querySelectorAll('.node-icon').length)).toEqual([
-      1, 1, 1, 1, 1, 1,
+      1, 1, 1, 0, 1, 1,
     ]);
+    const analyse = q('workflow-node-analyse')!;
+    expect(
+      analyse.querySelector('[data-testid="workflow-node-portrait"]'),
+    ).not.toBeNull();
+    expect(
+      analyse.querySelector('[data-testid="workflow-node-ai"]')?.textContent,
+    ).toBe('AI');
     expect(
       q('workflow-node-analyse')?.querySelector('.sr-only')?.textContent,
     ).toBe('Step 3:');
@@ -183,7 +191,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     const title = q('workflow-node-analyse')!.querySelector<HTMLElement>(
       '[data-testid="workflow-node-title"]',
     )!;
-    expect(Number(getComputedStyle(title).fontWeight)).toBeGreaterThanOrEqual(600);
+    expect(Number(getComputedStyle(title).fontWeight)).toBeGreaterThanOrEqual(
+      600,
+    );
     expect(text(q('workflow-node-agent'))).toBe('Michael');
     expect(text(q('workflow-node-agent-role'))).toBe('Insights Analyst');
     const label = (id: string) =>
@@ -250,7 +260,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       'Model claude-sonnet-5-5 of Analyse',
     );
     expect(subs[0].hasAttribute('aria-haspopup')).toBe(false);
-    expect(subs[1].getAttribute('aria-label')).toBe('Tools of Analyse: 3 tools');
+    expect(subs[1].getAttribute('aria-label')).toBe(
+      'Tools of Analyse: 3 tools',
+    );
     expect(subs[1].getAttribute('aria-haspopup')).toBe('menu');
     expect(subs[1].getAttribute('aria-expanded')).toBe('false');
     expect(subs[1].getAttribute('title')).toBe(
@@ -282,7 +294,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     const tools = () => q('workflow-subnode-analyse-tools')!;
     const menu = () => q('workflow-tools-menu-analyse');
     const items = () =>
-      Array.from(menu()?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+      Array.from(
+        menu()?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
+      );
     const key = (k: string) => {
       const event = new KeyboardEvent('keydown', {
         key: k,
@@ -380,7 +394,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
 
     it('a press outside it closes it', fakeAsync(() => {
       open('click');
-      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      document.body.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true }),
+      );
       fixture.detectChanges();
       expect(menu()).toBeNull();
     }));
@@ -453,9 +469,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     });
 
     it("types each edge's fields from the declared schema", () => {
-      expect(text(label('start-receive-question').querySelector('.sr-only'))).toBe(
-        'Passes on: question (string), datasets (string[])',
-      );
+      expect(
+        text(label('start-receive-question').querySelector('.sr-only')),
+      ).toBe('Passes on: question (string), datasets (string[])');
       expect(label('analyse-wrap-up').getAttribute('title')).toBe(
         'Passes on: calls (object[]), stopped (boolean)',
       );
@@ -478,7 +494,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       expect(violation('analyse-wrap-up')).toBeNull();
       expect(violation('receive-question-load-catalog')).toBeNull();
       expect(
-        q('workflow-connector-load-catalog-analyse')?.getAttribute('marker-end'),
+        q('workflow-connector-load-catalog-analyse')?.getAttribute(
+          'marker-end',
+        ),
       ).toBe('url(#workflow-canvas-arrow-violation)');
       expect(
         q('workflow-connector-load-catalog-analyse')?.classList.contains(
@@ -495,9 +513,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       fixture.detectChanges();
       expect(violation('analyse-wrap-up')).toBe('true');
       expect(violation('load-catalog-analyse')).toBeNull();
-      expect(
-        text(label('analyse-wrap-up').querySelector('.sr-only')),
-      ).toBe('Passes on: calls (object[]), stopped (boolean). Contract violation');
+      expect(text(label('analyse-wrap-up').querySelector('.sr-only'))).toBe(
+        'Passes on: calls (object[]), stopped (boolean). Contract violation',
+      );
       expect(el.querySelectorAll('[data-violation="true"]').length).toBe(1);
     });
   });
@@ -681,7 +699,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     expect(badges.map(text)).toEqual(['Invalid input']);
     expect(badges[0].getAttribute('data-status')).toBe('invalid');
     expect(text(badges[0].querySelector('.sr-only'))).toBe('Invalid input');
-    expect(q('workflow-node-start')?.getAttribute('data-status')).toBe('invalid');
+    expect(q('workflow-node-start')?.getAttribute('data-status')).toBe(
+      'invalid',
+    );
   });
 
   it('shows a step running live', () => {
@@ -746,9 +766,13 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
 
   it('marks every connector of a linear workflow `next`, with no edge labels', () => {
     expect(
-      Array.from(el.querySelectorAll('path.edge')).map((p) => p.getAttribute('data-kind')),
+      Array.from(el.querySelectorAll('path.edge')).map((p) =>
+        p.getAttribute('data-kind'),
+      ),
     ).toEqual(['next', 'next', 'next', 'next', 'next']);
-    expect(el.querySelector('[data-testid^="workflow-edge-label-"]')).toBeNull();
+    expect(
+      el.querySelector('[data-testid^="workflow-edge-label-"]'),
+    ).toBeNull();
   });
 
   describe('a graph with a branch and a retry loop', () => {
@@ -757,18 +781,27 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       fixture.detectChanges();
     });
 
-    const kind = (id: string) => q(`workflow-connector-${id}`)?.getAttribute('data-kind');
+    const kind = (id: string) =>
+      q(`workflow-connector-${id}`)?.getAttribute('data-kind');
 
     it('draws each edge with its kind and labels the branches and the loop', () => {
       expect(kind('plan-clarify')).toBe('branch');
       expect(kind('plan-analyse')).toBe('branch');
       expect(kind('validate-analyse')).toBe('loop');
       expect(kind('clarify-end')).toBe('next');
-      expect(text(q('workflow-edge-label-plan-clarify'))).toBe('Needs clarification');
+      expect(text(q('workflow-edge-label-plan-clarify'))).toBe(
+        'Needs clarification',
+      );
       expect(text(q('workflow-edge-label-plan-analyse'))).toBe('Clear');
-      expect(text(q('workflow-edge-label-validate-analyse'))).toBe('Retry once');
-      expect(q('workflow-edge-label-validate-analyse')?.getAttribute('data-kind')).toBe('loop');
-      expect(text(q('workflow-edge-label-validate-write-answer'))).toBe('Valid or retried');
+      expect(text(q('workflow-edge-label-validate-analyse'))).toBe(
+        'Retry once',
+      );
+      expect(
+        q('workflow-edge-label-validate-analyse')?.getAttribute('data-kind'),
+      ).toBe('loop');
+      expect(text(q('workflow-edge-label-validate-write-answer'))).toBe(
+        'Valid or retried',
+      );
       expect(q('workflow-edge-label-analyse-validate')).toBeNull();
       // Every step is a node, Clarify too.
       expect(q('workflow-node-clarify')).not.toBeNull();
@@ -787,20 +820,42 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
         'wrap-up': 'success',
         end: 'success',
       });
-      fixture.componentRef.setInput('attempts', { analyse: 2, validate: 2, plan: 1 });
+      fixture.componentRef.setInput('attempts', {
+        analyse: 2,
+        validate: 2,
+        plan: 1,
+      });
       fixture.detectChanges();
-      expect(q('workflow-node-clarify')?.getAttribute('data-skipped')).toBe('true');
-      expect(q('workflow-node-analyse')?.getAttribute('data-skipped')).toBeNull();
-      expect(q('workflow-connector-plan-clarify')?.getAttribute('data-skipped')).toBe('true');
-      expect(q('workflow-connector-plan-clarify')?.getAttribute('data-done')).toBe('false');
-      expect(q('workflow-connector-clarify-end')?.getAttribute('data-skipped')).toBe('true');
-      expect(q('workflow-edge-label-plan-clarify')?.getAttribute('data-skipped')).toBe('true');
-      expect(q('workflow-connector-plan-analyse')?.getAttribute('data-done')).toBe('true');
+      expect(q('workflow-node-clarify')?.getAttribute('data-skipped')).toBe(
+        'true',
+      );
+      expect(
+        q('workflow-node-analyse')?.getAttribute('data-skipped'),
+      ).toBeNull();
+      expect(
+        q('workflow-connector-plan-clarify')?.getAttribute('data-skipped'),
+      ).toBe('true');
+      expect(
+        q('workflow-connector-plan-clarify')?.getAttribute('data-done'),
+      ).toBe('false');
+      expect(
+        q('workflow-connector-clarify-end')?.getAttribute('data-skipped'),
+      ).toBe('true');
+      expect(
+        q('workflow-edge-label-plan-clarify')?.getAttribute('data-skipped'),
+      ).toBe('true');
+      expect(
+        q('workflow-connector-plan-analyse')?.getAttribute('data-done'),
+      ).toBe('true');
       // The loop was taken: Analyse ran again.
-      expect(q('workflow-connector-validate-analyse')?.getAttribute('data-done')).toBe('true');
+      expect(
+        q('workflow-connector-validate-analyse')?.getAttribute('data-done'),
+      ).toBe('true');
 
       const badge = (id: string) =>
-        q(`workflow-node-${id}`)?.querySelector('[data-testid="workflow-node-attempts"]');
+        q(`workflow-node-${id}`)?.querySelector(
+          '[data-testid="workflow-node-attempts"]',
+        );
       expect(text(badge('analyse')!)).toBe('×2');
       expect(text(badge('validate')!)).toBe('×2');
       expect(badge('plan')).toBeNull();
@@ -808,10 +863,15 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     });
 
     it('leaves the loop undone when the step it goes back to ran once', () => {
-      fixture.componentRef.setInput('statuses', { validate: 'success', analyse: 'success' });
+      fixture.componentRef.setInput('statuses', {
+        validate: 'success',
+        analyse: 'success',
+      });
       fixture.componentRef.setInput('attempts', { analyse: 1, validate: 1 });
       fixture.detectChanges();
-      expect(q('workflow-connector-validate-analyse')?.getAttribute('data-done')).toBe('false');
+      expect(
+        q('workflow-connector-validate-analyse')?.getAttribute('data-done'),
+      ).toBe('false');
       expect(all('workflow-node-attempts')).toEqual([]);
     });
   });
