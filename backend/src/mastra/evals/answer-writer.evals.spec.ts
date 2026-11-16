@@ -84,6 +84,44 @@ describe('answer-writer checks (story 1.28.3)', () => {
     expect(await run(check, written('The top 5 statuses.'))).toBeUndefined();
   });
 
+  it('figuresFromRows accepts derived figures (sum, difference, share) and still refuses a made-up one (1.28.8)', async () => {
+    const counts = [
+      { status: 'delivered', orders: 112319 },
+      { status: 'returned', orders: 37941 },
+      { status: 'shipped', orders: 37208 },
+      { status: 'other', orders: 112532 },
+    ];
+    const check = figuresFromRows(counts);
+    // Real baseline answer: the total and the shares.
+    expect(
+      await run(
+        check,
+        written(
+          'Delivered leads with 112,319 of 300,000 orders (37.4%); returned is 12.6%.',
+        ),
+      ),
+    ).toBeUndefined();
+    const weights = figuresFromRows([
+      {
+        products: 5000,
+        nan_weights: 5,
+        infinite_weights: 1,
+        avg_finite_kg: 25.175,
+      },
+    ]);
+    expect(
+      await run(
+        weights,
+        written(
+          'The average is 25.18 kg over the 4,994 products with a finite weight.',
+        ),
+      ),
+    ).toBeUndefined();
+    expect(await run(check, written('Delivered had 150,000 orders.'))).toMatch(
+      /150,000/,
+    );
+  });
+
   it('says and neverSays', async () => {
     const tie = says(/\btie/i, 'says they tie', 'says-tie');
     expect(

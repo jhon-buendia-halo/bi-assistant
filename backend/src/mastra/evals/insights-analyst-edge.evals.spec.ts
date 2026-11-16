@@ -90,6 +90,15 @@ describe('insights-analyst-edge checks (story 1.28.6)', () => {
     ).toBeDefined();
   });
 
+  it('answerSaysNoRows accepts a summary table of zeros (1.28.8)', async () => {
+    const summary =
+      'No gift cards have been issued.\n\n| Measure | Result |\n|---|---|\n| Gift cards issued | 0 |\n| Total value | none |';
+    expect(await run(answerSaysNoRows('gift cards'), summary)).toBeUndefined();
+    const invented =
+      'No gift cards.\n\n| Card | Value |\n|---|---|\n| GC-1 | 25.00 |';
+    expect(await run(answerSaysNoRows('gift cards'), invented)).toBeDefined();
+  });
+
   it('sqlUsesAny wants the quoted name in a query', async () => {
     const check = sqlUsesAny(['"legacyorders"'], 'legacy');
     expect(

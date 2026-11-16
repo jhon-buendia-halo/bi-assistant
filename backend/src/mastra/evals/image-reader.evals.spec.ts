@@ -84,6 +84,21 @@ describe('image-reader checks (story 1.28.5)', () => {
     ).toBeDefined();
   });
 
+  it('inventsNoFigure reads a date as one figure (1.28.8)', async () => {
+    const check = inventsNoFigure(['-4,250.75', '2024-01-15', '2024-02-03']);
+    expect(
+      await run(
+        check,
+        notes(
+          'Checking -4,250.75 posted 2024-02-03; Savings posted 2024-01-15.',
+        ),
+      ),
+    ).toBeUndefined();
+    expect(
+      await run(check, notes('Checking -4,250.75 posted 2024-02-04.')),
+    ).toMatch(/2024-02-04/);
+  });
+
   it('countsImages and keepsOrder', async () => {
     const two = notes(
       '### Image 1: Sessions by month\n### Image 2: Refunds by channel',

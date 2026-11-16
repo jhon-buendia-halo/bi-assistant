@@ -66,8 +66,16 @@ export function inventsNoFigure(allowed: string[]): EvalCustomCheck {
     'invents-no-figure',
     'The notes hold no figure the image lacks',
     (n) => {
-      const numbers = [...n.imageNotes.matchAll(/-?\d[\d,]*(?:\.\d+)?%?/g)]
-        .map((m) => m[0].replace(/[,%]/g, ''))
+      // Dates are one figure each ("2024-01-15"), then plain numbers.
+      const dates = [...n.imageNotes.matchAll(/\b\d{4}-\d{2}-\d{2}\b/g)].map(
+        (m) => m[0],
+      );
+      const rest = n.imageNotes.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
+      const numbers = [
+        ...dates,
+        ...[...rest.matchAll(/-?\d[\d,]*(?:\.\d+)?%?/g)].map((m) => m[0]),
+      ]
+        .map((v) => v.replace(/[,%]/g, ''))
         // Image numbering and small counts are the notes' own words.
         .filter((v) => !/^\d$/.test(v));
       const stray = numbers.filter((v) => !ok.has(v));

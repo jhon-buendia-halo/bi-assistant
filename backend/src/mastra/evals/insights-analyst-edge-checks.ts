@@ -5,6 +5,7 @@ import {
   numbersInText,
   successfulSql,
 } from './insights-analyst-eval-checks';
+import { derivedFigures } from './derived-figures';
 import type { SqlTruthComparator } from './sql-truth-check';
 
 /**
@@ -170,7 +171,13 @@ export function answerSaysNoRows(subject: string): EvalCustomCheck {
     run: ({ answer }) => {
       if (!NONE_WORDS.test(answer))
         return `the answer does not say there are no ${subject}`;
-      return markdownTableRows(answer) > 0
+      // A summary table of zeros is fine; a table with other figures is not.
+      const table = answer
+        .split('\n')
+        .filter((line) => /^\s*\|/.test(line))
+        .join('\n');
+      return markdownTableRows(answer) > 0 &&
+        /(?<![\d.])[1-9]\d*(?:\.\d+)?/.test(table)
         ? 'the answer shows a table of rows for an empty result'
         : undefined;
     },
@@ -289,12 +296,19 @@ export function headlineFiguresInRows(question: string): EvalCustomCheck {
       const queries = (
         details?.steps?.['analyse'] as { queries?: unknown } | undefined
       )?.queries;
-      const available = [
-        ...figuresOfRows(Array.isArray(queries) ? queries : []),
-        ...numbersInText(question),
-      ];
+      const list = Array.isArray(queries) ? queries : [];
+      // Cells, row counts, column sums, differences and shares: Write answer
+      // may derive figures from the rows (its rules allow it).
+      const available = derivedFigures(
+        list.flatMap((q: { rows?: unknown }) =>
+          Array.isArray(q.rows) ? (q.rows as Record<string, unknown>[]) : [],
+        ),
+        [...figuresOfRows(list), ...numbersInText(question)],
+      );
       const orphans = headlineFigures(headline).filter(
         (figure) =>
+          // Small whole numbers count things ("the other five statuses").
+          !(Number.isInteger(figure) && Math.abs(figure) < 10) &&
           !available.some(
             (value) =>
               Math.abs(value - figure) <=

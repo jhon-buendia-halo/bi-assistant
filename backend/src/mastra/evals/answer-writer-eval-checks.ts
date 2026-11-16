@@ -1,4 +1,5 @@
 import type { EvalCustomCheck } from './assistant.evals';
+import { derivedFigures, matchesRounded } from './derived-figures';
 
 /**
  * The custom checks of the `answer-writer` eval set (agents.md 8.1, 2.11;
@@ -101,25 +102,20 @@ export function figuresFromRows(
   allow: number[] = [],
   question = '',
 ): EvalCustomCheck {
-  const known = [
+  // Cells, column sums, differences and shares: the writer may derive
+  // figures (its rules round "averages, ratios and other derived figures").
+  const known = derivedFigures(rows, [
     ...rowNumbers(rows),
     ...allow,
     ...numbersIn(question).map((n) => n.value),
-  ];
+  ]);
   return writerCheck(
     'figures-from-rows',
     'Every figure of the answer is in the rows it was given',
     (w) => {
       const stray = numbersIn(textOf(w)).filter(({ value, decimals }) => {
         if (Number.isInteger(value) && Math.abs(value) < 10) return false;
-        return !known.some((k) => {
-          const factor = 10 ** decimals;
-          return (
-            Math.round(k * factor) / factor === value ||
-            // A share written as a percent of a ratio cell.
-            Math.round(k * 100 * factor) / factor === value
-          );
-        });
+        return !matchesRounded(value, decimals, known);
       });
       return stray.length
         ? `figures not in the rows: ${stray.map((s) => s.raw).join(', ')}`
