@@ -82,6 +82,16 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     role: 'Insights Writer',
     domain: 'storytelling',
   },
+  'dashboard-reader': {
+    name: 'Grace',
+    role: 'Dashboard Analyst',
+    domain: 'storytelling',
+  },
+  'data-mapper': {
+    name: 'Daniel',
+    role: 'Data Mapping Analyst',
+    domain: 'data-foundations',
+  },
   'query-explainer': {
     name: 'Hannah',
     role: 'Query Explainer',

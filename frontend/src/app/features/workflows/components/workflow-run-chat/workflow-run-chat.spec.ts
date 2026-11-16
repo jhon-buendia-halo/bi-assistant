@@ -79,8 +79,8 @@ const V2: WorkflowDetail = {
         maxSteps: 15,
       },
       exits: [
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
       ],
     },
     STEP('wrap-up', 'Wrap up', ['calls', 'stopped'], ['sqlQueries', 'failedQueries', 'rows']),

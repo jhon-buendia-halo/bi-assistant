@@ -8,8 +8,8 @@ Defined in [../../product/glossary.md](../../product/glossary.md): session, data
 
 Capability-local vocabulary, used only for UI words:
 - **Navigation rail** — the narrow, always-visible left column of icon buttons: the six workspace areas at the top, and system logs and Settings at the bottom.
-- **Area** — what the rail selects: Datasets, Workflows, Agents, Sessions, Monitoring or Settings. Sessions and Settings show a list pane beside their content.
-- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, the Runs area (with nothing open), an open run, a past chat (read-only), or a Settings section.
+- **Area** — what the rail selects: Datasets, Workflows, Agents, Artifacts, Sessions, Monitoring or Settings. Sessions and Settings show a list pane beside their content.
+- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Artifacts, an artifact's page, the Runs area (with nothing open), an open run, a past chat (read-only), or a Settings section.
 - **Details panel** — the right-hand column. What it shows depends on the main view (see R14).
 - **Backend status** — one of `starting`, `ready`, `restarting`, `down`, reported by the desktop shell's backend supervisor.
 
@@ -18,7 +18,7 @@ Capability-local vocabulary, used only for UI words:
 Layout and navigation
 - R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Halo Powered" header above the main area and, when open, the details panel. In the default `halo` brand the shell is flat (ADR-0044; a `mercer` build differs, R56): the rail runs the full height beside the column, with no frame, gaps or rounded panels.
 - R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
-- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Workflows**, **Agents**, **Runs** and **Monitoring**, in that order (**Runs** replaced **Sessions** on 2026-11-11, roadmap 1.23.21). Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Runs**, in a run or a past chat: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Workflows while a workflow's page is open, Datasets while the dataset editor is open, and Runs while a run, the composer or a chat is open. Choosing **Workflows** on a workflow's page SHALL return to the Workflows page ([workflows](../workflows/spec.md) R5, R7). Choosing **Runs** SHALL open the Runs page (R46), also from an open run, past chat or composer, and SHALL NOT change the drawer.
+- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Workflows**, **Agents**, **Artifacts**, **Runs** and **Monitoring**, in that order (**Runs** replaced **Sessions** on 2026-11-11, roadmap 1.23.21; **Artifacts** was added on 2026-11-15, [../workflows/spec.md](../workflows/spec.md) R33). Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Runs**, in a run or a past chat: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Workflows while a workflow's page is open, Datasets while the dataset editor is open, and Runs while a run, the composer or a chat is open. Choosing **Workflows** on a workflow's page SHALL return to the Workflows page ([workflows](../workflows/spec.md) R5, R7). Choosing **Runs** SHALL open the Runs page (R46), also from an open run, past chat or composer, and SHALL NOT change the drawer.
 - R3a. (Removed 2026-11-15.) The rail's **Context** item and its page are gone, with the User personas and Visuals library sections. Ontologies are edited only in the dataset editor's **Ontology** tab ([../dataset-ontology/spec.md](../dataset-ontology/spec.md)).
 - R3b. Choosing **Monitoring** SHALL show the Monitoring page, with Monitoring the current rail item: the level-two heading "Monitoring" and the LLM calls page ([../monitoring/spec.md](../monitoring/spec.md)): the note "LLM calls made by the app's agents, newest first.", the filters and the table of calls, or "No LLM calls yet." when there are none. A call opens its own page with Monitoring still current, and choosing **Monitoring** on the rail from it returns to the table (as Runs returns to its page, R3). The item and an empty page were added on 2026-11-10 (roadmap 1.21.13); the LLM calls table and the call page the same day (roadmap 1.21.14, 1.21.15).
 - R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**; in the `halo` brand nothing follows them (the LenAI mark and "Powered by LenAI" were removed, ADR-0044; the `mercer` brand keeps the badge, R56). The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
@@ -88,7 +88,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Workflows, Agents, Sessions, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Workflows, Agents, Artifacts, Sessions, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -116,7 +116,7 @@ Accessibility and visual stability
 
 Lives in the shell itself: [../../system/ui.md](../../system/ui.md). States:
 - Banner: hidden (starting, ready), amber (restarting), red (down).
-- Rail: one current area (Datasets, Workflows, Agents, Runs, Monitoring or Settings), or none on home.
+- Rail: one current area (Datasets, Workflows, Agents, Artifacts, Runs, Monitoring or Settings), or none on home.
 - Details panel: expanded at the remembered width, collapsed.
 - Toasts: success, info, error, several stacked.
 

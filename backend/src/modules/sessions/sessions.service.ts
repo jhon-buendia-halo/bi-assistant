@@ -46,6 +46,7 @@ import { MetricsService } from '../metrics/metrics.service';
 import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
+import { ArtifactsService } from '../artifacts/artifacts.service';
 import {
   buildPanelItem,
   tableCsv,
@@ -67,6 +68,7 @@ import { renderPdf } from '../../common/markdown-pdf';
 import {
   WorkspaceFileError,
   readWorkspaceFile,
+  readWorkspaceImage,
   writeWorkspaceFile,
 } from './workspace-files';
 import {
@@ -162,6 +164,13 @@ export interface RunHostSpec {
   /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
   checkDataQuality?: true;
   /**
+   * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
+   * host's workspace at `path` before the turn.
+   */
+  image?: { path: string; data: Buffer };
+  /** Dashboard Image to Artifact's saved dashboard: the artifact's id. */
+  artifact?: string;
+  /**
    * A follow-up run (agents.md 5.14): the earlier run's host id, whose
    * memory threads the host starts from as copies of its own.
    */
@@ -202,6 +211,8 @@ export class SessionsService implements OnModuleInit {
     @Optional()
     @Inject(SYNTHETIC_DATA_SERVICE)
     private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
+    // The saved dashboards a Dashboard Image to Artifact run takes (agents.md 5.17).
+    @Optional() private readonly artifacts?: ArtifactsService,
   ) {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
     // service's own dependencies and its session reads and writes.
@@ -244,6 +255,40 @@ export class SessionsService implements OnModuleInit {
       crossCheckAnswer: (session, question, data) =>
         this.crossCheckAnswer(session, question, data),
       readinessBridge: () => this.readinessBridge,
+      readImage: (sessionId, path) => readWorkspaceImage(sessionId, path),
+      artifact: async (artifactId) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        const { name, blueprint } = await this.artifacts.get(artifactId);
+        return { name, blueprint };
+      },
+      saveArtifact: async (sessionId, blueprint, image) => {
+        if (!this.artifacts) throw new Error('Artifacts are not available');
+        const session = await this.get(sessionId);
+        const saved = await this.artifacts.create({
+          blueprint,
+          ...(image ? { image } : {}),
+          // A run host is `run-<run id>`: the artifact names its run.
+          ...(sessionId.startsWith(RUN_HOST_ID_PREFIX)
+            ? {
+                source: {
+                  runId: sessionId.slice(RUN_HOST_ID_PREFIX.length),
+                  workflowId: session.workflowId ?? '',
+                },
+              }
+            : {}),
+        });
+        return { id: saved.id, name: saved.name };
+      },
+      saveMock: async (sessionId, bundle, instruction) => {
+        const session = await this.get(sessionId);
+        const { metadata } = await this.visuals.createFromBundle(
+          session,
+          bundle,
+          instruction,
+        );
+        await this.saveVisualMetadata(session, metadata);
+        return metadata;
+      },
     });
   }
 
@@ -463,10 +508,15 @@ export class SessionsService implements OnModuleInit {
           : [],
       ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
       ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
+      ...(spec.image ? { inputImage: spec.image.path } : {}),
+      ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
     };
+    if (spec.image) {
+      await writeWorkspaceFile(id, spec.image.path, spec.image.data);
+    }
     if (spec.continuesThreadsOf) {
       try {
         const copied = await this.mastra.copyMemoryResource(
@@ -618,6 +668,17 @@ export class SessionsService implements OnModuleInit {
     if (!hostId.startsWith(RUN_HOST_ID_PREFIX)) return;
     this.memoryHosts.delete(hostId);
     await this.mastra.deleteSessionWorkspace(hostId);
+  }
+
+  /**
+   * A run's input image, from its host's workspace (agents.md 5.17): what a
+   * follow-up run reads to run on the same image.
+   */
+  async runHostImage(
+    hostId: string,
+    path: string,
+  ): Promise<{ data: Buffer; mediaType: string }> {
+    return readWorkspaceImage(hostId, path);
   }
 
   /**

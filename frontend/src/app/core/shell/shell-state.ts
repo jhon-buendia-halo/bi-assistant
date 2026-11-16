@@ -16,6 +16,8 @@ export type MainView =
   | 'skills'
   | 'skill-editor'
   | 'builtin-skill-editor'
+  | 'artifacts'
+  | 'artifact-detail'
   | 'runs'
   | 'run-detail'
   | 'session-chat'
@@ -28,6 +30,7 @@ export type Area =
   | 'datasets'
   | 'workflows'
   | 'agents'
+  | 'artifacts'
   | 'runs'
   | 'monitoring'
   | 'settings';
@@ -37,6 +40,7 @@ export const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   datasets: 'dataset',
   workflows: 'workflows',
   agents: 'agents',
+  artifacts: 'artifacts',
   runs: 'runs',
   monitoring: 'monitoring',
 };
@@ -52,6 +56,8 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   skills: 'agents',
   'skill-editor': 'agents',
   'builtin-skill-editor': 'agents',
+  artifacts: 'artifacts',
+  'artifact-detail': 'artifacts',
   runs: 'runs',
   'run-detail': 'runs',
   'session-chat': 'runs',
@@ -135,6 +141,7 @@ export class ShellState {
       !leavingEditor &&
       (area !== 'runs' || this.mainView() === 'runs') &&
       (area !== 'workflows' || this.mainView() === 'workflows') &&
+      (area !== 'artifacts' || this.mainView() === 'artifacts') &&
       (area !== 'monitoring' || this.mainView() === 'monitoring');
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {

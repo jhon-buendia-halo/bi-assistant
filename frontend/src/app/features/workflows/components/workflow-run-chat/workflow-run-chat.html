@@ -2,9 +2,9 @@
   <!-- The Chat column of the Run panel (workflows R21; ui.md 4.4b): the
        question, the run's answer as it forms, and the composer. The steps
        are in the Logs column beside it, never here. -->
-  <div class="flex shrink-0 items-center gap-2 px-4 pt-2.5 pb-1">
+  <div class="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 px-4 pt-2.5 pb-1">
     <h3
-      class="m-0 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+      class="m-0 mr-auto flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
     >
       <lucide-angular [img]="MessageSquare" [size]="12" />
       Chat
@@ -23,12 +23,40 @@
           <span>Run again</span>
         </button>
       }
+      @if (savedArtifactId(); as artifactId) {
+        <!-- Dashboard Image to Artifact saved the dashboard it read (ui.md 4.8i) -->
+        <span
+          data-testid="workflow-run-artifact-saved"
+          class="flex items-center gap-1.5 text-[12px] text-fg-muted"
+          [class.ml-auto]="!designer.canRunAgain()"
+        >
+          <lucide-angular [img]="CircleCheck" [size]="13" />
+          <span>Saved to Artifacts</span>
+          <button
+            type="button"
+            data-testid="workflow-run-artifact-open"
+            (click)="openSavedArtifact(artifactId)"
+            class="btn btn-ghost px-2 py-0.5 text-[12px]"
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            data-testid="workflow-run-artifact-map"
+            title="Map this dashboard to your datasets"
+            (click)="mapSavedArtifact(artifactId)"
+            class="btn btn-ghost px-2 py-0.5 text-[12px]"
+          >
+            Map to data
+          </button>
+        </span>
+      }
       <button
         type="button"
         data-testid="workflow-run-new"
         (click)="designer.newQuestion()"
         class="btn btn-ghost px-2.5 py-1"
-        [class.ml-auto]="!designer.canRunAgain()"
+        [class.ml-auto]="!designer.canRunAgain() && savedArtifactId() === null"
       >
         <lucide-angular [img]="SquarePen" [size]="13" />
         <span>New question</span>
@@ -397,11 +425,91 @@
                   }
                 </div>
               }
+              @case ("artifact") {
+                <div class="flex flex-col gap-1">
+                  <label
+                    [for]="inputId(field.name)"
+                    class="text-[12px] font-medium text-fg-muted"
+                    >{{ field.label }}</label
+                  >
+                  <select
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    (change)="onArtifact(field, $event)"
+                    class="field"
+                  >
+                    <option value="" [selected]="designer.inputValue(field.name) === ''">
+                      {{ field.requiredWithout ? "None — upload an image" : "Select a saved dashboard" }}
+                    </option>
+                    @for (artifact of artifactChoices(field); track artifact.id) {
+                      <option
+                        [value]="artifact.id"
+                        [selected]="artifact.id === designer.inputValue(field.name)"
+                      >
+                        {{ artifact.name }}
+                      </option>
+                    }
+                  </select>
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">{{ field.help }}</p>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
+              @case ("image") {
+                <div class="flex flex-col gap-1">
+                  <label [for]="inputId(field.name)" class="text-[12px] font-medium text-fg-muted">{{
+                    field.label
+                  }}</label>
+                  <input
+                    type="file"
+                    [id]="inputId(field.name)"
+                    [attr.data-testid]="inputId(field.name)"
+                    [attr.accept]="imageAccept"
+                    [attr.aria-required]="field.required ? 'true' : null"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    (change)="onImage(field.name, $event)"
+                    class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:text-fg"
+                  />
+                  @if (imagePreview(field.name); as preview) {
+                    <img
+                      [src]="preview"
+                      [alt]="imageName(field.name) || field.label"
+                      [attr.data-testid]="inputId(field.name) + '-preview'"
+                      class="max-h-40 w-auto self-start rounded-md border border-border object-contain"
+                    />
+                  }
+                  @if (field.help) {
+                    <p class="m-0 text-[12px] text-fg-muted">{{ field.help }}</p>
+                  }
+                  @if (fieldError(field.name); as message) {
+                    <p
+                      [id]="errorId(field.name)"
+                      [attr.data-testid]="errorId(field.name)"
+                      class="m-0 text-[12px] text-on-danger-soft"
+                    >
+                      {{ message }}
+                    </p>
+                  }
+                </div>
+              }
               @case ("textarea") {
                 <div class="flex flex-col gap-1">
                   <label
                     [for]="inputId(field.name)"
-                    [class]="field.name === designer.questionField() ? 'sr-only' : 'text-[12px] font-medium text-fg-muted'"
+                    [class]="isPrompt(field) ? 'sr-only' : 'text-[12px] font-medium text-fg-muted'"
                     >{{ field.label }}</label
                   >
                   <textarea
@@ -415,8 +523,8 @@
                     (input)="onInput(field.name, $event)"
                     (keydown.enter)="onEnter($event, 'execute')"
                     rows="2"
-                    class="composer-input"
-                    [class.composer-input-invalid]="!!fieldError(field.name)"
+                    [class]="isPrompt(field) ? 'composer-input' : 'field resize-y'"
+                    [class.composer-input-invalid]="isPrompt(field) && !!fieldError(field.name)"
                   ></textarea>
                   @if (fieldError(field.name); as message) {
                     <p

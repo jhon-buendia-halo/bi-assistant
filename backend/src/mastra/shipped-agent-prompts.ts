@@ -6,6 +6,10 @@ import {
 } from './workflows/answer-business-question.prompts';
 import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
 import {
+  MAP_DATA_INSTRUCTIONS,
+  READ_DASHBOARD_INSTRUCTIONS,
+} from './workflows/recreate-dashboard.prompts';
+import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
   EVAL_JUDGE_PROMPT,
@@ -32,6 +36,8 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'data-readiness': DATA_READINESS_PROMPT,
   'analysis-planner': PLAN_INSTRUCTIONS,
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
+  'dashboard-reader': READ_DASHBOARD_INSTRUCTIONS,
+  'data-mapper': MAP_DATA_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
 };
 

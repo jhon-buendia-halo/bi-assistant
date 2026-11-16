@@ -4,6 +4,7 @@ import {
   WorkflowDetailStep,
   WorkflowEdge,
 } from '../models/workflow.model';
+import { exitSentence } from '../../agents/services/workflow-flow';
 import { contractFields, passesOnText } from './workflow-contract';
 import { mainPath, workflowEdges } from './workflow-graph';
 
@@ -252,13 +253,8 @@ export interface CanvasBox {
   h: number;
 }
 
-const EXIT_TEXT = {
-  fails: 'fails',
-  stops: 'ends here',
-  waits: 'waits for you',
-} as const;
 /** Start's exit note (ui.md 4.4b): the input is checked before anything runs. */
-const START_EXIT_TEXT = 'Invalid input → not started';
+const START_EXIT_TEXT = 'Not started if the input is invalid';
 
 /** `1 field` / `<n> fields`, or '' for none. */
 export function fieldsLabel(count: number): string {
@@ -649,7 +645,7 @@ function exitStackHeight(step: WorkflowDetailStep): number {
 }
 
 function exitText(exit: WorkflowDetailStep['exits'][number]): string {
-  return `${exit.label} → ${EXIT_TEXT[exit.outcome]}`;
+  return exitSentence(exit);
 }
 
 /** Start or End: a square on the centre line, its label (and Start's exit note) under it. */

@@ -82,13 +82,13 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     expect(step('receive-question').exits).toEqual([]);
     // Analyse can ask a clarifying question: the run waits for the answer.
     expect(step('analyse').exits).toEqual([
-      { label: 'Model error', outcome: 'fails' },
-      { label: 'Stop', outcome: 'stops' },
-      { label: 'Clarifying question', outcome: 'waits' },
+      { label: 'the model returns an error', outcome: 'fails' },
+      { label: 'you stop it', outcome: 'stops' },
+      { label: 'if it asks you a question', outcome: 'waits' },
     ]);
     expect(step('plan').exits).toEqual([
-      { label: 'Model error', outcome: 'fails' },
-      { label: 'Stop', outcome: 'stops' },
+      { label: 'the model returns an error', outcome: 'fails' },
+      { label: 'you stop it', outcome: 'stops' },
     ]);
     expect(step('write-answer').output).toEqual([
       'headline',

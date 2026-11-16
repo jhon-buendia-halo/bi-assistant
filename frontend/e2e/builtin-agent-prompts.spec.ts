@@ -422,19 +422,19 @@ test(
     );
     await scenarioStep(
       page,
-      `And "Plan", "Analyse" and "Write answer" show "Model error → fails the turn" and "Stop → ends the turn here", "Check data quality" shows "Stop → ends the turn here", "Clarify" shows "Waits for an answer → waits for the user's answer", and "Analyse" also "Clarifying question → waits for the user's answer"`,
+      `And "Plan", "Analyse" and "Write answer" show "Fails the turn if the model returns an error" and "Ends the turn if you stop it", "Check data quality" shows "Ends the turn if you stop it", "Clarify" shows "Waits until you answer", and "Analyse" also "Waits if it asks you a question"`,
       async () => {
         // "Receive question" has no exit: its input is checked before the run.
         // Clarify pauses the run until the user answers.
-        const fails = 'Model error → fails the turn';
-        const stops = 'Stop → ends the turn here';
+        const fails = 'Fails the turn if the model returns an error';
+        const stops = 'Ends the turn if you stop it';
         await expect(page.getByTestId('workflow-step-exit')).toHaveText([
           fails,
           stops,
-          "Waits for an answer → waits for the user's answer",
+          "Waits until you answer",
           fails,
           stops,
-          "Clarifying question → waits for the user's answer",
+          "Waits if it asks you a question",
           stops,
           fails,
           stops,

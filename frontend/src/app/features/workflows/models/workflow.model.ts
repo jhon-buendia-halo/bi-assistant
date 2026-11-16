@@ -1,3 +1,4 @@
+import { ArtifactKind } from '../../artifacts/models/artifact.model';
 import { AgentWorkflow } from '../../agents/services/agents-api.service';
 import {
   ChatMessage,
@@ -17,7 +18,14 @@ export type WorkflowInputFieldType =
   /** One or more dataset names. */
   | 'datasets'
   /** Exactly one dataset name. */
-  | 'dataset';
+  | 'dataset'
+  /**
+   * One image (PNG, JPEG or WebP, at most 5 MB), sent as a `data:` URL; a
+   * stored run holds the path of the file instead.
+   */
+  | 'image'
+  /** One stored artifact, sent as its id. */
+  | 'artifact';
 
 /** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {
@@ -32,6 +40,13 @@ export interface WorkflowInputField {
   default?: string | number | boolean;
   /** 'dataset' / 'datasets': only datasets bound to these kinds. */
   datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
+  /** 'artifact': only artifacts of these kinds are offered. */
+  artifactKinds?: ArtifactKind[];
+  /**
+   * The name of another field: this field is required only while that other
+   * field has no value.
+   */
+  requiredWithout?: string;
   /** Set by the app, never rendered as a control. */
   hidden?: boolean;
   /**

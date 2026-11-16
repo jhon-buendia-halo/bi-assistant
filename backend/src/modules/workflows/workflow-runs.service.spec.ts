@@ -376,6 +376,8 @@ function build(
     repository,
     nodeChats,
     queryEvidence as unknown as QueryEvidenceService,
+    // No stored artifact: no workflow here takes one.
+    { list: () => Promise.resolve([]) } as never,
   );
   return {
     db,
@@ -395,6 +397,7 @@ function build(
         new WorkflowRunsRepository(new SqliteDocStore(db, 'workflow_runs')),
         nodeChats,
         queryEvidence as unknown as QueryEvidenceService,
+        { list: () => Promise.resolve([]) } as never,
       ),
     sessions,
     userAgents,

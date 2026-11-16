@@ -183,6 +183,9 @@ export function runInput(
       input[field.name] = value === true;
     } else if (field.type === 'datasets') {
       if (Array.isArray(value)) input[field.name] = [...value];
+    } else if (field.type === 'artifact' || field.type === 'image') {
+      // Picking one of the pair clears the other: an empty one sends nothing.
+      if (typeof value === 'string' && value !== '') input[field.name] = value;
     } else if (value !== undefined && !Array.isArray(value)) {
       input[field.name] = typeof value === 'string' ? value : String(value);
     }
@@ -222,6 +225,8 @@ export function runAgainValues(
   const values = initialInputValues(fields);
   for (const field of fields) {
     if (field.hidden || !Object.hasOwn(input, field.name)) continue;
+    // A stored run holds the image's path, not the image: it is picked again.
+    if (field.type === 'image') continue;
     const value = input[field.name];
     values[field.name] = Array.isArray(value)
       ? [...value]

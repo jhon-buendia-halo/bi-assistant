@@ -37,8 +37,8 @@ const code = (
 });
 
 const MODEL_EXITS: WorkflowDetailStep['exits'] = [
-  { label: 'Model error', outcome: 'fails' },
-  { label: 'Stop', outcome: 'stops' },
+  { label: 'the model returns an error', outcome: 'fails' },
+  { label: 'you stop it', outcome: 'stops' },
 ];
 
 const agentStep = (
@@ -137,7 +137,7 @@ const REAL_V2: WorkflowDetail = {
         maxSteps: analyse ? 15 : 1,
       },
       exits: analyse
-        ? [...MODEL_EXITS, { label: 'Clarifying question', outcome: 'stops' }]
+        ? [...MODEL_EXITS, { label: 'it asks you a question', outcome: 'stops' }]
         : MODEL_EXITS,
     };
   }),
@@ -151,12 +151,12 @@ const REAL_V2_CLARIFY_LOOP: WorkflowDetail = {
   ...REAL_V2,
   steps: REAL_V2.steps.map((step): WorkflowDetailStep => {
     if (step.id === 'clarify') {
-      return { ...step, exits: [{ label: 'Waits for an answer', outcome: 'waits' }] };
+      return { ...step, exits: [{ label: 'until you answer', outcome: 'waits' }] };
     }
     if (step.id === 'analyse') {
       return {
         ...step,
-        exits: [...MODEL_EXITS, { label: 'Clarifying question', outcome: 'waits' }],
+        exits: [...MODEL_EXITS, { label: 'if it asks you a question', outcome: 'waits' }],
       };
     }
     return step;
@@ -258,7 +258,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
       agents: [],
       steps: [
         code('a', ['text'], ['text']),
-        code('b', ['text'], ['n'], [{ label: 'Too long', outcome: 'fails' }]),
+        code('b', ['text'], ['n'], [{ label: 'it is too long', outcome: 'fails' }]),
         code('c', ['n'], ['result']),
       ],
     });
@@ -280,7 +280,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     // Start's left edge (Start is the first column).
     expect(layout.nodes[0].exits).toEqual([
       {
-        text: 'Invalid input → not started',
+        text: 'Not started if the input is invalid',
         outcome: 'fails',
         x: 40,
         // Right under Start's 41 px label.
@@ -293,7 +293,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     // A code step's exit sits right under its label, centred on the node.
     expect(layout.nodes[2].exits).toEqual([
       {
-        text: 'Too long → fails',
+        text: 'Fails if it is too long',
         outcome: 'fails',
         x: 390 + 44,
         y: 40 + 88 + 41 + 4,
@@ -327,7 +327,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
     expect(analyse.agent).toEqual({ name: 'Michael', role: 'Insights Analyst' });
     expect(analyse.exits).toEqual([
       {
-        text: 'Model error → fails',
+        text: 'Fails if the model returns an error',
         outcome: 'fails',
         x: 693,
         y: cy - 44 - 12 - 32,
@@ -336,7 +336,7 @@ describe('workflowCanvasLayout (ui.md 4.4b)', () => {
         lines: 1,
       },
       {
-        text: 'Stop → ends here',
+        text: 'Ends if you stop it',
         outcome: 'stops',
         x: 693,
         y: cy - 44 - 12 - 16,
@@ -754,23 +754,23 @@ describe('Insights Analyst as the API returns it (roomy canvas)', () => {
       expect(clarify.labelHeight).toBe(41);
       expect(clarify.exits).toEqual([
         {
-          text: 'Waits for an answer → waits for you',
+          text: 'Waits until you answer',
           outcome: 'waits',
           x: clarify.x + 44,
           y: clarify.y + 88 + 41 + 4,
           align: 'center',
           width: 150,
-          lines: 2,
+          lines: 1,
         },
       ]);
-      expect(layout.height).toBe(clarify.y + 88 + 41 + 4 + 2 * 16 + 40);
+      expect(layout.height).toBe(clarify.y + 88 + 41 + 4 + 1 * 16 + 40);
     });
 
     it("Analyse's clarifying question waits for the user, on one row", () => {
       expect(node('analyse').exits.map((e) => [e.text, e.outcome, e.lines])).toEqual([
-        ['Model error → fails', 'fails', 1],
-        ['Stop → ends here', 'stops', 1],
-        ['Clarifying question → waits for you', 'waits', 1],
+        ['Fails if the model returns an error', 'fails', 1],
+        ['Ends if you stop it', 'stops', 1],
+        ['Waits if it asks you a question', 'waits', 1],
       ]);
     });
 

@@ -452,7 +452,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 #### 34. `GET /agents/:key`
 - Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant, insights-analyst and data-readiness only; false for the System agents */; updatedAt: string | null /* the override's */ } /* built-in agents only */; workflow?: AgentWorkflow /* workflow-backed built-in agents only (today insights-analyst) */; usedInWorkflows: { id: string; name: string }[] /* always present */ }`.
 - `usedInWorkflows` lists the workflows whose steps call the agent ([agents.md](agents.md) 5.12): `insights-analyst`, `analysis-planner` and `answer-writer` → `[{ id: 'answer-business-question', name: 'Answer a Business Question' }]`; `data-readiness` → `[{ id: 'answer-business-question', name: 'Answer a Business Question' }, { id: 'data-readiness-assessment', name: 'Assess Data Readiness' }]` (since 2026-11-13: Check data quality and Explain report); every other agent (the assistant, every user agent, the other System agents) → `[]`. Agents are a library, not workflows (ADR-0042).
-- `AgentWorkflow = { id: string; steps: { id: string; title: string; kind: 'code' | 'agent'; summary: string; input: string[]; output: string[]; agent?: { key: string; name: string; role: string; tools: string[]; maxSteps: number } /* agent steps only; `key` is the registry key of the step's own agent, `name` and `role` its persona (agents.md 1.1) */; exits: { label: string; outcome: 'fails' | 'stops' }[] }[] }`. The steps are in catalogue order (how they connect is 117's `edges`), and it is built from the workflow's step catalogue ([agents.md](agents.md) 5.11): for v2, `id` is `answer-business-question`, its nine steps are Receive question, Load catalog, Plan, Clarify, Analyse, Validate, Check data quality, Write answer and Wrap up, and its four agent steps each name their own agent and its persona: Plan `analysis-planner`, `Olivia` (`role` `Analysis Lead`); Analyse `insights-analyst`, `Michael` (`role` `Insights Analyst`) with its five tools (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`) and `maxSteps` 15; Write answer `answer-writer`, `Jessica` (`role` `Insights Writer`). Plan and Write answer have no tools and `maxSteps` 1 (one model call). Analyse's `exits` are `Model error` (`fails`), `Stop` (`stops`) and `Clarifying question` (`stops`); Plan's and Write answer's `Model error` and `Stop`. It is read-only and never stored ([agents-evals](../capabilities/agents-evals/spec.md) R108).
+- `AgentWorkflow = { id: string; steps: { id: string; title: string; kind: 'code' | 'agent'; summary: string; input: string[]; output: string[]; agent?: { key: string; name: string; role: string; tools: string[]; maxSteps: number } /* agent steps only; `key` is the registry key of the step's own agent, `name` and `role` its persona (agents.md 1.1) */; exits: { label: string; outcome: 'fails' | 'stops' }[] }[] }`. The steps are in catalogue order (how they connect is 117's `edges`), and it is built from the workflow's step catalogue ([agents.md](agents.md) 5.11): for v2, `id` is `answer-business-question`, its nine steps are Receive question, Load catalog, Plan, Clarify, Analyse, Validate, Check data quality, Write answer and Wrap up, and its four agent steps each name their own agent and its persona: Plan `analysis-planner`, `Olivia` (`role` `Analysis Lead`); Analyse `insights-analyst`, `Michael` (`role` `Insights Analyst`) with its five tools (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`) and `maxSteps` 15; Write answer `answer-writer`, `Jessica` (`role` `Insights Writer`). Plan and Write answer have no tools and `maxSteps` 1 (one model call). Analyse's `exits` are `the model returns an error` (`fails`), `you stop it` (`stops`) and `if it asks you a question` (`waits`); Plan's and Write answer's the first two. An exit's `label` is the rest of the sentence the app writes about it (`Fails if …`, `Ends if …`, `Waits …`; [ui.md](ui.md) 4.4b). It is read-only and never stored ([agents-evals](../capabilities/agents-evals/spec.md) R108).
 - For a built-in agent, `instructions` is the prompt as served, so it reflects an override (ADR-0026), and `prompt` carries the editable text, the shipped text and the override state ([data-model.md](data-model.md) 3.10.3). For the `assistant`, `editable` and `shipped` exclude the generated `## Tools` section ([agents.md](agents.md) 2.1).
 - A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
@@ -648,12 +648,16 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     type: 'text' | 'textarea' | 'number'
         | 'boolean'                   // a checkbox; absent means false (or `default`)
         | 'datasets'                  // one or more dataset names
-        | 'dataset';                  // exactly one dataset name
+        | 'dataset'                   // exactly one dataset name
+        | 'image'                     // one PNG, JPEG or WebP image of at most 5 MB, as a base64 `data:` URL (118's rules); a stored run holds the file's path instead
+        | 'artifact';                 // the id of one stored artifact (144)
     required: boolean;
     placeholder?: string;
     help?: string;                    // one line under the control
     default?: string | number | boolean;  // the value of a field that is missing or empty
     datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];  // 'dataset' / 'datasets': only datasets bound to these kinds
+    artifactKinds?: 'dashboard'[];    // 'artifact': only artifacts of these kinds
+    requiredWithout?: string;         // another field's name: this field is required only while that one has no value (118's rules)
     hidden?: boolean;                 // set by the app, never rendered as a control
     maxLength?: number;               // 'text' / 'textarea': the most characters of the trimmed text (118's rules)
     min?: number;                     // 'number': the smallest value
@@ -668,16 +672,20 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   |---|---|---|---|---|---|---|
   | `answer-business-question` | `Answer a Business Question` | code | `insights-analyst` | 9 | steps | none |
   | `data-readiness-assessment` | `Assess Data Readiness` | code | `data-readiness` | 6 | steps | the Data Readiness Agent's (its PostgreSQL and Databricks datasets) |
+  | `recreate-dashboard` | `Dashboard Image to Artifact` | code | `dashboard-reader` | 3 | steps | none |
+  | `map-dashboard-data` | `Map a Dashboard to Data` | code | `data-mapper` | 4 | steps | none |
 
 - Description, starter questions and missing datasets come from the agent's catalogue entry (33), except the description, which is the workflow's own; v2's starter questions are empty, as in its AgentSummary; Assess Data Readiness's are the Data Readiness Agent's three.
-- **Trigger and input:** both are run workflows: `trigger: 'run'` and an `input` they run on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
+- **Trigger and input:** all are run workflows: `trigger: 'run'` and an `input` they run on (118, 119; [workflows](../capabilities/workflows/spec.md) R14):
 
   | id | `input` (in order) |
   |---|---|
   | `answer-business-question` | `question` (`Question`, textarea, required, placeholder `Ask a question about your data`, `maxLength` 4000, `usedBy` `['receive-question']`); `datasets` (`Datasets`, datasets, required, `usedBy` `['receive-question']`); `checkDataQuality` (`Check data quality: Sarah reviews the tables the analysis used`, boolean, optional, `default` false, `usedBy` `[]`: it picks the branch to Check data quality, [agents.md](agents.md) 5.11) |
   | `data-readiness-assessment` | `dataset` (`Dataset`, dataset, required, `datasourceKinds` `['postgres', 'databricks']`, `usedBy` `['resolve-dataset']`); `question` (`Question`, textarea, optional, placeholder and default `Assess the readiness of this dataset`, `maxLength` 4000, `usedBy` `['resolve-dataset']`) |
+  | `recreate-dashboard` | `image` (`Dashboard image`, image, required, `help` `A PNG, JPEG or WebP screenshot of the dashboard, up to 5 MB.`, `usedBy` `['load-image']`); `question` (`Instructions`, textarea, optional, placeholder and default `Recreate this dashboard as an interactive mock`, `maxLength` 4000, `usedBy` `['load-image']`) |
+  | `map-dashboard-data` | `artifact` (`Saved dashboard`, artifact, required, `artifactKinds` `['dashboard']`, `help` `A dashboard saved in Artifacts by Dashboard Image to Artifact.`, `usedBy` `['load-dashboard']`); `datasets` (`Datasets`, datasets, required, `help` `The data the dashboard is mapped to.`, `usedBy` `['load-dashboard']`); `question` (`Instructions`, textarea, optional, placeholder and default `Map this dashboard to the datasets`, `maxLength` 4000, `usedBy` `['load-dashboard']`) |
 
-- **Order:** `answer-business-question`, then `data-readiness-assessment`. No agent (System, Official or user) is listed.
+- **Order:** `answer-business-question`, `data-readiness-assessment`, `recreate-dashboard`, then `map-dashboard-data`. No agent (System, Official or user) is listed.
 
 #### 117. `GET /workflows/:id`
 - Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[]; edges: WorkflowEdge[]; contractHash: string }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
@@ -748,6 +756,10 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
   };
   ```
   Field errors (`field` = the field's name): `"<label> is required"` for a required field that is missing, `""` or whitespace-only (`"Question is required"`); `"Select at least one dataset"` for a required `datasets` field with none; `"<label> must be a number"`; `"<label> must be at least <min>"` / `"<label> must be at most <max>"` for a number outside `min` / `max`; `"<label> must be at most <maxLength> characters"` for a text whose trimmed length is over `maxLength` (`"Question must be at most 4000 characters"`); `"<label> must be true or false"`; `"Dataset \"<name>\" not found"`; `"Dataset \"<name>\" is not a <kinds> dataset"` (the field's `datasourceKinds` named, e.g. `PostgreSQL or Databricks`). Non-field errors (`field: null`): `"Run \"<id>\" not found"` for a `context.fromRunId` that names no stored run, and `"Run \"<id>\" has no answer to continue from"` for a stored run without a question and answer, listed after the field errors; `"Workflow \"<id>\" can't run on an input"` alone, for a workflow with no input fields. Example: `{ input: { question: "  ", datasets: [] } }` answers `{ statusCode: 400, error: "Bad Request", message: "Question is required", errors: [{ field: "question", message: "Question is required" }, { field: "datasets", message: "Select at least one dataset" }] }`. `404 "Workflow \"<id>\" not found"` for any id 116 does not list (plain Style B, no `errors`).
+  An `image` field: `"<label> must be a PNG, JPEG or WebP image"` when the value is not a base64 `data:` URL of one of those types or its bytes do not start as a file of that type does, and `"<label> must be at most 5 MB"` over 5 MB (5 × 1024 × 1024 bytes, decoded).
+  An `artifact` field: `"Artifact \"<id>\" not found"` when no stored artifact of the field's `artifactKinds` has that id.
+  Two fields that name each other in `requiredWithout`: when neither has a value, one error on the first of the two in field order, `"<label> or <other label> is required"` (no catalogued workflow uses the rule since the two dashboard workflows were split); a value that was refused for another reason is not also reported as missing. When both have a value, an `image` field's value is dropped: the run uses the other one.
+- **An image is not stored in the run.** For each `image` field the checked `data:` URL is taken out: the stored run's `input` holds the path `inputs/<field name>.<png|jpg|webp>` of the file in the run's workspace ([agents.md](agents.md) 5.17), and every response carries that path, never the image. With `context.fromRunId` naming a run of the same workflow, an `image` value equal to that run's stored path stands for that run's image (a follow-up runs on the same image); any other non-image value is refused as above.
 - A refused run is never stored and no step runs.
 - Side effects: the run is stored in `workflow_runs` ([data-model.md](data-model.md) 3.16) as `running` before it starts and updated when it ends, with its steps, output or error; an engine failure is stored as `failed` and answered as the error it is. A run is 119's, without the stream.
 
@@ -945,6 +957,46 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 - The checks of 142, before any header is written. Raises the statement's top-level `LIMIT` (or `FETCH FIRST n`) to 50 001, or appends `LIMIT 50001` when there is none (a trailing `;` or comment is dropped first), runs it with the row clamp raised to 50 001, and keeps 50 000 rows. A `sample_rows` record is sampled again at its size.
 - Response `200`: `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="query-<Q>-<first 8 of the run id>.csv"` (`<Q>` is the query's 1-based position in `evidence`), and `X-Rows-Cut: 50000` when more rows existed. Body: a header row of the columns, then one line per row, CRLF line ends, quoted per RFC 4180 (a field holding `"`, `,`, CR or LF is quoted, `"` doubled); `null` is empty, an object is its JSON.
 - Errors: as 142.
+
+### 2.6.4 Artifacts
+
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148 read, rename and delete them), and taken by Map a Dashboard to Data (5.18).
+
+```ts
+type ArtifactSummary = {
+  id: string;                       // uuid
+  kind: 'dashboard';
+  name: string;                     // 1 to 80 characters, trimmed
+  description: string;              // the blueprint's summary; may be ''
+  widgetCount: number;
+  filterCount: number;
+  hasImage: boolean;                // whether 146 answers the image the dashboard was read from
+  source?: { runId: string; workflowId: string };   // the run it was saved from
+  createdAt: string;                // ISO
+  updatedAt: string;                // ISO
+};
+type Artifact = ArtifactSummary & {
+  blueprint: DashboardBlueprint;    // the dashboard as data (agents.md 5.17)
+  document: string;                 // the dashboard drawn by the fixed runtime with no mapping: a self-contained HTML document for a sandboxed frame
+};
+```
+
+#### 144. `GET /artifacts`
+- Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending).
+
+#### 145. `GET /artifacts/:id`
+- Response `200`: `Artifact`. `404 "Artifact \"<id>\" not found"`.
+
+#### 146. `GET /artifacts/:id/image`
+- Response `200`: the bytes of the image the dashboard was read from, with its `Content-Type` (`image/png`, `image/jpeg` or `image/webp`) and `Cache-Control: private, max-age=3600`. `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no image"` when it was saved without one or the file is gone.
+
+#### 147. `PATCH /artifacts/:id`
+- Body: `{ name: string }` (trimmed).
+- Response `200`: `ArtifactSummary`. `400 "Name is required"`; `400 "Name must be at most 80 characters"`; `404 "Artifact \"<id>\" not found"`.
+
+#### 148. `DELETE /artifacts/:id`
+- Response `204`. `404 "Artifact \"<id>\" not found"`.
+- Side effects: the document and its image file are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output).
 
 ### 2.7 Deep analysis (removed 2026-11-12)
 
@@ -1674,7 +1726,7 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset deletes its own ontology items but leaves sessions that name it. Behaviour of such dangling references is not specified in the API.
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
 - **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for ontology, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
-- **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
+- **G9. Request body size.** The JSON body limit is 8 MB (`JSON_BODY_LIMIT`, `app-bootstrap.ts`; since 2026-11-15, so a run's 5 MB image fits as base64, 118), up from the framework default (about 100 kB); large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
 - **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication (G14); only the CLI binds `127.0.0.1` by default. Kept by the user's choice (ADR-0030).
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.
 - **G12. Spec of `PUT /metrics/:id` not-found** is thrown as a 400-class exception but surfaced inside the `ok:false` envelope, so clients cannot distinguish "not found" from validation by status.

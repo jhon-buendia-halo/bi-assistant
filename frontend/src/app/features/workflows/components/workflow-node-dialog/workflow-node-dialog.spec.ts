@@ -183,7 +183,7 @@ describe('WorkflowNodeDialog', () => {
     );
     expect(text('workflow-step-field-max-steps')).toBe('15');
     expect(text('workflow-step-field-exits')).toBe(
-      'Model error → fails · Stop → ends here',
+      'Fails if the model returns an error · Ends if you stop it',
     );
     // No declared schema (an older backend): the names, untyped.
     expect(fields('workflow-step-field-input')).toEqual([
@@ -265,10 +265,10 @@ describe('WorkflowNodeDialog', () => {
       ...receive,
       step: {
         ...receive.step!,
-        exits: [{ label: 'No catalog', outcome: 'fails' }],
+        exits: [{ label: 'there is no catalog', outcome: 'fails' }],
       },
     });
-    expect(text('workflow-step-field-exits')).toBe('No catalog → fails');
+    expect(text('workflow-step-field-exits')).toBe('Fails if there is no catalog');
   });
 
   it("lists an agent step's settings under its Config: status, duration and run id", () => {

@@ -66,13 +66,13 @@ function requestText(messages: unknown): string {
 }
 
 /** The text of a reply: the model's text, else its object as JSON. */
-function replyText(object: unknown, text: string | undefined): string {
+export function replyText(object: unknown, text: string | undefined): string {
   if (text?.trim()) return text;
   return object === undefined ? '' : JSON.stringify(object);
 }
 
 /** Hand the exchange to `onExchange` unless the turn stopped. */
-async function noteExchange(
+export async function noteExchange(
   options: StepModelOptions,
   request: string,
   reply: string,
@@ -82,7 +82,7 @@ async function noteExchange(
 }
 
 /** One model call, no tools, structured output by JSON prompt injection. */
-function callOptions(options: StepModelOptions) {
+export function callOptions(options: StepModelOptions) {
   return {
     maxSteps: 1,
     toolChoice: 'none' as const,
@@ -97,7 +97,7 @@ function callOptions(options: StepModelOptions) {
 }
 
 /** Whether a failure is the turn's own stop. */
-function stoppedBy(options: StepModelOptions): boolean {
+export function stoppedBy(options: StepModelOptions): boolean {
   return options.abortSignal?.aborted === true;
 }
 
