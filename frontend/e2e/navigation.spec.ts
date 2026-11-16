@@ -57,44 +57,68 @@ test('moves between areas from the rail', async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test(
-  'Opens the empty Monitoring page from the rail',
-  async ({ page }) => {
-    await scenarioStep(page, 'When I click "Monitoring" on the rail', async () => {
+test('Opens the empty Monitoring page from the rail', async ({ page }) => {
+  await scenarioStep(
+    page,
+    'When I click "Monitoring" on the rail',
+    async () => {
       await railItem(page, 'Monitoring').click();
-    });
-    await scenarioStep(
-      page,
-      'Then I see the "Monitoring" page with "No LLM calls yet." and "Monitoring" is the current rail item',
-      async () => {
-        await expect(
-          page.getByRole('heading', { name: 'Monitoring', exact: true }),
-        ).toBeVisible();
-        await expect(page.getByTestId('monitoring-note')).toHaveText(
-          "LLM calls made by the app's agents, newest first.",
-        );
-        await expect(page.getByTestId('llm-calls-empty')).toHaveText(
-          'No LLM calls yet.',
-        );
-        await expectCurrent(page, 'Monitoring');
-      },
-    );
-    await scenarioStep(page, 'When I click "Runs" on the rail', async () => {
-      await railItem(page, 'Runs').click();
-    });
-    await scenarioStep(
-      page,
-      'Then I see the Runs page and "Monitoring" is no longer the current rail item',
-      async () => {
-        await expect(sessionsList(page)).toBeVisible();
-        await expect(railItem(page, 'Monitoring')).not.toHaveAttribute(
-          'aria-current',
-        );
-        await expect(page.getByTestId('monitoring-page')).toHaveCount(0);
-      },
-    );
-  },
-);
+    },
+  );
+  await scenarioStep(
+    page,
+    'Then I see the "Monitoring" page with "No LLM calls yet." and "Monitoring" is the current rail item',
+    async () => {
+      await expect(
+        page.getByRole('heading', { name: 'Monitoring', exact: true }),
+      ).toBeVisible();
+      await expect(page.getByTestId('monitoring-note')).toHaveText(
+        "LLM calls made by the app's agents, newest first.",
+      );
+      await expect(page.getByTestId('llm-calls-empty')).toHaveText(
+        'No LLM calls yet.',
+      );
+      await expectCurrent(page, 'Monitoring');
+    },
+  );
+  await scenarioStep(page, 'When I click "Runs" on the rail', async () => {
+    await railItem(page, 'Runs').click();
+  });
+  await scenarioStep(
+    page,
+    'Then I see the Runs page and "Monitoring" is no longer the current rail item',
+    async () => {
+      await expect(sessionsList(page)).toBeVisible();
+      await expect(railItem(page, 'Monitoring')).not.toHaveAttribute(
+        'aria-current',
+      );
+      await expect(page.getByTestId('monitoring-page')).toHaveCount(0);
+    },
+  );
+});
+
+test('Opens the empty Dashboard from the rail', async ({ page }) => {
+  await scenarioStep(page, 'When I click "Dashboard" on the rail', async () => {
+    await railItem(page, 'Dashboard').click();
+  });
+  await scenarioStep(
+    page,
+    'Then I see the "Dashboard" page with $0.00 today and this month, the monthly chart and "No LLM calls in this period."',
+    async () => {
+      await expect(
+        page.getByRole('heading', { name: 'Dashboard', exact: true }),
+      ).toBeVisible();
+      await expectCurrent(page, 'Dashboard');
+      await expect(page.getByTestId('kpi-today')).toContainText('$0.00');
+      await expect(page.getByTestId('kpi-month')).toContainText('$0.00');
+      await expect(page.getByTestId('dashboard-empty')).toHaveText(
+        'No LLM calls in this period.',
+      );
+      await expect(page.getByTestId('dashboard-monthly-chart')).toBeVisible();
+      await expect(page.getByTestId('dashboard-period')).toHaveValue('30d');
+    },
+  );
+});
 
 test('the start page explains how the product works', async ({ page }) => {
   await expect(
@@ -145,9 +169,13 @@ test(
   'Chats can no longer be started: home points to workflows, and nothing offers a chat',
   { tag: ['@demo', '@story-1.23.22'] },
   async ({ page }) => {
-    await scenarioStep(page, 'Given I open the app on its home page', async () => {
-      await expect(page.getByTestId('welcome')).toBeVisible();
-    });
+    await scenarioStep(
+      page,
+      'Given I open the app on its home page',
+      async () => {
+        await expect(page.getByTestId('welcome')).toBeVisible();
+      },
+    );
     await scenarioStep(page, 'Then home shows "Run a workflow"', async () => {
       await expect(page.getByTestId('welcome-step-2')).toContainText(
         'Run a workflow',
@@ -270,6 +298,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
     'Datasets',
     'Agents',
     'Runs',
+    'Dashboard',
     'Monitoring',
   ]) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
@@ -337,7 +366,9 @@ test('shows the product name', async ({ page }) => {
   );
   await expect(page.getByTestId('header-area')).toHaveCount(0);
   await expect(page).toHaveTitle('Halo Powered');
-  await expect(rail(page).getByRole('img', { name: 'Halo Powered' })).toBeVisible();
+  await expect(
+    rail(page).getByRole('img', { name: 'Halo Powered' }),
+  ).toBeVisible();
 
   await railItem(page, 'Settings').click();
   await expect(page.getByTestId('header-area')).toHaveText('Settings');

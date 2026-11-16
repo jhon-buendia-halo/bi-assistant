@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { LlmCallStatus } from '../entities/llm-call.entity';
+import type { UsageCallRecord } from '../usage-summary';
 
 /**
  * The query surface of the trace store's DuckDB connection
@@ -274,6 +275,21 @@ SELECT COUNT(*) AS n FROM calls ${where.sql}`,
       where.params,
     );
     return Number(rows[0]?.n ?? 0);
+  }
+
+  /**
+   * What the Dashboard sums of every call started at or after `since` (all
+   * calls when null): start, agent, thread, model and tokens.
+   */
+  usageRows(since: Date | null): Promise<UsageCallRecord[]> {
+    const where = whereClause(since ? { from: since } : {});
+    return this.db.query<UsageCallRecord>(
+      `${CALLS_CTE}
+SELECT startedAt, agentId, agentName, sessionId, model, provider,
+       inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens
+  FROM calls ${where.sql}`,
+      where.params,
+    );
   }
 
   /** The distinct agents, models, providers and sessions of all calls. */

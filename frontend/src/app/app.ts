@@ -11,6 +11,7 @@ import {
   LucideAngularModule,
   LucideIconData,
   Activity,
+  LayoutDashboard,
   Bot,
   FlaskConical,
   FolderKanban,
@@ -34,6 +35,7 @@ import { DatasetSelectionService } from './features/datasets/services/dataset-se
 import { DatasetsArea } from './features/datasets/components/datasets-area/datasets-area';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { Welcome } from './features/home/components/welcome/welcome';
+import { DashboardArea } from './features/dashboard/components/dashboard-area/dashboard-area';
 import { MonitoringArea } from './features/monitoring/components/monitoring-area/monitoring-area';
 import { SessionsArea } from './features/sessions/components/sessions-area/sessions-area';
 import { SessionsHeader } from './features/sessions/components/sessions-header/sessions-header';
@@ -77,6 +79,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AgentsArea,
     SessionsArea,
     SessionsHeader,
+    DashboardArea,
     MonitoringArea,
     SessionsPanel,
     AgentTryIt,
@@ -117,6 +120,7 @@ export class App {
     { area: 'workflows', label: 'Workflows', icon: Workflow },
     { area: 'agents', label: 'Agents', icon: Bot },
     { area: 'runs', label: 'Runs', icon: FolderKanban },
+    { area: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { area: 'monitoring', label: 'Monitoring', icon: Activity },
   ];
 
@@ -141,7 +145,8 @@ export class App {
   constructor() {
     // Selecting a datasource element reveals its details in the right panel.
     effect(() => {
-      if (this.datasetSelection.selection()) this.shell.rightPanelOpen.set(true);
+      if (this.datasetSelection.selection())
+        this.shell.rightPanelOpen.set(true);
     });
     // Selecting an eval question reveals how it ran (R10).
     effect(() => {

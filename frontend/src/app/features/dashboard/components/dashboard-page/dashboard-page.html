@@ -1,0 +1,453 @@
+<div class="@container flex flex-col gap-4" data-testid="dashboard-content">
+  <!-- Period and the price-table note -->
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <p class="max-w-[640px] text-[13px] text-fg-muted">
+      Estimated LLM cost of the app's agents, in USD, from the same price table
+      as Monitoring. Days and months follow this computer's time zone.
+    </p>
+    <label class="flex w-44 flex-col gap-1">
+      <span class="field-label">Period</span>
+      <select
+        data-testid="dashboard-period"
+        class="field"
+        (change)="onPeriod($event)"
+      >
+        @for (p of periods; track p.value) {
+          <option
+            [value]="p.value"
+            class="bg-surface"
+            [selected]="period() === p.value"
+          >
+            {{ p.label }}
+          </option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (error(); as err) {
+    <p
+      data-testid="dashboard-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  }
+
+  @if (summary(); as s) {
+    <div
+      class="flex flex-col gap-4"
+      [class.opacity-60]="loading()"
+      [attr.aria-busy]="loading()"
+    >
+      <!-- KPI tiles -->
+      <div class="grid grid-cols-2 gap-3 @3xl:grid-cols-4">
+        <div class="card flex flex-col gap-1 px-4 py-3" data-testid="kpi-today">
+          <span class="text-[12px] text-fg-muted">Today</span>
+          <span
+            class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
+            >{{ formatUsd(s.today.costUsd) }}</span
+          >
+          <span class="text-[12px] text-fg-muted">{{
+            callsText(s.today.calls)
+          }}</span>
+        </div>
+        <div class="card flex flex-col gap-1 px-4 py-3" data-testid="kpi-month">
+          <span class="text-[12px] text-fg-muted">This month</span>
+          <span
+            class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
+            >{{ formatUsd(s.thisMonth.costUsd) }}</span
+          >
+          <span class="text-[12px] text-fg-muted">{{
+            callsText(s.thisMonth.calls)
+          }}</span>
+        </div>
+        <div
+          class="card flex flex-col gap-1 px-4 py-3"
+          data-testid="kpi-period"
+        >
+          <span class="text-[12px] text-fg-muted">{{ periodLabel() }}</span>
+          <span
+            class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
+            >{{ formatUsd(s.totals.costUsd) }}</span
+          >
+          <span class="text-[12px] text-fg-muted">{{
+            callsText(s.totals.calls)
+          }}</span>
+        </div>
+        <div
+          class="card flex flex-col gap-1 px-4 py-3"
+          data-testid="kpi-tokens"
+        >
+          <span class="text-[12px] text-fg-muted"
+            >Tokens · {{ periodLabel() }}</span
+          >
+          <span
+            class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
+            >{{
+              formatCompact(s.totals.inputTokens + s.totals.outputTokens)
+            }}</span
+          >
+          <span class="text-[12px] text-fg-muted tabular-nums">
+            {{ formatCompact(s.totals.inputTokens) }} in ·
+            {{ formatCompact(s.totals.outputTokens) }} out
+          </span>
+        </div>
+      </div>
+
+      @if (unpricedCalls() > 0) {
+        <p data-testid="dashboard-unpriced" class="text-[12px] text-fg-muted">
+          {{ callsText(unpricedCalls()) }} in this period use a model with no
+          price or with unknown tokens; they count as calls but add no cost.
+        </p>
+      }
+
+      @if (s.totals.calls === 0) {
+        <div
+          data-testid="dashboard-empty"
+          class="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-6 py-8"
+        >
+          <span
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
+          >
+            <lucide-angular [img]="ChartColumnIncreasing" [size]="17" />
+          </span>
+          <p class="text-[13px] text-fg">No LLM calls in this period.</p>
+        </div>
+      } @else {
+        <!-- Daily cost -->
+        <section
+          class="card flex flex-col gap-3 px-4 py-3"
+          data-testid="dashboard-daily"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-[14px] font-medium text-fg-strong">Daily cost</h3>
+            <button
+              type="button"
+              class="btn btn-ghost px-2 py-1 text-[12px]"
+              data-testid="dashboard-daily-toggle"
+              [attr.aria-pressed]="showDailyTable()"
+              (click)="showDailyTable.set(!showDailyTable())"
+            >
+              {{ showDailyTable() ? "Show chart" : "Show table" }}
+            </button>
+          </div>
+          @if (showDailyTable()) {
+            <ng-container
+              *ngTemplateOutlet="
+                barTable;
+                context: { $implicit: daily().bars, first: 'Day' }
+              "
+            />
+          } @else {
+            <ng-container
+              *ngTemplateOutlet="
+                columnChart;
+                context: {
+                  $implicit: daily(),
+                  chart: 'daily',
+                  ticks: dailyTicks(),
+                  label: 'Daily cost, ' + periodLabel(),
+                }
+              "
+            />
+          }
+        </section>
+      }
+
+      <!-- Monthly cost: the 12 months ending with this one, whatever the period -->
+      <section
+        class="card flex flex-col gap-3 px-4 py-3"
+        data-testid="dashboard-monthly"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-[14px] font-medium text-fg-strong">
+            Monthly cost
+            <span class="font-normal text-fg-muted">· last 12 months</span>
+          </h3>
+          <button
+            type="button"
+            class="btn btn-ghost px-2 py-1 text-[12px]"
+            data-testid="dashboard-monthly-toggle"
+            [attr.aria-pressed]="showMonthlyTable()"
+            (click)="showMonthlyTable.set(!showMonthlyTable())"
+          >
+            {{ showMonthlyTable() ? "Show chart" : "Show table" }}
+          </button>
+        </div>
+        @if (showMonthlyTable()) {
+          <ng-container
+            *ngTemplateOutlet="
+              barTable;
+              context: { $implicit: monthly().bars, first: 'Month' }
+            "
+          />
+        } @else {
+          <ng-container
+            *ngTemplateOutlet="
+              columnChart;
+              context: {
+                $implicit: monthly(),
+                chart: 'monthly',
+                ticks: null,
+                label: 'Monthly cost, last 12 months',
+              }
+            "
+          />
+        }
+      </section>
+
+      @if (s.totals.calls > 0) {
+        <!-- Rankings over the period -->
+        <div class="grid grid-cols-1 gap-3 @4xl:grid-cols-3">
+          <ng-container
+            *ngTemplateOutlet="
+              rankCard;
+              context: { $implicit: byModel(), title: 'By model', id: 'model' }
+            "
+          />
+          <ng-container
+            *ngTemplateOutlet="
+              rankCard;
+              context: {
+                $implicit: byWorkflow(),
+                title: 'By workflow',
+                id: 'workflow',
+              }
+            "
+          />
+          <ng-container
+            *ngTemplateOutlet="
+              rankCard;
+              context: { $implicit: byAgent(), title: 'By agent', id: 'agent' }
+            "
+          />
+        </div>
+      }
+    </div>
+  } @else if (loading()) {
+    <div
+      class="mt-6 flex items-center gap-2.5 text-fg-muted"
+      data-testid="dashboard-loading"
+    >
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading usage…</span>
+    </div>
+  }
+</div>
+
+<!-- A single-series column chart with a hover tooltip per bar -->
+<ng-template
+  #columnChart
+  let-data
+  let-chart="chart"
+  let-ticks="ticks"
+  let-label="label"
+>
+  <div class="flex gap-2">
+    <!-- Y axis: 0, half and the scale ceiling -->
+    <div
+      class="flex h-40 w-14 shrink-0 flex-col justify-between text-right text-[11px] text-fg-muted tabular-nums"
+      aria-hidden="true"
+    >
+      <span class="-translate-y-1/2">{{ formatUsd(data.scale) }}</span>
+      <span>{{ formatUsd(data.scale / 2) }}</span>
+      <span class="translate-y-1/2">$0</span>
+    </div>
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <div
+        class="relative h-40 border-b border-border-strong"
+        role="img"
+        [attr.aria-label]="label"
+        [attr.data-testid]="'dashboard-' + chart + '-chart'"
+      >
+        <!-- Recessive grid lines -->
+        <div
+          class="pointer-events-none absolute inset-x-0 top-0 border-t border-dashed border-border"
+        ></div>
+        <div
+          class="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-border"
+        ></div>
+        <div
+          class="absolute inset-0 flex items-end"
+          [class.gap-[2px]]="data.bars.length <= 60"
+          [class.gap-px]="data.bars.length > 60"
+        >
+          @for (
+            bar of data.bars;
+            track bar.key;
+            let i = $index;
+            let n = $count
+          ) {
+            <div
+              class="relative flex h-full min-w-0 flex-1 items-end"
+              [attr.data-testid]="'dashboard-' + chart + '-bar-' + bar.key"
+              (mouseenter)="hovered.set(chart + ':' + bar.key)"
+              (mouseleave)="hovered.set(null)"
+            >
+              <div
+                class="w-full rounded-t-[4px] bg-primary transition-colors"
+                [class.bg-primary-hover]="hovered() === chart + ':' + bar.key"
+                [style.height.%]="bar.height"
+                [style.min-height.px]="bar.costUsd > 0 ? 2 : 0"
+              ></div>
+              @if (hovered() === chart + ":" + bar.key) {
+                <div
+                  role="tooltip"
+                  class="card pointer-events-none absolute bottom-full z-10 mb-1 px-2.5 py-1.5 text-[12px] whitespace-nowrap text-fg"
+                  [class.left-0]="i < n / 4"
+                  [class.right-0]="i >= (n * 3) / 4"
+                  [class.left-1/2]="i >= n / 4 && i < (n * 3) / 4"
+                  [class.-translate-x-1/2]="i >= n / 4 && i < (n * 3) / 4"
+                >
+                  <div class="font-medium text-fg-strong">{{ bar.label }}</div>
+                  <div class="tabular-nums">
+                    {{ formatUsd(bar.costUsd) }} · {{ callsText(bar.calls) }}
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+      <!-- X axis -->
+      @if (ticks) {
+        <div
+          class="flex justify-between text-[11px] text-fg-muted"
+          aria-hidden="true"
+        >
+          @for (tick of ticks; track $index) {
+            <span>{{ tick }}</span>
+          }
+        </div>
+      } @else {
+        <div
+          class="flex gap-[2px] text-[11px] text-fg-muted"
+          aria-hidden="true"
+        >
+          @for (bar of data.bars; track bar.key) {
+            <span class="min-w-0 flex-1 truncate text-center">{{
+              bar.axisLabel
+            }}</span>
+          }
+        </div>
+      }
+    </div>
+  </div>
+</ng-template>
+
+<!-- The chart's data as a table -->
+<ng-template #barTable let-bars let-first="first">
+  <div class="max-h-72 overflow-y-auto">
+    <table class="w-full border-collapse text-left text-[12px]">
+      <thead>
+        <tr class="border-b border-border bg-surface-muted text-fg-muted">
+          <th scope="col" class="px-3 py-2 font-medium">{{ first }}</th>
+          <th scope="col" class="px-3 py-2 text-right font-medium">Cost</th>
+          <th scope="col" class="px-3 py-2 text-right font-medium">Calls</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (bar of bars; track bar.key) {
+          <tr class="border-b border-border text-fg last:border-b-0">
+            <td class="px-3 py-1.5">{{ bar.label }}</td>
+            <td class="px-3 py-1.5 text-right tabular-nums">
+              {{ formatUsd(bar.costUsd) }}
+            </td>
+            <td class="px-3 py-1.5 text-right tabular-nums">
+              {{ formatCount(bar.calls) }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>
+
+<!-- A ranking by cost; a model or an agent opens Monitoring filtered to it -->
+<ng-template #rankCard let-rows let-title="title" let-id="id">
+  <section
+    class="card flex min-w-0 flex-col gap-2 px-4 py-3"
+    [attr.data-testid]="'dashboard-by-' + id"
+  >
+    <h3 class="text-[14px] font-medium text-fg-strong">
+      {{ title }}
+      <span class="font-normal text-fg-muted">· {{ periodLabel() }}</span>
+    </h3>
+    <ul class="flex flex-col">
+      @for (row of rows; track row.key) {
+        <li>
+          @if (row.filter) {
+            <button
+              type="button"
+              class="group flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+              [attr.data-testid]="'dashboard-' + id + '-row'"
+              [attr.aria-label]="
+                'Open the LLM calls of ' +
+                row.name +
+                ' in Monitoring: ' +
+                formatUsd(row.costUsd) +
+                ', ' +
+                callsText(row.calls)
+              "
+              (click)="openInMonitoring(row)"
+            >
+              <ng-container
+                *ngTemplateOutlet="
+                  rankBody;
+                  context: { $implicit: row, link: true }
+                "
+              />
+            </button>
+          } @else {
+            <div
+              class="flex flex-col gap-1 px-2 py-1.5"
+              [attr.data-testid]="'dashboard-' + id + '-row'"
+            >
+              <ng-container
+                *ngTemplateOutlet="
+                  rankBody;
+                  context: { $implicit: row, link: false }
+                "
+              />
+            </div>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+</ng-template>
+
+<ng-template #rankBody let-row let-link="link">
+  <div class="flex items-baseline justify-between gap-2 text-[12px]">
+    <span class="min-w-0 truncate text-fg" [title]="row.name">
+      {{ row.name }}
+      @if (row.detail) {
+        <span class="text-[11px] text-fg-muted">· {{ row.detail }}</span>
+      }
+    </span>
+    <span class="flex shrink-0 items-center gap-1 tabular-nums text-fg-strong">
+      {{ row.unpriced ? "No price" : formatUsd(row.costUsd) }}
+      @if (link) {
+        <lucide-angular
+          [img]="ChevronRight"
+          [size]="12"
+          class="text-fg-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+        />
+      }
+    </span>
+  </div>
+  <div class="flex items-center gap-2">
+    <div class="h-1.5 min-w-0 flex-1 rounded-full bg-surface-muted">
+      <div
+        class="h-full rounded-full bg-primary"
+        [style.width.%]="row.width"
+      ></div>
+    </div>
+    <span
+      class="w-20 shrink-0 text-right text-[11px] text-fg-muted tabular-nums"
+      >{{ callsText(row.calls) }}</span
+    >
+  </div>
+</ng-template>

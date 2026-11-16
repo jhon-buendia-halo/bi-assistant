@@ -2,6 +2,8 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { MonitoringService } from './monitoring.service';
 import type { LlmCallsQuery } from './dto/llm-calls-query';
 import type { SessionsQuery } from './dto/sessions-query';
+import type { UsageQuery } from './dto/usage-query';
+import type { UsageSummary } from './entities/usage.entity';
 import type { LlmCallDetail, LlmCallsPage } from './entities/llm-call.entity';
 import type {
   SessionDetail,
@@ -16,6 +18,11 @@ export class MonitoringController {
   @Get('llm-calls')
   async listCalls(@Query() query: LlmCallsQuery): Promise<LlmCallsPage> {
     return this.monitoring.listCalls(query);
+  }
+
+  @Get('usage')
+  async getUsage(@Query() query: UsageQuery): Promise<UsageSummary> {
+    return this.monitoring.getUsage(query);
   }
 
   @Get('llm-calls/:id')
