@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-766  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-797  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -344,20 +344,26 @@ roadmap.md:744-748  #### 1.29.5 — image-reader border-case evals  `✅ Done`
 roadmap.md:750-754  #### 1.29.6 — insights-analyst and result-explorer evals on Edge Cases  `✅ Done`
 roadmap.md:756-760  #### 1.29.7 — Explain report evals inside Assess Data Readiness  `✅ Done`
 roadmap.md:762-766  #### 1.29.8 — Baseline, inconsistency report and fixes  `✅ Done`
-roadmap.md:768-772  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:772-772  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:774-776  ## Backlog
+roadmap.md:768-797  ### Milestone 1.30 — Consumption Gap Analysis: does the medallion's Consumption layer support the business? (M1-30)
+roadmap.md:772-776  #### 1.30.1 — World Cup Medallion sample  `🚧 In progress`
+roadmap.md:778-781  #### 1.30.2 — Lineage inference and gap tracing  `🚧 In progress`
+roadmap.md:783-786  #### 1.30.3 — Requirements Analyst, Layer Mapper and Gap Advisor  `🚧 In progress`
+roadmap.md:788-791  #### 1.30.4 — The gap report  `🚧 In progress`
+roadmap.md:793-797  #### 1.30.5 — The Consumption Gap Analysis workflow  `🚧 In progress`
+roadmap.md:799-803  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:803-803  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:805-807  ## Backlog
 
-specs/README.md:7-91  ## Layout
+specs/README.md:7-92  ## Layout
 specs/README.md:28-52  ### Capabilities
-specs/README.md:54-91  ### Epics
-specs/README.md:93-97  ## Stack neutrality
-specs/README.md:99-108  ## Data assets
-specs/README.md:110-171  ## Formats
-specs/README.md:112-146  ### Capability spec — `capabilities/<capability>/spec.md`
-specs/README.md:148-171  ### Epic spec — `epics/<EPIC-ID>/spec.md`
-specs/README.md:173-177  ## Lifecycle
-specs/README.md:179-185  ## Rebuild prompt
+specs/README.md:54-92  ### Epics
+specs/README.md:94-98  ## Stack neutrality
+specs/README.md:100-109  ## Data assets
+specs/README.md:111-172  ## Formats
+specs/README.md:113-147  ### Capability spec — `capabilities/<capability>/spec.md`
+specs/README.md:149-172  ### Epic spec — `epics/<EPIC-ID>/spec.md`
+specs/README.md:174-178  ## Lifecycle
+specs/README.md:180-186  ## Rebuild prompt
 
 specs/capabilities/agent-answers/spec.md:7-9  ## Concepts
 specs/capabilities/agent-answers/spec.md:11-217  ## Rules
@@ -1740,6 +1746,14 @@ specs/epics/M1-29/spec.md:17-28  ## Stories
 specs/epics/M1-29/spec.md:30-32  ## Specs touched
 specs/epics/M1-29/spec.md:34-36  ## Acceptance
 specs/epics/M1-29/spec.md:38-42  ## Dependencies, risks and open questions
+
+specs/epics/M1-30/spec.md:5-7  ## Goal
+specs/epics/M1-30/spec.md:9-11  ## Scope
+specs/epics/M1-30/spec.md:13-15  ## Out of scope
+specs/epics/M1-30/spec.md:17-25  ## Stories
+specs/epics/M1-30/spec.md:27-29  ## Specs touched
+specs/epics/M1-30/spec.md:31-33  ## Acceptance
+specs/epics/M1-30/spec.md:35-38  ## Dependencies, risks and open questions
 
 specs/product/non-functional.md:5-19  ## 1. Platforms and delivery
 specs/product/non-functional.md:21-33  ## 2. Local-first data
