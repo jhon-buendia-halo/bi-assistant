@@ -125,8 +125,7 @@
       <div class="flex-1"></div>
 
       <div class="flex shrink-0 flex-col gap-1" [class.items-center]="!navExpanded()">
-        
-        
+        <app-background-tasks [expanded]="navExpanded()" />
         <button
           type="button"
           (click)="systemLogsOpen.set(true)"

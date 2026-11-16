@@ -52,6 +52,7 @@ import { AppLogo } from './shared/components/app-logo/app-logo';
 import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
+import { BackgroundTasks } from './shared/components/background-tasks/background-tasks';
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
 const MIN_RIGHT_PANEL_WIDTH = 360;
@@ -73,6 +74,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AppLogo,
     BackendStatusBanner,
     ToastContainer,
+    BackgroundTasks,
     SystemLogsPanel,
     Welcome,
     SettingsNav,
