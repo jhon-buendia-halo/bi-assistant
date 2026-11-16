@@ -4,7 +4,11 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { NodeChatMessage, WorkflowRun, WorkflowRunStep } from '../models/workflow.model';
+import {
+  NodeChatMessage,
+  WorkflowRun,
+  WorkflowRunStep,
+} from '../models/workflow.model';
 import {
   NodeChatStreamHandlers,
   RunStreamHandlers,
@@ -34,9 +38,20 @@ const RUN: WorkflowRun = {
   workflowName: 'Insights Analyst',
   input: { question: 'Q', datasets: ['World Cup Core'] },
   status: 'success',
-  steps: [{ id: 'answer', title: 'Answer', status: 'success', output: { calls: [], stopped: false } }],
+  steps: [
+    {
+      id: 'answer',
+      title: 'Answer',
+      status: 'success',
+      output: { calls: [], stopped: false },
+    },
+  ],
   question: 'Q',
-  answer: { role: 'assistant', content: 'The answer.', at: '2026-11-11T10:00:01.000Z' },
+  answer: {
+    role: 'assistant',
+    content: 'The answer.',
+    at: '2026-11-11T10:00:01.000Z',
+  },
   datasets: ['World Cup Core'],
   startedAt: '2026-11-11T10:00:00.000Z',
 };
@@ -60,7 +75,10 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
       { input: { question: 'Q' }, context: { fromRunId: 'run-0' } },
       {},
     );
-    const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+    const [url, init] = fetchSpy.calls.mostRecent().args as [
+      string,
+      RequestInit,
+    ];
     expect(url).toMatch(/\/workflows\/answer-business-question\/runs\/stream$/);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
@@ -75,11 +93,26 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
         { type: 'run', runId: 'run-1', workflowId: 'answer-business-question' },
         { type: 'step', id: 'answer', title: 'Answer', status: 'running' },
         { type: 'reasoning', content: 'Thinking about goals' },
-        { type: 'tool', content: JSON.stringify({ name: 'run_readonly_sql', input: 'SELECT 1' }) },
-        { type: 'tool-result', content: JSON.stringify({ tool: 'run_readonly_sql', rowCount: 3 }) },
+        {
+          type: 'tool',
+          content: JSON.stringify({
+            name: 'run_readonly_sql',
+            input: 'SELECT 1',
+          }),
+        },
+        {
+          type: 'tool-result',
+          content: JSON.stringify({ tool: 'run_readonly_sql', rowCount: 3 }),
+        },
         { type: 'text', content: 'The ' },
         { type: 'text', content: 'answer.' },
-        { type: 'step', id: 'answer', title: 'Answer', status: 'success', output: { stopped: false } },
+        {
+          type: 'step',
+          id: 'answer',
+          title: 'Answer',
+          status: 'success',
+          output: { stopped: false },
+        },
         { type: 'done', run: RUN },
       ),
     );
@@ -98,7 +131,11 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
       onDone: (run) => seen.push(`done:${run.id}`),
       onError: (m) => seen.push(`error:${m}`),
     };
-    await service.streamRun('answer-business-question', { input: {} }, handlers);
+    await service.streamRun(
+      'answer-business-question',
+      { input: {} },
+      handlers,
+    );
     expect(seen).toEqual([
       'run:run-1',
       'step:running',
@@ -128,26 +165,47 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
       output: { stopped: false },
       startedAt: '2026-11-11T10:00:00.000Z',
       endedAt: '2026-11-11T10:00:02.000Z',
-      toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40 }],
+      toolCalls: [
+        {
+          tool: 'run_readonly_sql',
+          input: 'select 1',
+          rowCount: 1,
+          durationMs: 40,
+        },
+      ],
     };
-    fetchSpy.and.resolveTo(sseResponse({ type: 'step', ...full }, { type: 'done', run: RUN }));
+    fetchSpy.and.resolveTo(
+      sseResponse({ type: 'step', ...full }, { type: 'done', run: RUN }),
+    );
     const steps: WorkflowRunStep[] = [];
-    await service.streamRun('answer-business-question', { input: { question: 'Q' } }, {
-      onStep: (s) => steps.push(s),
-    });
+    await service.streamRun(
+      'answer-business-question',
+      { input: { question: 'Q' } },
+      {
+        onStep: (s) => steps.push(s),
+      },
+    );
     expect(steps[0]).toEqual(full as WorkflowRunStep);
   });
 
   it("reports a refusal with the server's message, before anything streams", async () => {
     fetchSpy.and.resolveTo(
       new Response(
-        JSON.stringify({ statusCode: 400, message: 'Select at least one dataset', error: 'Bad Request' }),
+        JSON.stringify({
+          statusCode: 400,
+          message: 'Select at least one dataset',
+          error: 'Bad Request',
+        }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       ),
     );
     const onError = jasmine.createSpy('onError');
     const onRun = jasmine.createSpy('onRun');
-    await service.streamRun('answer-business-question', { input: {} }, { onError, onRun });
+    await service.streamRun(
+      'answer-business-question',
+      { input: {} },
+      { onError, onRun },
+    );
     expect(onError).toHaveBeenCalledOnceWith('Select at least one dataset');
     expect(onRun).not.toHaveBeenCalled();
   });
@@ -161,13 +219,24 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     ];
     fetchSpy.and.resolveTo(
       new Response(
-        JSON.stringify({ statusCode: 400, message: 'Question is required', errors }),
+        JSON.stringify({
+          statusCode: 400,
+          message: 'Question is required',
+          errors,
+        }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       ),
     );
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('answer-business-question', { input: {} }, { onError });
-    expect(onError).toHaveBeenCalledOnceWith('Question is required', errors.slice(0, 3));
+    await service.streamRun(
+      'answer-business-question',
+      { input: {} },
+      { onError },
+    );
+    expect(onError).toHaveBeenCalledOnceWith(
+      'Question is required',
+      errors.slice(0, 3),
+    );
   });
 
   it("reports the agent turn's error event", async () => {
@@ -178,19 +247,39 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
       ),
     );
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('answer-business-question', { input: {} }, { onError });
-    expect(onError).toHaveBeenCalledOnceWith('The endpoint rejected the API key (401)');
+    await service.streamRun(
+      'answer-business-question',
+      { input: {} },
+      { onError },
+    );
+    expect(onError).toHaveBeenCalledOnceWith(
+      'The endpoint rejected the API key (401)',
+    );
   });
 
   it('reports an unreachable backend and a stream that ends without a terminal event', async () => {
     fetchSpy.and.rejectWith(new TypeError('Failed to fetch'));
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('answer-business-question', { input: {} }, { onError });
+    await service.streamRun(
+      'answer-business-question',
+      { input: {} },
+      { onError },
+    );
     expect(onError).toHaveBeenCalledOnceWith('Backend unreachable');
 
     onError.calls.reset();
-    fetchSpy.and.resolveTo(sseResponse({ type: 'run', runId: 'r', workflowId: 'answer-business-question' }));
-    await service.streamRun('answer-business-question', { input: {} }, { onError });
+    fetchSpy.and.resolveTo(
+      sseResponse({
+        type: 'run',
+        runId: 'r',
+        workflowId: 'answer-business-question',
+      }),
+    );
+    await service.streamRun(
+      'answer-business-question',
+      { input: {} },
+      { onError },
+    );
     expect(onError).toHaveBeenCalledOnceWith('Stream ended before completion');
   });
 
@@ -199,7 +288,12 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     controller.abort();
     fetchSpy.and.rejectWith(new DOMException('Aborted', 'AbortError'));
     const onError = jasmine.createSpy('onError');
-    await service.streamRun('answer-business-question', { input: {} }, { onError }, controller.signal);
+    await service.streamRun(
+      'answer-business-question',
+      { input: {} },
+      { onError },
+      controller.signal,
+    );
     expect(onError).not.toHaveBeenCalled();
   });
 });
@@ -230,7 +324,9 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
 
   it('reads a step chat at the encoded run and step ids (136)', () => {
     let messages: NodeChatMessage[] | null = null;
-    service.getNodeChat('run 1', 'an/alyse').subscribe((r) => (messages = r.messages));
+    service
+      .getNodeChat('run 1', 'an/alyse')
+      .subscribe((r) => (messages = r.messages));
     const req = http.expectOne((r) =>
       r.url.endsWith('/workflow-runs/run%201/node-chats/an%2Falyse'),
     );
@@ -243,12 +339,24 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
     fetchSpy.and.resolveTo(
       sseResponse(
         { type: 'reasoning', content: 'Looking' },
-        { type: 'tool', content: JSON.stringify({ name: 'run_readonly_sql', input: 'SELECT 1' }) },
+        {
+          type: 'tool',
+          content: JSON.stringify({
+            name: 'run_readonly_sql',
+            input: 'SELECT 1',
+          }),
+        },
         {
           type: 'tool-progress',
-          content: JSON.stringify({ tool: 'run_readonly_sql', message: 'Querying' }),
+          content: JSON.stringify({
+            tool: 'run_readonly_sql',
+            message: 'Querying',
+          }),
         },
-        { type: 'tool-result', content: JSON.stringify({ tool: 'run_readonly_sql', rowCount: 6 }) },
+        {
+          type: 'tool-result',
+          content: JSON.stringify({ tool: 'run_readonly_sql', rowCount: 6 }),
+        },
         { type: 'text', content: 'Six ' },
         { type: 'text', content: 'stages.' },
         { type: 'done', message: REPLY },
@@ -265,11 +373,23 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
       onDone: (m) => seen.push(`done:${m.id}`),
       onError: (m) => seen.push(`error:${m}`),
     };
-    await service.streamNodeChat('run-1', 'analyse', 'How many stages?', handlers);
-    const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
-    expect(url).toMatch(/\/workflow-runs\/run-1\/node-chats\/analyse\/messages\/stream$/);
+    await service.streamNodeChat(
+      'run-1',
+      'analyse',
+      'How many stages?',
+      handlers,
+    );
+    const [url, init] = fetchSpy.calls.mostRecent().args as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toMatch(
+      /\/workflow-runs\/run-1\/node-chats\/analyse\/messages\/stream$/,
+    );
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ content: 'How many stages?' });
+    expect(JSON.parse(init.body as string)).toEqual({
+      content: 'How many stages?',
+    });
     expect(seen).toEqual([
       'reasoning:Looking',
       'tool:run_readonly_sql:SELECT 1',
@@ -295,14 +415,19 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
       );
       const onError = jasmine.createSpy('onError');
       const onDone = jasmine.createSpy('onDone');
-      await service.streamNodeChat('run-1', 'analyse', 'Hi', { onError, onDone });
+      await service.streamNodeChat('run-1', 'analyse', 'Hi', {
+        onError,
+        onDone,
+      });
       expect(onError).toHaveBeenCalledOnceWith(message);
       expect(onDone).not.toHaveBeenCalled();
     });
   }
 
   it("reports the turn's error event, and a stream that ends without a terminal event", async () => {
-    fetchSpy.and.resolveTo(sseResponse({ type: 'error', content: 'Model down' }));
+    fetchSpy.and.resolveTo(
+      sseResponse({ type: 'error', content: 'Model down' }),
+    );
     const onError = jasmine.createSpy('onError');
     await service.streamNodeChat('run-1', 'analyse', 'Hi', { onError });
     expect(onError).toHaveBeenCalledOnceWith('Model down');
@@ -318,7 +443,13 @@ describe('WorkflowRunsApiService, a step chat (api.md 136, 137)', () => {
     controller.abort();
     fetchSpy.and.rejectWith(new DOMException('Aborted', 'AbortError'));
     const onError = jasmine.createSpy('onError');
-    await service.streamNodeChat('run-1', 'analyse', 'Hi', { onError }, controller.signal);
+    await service.streamNodeChat(
+      'run-1',
+      'analyse',
+      'Hi',
+      { onError },
+      controller.signal,
+    );
     expect(onError).not.toHaveBeenCalled();
   });
 });
@@ -360,7 +491,10 @@ describe('WorkflowRunsApiService, resume (api.md 138)', () => {
       onDone: (r) => seen.push(`done:${r.status}`),
     };
     await service.resumeRun('agent:run-1', 'clarify', '2022', handlers);
-    const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+    const [url, init] = fetchSpy.calls.mostRecent().args as [
+      string,
+      RequestInit,
+    ];
     expect(url).toMatch(/\/workflow-runs\/agent%3Arun-1\/resume\/stream$/);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
@@ -409,7 +543,13 @@ describe('WorkflowRunsApiService, resume (api.md 138)', () => {
     controller.abort();
     fetchSpy.and.rejectWith(new DOMException('Aborted', 'AbortError'));
     const onError = jasmine.createSpy('onError');
-    await service.resumeRun('run-1', 'clarify', 'x', { onError }, controller.signal);
+    await service.resumeRun(
+      'run-1',
+      'clarify',
+      'x',
+      { onError },
+      controller.signal,
+    );
     expect(onError).not.toHaveBeenCalled();
   });
 });
@@ -433,8 +573,19 @@ describe('WorkflowRunsApiService, a run followed again and Stop (api.md 149, 150
   it('reads the events after a seq with a GET and reports them as a run stream (frames carry their seq)', async () => {
     fetchSpy.and.resolveTo(
       sseResponse(
-        { seq: 1, type: 'run', runId: 'run 1', workflowId: 'answer-business-question' },
-        { seq: 2, type: 'step', id: 'answer', title: 'Answer', status: 'running' },
+        {
+          seq: 1,
+          type: 'run',
+          runId: 'run 1',
+          workflowId: 'answer-business-question',
+        },
+        {
+          seq: 2,
+          type: 'step',
+          id: 'answer',
+          title: 'Answer',
+          status: 'running',
+        },
         { seq: 4, type: 'text', content: 'Brazil' },
         { seq: 5, type: 'done', run: RUN },
       ),
@@ -446,18 +597,29 @@ describe('WorkflowRunsApiService, a run followed again and Stop (api.md 149, 150
       onText: (delta) => order.push(`text:${delta}`),
       onDone: (run) => order.push(`done:${run.id}`),
     });
-    const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+    const [url, init] = fetchSpy.calls.mostRecent().args as [
+      string,
+      RequestInit,
+    ];
     expect(url).toMatch(/\/workflow-runs\/run%201\/events\/stream\?after=0$/);
     expect(init.method).toBe('GET');
-    expect(order).toEqual(['run:run 1', 'step:answer', 'text:Brazil', 'done:run-1']);
+    expect(order).toEqual([
+      'run:run 1',
+      'step:answer',
+      'text:Brazil',
+      'done:run-1',
+    ]);
   });
 
   it('reports a run the server no longer holds as a 404 refusal', async () => {
     fetchSpy.and.resolveTo(
-      new Response(JSON.stringify({ message: 'Run "run-1" has no live events' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify({ message: 'Run "run-1" has no live events' }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
     );
     const onRefused = jasmine.createSpy('onRefused');
     const onError = jasmine.createSpy('onError');
@@ -470,9 +632,15 @@ describe('WorkflowRunsApiService, a run followed again and Stop (api.md 149, 150
   it('posts Stop to the encoded run id and answers the stored run', () => {
     let answered: WorkflowRun | undefined;
     service.stopRun('run 1').subscribe((res) => (answered = res.run));
-    const req = http.expectOne((r) => r.url.endsWith('/workflow-runs/run%201/stop'));
+    const req = http.expectOne((r) =>
+      r.url.endsWith('/workflow-runs/run%201/stop'),
+    );
     expect(req.request.method).toBe('POST');
-    req.flush({ ok: true, message: 'Run stopped', run: { ...RUN, status: 'stopped' } });
+    req.flush({
+      ok: true,
+      message: 'Run stopped',
+      run: { ...RUN, status: 'stopped' },
+    });
     expect(answered?.status).toBe('stopped');
   });
 });
@@ -495,23 +663,43 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
     const base = '/workflow-runs/run%201/answer';
     service.prepareEvidence('run 1').subscribe();
     http
-      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/evidence`))
+      .expectOne(
+        (r) => r.method === 'POST' && r.url.endsWith(`${base}/evidence`),
+      )
       .flush({ ok: true, run: RUN });
     service.explainQuery('run 1', 2).subscribe();
     http
-      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/queries/2/explanation`))
+      .expectOne(
+        (r) =>
+          r.method === 'POST' &&
+          r.url.endsWith(`${base}/queries/2/explanation`),
+      )
       .flush({ ok: true, run: RUN });
     service.countQueryStages('run 1', 2).subscribe();
     http
-      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/queries/2/stage-counts`))
+      .expectOne(
+        (r) =>
+          r.method === 'POST' &&
+          r.url.endsWith(`${base}/queries/2/stage-counts`),
+      )
       .flush({ ok: true, run: RUN });
     let rows = -1;
-    service.rerunQuery('run 1', 0).subscribe((response) => (rows = response.result.rowCount));
+    service
+      .rerunQuery('run 1', 0)
+      .subscribe((response) => (rows = response.result.rowCount));
     http
-      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/queries/0/rerun`))
+      .expectOne(
+        (r) => r.method === 'POST' && r.url.endsWith(`${base}/queries/0/rerun`),
+      )
       .flush({
         ok: true,
-        result: { columns: [], rows: [], rowCount: 4, coverage: 'whole-table', ranAt: 'x' },
+        result: {
+          columns: [],
+          rows: [],
+          rowCount: 4,
+          coverage: 'whole-table',
+          ranAt: 'x',
+        },
       });
     expect(rows).toBe(4);
   });
@@ -520,7 +708,9 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
     let size = 0;
     service.queryCsv('run-1', 1).subscribe((blob) => (size = blob.size));
     const req = http.expectOne(
-      (r) => r.method === 'GET' && r.url.endsWith('/workflow-runs/run-1/answer/queries/1/csv'),
+      (r) =>
+        r.method === 'GET' &&
+        r.url.endsWith('/workflow-runs/run-1/answer/queries/1/csv'),
     );
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['a,b\r\n']));

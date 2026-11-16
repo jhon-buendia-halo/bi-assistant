@@ -56,6 +56,8 @@ import {
   zoomOut,
 } from '../../services/workflow-canvas-layout';
 import { nodeStatusLabel } from '../../services/workflows.util';
+import { AgentStepStory } from '../../services/agent-step-story';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 
 /** A drag shorter than this, in pixels, is a click on the background. */
 const PAN_THRESHOLD = 3;
@@ -109,7 +111,7 @@ const STATUS_ICONS: Record<WorkflowNodeStatus, LucideIconData> = {
  */
 @Component({
   selector: 'app-workflow-canvas',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, AgentAvatar],
   templateUrl: './workflow-canvas.html',
   styleUrl: './workflow-canvas.scss',
   host: {
@@ -150,6 +152,8 @@ export class WorkflowCanvas {
   readonly violations = input<Record<string, ContractSide>>({});
   /** How many times each step ran in the run shown, for a step that ran more than once (a loop's retry). */
   readonly attempts = input<Record<string, number>>({});
+  /** What each agent step's agent is doing in the run shown, by step id (ui.md 4.4b). */
+  readonly agents = input<ReadonlyMap<string, AgentStepStory>>(new Map());
   /** A node chosen by a single click, or null for a click on the background. */
   readonly selectNode = output<string | null>();
   /** Open a node's details: double click or Enter, or a click on an agent's sub-node (its step id). */
@@ -238,9 +242,17 @@ export class WorkflowCanvas {
   }
 
   /** How many times a step ran, when more than once; else null. */
+  /** The agent's run line for its node; null before a run (its job title shows). */
+  protected activity(stepId: string): AgentStepStory | null {
+    const story = this.agents().get(stepId);
+    return story && story.state !== 'idle' && story.line ? story : null;
+  }
+
   protected attemptCount(id: string): number | null {
     const attempts = this.attempts();
-    return Object.hasOwn(attempts, id) && attempts[id] > 1 ? attempts[id] : null;
+    return Object.hasOwn(attempts, id) && attempts[id] > 1
+      ? attempts[id]
+      : null;
   }
 
   /** An edge into or out of a skipped step is muted. */

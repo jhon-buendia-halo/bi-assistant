@@ -19,7 +19,7 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 
 - R1. The system SHALL create a visual only from a completed assistant answer. The answer must have non-empty text and must not be a clarification. When no answer is named, the latest such answer is used.
 - R2. Every answer with text SHALL offer "Generate interactive visuals". While generating, the label reads "Generating interactive visuals…" and the button is disabled. It is also disabled while a chat turn runs. One generation runs per session at a time.
-  - On a run (workflows R18-R20), the button sits under the answer in the Run tab and on the run page. It is disabled while the run is `running`, and one generation runs at a time.
+  - On a run (workflows R18-R20), the button sits under the answer on the run page only (`run-detail`, a legacy run). It is disabled while the run is `running`, and one generation runs at a time. The workflow page's Run panel SHALL NOT offer it (since 2026-11-15): a workflow that wants visuals makes them in a step of its own, with a specialised agent; visuals a run already has still open under its answer there.
 - R3. The assistant SHALL create a visual when the user asks for a chart or visual of an answer, and SHALL never paste HTML, CSS or JavaScript into the chat. A visual created during a turn SHALL also see that turn's query results, merged onto the source answer's data records. When both share the same SQL text, the turn's record wins.
 - R4. A new visual SHALL get a unique id and start at version 1, with `currentVersion` = 1. Its title comes from the designer, trimmed to 100 characters (default "Interactive visual"). Its description (the takeaway) also comes from the designer. Its source answer is recorded by timestamp.
 
@@ -289,7 +289,7 @@ The scenario "I generate, tailor, revert and refresh a visual on a run answer" o
 
 ### Feature: Visual tailoring
 
-E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); and "I generate, tailor, revert and refresh a visual on a run answer" (a stored run of the Assistant opened from Runs: its answer's visual is generated, tailored with Sort, reverted and refreshed); the other scenarios have none yet.
+E2E: `frontend/e2e/visual-tailoring.spec.ts` covers "The visual follows the app's theme" (the theme is switched through System and the operating system setting, so the chat and its panel stay open) and "An older visual opens in the current theme" (the stored visual is rewritten on disk as a legacy bundle whose own styles hardcode the old dark frame); and "I generate, tailor, revert and refresh a visual on a run answer" (a stored run of the Assistant opened from Runs: the Run panel offers no "Generate interactive visuals", its answer's visual is made through `POST /workflow-runs/:id/visualizations` as a workflow step would, then tailored with Sort, reverted and refreshed); the other scenarios have none yet.
 
 ```gherkin
 Feature: Visual tailoring

@@ -1,8 +1,46 @@
+<!-- CV or the text as stored (ui.md 4.5); shown while reading, not editing. -->
+<ng-template #viewToggle>
+  <div
+    role="group"
+    aria-label="Show the job description as"
+    data-testid="agent-prompt-format"
+    class="inline-flex overflow-hidden rounded-md border border-border"
+  >
+    <button
+      type="button"
+      data-testid="agent-prompt-format-cv"
+      [attr.aria-pressed]="view() === 'cv'"
+      (click)="view.set('cv')"
+      class="px-2.5 py-0.5 text-[11px] font-medium tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-focus"
+      [class.bg-primary-soft]="view() === 'cv'"
+      [class.text-on-primary-soft]="view() === 'cv'"
+      [class.text-fg-muted]="view() !== 'cv'"
+    >
+      CV
+    </button>
+    <button
+      type="button"
+      data-testid="agent-prompt-format-text"
+      [attr.aria-pressed]="view() === 'text'"
+      (click)="view.set('text')"
+      class="px-2.5 py-0.5 text-[11px] font-medium tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-focus"
+      [class.bg-primary-soft]="view() === 'text'"
+      [class.text-on-primary-soft]="view() === 'text'"
+      [class.text-fg-muted]="view() !== 'text'"
+    >
+      Text
+    </button>
+  </div>
+</ng-template>
+
 @if (isUserAgent()) {
   <div class="flex items-center gap-3">
     <h3 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
       Job description
     </h3>
+    @if (!editing() && instructions()) {
+      <ng-container [ngTemplateOutlet]="viewToggle" />
+    }
     @if (canEdit() && !editing()) {
       <button
         type="button"
@@ -86,10 +124,21 @@
       </div>
     </div>
   } @else if (instructions()) {
-    <pre
-      data-testid="agent-instructions"
-      class="mt-2 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-    ><app-linked-text [text]="instructions()" [known]="known()" /></pre>
+    @if (view() === "cv") {
+      @defer (on immediate) {
+        <app-agent-cv
+          [agent]="agent()"
+          [text]="instructions()"
+          [known]="known()"
+          bodyTestId="agent-instructions"
+        />
+      }
+    } @else {
+      <pre
+        data-testid="agent-instructions"
+        class="mt-2 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+      ><app-linked-text [text]="instructions()" [known]="known()" /></pre>
+    }
   } @else {
     <p class="mt-2 text-[13px] text-fg-muted">No job description yet.</p>
   }
@@ -110,6 +159,12 @@
       Job description
     </h3>
     <span class="chip">Built-in</span>
+    @if (
+      !editing() &&
+      (prompt.linksAllowed ? prompt.editable : agent().instructions)
+    ) {
+      <ng-container [ngTemplateOutlet]="viewToggle" />
+    }
     @if (prompt.modified) {
       <span class="chip chip-warning" data-testid="agent-prompt-modified"
         >Modified</span
@@ -245,11 +300,25 @@
       </div>
     </div>
   } @else if (prompt.linksAllowed) {
-    <pre
-      data-testid="agent-prompt-view"
-      class="mt-3 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-    ><app-linked-text [text]="prompt.editable" [known]="builtInKnown()" /></pre>
-    <p data-testid="agent-prompt-tools-note" class="mt-2 text-[12px] text-fg-muted">
+    @if (view() === "cv") {
+      @defer (on immediate) {
+        <app-agent-cv
+          [agent]="agent()"
+          [text]="prompt.editable"
+          [known]="builtInKnown()"
+          bodyTestId="agent-prompt-view"
+        />
+      }
+    } @else {
+      <pre
+        data-testid="agent-prompt-view"
+        class="mt-3 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+      ><app-linked-text [text]="prompt.editable" [known]="builtInKnown()" /></pre>
+    }
+    <p
+      data-testid="agent-prompt-tools-note"
+      class="mt-2 text-[12px] text-fg-muted"
+    >
       {{ officialCopy().generatedToolsNote }}
     </p>
     @if (agent().instructions) {
@@ -263,10 +332,21 @@
       </details>
     }
   } @else if (agent().instructions) {
-    <pre
-      data-testid="agent-prompt-view"
-      class="mt-3 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-    ><app-linked-text [text]="agent().instructions" [known]="builtInKnown()" /></pre>
+    @if (view() === "cv") {
+      @defer (on immediate) {
+        <app-agent-cv
+          [agent]="agent()"
+          [text]="agent().instructions"
+          [known]="builtInKnown()"
+          bodyTestId="agent-prompt-view"
+        />
+      }
+    } @else {
+      <pre
+        data-testid="agent-prompt-view"
+        class="mt-3 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+      ><app-linked-text [text]="agent().instructions" [known]="builtInKnown()" /></pre>
+    }
   } @else {
     <p class="mt-3 text-[13px] text-fg-muted">
       This agent builds its prompt at request time, so there is no static

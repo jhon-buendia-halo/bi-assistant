@@ -80,6 +80,7 @@
           [statuses]="designer.nodeStatuses()"
           [violations]="designer.contractViolations()"
           [attempts]="designer.nodeAttempts()"
+          [agents]="designer.agentStories()"
           (selectNode)="designer.select($event)"
           (openNode)="designer.openNode($event)"
           (execute)="execute()"

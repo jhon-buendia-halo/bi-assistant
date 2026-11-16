@@ -17,12 +17,12 @@
     </p>
   } @else if (agent(); as agent) {
     <!-- Header -->
-    <div class="mt-4 flex items-start gap-3.5">
-      <span
-        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
-      >
-        <lucide-angular [img]="Bot" [size]="19" />
-      </span>
+    <div class="mt-4 flex items-start gap-4">
+      <app-agent-avatar
+        [agentKey]="agent.key"
+        [name]="agent.name"
+        [size]="64"
+      />
       <div class="flex min-w-0 flex-col gap-1">
         <h2
           class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
@@ -35,6 +35,27 @@
             class="m-0 text-[13px] leading-5 text-fg-muted"
           >
             {{ agent.role }}
+          </p>
+        }
+        @if (activity(); as act) {
+          <p
+            data-testid="agent-detail-activity"
+            [attr.data-state]="act.state"
+            class="m-0 flex items-center gap-1.5 text-[12px]"
+            [class.text-on-success-soft]="act.state === 'available'"
+            [class.text-fg-muted]="act.state !== 'available'"
+          >
+            <span
+              aria-hidden="true"
+              class="h-1.5 w-1.5 shrink-0 rounded-full"
+              [class.bg-on-success-soft]="act.state === 'available'"
+              [class.bg-on-warning-soft]="act.state === 'waiting'"
+              [class.bg-primary]="act.state === 'working'"
+              [class.animate-pulse]="act.state === 'working'"
+            ></span>
+            <span [class.italic]="act.state !== 'available'">{{
+              act.label
+            }}</span>
           </p>
         }
         <div class="flex flex-wrap items-center gap-2">
@@ -136,6 +157,16 @@
         </div>
       }
     </div>
+    @if (agent.intro) {
+      <!-- The persona introduces itself; the technical description stays
+           one line below it (agents.md 1.1). -->
+      <p
+        data-testid="agent-detail-intro"
+        class="mt-4 max-w-[70ch] rounded-xl rounded-tl-sm bg-surface-muted px-4 py-3 text-[14px] leading-relaxed text-fg"
+      >
+        {{ agent.intro }}
+      </p>
+    }
     @if (agent.description) {
       <p class="mt-3 max-w-[70ch] text-[13px] leading-relaxed text-fg-muted">
         {{ agent.description }}
@@ -279,60 +310,6 @@
               [view]="skillsView"
               [userAgent]="isUserAgent()"
             />
-          }
-        }
-        @case ("graph") {
-          @if (isUserAgent() && agent.toolLinks; as toolLinks) {
-            @if (librarySkillsError(); as graphErr) {
-              <p class="text-[13px] text-on-danger-soft">{{ graphErr }}</p>
-            } @else if (librarySkills(); as library) {
-              <app-agent-graph
-                [instructions]="agentInstructions()"
-                [skills]="library"
-                [toolLinks]="toolLinks"
-              />
-            } @else {
-              <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
-                <lucide-angular
-                  [img]="Loader2"
-                  [size]="14"
-                  class="animate-spin"
-                />
-                <span>Loading graph…</span>
-              </div>
-            }
-          } @else if (agent.prompt?.linksAllowed) {
-            <!-- An Official agent: its prompt's links, every one of its tools on. -->
-            @if (agent.workflow; as workflow) {
-              <!-- A workflow-backed agent: its turn first (R108). -->
-              <app-agent-workflow [workflow]="workflow" />
-              <h3
-                class="mt-8 mb-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-              >
-                Prompt links
-              </h3>
-            }
-            @if (officialGraph(); as graph) {
-              <app-agent-graph
-                [instructions]="agent.prompt!.editable"
-                [skills]="graph.skills"
-                [toolLinks]="graph.toolLinks"
-                [showSteps]="!agent.workflow"
-              />
-            } @else {
-              <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
-                <lucide-angular
-                  [img]="Loader2"
-                  [size]="14"
-                  class="animate-spin"
-                />
-                <span>Loading graph…</span>
-              </div>
-            }
-          } @else {
-            <p class="text-[13px] text-fg-muted">
-              This agent has no links: it gets all of its tools.
-            </p>
           }
         }
         @case ("memory") {
@@ -594,8 +571,8 @@
             @if (selectedSet(); as openSet) {
               <p class="mt-4 text-[12px] text-fg-muted">
                 {{ openSet.cases.length }} questions in
-                <span class="text-fg-muted">{{ openSet.name }}</span
-                >. Each check must score 1.0 for its question to pass.
+                <span class="text-fg-muted">{{ openSet.name }}</span>. Each
+                check must score 1.0 for its question to pass.
               </p>
 
               <!-- Datasource picker + run -->

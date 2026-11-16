@@ -7,14 +7,7 @@ import {
 import { LinkKind, promptSegments } from './prompt-links';
 
 export type AgentTabId =
-  | 'chat'
-  | 'prompt'
-  | 'skills'
-  | 'tools'
-  | 'graph'
-  | 'memory'
-  | 'evals'
-  | 'model';
+  'chat' | 'prompt' | 'skills' | 'tools' | 'memory' | 'evals' | 'model';
 
 /** The tabs of the agent page, in order (agents-evals R86). */
 export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
@@ -22,7 +15,6 @@ export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
   { id: 'prompt', label: 'Job Description' },
   { id: 'skills', label: 'Skills' },
   { id: 'tools', label: 'Tools' },
-  { id: 'graph', label: 'Graph' },
   { id: 'memory', label: 'Memory' },
   { id: 'evals', label: 'Evals' },
   { id: 'model', label: 'LLM Config' },

@@ -63,12 +63,19 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     fixture.componentRef.setInput('agent', agent);
     fixture.detectChanges();
   }
+  /** The CV view loads on its own (`@defer`): let it render. */
+  async function settle(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
   const el = () => fixture.nativeElement as HTMLElement;
   const byId = (id: string) =>
     el().querySelector<HTMLButtonElement>(`[data-testid="${id}"]`);
 
-  it('shows the prompt as served with a Built-in chip and Edit', () => {
+  it('shows the prompt as served with a Built-in chip and Edit', async () => {
     render(builtIn('sql-fixer'));
+    await settle();
     expect(el().textContent).toContain('Built-in');
     expect(byId('agent-prompt-view')?.textContent).toContain('SERVED PROMPT');
     expect(byId('agent-prompt-edit')).not.toBeNull();
@@ -109,14 +116,14 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     expect(byId('agent-prompt-save')).toBeNull();
   });
 
-  it('disables Save for an empty prompt and Cancel discards', () => {
+  it('disables Save for an empty prompt and Cancel discards', async () => {
     render(builtIn('sql-fixer'));
     byId('agent-prompt-edit')!.click();
     component.draft.set('   ');
     fixture.detectChanges();
     expect(byId('agent-prompt-save')!.disabled).toBeTrue();
     byId('agent-prompt-cancel')!.click();
-    fixture.detectChanges();
+    await settle();
     expect(byId('agent-prompt-editing')).toBeNull();
     expect(byId('agent-prompt-view')).not.toBeNull();
   });
@@ -134,7 +141,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     );
   });
 
-  it("shows the Report Builder's links as chips, known against its own tools and skills", () => {
+  it("shows the Report Builder's links as chips, known against its own tools and skills", async () => {
     const report = {
       ...builtIn('report', {
         editable:
@@ -174,7 +181,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
         updatedAt: null,
       },
     ]);
-    fixture.detectChanges();
+    await settle();
     const view = byId('agent-prompt-view')!;
     expect(view.textContent).not.toContain('[[');
     const chip = (name: string) =>

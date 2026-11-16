@@ -24,12 +24,10 @@ import {
   LucideAngularModule,
   ArrowLeft,
   BookOpen,
-  Bot,
   Brain,
   CircleCheck,
   CircleX,
   Cpu,
-  Network,
   Trash2,
   Gauge,
   Loader2,
@@ -66,13 +64,15 @@ import {
 } from '../../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { AgentSkills } from '../agent-skills/agent-skills';
-import { AgentGraph } from '../agent-graph/agent-graph';
-import { AgentWorkflowView } from '../agent-workflow/agent-workflow';
 import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
 import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
 import { AgentTryIt } from '../agent-try-it/agent-try-it';
 import { AgentSkillsInline } from '../agent-skills-inline/agent-skills-inline';
 import { AgentSystemPrompt } from '../agent-system-prompt/agent-system-prompt';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
+import { agentActivity } from '../../services/agent-activity';
+import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
+import { WorkflowRunSummary } from '../../../workflows/models/workflow.model';
 import { AgentPageState } from '../../services/agent-page-state.service';
 import {
   AGENT_TAB_ORDER,
@@ -84,7 +84,6 @@ import {
   usedInEmptyText,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
-import { officialGraphInput } from '../../services/official-links';
 import { knownLinks, linkableBuiltInSkills } from '../../services/prompt-links';
 import {
   BuiltInSkillSummary,
@@ -122,13 +121,12 @@ type EvalTab = 'questions' | 'runs';
   imports: [
     LucideAngularModule,
     AgentSkills,
-    AgentGraph,
-    AgentWorkflowView,
     AgentLlmConfig,
     AgentToolLinks,
     AgentTryIt,
     AgentSkillsInline,
     AgentSystemPrompt,
+    AgentAvatar,
   ],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
@@ -136,12 +134,10 @@ type EvalTab = 'questions' | 'runs';
 export class AgentDetail implements OnDestroy {
   readonly ArrowLeft = ArrowLeft;
   readonly BookOpen = BookOpen;
-  readonly Bot = Bot;
   readonly Brain = Brain;
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
   readonly Cpu = Cpu;
-  readonly Network = Network;
   readonly Gauge = Gauge;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
@@ -162,6 +158,7 @@ export class AgentDetail implements OnDestroy {
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
   private readonly pageState = inject(AgentPageState);
+  private readonly runsApi = inject(WorkflowRunsApiService);
   private readonly tasks = inject(BackgroundTasksService);
   private readonly nav = inject(AgentsNavState);
   private alive = true;
@@ -195,6 +192,15 @@ export class AgentDetail implements OnDestroy {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly agent = signal<AgentDetailModel | null>(null);
+  /** The run history, for the header's status; null until it loads. */
+  private readonly runs = signal<WorkflowRunSummary[] | null>(null);
+
+  /** What the agent is doing now (ui.md 4.5); null while unknown. */
+  readonly activity = computed(() => {
+    const agent = this.agent();
+    const runs = this.runs();
+    return agent && runs ? agentActivity(agent, runs) : null;
+  });
   readonly activeTab = signal<AgentTab>('prompt');
   /** Try it mounts the first time it is shown, then stays. */
   readonly chatMounted = signal(false);
@@ -213,7 +219,6 @@ export class AgentDetail implements OnDestroy {
       prompt: this.ScrollText,
       skills: this.BookOpen,
       tools: this.Wrench,
-      graph: this.Network,
       memory: this.Brain,
       evals: this.Gauge,
       model: this.Cpu,
@@ -332,7 +337,7 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /** The owner's skills, for the Graph tab and the instruction chips. */
+  /** The owner's skills, for the Skills tab and the instruction chips. */
   readonly librarySkills = signal<SkillSummary[] | null>(null);
   readonly librarySkillsError = signal<string | null>(null);
   /** The names that exist, so a link to anything else shows as not found. */
@@ -386,16 +391,6 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /**
-   * The Graph tab of an Official agent (R105): the skills it gets and every
-   * one of its tools, always on. Null while the built-in skills load.
-   */
-  readonly officialGraph = computed(() => {
-    const agent = this.agent();
-    const skills = this.builtInSkills();
-    return agent && skills ? officialGraphInput(agent, skills) : null;
-  });
-
   /** Reload the owner's skills after the Skills tab changed one. */
   reloadLibrary(): void {
     this.loadLibrarySkills(this.agentKey());
@@ -408,6 +403,12 @@ export class AgentDetail implements OnDestroy {
   }
 
   private loadAgent(key: string, initial = false): void {
+    if (initial) {
+      this.runsApi.list().subscribe({
+        next: (res) => this.runs.set(res.runs),
+        error: () => this.runs.set(null),
+      });
+    }
     this.api.getAgent(key).subscribe({
       next: (agent) => {
         if (this.agentKey() !== key) return;

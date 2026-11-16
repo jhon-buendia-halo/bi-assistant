@@ -17,7 +17,15 @@ const WORKFLOW = {
   description: 'Answers questions.',
   agents: [{ key: 'assistant', name: 'Assistant', model: 'openai/gpt-5' }],
   steps: [
-    { id: 'prepare', title: 'Prepare', kind: 'code', summary: 'Prepares.', input: ['question'], output: ['prompt'], exits: [] },
+    {
+      id: 'prepare',
+      title: 'Prepare',
+      kind: 'code',
+      summary: 'Prepares.',
+      input: ['question'],
+      output: ['prompt'],
+      exits: [],
+    },
     {
       id: 'answer',
       title: 'Answer',
@@ -25,14 +33,28 @@ const WORKFLOW = {
       summary: 'Answers.',
       input: ['prompt'],
       output: ['answer'],
-      agent: { key: 'assistant', name: 'Assistant', tools: ['run_readonly_sql'], maxSteps: 8 },
+      agent: {
+        key: 'assistant',
+        name: 'Assistant',
+        tools: ['run_readonly_sql'],
+        maxSteps: 8,
+      },
       exits: [],
     },
   ],
 } as unknown as WorkflowDetail;
 
-function src(run: RunView | null, extra: Partial<NodeInspectionSource> = {}): NodeInspectionSource {
-  return { workflow: WORKFLOW, run, liveToolCalls: [], running: false, ...extra };
+function src(
+  run: RunView | null,
+  extra: Partial<NodeInspectionSource> = {},
+): NodeInspectionSource {
+  return {
+    workflow: WORKFLOW,
+    run,
+    liveToolCalls: [],
+    running: false,
+    ...extra,
+  };
 }
 
 const STORED: RunView = {
@@ -43,11 +65,32 @@ const STORED: RunView = {
   finishedAt: '2026-11-11T10:00:14.000Z',
   output: { answer: 'A' },
   steps: [
-    { id: 'prepare', title: 'Prepare', kind: 'code', status: 'success', input: { question: 'Q' }, output: { prompt: 'P' }, startedAt: '2026-11-11T10:00:00.000Z', endedAt: '2026-11-11T10:00:00.002Z' },
     {
-      id: 'answer', title: 'Answer', kind: 'agent', status: 'success', output: { answer: 'A' },
-      startedAt: '2026-11-11T10:00:00.002Z', endedAt: '2026-11-11T10:00:13.902Z',
-      toolCalls: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40 }],
+      id: 'prepare',
+      title: 'Prepare',
+      kind: 'code',
+      status: 'success',
+      input: { question: 'Q' },
+      output: { prompt: 'P' },
+      startedAt: '2026-11-11T10:00:00.000Z',
+      endedAt: '2026-11-11T10:00:00.002Z',
+    },
+    {
+      id: 'answer',
+      title: 'Answer',
+      kind: 'agent',
+      status: 'success',
+      output: { answer: 'A' },
+      startedAt: '2026-11-11T10:00:00.002Z',
+      endedAt: '2026-11-11T10:00:13.902Z',
+      toolCalls: [
+        {
+          tool: 'run_readonly_sql',
+          input: 'select 1',
+          rowCount: 1,
+          durationMs: 40,
+        },
+      ],
     },
   ],
 };
@@ -69,22 +112,59 @@ describe('buildNodeInspections', () => {
 
   it('shows a stored successful run', () => {
     const n = buildNodeInspections(src(STORED));
-    expect(n[0].run).toEqual(jasmine.objectContaining({ status: 'success', input: { question: 'Q' }, output: { question: 'Q' } }));
+    expect(n[0].run).toEqual(
+      jasmine.objectContaining({
+        status: 'success',
+        input: { question: 'Q' },
+        output: { question: 'Q' },
+      }),
+    );
     expect(n[1].run?.durationMs).toBe(2);
     expect(n[2].run?.toolCalls).toEqual([
-      { tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40, finished: true },
+      {
+        tool: 'run_readonly_sql',
+        input: 'select 1',
+        rowCount: 1,
+        durationMs: 40,
+        finished: true,
+      },
     ]);
     expect(n[2].context).toEqual({
       workflowInput: { question: 'Q' },
       earlierSteps: [{ id: 'prepare', title: 'Prepare', status: 'success' }],
-      agent: { key: 'assistant', name: 'Assistant', model: 'openai/gpt-5', tools: ['run_readonly_sql'] },
+      agent: {
+        key: 'assistant',
+        name: 'Assistant',
+        model: 'openai/gpt-5',
+        tools: ['run_readonly_sql'],
+      },
     });
-    expect(n[3].run).toEqual(jasmine.objectContaining({ status: 'success', input: { answer: 'A' }, output: { answer: 'A' } }));
+    expect(n[3].run).toEqual(
+      jasmine.objectContaining({
+        status: 'success',
+        input: { answer: 'A' },
+        output: { answer: 'A' },
+      }),
+    );
   });
 
   it('marks End skipped on a failed run and stopped on a stopped run', () => {
-    const failed: RunView = { ...STORED, status: 'failed', error: 'boom', output: undefined,
-      steps: [STORED.steps[0], { id: 'answer', title: 'Answer', kind: 'agent', status: 'failed', error: 'boom' }] };
+    const failed: RunView = {
+      ...STORED,
+      status: 'failed',
+      error: 'boom',
+      output: undefined,
+      steps: [
+        STORED.steps[0],
+        {
+          id: 'answer',
+          title: 'Answer',
+          kind: 'agent',
+          status: 'failed',
+          error: 'boom',
+        },
+      ],
+    };
     const f = buildNodeInspections(src(failed));
     expect(f[3].run?.status).toBe('skipped');
     expect(f[3].run?.error).toBe('boom');
@@ -95,7 +175,9 @@ describe('buildNodeInspections', () => {
 
   it('feeds the running agent step the live tool calls, and End has no run', () => {
     const live: RunView = {
-      status: 'running', runId: 'run-2', input: { question: 'Q' },
+      status: 'running',
+      runId: 'run-2',
+      input: { question: 'Q' },
       steps: [
         STORED.steps[0],
         { id: 'answer', title: 'Answer', kind: 'agent', status: 'running' },
@@ -105,23 +187,41 @@ describe('buildNodeInspections', () => {
       src(live, {
         running: true,
         liveToolCalls: [
-          { name: 'run_readonly_sql', input: 'select 1', rowCount: 3, finished: true },
+          {
+            name: 'run_readonly_sql',
+            input: 'select 1',
+            rowCount: 3,
+            finished: true,
+          },
           { name: 'other', error: 'bad', finished: false },
         ],
       }),
     );
     expect(n[2].run?.toolCalls).toEqual([
-      { tool: 'run_readonly_sql', input: 'select 1', rowCount: 3, finished: true },
+      {
+        tool: 'run_readonly_sql',
+        input: 'select 1',
+        rowCount: 3,
+        finished: true,
+      },
       { tool: 'other', error: 'bad', finished: false },
     ]);
     expect(n[1].run?.toolCalls).toEqual([]);
     expect(n[3].run).toBeNull();
-    const idle = buildNodeInspections(src(live, { running: false, liveToolCalls: [{ name: 'x', finished: true }] }));
+    const idle = buildNodeInspections(
+      src(live, {
+        running: false,
+        liveToolCalls: [{ name: 'x', finished: true }],
+      }),
+    );
     expect(idle[2].run?.toolCalls).toEqual([]);
   });
 
   it('treats a step without status as not run', () => {
-    const r: RunView = { status: 'running', steps: [{ id: 'prepare', title: 'Prepare', kind: 'code', status: null }] };
+    const r: RunView = {
+      status: 'running',
+      steps: [{ id: 'prepare', title: 'Prepare', kind: 'code', status: null }],
+    };
     const n = buildNodeInspections(src(r));
     expect(n[1].run).toBeNull();
     expect(n[2].context?.earlierSteps[0].status).toBeNull();
@@ -133,8 +233,20 @@ describe('buildNodeInspections', () => {
       status: 'success',
       output: { answer: 'A' },
       steps: [
-        { id: 'prepare', title: 'Prepare', kind: 'code', status: 'success', output: { prompt: 'P' } },
-        { id: 'answer', title: 'Answer', kind: 'agent', status: 'success', output: { answer: 'A' } },
+        {
+          id: 'prepare',
+          title: 'Prepare',
+          kind: 'code',
+          status: 'success',
+          output: { prompt: 'P' },
+        },
+        {
+          id: 'answer',
+          title: 'Answer',
+          kind: 'agent',
+          status: 'success',
+          output: { answer: 'A' },
+        },
       ],
     };
     const n = buildNodeInspections(src(old));
@@ -152,7 +264,12 @@ describe('buildNodeInspections', () => {
   it('falls back to the agent name when the step has no key', () => {
     const w = {
       ...WORKFLOW,
-      steps: [{ ...WORKFLOW.steps[1], agent: { name: 'Assistant', tools: [], maxSteps: 1 } }],
+      steps: [
+        {
+          ...WORKFLOW.steps[1],
+          agent: { name: 'Assistant', tools: [], maxSteps: 1 },
+        },
+      ],
     } as unknown as WorkflowDetail;
     const n = buildNodeInspections({ ...src(null), workflow: w });
     expect(n[1].agent?.key).toBe('assistant');
@@ -168,8 +285,16 @@ describe('buildToolInspection (a tool sub-node opens that tool)', () => {
         name: 'Assistant',
         model: 'openai/gpt-5',
         toolDetails: [
-          { name: 'describe_entity', description: 'Describes a table.', inputs: ['entity'] },
-          { name: 'run_readonly_sql', description: 'Runs one read-only query.', inputs: ['sql', 'reason'] },
+          {
+            name: 'describe_entity',
+            description: 'Describes a table.',
+            inputs: ['entity'],
+          },
+          {
+            name: 'run_readonly_sql',
+            description: 'Runs one read-only query.',
+            inputs: ['sql', 'reason'],
+          },
         ],
       },
     ],
@@ -177,14 +302,21 @@ describe('buildToolInspection (a tool sub-node opens that tool)', () => {
       WORKFLOW.steps[0],
       {
         ...WORKFLOW.steps[1],
-        agent: { key: 'assistant', name: 'Assistant', tools: ['describe_entity', 'run_readonly_sql', 'undocumented'], maxSteps: 8 },
+        agent: {
+          key: 'assistant',
+          name: 'Assistant',
+          tools: ['describe_entity', 'run_readonly_sql', 'undocumented'],
+          maxSteps: 8,
+        },
       },
     ],
   } as unknown as WorkflowDetail;
-  const nodes = (run: RunView | null, extra: Partial<NodeInspectionSource> = {}) =>
-    buildNodeInspections({ ...src(run, extra), workflow: TOOLS_WORKFLOW });
+  const nodes = (
+    run: RunView | null,
+    extra: Partial<NodeInspectionSource> = {},
+  ) => buildNodeInspections({ ...src(run, extra), workflow: TOOLS_WORKFLOW });
 
-  it("resolves a tool sub-node id to the tool, its step and agent; not run yet without a run", () => {
+  it('resolves a tool sub-node id to the tool, its step and agent; not run yet without a run', () => {
     const t = buildToolInspection(nodes(null), 'answer-tool-run_readonly_sql')!;
     expect(t.nodeId).toBe(toolNodeId('answer', 'run_readonly_sql'));
     expect(t.kind).toBe('tool');
@@ -218,8 +350,18 @@ describe('buildToolInspection (a tool sub-node opens that tool)', () => {
           ...STORED.steps[1],
           toolCalls: [
             { tool: 'describe_entity', input: 'matches', durationMs: 5 },
-            { tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40 },
-            { tool: 'run_readonly_sql', input: 'select x', error: 'no column x', durationMs: 2 },
+            {
+              tool: 'run_readonly_sql',
+              input: 'select 1',
+              rowCount: 1,
+              durationMs: 40,
+            },
+            {
+              tool: 'run_readonly_sql',
+              input: 'select x',
+              error: 'no column x',
+              durationMs: 2,
+            },
           ],
         },
       ],
@@ -227,16 +369,33 @@ describe('buildToolInspection (a tool sub-node opens that tool)', () => {
     const t = buildToolInspection(nodes(run), 'answer-tool-run_readonly_sql')!;
     expect(t.tool?.ran).toBeTrue();
     expect(t.tool?.calls).toEqual([
-      { tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, durationMs: 40, finished: true },
-      { tool: 'run_readonly_sql', input: 'select x', error: 'no column x', durationMs: 2, finished: true },
+      {
+        tool: 'run_readonly_sql',
+        input: 'select 1',
+        rowCount: 1,
+        durationMs: 40,
+        finished: true,
+      },
+      {
+        tool: 'run_readonly_sql',
+        input: 'select x',
+        error: 'no column x',
+        durationMs: 2,
+        finished: true,
+      },
     ]);
     expect(t.tool?.totalDurationMs).toBe(42);
   });
 
   it('includes the live calls while its step runs', () => {
     const live: RunView = {
-      status: 'running', runId: 'run-2', input: { question: 'Q' },
-      steps: [STORED.steps[0], { id: 'answer', title: 'Answer', kind: 'agent', status: 'running' }],
+      status: 'running',
+      runId: 'run-2',
+      input: { question: 'Q' },
+      steps: [
+        STORED.steps[0],
+        { id: 'answer', title: 'Answer', kind: 'agent', status: 'running' },
+      ],
     };
     const n = nodes(live, {
       running: true,
@@ -246,14 +405,20 @@ describe('buildToolInspection (a tool sub-node opens that tool)', () => {
       ],
     });
     const t = buildToolInspection(n, 'answer-tool-run_readonly_sql')!;
-    expect(t.tool?.calls).toEqual([{ tool: 'run_readonly_sql', input: 'select 1', finished: false }]);
+    expect(t.tool?.calls).toEqual([
+      { tool: 'run_readonly_sql', input: 'select 1', finished: false },
+    ]);
     expect(t.tool?.totalDurationMs).toBeNull();
   });
 
   it('a tool without details has no description and no inputs; anything else is not a tool', () => {
     const n = nodes(null);
     expect(buildToolInspection(n, 'answer-tool-undocumented')?.tool).toEqual(
-      jasmine.objectContaining({ name: 'undocumented', description: '', inputs: [] }),
+      jasmine.objectContaining({
+        name: 'undocumented',
+        description: '',
+        inputs: [],
+      }),
     );
     expect(buildToolInspection(n, 'answer')).toBeNull();
     expect(buildToolInspection(n, 'answer-model')).toBeNull();
@@ -267,17 +432,43 @@ describe('workflowStateSummary and nodeStatuses', () => {
   it('counts nodes that ran and maps statuses', () => {
     const s = src(STORED);
     const n = buildNodeInspections(s);
-    expect(workflowStateSummary(s, n)).toEqual({ status: 'success', ran: 4, total: 4, durationMs: 14000, runId: 'run-1', invalidFields: 0 });
-    expect(nodeStatuses(n)).toEqual({ start: 'success', prepare: 'success', answer: 'success', end: 'success' });
+    expect(workflowStateSummary(s, n)).toEqual({
+      status: 'success',
+      ran: 4,
+      total: 4,
+      durationMs: 14000,
+      runId: 'run-1',
+      invalidFields: 0,
+    });
+    expect(nodeStatuses(n)).toEqual({
+      start: 'success',
+      prepare: 'success',
+      answer: 'success',
+      end: 'success',
+    });
   });
 
   it('counts a running run partially and an empty page as null', () => {
-    const live: RunView = { status: 'running', runId: 'r', steps: [STORED.steps[0], { id: 'answer', title: 'Answer', kind: 'agent', status: 'running' }] };
+    const live: RunView = {
+      status: 'running',
+      runId: 'r',
+      steps: [
+        STORED.steps[0],
+        { id: 'answer', title: 'Answer', kind: 'agent', status: 'running' },
+      ],
+    };
     const n = buildNodeInspections(src(live));
     expect(workflowStateSummary(src(live), n).ran).toBe(2);
     expect(nodeStatuses(n)['answer']).toBe('running');
     const none = buildNodeInspections(src(null));
-    expect(workflowStateSummary(src(null), none)).toEqual({ status: null, ran: 0, total: 4, durationMs: null, runId: null, invalidFields: 0 });
+    expect(workflowStateSummary(src(null), none)).toEqual({
+      status: null,
+      ran: 0,
+      total: 4,
+      durationMs: null,
+      runId: null,
+      invalidFields: 0,
+    });
     expect(nodeStatuses(none)).toEqual({});
   });
   it('marks Start invalid and counts the errors when the last Execute was refused', () => {
@@ -292,13 +483,17 @@ describe('workflowStateSummary and nodeStatuses', () => {
     expect(n[1].inputErrors).toBeUndefined();
     expect(workflowStateSummary(s, n).invalidFields).toBe(2);
     expect(nodeStatuses(n)).toEqual({ start: 'invalid' });
-    expect(buildNodeInspections(src(null, { inputErrors: [] }))[0].inputErrors).toBeUndefined();
+    expect(
+      buildNodeInspections(src(null, { inputErrors: [] }))[0].inputErrors,
+    ).toBeUndefined();
   });
 });
 
 describe('durationMs and formatDuration', () => {
   it('computes and guards durations', () => {
-    expect(durationMs('2026-01-01T00:00:00.000Z', '2026-01-01T00:00:01.500Z')).toBe(1500);
+    expect(
+      durationMs('2026-01-01T00:00:00.000Z', '2026-01-01T00:00:01.500Z'),
+    ).toBe(1500);
     expect(durationMs(undefined, 'x')).toBeNull();
     expect(durationMs('nope', '2026-01-01T00:00:00.000Z')).toBeNull();
   });
@@ -329,15 +524,25 @@ describe('buildNodeInspections on a graph with a branch and a retry loop', () =>
     const analyse = n.find((x) => x.nodeId === 'analyse')!;
     expect(analyse.run?.attempt).toBe(2);
     expect(analyse.run?.input).toEqual({ plan: 'second' });
-    expect(analyse.attempts?.map((a) => [a.attempt, a.input, a.durationMs])).toEqual([
+    expect(
+      analyse.attempts?.map((a) => [a.attempt, a.input, a.durationMs]),
+    ).toEqual([
       [1, { plan: 'first' }, 6000],
       [2, { plan: 'second' }, 9000],
     ]);
     expect(analyse.attempts?.[0].toolCalls).toEqual([
-      { tool: 'run_readonly_sql', input: 'select 1', error: 'boom', finished: true },
+      {
+        tool: 'run_readonly_sql',
+        input: 'select 1',
+        error: 'boom',
+        finished: true,
+      },
     ]);
     const validate = n.find((x) => x.nodeId === 'validate')!;
-    expect(validate.attempts?.map((a) => a.output?.['ok'])).toEqual([false, true]);
+    expect(validate.attempts?.map((a) => a.output?.['ok'])).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it('leaves `attempts` out for a step that ran once', () => {
@@ -350,11 +555,23 @@ describe('buildNodeInspections on a graph with a branch and a retry loop', () =>
     const n = buildNodeInspections(graph(GRAPH_RETRY_RUN));
     const earlier = (id: string) =>
       n.find((x) => x.nodeId === id)!.context!.earlierSteps.map((e) => e.id);
-    expect(earlier('analyse')).toEqual(['receive-question', 'load-catalog', 'plan']);
-    expect(earlier('write-answer')).toEqual([
-      'receive-question', 'load-catalog', 'plan', 'analyse', 'validate',
+    expect(earlier('analyse')).toEqual([
+      'receive-question',
+      'load-catalog',
+      'plan',
     ]);
-    expect(earlier('clarify')).toEqual(['receive-question', 'load-catalog', 'plan']);
+    expect(earlier('write-answer')).toEqual([
+      'receive-question',
+      'load-catalog',
+      'plan',
+      'analyse',
+      'validate',
+    ]);
+    expect(earlier('clarify')).toEqual([
+      'receive-question',
+      'load-catalog',
+      'plan',
+    ]);
   });
 
   it('counts a repeated step once in the summary', () => {

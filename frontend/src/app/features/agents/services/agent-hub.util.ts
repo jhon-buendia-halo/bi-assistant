@@ -33,7 +33,9 @@ const OWNER_KIND: Record<Exclude<OwnerFilter, 'any'>, AgentKind> = {
  * in domain order (R1, R2). Built from every agent, so the pills do not move
  * as the user types a search or changes the owner.
  */
-export function hubFilters(agents: Agent[]): { id: HubFilter; label: string }[] {
+export function hubFilters(
+  agents: Agent[],
+): { id: HubFilter; label: string }[] {
   const present = new Set(agents.map(agentDomain));
   return [
     { id: 'all', label: 'All' },
@@ -50,13 +52,15 @@ export function agentKind(agent: Agent): AgentKind {
   return agent.key === 'assistant' ? 'official' : 'system';
 }
 
-/** Search matches the trimmed query in the name or description, any case (R2). */
+/**
+ * Search matches the trimmed query in the name, the description or a
+ * built-in agent's intro (the text its card shows), any case (R2).
+ */
 export function matchesQuery(agent: Agent, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  return (
-    agent.name.toLowerCase().includes(needle) ||
-    (agent.description ?? '').toLowerCase().includes(needle)
+  return [agent.name, agent.description, agent.intro].some((text) =>
+    (text ?? '').toLowerCase().includes(needle),
   );
 }
 

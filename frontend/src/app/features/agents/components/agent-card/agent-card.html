@@ -9,32 +9,70 @@
     (click)="open.emit()"
     class="agent-open flex min-w-0 flex-1 flex-col gap-2.5 rounded-xl p-4 text-left outline-none"
   >
-    <!-- The tile row also holds the pin toggle (absolutely placed), so the
-         name gets the card's full width even three cards to a row. -->
-    <span
-      [attr.data-testid]="'agent-domain-' + a.key"
-      [attr.data-domain]="domain().id"
-      [title]="domain().label"
-      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
-    >
-      <lucide-angular [img]="domain().icon" [size]="15" aria-hidden="true" />
-    </span>
-    <span class="flex min-w-0 flex-col">
-      <span class="truncate text-[14px] font-medium text-fg-strong">{{
-        a.name
-      }}</span>
-      @if (a.role) {
+    <!-- The portrait row also holds the pin toggle (absolutely placed), so
+         the name column leaves room for it (ui.md 4.4). -->
+    <span class="flex min-w-0 items-center gap-3 pr-20">
+      <span class="relative shrink-0">
+        <app-agent-avatar [agentKey]="a.key" [name]="a.name" [size]="44" />
+        <!-- The domain, as a badge on the portrait. -->
         <span
-          [attr.data-testid]="'agent-role-' + a.key"
-          class="truncate text-[12px] text-fg-muted"
-          >{{ a.role }}</span
+          [attr.data-testid]="'agent-domain-' + a.key"
+          [attr.data-domain]="domain().id"
+          [title]="domain().label"
+          class="absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-surface bg-primary-soft text-on-primary-soft"
         >
-      }
+          <lucide-angular
+            [img]="domain().icon"
+            [size]="10"
+            aria-hidden="true"
+          />
+        </span>
+      </span>
+      <span class="flex min-w-0 flex-col">
+        <span class="truncate text-[14px] font-medium text-fg-strong">{{
+          a.name
+        }}</span>
+        @if (a.role) {
+          <span
+            [attr.data-testid]="'agent-role-' + a.key"
+            class="truncate text-[12px] text-fg-muted"
+            >{{ a.role }}</span
+          >
+        }
+      </span>
     </span>
-    @if (a.description) {
+    @if (a.intro) {
+      <!-- A built-in agent introduces itself (agents.md 1.1). -->
+      <span
+        [attr.data-testid]="'agent-intro-' + a.key"
+        class="line-clamp-3 text-[12px] leading-relaxed text-fg"
+        >“{{ a.intro }}”</span
+      >
+    } @else if (a.description) {
       <span class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted">{{
         a.description
       }}</span>
+    }
+    @if (activity(); as act) {
+      <span
+        [attr.data-testid]="'agent-activity-' + a.key"
+        [attr.data-state]="act.state"
+        class="flex min-w-0 items-center gap-1.5 text-[12px]"
+        [class.text-on-success-soft]="act.state === 'available'"
+        [class.text-fg-muted]="act.state !== 'available'"
+      >
+        <span
+          aria-hidden="true"
+          class="h-1.5 w-1.5 shrink-0 rounded-full"
+          [class.bg-on-success-soft]="act.state === 'available'"
+          [class.bg-on-warning-soft]="act.state === 'waiting'"
+          [class.bg-primary]="act.state === 'working'"
+          [class.animate-pulse]="act.state === 'working'"
+        ></span>
+        <span class="truncate" [class.italic]="act.state !== 'available'">{{
+          act.label
+        }}</span>
+      </span>
     }
     <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
       <span class="text-[12px] text-fg-muted">Owner: {{ owner() }}</span>
@@ -64,7 +102,7 @@
     (click)="togglePin.emit()"
     [attr.aria-pressed]="!!a.pinned"
     [attr.aria-label]="(a.pinned ? 'Unpin ' : 'Pin ') + a.name"
-    class="group/pin absolute top-[22px] right-3 flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-primary hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+    class="group/pin absolute top-[28px] right-3 flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-primary hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
     [class.bg-surface-selected]="a.pinned"
   >
     @if (a.pinned) {

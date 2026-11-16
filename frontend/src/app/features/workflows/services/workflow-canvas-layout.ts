@@ -1,4 +1,8 @@
-import { END_NODE_ID, START_NODE_ID, WorkflowNodeKind } from '../models/workflow-node.model';
+import {
+  END_NODE_ID,
+  START_NODE_ID,
+  WorkflowNodeKind,
+} from '../models/workflow-node.model';
 import {
   WorkflowDetail,
   WorkflowDetailStep,
@@ -179,6 +183,8 @@ export interface CanvasNode {
 export interface CanvasNodeAgent {
   name: string;
   role: string;
+  /** Its registry key, for its portrait; '' when the catalogue gave none. */
+  key: string;
 }
 
 export interface CanvasEdge {
@@ -282,7 +288,7 @@ function modelLabel(
 function nodeAgent(step: WorkflowDetailStep): CanvasNodeAgent | null {
   const agent = step.agent;
   if (!agent) return null;
-  return { name: agent.name, role: agent.role ?? '' };
+  return { name: agent.name, role: agent.role ?? '', key: agent.key ?? '' };
 }
 
 /** How many lines an exit note takes at `width`. */
@@ -333,10 +339,17 @@ function squareLabelHeight(
   subtitle: string,
   mono: boolean,
 ): number {
-  const titleLines = Math.min(2, Math.max(1, textLines(title, TITLE_CHAR, CANVAS.labelWidth)));
+  const titleLines = Math.min(
+    2,
+    Math.max(1, textLines(title, TITLE_CHAR, CANVAS.labelWidth)),
+  );
   const subLines = Math.min(
     3,
-    textLines(subtitle, mono ? SUBTITLE_MONO_CHAR : SUBTITLE_CHAR, CANVAS.labelWidth),
+    textLines(
+      subtitle,
+      mono ? SUBTITLE_MONO_CHAR : SUBTITLE_CHAR,
+      CANVAS.labelWidth,
+    ),
   );
   return (
     SQUARE_LABEL_TOP +
@@ -425,7 +438,9 @@ export function workflowCanvasLayout(
   const sideIds = new Set(sideSteps.map((s) => s.id));
   const dropsFrom = new Set(
     graph
-      .filter((e) => e.kind !== 'loop' && sideIds.has(e.to) && onPath.has(e.from))
+      .filter(
+        (e) => e.kind !== 'loop' && sideIds.has(e.to) && onPath.has(e.from),
+      )
       .map((e) => e.from),
   );
 
@@ -521,7 +536,9 @@ export function workflowCanvasLayout(
       const below = Math.max(
         exit.y,
         next.y + next.height + next.labelHeight + EXIT_LABEL_GAP,
-        ...next.exits.map((e) => e.y + e.lines * CANVAS.exitRowHeight + EXIT_LABEL_GAP),
+        ...next.exits.map(
+          (e) => e.y + e.lines * CANVAS.exitRowHeight + EXIT_LABEL_GAP,
+        ),
       );
       start.exits = [{ ...exit, y: below }];
     }
@@ -578,7 +595,14 @@ export function workflowCanvasLayout(
     const typed = contractFields(schema, fields);
     const byName = new Map(typed.map((field) => [field.name, field]));
     const lines = g.label ? [g.label] : [];
-    const shape = edgeShape(g, from, to, end, lines, main ? dropAt.get(from.id) : undefined);
+    const shape = edgeShape(
+      g,
+      from,
+      to,
+      end,
+      lines,
+      main ? dropAt.get(from.id) : undefined,
+    );
     return [
       {
         id: `${from.id}-${to.id}`,
@@ -637,8 +661,7 @@ export function workflowCanvasLayout(
 function exitStackHeight(step: WorkflowDetailStep): number {
   return (
     step.exits.reduce(
-      (sum, exit) =>
-        sum + exitLines(exitText(exit), CANVAS.exitWidth),
+      (sum, exit) => sum + exitLines(exitText(exit), CANVAS.exitWidth),
       0,
     ) * CANVAS.exitRowHeight
   );
@@ -703,7 +726,9 @@ function stepNode(
   const top = centerY - height / 2;
   const bottom = top + height;
   const centreX = x + width / 2;
-  const labelHeight = isAgent ? 0 : squareLabelHeight(step.title, step.id, true);
+  const labelHeight = isAgent
+    ? 0
+    : squareLabelHeight(step.title, step.id, true);
   const exits: CanvasExit[] = [];
   if (isAgent) {
     // Stacked upwards from just above the node, the first exit on top.
@@ -799,12 +824,14 @@ function rowBottom(nodes: CanvasNode[]): number {
  */
 function columnGap(fields: string, branch: string[], drop: boolean): number {
   const branchW = branch.length ? branchLabelWidth(branch) : 0;
-  return Math.ceil(Math.max(
-    CANVAS.colGap,
-    fields ? fieldsLabelWidth(fields) + 2 * LABEL_MARGIN : 0,
-    branchW ? branchW + 2 * LABEL_MARGIN : 0,
-    drop && branchW ? 2 * (SIDE_LABEL_OFFSET + branchW + LABEL_MARGIN) : 0,
-  ));
+  return Math.ceil(
+    Math.max(
+      CANVAS.colGap,
+      fields ? fieldsLabelWidth(fields) + 2 * LABEL_MARGIN : 0,
+      branchW ? branchW + 2 * LABEL_MARGIN : 0,
+      drop && branchW ? 2 * (SIDE_LABEL_OFFSET + branchW + LABEL_MARGIN) : 0,
+    ),
+  );
 }
 
 /**
@@ -817,7 +844,14 @@ export function canvasBoxes(
 ): CanvasBox[] {
   const boxes: CanvasBox[] = [];
   for (const n of layout.nodes) {
-    boxes.push({ owner: n.id, part: 'node', x: n.x, y: n.y, w: n.width, h: n.height });
+    boxes.push({
+      owner: n.id,
+      part: 'node',
+      x: n.x,
+      y: n.y,
+      w: n.width,
+      h: n.height,
+    });
     if (n.kind !== 'agent') {
       boxes.push({
         owner: n.id,
@@ -840,11 +874,26 @@ export function canvasBoxes(
       });
     }
     for (const port of n.ports) {
-      const w = (port.label.length + (port.kind === 'model' ? 1 : 0)) * PORT_CHAR;
-      boxes.push({ owner: n.id, part: 'port-label', x: port.x - w / 2, y: port.y + 10, w, h: 14 });
+      const w =
+        (port.label.length + (port.kind === 'model' ? 1 : 0)) * PORT_CHAR;
+      boxes.push({
+        owner: n.id,
+        part: 'port-label',
+        x: port.x - w / 2,
+        y: port.y + 10,
+        w,
+        h: 14,
+      });
     }
     for (const sub of n.subNodes) {
-      boxes.push({ owner: sub.id, part: 'sub-node', x: sub.x, y: sub.y, w: sub.size, h: sub.size });
+      boxes.push({
+        owner: sub.id,
+        part: 'sub-node',
+        x: sub.x,
+        y: sub.y,
+        w: sub.size,
+        h: sub.size,
+      });
       const [left] = subLabelSpan(sub);
       boxes.push({
         owner: sub.id,
@@ -859,7 +908,14 @@ export function canvasBoxes(
   for (const e of layout.edges) {
     if (e.label) {
       const w = fieldsLabelWidth(e.label);
-      boxes.push({ owner: e.id, part: 'edge-label', x: e.labelX - w / 2, y: e.labelY - 8, w, h: 16 });
+      boxes.push({
+        owner: e.id,
+        part: 'edge-label',
+        x: e.labelX - w / 2,
+        y: e.labelY - 8,
+        w,
+        h: 16,
+      });
     }
     if (e.branchLabelLines.length) {
       const w = branchLabelWidth(e.branchLabelLines);
@@ -988,7 +1044,8 @@ export function fitZoom(
 ): number {
   const byHeight = viewportHeight / layout.height;
   const whole = Math.min(viewportWidth / layout.width, byHeight);
-  const ratio = whole >= FIT_MIN_ZOOM ? whole : Math.min(FIT_MIN_ZOOM, byHeight);
+  const ratio =
+    whole >= FIT_MIN_ZOOM ? whole : Math.min(FIT_MIN_ZOOM, byHeight);
   const fives = Math.floor(ratio * 20 + 1e-6) / 20;
   return Math.min(1, Math.max(MIN_ZOOM, fives));
 }

@@ -1,0 +1,83 @@
+@if (rows().length > 0) {
+  <ol
+    class="m-0 flex list-none flex-col gap-2 p-0"
+    aria-label="Agents on this run"
+    data-testid="workflow-run-team"
+  >
+    @for (row of rows(); track row.story.stepId) {
+      @let s = row.story;
+      @if (row.handoff; as handoff) {
+        <li
+          class="flex items-center gap-1.5 pl-1 text-[12px] text-fg-muted"
+          data-testid="workflow-run-team-handoff"
+        >
+          <span aria-hidden="true">↳</span>
+          <span>{{ handoff }}</span>
+        </li>
+      }
+      <li
+        class="flex items-start gap-2.5"
+        [attr.data-testid]="'workflow-run-team-' + s.stepId"
+        [attr.data-state]="s.state"
+      >
+        <!-- Only the face fades while it waits: the text keeps its contrast. -->
+        <app-agent-avatar
+          [class.opacity-50]="s.state === 'waiting'"
+          [agentKey]="s.agent.key"
+          [name]="s.agent.name"
+          [size]="28"
+        />
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+          <p class="m-0 flex flex-wrap items-baseline gap-x-1.5 text-[12px]">
+            <span class="font-medium text-fg-strong">{{ s.agent.name }}</span>
+            <span class="text-fg-muted">· {{ s.title }}</span>
+            @if (s.state === "waiting") {
+              <span class="text-fg-muted">· {{ s.line }}</span>
+            } @else if (s.state === "done" && s.durationMs !== null) {
+              <span class="text-fg-muted"
+                >· {{ s.line.replace("Done · ", "") }}</span
+              >
+            }
+          </p>
+          @if (s.sentence; as sentence) {
+            <p
+              class="m-0 w-fit max-w-full rounded-[2px_10px_10px_10px] border px-2.5 py-1.5 text-[13px] leading-snug break-words"
+              data-testid="workflow-run-team-sentence"
+              [class.border-border]="
+                s.state !== 'active' && s.state !== 'failed'
+              "
+              [class.bg-surface-muted]="
+                s.state !== 'active' && s.state !== 'failed'
+              "
+              [class.border-primary]="s.state === 'active'"
+              [class.bg-primary-soft]="s.state === 'active'"
+              [class.border-danger-soft]="s.state === 'failed'"
+              [class.bg-danger-soft]="s.state === 'failed'"
+              [class.text-fg]="s.state !== 'failed'"
+              [class.text-on-danger-soft]="s.state === 'failed'"
+            >
+              {{ sentence }}
+            </p>
+          }
+          @if (s.state !== "waiting") {
+            <button
+              type="button"
+              class="w-fit text-[12px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+              [attr.data-testid]="'workflow-run-team-open-' + s.stepId"
+              (click)="openNode.emit(s.stepId)"
+            >
+              {{
+                s.queries > 0
+                  ? "See " +
+                    s.queries +
+                    (s.queries === 1 ? " query" : " queries") +
+                    " and data"
+                  : "See its data"
+              }}
+            </button>
+          }
+        </div>
+      </li>
+    }
+  </ol>
+}

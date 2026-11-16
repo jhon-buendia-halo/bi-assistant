@@ -36,7 +36,12 @@ const emily = agent('assistant', 'Emily', 'official', 'analysis');
 const michael = agent('insights-analyst', 'Michael', 'official', 'analysis');
 const sarah = agent('data-readiness', 'Sarah', 'official', 'data-foundations');
 const olivia = agent('analysis-planner', 'Olivia', 'system', 'analysis');
-const kevin = agent('knowledge-bootstrap', 'Kevin', 'system', 'data-foundations');
+const kevin = agent(
+  'knowledge-bootstrap',
+  'Kevin',
+  'system',
+  'data-foundations',
+);
 const david = agent('sql-fixer', 'David', 'system', 'sql');
 const rachel = agent('sql-verifier', 'Rachel', 'system', 'sql');
 const laura = agent('assistant-eval-judge', 'Laura', 'system', 'quality');
@@ -65,6 +70,11 @@ describe('matchesQuery', () => {
     expect(matchesQuery(claims, 'urgency')).toBeTrue();
     expect(matchesQuery(claims, 'health')).toBeFalse();
     expect(matchesQuery(claims, '   ')).toBeTrue();
+  });
+
+  it("matches a built-in agent's intro, the text its card shows", () => {
+    const grace = { ...claims, intro: 'Show me a picture of any dashboard' };
+    expect(matchesQuery(grace, 'PICTURE')).toBeTrue();
   });
 });
 
@@ -167,8 +177,9 @@ describe('buildHubSections', () => {
       'u-claims',
     ]);
     const system = buildHubSections(all, 'all', 'system', '');
-    expect(system.flatMap((s) => s.agents).every((a) => a.kind === 'system'))
-      .toBeTrue();
+    expect(
+      system.flatMap((s) => s.agents).every((a) => a.kind === 'system'),
+    ).toBeTrue();
   });
 
   it('combines search, domain and owner', () => {
@@ -214,7 +225,12 @@ describe('hubEmptyMessage', () => {
 
   it('says nothing when sections are shown', () => {
     expect(
-      hubEmptyMessage('all', 'any', '', buildHubSections(all, 'all', 'any', '')),
+      hubEmptyMessage(
+        'all',
+        'any',
+        '',
+        buildHubSections(all, 'all', 'any', ''),
+      ),
     ).toBeNull();
   });
 });

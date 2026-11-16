@@ -8,6 +8,8 @@ import {
 import { Agent } from '../../services/agents-api.service';
 import { agentKind } from '../../services/agent-hub.util';
 import { agentDomain, domainInfo } from '../../services/agent-domains';
+import { AgentActivity } from '../../services/agent-activity';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 
 /**
  * One agent on the hub (ui.md 4.4). The open control and the pin toggle are
@@ -16,7 +18,7 @@ import { agentDomain, domainInfo } from '../../services/agent-domains';
  */
 @Component({
   selector: 'app-agent-card',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, AgentAvatar],
   templateUrl: './agent-card.html',
   host: { class: 'block h-full' },
 })
@@ -26,10 +28,12 @@ export class AgentCard {
   readonly TriangleAlert = TriangleAlert;
 
   readonly agent = input.required<Agent>();
+  /** What the agent is doing now; absent until the run history loads. */
+  readonly activity = input<AgentActivity | null>(null);
   readonly open = output<void>();
   readonly togglePin = output<void>();
 
-  /** The domain's label and the icon on the tile (ui.md 4.4). */
+  /** The domain's label and the icon of the badge on the portrait (ui.md 4.4). */
   readonly domain = computed(() => domainInfo(agentDomain(this.agent())));
 
   readonly isUser = computed(() => agentKind(this.agent()) === 'user');

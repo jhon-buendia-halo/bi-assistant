@@ -126,8 +126,11 @@ describe('AgentsService (built-in and user agents)', () => {
         hasUnpublishedChanges: false,
         missingDatasets: [],
         datasets: [],
-        starterQuestions: [],
+        starterQuestions: [], // No workflow step calls the assistant (api.md 33).
+        usedInWorkflows: [],
       });
+      // And its first-person intro (agents.md 1.1).
+      expect(agents[1].intro).toMatch(/^Ask me a business question/);
       expect(agents[0]).toMatchObject({
         key: 'sql-fixer',
         name: 'David',
@@ -279,6 +282,8 @@ describe('AgentsService (built-in and user agents)', () => {
         id: created.id,
         name: 'Health plan analyst',
         role: 'Claims Analyst',
+        // A user agent has no persona intro: its card shows the description.
+        intro: '',
         // No domain chosen: General.
         domain: 'general',
         description: 'Plans',
@@ -292,6 +297,7 @@ describe('AgentsService (built-in and user agents)', () => {
         missingDatasets: ['Gone'],
         datasets: ['World Cup Core', 'Gone'],
         starterQuestions: ['Who won?'],
+        usedInWorkflows: [],
       });
     }),
   );

@@ -1,9 +1,7 @@
-import type { AgentToolLink } from './agents-api.service';
 import {
   LINKABLE_TOOLS,
   LinkOption,
   linkableBuiltInSkills,
-  linkedNames,
 } from './prompt-links';
 
 /**
@@ -45,43 +43,6 @@ export function officialLinkSkills<
   return linkableBuiltInSkills(skills).filter((skill) =>
     (skill.agents ?? []).includes(agentKey),
   );
-}
-
-/**
- * What the Graph tab of an Official agent draws: its skills with the tools
- * each body links, and every tool, always on.
- */
-export function officialGraphInput(
-  agent: {
-    key: string;
-    toolDetails?: { name: string; description: string }[];
-    prompt?: { editable: string };
-  },
-  skills: readonly {
-    name: string;
-    loading: 'on-demand' | 'harness';
-    agents?: string[];
-    tools?: string[];
-  }[],
-): { skills: { name: string; tools: string[] }[]; toolLinks: AgentToolLink[] } {
-  const linked = linkedNames(agent.prompt?.editable ?? '', 'tool');
-  const graphSkills = officialLinkSkills(skills, agent.key).map((skill) => ({
-    name: skill.name,
-    tools: [...(skill.tools ?? [])],
-  }));
-  return {
-    skills: graphSkills,
-    toolLinks: officialLinkTools(agent).map((tool) => ({
-      name: tool.name,
-      status: 'always-on' as const,
-      linkedVia: {
-        instructions: linked.includes(tool.name),
-        skills: graphSkills
-          .filter((skill) => skill.tools.includes(tool.name))
-          .map((skill) => skill.name),
-      },
-    })),
-  };
 }
 
 /**

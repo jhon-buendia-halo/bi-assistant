@@ -55,6 +55,9 @@ describe('AgentSystemPrompt', () => {
     fixture.componentRef.setInput('agent', agent);
     fixture.componentRef.setInput('library', library);
     fixture.detectChanges();
+    // The CV view loads on its own (`@defer`).
+    await fixture.whenStable();
+    fixture.detectChanges();
   });
 
   afterEach(() => http.verify());
@@ -62,6 +65,21 @@ describe('AgentSystemPrompt', () => {
   const el = () => fixture.nativeElement as HTMLElement;
   const byId = (id: string) =>
     el().querySelector<HTMLButtonElement>(`[data-testid="${id}"]`);
+
+  it('shows the job description as a CV first, and as stored on Text', () => {
+    // CV: the agent's details beside the job description's sections.
+    expect(byId('agent-cv')).not.toBeNull();
+    expect(byId('agent-cv-facts')?.textContent).toContain('Fan');
+    expect(byId('agent-cv-section-profile')?.textContent).toContain('Be brief');
+    expect(byId('agent-prompt-format-cv')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    byId('agent-prompt-format-text')!.click();
+    fixture.detectChanges();
+    expect(byId('agent-cv')).toBeNull();
+    expect(byId('agent-instructions')?.tagName).toBe('PRE');
+    expect(byId('agent-instructions')?.textContent).toContain('Be brief');
+  });
 
   it('shows the instructions with chips and the core prompt collapsed', () => {
     expect(byId('agent-instructions')?.textContent).toContain('Be brief');

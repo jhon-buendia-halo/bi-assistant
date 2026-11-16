@@ -16,16 +16,15 @@
         <lucide-angular [img]="BookOpen" [size]="14" />
         <span>Skills</span>
       </button>
-              <button
-          type="button"
-          data-testid="agent-new"
-          (click)="newAgent.emit()"
-          class="btn btn-primary"
-        >
-          <lucide-angular [img]="Plus" [size]="14" />
-          <span>New agent</span>
-        </button>
-      
+      <button
+        type="button"
+        data-testid="agent-new"
+        (click)="newAgent.emit()"
+        class="btn btn-primary"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New agent</span>
+      </button>
     </div>
   </div>
 
@@ -111,6 +110,7 @@
             @for (agent of section.agents; track agent.key) {
               <app-agent-card
                 [agent]="agent"
+                [activity]="activities().get(agent.key) ?? null"
                 (open)="openAgent.emit(agent)"
                 (togglePin)="togglePin(agent)"
               />

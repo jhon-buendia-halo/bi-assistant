@@ -17,6 +17,7 @@ import {
   LucideAngularModule,
   X,
 } from 'lucide-angular';
+import { AgentAvatar } from '../agent-avatar/agent-avatar';
 import {
   BackgroundTask,
   BackgroundTasksService,
@@ -30,7 +31,7 @@ import {
  */
 @Component({
   selector: 'app-background-tasks',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, AgentAvatar],
   templateUrl: './background-tasks.html',
   styles: `
     :host {

@@ -24,7 +24,7 @@ An **agent** is a named, stateless-by-default LLM wrapper with:
 - a **model**, resolved *at call time* (never at construction) from the persisted LLM settings — see 1.3;
 - optionally a **tool set**, a **conversation memory** and a **workspace** (a per-session sandboxed folder, see 7).
 
-**Personas.** Every built-in agent is also a **user persona**: a human first name and a job title, so the Agents catalogue reads as a team. The table lives in code, `backend/src/mastra/agent-personas.ts`, by registry key:
+**Personas.** Every built-in agent is also a **user persona**: a human first name, a job title and a short first-person **intro** (one or two sentences, for example Grace's "Show me a picture of any dashboard and I'll describe its layout, filters, charts and the data behind them, ready to rebuild."), so the Agents catalogue reads as a team. The intros are in `agent-personas.ts` with the rest of the persona; a unit test keeps each one in the first person and at most 160 characters. The table lives in code, `backend/src/mastra/agent-personas.ts`, by registry key:
 
 | Registry key | Persona | Job title | Domain |
 |---|---|---|---|
@@ -44,7 +44,7 @@ An **agent** is a named, stateless-by-default LLM wrapper with:
 
 Each persona also carries a **domain**, the specialty that groups the agent in the Agent Hub. The six ids, in the order the hub shows them: `data-foundations` (Data Foundations), `analysis` (Analysis), `sql` (SQL Engineering), `storytelling` (Storytelling), `quality` (Quality & Evals) and `general` (General). `general` is the default (`DEFAULT_AGENT_DOMAIN`) and belongs to no built-in agent: it is where user agents with no domain chosen sit. The ids and the check `isAgentDomain` live in `agent-personas.ts` (`AGENT_DOMAINS`, `AgentDomain`).
 
-The persona is presentation only. The Mastra agent keeps its technical name (for example `Data Readiness Agent`) in traces, monitoring, workflow steps and chat sessions, and the model never sees the persona. Only the agent catalogue (`GET /agents`, `GET /agents/:key`, [api.md](api.md) 33, 34) reports it: `name` is the persona's name and `role` its job title; the catalogue sorts by that `name`. The persona name also names the agent in the messages of the job-description editor (agents-evals R101, R102, R107). A user agent has no persona: its `name` is what the user typed and its optional `role` is the job title it was given (data-model.md 3.10). In the app a system prompt is called a **job description**; the `prompt` and `instructions` fields, the prompt endpoints and `agent_prompt_overrides` keep their names.
+The persona is presentation only. The Mastra agent keeps its technical name (for example `Data Readiness Agent`) in traces, monitoring, workflow steps and chat sessions, and the model never sees the persona. Only the agent catalogue (`GET /agents`, `GET /agents/:key`, [api.md](api.md) 33, 34) reports it: `name` is the persona's name, `role` its job title and `intro` its first-person intro; the catalogue sorts by that `name`. The persona name also names the agent in the messages of the job-description editor (agents-evals R101, R102, R107). A user agent has no persona: its `name` is what the user typed, its optional `role` is the job title it was given (data-model.md 3.10) and its `intro` is empty, so the app shows its description instead. Every agent also has an illustrated **portrait**, drawn in the browser (ui.md 4.4); the backend knows nothing of it. In the app a system prompt is called a **job description**; the `prompt` and `instructions` fields, the prompt endpoints and `agent_prompt_overrides` keep their names.
 
 Callers invoke an agent in one of two modes:
 
@@ -1345,7 +1345,7 @@ The model never writes this state: v2 has no `update_workflow`. A failed step en
 
 The non-streamed turn was removed in 1.23.27: every turn is a run (5.1).
 
-**The step catalogue describes each step for the agent's Graph tab** ([agents-evals](../capabilities/agents-evals/spec.md) R108) and the workflow page. Besides the id and title, it holds for each step:
+**The step catalogue describes each step for the workflow page** (the agent page's Graph tab that also drew it was removed on 2026-11-15, [agents-evals](../capabilities/agents-evals/spec.md) R108). Besides the id and title, it holds for each step:
 - its kind, `code` or `agent` (Plan and Write answer are `agent` steps that run their own registered System agent, `analysis-planner` and `answer-writer`, for one model call without tools, `modelOnly`; `stepAgents` on the code workflow source maps each such step to its agent's registry key, and Analyse runs `insights-analyst`);
 - a one-line summary;
 - the field names of its input and output, in the order of the step's input and output schemas, derived from those schemas (5.12);

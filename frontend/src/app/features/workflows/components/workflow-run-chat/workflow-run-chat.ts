@@ -46,6 +46,7 @@ import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
+import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
 import {
   IMAGE_ACCEPT,
   isImageDataUrl,
@@ -82,6 +83,7 @@ const FORM_CONTROLS =
     ReadinessHistory,
     RunVisual,
     WorkflowRunInputRequired,
+    WorkflowRunTeam,
   ],
   templateUrl: './workflow-run-chat.html',
   styles: `
@@ -264,7 +266,9 @@ export class WorkflowRunChat {
       root.querySelectorAll<HTMLElement>(FORM_CONTROLS),
     );
     const first = controls.find((el) => el.getClientRects().length > 0);
-    (first ?? root.querySelector<HTMLElement>('[data-testid="workflow-run"]'))?.focus();
+    (
+      first ?? root.querySelector<HTMLElement>('[data-testid="workflow-run"]')
+    )?.focus();
   }
 
   /** Only a workflow with an input runs from its page (R21). */
@@ -277,15 +281,9 @@ export class WorkflowRunChat {
   protected readonly applyRun = (run: WorkflowRun): void =>
     this.designer.run.set(run);
 
-  protected readonly visualGenerating = computed(
-    () => this.visuals.generating() === this.designer.run()?.id,
-  );
-
-  /** "Generate interactive visuals" on the stored run's answer. */
-  protected generateVisual(): void {
-    const run = this.designer.run();
-    if (run !== null) this.visuals.generate(run, this.applyRun);
-  }
+  // No "Generate interactive visuals" here: a workflow that wants visuals
+  // makes them in a step of its own, with a specialised agent (ui.md 4.4b).
+  // Visuals a run already has still open under the answer.
 
   /** A visual card's View: open that visual under the answer. */
   /** A figure chip or query row: the query opens in the sheet beside the answer. */
@@ -423,7 +421,8 @@ export class WorkflowRunChat {
     const workflow = this.designer.workflow();
     const datasets = workflow?.input.some(
       (field) =>
-        !field.hidden && (field.type === 'datasets' || field.type === 'dataset'),
+        !field.hidden &&
+        (field.type === 'datasets' || field.type === 'dataset'),
     );
     const image = workflow?.input.some(
       (field) => !field.hidden && field.type === 'image',
@@ -542,7 +541,9 @@ export class WorkflowRunChat {
         typeof reader.result === 'string' ? reader.result : '',
       );
       // An image picked replaces the field this one is required without.
-      const field = this.designer.workflow()?.input.find((f) => f.name === name);
+      const field = this.designer
+        .workflow()
+        ?.input.find((f) => f.name === name);
       if (field !== undefined) this.clearPeer(field);
     };
     reader.onerror = () => {
