@@ -126,6 +126,19 @@ test("a quiet gap flushes the group so the next line starts a new entry", () => 
   );
 });
 
+test("a Mastra pretty-printed error starts its own entry and keeps its stack", () => {
+  const entries = collect("info", [
+    "[Nest] 5424  - 11/15/2026, 8:29:11 PM     LOG [SessionsService] run started",
+    "ERROR [2026-11-15 20:29:11.573 -0500] (Mastra): Error executing step workflow.data-readiness-assessment.step.profile-source: BadRequestException: None of the entities to assess exist",
+    "    at async Object.profile (C:\\app\\dist\\main.js:892718:22)",
+    "    at async executeStep (C:\\app\\dist\\main.js:556724:31)",
+  ]);
+  assert.equal(entries.length, 2);
+  assert.equal(entries[1].level, "error");
+  assert.match(entries[1].message, /\(Mastra\): Error executing step/);
+  assert.equal(entries[1].details.split("\n").length, 2);
+});
+
 test("levelFromLine reads the level word", () => {
   assert.equal(levelFromLine("x ERROR y", "info"), "error");
   assert.equal(levelFromLine("x WARN y", "info"), "warn");

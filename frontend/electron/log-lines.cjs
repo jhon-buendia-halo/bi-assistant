@@ -3,12 +3,16 @@
 // (api.md 4.2 "Backend output capture"). Pure: no Electron, no I/O.
 //
 // A new entry starts on a head line: a Nest log prefix, a Mastra/pino JSON
-// line, a `(node:<pid>)` warning, or the first line after a quiet gap on the
+// line, a Mastra pretty-printed `LEVEL [date …]` line, a `(node:<pid>)`
+// warning, or the first line after a quiet gap on the
 // same stream. Everything else (stack frames, `{`, `}`, `^`, indented text,
 // the `(Use ...)` hint) is appended to the entry in progress.
 
 const NEST_HEAD = /^\[Nest\]\s+\d+\s+- /;
 const NODE_WARNING_HEAD = /^\(node:\d+\)/;
+/** Mastra's pretty-printed logger: `ERROR [2026-11-13 12:21:53.410 -0500] (Mastra): …`. */
+const LEVEL_TIMESTAMP_HEAD =
+  /^(?:TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s+\[\d{4}-\d{2}-\d{2}[ T]/;
 /** Quiet time on a stream after which the pending group is flushed. */
 const GROUP_GAP_MS = 40;
 
@@ -32,7 +36,11 @@ function parseJsonLine(line) {
 }
 
 function isHeadLine(line) {
-  return NEST_HEAD.test(line) || NODE_WARNING_HEAD.test(line);
+  return (
+    NEST_HEAD.test(line) ||
+    NODE_WARNING_HEAD.test(line) ||
+    LEVEL_TIMESTAMP_HEAD.test(line)
+  );
 }
 
 /**
