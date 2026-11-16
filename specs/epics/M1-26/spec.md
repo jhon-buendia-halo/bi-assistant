@@ -31,7 +31,7 @@ Saving a dataset disappeared when the user opened another screen, and the datase
 | 1.26.2 | Saving a dataset and loading an inventory | In progress |
 | 1.26.3 | Testing Data, ontology suggestions, synthetic profile | In progress |
 | 1.26.4 | Visual tailor and refresh, eval runs | In progress |
-| 1.26.5 | Workflow runs keep running when their page is left | Planned (approach pending) |
+| 1.26.5 | Workflow runs keep running when their page is left (approach A: backend run registry, re-attach, Stop endpoint) | In progress |
 
 ## Specs touched
 
@@ -51,4 +51,4 @@ Saving a dataset disappeared when the user opened another screen, and the datase
 
 - Plan and contract: [docs/plans/m1-26-background-tasks.md](../../../docs/plans/m1-26-background-tasks.md).
 - Risk: a component that still toasts its own outcome would toast twice; the plan's rule 3 removes them.
-- Open: the approach for 1.26.5.
+- 1.26.5 approach A, picked by the user on 2026-11-15 ("vamos con tu recomendacion"); ADR-0048.

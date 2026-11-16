@@ -603,10 +603,12 @@ Saving a dataset disappeared when the user opened another screen, and the datase
 - **Out of scope:** the automatic visual repair; eval jobs started before an app reload.
 - **Acceptance:** unit tests: busy state and result across re-creation; polling stops at the terminal status and with no timer left.
 
-#### 1.26.5 — Workflow runs keep running when the user leaves their page  `📋 Planned`
-- **Intent:** leaving a workflow's page no longer stops its run; the run shows in Background tasks and the page re-attaches to it.
-- **Scope:** the approach the user picks among the three proposed on 2026-11-15 (backend run registry with re-attach, Mastra's run lifecycle, or the frontend keeping the connection), with its ADR.
-- **Notes:** waiting for the user's choice (CLAUDE.md, *New or changed workflows start from Mastra's docs*).
+#### 1.26.5 — Workflow runs keep running when the user leaves their page  `🚧 In progress`
+- **Intent:** leaving a workflow's page, reloading or closing the window no longer stops its run; the run shows in Background tasks and the page re-attaches to it with the live view it had.
+- **Scope:** approach A of three (picked by the user on 2026-11-15): a backend registry of live runs with a numbered event log; the start, follow-up and resume streams detach from their connection; a re-attach stream and a Stop endpoint; the designer re-attaches and Stop calls the endpoint; `workflow-run` tasks polled through 121, registered at start-up for runs still running; api.md, workflows spec, ADR-0048.
+- **Out of scope:** surviving a backend restart (R20 unchanged); draft runs (Try it) and a step's chat keep stopping when their connection closes.
+- **Acceptance:** Jest tests for the registry and the two routes; Karma tests for the designer (leaving does not abort, Stop calls the endpoint, re-attach rebuilds the live view); a Playwright scenario: start a run, leave, the rail counts it, return, the live view is there, the answer lands.
+- **Notes:** rejected: B (Mastra's `watch`/`cancel`, internal API, every agent step rewritten, evals), C (frontend-only, a reload stops the run, 6 connections per origin).
 
 ## Release 2 — Multi-user  (no target date yet)
 
