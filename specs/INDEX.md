@@ -345,7 +345,7 @@ specs/README.md:171-175  ## Lifecycle
 specs/README.md:177-183  ## Rebuild prompt
 
 specs/capabilities/agent-answers/spec.md:7-9  ## Concepts
-specs/capabilities/agent-answers/spec.md:11-215  ## Rules
+specs/capabilities/agent-answers/spec.md:11-216  ## Rules
 specs/capabilities/agent-answers/spec.md:13-41  ### Sending a message and streaming
 specs/capabilities/agent-answers/spec.md:15-15  R8 The system SHALL reject an empty or whitespace-only question: a run re
 specs/capabilities/agent-answers/spec.md:16-16  R9 Retired (1.23.27). The composer's Enter and Shift+Enter went with it.
@@ -378,69 +378,69 @@ specs/capabilities/agent-answers/spec.md:95-95  R31 The interpretation line SHAL
 specs/capabilities/agent-answers/spec.md:96-101  R32 Under an answer, the chat SHALL show these blocks, each only when non-
 specs/capabilities/agent-answers/spec.md:102-106  R33 Unless the host shows the query inspector (R67), each entry in "Data u
 specs/capabilities/agent-answers/spec.md:107-107  R34 The chat SHALL offer "Copy message" on every user message and answer.
-specs/capabilities/agent-answers/spec.md:109-142  ### Query inspector
+specs/capabilities/agent-answers/spec.md:109-143  ### Query inspector
 specs/capabilities/agent-answers/spec.md:113-113  R67 A host turns the inspector on with the answer view's `queryInspector`
 specs/capabilities/agent-answers/spec.md:114-114  R68 Each persisted answer MAY carry `evidence`: one entry per `run_readonl
 specs/capabilities/agent-answers/spec.md:115-122  R69 In inspector mode each figure of the answer text SHALL carry a numbere
-specs/capabilities/agent-answers/spec.md:123-127  R70 Under the answer, in place of `How I worked this out` and `Data used`,
-specs/capabilities/agent-answers/spec.md:128-128  R71 The answer view in inspector mode SHALL list one **row** per `data` re
-specs/capabilities/agent-answers/spec.md:129-129  R72 An answer stored before the feature has `data` but no `evidence`: the
-specs/capabilities/agent-answers/spec.md:130-130  R73 Opening a query (a chip, a row or the coverage line's link) SHALL show
-specs/capabilities/agent-answers/spec.md:131-131  R74 `Step by step` shows the SQL as a funnel of business steps (`Start fro
-specs/capabilities/agent-answers/spec.md:132-132  R75 The size of each table a query reads is counted in code (`SELECT COUNT
-specs/capabilities/agent-answers/spec.md:133-133  R76 The `Result` tab SHALL first show the rows stored with the answer (at
-specs/capabilities/agent-answers/spec.md:134-134  R77 **Re-run** SHALL run the same statement again, with no repair, on the
-specs/capabilities/agent-answers/spec.md:135-135  R79 The `Result` tab SHALL have a pager: `Previous` and `Next` ask the ser
-specs/capabilities/agent-answers/spec.md:136-136  R80 Each column header of the `Result` tab SHALL be a button that sorts by
-specs/capabilities/agent-answers/spec.md:137-137  R81 The `Result` tab SHALL let the reader add column filters (`Add filter`
-specs/capabilities/agent-answers/spec.md:138-138  R82 In a query that can be paged, the `Result` tab SHALL offer `Filter in
-specs/capabilities/agent-answers/spec.md:139-139  R83 When the evidence of a query holds a `view` (an `explore_result` recor
-specs/capabilities/agent-answers/spec.md:140-140  R84 An answer that paged, filtered or sorted an earlier query with `explor
-specs/capabilities/agent-answers/spec.md:141-141  R85 After each table of the answer text whose figures a query holds, the a
-specs/capabilities/agent-answers/spec.md:142-142  R78 The explanation, the step counts and the evidence are written to the r
-specs/capabilities/agent-answers/spec.md:144-152  ### Verified badge and rating
-specs/capabilities/agent-answers/spec.md:146-146  R35 An answer whose last successful SQL equals a stored verified query (ca
-specs/capabilities/agent-answers/spec.md:147-152  R36 An answer with data records SHALL offer "Save as verified query" (thum
-specs/capabilities/agent-answers/spec.md:154-171  ### Careful mode (cross-check)
-specs/capabilities/agent-answers/spec.md:156-156  R37 Careful mode is asked for per run (the `careful` option of a run's tur
-specs/capabilities/agent-answers/spec.md:157-162  R38 In careful mode, before `done`, the system SHALL check the turn's last
-specs/capabilities/agent-answers/spec.md:163-170  R39 The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check
-specs/capabilities/agent-answers/spec.md:171-171  R40 A failing cross-check SHALL NOT lose the answer. A turn with no succes
-specs/capabilities/agent-answers/spec.md:173-181  ### Clarification
-specs/capabilities/agent-answers/spec.md:175-175  R41 The assistant SHALL ask at most one clarifying question per user quest
-specs/capabilities/agent-answers/spec.md:176-176  R42 A clarification SHALL end the turn immediately: the model stops. A cla
-specs/capabilities/agent-answers/spec.md:177-180  R43 Only the latest clarification card SHALL be actionable. Its controls:
-specs/capabilities/agent-answers/spec.md:181-181  R44 When the user answers a clarification, the system SHALL give the model
-specs/capabilities/agent-answers/spec.md:183-185  ### Errors
-specs/capabilities/agent-answers/spec.md:185-185  R45 Retired (1.23.27). The chat error bubble, its toast and **Retry** went
-specs/capabilities/agent-answers/spec.md:187-191  ### Memory and continuity
-specs/capabilities/agent-answers/spec.md:189-189  R46 Each session SHALL have its own persistent agent memory thread. Each t
-specs/capabilities/agent-answers/spec.md:190-190  R47 When a session has a transcript but no memory thread (created before m
-specs/capabilities/agent-answers/spec.md:191-191  R48 Background work (grounding pass, SQL repair, cross-check, visual desig
-specs/capabilities/agent-answers/spec.md:193-196  ### Retired chat rules
-specs/capabilities/agent-answers/spec.md:195-195  R50 Retired (1.23.27). The empty chat's welcome block and its starter prom
-specs/capabilities/agent-answers/spec.md:196-196  R51 Moved to past-chats R66 (the history strip of a transcript; see ../pas
-specs/capabilities/agent-answers/spec.md:198-215  ### Sessions started from an agent
-specs/capabilities/agent-answers/spec.md:202-202  R52 Retired (1.24.12). **Start chat** (on a workflow, never on an agent) c
-specs/capabilities/agent-answers/spec.md:203-203  R53 A session started from an agent SHALL keep the datasets it was created
-specs/capabilities/agent-answers/spec.md:204-210  R54 Every assistant call made for a session bound to a user agent that sti
-specs/capabilities/agent-answers/spec.md:211-211  R55 An agent's instructions SHALL NOT relax any rule enforced in code: the
-specs/capabilities/agent-answers/spec.md:212-212  R56 A model override SHALL name a model or deployment of the configured pr
-specs/capabilities/agent-answers/spec.md:213-213  R58 Retired (1.23.27). The welcome block of a session bound to an agent we
-specs/capabilities/agent-answers/spec.md:214-214  R61 A session bound to a built-in agent (today the Data Readiness Agent an
-specs/capabilities/agent-answers/spec.md:215-215  R64 Retired (1.24.12). The new-session screen, with its **Workflow** field
-specs/capabilities/agent-answers/spec.md:217-229  ## Edge cases and errors
-specs/capabilities/agent-answers/spec.md:231-239  ## Contracts
-specs/capabilities/agent-answers/spec.md:241-253  ## UI
-specs/capabilities/agent-answers/spec.md:255-454  ## Flows
-specs/capabilities/agent-answers/spec.md:257-280  ### Feature: Chat and visuals
-specs/capabilities/agent-answers/spec.md:282-372  ### Feature: Chat answers and reliability signals
-specs/capabilities/agent-answers/spec.md:374-408  ### Feature: Sessions started from an agent
-specs/capabilities/agent-answers/spec.md:410-416  ### Feature: Page, sort and filter a query's result
-specs/capabilities/agent-answers/spec.md:418-424  ### Feature: Every workflow whose answer ran queries gets the query inspector
-specs/capabilities/agent-answers/spec.md:426-432  ### Feature: Filter a query's result in words
-specs/capabilities/agent-answers/spec.md:434-454  ### Feature: Skills the assistant is given
-specs/capabilities/agent-answers/spec.md:456-465  ## Acceptance
+specs/capabilities/agent-answers/spec.md:123-128  R70 Under the answer, in place of `How I worked this out` and `Data used`,
+specs/capabilities/agent-answers/spec.md:129-129  R71 The answer view in inspector mode SHALL list one **row** per `data` re
+specs/capabilities/agent-answers/spec.md:130-130  R72 An answer stored before the feature has `data` but no `evidence`: the
+specs/capabilities/agent-answers/spec.md:131-131  R73 Opening a query (a chip, a row or the coverage line's link) SHALL show
+specs/capabilities/agent-answers/spec.md:132-132  R74 `Step by step` shows the SQL as a funnel of business steps (`Start fro
+specs/capabilities/agent-answers/spec.md:133-133  R75 The size of each table a query reads is counted in code (`SELECT COUNT
+specs/capabilities/agent-answers/spec.md:134-134  R76 The `Result` tab SHALL first show the rows stored with the answer (at
+specs/capabilities/agent-answers/spec.md:135-135  R77 **Re-run** SHALL run the same statement again, with no repair, on the
+specs/capabilities/agent-answers/spec.md:136-136  R79 The `Result` tab SHALL have a pager: `Previous` and `Next` ask the ser
+specs/capabilities/agent-answers/spec.md:137-137  R80 Each column header of the `Result` tab SHALL be a button that sorts by
+specs/capabilities/agent-answers/spec.md:138-138  R81 The `Result` tab SHALL let the reader add column filters (`Add filter`
+specs/capabilities/agent-answers/spec.md:139-139  R82 In a query that can be paged, the `Result` tab SHALL offer `Filter in
+specs/capabilities/agent-answers/spec.md:140-140  R83 When the evidence of a query holds a `view` (an `explore_result` recor
+specs/capabilities/agent-answers/spec.md:141-141  R84 An answer that paged, filtered or sorted an earlier query with `explor
+specs/capabilities/agent-answers/spec.md:142-142  R85 After each table of the answer text whose figures a query holds, the a
+specs/capabilities/agent-answers/spec.md:143-143  R78 The explanation, the step counts and the evidence are written to the r
+specs/capabilities/agent-answers/spec.md:145-153  ### Verified badge and rating
+specs/capabilities/agent-answers/spec.md:147-147  R35 An answer whose last successful SQL equals a stored verified query (ca
+specs/capabilities/agent-answers/spec.md:148-153  R36 An answer with data records SHALL offer "Save as verified query" (thum
+specs/capabilities/agent-answers/spec.md:155-172  ### Careful mode (cross-check)
+specs/capabilities/agent-answers/spec.md:157-157  R37 Careful mode is asked for per run (the `careful` option of a run's tur
+specs/capabilities/agent-answers/spec.md:158-163  R38 In careful mode, before `done`, the system SHALL check the turn's last
+specs/capabilities/agent-answers/spec.md:164-171  R39 The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check
+specs/capabilities/agent-answers/spec.md:172-172  R40 A failing cross-check SHALL NOT lose the answer. A turn with no succes
+specs/capabilities/agent-answers/spec.md:174-182  ### Clarification
+specs/capabilities/agent-answers/spec.md:176-176  R41 The assistant SHALL ask at most one clarifying question per user quest
+specs/capabilities/agent-answers/spec.md:177-177  R42 A clarification SHALL end the turn immediately: the model stops. A cla
+specs/capabilities/agent-answers/spec.md:178-181  R43 Only the latest clarification card SHALL be actionable. Its controls:
+specs/capabilities/agent-answers/spec.md:182-182  R44 When the user answers a clarification, the system SHALL give the model
+specs/capabilities/agent-answers/spec.md:184-186  ### Errors
+specs/capabilities/agent-answers/spec.md:186-186  R45 Retired (1.23.27). The chat error bubble, its toast and **Retry** went
+specs/capabilities/agent-answers/spec.md:188-192  ### Memory and continuity
+specs/capabilities/agent-answers/spec.md:190-190  R46 Each session SHALL have its own persistent agent memory thread. Each t
+specs/capabilities/agent-answers/spec.md:191-191  R47 When a session has a transcript but no memory thread (created before m
+specs/capabilities/agent-answers/spec.md:192-192  R48 Background work (grounding pass, SQL repair, cross-check, visual desig
+specs/capabilities/agent-answers/spec.md:194-197  ### Retired chat rules
+specs/capabilities/agent-answers/spec.md:196-196  R50 Retired (1.23.27). The empty chat's welcome block and its starter prom
+specs/capabilities/agent-answers/spec.md:197-197  R51 Moved to past-chats R66 (the history strip of a transcript; see ../pas
+specs/capabilities/agent-answers/spec.md:199-216  ### Sessions started from an agent
+specs/capabilities/agent-answers/spec.md:203-203  R52 Retired (1.24.12). **Start chat** (on a workflow, never on an agent) c
+specs/capabilities/agent-answers/spec.md:204-204  R53 A session started from an agent SHALL keep the datasets it was created
+specs/capabilities/agent-answers/spec.md:205-211  R54 Every assistant call made for a session bound to a user agent that sti
+specs/capabilities/agent-answers/spec.md:212-212  R55 An agent's instructions SHALL NOT relax any rule enforced in code: the
+specs/capabilities/agent-answers/spec.md:213-213  R56 A model override SHALL name a model or deployment of the configured pr
+specs/capabilities/agent-answers/spec.md:214-214  R58 Retired (1.23.27). The welcome block of a session bound to an agent we
+specs/capabilities/agent-answers/spec.md:215-215  R61 A session bound to a built-in agent (today the Data Readiness Agent an
+specs/capabilities/agent-answers/spec.md:216-216  R64 Retired (1.24.12). The new-session screen, with its **Workflow** field
+specs/capabilities/agent-answers/spec.md:218-230  ## Edge cases and errors
+specs/capabilities/agent-answers/spec.md:232-240  ## Contracts
+specs/capabilities/agent-answers/spec.md:242-254  ## UI
+specs/capabilities/agent-answers/spec.md:256-455  ## Flows
+specs/capabilities/agent-answers/spec.md:258-281  ### Feature: Chat and visuals
+specs/capabilities/agent-answers/spec.md:283-373  ### Feature: Chat answers and reliability signals
+specs/capabilities/agent-answers/spec.md:375-409  ### Feature: Sessions started from an agent
+specs/capabilities/agent-answers/spec.md:411-417  ### Feature: Page, sort and filter a query's result
+specs/capabilities/agent-answers/spec.md:419-425  ### Feature: Every workflow whose answer ran queries gets the query inspector
+specs/capabilities/agent-answers/spec.md:427-433  ### Feature: Filter a query's result in words
+specs/capabilities/agent-answers/spec.md:435-455  ### Feature: Skills the assistant is given
+specs/capabilities/agent-answers/spec.md:457-466  ## Acceptance
 
 specs/capabilities/agent-panel/spec.md:5-15  ## Concepts
 specs/capabilities/agent-panel/spec.md:17-58  ## Rules

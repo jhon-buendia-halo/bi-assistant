@@ -48,13 +48,18 @@ export interface SourceInfo {
   coverage: string | null;
 }
 
-export function rowsText(count: number | undefined, truncated: boolean | undefined): string | null {
+export function rowsText(
+  count: number | undefined,
+  truncated: boolean | undefined,
+): string | null {
   if (count === undefined) return null;
   return `${formatCount(count)}${truncated ? '+' : ''} ${count === 1 && !truncated ? 'row' : 'rows'}`;
 }
 
 /** One entry per data record, in order. */
-export function sourceInfos(message: Pick<ChatMessage, 'data' | 'evidence'>): SourceInfo[] {
+export function sourceInfos(
+  message: Pick<ChatMessage, 'data' | 'evidence'>,
+): SourceInfo[] {
   return (message.data ?? []).map((record, index) => {
     const evidence = message.evidence?.find((e) => e.index === index);
     const coverage = record.error ? 'failed' : evidence?.coverage;
@@ -99,7 +104,10 @@ export function coverageChip(
       const limit = evidence?.outerLimit;
       const total = evidence ? verifiedTotal(evidence) : null;
       if (limit !== undefined && total !== null) {
-        return { label: `Top ${formatCount(limit)} of ${formatCount(total)}`, tone: 'info' };
+        return {
+          label: `Top ${formatCount(limit)} of ${formatCount(total)}`,
+          tone: 'info',
+        };
       }
       return {
         label:
@@ -158,6 +166,22 @@ export function coverageLine(message: ChatMessage): CoverageLine | null {
   const sentences: string[] = [];
   for (const row of rows) {
     const e = evidenceOf(message, row.index);
+    if (e?.view) {
+      // A page of an earlier result (agent-answers R83): cut on purpose.
+      const pages =
+        e.view.matchedRows !== undefined
+          ? Math.max(
+              1,
+              Math.ceil(e.view.matchedRows / Math.max(1, e.view.pageSize)),
+            )
+          : undefined;
+      sentences.push(
+        pages !== undefined
+          ? `${row.label} shows page ${e.view.page} of ${pages} of an earlier result.`
+          : `${row.label} shows page ${e.view.page} of an earlier result.`,
+      );
+      continue;
+    }
     if (row.coverage === 'partial') {
       const cap = e?.rowLimit ?? message.data?.[row.index]?.rowCount;
       sentences.push(
@@ -172,7 +196,9 @@ export function coverageLine(message: ChatMessage): CoverageLine | null {
     }
   }
 
-  let tone: CoverageLine['tone'] = 'warning';
+  // Only pages of earlier results: nothing is missing, it is a view.
+  const onlyPages = rows.every((row) => evidenceOf(message, row.index)?.view);
+  let tone: CoverageLine['tone'] = onlyPages ? 'success' : 'warning';
   if (!sentences.length) {
     tone = 'success';
     const read = new Map<string, number | null>();
@@ -186,7 +212,9 @@ export function coverageLine(message: ChatMessage): CoverageLine | null {
     }
     if (read.size) {
       const names = [...read].map(([entity, size]) =>
-        size === null ? tableName(entity) : `${tableName(entity)} (${formatCount(size)} rows)`,
+        size === null
+          ? tableName(entity)
+          : `${tableName(entity)} (${formatCount(size)} rows)`,
       );
       if (read.size === 1) {
         const [[entity, size]] = [...read];
@@ -204,7 +232,10 @@ export function coverageLine(message: ChatMessage): CoverageLine | null {
   return {
     text: sentences.join(' '),
     tone,
-    linkLabel: rows.length === 1 ? 'Inspect the source' : `Inspect the ${rows.length} sources`,
+    linkLabel:
+      rows.length === 1
+        ? 'Inspect the source'
+        : `Inspect the ${rows.length} sources`,
     linkIndex: rows[0].index,
   };
 }

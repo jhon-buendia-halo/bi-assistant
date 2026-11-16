@@ -875,7 +875,8 @@ export class TurnEngine {
               throw new Error('The earlier query is no longer known');
             const args = {
               query: target.sql,
-              rationale: `I read ${understood.toLowerCase() === 'all rows' ? 'the rows' : understood} of the earlier result ${target.ref}.`,
+              // Named as the reader saw it (agent-answers R69): `Source 5`.
+              rationale: `${understood.toLowerCase() === 'all rows' ? 'The rows' : understood} of the earlier answer's ${target.source ? `Source ${target.source}` : 'query'}.`,
             };
             calledTools.add('explore_result');
             emit({
