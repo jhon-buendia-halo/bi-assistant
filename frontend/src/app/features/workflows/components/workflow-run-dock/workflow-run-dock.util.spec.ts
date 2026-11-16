@@ -1,14 +1,23 @@
 import {
   LOGS_DOCK,
+  NODE_CHAT_PANE,
   RUN_DOCK,
   dockBounds,
   dockSize,
+  nodeChatBounds,
+  nodeChatWidth,
   readDockRatio,
+  readNodeChatWidth,
   writeDockRatio,
+  writeNodeChatWidth,
 } from './workflow-run-dock.util';
 
 describe('workflow-run-dock.util', () => {
-  const keys = [RUN_DOCK.storageKey, LOGS_DOCK.storageKey];
+  const keys = [
+    RUN_DOCK.storageKey,
+    LOGS_DOCK.storageKey,
+    NODE_CHAT_PANE.storageKey,
+  ];
   beforeEach(() => keys.forEach((k) => localStorage.removeItem(k)));
   afterEach(() => keys.forEach((k) => localStorage.removeItem(k)));
 
@@ -75,6 +84,34 @@ describe('workflow-run-dock.util', () => {
       writeDockRatio(LOGS_DOCK, 0.33333);
       expect(readDockRatio(RUN_DOCK)).toBe(0.4);
       expect(readDockRatio(LOGS_DOCK)).toBe(0.333);
+    });
+  });
+
+  describe('node dialog chat pane', () => {
+    it('may take at most 60% of a wide dialog', () => {
+      expect(nodeChatBounds(2000)).toEqual({ min: 320, max: 1200 });
+    });
+
+    it('leaves the artifact its minimum in a narrow dialog', () => {
+      expect(nodeChatBounds(1000)).toEqual({ min: 320, max: 520 });
+      expect(nodeChatBounds(600)).toEqual({ min: 320, max: 320 });
+    });
+
+    it('clamps the wanted width, and keeps it before the room is measured', () => {
+      expect(nodeChatWidth(0, 400)).toBe(400);
+      expect(nodeChatWidth(2000, 100)).toBe(320);
+      expect(nodeChatWidth(2000, 1500)).toBe(1200);
+      expect(nodeChatWidth(2000, 640)).toBe(640);
+    });
+
+    it('defaults to 400 px and round-trips a dragged width', () => {
+      expect(readNodeChatWidth()).toBe(400);
+      for (const bad of ['abc', '10', '-500']) {
+        localStorage.setItem(NODE_CHAT_PANE.storageKey, bad);
+        expect(readNodeChatWidth()).toBe(400);
+      }
+      writeNodeChatWidth(612.4);
+      expect(readNodeChatWidth()).toBe(612);
     });
   });
 });

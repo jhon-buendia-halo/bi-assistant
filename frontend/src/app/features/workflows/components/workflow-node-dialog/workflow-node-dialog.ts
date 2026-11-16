@@ -4,6 +4,7 @@ import {
   ElementRef,
   afterNextRender,
   computed,
+  effect,
   input,
   linkedSignal,
   output,
@@ -60,6 +61,14 @@ import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { WorkflowStepNarrative } from '../workflow-step-narrative/workflow-step-narrative';
 import { exitSentence } from '../../../agents/services/workflow-flow';
 import { formatNodeDuration, nodeStatusChip } from './workflow-node-format';
+import {
+  DOCK_KEY_STEP,
+  NODE_CHAT_PANE,
+  nodeChatBounds,
+  nodeChatWidth,
+  readNodeChatWidth,
+  writeNodeChatWidth,
+} from '../workflow-run-dock/workflow-run-dock.util';
 
 type DialogTab = 'parameters' | 'settings';
 
@@ -117,6 +126,39 @@ const FOCUSABLE =
     WorkflowStepOutputView,
   ],
   templateUrl: './workflow-node-dialog.html',
+  styles: `
+    /* The chat pane's right edge: a 10 px grab area, a 2 px line on hover, focus and drag. */
+    .ndv-chat-handle {
+      position: absolute;
+      z-index: 30;
+      right: -5px;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+      cursor: col-resize;
+      touch-action: none;
+      outline: none;
+    }
+    .ndv-chat-handle::after {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 4px;
+      width: 2px;
+      content: '';
+      background: transparent;
+      transition: background-color 120ms ease;
+    }
+    .ndv-chat-handle:hover::after,
+    .ndv-chat-handle:focus-visible::after,
+    .ndv-chat-handle-active::after {
+      background: var(--qti-border-selected);
+    }
+    .ndv-resizing,
+    .ndv-resizing * {
+      user-select: none !important;
+    }
+  `,
   host: {
     '(document:keydown.escape)': 'close.emit()',
   },
@@ -181,8 +223,85 @@ export class WorkflowNodeDialog {
   private readonly closeButton =
     viewChild.required<ElementRef<HTMLButtonElement>>('closeButton');
 
+  /** The agent-step layout, measured: the room the chat and the artifact share. */
+  private readonly artifactLayout =
+    viewChild<ElementRef<HTMLElement>>('artifactLayout');
+  private readonly layoutRoom = signal(0);
+  /** The chat pane's width as last dragged (kept across openings). */
+  private readonly wantedChatWidth = signal(readNodeChatWidth());
+  readonly chatResizing = signal(false);
+  readonly chatBounds = computed(() => nodeChatBounds(this.layoutRoom()));
+  readonly chatWidth = computed(() =>
+    nodeChatWidth(this.layoutRoom(), this.wantedChatWidth()),
+  );
+
   constructor() {
     afterNextRender(() => this.closeButton().nativeElement.focus());
+    effect((onCleanup) => {
+      const layout = this.artifactLayout()?.nativeElement;
+      if (!layout) return;
+      this.layoutRoom.set(layout.clientWidth);
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(() =>
+        this.layoutRoom.set(layout.clientWidth),
+      );
+      observer.observe(layout);
+      onCleanup(() => observer.disconnect());
+    });
+  }
+
+  /** Dragging the chat pane's right edge sets its width (kept on release). */
+  startChatResize(event: PointerEvent): void {
+    if (!this.artifactLayout() || event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.target as HTMLElement;
+    handle.setPointerCapture?.(event.pointerId);
+    this.chatResizing.set(true);
+    // Relative to where it was grabbed, so the edge never jumps under the pointer.
+    const startX = event.clientX;
+    const startWidth = this.chatWidth();
+    const move = (e: PointerEvent) =>
+      this.setChatWidth(startWidth + e.clientX - startX);
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      this.chatResizing.set(false);
+      writeNodeChatWidth(this.chatWidth());
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  }
+
+  /** Arrow Right / Left widen or narrow the chat by a step; Home and End go to the bounds. */
+  resizeChatWithKeyboard(event: KeyboardEvent): void {
+    const { min, max } = this.chatBounds();
+    const now = this.chatWidth();
+    const next =
+      event.key === 'ArrowRight'
+        ? now + DOCK_KEY_STEP
+        : event.key === 'ArrowLeft'
+          ? now - DOCK_KEY_STEP
+          : event.key === 'Home'
+            ? min
+            : event.key === 'End'
+              ? max
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    this.setChatWidth(next);
+    writeNodeChatWidth(this.chatWidth());
+  }
+
+  /** Double-click on the edge: back to the default width. */
+  resetChatWidth(): void {
+    this.wantedChatWidth.set(NODE_CHAT_PANE.defaultWidth);
+    writeNodeChatWidth(NODE_CHAT_PANE.defaultWidth);
+  }
+
+  private setChatWidth(px: number): void {
+    this.wantedChatWidth.set(nodeChatWidth(this.layoutRoom(), px));
   }
 
   readonly icon = computed(() => KIND_ICONS[this.node().kind]);

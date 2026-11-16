@@ -995,7 +995,7 @@ specs/capabilities/diagnostics/spec.md:184-189  ## Acceptance
 specs/capabilities/diagnostics/spec.md:191-198  ## Open questions
 
 specs/capabilities/llm-settings/spec.md:5-16  ## Concepts
-specs/capabilities/llm-settings/spec.md:18-116  ## Rules
+specs/capabilities/llm-settings/spec.md:18-117  ## Rules
 specs/capabilities/llm-settings/spec.md:21-21  R1 The system SHALL support exactly five providers: `openai` (shown as "O
 specs/capabilities/llm-settings/spec.md:22-22  R2 There SHALL be one global configuration, used by every agent and every
 specs/capabilities/llm-settings/spec.md:23-23  R3 The model SHALL be a free-text, non-empty value after trimming; otherw
@@ -1060,14 +1060,15 @@ specs/capabilities/llm-settings/spec.md:109-109  R62 Chat answers on `copilot` S
 specs/capabilities/llm-settings/spec.md:110-110  R63 A Copilot session left waiting for the app's tool results SHALL be clo
 specs/capabilities/llm-settings/spec.md:111-111  R64 When a chat turn fails on `copilot`, the session SHALL show `GitHub Co
 specs/capabilities/llm-settings/spec.md:112-112  R65 `copilot` SHALL read "GitHub Copilot" wherever the app names the provi
-specs/capabilities/llm-settings/spec.md:113-115  R66 When a Copilot model ends a step that offers tools by writing, as its
-specs/capabilities/llm-settings/spec.md:116-116  R43 There SHALL be one LLM configuration for the whole server. Reading it,
-specs/capabilities/llm-settings/spec.md:118-141  ## Edge cases and errors
-specs/capabilities/llm-settings/spec.md:143-150  ## Contracts
-specs/capabilities/llm-settings/spec.md:152-154  ## UI
-specs/capabilities/llm-settings/spec.md:156-425  ## Flows
-specs/capabilities/llm-settings/spec.md:427-439  ## Acceptance
-specs/capabilities/llm-settings/spec.md:441-445  ## Open questions
+specs/capabilities/llm-settings/spec.md:113-113  R66 When a Copilot model ends a step that offers tools by writing, as its
+specs/capabilities/llm-settings/spec.md:114-116  R67 An image in a request to a `copilot` model (Read dashboard's call, age
+specs/capabilities/llm-settings/spec.md:117-117  R43 There SHALL be one LLM configuration for the whole server. Reading it,
+specs/capabilities/llm-settings/spec.md:119-142  ## Edge cases and errors
+specs/capabilities/llm-settings/spec.md:144-151  ## Contracts
+specs/capabilities/llm-settings/spec.md:153-155  ## UI
+specs/capabilities/llm-settings/spec.md:157-426  ## Flows
+specs/capabilities/llm-settings/spec.md:428-440  ## Acceptance
+specs/capabilities/llm-settings/spec.md:442-446  ## Open questions
 
 specs/capabilities/metrics/spec.md:7-9  ## Concepts
 specs/capabilities/metrics/spec.md:11-35  ## Rules

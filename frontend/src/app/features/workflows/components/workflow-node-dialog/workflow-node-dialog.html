@@ -12,7 +12,7 @@
   aria-modal="true"
   aria-labelledby="workflow-ndv-title"
   data-testid="workflow-ndv"
-  class="fixed inset-x-6 top-10 bottom-6 z-50 mx-auto flex max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+  class="fixed inset-x-6 top-10 bottom-6 z-50 flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
   (keydown)="onKeydown($event)"
 >
   <header
@@ -60,13 +60,36 @@
 
   @if (artifact()) {
     <!-- An agent step: the chat beside an artifact of its run (ui.md 4.4b). -->
-    <div class="flex min-h-0 flex-1" data-testid="workflow-ndv-artifact-layout">
+    <div
+      #artifactLayout
+      class="flex min-h-0 flex-1"
+      data-testid="workflow-ndv-artifact-layout"
+      [class.ndv-resizing]="chatResizing()"
+    >
       @if (hasChat()) {
         <aside
-          class="flex w-[400px] shrink-0 flex-col border-r border-border bg-surface-muted/40"
+          class="relative flex shrink-0 flex-col border-r border-border bg-surface-muted/40"
           data-testid="workflow-ndv-chat-pane"
+          [style.width.px]="chatWidth()"
           [attr.aria-label]="'Chat with ' + agentName()"
         >
+          <!-- The right edge: drag (or the arrow keys) to resize; double-click resets. -->
+          <div
+            class="ndv-chat-handle"
+            [class.ndv-chat-handle-active]="chatResizing()"
+            role="separator"
+            tabindex="0"
+            aria-label="Resize chat"
+            aria-orientation="vertical"
+            [attr.aria-valuemin]="chatBounds().min"
+            [attr.aria-valuemax]="chatBounds().max"
+            [attr.aria-valuenow]="chatWidth()"
+            title="Drag to resize · Double-click to reset"
+            data-testid="workflow-ndv-chat-resize"
+            (pointerdown)="startChatResize($event)"
+            (keydown)="resizeChatWithKeyboard($event)"
+            (dblclick)="resetChatWidth()"
+          ></div>
           <p
             class="m-0 shrink-0 border-b border-border px-4 py-2.5 text-[12px] text-fg-muted"
           >

@@ -25,6 +25,7 @@ import {
   COPILOT_AUTO_MODEL,
   COPILOT_EFFORT_LEVELS,
   COPILOT_PENDING_TOOL_TIMEOUT_MS,
+  copilotModelCannotReadImagesMessage,
   copilotRequestFailedMessage,
   copilotToolAsTextNudge,
   type CopilotModelOptions,
@@ -42,6 +43,7 @@ interface SessionLike {
   send(options: {
     prompt: string;
     responseSchema?: Record<string, unknown>;
+    attachments?: ImageAttachment[];
   }): Promise<unknown>;
   abort(): Promise<void>;
   disconnect(): Promise<void>;
@@ -150,6 +152,74 @@ function textOf(content: LanguageModelV3Message['content']): string {
   if (typeof content === 'string') return content;
   const parts: ReadonlyArray<{ type: string; text?: string }> = content;
   return parts.map((part) => (part.type === 'text' ? part.text : '')).join('');
+}
+
+/** An image sent beside a prompt, as the Copilot SDK's blob attachment (R67). */
+interface ImageAttachment {
+  type: 'blob';
+  /** Base64, no `data:` prefix. */
+  data: string;
+  mimeType: string;
+  displayName: string;
+}
+
+/** A file part's data as base64 (bytes, base64 text, or a `data:` URL). */
+function base64Of(data: Uint8Array | string | URL): string {
+  if (data instanceof Uint8Array) return Buffer.from(data).toString('base64');
+  const text = data instanceof URL ? data.href : data;
+  if (text.startsWith('data:')) return text.slice(text.indexOf(',') + 1);
+  if (data instanceof URL) {
+    throw new CopilotRequestError(
+      copilotRequestFailedMessage(`images by URL are not supported (${text})`),
+    );
+  }
+  return text;
+}
+
+/**
+ * The images of the users' messages, in order, as blob attachments: Copilot
+ * takes a prompt as text, so an image goes beside it rather than in it (R67).
+ */
+function imagesOf(messages: LanguageModelV3Message[]): ImageAttachment[] {
+  const images: ImageAttachment[] = [];
+  for (const m of messages) {
+    if (m.role !== 'user') continue;
+    for (const part of m.content) {
+      if (part.type !== 'file' || !part.mediaType.startsWith('image/')) {
+        continue;
+      }
+      const ext = part.mediaType.slice('image/'.length).replace('jpeg', 'jpg');
+      images.push({
+        type: 'blob',
+        data: base64Of(part.data),
+        mimeType: part.mediaType,
+        displayName: part.filename ?? `image-${images.length + 1}.${ext}`,
+      });
+    }
+  }
+  return images;
+}
+
+/** Throws R67's text when Copilot says the chosen model cannot read images. */
+async function ensureReadsImages(
+  client: { listModels(): Promise<unknown[]> },
+  model: string,
+): Promise<void> {
+  let models: unknown[];
+  try {
+    models = await client.listModels();
+  } catch {
+    return; // unknown: let Copilot decide
+  }
+  const info = models.find(
+    (m): m is { capabilities?: { supports?: { vision?: unknown } } } =>
+      typeof m === 'object' &&
+      m !== null &&
+      (m as { id?: unknown }).id === model,
+  );
+  if (info?.capabilities?.supports?.vision === false) {
+    throw new CopilotRequestError(copilotModelCannotReadImagesMessage(model));
+  }
 }
 
 function toolOutput(output: LanguageModelV3ToolResultOutput): string {
@@ -491,9 +561,13 @@ export function createCopilotModel(
     // Fresh step: a new session with only the step's tools enabled.
     await runtime().ensureSignedIn(); // its errors pass through unchanged
     if (signal.aborted) throw abortError();
+    const images = imagesOf(rest);
     let session: SessionLike;
     try {
       const client = await runtime().client();
+      if (images.length && model && model !== COPILOT_AUTO_MODEL) {
+        await ensureReadsImages(client, model);
+      }
       const effort = effortOf(call);
       const config: SessionConfig = {
         ...(model && model !== COPILOT_AUTO_MODEL ? { model } : {}),
@@ -530,6 +604,7 @@ export function createCopilotModel(
       () =>
         session.send({
           prompt,
+          ...(images.length ? { attachments: images } : {}),
           ...(format?.type === 'json' && format.schema
             ? { responseSchema: format.schema as Record<string, unknown> }
             : {}),
