@@ -72,23 +72,6 @@ export const SITE_REVIEWER_AGENT_KEY = 'site-reviewer';
 /** Its name. */
 export const SITE_REVIEWER_AGENT_NAME = 'Site Reviewer';
 
-/** The registry keys of the System agents: the app calls them itself. */
-export const SYSTEM_AGENT_KEYS: readonly string[] = [
-  ANALYSIS_PLANNER_AGENT_KEY,
-  ANSWER_WRITER_AGENT_KEY,
-  DASHBOARD_READER_AGENT_KEY,
-  DATA_MAPPER_AGENT_KEY,
-  IMAGE_READER_AGENT_KEY,
-  QUERY_EXPLAINER_AGENT_KEY,
-  RESULT_EXPLORER_AGENT_KEY,
-  SITE_REVIEWER_AGENT_KEY,
-  'visualization',
-  'sql-fixer',
-  'sql-verifier',
-  'assistant-eval-judge',
-  'knowledge-bootstrap',
-];
-
 /**
  * The agents of the three model steps of `consumption-gap-analysis`
  * (agents.md 2.18 to 2.20, 5.20): Derive (and Confirm) requirements, Map
@@ -103,3 +86,23 @@ export const LAYER_MAPPER_AGENT_NAME = 'Layer Mapper';
 export const GAP_ADVISOR_AGENT_KEY = 'gap-advisor';
 /** Its name: the Recommend fixes step's agent. */
 export const GAP_ADVISOR_AGENT_NAME = 'Gap Advisor';
+
+/** The registry keys of the System agents: the app calls them itself. */
+export const SYSTEM_AGENT_KEYS: readonly string[] = [
+  ANALYSIS_PLANNER_AGENT_KEY,
+  ANSWER_WRITER_AGENT_KEY,
+  DASHBOARD_READER_AGENT_KEY,
+  DATA_MAPPER_AGENT_KEY,
+  IMAGE_READER_AGENT_KEY,
+  QUERY_EXPLAINER_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
+  SITE_REVIEWER_AGENT_KEY,
+  REQUIREMENTS_ANALYST_AGENT_KEY,
+  LAYER_MAPPER_AGENT_KEY,
+  GAP_ADVISOR_AGENT_KEY,
+  'visualization',
+  'sql-fixer',
+  'sql-verifier',
+  'assistant-eval-judge',
+  'knowledge-bootstrap',
+];
