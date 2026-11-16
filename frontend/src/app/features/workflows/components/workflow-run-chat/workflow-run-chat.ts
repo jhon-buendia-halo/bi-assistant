@@ -281,15 +281,9 @@ export class WorkflowRunChat {
   protected readonly applyRun = (run: WorkflowRun): void =>
     this.designer.run.set(run);
 
-  protected readonly visualGenerating = computed(
-    () => this.visuals.generating() === this.designer.run()?.id,
-  );
-
-  /** "Generate interactive visuals" on the stored run's answer. */
-  protected generateVisual(): void {
-    const run = this.designer.run();
-    if (run !== null) this.visuals.generate(run, this.applyRun);
-  }
+  // No "Generate interactive visuals" here: a workflow that wants visuals
+  // makes them in a step of its own, with a specialised agent (ui.md 4.4b).
+  // Visuals a run already has still open under the answer.
 
   /** A visual card's View: open that visual under the answer. */
   /** A figure chip or query row: the query opens in the sheet beside the answer. */

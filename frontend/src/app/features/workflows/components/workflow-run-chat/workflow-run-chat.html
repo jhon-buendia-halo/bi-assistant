@@ -181,13 +181,8 @@
             [queryInspector]="designer.inspectsQueries()"
             [question]="designer.shownQuestion()"
             (inspectQuery)="inspectQuery($event)"
-            [showGenerateVisual]="
-              !designer.running() && designer.run() !== null
-            "
-            [visualGenerating]="visualGenerating()"
             (rate)="designer.rateAnswer($event)"
             (optionPicked)="designer.followUp($event)"
-            (generateVisual)="generateVisual()"
             (viewVisual)="viewVisual($event)"
             (openScorecard)="openScorecard($event)"
           />
