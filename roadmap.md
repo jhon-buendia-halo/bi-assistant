@@ -634,7 +634,7 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 
 #### 1.27.4 — The result-explorer agent and the interpret-filter routes  `🚧 In progress`
 - **Intent:** the user's words become a structured view (filters, sort, page) over the result's known columns, never free SQL.
-- **Scope:** per plan 1.27.4: `result-explorer` (one model call, no tools), `specOf`, api.md 153 and 155; agents.md 1.1, 2.15.
+- **Scope:** per plan 1.27.4: `result-explorer` (one model call, no tools), `specOf`, api.md 153 and 155; agents.md 1.1, 2.16.
 - **Out of scope:** routing a follow-up (1.27.8).
 - **Acceptance:** `result-explorer.prompts.spec.ts`; route tests with a stubbed model.
 

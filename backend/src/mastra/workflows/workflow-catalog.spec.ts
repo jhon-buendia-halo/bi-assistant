@@ -13,10 +13,22 @@ import {
   oneStepWorkflowSteps,
   parseWorkflowId,
   sessionWorkflowId,
+  stepAgentKey,
   wrappedAgentMaxSteps,
   workflowsUsingAgent,
   WRAPPED_AGENT_KEYS,
 } from './workflow-catalog';
+import { inputFieldsWithUsage } from './workflow-input';
+
+/** The reference images field (api.md 116; plan D5). */
+const IMAGES_FIELD = {
+  name: 'images',
+  label: 'Reference images',
+  type: 'images',
+  required: false,
+  max: 4,
+  help: 'Paste, drop or attach up to 4 PNG, JPEG or WebP images, 5 MB each.',
+};
 
 /**
  * The keys `src/mastra/index.ts` registers under `agents: { … }`, read from
@@ -71,6 +83,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       },
     ]);
     expect(CODE_WORKFLOWS[0].steps.map((step) => step.id)).toEqual([
+      'read-images',
       'receive-question',
       'load-catalog',
       'plan',
@@ -81,13 +94,20 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'write-answer',
       'wrap-up',
     ]);
-    // The flow is its edges (api.md 117): a branch after Plan, a loop back
-    // from Clarify to Plan once answered, a loop back from Validate to
-    // Analyse, and the optional branch to Check data quality.
-    expect(CODE_WORKFLOWS[0].edges).toHaveLength(13);
+    // The flow is its edges (api.md 117): the optional branch to Read
+    // images from Start, a branch after Plan, a loop back from Clarify to
+    // Plan once answered, a loop back from Validate to Analyse, and the
+    // optional branch to Check data quality.
+    expect(CODE_WORKFLOWS[0].edges).toHaveLength(15);
     expect(
       CODE_WORKFLOWS[0].edges.filter((edge) => edge.kind !== 'next'),
     ).toEqual([
+      {
+        from: 'start',
+        to: 'read-images',
+        kind: 'branch',
+        label: 'Reference images',
+      },
       {
         from: 'plan',
         to: 'clarify',
@@ -116,6 +136,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         placeholder: 'Ask a question about your data',
         maxLength: 4000,
       },
+      IMAGES_FIELD,
       { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
       {
         name: 'checkDataQuality',
@@ -125,6 +146,77 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         default: false,
       },
     ]);
+  });
+
+  // Reference images (workflows R35; agents.md 2.15; api.md 116; plan D5).
+  describe('reference images', () => {
+    const byId = (id: string) =>
+      CODE_WORKFLOWS.find((workflow) => workflow.id === id)!;
+    const WITH_IMAGES = [
+      'answer-business-question',
+      'data-readiness-assessment',
+      'map-dashboard-data',
+    ];
+
+    it('gives Answer a Business Question, Assess Data Readiness and Map a Dashboard to Data an optional images field right after the question', () => {
+      for (const id of WITH_IMAGES) {
+        const names = byId(id).input.map((field) => field.name);
+        expect([id, names[names.indexOf('question') + 1]]).toEqual([
+          id,
+          'images',
+        ]);
+        expect(byId(id).input.find((field) => field.name === 'images')).toEqual(
+          IMAGES_FIELD,
+        );
+      }
+      // Dashboard Image to Artifact keeps its one image and no Read images.
+      expect(
+        byId('recreate-dashboard').input.map((field) => field.name),
+      ).toEqual(['image', 'question']);
+      expect(
+        byId('recreate-dashboard').steps.map((step) => step.id),
+      ).not.toContain('read-images');
+    });
+
+    it('runs Read images first, on Zoe, the Image Reader, in all three', () => {
+      for (const id of WITH_IMAGES) {
+        expect([id, byId(id).steps[0].id]).toEqual([id, 'read-images']);
+        expect([id, stepAgentKey(byId(id), 'read-images')]).toEqual([
+          id,
+          'image-reader',
+        ]);
+      }
+      expect(workflowsUsingAgent('image-reader')).toEqual(
+        WITH_IMAGES.map((id) => ({ id, name: byId(id).name })),
+      );
+    });
+
+    it('says which steps read each field as api.md 116 lists them', () => {
+      const usedBy = (id: string) =>
+        Object.fromEntries(
+          inputFieldsWithUsage(byId(id)).map((field) => [
+            field.name,
+            field.usedBy,
+          ]),
+        );
+      expect(usedBy('answer-business-question')).toEqual({
+        question: ['read-images', 'receive-question'],
+        images: ['read-images'],
+        datasets: ['receive-question'],
+        checkDataQuality: [],
+      });
+      expect(usedBy('data-readiness-assessment')).toEqual({
+        dataset: ['resolve-dataset'],
+        question: ['read-images', 'resolve-dataset'],
+        images: ['read-images'],
+      });
+      expect(usedBy('map-dashboard-data')).toEqual({
+        artifact: ['load-dashboard'],
+        datasets: ['load-dashboard'],
+        question: ['read-images', 'load-dashboard'],
+        images: ['read-images'],
+      });
+    });
   });
 
   describe('removed workflows (1.23.35)', () => {

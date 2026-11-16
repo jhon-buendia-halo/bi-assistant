@@ -14,7 +14,7 @@ import {
 } from './result-explorer.prompts';
 
 /**
- * Nathan, Result Explorer (agents.md 1.1, 2.15): turns a user's words into a
+ * Nathan, Result Explorer (agents.md 1.1, 2.16): turns a user's words into a
  * view (filters, sort, page) of a stored query's result, over its known
  * columns only, in one model call with no tools and no memory. A System
  * agent: the query inspector's filter in words (api.md 153, 155) calls him

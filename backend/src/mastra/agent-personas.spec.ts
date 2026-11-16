@@ -37,6 +37,11 @@ describe('built-in agent personas (agents.md 1.1)', () => {
   it('never gives two agents the same name', () => {
     const names = Object.values(BUILTIN_AGENT_PERSONAS).map((p) => p.name);
     expect(new Set(names).size).toBe(names.length);
+    expect(builtinAgentPersona('image-reader')).toMatchObject({
+      name: 'Zoe',
+      role: 'Image Analyst',
+      domain: 'storytelling',
+    });
   });
 
   it('groups the built-in agents into their domains, none General', () => {
@@ -58,7 +63,12 @@ describe('built-in agent personas (agents.md 1.1)', () => {
         'result-explorer',
       ],
       sql: ['query-explainer', 'sql-fixer', 'sql-verifier'],
-      storytelling: ['answer-writer', 'dashboard-reader', 'visualization'],
+      storytelling: [
+        'answer-writer',
+        'dashboard-reader',
+        'image-reader',
+        'visualization',
+      ],
       quality: ['assistant-eval-judge'],
     });
   });

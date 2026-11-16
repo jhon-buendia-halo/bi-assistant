@@ -1,5 +1,5 @@
 /**
- * The result explorer's catalogue data (agents.md 2.15; plan
+ * The result explorer's catalogue data (agents.md 2.16; plan
  * docs/plans/m1-27-result-explorer.md 0.3): its job description, its reply
  * schema, the candidates and the request it reads, and `specOf`, the pure
  * code that turns its reply into a `FilterInterpretation` over the known

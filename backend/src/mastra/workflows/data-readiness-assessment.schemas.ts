@@ -23,6 +23,23 @@ export const assessmentInputSchema = z.object({
     .string()
     .describe("The user's question; by default, assess the dataset."),
   dataset: z.string().describe('The dataset to assess.'),
+  imageNotes: z
+    .string()
+    .default('')
+    .describe("Read images' notes; '' when the run has no images."),
+});
+
+/**
+ * The run's own input (the workflow's input schema): the first step's input
+ * plus the reference images' stored paths, which only Read images reads.
+ * Kept out of `assessmentInputSchema` so `images` is used by Read images
+ * alone (agents.md 5.11, 5.13).
+ */
+export const assessmentRunInputSchema = assessmentInputSchema.extend({
+  images: z
+    .array(z.string())
+    .optional()
+    .describe('Reference images: their stored paths.'),
 });
 
 /** What Resolve dataset finds: the dataset's datasource and scope. */
@@ -34,6 +51,9 @@ export const assessmentTargetSchema = z.object({
     .enum(['postgres', 'databricks'])
     .describe('postgres or databricks.'),
   tableCount: z.number().describe("The dataset's tables: the scope."),
+  imageNotes: z
+    .string()
+    .describe("Read images' notes; '' when the run has no images."),
 });
 
 /** What Profile source measured (no row values, R6). */

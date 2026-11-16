@@ -55,28 +55,41 @@ const READ_OUTPUT_TOKENS = 8000;
 /** The most tokens Map data's mapping takes. */
 const MAP_OUTPUT_TOKENS = 8000;
 
-/** One user message: the request's text and the image. */
-function imageMessage(request: string, image: StepImage): MessageListInput {
+/**
+ * One user message: the request's text, then one image part per image
+ * (base64, with its media type), in order. Read dashboard sends one image,
+ * Read images every reference image of the run (agents.md 2.13, 2.15).
+ */
+export function imagesMessage(
+  request: string,
+  images: readonly StepImage[],
+): MessageListInput {
   return [
     {
       role: 'user',
       content: [
         { type: 'text', text: request },
-        {
+        ...images.map((image) => ({
           type: 'image',
           image: image.data.toString('base64'),
           mimeType: image.mediaType,
-        },
+        })),
       ],
     },
   ] as MessageListInput;
 }
 
+/** One user message: the request's text and the image. */
+function imageMessage(request: string, image: StepImage): MessageListInput {
+  return imagesMessage(request, [image]);
+}
+
 /**
  * The call's options with its output cap filed the way the resolved model
- * reads it; the turn's own provider options (its effort) are kept.
+ * reads it; the turn's own provider options (its effort) are kept. Shared
+ * by the one-call image steps (Read dashboard, Map data, Read images).
  */
-async function tunedOptions(
+export async function tunedOptions(
   options: StepModelOptions,
   maxOutputTokens: number,
 ) {
@@ -98,7 +111,7 @@ async function tunedOptions(
 }
 
 /** The model's own failure as an error; undefined when it did not fail. */
-function replyFailure(error: unknown): Error | undefined {
+export function replyFailure(error: unknown): Error | undefined {
   if (error === undefined || error === null) return undefined;
   return error instanceof Error ? error : new Error(runErrorMessage(error));
 }
@@ -174,6 +187,12 @@ export async function mapDataWithModel(
     blueprint: DashboardBlueprint;
     catalog: readonly CatalogEntity[];
     columns: readonly EntityColumns[];
+    /**
+     * Read images' notes on the run's reference images (agents.md 2.15,
+     * 5.18); absent or `''` when the run has none, and the request is then
+     * what it was before.
+     */
+    imageNotes?: string;
   },
   options: StepModelOptions,
 ): Promise<{ mapping: DataMapping; stopped: boolean }> {

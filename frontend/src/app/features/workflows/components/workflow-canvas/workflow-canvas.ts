@@ -57,6 +57,7 @@ import {
 } from '../../services/workflow-canvas-layout';
 import { nodeStatusLabel } from '../../services/workflows.util';
 import { AgentStepStory } from '../../services/agent-step-story';
+import { RunLine } from '../../services/workflow-run-story';
 import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 
 /** A drag shorter than this, in pixels, is a click on the background. */
@@ -154,6 +155,8 @@ export class WorkflowCanvas {
   readonly attempts = input<Record<string, number>>({});
   /** What each agent step's agent is doing in the run shown, by step id (ui.md 4.4b). */
   readonly agents = input<ReadonlyMap<string, AgentStepStory>>(new Map());
+  /** Each code step's line in the run shown (its story's few words and time), by step id. */
+  readonly runLines = input<Readonly<Record<string, RunLine>>>({});
   /** A node chosen by a single click, or null for a click on the background. */
   readonly selectNode = output<string | null>();
   /** Open a node's details: double click or Enter, or a click on an agent's sub-node (its step id). */
@@ -246,6 +249,11 @@ export class WorkflowCanvas {
   protected activity(stepId: string): AgentStepStory | null {
     const story = this.agents().get(stepId);
     return story && story.state !== 'idle' && story.line ? story : null;
+  }
+
+  /** A code step's run line for its label; null before a run (its id shows). */
+  protected runLine(stepId: string): RunLine | null {
+    return this.runLines()[stepId] ?? null;
   }
 
   protected attemptCount(id: string): number | null {

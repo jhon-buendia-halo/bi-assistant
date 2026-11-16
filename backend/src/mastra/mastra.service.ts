@@ -21,6 +21,7 @@ import {
   mapDataWithModel,
   readDashboardWithModel,
 } from './workflows/recreate-dashboard.agents';
+import { readImagesWithModel } from './workflows/read-images.agents';
 import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
@@ -118,7 +119,7 @@ export class MastraService {
 
   /**
    * A user's words read as a view of a query's result (api.md 153, 155;
-   * agents.md 2.15): one `result-explorer` call, no tools, the reply turned
+   * agents.md 2.16): one `result-explorer` call, no tools, the reply turned
    * into `{ action, query, interpretation }` by `specOf`.
    */
   interpretResult(
@@ -147,6 +148,18 @@ export class MastraService {
     ...args: Parameters<typeof readDashboardWithModel>
   ): ReturnType<typeof readDashboardWithModel> {
     return readDashboardWithModel(...args);
+  }
+
+  /**
+   * The Read images step model call of Answer a Business Question, Assess
+   * Data Readiness and Map a Dashboard to Data (agents.md 2.15; workflows
+   * R35): Zoe, the Image Reader, over every reference image of the run in
+   * one call, her notes rendered from the reply. A model error rejects.
+   */
+  readImages(
+    ...args: Parameters<typeof readImagesWithModel>
+  ): ReturnType<typeof readImagesWithModel> {
+    return readImagesWithModel(...args);
   }
 
   /**

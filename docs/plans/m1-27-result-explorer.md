@@ -146,7 +146,7 @@ Ownership: only 1.27.0 edits `paged-sql.types.ts`; only 1.27.3 creates the `quer
 - datasources: R37 gains "except a paged read of a stored query's result (R52, ADR-0049)"; new R52.
 - agent-answers: R76 (stored rows first; paging, sorting or filtering asks the server); new R79 pager, R80 sort, R81 column filters, R82 filter in words, R83 explore records open on their view, R84 `explore_result` answers link through the shared layer.
 - workflows: R1, R2, R27; new R35.
-- api.md 152–155 and header counts, `QueryEvidence.view`; data-model 3.4.2a `view`; non-functional §5 Result paging and N72; agents.md 1.1, 2.15, 3.15, 4.2, 5.11, 5.12, 8.1; ui.md 4.12.2.
+- api.md 152–155 and header counts, `QueryEvidence.view`; data-model 3.4.2a `view`; non-functional §5 Result paging and N72; agents.md 1.1, 2.16, 3.15, 4.2, 5.11, 5.12, 8.1; ui.md 4.12.2.
 
 ## 5. Evals
 

@@ -58,7 +58,22 @@
             <div class="flex flex-wrap gap-x-3 gap-y-0.5">
               <dt class="font-mono text-[12px] text-fg-muted">{{ entry.name }}</dt>
               <dd class="m-0 min-w-0 text-[13px] break-words text-fg-strong">
-                {{ entry.value }}
+                @if (entry.images; as paths) {
+                  <ul class="m-0 flex list-none flex-wrap gap-2 p-0">
+                    @for (path of paths; track $index) {
+                      <li>
+                        <img
+                          [src]="inputImageUrl(path)"
+                          [alt]="'Reference image ' + ($index + 1)"
+                          [attr.data-testid]="'run-detail-input-image-' + $index"
+                          class="block h-16 w-16 rounded-md border border-border object-cover"
+                        />
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  {{ entry.value }}
+                }
               </dd>
             </div>
           }

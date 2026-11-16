@@ -8,6 +8,7 @@
  */
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import type { WorkflowInputValues } from '../../mastra/workflows/workflow-catalog';
+import type { StepStory } from '../../mastra/workflows/workflow-story';
 import type {
   ChatMessage,
   PanelItem,
@@ -95,6 +96,13 @@ export interface WorkflowRunStep {
    * most `STEP_TOOL_CALL_CAP`; absent when the step made none.
    */
   toolCalls?: WorkflowRunToolCall[];
+  /**
+   * What the step did, in business words (ui.md 4.4b, Logs *Story*): told
+   * when the step ends or is skipped, from its full output (before the cap);
+   * absent while it runs or waits. A run stored before stories has none
+   * until it is read (`withStepStories`).
+   */
+  story?: StepStory;
 }
 
 /**
@@ -388,6 +396,38 @@ interface TrackedCall {
   done: boolean;
 }
 
+/**
+ * Writes a step's story (ui.md 4.4b): the step (with its full output) and
+ * the run's steps so far, in order; undefined for no story.
+ */
+export type StepTeller = (
+  step: WorkflowRunStep,
+  steps: readonly WorkflowRunStep[],
+  runStatus?: WorkflowRunStatus,
+) => StepStory | undefined;
+
+/**
+ * A stored run's steps with a story each (ui.md 4.4b): a run stored before
+ * stories gets them told from its stored (capped) data when it is read; a
+ * step that has one, or runs, or waits, is left as it is.
+ */
+export function withStepStories(
+  steps: WorkflowRunStep[],
+  tell: StepTeller,
+  runStatus?: WorkflowRunStatus,
+): WorkflowRunStep[] {
+  return steps.map((step) => {
+    if (step.story) return step;
+    let story: StepStory | undefined;
+    try {
+      story = tell(step, steps, runStatus);
+    } catch {
+      story = undefined;
+    }
+    return story ? { ...step, story } : step;
+  });
+}
+
 /** A step of the workflow, as the tracker reads it. */
 export interface TrackedStepShape {
   id: string;
@@ -417,9 +457,15 @@ export class RunStepTracker {
   /** Tool calls by step id and attempt (`<id>#<attempt>`). */
   private readonly calls = new Map<string, TrackedCall[]>();
 
+  /**
+   * `tell`, when given, writes a step's story as it ends or is skipped
+   * (ui.md 4.4b): it reads the step with its full output (before the cap)
+   * and the run's steps so far.
+   */
   constructor(
     private readonly steps: readonly TrackedStepShape[],
     private readonly now: () => Date = () => new Date(),
+    private readonly tell?: StepTeller,
   ) {}
 
   /** The `step` event one engine event makes, or undefined. */
@@ -490,6 +536,9 @@ export class RunStepTracker {
       }
     }
     if (!next) return undefined;
+    if (event.type === 'workflow-step-result') {
+      next = this.storied(next, asRecord(event.payload?.output));
+    }
     this.states.set(
       step.id,
       replace && attempts.length
@@ -572,7 +621,11 @@ export class RunStepTracker {
     const changed: WorkflowRunStep[] = [];
     const ended = (state: WorkflowRunStep): WorkflowRunStep => {
       if (state.status === 'failed' && state.error === undefined) {
-        const filled = { ...state, error: error ?? 'The step failed' };
+        const filled = this.storied(
+          { ...state, error: error ?? 'The step failed' },
+          undefined,
+          status,
+        );
         changed.push(this.view(filled));
         return filled;
       }
@@ -590,17 +643,18 @@ export class RunStepTracker {
         ...(startedAt ? { startedAt } : {}),
         endedAt: this.now().toISOString(),
       };
-      changed.push(this.view(closed));
-      return closed;
+      const told = this.storied(closed, undefined, status);
+      changed.push(this.view(told));
+      return told;
     };
     const steps = this.steps.flatMap((step) => {
       const attempts = this.states.get(step.id);
       if (!attempts?.length) {
-        const skipped: WorkflowRunStep = {
-          id: step.id,
-          title: step.title,
-          status: 'skipped',
-        };
+        const skipped = this.storied(
+          { id: step.id, title: step.title, status: 'skipped' },
+          undefined,
+          status,
+        );
         changed.push({ ...skipped });
         return [skipped];
       }
@@ -631,6 +685,33 @@ export class RunStepTracker {
       if (current?.status === 'running') return callKey(current);
     }
     return undefined;
+  }
+
+  /**
+   * A step's state with its story (`tell`), read from its full output when
+   * given (the capped state may have dropped it); unchanged without `tell`.
+   * A failing teller leaves the step without a story.
+   */
+  private storied(
+    state: WorkflowRunStep,
+    fullOutput?: Record<string, unknown>,
+    runStatus?: WorkflowRunStatus,
+  ): WorkflowRunStep {
+    if (!this.tell) return state;
+    const plain: WorkflowRunStep = { ...state };
+    delete plain.story;
+    const view = this.view(plain);
+    let story: StepStory | undefined;
+    try {
+      story = this.tell(
+        fullOutput ? { ...view, output: fullOutput } : view,
+        this.pause(),
+        runStatus,
+      );
+    } catch {
+      story = undefined;
+    }
+    return story ? { ...plain, story } : plain;
   }
 
   /** A copy of a step's state, with its tool calls when it made any. */

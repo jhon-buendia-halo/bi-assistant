@@ -40,7 +40,7 @@ A dataset query can return thousands of rows, but an answer kept at most 200 and
 ## Specs touched
 
 - [datasources](../../capabilities/datasources/spec.md) R37, R52; [agent-answers](../../capabilities/agent-answers/spec.md) R76, R79–R84; [workflows](../../capabilities/workflows/spec.md) R1, R2, R27, R35.
-- [api.md](../../system/api.md) 152–155; [data-model.md](../../system/data-model.md) 3.4.2a; [non-functional.md](../../product/non-functional.md) §5; [agents.md](../../system/agents.md) 1.1, 2.1, 2.11, 2.15, 3.15, 4.2, 5.11, 5.12, 8.1; [ui.md](../../system/ui.md) 4.12.2.
+- [api.md](../../system/api.md) 152–155; [data-model.md](../../system/data-model.md) 3.4.2a; [non-functional.md](../../product/non-functional.md) §5; [agents.md](../../system/agents.md) 1.1, 2.1, 2.11, 2.16, 3.15, 4.2, 5.11, 5.12, 8.1; [ui.md](../../system/ui.md) 4.12.2.
 - [architecture.md](../../system/architecture.md) ADR-0049.
 
 ## Acceptance

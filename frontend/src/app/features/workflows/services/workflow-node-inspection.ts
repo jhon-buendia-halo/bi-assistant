@@ -30,7 +30,10 @@ export interface NodeInspectionSource {
 }
 
 /** Milliseconds between two ISO times; null when either is missing or invalid. */
-export function durationMs(startedAt?: string, endedAt?: string): number | null {
+export function durationMs(
+  startedAt?: string,
+  endedAt?: string,
+): number | null {
   if (!startedAt || !endedAt) return null;
   const ms = Date.parse(endedAt) - Date.parse(startedAt);
   return Number.isFinite(ms) ? Math.max(0, ms) : null;
@@ -76,6 +79,7 @@ function stepRun(
     durationMs: durationMs(rs.startedAt, rs.endedAt),
     toolCalls,
     ...(rs.attempt !== undefined ? { attempt: rs.attempt } : {}),
+    ...(rs.story !== undefined ? { story: rs.story } : {}),
   };
 }
 
@@ -120,7 +124,9 @@ function stepAttempts(
 }
 
 /** Start, the steps in order, End. */
-export function buildNodeInspections(s: NodeInspectionSource): NodeInspection[] {
+export function buildNodeInspections(
+  s: NodeInspectionSource,
+): NodeInspection[] {
   const { workflow, run } = s;
   const runInput = (run?.input ?? null) as Record<string, unknown> | null;
   const runSteps = runStepsById(run);

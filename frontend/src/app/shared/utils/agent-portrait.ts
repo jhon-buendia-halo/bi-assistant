@@ -48,6 +48,7 @@ export const BUILTIN_PORTRAITS: Readonly<Record<string, PortraitLook>> = {
   'data-mapper': { hair: 'variant54' }, // Daniel
   'query-explainer': { hair: 'variant58' }, // Hannah
   'result-explorer': { hair: 'variant12' }, // Nathan
+  'image-reader': { hair: 'variant31', glasses: 'variant11' }, // Zoe
 };
 
 /** The Notionists options for an agent's portrait (pure; unit-tested). */

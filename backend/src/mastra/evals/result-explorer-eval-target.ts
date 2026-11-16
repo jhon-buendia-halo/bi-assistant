@@ -10,7 +10,7 @@ import { answerResult } from './query-explainer-eval-answer';
 import { lastUserText } from './insights-analyst-workflow-target';
 
 /**
- * The `result-explorer` eval target's turn (agents.md 8.1, 2.15): a case is
+ * The `result-explorer` eval target's turn (agents.md 8.1, 2.16): a case is
  * the user's words with the candidates and the current view they are said
  * about. A run does what the app does for the query inspector's filter in
  * words: `explorerRequest` over those, one structured model call, `specOf`

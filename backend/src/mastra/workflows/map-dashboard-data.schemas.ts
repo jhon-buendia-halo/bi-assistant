@@ -34,6 +34,22 @@ export const mapDashboardInputSchema = z.object({
   datasets: z
     .array(z.string())
     .describe('The datasets the dashboard is mapped to; at least one.'),
+  imageNotes: z
+    .string()
+    .default('')
+    .describe("Read images' notes; '' when the run has no images."),
+});
+
+/**
+ * The run's own input (the workflow's input schema): the first step's input
+ * plus the reference images' stored paths, which only Read images reads
+ * (agents.md 5.11, 5.18).
+ */
+export const mapDashboardRunInputSchema = mapDashboardInputSchema.extend({
+  images: z
+    .array(z.string())
+    .optional()
+    .describe('Reference images: their stored paths.'),
 });
 
 /** What Load dashboard read from the artifact. */
@@ -42,6 +58,9 @@ export const loadedDashboardSchema = z.object({
   datasets: z.array(z.string()).describe("The run's datasets."),
   artifactName: z.string().describe("The saved dashboard's name."),
   blueprint: dashboardBlueprintSchema.describe("The dashboard's structure."),
+  imageNotes: z
+    .string()
+    .describe("Read images' notes; '' when the run has no images."),
 });
 
 /** What Load catalog read: the entities and columns to map to. */

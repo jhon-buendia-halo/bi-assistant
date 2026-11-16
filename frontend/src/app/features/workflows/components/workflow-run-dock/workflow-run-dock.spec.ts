@@ -133,7 +133,7 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
     expect(text('workflow-state-toggle')).toBe('Run');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(q('workflow-run-chat')).not.toBeNull();
-    // The Logs are under the canvas, not in the Run panel.
+    // No Logs list anywhere: each step's state is on the canvas.
     expect(q('workflow-state')).toBeNull();
     expect(handle()).not.toBeNull();
 

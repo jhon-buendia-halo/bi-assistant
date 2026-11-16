@@ -313,6 +313,20 @@ export class WorkflowRunsController {
     );
   }
 
+  /** One reference image of a run's input, by its stored path (api.md 151). */
+  @Get(':id/input-image')
+  async inputImage(
+    @Param('id') id: string,
+    @Query('path') path: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const image = await this.runs.inputImage(id, path ?? '');
+    res.setHeader('Content-Type', image.mediaType);
+    res.setHeader('Content-Length', image.data.length);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(image.data);
+  }
+
   /** A run's visual (api.md 123). */
   @Get(':id/visualizations/:visualizationId')
   getVisualization(

@@ -40,7 +40,7 @@ import {
 } from './result-explorer.evals';
 import { explorerTurnAgent } from './result-explorer-eval-target';
 
-describe('result-explorer eval set (agents.md 8.1, 2.15)', () => {
+describe('result-explorer eval set (agents.md 8.1, 2.16)', () => {
   it('has 13 cases with unique ids, across every set too', () => {
     expect(RESULT_EXPLORER_EVAL_SET.cases).toHaveLength(13);
     const ids = EVAL_SETS.flatMap((s) => s.cases.map((c) => c.id));

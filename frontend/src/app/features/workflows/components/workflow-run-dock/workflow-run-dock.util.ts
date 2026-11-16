@@ -1,8 +1,8 @@
 /**
- * The sizes of the workflow page's two resizable panels (ui.md 4.4b): the
- * Run panel (the Chat) on the right, sized by its width, and the Logs under
- * the canvas, sized by their height. Each is kept as a share of the room it
- * shares with the canvas.
+ * The sizes of the workflow page's resizable panels (ui.md 4.4b): the Run
+ * panel (the Chat) on the right, sized by its width, and the node dialog's
+ * chat pane. A panel's size is kept as a share of the room it shares with
+ * the canvas.
  */
 export interface DockSize {
   /** Its least size. */
@@ -16,22 +16,13 @@ export interface DockSize {
   storageKey: string;
 }
 
-/** The Run panel, beside the canvas and the Logs: a width. */
+/** The Run panel, beside the canvas: a width. */
 export const RUN_DOCK: DockSize = {
   min: 360,
   minOther: 480,
   defaultRatio: 0.32,
   fallback: 380,
   storageKey: 'qti.workflow-run-dock.width-ratio',
-};
-
-/** The Logs, under the canvas: a height. */
-export const LOGS_DOCK: DockSize = {
-  min: 160,
-  minOther: 200,
-  defaultRatio: 0.4,
-  fallback: 320,
-  storageKey: 'qti.workflow-logs-dock.ratio',
 };
 
 /** Arrow keys on a panel's edge. */

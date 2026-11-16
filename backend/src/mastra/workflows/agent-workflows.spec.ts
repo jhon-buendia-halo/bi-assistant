@@ -10,10 +10,11 @@ const V2_TOOLS = [
 ];
 
 describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
-  it("returns v2's turn workflow with its nine steps in catalogue order", () => {
+  it("returns v2's turn workflow with its ten steps in catalogue order", () => {
     const workflow = agentWorkflow('insights-analyst');
     expect(workflow?.id).toBe('answer-business-question');
     expect(workflow?.steps.map((step) => [step.title, step.kind])).toEqual([
+      ['Read images', 'agent'],
       ['Receive question', 'code'],
       ['Load catalog', 'code'],
       ['Plan', 'agent'],
@@ -25,6 +26,22 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       ['Wrap up', 'code'],
     ]);
   });
+
+  // agents.md 2.15, 5.11, 5.13, 5.18; plan D5, D6.
+  it.each(['insights-analyst', 'data-readiness'])(
+    "gives %s's Read images to Zoe, in one model call without tools",
+    (key) => {
+      const steps = agentWorkflow(key)!.steps;
+      expect(steps[0].id).toBe('read-images');
+      expect(steps[0].agent).toEqual({
+        key: 'image-reader',
+        name: 'Zoe',
+        role: 'Image Analyst',
+        tools: [],
+        maxSteps: 1,
+      });
+    },
+  );
 
   it('gives Check data quality to Sarah, in one model call without tools', () => {
     const steps = agentWorkflow('insights-analyst')!.steps;
@@ -75,8 +92,8 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     const steps = agentWorkflow('insights-analyst')!;
     const step = (id: string) => steps.steps.find((s) => s.id === id)!;
     expect(step('load-catalog')).toMatchObject({
-      input: ['question', 'datasets'],
-      output: ['question', 'catalog', 'columns'],
+      input: ['question', 'datasets', 'imageNotes'],
+      output: ['question', 'catalog', 'columns', 'imageNotes'],
       exits: [],
     });
     // Receive question has no exit: the input node checks the question first.
@@ -105,7 +122,10 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       workflow.steps.flatMap((step) =>
         step.agent ? [[step.id, step.agent.key, step.agent.maxSteps]] : [],
       ),
-    ).toEqual([['explain-report', 'data-readiness', 10]]);
+    ).toEqual([
+      ['read-images', 'image-reader', 1],
+      ['explain-report', 'data-readiness', 10],
+    ]);
   });
 
   it.each(['assistant', 'rfp', 'constructor', 'nope'])(
@@ -117,10 +137,14 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
 
   it('returns a copy the caller can change safely', () => {
     const first = agentWorkflow('insights-analyst')!;
-    first.steps[0].input.push('x');
-    first.steps[4].agent!.tools.push('y');
+    first.steps[1].input.push('x');
+    first.steps[5].agent!.tools.push('y');
     const second = agentWorkflow('insights-analyst')!;
-    expect(second.steps[0].input).toEqual(['question', 'datasets']);
-    expect(second.steps[4].agent!.tools).toHaveLength(6);
+    expect(second.steps[1].input).toEqual([
+      'question',
+      'datasets',
+      'imageNotes',
+    ]);
+    expect(second.steps[5].agent!.tools).toHaveLength(6);
   });
 });

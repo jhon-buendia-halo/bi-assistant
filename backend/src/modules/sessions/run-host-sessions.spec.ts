@@ -83,6 +83,15 @@ jest.mock('../../mastra/agents/sql-verifier.agent', () => {
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
+jest.mock('./workspace-files', () => {
+  const actual =
+    jest.requireActual<typeof import('./workspace-files')>('./workspace-files');
+  return {
+    ...actual,
+    writeWorkspaceFile: jest.fn(actual.writeWorkspaceFile),
+    readWorkspaceImage: jest.fn(actual.readWorkspaceImage),
+  };
+});
 jest.mock('./visualization.service', () => ({
   VisualizationService: class {},
 }));
@@ -113,6 +122,7 @@ import { BadGatewayException } from '@nestjs/common';
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import { listSessionWorkspaceIds } from '../../mastra/session-workspaces';
+import { readWorkspaceImage, writeWorkspaceFile } from './workspace-files';
 import { WorkflowNodeChatsRepository } from '../workflows/repositories/workflow-node-chats.repository';
 import { WorkflowRunsRepository } from '../workflows/repositories/workflow-runs.repository';
 import type { WorkflowRun } from '../workflows/workflow-run-steps';
@@ -399,6 +409,23 @@ function build(options: BuildOptions = {}) {
         opts.onText?.('Brazil won.');
         return Promise.resolve({
           answer: { headline: 'Brazil won.', answer: 'Brazil won.' },
+          stopped: false,
+        });
+      },
+    ),
+    // Read images' model call (agents.md 2.15): no notes unless a test
+    // scripts them.
+    readImages: jest.fn(
+      (
+        input: { question: string; images: unknown[] },
+        opts: { onExchange?: (e: object) => Promise<void> },
+      ) => {
+        // The stand-in records nothing; a test may (`onExchange`).
+        void input;
+        void opts;
+        return Promise.resolve({
+          imageNotes: '',
+          imageCount: 0,
           stopped: false,
         });
       },
@@ -727,6 +754,40 @@ describe('the run host (agents.md 5.14)', () => {
     );
   });
 
+  it("writes every reference image of the run's input to its workspace once and records their paths (workflows R35)", async () => {
+    const ctx = build();
+    const write = jest.mocked(writeWorkspaceFile);
+    write.mockClear();
+    write.mockResolvedValue(undefined);
+    const one = Buffer.from('one');
+    const two = Buffer.from('two');
+    const host = await ctx.sessions.createRunHost({
+      runId: 'img-1',
+      workflowId: 'answer-business-question',
+      name: 'Answer a Business Question',
+      datasets: ['World Cup'],
+      image: { path: 'inputs/image.png', data: one },
+      inputFiles: [
+        { path: 'inputs/image.png', data: one },
+        { path: 'inputs/images/1.png', data: two },
+      ],
+      inputImages: ['inputs/images/1.png'],
+    });
+    expect(host.inputImages).toEqual(['inputs/images/1.png']);
+    expect(host.inputImage).toBe('inputs/image.png');
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(write).toHaveBeenCalledWith('run-img-1', 'inputs/images/1.png', two);
+    // A host with no images records none.
+    const plain = await ctx.sessions.createRunHost({
+      runId: 'img-2',
+      workflowId: 'answer-business-question',
+      name: 'Answer a Business Question',
+      datasets: ['World Cup'],
+    });
+    expect(plain).not.toHaveProperty('inputImages');
+    write.mockReset();
+  });
+
   it('narrows a host to the datasets an eval run names, and deletes its workspace with it (agents.md 8.3)', async () => {
     const ctx = build();
     const host = await ctx.sessions.createRunHost({
@@ -959,11 +1020,14 @@ describe('the run host (agents.md 5.14)', () => {
       'write-answer:success',
       'wrap-up:running',
       'wrap-up:success',
+      // No reference images (workflows R35).
+      'read-images:skipped',
       'clarify:skipped',
       // Not asked for (agents.md 5.11).
       'check-data-quality:skipped',
     ]);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
+      'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
       'plan:success',
@@ -1208,6 +1272,8 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
 
     expect(run.status).toBe('success');
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
+      // No reference images (workflows R35).
+      'read-images:skipped',
       'resolve-dataset:success',
       'profile-source:success',
       'score-readiness:success',
@@ -1276,7 +1342,56 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       }),
     ).rejects.toThrow('is not a PostgreSQL or Databricks dataset');
   });
+
+  // Reference images (workflows R35; agents.md 2.15, 5.13).
+  it("adds Zoe's notes after the report block when the run has images, and leaves the context as it was without", async () => {
+    const readiness = readinessService();
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness });
+    jest.mocked(writeWorkspaceFile).mockResolvedValue(undefined);
+    jest.mocked(readWorkspaceImage).mockResolvedValue({
+      path: 'inputs/images/1.png',
+      data: PNG_BYTES,
+      mediaType: 'image/png',
+    });
+    ctx.mastra.readImages.mockResolvedValue({
+      imageNotes: IMAGE_NOTES,
+      imageCount: 1,
+      stopped: false,
+    });
+    const plain = await readinessRun(ctx, { dataset: 'World Cup' });
+    const noted = await readinessRun(ctx, {
+      dataset: 'World Cup',
+      images: [PNG_URL],
+    });
+    expect(plain.run.status).toBe('success');
+    expect(noted.run.status).toBe('success');
+    expect(noted.run.steps[0]).toMatchObject({
+      id: 'read-images',
+      status: 'success',
+    });
+    const [before, after] = ctx.calls['data-readiness'].map((call) =>
+      call.options.context.map((block) => block.content),
+    );
+    // Without images: the report block is the last one, as before.
+    expect(before.at(-1)).toContain('stored readiness report');
+    // With images: the same blocks, then the notes.
+    expect(after.slice(0, -1)).toHaveLength(before.length);
+    expect(after.at(-2)).toContain('stored readiness report');
+    expect(after.at(-1)).toBe(IMAGE_NOTES);
+    expect(ctx.mastra.readImages).toHaveBeenCalledTimes(1);
+    jest.mocked(writeWorkspaceFile).mockReset();
+    jest.mocked(readWorkspaceImage).mockReset();
+  });
 });
+
+/** Read images' notes as a stand-in model returns them (agents.md 2.15). */
+const IMAGE_NOTES = '## Reference images\nA bar chart of goals per team.';
+/** Bytes with the PNG signature, as the input check requires. */
+const PNG_BYTES = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.from('chart'),
+]);
+const PNG_URL = `data:image/png;base64,${PNG_BYTES.toString('base64')}`;
 
 /** A plan that asks the user first (agents.md 5.11). */
 const ASKING_PLAN = planOf(
@@ -1403,6 +1518,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'write-answer:success',
       'wrap-up:running',
       'wrap-up:success',
+      'read-images:skipped',
       'check-data-quality:skipped',
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'done' });
@@ -1412,6 +1528,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(run.waitingFor).toBeUndefined();
     expect(run.answer?.content).toBe('Brazil won.');
     expect(run.steps.map(stepLine)).toEqual([
+      'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
       'plan:success#1',
@@ -1493,6 +1610,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'write-answer:success',
       'wrap-up:running',
       'wrap-up:success',
+      'read-images:skipped',
       'clarify:skipped',
       'check-data-quality:skipped',
     ]);
@@ -1703,5 +1821,143 @@ describe('run host workspaces at start-up (data-model 3.16; agents.md 5.14)', ()
     const ctx = build();
     workspaceIds.mockReturnValue(['preview-a', 'run-b', 'abc', 'run-c']);
     expect(ctx.sessions.runHostWorkspaceIds()).toEqual(['run-b', 'run-c']);
+  });
+});
+
+describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)', () => {
+  /** The system blocks of an Analyse call, by content. */
+  const systemOf = (call: StreamCall) =>
+    call.options.context.map((block) => block.content);
+
+  let ctx: Ctx;
+  beforeEach(() => {
+    ctx = build();
+    jest.mocked(writeWorkspaceFile).mockResolvedValue(undefined);
+    // Each stored image reads back as its own path's bytes.
+    jest
+      .mocked(readWorkspaceImage)
+      .mockImplementation((_id: string, path: string) =>
+        Promise.resolve({
+          path,
+          data: Buffer.from(path),
+          mediaType: 'image/png',
+        }),
+      );
+    ctx.mastra.readImages.mockImplementation(async (_input, opts) => {
+      await opts.onExchange?.({ request: 'Describe 2 images', reply: '{}' });
+      return { imageNotes: IMAGE_NOTES, imageCount: 2, stopped: false };
+    });
+  });
+  afterEach(() => {
+    jest.mocked(writeWorkspaceFile).mockReset();
+    jest.mocked(readWorkspaceImage).mockReset();
+  });
+
+  it("reads the stored images once and hands Zoe's notes to Plan, Analyse and Write answer", async () => {
+    const { run } = await runOf(ctx, {
+      ...V2_INPUT,
+      images: [PNG_URL, PNG_URL],
+    });
+    expect(run.status).toBe('success');
+    expect(run.steps[0]).toMatchObject({
+      id: 'read-images',
+      status: 'success',
+    });
+    // The engine is given the stored paths, never the bytes.
+    const paths = ['inputs/images/1.png', 'inputs/images/2.png'];
+    expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
+      'answer-business-question',
+      { ...V2_INPUT, images: paths },
+      expect.anything(),
+    );
+    // Each stored image is loaded from the run's workspace, in order, and
+    // Zoe gets them all in one call, her exchange recorded in her thread.
+    expect(
+      jest.mocked(readWorkspaceImage).mock.calls.map(([, path]) => path),
+    ).toEqual(paths);
+    expect(ctx.mastra.readImages).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.readImages).toHaveBeenCalledWith(
+      {
+        question: 'Who won?',
+        images: paths.map((path) => ({
+          data: Buffer.from(path),
+          mediaType: 'image/png',
+        })),
+      },
+      expect.objectContaining({
+        onExchange: expect.any(Function) as unknown,
+      }),
+    );
+    expect(ctx.mastra.recordAgentExchange).toHaveBeenCalledWith(
+      expect.any(String),
+      'image-reader',
+      { request: 'Describe 2 images', reply: '{}' },
+    );
+    expect(ctx.mastra.planAnalysis.mock.calls[0][0]).toMatchObject({
+      imageNotes: IMAGE_NOTES,
+    });
+    const system = systemOf(ctx.calls['insights-analyst'][0]);
+    expect(system.at(-3)).toMatch(/^Catalog loaded for this turn:/);
+    expect(system.at(-2)).toMatch(/^Analysis plan for this turn:/);
+    expect(system.at(-1)).toBe(IMAGE_NOTES);
+    expect(ctx.mastra.writeAnswer.mock.calls[0][0]).toMatchObject({
+      imageNotes: IMAGE_NOTES,
+    });
+  });
+
+  it('sends every model request as before when the run has no images', async () => {
+    const { run } = await runOf(ctx, V2_INPUT);
+    expect(run.status).toBe('success');
+    expect(run.steps[0]).toMatchObject({
+      id: 'read-images',
+      status: 'skipped',
+    });
+    // The engine's input has no images field at all.
+    expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
+      'answer-business-question',
+      V2_INPUT,
+      expect.anything(),
+    );
+    expect(ctx.mastra.readImages).not.toHaveBeenCalled();
+    expect(readWorkspaceImage).not.toHaveBeenCalled();
+    // Plan and Write answer get no notes field; Analyse's last two system
+    // blocks are the catalog and the plan, as before.
+    expect(ctx.mastra.planAnalysis.mock.calls[0][0]).not.toHaveProperty(
+      'imageNotes',
+    );
+    expect(ctx.mastra.writeAnswer.mock.calls[0][0]).not.toHaveProperty(
+      'imageNotes',
+    );
+    const system = systemOf(ctx.calls['insights-analyst'][0]);
+    expect(system.at(-2)).toMatch(/^Catalog loaded for this turn:/);
+    expect(system.at(-1)).toMatch(/^Analysis plan for this turn:/);
+  });
+
+  it('keeps the notes through a Clarify wait and its resume, without reading the images again', async () => {
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const started = await runOf(ctx, {
+      question: 'Which team was the most dominant?',
+      datasets: ['World Cup'],
+      images: [PNG_URL],
+    });
+    expect(started.run.status).toBe('suspended');
+    const { run } = await resumeOf(ctx, started.run.id, {
+      stepId: 'clarify',
+      answer: 'Matches won',
+    });
+    expect(run.status).toBe('success');
+    expect(ctx.mastra.readImages).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
+    expect(ctx.mastra.planAnalysis.mock.calls[1][0]).toMatchObject({
+      answered: expect.objectContaining({ answer: 'Matches won' }) as unknown,
+      imageNotes: IMAGE_NOTES,
+    });
+    expect(systemOf(ctx.calls['insights-analyst'][0]).at(-1)).toBe(IMAGE_NOTES);
+    expect(ctx.mastra.writeAnswer.mock.calls[0][0]).toMatchObject({
+      imageNotes: IMAGE_NOTES,
+    });
   });
 });

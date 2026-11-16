@@ -417,6 +417,46 @@ describe('checkWorkflowContract: checked when the catalogue loads (workflows R26
     ]);
   });
 
+  it('maps an images field to string[] (its stored paths; workflows R35), optional unless required', () => {
+    const images = {
+      name: 'images',
+      label: 'Reference images',
+      type: 'images',
+      required: false,
+      max: 4,
+    } as const;
+    const reads = (schema: z.ZodType) =>
+      workflow(
+        [
+          {
+            id: 'a',
+            input: z.object({ images: schema }),
+            output: z.object({}),
+          },
+        ],
+        [images],
+      );
+    expect(
+      checkWorkflowContract(reads(z.array(z.string()).default([]))),
+    ).toEqual([]);
+    expect(checkWorkflowContract(reads(z.array(z.string())))).toEqual([
+      {
+        stepId: 'a',
+        field: 'images',
+        problem: 'optional',
+        message: 'may be missing',
+      },
+    ]);
+    expect(checkWorkflowContract(reads(z.string().optional()))).toEqual([
+      {
+        stepId: 'a',
+        field: 'images',
+        problem: 'type',
+        message: 'expected string, got string[]',
+      },
+    ]);
+  });
+
   it('unknown accepts anything; the closest earlier output gives a field', () => {
     const fine = workflow([
       {

@@ -57,7 +57,7 @@ function reply(patch: Record<string, unknown> = {}) {
   };
 }
 
-describe('result-explorer catalogue (agents.md 2.15)', () => {
+describe('result-explorer catalogue (agents.md 2.16)', () => {
   it('is registered under its key, with the rules last', () => {
     expect(RESULT_EXPLORER_AGENT_KEY).toBe('result-explorer');
     expect(RESULT_EXPLORER_INSTRUCTIONS).toContain('new-question');

@@ -34,7 +34,7 @@ import {
 } from './result-explorer-eval-target';
 
 /**
- * The eval set of Nathan, Result Explorer (agents.md 8.1, 2.15), run on the
+ * The eval set of Nathan, Result Explorer (agents.md 8.1, 2.16), run on the
  * `result-explorer` agent over the World Cup sample. A case is the user's
  * words, the candidates they are said about (built with `explorerCandidateOf`
  * from hard-coded stored rows of the fixture's real columns: no database is

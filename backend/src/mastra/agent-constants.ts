@@ -55,9 +55,18 @@ export const DATA_MAPPER_AGENT_NAME = 'Data Mapper';
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 /**
  * The agent that turns a user's words into a view (filters, sort, page) of
- * a stored query's result (agents.md 2.15).
+ * a stored query's result (agents.md 2.16).
  */
 export const RESULT_EXPLORER_AGENT_KEY = 'result-explorer';
+/**
+ * The agent of Read images, the optional first step of Answer a Business
+ * Question, Assess Data Readiness and Map a Dashboard to Data (agents.md
+ * 2.15; workflows R35): it describes the run's reference images as text.
+ * A System agent: the workflows call it.
+ */
+export const IMAGE_READER_AGENT_KEY = 'image-reader';
+/** Its name: the Read images step's agent. */
+export const IMAGE_READER_AGENT_NAME = 'Image Reader';
 
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
@@ -65,6 +74,7 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANSWER_WRITER_AGENT_KEY,
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
+  IMAGE_READER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
   'visualization',
