@@ -62,7 +62,9 @@ const PASS_RULE =
   'does not have. Score pass=false if a step is missing, out of order, ' +
   'describes a filter, join or table the SQL does not hold, or restates the ' +
   'SQL instead of explaining it. The steps for the LIMIT or the final list ' +
-  'are added by the app (a Show step), not written by the explainer.';
+  'are added by the app (a Show step), not written by the explainer. A ' +
+  'table named with its catalog (world_cup.world_cup.goals) is the same ' +
+  'table as the one the SQL names (world_cup.goals).';
 
 const STATEMENTS: ExplainerStatement[] = [
   {
