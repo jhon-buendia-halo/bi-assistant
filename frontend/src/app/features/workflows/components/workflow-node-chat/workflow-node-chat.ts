@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { Loader2, LucideAngularModule, Send, Square } from 'lucide-angular';
+import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import {
   LiveToolCall,
@@ -78,7 +79,7 @@ function toStoredCall(call: LiveToolCall): WorkflowRunToolCall {
  */
 @Component({
   selector: 'app-workflow-node-chat',
-  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
+  imports: [ExecutionId, LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
   templateUrl: './workflow-node-chat.html',
   host: { class: 'flex min-h-0 flex-1 flex-col' },
 })
@@ -114,7 +115,7 @@ export class WorkflowNodeChat {
     const id = this.runId();
     return id === null
       ? ''
-      : `Chatting about run ${id.slice(0, 8)}: this step's input, output and tool calls.`;
+      : "Chatting about this run: this step's input, output and tool calls.";
   });
   readonly canSend = computed(
     () => this.runId() !== null && !this.streaming() && !!this.draft().trim(),

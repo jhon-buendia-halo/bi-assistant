@@ -78,12 +78,10 @@
             data-testid="workflow-state-duration"
             >{{ duration(summary().durationMs) }}</span
           >
-          <span class="text-[12px] text-fg-muted"
-            >run
-            <span class="font-mono" data-testid="workflow-state-run-id">{{
-              summary().runId
-            }}</span></span
-          >
+          <app-execution-id
+            data-testid="workflow-state-run-id"
+            [id]="summary().runId!"
+          />
         } @else {
           <span
             class="text-[12px] text-fg-muted"

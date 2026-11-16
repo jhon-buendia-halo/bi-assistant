@@ -696,7 +696,9 @@ test.describe('Feature: Workflows (run workflows)', () => {
           const runs = (await storedRuns(page)) as { id: string; status: string }[];
           expect(runs.map((run) => run.status)).toEqual(['suspended']);
           runId = runs[0].id;
-          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
         },
       );
       await scenarioStep(page, `When I pick "${clarification.options[0]}"`, async () => {
@@ -712,7 +714,9 @@ test.describe('Feature: Workflows (run workflows)', () => {
             await expect(nodeStatus(page, id)).toHaveText('Done');
             await expect(canvasNode(page, id)).toHaveAttribute('data-status', 'success');
           }
-          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
           const runs = (await storedRuns(page)) as { id: string; status: string }[];
           expect(runs.map((run) => [run.id, run.status])).toEqual([[runId, 'success']]);
           await expect(page.getByTestId('run-answer')).toBeVisible();
@@ -797,7 +801,9 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
           await expect(page.getByTestId('workflow-run-input-required')).toHaveCount(0);
           await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
-          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
           for (const id of ['analyse', 'validate', 'write-answer']) {
             await expect(nodeStatus(page, id)).toHaveText('Done');
           }
@@ -1415,7 +1421,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(dialog.getByTestId('workflow-ndv-chat-intro')).toBeVisible();
         await expect(dialog.getByTestId('workflow-step-story-headline')).toContainText('Ran ');
         await expect(dialog.getByTestId('workflow-node-chat-note')).toHaveText(
-          /^\s*Chatting about run \S{8}: this step's input, output and tool calls\.\s*$/,
+          /^\s*Chatting about this run: this step's input, output and tool calls\.\s*Execution ID \S{8}\s*$/,
         );
         await expect(dialog.getByRole('log')).toBeVisible();
         await expect(dialog.getByTestId('workflow-node-chat-message')).toHaveCount(0);

@@ -230,7 +230,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       ),
     ).toEqual(['Done', 'Done', 'Done', 'Done', 'Done']);
     expect(text('workflow-state-progress')).toBe('5 of 5 nodes ran');
-    expect(text('workflow-state-run-id')).toBe('run-1');
+    expect(text('workflow-state-run-id')).toBe('Execution ID run-1');
   });
 
   it("shows the server's error, and leaving the page discards the workflow and its run", () => {

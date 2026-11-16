@@ -425,7 +425,9 @@ test.describe('Runs and Past chats', () => {
           await expect(
             page.getByTestId('workflow-node-receive-question').getByTestId('workflow-node-status'),
           ).toHaveText('Done');
-          await expect(page.getByTestId('workflow-state-run-id')).toContainText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
         },
       );
       await scenarioStep(page, 'When I click Run again', async () => {

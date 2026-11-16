@@ -134,7 +134,7 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
     open();
     expect(api.getNodeChat).toHaveBeenCalledOnceWith(RUN_ID, 'analyse');
     expect(text(byId('workflow-node-chat-note'))).toBe(
-      "Chatting about run 3f9c2a7e: this step's input, output and tool calls.",
+      "Chatting about this run: this step's input, output and tool calls. Execution ID 3f9c2a7e",
     );
     const log = byId('workflow-node-chat-messages')!;
     expect(log.getAttribute('role')).toBe('log');
