@@ -506,7 +506,7 @@
                 <div class="flex flex-col gap-1">
                   <label
                     [for]="inputId(field.name)"
-                    [class]="field.name === designer.questionField() ? 'sr-only' : 'text-[12px] font-medium text-fg-muted'"
+                    [class]="isPrompt(field) ? 'sr-only' : 'text-[12px] font-medium text-fg-muted'"
                     >{{ field.label }}</label
                   >
                   <textarea
@@ -520,8 +520,8 @@
                     (input)="onInput(field.name, $event)"
                     (keydown.enter)="onEnter($event, 'execute')"
                     rows="2"
-                    class="composer-input"
-                    [class.composer-input-invalid]="!!fieldError(field.name)"
+                    [class]="isPrompt(field) ? 'composer-input' : 'field resize-y'"
+                    [class.composer-input-invalid]="isPrompt(field) && !!fieldError(field.name)"
                   ></textarea>
                   @if (fieldError(field.name); as message) {
                     <p

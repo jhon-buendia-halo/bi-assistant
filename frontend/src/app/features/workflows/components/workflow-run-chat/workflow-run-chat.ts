@@ -445,17 +445,29 @@ export class WorkflowRunChat {
 
   /**
    * The composer's controls: every field the app does not set itself, the
-   * question first, then the others in order.
+   * prompt first (`isPrompt`), then the others in order.
    */
   protected readonly composerFields = computed(() => {
     const fields =
       this.designer.workflow()?.input.filter((field) => !field.hidden) ?? [];
-    const question = this.designer.questionField();
     return [
-      ...fields.filter((field) => field.name === question),
-      ...fields.filter((field) => field.name !== question),
+      ...fields.filter((field) => this.isPrompt(field)),
+      ...fields.filter((field) => !this.isPrompt(field)),
     ];
   });
+
+  /**
+   * Whether a field is the composer's prompt: the question the user types,
+   * shown first and bare, as a chat's message box. A question the workflow
+   * fills in itself (it has a `default`: optional instructions) is a form
+   * field like the others instead: labelled, boxed and in its own place.
+   */
+  protected isPrompt(field: WorkflowInputField): boolean {
+    return (
+      field.name === this.designer.questionField() &&
+      field.default === undefined
+    );
+  }
 
   /** The latest line of the agent's reasoning, for the Thinking block. */
   protected readonly reasoningSnippet = computed(() => {
