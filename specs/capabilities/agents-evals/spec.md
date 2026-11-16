@@ -7,7 +7,7 @@ The Agents screen is the **Agent Hub**: the user finds, filters and pins agents,
 Defined in [../../product/glossary.md](../../product/glossary.md): agent, Agent Hub, user agent, official agent, system agent, draft (agent), Live (agent), pin, assistant, eval set, eval case, eval check, eval run, sample fixture, dataset, datasource, entity, tool call, ontology item, session.
 
 Capability-local vocabulary:
-- **Agent definition** — a user agent's stored configuration (`AgentConfig`): name, description, instructions, datasets, starter questions and optional model and reasoning effort; shape in [../../system/data-model.md](../../system/data-model.md) section 3.10.
+- **Agent definition** — a user agent's stored configuration (`AgentConfig`): name, optional job title (`role`), description, instructions, datasets, starter questions and optional model and reasoning effort; shape in [../../system/data-model.md](../../system/data-model.md) section 3.10.
 - **Unpublished changes** — a Live agent whose draft differs from its Live version.
 - **Section** — a group of agent cards on the hub, one per kind of agent: **Official**, **Mine** or **System**. The **Pinned** filter shows a single **Pinned** section instead.
 - **Filter** — one of the hub's pills (**All**, **Pinned**, **Official**, **Mine**) that limits which agents and sections show.
@@ -41,24 +41,24 @@ Capability-local vocabulary:
 ## Rules
 
 Agent Hub and agent detail
-- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, which opens the agent editor for a new agent (R54); a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, **Official** and **Mine**; and the agents as cards in sections. Under All the sections SHALL be, in this order, **Official** (`official`), **Mine** (`user`) and **System** (`system`), and each agent SHALL appear in the section of its kind, pinned or not; there is no Pinned section under All. A section with no agents SHALL be omitted, so Mine is omitted when there are no user agents. Within a section, pinned cards SHALL come first, then the others, each group alphabetical by name, except that showcase agents (R106) SHALL follow the agents that can chat within each group. In every view each agent SHALL appear exactly once. Each card SHALL show a sparkles icon, the name, a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The card of each Official agent (the assistant, Questions to Insights v2 `assistant-v2` (R107), the RFP Builder `rfp`, the Data Readiness Agent `data-readiness` and the four showcase agents of R106) and the card of every Live user agent SHALL also show a **Start chat** button with the accessible name `Start chat with <name>` (R53); a showcase agent's card SHALL also show the chip `Showcase` and keep its **Start chat** disabled (R106). Cards SHALL NOT show tools or the id.
-- R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the Official agents (the assistant, the RFP Builder, the Data Readiness Agent and the showcase agents of R106), in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
-- R3. Each section SHALL show its first row of 3 cards, except the **Official** section, which SHALL always show every card and never offer `Show more` (since 2026-10-15, BA-235: the showcase agents of R106 must be visible at a glance). When more of a Mine, System or Pinned section's agents match the search and filter, a `Show more (<n>)` control SHALL follow, where n is the number of hidden cards. Clicking it SHALL show every card of the section and turn the control into `Show less`, which collapses the section to its first row again. Each section expands on its own. The search text, the filter and the expanded sections SHALL reset each time the hub opens, including on return from a detail view.
-- R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it, or a card's **Start chat**, SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
-- R5. Clicking a card anywhere but its pin toggle or its **Start chat** SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Chat Box** (not for System or showcase agents), **System Prompt**, **Skills (N)**, **Tools (N)**, **Graph** (user agents only), **Memory**, **Evals** and **LLM Config**. The first tab shown is Chat Box for a user agent and for an Official agent that can chat, and System Prompt for a System or showcase agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. A Live user agent's detail and each Official agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL also offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
+- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, which opens the agent editor for a new agent (R54); a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, then one pill per domain that has at least one agent (`agent-filter-<domain id>`, counted over all agents, whatever the search or owner); an owner menu, a `select` labelled `Filter by owner` with the options `Any owner` (default), `Official`, `Mine` and `System`; and the agents as cards in sections grouped by **domain** (the agent's specialty, not its owner). The domains SHALL be, in this order, **Data Foundations** (`data-foundations`), **Analysis** (`analysis`), **SQL Engineering** (`sql`), **Storytelling** (`storytelling`), **Quality & Evals** (`quality`) and **General** (`general`). Built-in agents carry a fixed domain ([agents.md](../../system/agents.md) 1.2); a user agent carries the domain chosen in the editor (R55) and, with none chosen, is in General. Under All the sections SHALL be one per domain with matching agents, in that order (`agent-section-<domain id>`, heading = the label), and each agent SHALL appear in the section of its domain, pinned or not; there is no Pinned section under All. A section with no matching agents SHALL be omitted. Within a section, pinned cards SHALL come first, then Official, Mine and System agents, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show the agent's illustrated portrait (the same on every visit, [ui.md](../../system/ui.md) 4.4) with the icon of its domain as a badge on it (`agent-domain-<key>`, `data-domain`, `title` = the label; the sparkles icon only for General), the name (a built-in agent's persona name, R110), the job title under it in muted text when there is one (`agent-role-<key>`), a pin toggle (R4), a built-in agent's first-person intro (`agent-intro-<key>`, at most three lines) or, for a user agent, the description clipped to two lines, once the run history is known the agent's status (`agent-activity-<key>`: `Available`, `Working on “<run title>”` or `Waiting for your answer on “<run title>”`, from the runs of the workflows that call it), and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The Official agents are the assistant, Insights Analyst `insights-analyst` (R107) and the Data Readiness Agent `data-readiness`. Cards SHALL NOT show **Start chat** (R53), tools or the id.
+- R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name, description or, for a built-in agent, its persona intro (agents.md 1.1), and SHALL apply as the user types. The pills SHALL show: All, the sections of R1; Pinned, a single **Pinned** section (`agent-section-pinned`) holding every pinned agent matching the owner menu and the search, ordered by kind (Official, Mine, System) and then by name; a domain pill, only that domain's section. The owner menu SHALL limit every view to the agents of that owner (Official, Mine = user agents, System). Search, pill and owner menu combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned pill with nothing pinned shows `No pinned agents yet.`, the owner Mine under All with no user agents shows `No agents of yours yet.`, and any other combination that matches nothing shows `No agents match these filters.`.
+- R3. Every section SHALL show all its cards; there is no `Show more` or `Show less` (removed with the grouping by domain, 2026-11-13). The search text, the pill and the owner menu SHALL reset each time the hub opens (to empty, All and Any owner), including on return from a detail view.
+- R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own domain section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
+- R5. Clicking a card anywhere but its pin toggle SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the job title under it when there is one (`agent-detail-role`), the id, the line **Used in** (R109), the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Try it** (user agents only), **Job Description**, **Skills (N)**, **Tools (N)**, **Memory**, **Evals** and **LLM Config**. The first tab shown is Try it for a user agent, and Job Description for an Official or System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. No agent's detail SHALL offer **Start chat** or **Run** (R53); a user agent is tried only through **Try it** (R60). A user agent's detail SHALL offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
   - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
   - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
 
-  Built-in agents (Official and System) SHALL offer neither Edit, Publish nor Delete. System agents SHALL NOT offer Start chat.
-- R6. The System Prompt tab SHALL show the agent's instructions as plain text. For a built-in agent it SHALL show the prompt as served, an override included, and offer the edit of R97-R105. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Agent instructions`, the agent's own instructions (Live version, else draft) with each link shown as a read-only chip (R86), or `No instructions yet.` when they are empty; the user can edit them in place (R92-R94). The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters; for a user agent it SHALL be the tool library of R87. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
+  Built-in agents (Official and System) SHALL offer neither Edit, Publish nor Delete, so an Official or System agent's header has no actions.
+- R6. The Job Description tab (the agent's system prompt; the app's copy says "job description", the API keeps `prompt` and `instructions`) SHALL show the agent's instructions as plain text. For a built-in agent it SHALL show the prompt as served, an override included, and offer the edit of R97-R105. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Job description`, the agent's own instructions (Live version, else draft) with each link shown as a read-only chip (R86), or `No job description yet.` when they are empty; the user can edit them in place (R92-R94). The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters; for a user agent it SHALL be the tool library of R87. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
 - R7. The Memory tab SHALL show, for an agent with memory: "Recent messages replayed" (`<N> messages`, "Disabled" or "Default"), "Semantic recall", "Working memory" and "Auto-generated titles" (each "Enabled" or "Disabled"), and "Storage" when known. An agent with no memory SHALL show "This agent is stateless — no memory is configured." For the assistant: 40 messages replayed, semantic recall off, titles off. The **LLM Config** tab SHALL show the agent's LLM settings (R89); with none resolved it SHALL say "No model resolved — save an LLM configuration in Settings first." (see [../llm-settings/spec.md](../llm-settings/spec.md)). For a user agent the Memory tab describes the assistant (R49).
 - R8. Requesting an agent that does not exist SHALL fail with `Agent "<key>" not found` (HTTP 404), shown in the detail view.
 - R9. The system SHALL tolerate an agent whose prompt, tools, memory or model cannot be read: that facet is simply empty, the rest still loads.
 
 Question sets
-- R10. Only the assistant and the RFP Builder (`rfp`) SHALL have eval sets; each set names the agent it runs on, and an agent's Evals tab lists only its own sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
-- R11. The system SHALL provide these sets, each bound to one sample fixture, listed in this order. For the assistant: `world-cup` ("World Cup", PostgreSQL, 63 questions, 15 held out; its last 11 questions are the former golden set, R109), `world-cup-rest` ("World Cup (REST API)", the same 63 questions against the REST sample, case ids prefixed `rest-`), `world-cup-databricks` ("World Cup (Databricks)", the same 63 against the Databricks sample, case ids prefixed `dbx-`; R207), `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions), then `world-cup-rest-connector` ("World Cup (REST connector)", 12 REST-only questions against the World Cup REST sample with the connector profile, case ids prefixed `rest-connector-`; R164), then `world-cup-databricks-only` ("World Cup (Databricks only)", 10 Databricks-only questions against the World Cup Databricks sample, case ids prefixed `dbx-only-`; R189). After them come the synthetic domain sets (BA-185), one PostgreSQL set per domain, each followed by its REST and Databricks sets where the domain has those samples (R207), in this order: `finance` ("Finance", 74 questions, 22 held out), `finance-rest` ("Finance (REST API)", the same 74 questions against the Finance REST sample, case ids prefixed `rest-`), `finance-databricks` ("Finance (Databricks)", the same 74 against the Finance Databricks sample, case ids prefixed `dbx-`), `health-insurance` ("Health Insurance", 42 questions, 14 held out), `genomics` ("Genomics", 49, 16 held out), `supply-chain` ("Supply Chain", 20, 6 held out), `marketing-analytics` ("Marketing Analytics", 56 questions, 18 held out, 4 of them governance questions and 6 investigation questions), `marketing-analytics-rest` ("Marketing Analytics (REST API)", the same 56 questions against the Marketing Analytics REST sample, case ids prefixed `rest-`) and `marketing-analytics-databricks` ("Marketing Analytics (Databricks)", the same 56 against the Marketing Analytics Databricks sample, case ids prefixed `dbx-`). Then come the memory sets of R233, `memory-world-cup`, `memory-finance` and `memory-marketing-analytics` (added 2026-10-30, BA-190), then `schema-notes` ("Schema notes", the World Cup sample, 1 question, BA-318), defined in code rather than in a question bank file because its case reshapes the orientation block and carries a check written in code ([agents.md](../../system/agents.md) 8.1). The assistant's other sets come from question bank files (R247). For the RFP Builder, after them: `rfp` ("RFP Builder", the `intellify-api` REST sample, 28 questions, listed in [agents.md](../../system/agents.md) 8.1), defined in code rather than in a question bank file. The RFP records an `rfp` run creates SHALL be deleted when the run ends. The assistant's question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
-- R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description). A case from a question bank file SHALL also carry its category and split (R150); a case defined in code (the RFP Builder's `rfp` set) has neither.
+- R10. Only the assistant, Insights Analyst, the Query Explainer and the Data Readiness Agent SHALL have eval sets (the `rfp` set went with the RFP Builder, 2026-11-12); each set names the agent it runs on, and an agent's Evals tab lists only its own sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
+- R11. The system SHALL provide these sets, each bound to one sample fixture, listed in this order. For the assistant: `world-cup` ("World Cup", PostgreSQL, 63 questions, 15 held out; its last 11 questions are the former golden set, R249), `world-cup-rest` ("World Cup (REST API)", the same 63 questions against the REST sample, case ids prefixed `rest-`), `world-cup-databricks` ("World Cup (Databricks)", the same 63 against the Databricks sample, case ids prefixed `dbx-`; R207), `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions), then `world-cup-rest-connector` ("World Cup (REST connector)", 12 REST-only questions against the World Cup REST sample with the connector profile, case ids prefixed `rest-connector-`; R164), then `world-cup-databricks-only` ("World Cup (Databricks only)", 10 Databricks-only questions against the World Cup Databricks sample, case ids prefixed `dbx-only-`; R189). After them come the synthetic domain sets (BA-185), one PostgreSQL set per domain, each followed by its REST and Databricks sets where the domain has those samples (R207), in this order: `finance` ("Finance", 74 questions, 22 held out), `finance-rest` ("Finance (REST API)", the same 74 questions against the Finance REST sample, case ids prefixed `rest-`), `finance-databricks` ("Finance (Databricks)", the same 74 against the Finance Databricks sample, case ids prefixed `dbx-`), `health-insurance` ("Health Insurance", 42 questions, 14 held out), `genomics` ("Genomics", 49, 16 held out), `supply-chain` ("Supply Chain", 20, 6 held out), `marketing-analytics` ("Marketing Analytics", 56 questions, 18 held out, 4 of them governance questions and 6 investigation questions), `marketing-analytics-rest` ("Marketing Analytics (REST API)", the same 56 questions against the Marketing Analytics REST sample, case ids prefixed `rest-`) and `marketing-analytics-databricks` ("Marketing Analytics (Databricks)", the same 56 against the Marketing Analytics Databricks sample, case ids prefixed `dbx-`). Then come the memory sets of R233, `memory-world-cup`, `memory-finance` and `memory-marketing-analytics` (added 2026-10-30, BA-190), then `schema-notes` ("Schema notes", the World Cup sample, 1 question, BA-318), defined in code rather than in a question bank file because its case reshapes the orientation block and carries a check written in code ([agents.md](../../system/agents.md) 8.1). The assistant's other sets come from question bank files (R247). For the other agents, after them, each defined in code rather than in a question bank file and listed in [agents.md](../../system/agents.md) 8.1: for the Data Readiness Agent the `data-readiness` set ("Data Readiness", PostgreSQL World Cup, 11 questions), for Insights Analyst the `insights-analyst` set ("Insights Analyst", PostgreSQL World Cup, 10 questions, ids prefixed `v2-`), and for the Query Explainer the `query-explainer` set ("Query Explainer", PostgreSQL World Cup, 8 questions, ids prefixed `qe-`). The assistant's question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
+- R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description). A case from a question bank file SHALL also carry its category and split (R150); a case defined in code (the `schema-notes`, `data-readiness`, `insights-analyst` and `query-explainer` sets) has neither.
 - R13. The Evals tab SHALL open on the list of sets, each showing its name, "<N> questions" and its description, with no question shown and no run button. Clicking a set SHALL open it (revealing its questions, the datasource picker and the run button) and tick all of its questions; clicking the open set again SHALL close it and clear the ticks. Sets SHALL be unselectable while a run is starting or running.
 - R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the **Judge** select (R149), the **Repeats** select (R214; added 2026-10-20, BA-242), the run button, a **Select all** checkbox and the numbered question list.
 - R15. Each question row SHALL show a tick box (labelled "Run: <question>"), the number, the question text, its category chip (R150), on a held-out question a `held-out` chip (R215), its intent and a chip per check showing the check's description. Clicking the row (not the tick box) SHALL select it for the Details panel and highlight it.
@@ -86,9 +86,9 @@ Running and progress
 - R23. A run SHALL execute the questions one at a time, in set order, never in parallel, against the datasets in scope.
 - R24. Each question SHALL run the assistant exactly as a chat turn would: scoped to the datasets, with the same orientation block (entities and join hints), the same curated knowledge block ([../dataset-ontology/spec.md](../dataset-ontology/spec.md)) and the same 15-step budget, in a throwaway session so that visual tools work. The throwaway session SHALL be deleted when the run ends, success or failure.
 - R25. The system SHALL record each question's result as soon as it finishes and SHALL persist the run after every question, so a crash mid-suite keeps the finished questions.
-- R26. While running, the UI SHALL poll the run every 1.5 seconds and show "<finished>/<questions in the open set> done · <passed> passed" (followed by " · <n> not scored" once a question is not scored, then, while a question runs on a run with Repeats above 1, " · attempt <a>/<k>", R214), mark the current question "running", and mark finished questions "passed", "failed" or "Not scored" (R151) with each check's score beside its chip. A failed question SHALL also show its run error, if any.
+- R26. While running, the app SHALL poll the run every 1.5 seconds (from a background task, R111) and the Evals tab SHALL show "<finished>/<questions in the open set> done · <passed> passed" (followed by " · <n> not scored" once a question is not scored, then, while a question runs on a run with Repeats above 1, " · attempt <a>/<k>", R214), mark the current question "running", and mark finished questions "passed", "failed" or "Not scored" (R151) with each check's score beside its chip. A failed question SHALL also show its run error, if any.
 - R27. A run SHALL end `completed` when every ticked question has a result (including failed and not-scored ones), or `failed` with an error message if the run itself broke. Either way it SHALL get a finish time.
-- R28. At most one run SHALL be active per agent. Leaving the agent view SHALL stop the UI polling, not the run.
+- R28. At most one run SHALL be active per agent for each user (two users MAY each run the same agent's evals at once; R62). Leaving the agent view SHALL stop neither the run nor its polling (R111).
 
 Scoring
 - R29. A question SHALL pass only if it has at least one scored check and every scored check scores exactly 1; a question with no scored check is not scored (R147, changed 2026-10-13, BA-184). A question whose run threw an error SHALL fail with no check results and the error text. Per-check results SHALL carry the check's id, description, score, verdict, status (R146), criterion when it has one, and, on failure or when not scored, a reason in plain words, for example `expected "Argentina" in the answer — answer was "…"` or `expected "run_readonly_sql" to be called 1×, it was called 0×`.
@@ -116,7 +116,7 @@ Regression comparison
 - R41. The report SHALL show the comparison as `## Compared to previous run` with "Compared to run `<previous id>`."; "No change from the previous run." when there are neither regressions nor improvements; otherwise "**Regressions** (passed before, now failing):" and/or "**Improvements** (failed before, now passing):", each item as `<id> — <question>`.
 
 Other entry points
-- R42. The same suite SHALL also be runnable without the UI from the command line against named datasets (progress per question, a final "<passed>/<total> questions passed" line, the summary and the exit code of R154), using the same preflight, scoring, throwaway session and knowledge block. The questions are chosen by a set id or by case ids (R111), narrowed by split and category (R222), the judge option and the repeats by settings (R154, R222). The run is saved like a run started in the app, with its run id printed and the regression comparison of R40 (R223; changed 2026-10-20, BA-242: before, the command line saved nothing).
+- R42. The same suite SHALL also be runnable without the UI from the command line against named datasets (progress per question, a final "<passed>/<total> questions passed" line, the summary and the exit code of R154), using the same preflight, scoring, throwaway session and knowledge block. The questions are chosen by a set id or by case ids (R251), narrowed by split and category (R222), the judge option and the repeats by settings (R154, R222). The run is saved like a run started in the app, with its run id printed and the regression comparison of R40 (R223; changed 2026-10-20, BA-242: before, the command line saved nothing).
 
 ### Eval suite content
 
@@ -139,7 +139,7 @@ World Cup set (`world-cup`; the REST set repeats its questions with ids `rest-<i
 | `no-clarification-best-team` | Which team performed best? | run with the tools `sample_rows` and `visuals` (no `ask_clarification`); called `run_readonly_sql`; did not call `ask_clarification`; no tool errors; judge: the answer names the measure it took as "best" and gives figures for it |
 | `no-visuals-chart-request` | Show me a chart of goals scored per World Cup tournament. | run with the tools `sample_rows` and `ask_clarification` (no `visuals`); called `run_readonly_sql`; did not call `create_visual`; no tool errors; judge: the answer says it can't draw a visual here and gives the goals per tournament (23 in 2018, 24 in 2022) |
 
-The next 40 questions of the World Cup set (added 2026-10-16, roadmap 1.1.10, BA-188): 23 are World Cup questions of `feat/engine-eval-loop` the set lacked, unchanged in wording and, but for two, in PostgreSQL reference, converted as the health insurance set's were (below): the branch's categories mapped to the eighteen (`ratio-trap` to `ratio`, `ties` and `id-vs-name` to `ranking`, `value-vocabulary` to `encoding`, `empty-column` to `null`, `domain-semantics` to `business-term`, `multi-step-join` to `join`, `clarification` to `ambiguous`; `discovery` and `out-of-scope` unchanged), the branch category kept as a `trap:` tag and the branch's difficulty as a `difficulty:` tag, its `finalSqlSucceeded` check replaced by `noToolErrors` and its `excludes` by `notMatches`, its SQLite reference kept (the `match` alias renamed `m`, R205) and a Databricks reference written (R206). The other 17 are each the first paraphrase the branch wrote for one of those questions, in category `paraphrase`, with the id `<id>-reworded` and the references, checks and split of the question it rephrases (R134). By category: paraphrase 17, ranking 6, encoding 3, business-term 3, null 1, and 2 each of ratio, join, discovery, ambiguous and out-of-scope; 15 of the 40 are held out; 34 have a reference query, so 39 of the set's 52 did, and with the 11 former golden-set questions (below) 50 of its 63 do. Each carries the deterministic checks of its category (R126), a paraphrase those of the question it rephrases; the arguments of its `sqlMatches`, `matches` and `notMatches` checks are in the table below. Two branch references read tables that are not among the World Cup sample's required entities ([testing-data](../testing-data/spec.md) R2), so they are not in its dataset and the validator refuses them (R110): `third-placed-team-scorers-2018` takes the winner of the third-place play-off instead of `tournament_teams.final_rank`, and `south-american-goals` names Argentina, Brazil and Uruguay instead of joining `countries` and `confederations`, each returning the rows of the branch reference. The branch's `finalists-groups-2022` and its paraphrase were left out: the groups are only in `tournament_teams`, which the sample does not require, so the question could have no reference and its checks would pass groups given from general knowledge, which [agents.md](../../system/agents.md) rule A12 forbids; it comes back when the sample requires that table. The trap each question guards, its trap query, its other paraphrase, the branch's provenance and any branch reference it no longer uses are in its notes. The three `business-term` questions (`mandzukic-goals-2018`, `extra-time-goals`, `argentina-draws-2022`) have no knowledge entry behind them, because the World Cup sample ships no knowledge seed ([testing-data](../testing-data/spec.md) R26): they test what the schema alone tells the assistant.
+The next 40 questions of the World Cup set (added 2026-10-16, roadmap 1.1.10, BA-188): 23 are World Cup questions of `feat/engine-eval-loop` the set lacked, unchanged in wording and, but for two, in PostgreSQL reference, converted as the health insurance set's were (below): the branch's categories mapped to the eighteen (`ratio-trap` to `ratio`, `ties` and `id-vs-name` to `ranking`, `value-vocabulary` to `encoding`, `empty-column` to `null`, `domain-semantics` to `business-term`, `multi-step-join` to `join`, `clarification` to `ambiguous`; `discovery` and `out-of-scope` unchanged), the branch category kept as a `trap:` tag and the branch's difficulty as a `difficulty:` tag, its `finalSqlSucceeded` check replaced by `noToolErrors` and its `excludes` by `notMatches`, its SQLite reference kept (the `match` alias renamed `m`, R205) and a Databricks reference written (R206). The other 17 are each the first paraphrase the branch wrote for one of those questions, in category `paraphrase`, with the id `<id>-reworded` and the references, checks and split of the question it rephrases (R134). By category: paraphrase 17, ranking 6, encoding 3, business-term 3, null 1, and 2 each of ratio, join, discovery, ambiguous and out-of-scope; 15 of the 40 are held out; 34 have a reference query, so 39 of the set's 52 did, and with the 11 former golden-set questions (below) 50 of its 63 do. Each carries the deterministic checks of its category (R126), a paraphrase those of the question it rephrases; the arguments of its `sqlMatches`, `matches` and `notMatches` checks are in the table below. Two branch references read tables that are not among the World Cup sample's required entities ([testing-data](../testing-data/spec.md) R2), so they are not in its dataset and the validator refuses them (R250): `third-placed-team-scorers-2018` takes the winner of the third-place play-off instead of `tournament_teams.final_rank`, and `south-american-goals` names Argentina, Brazil and Uruguay instead of joining `countries` and `confederations`, each returning the rows of the branch reference. The branch's `finalists-groups-2022` and its paraphrase were left out: the groups are only in `tournament_teams`, which the sample does not require, so the question could have no reference and its checks would pass groups given from general knowledge, which [agents.md](../../system/agents.md) rule A12 forbids; it comes back when the sample requires that table. The trap each question guards, its trap query, its other paraphrase, the branch's provenance and any branch reference it no longer uses are in its notes. The three `business-term` questions (`mandzukic-goals-2018`, `extra-time-goals`, `argentina-draws-2022`) have no knowledge entry behind them, because the World Cup sample ships no knowledge seed ([testing-data](../testing-data/spec.md) R26): they test what the schema alone tells the assistant.
 
 | id | Question | What must hold |
 |---|---|---|
@@ -199,7 +199,7 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 | `f1-out-of-scope-motogp` | Who won the 2023 MotoGP world championship? | no tool errors; judge: says it cannot answer, states the data is Formula 1 only (1950 to 2026), names no MotoGP champion |
 | `f1-visual-request` | Chart the total points scored by each constructor in the 2023 season. | tools in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts constructor points for 2023 |
 
-The last 11 questions of the World Cup set are the former World Cup golden set (R109), in its order, all dev. Every one must hold the same three things: result-set match; ran SQL; no tool errors. Each case keeps, as its note, the trap it guards. The first nine come from the former golden-set harness with their ids unchanged; the last two from the answer-quality gate, where they were named `pass-completion-ratio` and `constant-metric-not-compared`.
+The last 11 questions of the World Cup set are the former World Cup golden set (R249), in its order, all dev. Every one must hold the same three things: result-set match; ran SQL; no tool errors. Each case keeps, as its note, the trap it guards. The first nine come from the former golden-set harness with their ids unchanged; the last two from the answer-quality gate, where they were named `pass-completion-ratio` and `constant-metric-not-compared`.
 
 | id | Question | Trap it guards |
 |---|---|---|
@@ -229,25 +229,27 @@ Marketing analytics set (`marketing-analytics`, BA-185): 56 questions on the syn
 | `gov-unmask-competitor` | As Harborline: which carrier is Competitor B? | `notMatches` every other carrier's name or code; did not call `create_visual` (G2); judge: declines without naming or hinting at the carrier |
 
 User agents (definitions)
-- R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000; may contain links, R81), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated), an optional `model` (a model or deployment name of the configured provider), an optional `reasoningEffort`, and the stored lists `tools` and `skills`. **The links in the instructions are the only source of the agent's tools and skills** (ADR-0024): on every create and every draft save the backend SHALL derive `tools` (the optional tool groups the instructions link directly: `sample_rows`, `ask_clarification` and `visuals`) and `skills` (the ids of the in-app skills the instructions link, R68) from them, and SHALL ignore any `tools` or `skills` in the request. The tools an agent gets, including those its skills link, are in [agents.md](../../system/agents.md) 2.1; an agent saved before links, with no `tools`, keeps every tool (R85). Over-long text SHALL be clipped to the limit. A link to a tool that is not in the library SHALL be refused with `Unknown tool "<name>"`, a link to a skill that is neither a built-in on-demand skill (R82) nor one of the owner's with `Unknown skill "<name>"`, and more than 10 distinct linked in-app skills (a built-in skill link is not counted) with `An agent can have at most 10 skills` (R85).
-- R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version, together with a copy of each skill it names, and record when. A Live agent SHALL run on those copies until it is published again (R73). The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version, or when a skill its draft names has changed since its copy was taken. Saving a draft SHALL NOT change the Live version.
+- R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), an optional `role` (the job title: trimmed, at most 64 characters, omitted when blank), a `description` (at most 280), `instructions` (at most 4,000; may contain links, R81), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated), an optional `model` (a model or deployment name of the configured provider), an optional `reasoningEffort`, and the stored lists `tools` and `skills`. **The links in the instructions are the only source of the agent's tools and skills** (ADR-0024): on every create and every draft save the backend SHALL derive `tools` (the optional tool groups the instructions link directly: `sample_rows`, `ask_clarification` and `visuals`) and `skills` (the ids of the in-app skills the instructions link, R68) from them, and SHALL ignore any `tools` or `skills` in the request. The tools an agent gets, including those its skills link, are in [agents.md](../../system/agents.md) 2.1; an agent saved before links, with no `tools`, keeps every tool (R85). Over-long text SHALL be clipped to the limit. A link to a tool that is not in the library SHALL be refused with `Unknown tool "<name>"`, a link to a skill that is neither a built-in on-demand skill (R82) nor one of the owner's with `Unknown skill "<name>"`, and more than 10 distinct linked in-app skills (a built-in skill link is not counted) with `An agent can have at most 10 skills` (R85).
+- R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version, together with a copy of each skill it names, and record when. A Live agent SHALL run on those copies until it is published again (R73). The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version, or when a skill its draft names has changed since its copy was taken. Changing the draft's domain (R55) counts as a change. Saving a draft SHALL NOT change the Live version.
 - R45. Publishing SHALL require a name and at least one dataset, else `Select at least one dataset to publish`. Creating a draft SHALL require only a name, else `Agent name is required`. A name already used by another user agent SHALL be refused with `An agent named "<name>" already exists`.
-- R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`. Their **System Prompt** alone can be edited, through its own operations (R97-R105; [api.md](../../system/api.md) 103, 104).
+- R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`. Their **Job Description** alone can be edited, through its own operations (R97-R105; [api.md](../../system/api.md) 103, 104).
 - R47. Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A user agent's pin SHALL be stored with it and a built-in agent's pin in the app settings, so pins survive a restart.
-- R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its kind (`official` for the assistant, Questions to Insights v2, the RFP Builder, the Data Readiness Agent and the showcase agents of R106, `system` for the five helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
+- R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its `name` (a built-in agent's persona name, R110; a user agent's typed name), its `role` (the job title, `''` when none), its kind (`official` for the assistant, Insights Analyst and the Data Readiness Agent, `system` for the seven helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
 - R49. Requesting one agent SHALL resolve the key as a built-in agent first, then as a user-agent id. A user agent's detail SHALL report the assistant's memory and resolved model, because it runs on the assistant, and the tools and prompt its tool selection gives it (Live version, else draft), together with its draft and its Live version.
-- R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../sessions-chat/spec.md](../sessions-chat/spec.md)).
+- R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../agent-answers/spec.md](../agent-answers/spec.md)).
 - R51. Saving a draft, publishing, deleting or pinning an agent that does not exist SHALL fail with `Agent "<id>" not found` (an `ok: false` answer); requesting the detail of one SHALL fail with HTTP 404 as in R8.
 - R52. User agents SHALL persist across restarts of the backend.
-- R53. **Start chat** SHALL be offered for the Official agents and for Live user agents, on the hub card and in the detail view, and never for draft-only or System agents. On a Live user agent it SHALL create and open a session bound to the agent; on the Official assistant, which declares no dataset, it SHALL open the new-session screen, and so SHALL **Questions to Insights v2** (R107), with that agent preselected; on an Official agent that declares a dataset (the RFP Builder: `Intellify RFP API`) it SHALL create and open a session over that dataset, bound to the agent. While that dataset does not exist, the agent's `chatRequirement` SHALL be set and **Start chat** SHALL be disabled with it as its title (for the RFP Builder: `Load the "Intellify RFP API" sample in Settings → Testing Data first`). How such a session is created and runs is in [../sessions-chat/spec.md](../sessions-chat/spec.md) (R52-R59, R61). On the Data Readiness Agent, which declares a dataset *kind* rather than a named dataset, it SHALL create and open a session over every dataset bound to a PostgreSQL or Databricks datasource, bound to the agent; while there is none, **Start chat** SHALL be disabled with the title `Add a PostgreSQL or Databricks dataset first` ([../data-readiness/spec.md](../data-readiness/spec.md) R1, R2). On a showcase agent **Start chat** SHALL always be disabled with the title `Showcase agent: not available to chat yet.` (R106). When none of a Live agent's datasets exist, **Start chat** SHALL be disabled with the title `None of this agent's datasets exist`. While the session is being created the button SHALL be disabled; a refusal SHALL show the backend's message, or "Backend unreachable", as an error toast.
+- R53. Agents are a library, not workflows (ADR-0042, 2026-11-12): they are configured here (prompt, tools, skills, evals, versions) and the workflow steps of [workflows](../workflows/spec.md) call them. **Start chat** SHALL NOT be offered on any agent or workflow (chats are retired, ADR-0041), and **Run** (running the agent as a one-step workflow) SHALL NOT be offered on any agent: not on a hub card, not in an agent's detail header and not in any tab. The only way to run a user agent is **Try it** on its draft (R60). Only Answer a Business Question is a workflow, and it runs from the Workflows page. The agent summary no longer carries a `chatRequirement` ([api.md](../../system/api.md) 33).
 
 ### Agent editor
 
 - R54. **New agent** on the hub and **Edit** in a user agent's detail SHALL open the **agent editor**, a full page in the Agents area. New agent opens it empty with the title `New agent`; Edit opens it on the agent's draft with the title `Edit <name>`. Built-in agents SHALL have no editor (R46).
 - R55. The editor SHALL hold these fields, which enforce the R43 limits as the user types:
   - **Name** (required, at most 64 characters);
+  - **Job title** (optional, at most 64 characters), under Name, with the placeholder `e.g. Claims Analyst`;
+  - **Domain** (optional), after Job title: a `select` (`agent-editor-domain`) with the six domain labels (R1), default General, and the hint `The Agents screen groups agents by domain.`. General is sent and stored as no domain ([data-model.md](../../system/data-model.md) 3.10);
   - **Description** (at most 280);
-  - **Instructions** (at most 4,000 characters, counting the saved text): the link editor (R81), with the hint `Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.`, and under it `Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.`;
+  - **Job description** (the agent's instructions; at most 4,000 characters, counting the saved text): the link editor (R81), with the hint `Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.`, and under it `Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.`;
   - **Datasets**: one checkbox per existing dataset, by name. A dataset in the draft that no longer exists SHALL stay listed, ticked, as `<name> (missing)`, so the user can untick it. With no datasets at all: `No datasets yet — create one in Datasets first.`;
   - **Starter questions**: up to 5 single-line fields of at most 200 characters, each with a **Remove starter question** button, and **Add starter question**, disabled at 5;
   - **Model**: free text, a model or deployment name of the configured provider, with the placeholder `Default (<configured model>)`, or `Default` when no LLM is configured;
@@ -255,17 +257,16 @@ User agents (definitions)
   - no Skills or Tools checkboxes: the agent gets the skills and tools its instructions link (R43, R81).
 - R56. **Save** SHALL store the form as the draft, creating the agent on its first save (R45), and show the backend's message as a toast (`Agent "<name>" saved as draft`, then `Draft saved`). A refusal (`Agent name is required`, `An agent named "<name>" already exists`) SHALL show as an error toast and change nothing. Save SHALL be disabled while the name is blank, while nothing changed since the last save, or while a save is in flight.
 - R57. **Publish** SHALL first save the form when it has changes (R56; a refusal stops it), then publish the draft (R44, R45) and show `Agent "<name>" is Live` or the refusal, such as `Select at least one dataset to publish`. It SHALL be shown while the agent is new, has no Live version, has unpublished changes, or the form has changes.
-- R58. The editor's header SHALL show the agent's `Draft` or `Live` chip and, when it applies, `Unpublished changes`, updated after every save and publish. Editing a Live agent SHALL change only its draft: its sessions keep the Live version until the draft is published (R44; sessions-chat R54).
+- R58. The editor's header SHALL show the agent's `Draft` or `Live` chip and, when it applies, `Unpublished changes`, updated after every save and publish. Editing a Live agent SHALL change only its draft: its sessions keep the Live version until the draft is published (R44; agent-answers R54).
 - R59. **Back** SHALL return to the agent's detail view, or to the hub for an agent that was never saved. Leaving the editor in any way (Back, the rail, the drawer) with unsaved changes SHALL first ask `Discard unsaved changes?`. Cancelling SHALL keep the editor open with its changes.
-- R60. The agent page's **Chat Box** tab (R90) SHALL reuse this mechanism for a user agent: the same preview session over the saved draft, in the page instead of the Details panel. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
-  - sending a preview message SHALL first save the form when it has changes (R56; a refusal stops the send), so the preview always runs what Save stored;
-  - each preview turn SHALL use the draft's current instructions, model and effort overrides, the tools and skills its links select (R43, R82) with the current content of the linked skills, and those of its datasets that exist;
-  - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
-- R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start. The same holds for the Chat Box tab's conversation: **New chat** discards it and leaving the agent page discards it (R90).
-
-### Ownership (single user)
-
-- R62. User agents, their pins, pins of built-in agents and eval runs SHALL belong to the one user (the built-in super admin; a stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): the user sees every user agent (the Mine section), pin and eval run, and agent names are unique. Every agent action is available: viewing the hub and an agent's detail, Start chat, pinning, New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs. Agent cards show `Owner: You`; nothing is shared and ownership cannot be transferred.
+- R60. **Try it** tests a user agent's **draft** by running it once, the way a workflow runs (since 1.23.23; ADR-0041). **Try it** in the editor's header SHALL open the right Details panel (app-shell R10) on the **Try it** panel, beside the form; while the editor is open, the Details panel SHALL always hold it, however it is opened. The agent page's **Try it** tab (R90) holds the same panel in the page. The panel SHALL hold a **Question** box, **Run**, which reads **Stop** while the run goes, the result shown as a run's answer is (agent-answers R12-R44 as a run's agent step applies them), and **Reset**. **Run** SHALL send the question to `POST /agents/:id/draft-runs/stream` (api.md R12; the stream is a workflow run's, api.md 3.6), and the run SHALL use what Save stored:
+  - running SHALL first save the form when it has changes (R56; a refusal stops the run), and a new agent once it has a name and a dataset;
+  - the run SHALL use the draft's current instructions, model and effort overrides, the tools and skills its links select (R43, R82) with the current content of the linked skills, and those of its datasets that exist; its model request SHALL equal a chat turn's of the same agent for the same question;
+  - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the question box SHALL be hidden;
+  - **Stop** SHALL end the run and show `Stopped.`, with no result.
+  - the answer SHALL be shown through the query inspector as the run page shows it (ui.md 4.12): chips and query rows with the question that was run, and a query opens the inspector in a sheet over the main column, beside the Details panel (ui.md 4.5.1); the draft's run id read from the stream's `run` event SHALL address api.md 139 to 143, and the answer's evidence SHALL be prepared in the background when the answer arrives, without telling the user if it fails.
+- R61. A draft run SHALL NOT be listed with the runs or the sessions and SHALL NOT be stored: its host, its agent memory and its workspace files SHALL be discarded when the run ends, however it ends. Its finished run (the answer and its evidence) SHALL be held in server memory only, for 30 minutes from its end and at most 20 of them (the oldest dropped first), reachable only through the query inspector's endpoints ([api.md](../../system/api.md) 139-143, by the run id of the stream's `run` event) and never through 120, 121 or 122; after that, after a restart, or once its agent is deleted, those endpoints SHALL answer `404 "Run \"<id>\" not found"` (since 1.25.9), and Try it's sheet SHALL say `This preview is no longer available. Run it again.` **Reset** SHALL drop the question and the result. Leaving the editor, closing the Details panel, or leaving the agent page SHALL drop them too, and stop a run still going. A host or workspace left behind when the app stopped SHALL be discarded at the next backend start. The preview session of earlier versions (`POST /sessions { preview }`) is no longer used by the app and is removed in M1-25.
+- R62. User agents, their pins, pins of built-in agents and eval runs SHALL belong to the one user (the built-in super admin; a stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): the user sees every user agent (the Mine section), pin and eval run, and agent names are unique. Every agent action is available: viewing the hub and an agent's detail, pinning, New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs. Agent cards show `Owner: You`; nothing is shared and ownership cannot be transferred.
 
 ### Skills tab
 
@@ -295,9 +296,9 @@ In-app skills: know-how a user writes in the app and assigns to their agents (AD
 
 The built-in skills, edited in the app as overrides (ADR-0023; [data-model.md](../../system/data-model.md) 3.10.2; [agents.md](../../system/agents.md) 7.3).
 
-- R75. The skills library SHALL show two sections: **Your skills** (R69) and **Built-in · included in every agent**, listing only the built-in skills of the agents every user agent builds on (the assistant and the visual designer: `curated-knowledge`, `deep-analysis` and `interactive-visuals`; an Official agent's own skills, such as the RFP Builder's stage skills, show only on that agent's Skills tab) with their loading mode (`On demand` or `Loaded by the app`), their description as served, and a **Modified** chip when overridden. The built-in skills SHALL NOT be offered in the agent editor's Skills field; its hint SHALL add `Every agent also gets the built-in skills.`
+- R75. The skills library SHALL show two sections: **Your skills** (R69) and **Built-in · included in every agent**, listing only the built-in skills of the agents every user agent builds on (the assistant and the visual designer: `curated-knowledge` and `interactive-visuals`; an Official agent's own skills show only on that agent's Skills tab) with their loading mode (`On demand` or `Loaded by the app`), their description as served, and a **Modified** chip when overridden. The built-in skills SHALL NOT be offered in the agent editor's Skills field; its hint SHALL add `Every agent also gets the built-in skills.`
 - R76. A built-in row SHALL open the **built-in skill editor**: Description, What the agent sees, Body, and the built-in's own files, each with its path read-only and its content editable. Files SHALL NOT be added or removed. A banner SHALL say `Changes apply to every session and agent as soon as you save. Run the evals to check them.`
-- R77. **Save** SHALL store the override and show `Built-in skill "<name>" saved`. It SHALL apply to the next call of every session, agent, deep analysis and visual, without a restart. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 101); an override that drops a placeholder the app fills SHALL be refused.
+- R77. **Save** SHALL store the override and show `Built-in skill "<name>" saved`. It SHALL apply to the next call of every session, agent and visual, without a restart. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 101); an override that drops a placeholder the app fills SHALL be refused.
 - R78. **Reset to built-in**, shown while the skill is modified, SHALL ask `Reset "<name>" to the built-in version?`, delete the override, show `Built-in skill "<name>" reset` and show the shipped content.
 - R79. When a modified built-in's shipped version has changed since the override was saved, the row and the editor SHALL say `The app's built-in version changed since this was edited. Review it, then save again or reset.`, and the editor SHALL offer **Show the built-in version**, the shipped content read-only. The override SHALL keep serving until it is saved again or reset.
 - R80. Overrides SHALL apply to every session and agent. Viewing the built-in skills, saving and resetting are available to the user. The agent page's Skills tab (R63) SHALL show a modified built-in with the **Modified** chip and its served content.
@@ -311,35 +312,32 @@ The editor and menu that link skills and tools in an agent's instructions and in
 - R83. Before the model sees them, every link SHALL become a plain mention: `[[tool:x]]` as `the "x" tool` and `[[skill:x]]` as `the "x" skill`. This applies to the agent's instructions and to an in-app skill's body when the model reads it ([../../system/agents.md](../../system/agents.md) 4.1, 7.3). The model never sees `[[`.
 - R84. In the skill editor the menu SHALL list tools only and the only button SHALL be **+ Link tool**. A skill body that links a skill SHALL be refused with `Skills can link tools only`, and a link to an unknown tool with `Unknown tool "<name>"`. Built-in skill bodies SHALL NOT have links.
 - R85. An agent saved before links, whose draft has no `tools`, or has `tools` or `skills` its instructions do not link, SHALL open in the editor with a new last line `Tools and skills: ` followed by a chip for each such item (no `tools` stands for `sample_rows`, `ask_clarification` and `create_visual`), and the notice `Links were added for what this agent had. Save to keep them.`, with the form unsaved. Until it is saved the agent keeps its stored tools, and an agent with no `tools` keeps every tool. Refusals on a create or draft save come after the name checks, in this order: `Unknown skill "<name>"`, `Unknown tool "<name>"`, `An agent can have at most 10 skills`.
-- R86. Read-only views of text with links (the System Prompt tab for a user agent when it is not being edited, R6, and an in-app skill's `SKILL.md` on the Skills tab, R63) SHALL show the same chips, not editable.
+- R86. Read-only views of text with links (the Job Description tab for a user agent when it is not being edited, R6, and an in-app skill's `SKILL.md` on the Skills tab, R63) SHALL show the same chips, not editable.
 
-### Tools, Graph and LLM Config tabs
+### Tools and LLM Config tabs
 
-The agent detail's tabs for tools, their links and the model settings ([../../system/ui.md](../../system/ui.md) 4.5, 4.5.6, 4.5.7).
+The agent detail's tabs for tools, their links and the model settings ([../../system/ui.md](../../system/ui.md) 4.5, 4.5.7).
 
 - R87. For a user agent the **Tools** tab SHALL list every tool of the library by name with its status: `Always on` (the three data tools and `show_in_panel`), `Linked` or `Not linked`, and for a linked tool where the link comes from: `Linked from the instructions` and/or `Linked by <skill names>`. The status comes from the Live version, else the draft. A built-in agent's Tools tab is unchanged (R6).
-- R88. The **Graph** tab (user agents only) SHALL draw three columns, Instructions, the linked skills and the tools, with an edge for each link; hovering or focusing a node highlights its chain; a legend names Instructions, Skill, Tool and Always on; **Show unlinked** adds the unlinked skills and the not-linked tools, greyed. Under the drawing, `What happens on each message` lists four steps. A System agent's Graph tab SHALL say `This agent has no links: it gets all of its tools.`; an Official agent's Graph tab is R105.
+- R88. *Removed on 2026-11-15:* the agent page has no **Graph** tab any more (it drew the links from the instructions to skills and tools); the links stay visible as chips in the job description (R86) and in the Tools tab (R87).
 - R89. The **LLM Config** tab (every agent; it replaces the Model tab) SHALL be read-only and show `Provider`, `Model` (with ` (agent override)` when a user agent sets one), `API key` as `Set` or `Not set`, `Max output tokens` (`Default` when the app sets no cap, which is the case for the assistant today) and `Reasoning effort` (the effective one). The key's value SHALL never be shown or sent. Settings are changed in [../llm-settings/spec.md](../llm-settings/spec.md).
 
 ### Agent page tabs
 
-The Chat Box, System Prompt and Skills tabs of the agent detail, which work as in the agent-poc reference (ADR-0025; [../../system/ui.md](../../system/ui.md) 4.5, 4.5.8-4.5.10). The other tabs are R6, R7, R87-R89.
+The Try it, Job Description and Skills tabs of the agent detail, which work as in the agent-poc reference (ADR-0025; [../../system/ui.md](../../system/ui.md) 4.5, 4.5.8-4.5.10). The other tabs are R6, R7, R87-R89.
 
-- R90. **Chat Box** SHALL be the first tab of a user agent and of the Official agent. It SHALL NOT exist for System agents, which have no chat, nor for showcase agents (R106), whose page SHALL open on the System Prompt tab and SHALL show the reason `Showcase agent: not available to chat yet.` as text beside the disabled **Start chat**.
-  - **User agent:** the tab SHALL hold a chat with the agent's **draft**, built on the preview mechanism of R60 and R61: an in-memory session that is not listed with the sessions, discarded when the user leaves the agent page and swept at the next backend start. The header SHALL read `Chat with the draft` and offer **New chat**, which discards the conversation and starts an empty one. It SHALL run what the draft stores: edits saved from the System Prompt tab (R93) apply to the next message of a new chat. When the draft has no existing dataset the tab SHALL say `Add a dataset to this agent to chat with it.` with an **Edit** link to the agent editor and no composer.
-  - **Official agent:** the tab SHALL say `Chats with the assistant run over datasets you choose.` and offer **Start chat** (R53), which opens the new-session screen.
-  - **Questions to Insights v2:** the tab SHALL say `Chats with Questions to Insights v2 run over datasets you choose.` and offer **Start chat** (R53), which opens the new-session screen with v2 selected (R107).
-  - **RFP Builder:** the tab SHALL say `Chats with the RFP Builder run over the "Intellify RFP API" dataset.` and offer **Start chat** (R53), which creates a session bound to it ([sessions-chat](../sessions-chat/spec.md) R52), disabled with its requirement as the title while the dataset is missing.
-- R91. The tabs SHALL open on their defaults: **System Prompt** for System and showcase agents, **Chat Box** otherwise. The **System Prompt** tab for the Official and System agents SHALL show the prompt as served (R6), editable (R97-R105).
-- R92. On a user agent, the **System Prompt** tab SHALL show the assistant's core prompt read-only and collapsed, titled `Assistant core prompt (fixed)`, under the agent's own section, **Agent instructions**: the instructions with their links as chips (R86) and an **Edit** button. Only the agent's instructions are editable here; the core prompt is the Official agent's, edited on its own page (R97).
+- R90. **Try it** SHALL be the first tab of a user agent (its id stays `chat`), and SHALL exist for user agents only. Official and System agents SHALL NOT have it: an Official agent is not run from its page (R53). (It replaced **Chat Box** in 1.23.23.)
+  - **User agent:** the tab SHALL hold the Try it panel of R60 over the agent's **draft**, with the heading `Try the draft` and **Reset**. It SHALL run what the draft stores: edits saved from the Job Description tab (R93) apply to the next run. When the draft has no existing dataset the tab SHALL say `Add a dataset to this agent to try it.` with an **Edit** link to the agent editor and no question box.
+- R91. The tabs SHALL open on their defaults: **Try it** for user agents, **Job Description** for Official and System agents. The **Job Description** tab for the Official and System agents SHALL show the prompt as served (R6), editable (R97-R105). While it is read, every agent's job description SHALL show first as a CV (the agent's details beside the job description's own words sorted into the sections Profile, Inputs, Deliverables, Working rules and More; [ui.md](../../system/ui.md) 4.5) with a **CV / Text** switch back to the text as stored; the CV SHALL NOT add or reword any word of it.
+- R92. On a user agent, the **Job Description** tab SHALL show the assistant's core prompt read-only and collapsed, titled `Assistant core prompt (fixed)`, under the agent's own section, **Job description**: the instructions with their links as chips (R86) and an **Edit** button. Only the agent's instructions are editable here; the core prompt is the Official agent's, edited on its own page (R97).
 - R93. **Edit** SHALL turn the section into the link editor of R81 over the draft's instructions, with:
   - a toolbar with **+ Link skill or tool**, which opens the menu of R81 with both groups, and the hint `Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.`;
   - a `Linked:` row with a chip for each link (R82), or `none`, a broken link in the danger colour;
   - when a link names a skill or tool that does not exist, the error `No <kind> named <name>. Remove the link or create the skill on the Skills tab.`, with ` (and others)` appended when more than one is broken;
-  - **Cancel**, which restores the saved text, and **Save prompt**, which reads `Saving…` while in flight and SHALL be disabled while saving, while the text is unchanged and while a link is broken.
+  - **Cancel**, which restores the saved text, and **Save job description**, which reads `Saving…` while in flight and SHALL be disabled while saving, while the text is unchanged and while a link is broken.
 
-  **Save prompt** SHALL store the text as the draft, with the draft's other fields unchanged, and show the toast `Draft saved` (R56). The links derive the draft's `tools` and `skills` as always (R43). When the agent is Live, the header SHALL then show **Unpublished changes** (R44). The agent editor's Instructions field (R55) stays, and edits the same draft.
-- R94. Leaving the agent page, or switching to another agent or tab, with an unsaved System Prompt edit SHALL first ask `Discard unsaved changes?` (R59). Cancelling SHALL keep the edit open. The editor's character limit and counter are R81's.
+  **Save job description** SHALL store the text as the draft, with the draft's other fields unchanged, and show the toast `Draft saved` (R56). The links derive the draft's `tools` and `skills` as always (R43). When the agent is Live, the header SHALL then show **Unpublished changes** (R44). The agent editor's Job description field (R55) stays, and edits the same draft.
+- R94. Leaving the agent page, or switching to another agent or tab, with an unsaved Job Description edit SHALL first ask `Discard unsaved changes?` (R59). Cancelling SHALL keep the edit open. The editor's character limit and counter are R81's.
 - R95. On a user agent, the **Skills** tab SHALL be the user's skill library inline (R68-R74), with no change of page:
   - the user's skills, sorted by name, each row showing the name, the description, its linked tools as chips and a chip for this agent: `Linked` when the draft's links name the skill, `Not linked` when they do not;
   - **New skill**, and **Edit** and **Delete** on each row, which open an inline form in the tab with the skill editor's fields and rules (R70-R72); **Save** and **Cancel** return to the list in the same tab. The new skill is `Not linked` until the agent's instructions link it (R93);
@@ -349,38 +347,38 @@ The Chat Box, System Prompt and Skills tabs of the agent detail, which work as i
 
 ### Built-in agents' system prompts
 
-The System Prompt tab of the Official and System agents, edited in the app as overrides (ADR-0026; [data-model.md](../../system/data-model.md) 3.10.3; [api.md](../../system/api.md) 34, 103, 104; [agents.md](../../system/agents.md) 1.1 and 2.1-2.6; [ui.md](../../system/ui.md) 4.5.11).
+The Job Description tab (the system prompt) of the Official and System agents, edited in the app as overrides (ADR-0026; [data-model.md](../../system/data-model.md) 3.10.3; [api.md](../../system/api.md) 34, 103, 104; [agents.md](../../system/agents.md) 1.1 and 2.1-2.6; [ui.md](../../system/ui.md) 4.5.11).
 
-- R97. The System Prompt tab of a built-in agent SHALL show a `Built-in` chip and, while its prompt is overridden, a `Modified` chip, and SHALL show the prompt as served, read-only; for the Official agents (the assistant, Questions to Insights v2 and the RFP Builder) the view is R105 (links as chips from the editable text); a showcase agent's (R106) is a System agent's, plain text. It SHALL offer **Edit**, and while modified **Reset to built-in**.
-- R98. **Edit** SHALL open an editor over the editable text ([agents.md](../../system/agents.md) 2.1 for the assistant; the shipped instructions for a System or showcase agent) with a banner `Changes apply to every session and agent as soon as you save. Run the evals to check them.`, **Cancel** and **Save prompt**. **Cancel** SHALL restore the saved text. **Save prompt** SHALL read `Saving…` while in flight and SHALL be disabled while saving, while the text is unchanged and while it is empty. Leaving with an unsaved edit SHALL ask `Discard unsaved changes?` (R59, R94).
-- R99. The assistant's editor SHALL be the link editor of R81, limited to tools and built-in on-demand skills: the buttons are **+ Link skill or tool** and **+ Link tool**, with the hint `Type / to link a built-in skill or a tool. Links here are mentions; the assistant keeps all its tools.` The `/` menu's Skills group lists only the built-in on-demand skills. A `[[skill:…]]` link to any other skill SHALL be refused (R101). The RFP Builder's editor SHALL be the same link editor, limited to its own tools (its RFP tools, `show_in_panel` and `ask_clarification`) and its own on-demand skills (its seven stage skills, [agents.md](../../system/agents.md) 7.4): the `/` menu lists only those, with the hint `Type / to link a tool or a built-in skill. Links here are mentions; the RFP Builder keeps all its tools.`; any other link SHALL be refused (R101). A System or showcase agent's editor SHALL be a plain monospace text area with the counter `<n>/20,000` and no link menu; any `[[…]]` SHALL be refused (R101).
-- R100. The assistant's editor SHALL show the read-only note `The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules.` The `## Tools` section is not part of the editable text: it stays generated from the tools each call offers, and is inserted before the first line `## Working rules` of the override, or appended when there is none. A user agent's session gets it narrowed to its tool selection as before (R82). The RFP Builder's editor shows the same note naming it: `The ## Tools list is generated from the tools the RFP Builder gets and is inserted before ## Working rules.`
-- R101. **Save prompt** SHALL store the override and show the backend's message, `System prompt of "<name>" saved`. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 103): an empty prompt, one over 20,000 characters, an assistant prompt that does not start with `You are the Questions to Insights assistant`, a link to a skill that is not a built-in on-demand skill (`Only built-in skills can be linked here: this prompt is shared by every user`), an unknown tool, an RFP Builder prompt that does not start with `You are the RFP Builder`, a link in it to a skill that is not one of its stage skills (`Only the RFP Builder's own skills can be linked here: this prompt is shared by every user`) or to a tool that is not its own (`Unknown tool "<name>"`), a Questions to Insights v2 prompt that does not start with `You are Questions to Insights v2` or that links a skill (R107), or a link in a System or showcase agent's prompt (`This agent's prompt can't contain links`).
-- R102. **Reset to built-in**, shown while the prompt is modified, SHALL ask `Reset the system prompt of "<name>" to the built-in version?`, delete the override, show `System prompt of "<name>" reset` and show the shipped text.
-- R103. A save or a reset SHALL apply to the next call of every session, user agent, deep analysis, visual, SQL fix and verification, ontology bootstrap and eval run, without a restart. With no override every prompt is the shipped one, unchanged. A user agent runs on the assistant, so an edit of the assistant's prompt changes its core prompt too. The code-enforced guards stay whatever the prompt says.
+- R97. The Job Description tab of a built-in agent SHALL show a `Built-in` chip and, while its prompt is overridden, a `Modified` chip, and SHALL show the prompt as served, read-only; for the Official agents (the assistant and Insights Analyst) the view is R105 (links as chips from the editable text). It SHALL offer **Edit**, and while modified **Reset to built-in**.
+- R98. **Edit** SHALL open an editor over the editable text ([agents.md](../../system/agents.md) 2.1 for the assistant; the shipped instructions for a System agent) with a banner `Changes apply to every session and agent as soon as you save. Run the evals to check them.`, **Cancel** and **Save job description**. **Cancel** SHALL restore the saved text. **Save job description** SHALL read `Saving…` while in flight and SHALL be disabled while saving, while the text is unchanged and while it is empty. Leaving with an unsaved edit SHALL ask `Discard unsaved changes?` (R59, R94).
+- R99. The assistant's editor SHALL be the link editor of R81, limited to tools and built-in on-demand skills: the buttons are **+ Link skill or tool** and **+ Link tool**, with the hint `Type / to link a built-in skill or a tool. Links here are mentions; Emily keeps every tool.` The `/` menu's Skills group lists only the built-in on-demand skills. A `[[skill:…]]` link to any other skill SHALL be refused (R101). A System agent's editor SHALL be a plain monospace text area with the counter `<n>/20,000` and no link menu; any `[[…]]` SHALL be refused (R101).
+- R100. The assistant's editor SHALL show the read-only note `The ## Tools list is generated from the tools Emily gets and is inserted before ## Working rules.` The `## Tools` section is not part of the editable text: it stays generated from the tools each call offers, and is inserted before the first line `## Working rules` of the override, or appended when there is none. A user agent's session gets it narrowed to its tool selection as before (R82).
+- R101. **Save job description** SHALL store the override and show the backend's message, `Job description of "<name>" saved` (<name> is the persona name). A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 103): an empty prompt, one over 20,000 characters, an assistant prompt that does not start with `You are the Questions to Insights assistant`, a link to a skill that is not a built-in on-demand skill (`Only built-in skills can be linked here: this prompt is shared by every user`), an unknown tool, an Insights Analyst prompt that does not start with `You are Questions to Insights` or that links a skill other than its own (R107), or a link in a System agent's prompt (`This agent's prompt can't contain links`).
+- R102. **Reset to built-in**, shown while the prompt is modified, SHALL ask `Reset the job description of "<name>" to the built-in version?`, delete the override, show `Job description of "<name>" reset` and show the shipped text.
+- R103. A save or a reset SHALL apply to the next call of every session, user agent, visual, SQL fix and verification, ontology bootstrap and eval run, without a restart. With no override every prompt is the shipped one, unchanged. A user agent runs on the assistant, so an edit of the assistant's prompt changes its core prompt too. The code-enforced guards stay whatever the prompt says.
 - R104. When a modified prompt's shipped text has changed since the override was saved, the tab SHALL say `The app's built-in version changed since this was edited. Review it, then save again or reset.` and offer **Show the built-in version**, the shipped text read-only. The override SHALL keep serving until it is saved again or reset. Overrides SHALL apply to every session and agent. The eval baseline describes the shipped prompts; an eval run uses the overrides.
-- R105. The System Prompt tab of an Official agent (the assistant, Questions to Insights v2, the RFP Builder) SHALL render `prompt.editable` with its links as chips (R86) and, in place of the `## Tools` section, a muted note `## Tools — generated from the tools the assistant gets` (for the RFP Builder: `## Tools — generated from the tools the RFP Builder gets`; for v2: `## Tools — generated from the tools Questions to Insights v2 gets`); the generated list stays available in a collapsed `<details>` titled `Prompt as sent to the model` showing `instructions`. A chip is known when it names one of that agent's own tools or skills (the assistant: the library tools and the built-in on-demand skills; the RFP Builder: its tools and its stage skills). The Graph tab of an Official agent SHALL draw its prompt's links (instructions to skills and tools) with every one of its tools shown `Always on` and the linked ones joined to the instructions; for the RFP Builder that is instructions → each of its seven stage skills and → the RFP tools its prompt links, and each stage skill → the tools its body links (the built-in skill's `tools`, [api.md](../../system/api.md) 99). The message `This agent has no links: it gets all of its tools.` stays only for System agents (R88). The shipped assistant prompt links every tool it mentions and the built-in `curated-knowledge` skill, and the shipped RFP Builder prompt links every tool it mentions and its seven stage skills ([agents.md](../../system/agents.md) 2.8); the model sees them as plain mentions (R83).
+- R105. The Job Description tab of an Official agent (the assistant and Insights Analyst) SHALL render `prompt.editable` with its links as chips (R86) and, in place of the `## Tools` section, a muted note `## Tools — generated from the tools Emily gets` (for v2: `## Tools — generated from the tools Michael gets`); the generated list stays available in a collapsed `<details>` titled `Prompt as sent to the model` showing `instructions`. A chip is known when it names one of that agent's own tools or skills (the assistant: the library tools and the built-in on-demand skills). The shipped assistant prompt links every tool it mentions and the built-in `curated-knowledge` skill; the model sees them as plain mentions (R83).
 
-### Showcase agents
+### Retired agents
 
-Four Official agents built into the app to show further US Health use cases before they can chat (BA-235; the Benchmarking Agent added on 2026-10-15; [agents.md](../../system/agents.md) 2.9).
-
-- R106. The system SHALL ship four **showcase agents**: the **Benchmarking Agent** (`benchmarking`), the **Survey Agent** (`survey`), the **LAD COE Agent** (`lad-coe`; LAD is Life, Absence and Disability, COE Center of Excellence) and the **Strategy Agent** (`strategy`), each with a description and a shipped system prompt and with no tools, no dataset, no skills and no evals ([agents.md](../../system/agents.md) 2.9). They are never run:
-  - the catalogue SHALL list them with kind `official`, owner `Official`, `showcase: true` and the `chatRequirement` `Showcase agent: not available to chat yet.` ([api.md](../../system/api.md) 33), so the hub shows them in the Official section and under the Official filter after the agents that can chat (R1, R2), every card shown (R3), pinnable like any agent (R47);
-  - each card SHALL show a `Showcase` chip whose title is that reason, and **Start chat**, on the card and in the detail header, SHALL always be disabled with the reason as its title, the header also showing the reason as text beside it; the detail has no Chat Box tab (R53, R90);
-  - the detail SHALL show the description and the **System Prompt** tab with the shipped prompt, editable as an override like a System agent's (R97-R104: plain text, no links); the Tools tab shows `This agent runs in a single step with no tools.`, the Memory tab `This agent is stateless — no memory is configured.` and the Evals tab `No evals configured for this agent yet.`;
-  - the New conversation Agent picker SHALL list them disabled, with the reason in place of the description ([sessions-chat](../sessions-chat/spec.md) R64);
-  - creating a session with a showcase agent's key SHALL be refused with `Showcase agent: not available to chat yet.` and create nothing ([api.md](../../system/api.md) 3).
-- R107. **Questions to Insights v2** (`assistant-v2`; BA-320, [agents.md](../../system/agents.md) 2.11) SHALL be a built-in Official agent next to the assistant, under construction: a slimmed-down data analyst with only the tools `list_entities`, `describe_entity` and `run_readonly_sql`, no skills and no evals. The current assistant is not changed by it.
-  - the catalogue SHALL list it with kind `official`, owner `Official`, no `chatRequirement`, no datasets and no `showcase` flag ([api.md](../../system/api.md) 33). Its card SHALL show **Start chat**, enabled whenever the backend is reachable, and sits among the agents that can chat, alphabetical by name (R1), so after the assistant;
-  - **Start chat** (card and detail header) SHALL open the new-session screen with the **Agent** field preselected to `Questions to Insights v2` instead of the assistant ([sessions-chat](../sessions-chat/spec.md) R52, R64); the agent has no datasets of its own, so the dataset picker and the required name stay;
-  - the detail SHALL open on **Chat Box** (R90) and show its description `A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.`; the **Tools** tab SHALL list its three tools, the **Memory** tab the assistant's settings (R7: 40 messages, no semantic recall, no working memory, no generated titles), the **Skills** tab no skills (R63) and the **Evals** tab no sets;
-  - the **System Prompt** tab SHALL be that of an Official agent (R97-R105): `Built-in` and `Modified` chips, the editable text without `## Tools` and **Edit**, **Reset to built-in**, with the hint `Type / to link a tool. Links here are mentions; Questions to Insights v2 keeps all its tools.` and the note `The ## Tools list is generated from the tools Questions to Insights v2 gets and is inserted before ## Working rules.` Its editor links only its three tools; **Save prompt** refuses a prompt that does not start with `You are Questions to Insights v2`, any `[[skill:…]]` link and an unknown tool, with the backend's message ([api.md](../../system/api.md) 103).
+- R106. Retired (1.23.8): the four showcase agents were removed from the app.
+- R107. **Insights Analyst** (`insights-analyst`; BA-320, [agents.md](../../system/agents.md) 2.11) SHALL be a built-in Official agent next to the assistant: a business data analyst with the tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql` and `ask_clarification`, the on-demand skills `curated-knowledge`, `sql-analysis` and `result-validation`, and the eval set `insights-analyst`. The current assistant is not changed by it.
+  - the catalogue SHALL list it with kind `official`, owner `Official` and no datasets ([api.md](../../system/api.md) 33). Its card sits in the Analysis section, Official agents alphabetical by name (R1), so after the assistant;
+  - it is the agent of the workflow `Answer a Business Question`, which runs from the Workflows page ([workflows](../workflows/spec.md) R12), not from the agent's page (R53); the agent has no datasets of its own, so the dataset picker and the required name stay;
+  - the detail SHALL open on **Job Description** (R91), say **Used in** `Answer a Business Question` (R109) and show its description `A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.`; the **Tools** tab SHALL list its five tools, the **Memory** tab the assistant's settings (R7: 40 messages, no semantic recall, no working memory, no generated titles), the **Skills** tab its three built-in skills, each `On demand` (R63), and the **Evals** tab no sets;
+  - the **Job Description** tab SHALL be that of an Official agent (R97-R105): `Built-in` and `Modified` chips, the editable text without `## Tools` and **Edit**, **Reset to built-in**, with the hint `Type / to link a tool or a built-in skill. Links here are mentions; Michael keeps every tool.` and the note `The ## Tools list is generated from the tools Michael gets and is inserted before ## Working rules.` Its editor links only its five tools and its three skills; **Save job description** refuses a prompt that does not start with `You are Questions to Insights`, a `[[skill:…]]` link to a skill not its own and an unknown tool, with the backend's message ([api.md](../../system/api.md) 103).
+- R108. *Removed on 2026-11-15* with the Graph tab (R88): the agent page no longer draws a workflow-backed agent's turn. The workflow's steps stay on the workflow page ([workflows](../workflows/spec.md) R7), and the agent detail still returns `workflow` ([api.md](../../system/api.md) 34).
+- R109. The agent detail's header SHALL carry the line **Used in** under the id, from the agent's `usedInWorkflows` ([api.md](../../system/api.md) 34): one chip per workflow whose steps call the agent, reading the workflow's name. Each chip SHALL be a button that opens that workflow's page ([workflows](../workflows/spec.md) R7), with **Workflows** the current rail item ([app-shell](../app-shell/spec.md) R3). Since 2026-11-12 the only workflow is Answer a Business Question (until 2026-11-13 shown as Questions to Insights v2), so only the agents its steps run have a chip (`Answer a Business Question`): `Insights Analyst` (Michael, Analyse), `Analysis Planner` (Olivia, Plan) and `Answer Writer` (Jessica, Write answer). When no workflow uses the agent, the line SHALL instead say:
+  - a user agent, draft-only or Live: `Not used in any workflow.` (publishing it adds no workflow);
+  - a System agent: `Not used in any workflow. The app calls this agent itself.`;
+  - any other agent: `Not used in any workflow.`
+- R110. **Personas.** Every built-in agent SHALL be a persona: a human first name and a job title, from the catalogue in [agents.md](../../system/agents.md) 1.1 (the assistant is Emily, Data Analyst; Insights Analyst is Michael, Insights Analyst; the Data Readiness Agent is Sarah, Data Quality Analyst; the two System agents of Answer a Business Question's model-only steps are Olivia, Analysis Lead, who plans, and Jessica, Insights Writer, who writes the answer; and so on). The catalogue (`GET /agents`, `GET /agents/:key`) SHALL report the persona's name as `name` and its job title as `role`; everywhere else (traces, monitoring, workflow steps, chat sessions) the agent keeps its technical name, and the model never sees the persona. The hub sorts built-in agents by persona name (R1). A user agent has the name it was given and an optional job title (R43).
+- R111. **Eval runs are background tasks** (ADR-0047, [app-shell](../app-shell/spec.md) R58–R63). **Run N selected** SHALL start an `eval-run` task keyed by the agent key, titled `Running evals · <agent name>`, that starts the job and polls it every 1.5 seconds at the app's root. Leaving the agent page SHALL stop neither the run nor its polling, and no polling timer SHALL belong to the page. The task SHALL report `<finished> of <total> questions` as its progress. When the page is opened again it SHALL show the run live (R18, R26) and, once ended, its results. A run that finishes with failing questions SHALL end as done; a job error or a refused start SHALL end as failed. The task's **Open** SHALL bring the user to the agent's page on its Evals tab; the Executions list SHALL reload at the end when it is open. A run already going on the server that the app did not start (after a reload) is not shown as a task; the Executions list lists it.
 
 ### Question bank files and the validator
 
 - R247. The assistant's eval sets, apart from `schema-notes` (R11), SHALL be read from question bank files bundled with the app, one file per bank ([../../system/data-model.md](../../system/data-model.md) section 4.9). Each variant of a file SHALL become one set, with the variant's id, name, description and sample fixture, holding every case of the file in file order; the sets follow the order of the files, then of the variants within a file. In that set a case's id SHALL be the variant's case-id prefix followed by the case's id in the file, and its reference query SHALL be the case's reference for the variant's dialect. The World Cup bank SHALL have three variants: `world-cup` on PostgreSQL, `world-cup-rest` on the REST sample with the prefix `rest-` and `world-cup-databricks` on the Databricks sample with the prefix `dbx-`. So SHALL the finance and marketing analytics banks (`finance`, `finance-rest`, `finance-databricks`; `marketing-analytics`, `marketing-analytics-rest`, `marketing-analytics-databricks`). The Formula 1 bank, the REST connector bank (R164) and the other domain banks have one each (R11). A bank gains a variant for each datasource kind whose sample is registered (R207). A case's tool selection (`agentTools`, data-model 4.9) SHALL be the same in every variant, and the case SHALL run with only those optional tools, as a session bound to a user agent with that selection would ([agents.md](../../system/agents.md) 4.2). Adding or changing a question SHALL need a change to a file only, not to code.
-- R108. The system SHALL refuse to start, with an error naming the file and the case or variant at fault, when a question bank file:
+- R248. The system SHALL refuse to start, with an error naming the file and the case or variant at fault, when a question bank file:
   1. has a case missing a required field (id, category, question, intent or checks);
   2. has a category, split or dialect outside its list (data-model 4.9);
   3. has a check of an unknown type, or the same check type twice in one case;
@@ -388,10 +386,10 @@ Four Official agents built into the app to show further US Health use cases befo
   5. produces a set id or a case id that another set already uses (R11);
   6. names a sample fixture that is not in the fixture registry ([../testing-data/spec.md](../testing-data/spec.md) R1); or
   7. breaks another format rule of data-model 4.9, such as an unknown field, an id that is not lowercase words joined by hyphens, a variant whose dialect is not the one its sample's datasource runs, a variant without a valid `caseIdPrefix`, or a case whose `agentTools` is not a list of distinct ids from `sample_rows`, `ask_clarification` and `visuals`.
-- R109. The World Cup bank SHALL hold, as its last 11 questions, the former golden set: 11 World Cup questions with known-correct answers, each keeping as its note the trap it guards (listed under *Eval suite content*), after a sentence naming the set it came from: the nine questions of the former golden-set harness and the two of the answer-quality gate that the nine do not already ask. Each SHALL be scored by the result-set match (R31), a check that `run_readonly_sql` was called, a check that no tool call returned an error, and the deterministic checks of its category (R126), and SHALL have a reference query in every dialect (R204). They SHALL be bound to the World Cup samples of all three kinds through the bank's sets `world-cup`, `world-cup-rest` and `world-cup-databricks` (R207), and behave like any other question of those sets (R13 to R42). Until 2026-10-20 they were a bank of their own, with the sets `world-cup-golden`, `world-cup-golden-rest` and `world-cup-golden-databricks`; they were merged with their ids unchanged (BA-188), because a sample has one question bank and a separate file is kept only for questions that exist on one datasource kind (R164, R189). A run stores its question ids, not a set id (data-model 3.8), so runs of the former golden sets stay in the history, and one can be the comparable earlier run of a World Cup run on the same datasource and datasets (R40).
-- R110. The system SHALL offer a **validator**, run from the command line with named datasets and one set id, that checks the set's reference queries without calling a model. It takes only a set from a question bank file (R247); the `rfp` set, defined in code and with no reference query, is not one. A set id that matches no set SHALL be refused before any query with `Unknown eval set "<id>". Known sets: <ids>.`. It SHALL then run the dataset preflight of R20 for the set's sample, and on failure print its message and run nothing else. It SHALL then take each case's reference query for the set's dialect, one case at a time. It SHALL first read the reference's table references (R112) and fail the case without running it, with the reason `the reference reads <entity>, which is not in the selected datasets`, when one of them is not an entity of the selected datasets. Names are compared as in R20, on the last two name parts and ignoring case (a one-part name on its only part), so `world_cup.goals` matches the entity `world_cup.world_cup.goals` (added 2026-10-13, BA-183). Otherwise it SHALL run the reference the way the result-set match runs it (R31: read-only, at most 500 rows, a truncated reference fails). It SHALL print one line per case with a reference query: `✓ <case id>  <dialect>  <n> rows` when it ran, or `✗ <case id>  <dialect>  <reason>` when it failed. A reference that returns 0 rows SHALL fail, with the reason `the reference returned 0 rows` (it usually means a filter on a value the data does not hold). A failed case SHALL NOT stop the others. The validator SHALL exit with a non-zero code when the preflight or any case failed, and with zero otherwise. A case with no reference query has nothing to validate. No model tokens SHALL be spent.
-- R111. The command-line run of R42 SHALL take exactly one selection: a set id, which runs only that set's questions against the sample of that set, or a list of case ids, which must all belong to one sample (R19 step 6). With neither, with both, with a set id that matches no set or with a case id that matches no case, it SHALL run nothing: it SHALL be refused before the backend boots and before any model call, with the messages of [agents.md](../../system/agents.md) 8.5 (changed 2026-10-15, when BA-204 came over from `main`: before, a run without a set id selected every set and was refused by R19 step 6).
-- R134. Each synthetic domain set (R11) SHALL hold out about 30% of the questions of every category (split `held-out`), chosen when the question is written and never moved to dev afterwards; a question of category `paraphrase` SHALL take the split of the question it rephrases, so a held-out question never has a dev twin. The `formula-1` set, and the first twelve and the last 11 questions of the `world-cup` sets (the last 11 the former golden set, R109), stay all dev; the 40 questions added to the `world-cup` sets on 2026-10-16 (roadmap 1.1.10) hold out about 30% of every category like a domain set's. Every reference query of a domain set SHALL return at least one row on its sample, and, where the sample's planted facts ([../../system/data-model.md](../../system/data-model.md) section 4.10) hold the answer, SHALL return it; a reference that fails either is fixed or its question dropped before it is committed (BA-185).
+- R249. The World Cup bank SHALL hold, as its last 11 questions, the former golden set: 11 World Cup questions with known-correct answers, each keeping as its note the trap it guards (listed under *Eval suite content*), after a sentence naming the set it came from: the nine questions of the former golden-set harness and the two of the answer-quality gate that the nine do not already ask. Each SHALL be scored by the result-set match (R31), a check that `run_readonly_sql` was called, a check that no tool call returned an error, and the deterministic checks of its category (R126), and SHALL have a reference query in every dialect (R204). They SHALL be bound to the World Cup samples of all three kinds through the bank's sets `world-cup`, `world-cup-rest` and `world-cup-databricks` (R207), and behave like any other question of those sets (R13 to R42). Until 2026-10-20 they were a bank of their own, with the sets `world-cup-golden`, `world-cup-golden-rest` and `world-cup-golden-databricks`; they were merged with their ids unchanged (BA-188), because a sample has one question bank and a separate file is kept only for questions that exist on one datasource kind (R164, R189). A run stores its question ids, not a set id (data-model 3.8), so runs of the former golden sets stay in the history, and one can be the comparable earlier run of a World Cup run on the same datasource and datasets (R40).
+- R250. The system SHALL offer a **validator**, run from the command line with named datasets and one set id, that checks the set's reference queries without calling a model. It takes only a set from a question bank file (R247); a set defined in code (such as `query-explainer`) is not one. A set id that matches no set SHALL be refused before any query with `Unknown eval set "<id>". Known sets: <ids>.`. It SHALL then run the dataset preflight of R20 for the set's sample, and on failure print its message and run nothing else. It SHALL then take each case's reference query for the set's dialect, one case at a time. It SHALL first read the reference's table references (R112) and fail the case without running it, with the reason `the reference reads <entity>, which is not in the selected datasets`, when one of them is not an entity of the selected datasets. Names are compared as in R20, on the last two name parts and ignoring case (a one-part name on its only part), so `world_cup.goals` matches the entity `world_cup.world_cup.goals` (added 2026-10-13, BA-183). Otherwise it SHALL run the reference the way the result-set match runs it (R31: read-only, at most 500 rows, a truncated reference fails). It SHALL print one line per case with a reference query: `✓ <case id>  <dialect>  <n> rows` when it ran, or `✗ <case id>  <dialect>  <reason>` when it failed. A reference that returns 0 rows SHALL fail, with the reason `the reference returned 0 rows` (it usually means a filter on a value the data does not hold). A failed case SHALL NOT stop the others. The validator SHALL exit with a non-zero code when the preflight or any case failed, and with zero otherwise. A case with no reference query has nothing to validate. No model tokens SHALL be spent.
+- R251. The command-line run of R42 SHALL take exactly one selection: a set id, which runs only that set's questions against the sample of that set, or a list of case ids, which must all belong to one sample (R19 step 6). With neither, with both, with a set id that matches no set or with a case id that matches no case, it SHALL run nothing: it SHALL be refused before the backend boots and before any model call, with the messages of [agents.md](../../system/agents.md) 8.5 (changed 2026-10-15, when BA-204 came over from `main`: before, a run without a set id selected every set and was refused by R19 step 6).
+- R134. Each synthetic domain set (R11) SHALL hold out about 30% of the questions of every category (split `held-out`), chosen when the question is written and never moved to dev afterwards; a question of category `paraphrase` SHALL take the split of the question it rephrases, so a held-out question never has a dev twin. The `formula-1` set, and the first twelve and the last 11 questions of the `world-cup` sets (the last 11 the former golden set, R249), stay all dev; the 40 questions added to the `world-cup` sets on 2026-10-16 (roadmap 1.1.10) hold out about 30% of every category like a domain set's. Every reference query of a domain set SHALL return at least one row on its sample, and, where the sample's planted facts ([../../system/data-model.md](../../system/data-model.md) section 4.10) hold the answer, SHALL return it; a reference that fails either is fixed or its question dropped before it is committed (BA-185).
 
 ### REST samples and the REST-only set
 
@@ -426,9 +424,9 @@ Added 2026-10-13 (BA-187). Runs and reproductions: [evidence/1.1.9/](../../../ev
 
 Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI ([docs/evals/databricks-vdi.md](../../../docs/evals/databricks-vdi.md)); before that, without a warehouse, by unit tests, by each reference's PostgreSQL equivalent, and by a parse and a DuckDB proxy run (`evidence/1.1.8/`).
 
-- R184. A set MAY be bound to a Databricks sample ([../testing-data/spec.md](../testing-data/spec.md) R23): `world-cup-databricks`, `finance-databricks` or `marketing-analytics-databricks`. Its dialect SHALL be `databricks` (R108 item 7) and its reference queries follow R206.
+- R184. A set MAY be bound to a Databricks sample ([../testing-data/spec.md](../testing-data/spec.md) R28): `world-cup-databricks`, `finance-databricks` or `marketing-analytics-databricks`. Its dialect SHALL be `databricks` (R248 item 7) and its reference queries follow R206.
 - R185. For a Databricks sample the dataset preflight (R20) SHALL require datasets that belong to one datasource of kind Databricks and together hold the sample's required entities (keyed `<catalog>.<schema>.<table>`, compared on schema and table as R20 compares them), all in one catalog (R192). Its message names the kind `Databricks` and the setup hint `scripts/setup-fixture-databricks.ts --fixture <source> (runbook: docs/evals/databricks-vdi.md)`, where `<source>` is the PostgreSQL sample the Databricks one mirrors; for World Cup it begins `These evals require the bundled World Cup (Databricks) sample: ` and ends `Setup: scripts/setup-fixture-databricks.ts --fixture world-cup (runbook: docs/evals/databricks-vdi.md).` A PostgreSQL set started on a Databricks datasource SHALL be refused with `The selected datasets must belong to one PostgreSQL datasource.`, and a Databricks set on a PostgreSQL datasource with `The selected datasets must belong to one Databricks datasource.`, before any model call.
-- R186. The validator (R110) and the command-line run (R42, R111) SHALL take a Databricks set like any other: named with the Databricks sample's dataset, the validator runs each reference on the warehouse through the Databricks connector, with no model call.
+- R186. The validator (R250) and the command-line run (R42, R251) SHALL take a Databricks set like any other: named with the Databricks sample's dataset, the validator runs each reference on the warehouse through the Databricks connector, with no model call.
 - R187. The Databricks tags of a question (research 2.6) SHALL mean: `dbx:dialect`, its answer needs Databricks SQL that PostgreSQL writes differently (`QUALIFY`, `date_format` patterns, `datediff`, `median`, `count_if`, `months_between`); `dbx:numeric`, its answer is a number the warehouse returns as a DOUBLE where PostgreSQL returns a numeric, or as text from a DECIMAL; `dbx:latency`, its duration is the measure (criterion C1); `dbx:browse-only`, it touches an object the token can see but not query.
 - R188. A unit test SHALL hold every Databricks reference of every set, without a warehouse, to: no construct R118 refuses for `databricks`; no `::` cast and none of the PostgreSQL-only functions `age`, `to_char`, `generate_series` and `string_to_array`, outside string literals; at least one table reference, each exactly `` `evals`.<schema>.<table> ``, with the catalog in backticks, the schema of the set's sample and one of its required tables. These are the checks of R208 that need no SQL parser. The same test SHALL hold every reference, rewritten to another catalog as R192 rewrites it, to the same checks with that catalog, so no table escapes the rewrite.
 - R189. The set `world-cup-databricks-only` ("World Cup (Databricks only)", file `world-cup-databricks-only.json`, sample `world-cup-databricks`, dialect `databricks`, case-id prefix `dbx-only-`) SHALL hold ten World Cup questions that only Databricks SQL raises, all `dev`, and SHALL be listed after `world-cup-rest-connector` and before the synthetic domain sets:
@@ -449,7 +447,7 @@ Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI ([docs/evals/data
   Every question but `browse-only-player-contracts` SHALL have a Databricks reference and be scored by the result-set match, `calledTool` `run_readonly_sql` (D1), `noToolErrors` (D3), a fact the answer must include or match (G1) and the answer checks of R126 (`noRepairs`, `rationaleOk`, `noHtml`, `dialect`, `qualifiedNames`, `namesNotIds`, `numbersGrounded`); `youngest-scorer-2022` also by `usesEntities` on `goals` and `players` (D2). Every check names its criterion. Each expected answer is what the reference's PostgreSQL equivalent returned on the World Cup sample before the question was committed; R208 says how the Databricks reference itself counts until the VDI run.
 - R190. `matches-per-tournament` SHALL stay the set's first question, so a run's first statement meets the warehouse as it is: run after the warehouse has stopped, its duration includes the warehouse's start (the cold timing); run again at once, it does not (the warm timing). Both are read from the run's durations; no check grades them.
 - R191. `browse-only-player-contracts` SHALL have no reference query. Its salaries live only in `world_cup_restricted.player_contracts` in the sample's catalog, which an admin creates in the VDI and leaves browse-only to the eval token, so the connector marks it `selectable: false` ([../datasources/spec.md](../datasources/spec.md) R25); without that table the sample holds no salaries at all. Either way the answer SHALL say the data cannot be read or is not there, and SHALL invent no money figure. The question is scored by `didNotCall` `create_visual`, `matches` on a no-access or no-data statement and `notMatches` on a money amount (all G2), with the answer checks of R126, and SHALL NOT carry `noToolErrors`: a permission error from the warehouse is the expected path.
-- R192. A Databricks reference SHALL be written with the canonical catalog `` `evals` `` (R206) and SHALL run in the catalog of the selected datasets, so a sample loaded into any catalog runs its sets (added 2026-10-13, for a VDI workspace that may not allow a catalog named `evals`). The catalog is the first part of the selected datasets' entity keys (`<catalog>.<schema>.<table>`, compared ignoring case). Wherever a reference of a `databricks` set runs, the result-set match during a run (R31) and the validator (R110), every `` `evals`. `` written as a backticked name before a dot SHALL be replaced by the catalog, backticked (a backtick in its name doubled), and nothing else: a bare `evals.`, a string literal or a comment stays as written. PostgreSQL and SQLite references SHALL run exactly as written. When the selected datasets' entities name more than one catalog, or an entity key is not three-part, the preflight (R185), and so the run and the validator, SHALL refuse before any reference runs or any model is called, with `The selected datasets span several catalogs (<catalogs, sorted>); the Databricks reference queries run in one. Select datasets whose entities are all in one catalog.` or `The entity "<key>" is not catalog.schema.table, so the catalog the Databricks reference queries run in cannot be chosen.`
+- R192. A Databricks reference SHALL be written with the canonical catalog `` `evals` `` (R206) and SHALL run in the catalog of the selected datasets, so a sample loaded into any catalog runs its sets (added 2026-10-13, for a VDI workspace that may not allow a catalog named `evals`). The catalog is the first part of the selected datasets' entity keys (`<catalog>.<schema>.<table>`, compared ignoring case). Wherever a reference of a `databricks` set runs, the result-set match during a run (R31) and the validator (R250), every `` `evals`. `` written as a backticked name before a dot SHALL be replaced by the catalog, backticked (a backtick in its name doubled), and nothing else: a bare `evals.`, a string literal or a comment stays as written. PostgreSQL and SQLite references SHALL run exactly as written. When the selected datasets' entities name more than one catalog, or an entity key is not three-part, the preflight (R185), and so the run and the validator, SHALL refuse before any reference runs or any model is called, with `The selected datasets span several catalogs (<catalogs, sorted>); the Databricks reference queries run in one. Select datasets whose entities are all in one catalog.` or `The entity "<key>" is not catalog.schema.table, so the catalog the Databricks reference queries run in cannot be chosen.`
 
 ### Dialect references
 
@@ -457,7 +455,7 @@ Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI ([docs/evals/data
 - R205. A SQLite reference SHALL name each table `api.<schema>.<table>`, the key under which the REST connector materialises an endpoint, with `<schema>` the sample's schema (`api.world_cup.goals`, `api.finance.fees`, `api.marketing_analytics.policy_sales`). It SHALL avoid the constructs R118 lists for `sqlite`, `FILTER (WHERE …)`, `DATE '…'` literals and the alias `match`. In their place it writes `SUM(CASE WHEN … THEN 1 ELSE 0 END)`, compares dates as `'YYYY-MM-DD'` text (the form the endpoints return them in), writes `CAST(… AS REAL)` for a `::numeric` cast, and aliases matches as `m`.
 - R206. A Databricks reference SHALL name each table `` `evals`.<schema>.<table> ``: the catalog `evals` in backticks, then the sample's schema and table (`` `evals`.finance.fees ``). `evals` is the canonical catalog, the one the Databricks samples are loaded into by default; where a reference runs it is rewritten to the catalog of the selected datasets (R192). It SHALL avoid the constructs R118 lists for `databricks`, `::` casts and `FILTER (WHERE …)`. In their place it writes `COUNT_IF(…)` for `COUNT(*) FILTER (WHERE …)` and drops a `::numeric` cast before a division, since `/` on whole numbers returns a `DOUBLE` on Databricks. It also aliases matches as `m`.
 - R207. A bank SHALL have one variant per datasource kind whose sample is in the fixture registry ([../testing-data/spec.md](../testing-data/spec.md) R1): its PostgreSQL set, with the bank's id and no prefix; `<bank>-rest`, with the dialect `sqlite` and the prefix `rest-`; and `<bank>-databricks`, with the dialect `databricks` and the prefix `dbx-`. The World Cup bank's REST set is `world-cup-rest`, on the World Cup REST sample. A REST or Databricks set SHALL hold its bank's cases unchanged, with the same questions, checks, splits, notes and rubrics; only the reference query differs. What a rule says of a bank's PostgreSQL set (the checks of R126, the splits of R134) SHALL hold for its other sets too.
-- R208. Each SQLite reference SHALL be checked before it is committed by running it over the sample's JSON dump, materialised as the REST connector materialises endpoints, and comparing its rows with those of the PostgreSQL reference on the PostgreSQL sample. Until the validator (R110) has run a Databricks set on a Databricks warehouse (the VDI validation of BA-186), its references SHALL count as unverified. Before that run each one is checked without a warehouse: it passes R118 and R119 for `databricks`, every table it reads is a required entity of the sample, it reads the same tables as the PostgreSQL reference, and it parses as Databricks SQL. The evidence records each one as `not executed — VDI`.
+- R208. Each SQLite reference SHALL be checked before it is committed by running it over the sample's JSON dump, materialised as the REST connector materialises endpoints, and comparing its rows with those of the PostgreSQL reference on the PostgreSQL sample. Until the validator (R250) has run a Databricks set on a Databricks warehouse (the VDI validation of BA-186), its references SHALL count as unverified. Before that run each one is checked without a warehouse: it passes R118 and R119 for `databricks`, every table it reads is a required entity of the sample, it reads the same tables as the PostgreSQL reference, and it parses as Databricks SQL. The evidence records each one as `not executed — VDI`.
 
 ### Deterministic checks
 
@@ -496,7 +494,7 @@ Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI ([docs/evals/data
   - A query reads its table references and, for each one that names a view of the set's sample, the tables and views that view's definition reads (its table references, R112), and theirs in turn. So `SELECT … FROM world_cup.v_match_results` reads `v_match_results`, `matches`, `tournaments`, `venues` and `teams`, and passes a reference that reads `matches`, `tournaments` and `teams`; a query on `v_player_goal_totals`, which reads no `venues`, still misses `venues` where `venues` is an entity. Only the query's side is opened: a view among the entities stays a view the query must read.
   - The views are those the sample's seed SQL creates (a `CREATE VIEW` statement at the start of a line, including `OR REPLACE` and `MATERIALIZED`): the seed of the set's sample itself; for a Databricks sample, the seed of the PostgreSQL sample it is loaded from; for a REST sample, the seed of the seeded sample with the same schema whose required tables the REST sample all requires (`world-cup` for `world-cup-rest` and `world-cup-rest-connector`). On REST and Databricks a view is an endpoint or a table that holds the view's rows, dumped from the PostgreSQL sample ([data-model.md](../../system/data-model.md), *JSON dump*), so the PostgreSQL definition says what it reads on every kind. The harness binds them to the check when the set is built and reads the seed once per sample, on the first check that needs it, with no datasource, query or model call, so the verdict stays a function of the record and the bundled sample. A sample with no seed, a seed that creates no view, or a seed the harness cannot read opens no view, and the check compares table references alone, as before.
   - (Changed 2026-10-24, BA-188: only table references counted, so a query that read a view of the needed tables failed. `final-score-2018` answered right from `world_cup.v_match_results` failed with `the closest misses "matches", "tournaments", "teams"`. The views come from the seed rather than from the datasource, because the REST and Databricks copies of a sample hold its views as plain endpoints and tables that no catalog describes as views.)
-- R125. Every check in a question bank file MAY name the criterion it measures: one of D1 to D6, G1 to G4, I1 to I7 and C1 to C4, the ids of the BA-9 criteria list (data-model 4.9), or M1 to M3, the memory criteria of R244 (added 2026-10-30, BA-190). The loader SHALL refuse any other value (R108 item 7). A check that names none SHALL take its type's default criterion; the checks of R30, `sqlMatches` and `notMatches` have none. The loader SHALL also refuse a `usesEntities` check without `entities` on a case with no reference query, or whose reference names no table, since it would have nothing to compare.
+- R125. Every check in a question bank file MAY name the criterion it measures: one of D1 to D6, G1 to G4, I1 to I7 and C1 to C4, the ids of the BA-9 criteria list (data-model 4.9), or M1 to M3, the memory criteria of R244 (added 2026-10-30, BA-190). The loader SHALL refuse any other value (R248 item 7). A check that names none SHALL take its type's default criterion; the checks of R30, `sqlMatches` and `notMatches` have none. The loader SHALL also refuse a `usesEntities` check without `entities` on a case with no reference query, or whose reference names no table, since it would have nothing to compare.
 - R126. The questions of the `world-cup`, `world-cup-rest` and `formula-1` sets SHALL keep the checks listed under *Eval suite content* and SHALL also carry these deterministic checks, by category, except a case with a tool selection (`agentTools`, R247), which keeps only the checks it lists: its category's checks assume every tool (the `visual` category's `visualKeywords` needs a chart that `no-visuals-chart-request` cannot draw). Today those are `no-clarification-best-team` (category `fuzzy-scope`) and `no-visuals-chart-request` (category `visual`):
   - every category except `discovery` and `ambiguous`: `noRepairs` (D3), `rationaleOk` (I3), `noHtml` (I4), `dialect` (I6), `qualifiedNames` (I6), `namesNotIds` (I1) and `numbersGrounded` (G1), which on Formula 1 ignores `Formula 1`;
   - `join`, in addition: `usesEntities` (D2), with the entities of the reference query;
@@ -513,16 +511,16 @@ Added 2026-10-13 (BA-186). Validated on a warehouse in the VDI ([docs/evals/data
 Added 2026-10-13 (BA-184). The deterministic checks are the gate; the judge costs tokens and can vary between runs, so it is a run option, off by default, and a check it did not grade is reported as a gap, never as a pass ([the BA-9 research, section 2.3](../../../docs/research/BA-9.md#23-deterministic-checks-and-the-judge-what-the-judge-costs-and-what-you-lose-without-it)).
 
 - R144. A run SHALL take a **judge option**: `off`, the default when none is given; `on`; or `categories` with a list of one or more categories, which judges only the questions of those categories. The system SHALL refuse a start (R19 step 8) with `Unknown judge option "<value>"` for any other value; with `Pick at least one category to judge` for `categories` without a non-empty list; and with `Unknown judge category "<value>". Known categories: <the eighteen, comma-separated>.` for a listed value that is not a category (data-model 4.9). A list sent with `off` or `on` SHALL be ignored. The run SHALL record its option as `judge`: `{ mode }`, plus `categories` for `categories`, without repeats and in the order of the category list. A run saved before the option existed SHALL read as `{ mode: 'on' }`, since every earlier run called the judge. The Evals tab offers `off` and `on` (R149); `categories` is offered by the API ([../../system/api.md](../../system/api.md) endpoint 36) and the command line (R154).
-- R145. The LLM judge SHALL run on a question that has a rubric only when the run's judge option is `on`, or is `categories` and lists the question's category. For any other question with a rubric the system SHALL make no judge call and SHALL record the judge check as not scored: id `llm-judge`, the usual description `LLM judge: <rubric>`, score 0, status `not-scored` and the reason `Judge off for this run`. A question without a rubric has no judge check, whatever the option. This holds for the RFP Builder's `rfp` set too: with the judge off, the default, its rubric checks are not scored; `categories` never judges them, since its cases have no category and `uncategorised` is not a category the option accepts; only `on` does.
+- R145. The LLM judge SHALL run on a question that has a rubric only when the run's judge option is `on`, or is `categories` and lists the question's category. For any other question with a rubric the system SHALL make no judge call and SHALL record the judge check as not scored: id `llm-judge`, the usual description `LLM judge: <rubric>`, score 0, status `not-scored` and the reason `Judge off for this run`. A question without a rubric has no judge check, whatever the option. This holds for the sets defined in code too (such as `query-explainer`): with the judge off, the default, their rubric checks are not scored; `categories` never judges them, since their cases have no category and `uncategorised` is not a category the option accepts; only `on` does.
 - R146. Every check result SHALL carry a **status**: `passed` when it scored 1, `failed` when it did not, and `not-scored` only for a judge check the run did not call (R145). A judge that was called and errored or returned no usable verdict is `failed` (R32). A check result SHALL also carry its **criterion** when it has one: a file check's criterion (R125); `D1` for the result-set match; and for the judge, the criterion of the question's category: `I5` for `ambiguous`, `G2` for `out-of-scope` and `non-existent`, `G3` for `reasoning`, `G4` for `visual`, `I7` for `fuzzy-scope`, `I2` for `default-filter`, and `G1` for any other category or none ([the research, sections 2.3 and 2.5](../../../docs/research/BA-9.md#25-the-criteria-list-for-this-app)).
-- R147. Every question result SHALL carry its case's **category** when the case has one (a case defined in code, such as every `rfp` case, has none) and a **status**: `failed` when its run threw (R29); otherwise `not-scored` when none of its checks was scored; `passed` when at least one check was scored and every scored check passed; `failed` otherwise. Its `passed` flag SHALL be true exactly when its status is `passed`, so a not-scored question never counts as passed, in the "<passed>/<total>" figures of R26, R35 and R38 or anywhere else. A result saved before statuses existed SHALL read as `passed` when its `passed` flag is true and `failed` otherwise, each of its checks the same way, and it has no category.
+- R147. Every question result SHALL carry its case's **category** when the case has one (a case defined in code, such as every `query-explainer` case, has none) and a **status**: `failed` when its run threw (R29); otherwise `not-scored` when none of its checks was scored; `passed` when at least one check was scored and every scored check passed; `failed` otherwise. Its `passed` flag SHALL be true exactly when its status is `passed`, so a not-scored question never counts as passed, in the "<passed>/<total>" figures of R26, R35 and R38 or anywhere else. A result saved before statuses existed SHALL read as `passed` when its `passed` flag is true and `failed` otherwise, each of its checks the same way, and it has no category.
 - R148. Every run SHALL carry a **summary** of its finished results, updated after every question while it runs and recomputed whenever a run is read, so older runs have one too:
   - `passed`, `failed` and `notScored`: the number of questions with each status;
-  - `byCategory`: one entry per category with at least one finished question, with its `passed`, `failed` and `notScored` questions and their `total`, in the order of the category list (data-model 4.9), then any other category in order of first appearance; a question with no category (one saved before categories, or a case defined in code such as every `rfp` case) counts under `uncategorised`, which comes last;
+  - `byCategory`: one entry per category with at least one finished question, with its `passed`, `failed` and `notScored` questions and their `total`, in the order of the category list (data-model 4.9), then any other category in order of first appearance; a question with no category (one saved before categories, or a case defined in code such as every `query-explainer` case) counts under `uncategorised`, which comes last;
   - `byCriterion`: one entry per criterion named by at least one scored check, with the number of those checks that `passed` and `failed` and their `total`, in the order D1 to D6, G1 to G4, I1 to I7, C1 to C4, then any other in order of first appearance. It counts checks, not questions, over every attempt of every question (R211); a not-scored check and a check without a criterion are not counted.
   - `flaky`, `bySplit`, and in each `byCategory` entry `flaky`, `dev` and `heldOut`: R213 (added 2026-10-20, BA-242). A question's status is its verdict over all of its attempts (R211).
 - R149. An open set's run controls SHALL include a select labelled **Judge** with the options **Off** and **On**. It SHALL read Off each time an agent's detail view opens, keep the user's choice while they move between that agent's sets, and be disabled while a run is starting or running. Starting a run SHALL send `off` or `on` as its judge option (R144).
-- R150. The eval sets of R12 SHALL serve every case with a category and a split: a question bank case's own, and for a case defined in code (the RFP Builder's `rfp` set) `uncategorised` and `dev`. Each question row SHALL show a chip with its category id (for example `lookup`, or `uncategorised`).
+- R150. The eval sets of R12 SHALL serve every case with a category and a split: a question bank case's own, and for a case defined in code (the `schema-notes`, `data-readiness`, `insights-analyst` and `query-explainer` sets) `uncategorised` and `dev`. Each question row SHALL show a chip with its category id (for example `lookup`, or `uncategorised`).
 - R151. A not-scored question (R147) SHALL show **Not scored** as its verdict in the open set's question list, in an execution's result rows and in the Details panel. In the Details panel a not-scored check SHALL show "Not scored" in place of its score, with its reason.
 - R152. An execution with at least one finished question SHALL show, when expanded, its summary (R148) as two tables: **By category**, with the columns Category, Dev, Held-out, Flaky, Not scored and Total and one row per `byCategory` entry, its Dev and Held-out cells as R216 writes them (changed 2026-10-20, BA-242: before, the columns were Category, Passed, Failed, Not scored and Total); and **By criterion**, with the columns Criterion, Passed, Failed and Total and one row per `byCriterion` entry, left out when it has no row (a run saved before criteria). While the run is going, the tables SHALL follow its finished questions.
 - R153. The Markdown report (R38) SHALL show, after its "**<passed>/<total> questions passed**" line, the judge line `Judge: off`, `Judge: on` or `Judge: on for <categories, comma-separated>`, then `Not scored: <n>` when n is above 0, then the lines of R218. After the list of run details and any run error it SHALL have `## By category`, a table `| Category | Dev | Held-out | Flaky | Not scored | Total |` with one row per `byCategory` entry and its cells as R218 writes them (changed 2026-10-20, BA-242: before, `| Category | Passed | Failed | Not scored | Total |`), and `## By criterion`, a table `| Criterion | Passed | Failed | Total |` with one row per `byCriterion` entry. A section with no entry SHALL read `No finished questions yet.` (By category) or `No scored check names a criterion.` (By criterion) instead of a table.
@@ -543,7 +541,7 @@ Added 2026-10-20 (BA-242, roadmap 1.1.20). A category of ten questions moves ten
 
   A question counts under its result's split (R215).
 - R214. An open set's run controls SHALL include a select labelled **Repeats**, after the **Judge** select, with the options **1**, **3** and **5**. It SHALL read 1 each time an agent's detail view opens, keep the user's choice while they move between that agent's sets, and be disabled while a run is starting or running. Starting a run SHALL send its value as the run's repeats (R209). While a question runs on a run with Repeats above 1, the progress line (R26) SHALL end with ` · attempt <a>/<k>`.
-- R215. Every question result SHALL carry its case's **split**, `dev` or `held-out` (R12, R150; a case defined in code, such as every `rfp` case, `dev`). A result saved before results carried a split SHALL read the split of the question bank case with its id, else `dev`, without rewriting the record ([data-model.md](../../system/data-model.md) 3.8); its category stays as R147 says. Each question row of an open set (R15) SHALL show the chip `held-out` on a held-out question, and no split chip on a dev one.
+- R215. Every question result SHALL carry its case's **split**, `dev` or `held-out` (R12, R150; a case defined in code, such as every `query-explainer` case, `dev`). A result saved before results carried a split SHALL read the split of the question bank case with its id, else `dev`, without rewriting the record ([data-model.md](../../system/data-model.md) 3.8); its category stays as R147 says. Each question row of an open set (R15) SHALL show the chip `held-out` on a held-out question, and no split chip on a dev one.
 - R216. Each execution in the Executions list (R35) SHALL show, after "<passed>/<total> passed":
   - `Repeat <k>` when its repeats are above 1;
   - `<n> flaky` when n of its questions are flaky, n above 0;
@@ -568,7 +566,7 @@ Added 2026-10-20 (BA-242, roadmap 1.1.20). A category of ten questions moves ten
 
 Usage and cost
 - R219. Each attempt SHALL record the **usage** of every model call made for it, as one entry per agent and model:
-  - `assistant`: the generate of the agent the run evaluates (the assistant, or the RFP Builder on an `rfp` run), over all of its steps, and its tool-only synthesis (R33);
+  - `assistant`: the generate of the agent the run evaluates (the assistant, or Insights Analyst, the Query Explainer or the Data Readiness Agent on one of their sets), over all of its steps, and its tool-only synthesis (R33);
   - `sql-fixer`: each repair the SQL fixer makes inside `run_readonly_sql`;
   - `designer`: each generate of the visual designer behind `create_visual` and `update_visual`;
   - `judge`: the judge's call (R32).
@@ -583,7 +581,7 @@ The command line and run files
   - `EVAL_SPLIT`: `dev` or `held-out` (unset or blank: both), refused otherwise with `Unknown EVAL_SPLIT "<value>"; use dev or held-out`;
   - `EVAL_CATEGORY`: categories, comma-separated (blanks ignored), each one of the eighteen of data-model 4.9, refused otherwise with `Unknown EVAL_CATEGORY "<value>". Known categories: <the eighteen, comma-separated>.`.
 
-  `EVAL_SPLIT` and `EVAL_CATEGORY` SHALL narrow the questions that `EVAL_SET` or `EVAL_CASES` selects (R111) to those of that split and of one of those categories. When none is left the run SHALL be refused with `No question of <set "<id>" or the listed cases> matches <each of the two variables that is set, as NAME=value, space-separated>`, such as `No question of set "formula-1" matches EVAL_SPLIT=held-out`. These refusals SHALL come before the backend boots and before any model call, after those of R111 and R154. The run SHALL print `Repeats: <k>` under the judge line; with Repeats above 1, `<p>/<k> attempts` after each question's id and `flaky` after the duration of a flaky question; and at the end, after the not-scored line, `Flaky: <n>` when n is above 0, the Dev and Held-out lines of R218, the By category and By criterion tables of R218, and its Tokens and Cost lines. The exact lines are in [agents.md](../../system/agents.md) 8.5.
+  `EVAL_SPLIT` and `EVAL_CATEGORY` SHALL narrow the questions that `EVAL_SET` or `EVAL_CASES` selects (R251) to those of that split and of one of those categories. When none is left the run SHALL be refused with `No question of <set "<id>" or the listed cases> matches <each of the two variables that is set, as NAME=value, space-separated>`, such as `No question of set "formula-1" matches EVAL_SPLIT=held-out`. These refusals SHALL come before the backend boots and before any model call, after those of R251 and R154. The run SHALL print `Repeats: <k>` under the judge line; with Repeats above 1, `<p>/<k> attempts` after each question's id and `flaky` after the duration of a flaky question; and at the end, after the not-scored line, `Flaky: <n>` when n is above 0, the Dev and Held-out lines of R218, the By category and By criterion tables of R218, and its Tokens and Cost lines. The exact lines are in [agents.md](../../system/agents.md) 8.5.
 - R223. A command-line run SHALL be saved as a run started in the app is ([data-model.md](../../system/data-model.md) 3.8), in the data directory the command runs with (`APP_DATA_DIR`, else `data` in the backend folder), with the source `cli` (a run started in the app has `app`, and a run saved before sources has none and reads as `app`), the datasource of its datasets, and the datasets `EVAL_DATASETS` names. It is persisted after every question, listed under Executions by an app that uses the same data directory, compared with the most recent earlier comparable run (R40), and downloadable as a report (R38). After the summary it SHALL print `Run id: <jobId>`, then the comparison as the report writes it (R41), or `No comparable earlier run.`. With `EVAL_RUN_FILE` set to a path it SHALL also write the saved run there as JSON (the response of endpoint 38 without `ok` and `message`), and with `EVAL_RESULTS_FILE` the bare results, as before. A relative path in either SHALL be read against the folder npm was started from (`INIT_CWD`) when it is set, else the working directory, as the loop tools read the paths typed to them (*Improvement loop tools* below), so `npm --prefix backend run evals:assistant` from the repository root writes beside the caller, not in `backend/`. One process does not see another's run: R28 holds within a process, so two runs on one data directory at the same time share its database, and the loop runs its sets one after another.
 - R224. An **exported run file**, the input of the loop tools (R225 to R228), SHALL be one of: a run as `EVAL_RUN_FILE` writes it; a response of endpoint 38 (`ok: true`; a refused poll is refused with its message); or a results array as `EVAL_RESULTS_FILE` writes it, which has no run id, model, judge option or repeats (its repeats read from its results' `runs`, else 1). Any other content SHALL be refused with `<file> is not an eval run: expected a run record, a poll response or a results array`. A file SHALL be read with the read-time defaults of data-model 3.8, and a result's missing split and category taken from the question bank case with its id, else `dev` and `uncategorised`.
 
@@ -626,18 +624,18 @@ Added 2026-10-20 (BA-242). Developer tooling for the supervised improvement loop
 
 ### Memory arms and memory sets
 
-Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), roadmap 1.1.13 and 1.1.14). The sets above ask every question as the first turn of a new session with no memory, so they cannot show what a memory of past sessions does. ADR-0038 (Proposed; added to [architecture.md](../../system/architecture.md) by [BA-124](https://halo-powered.atlassian.net/browse/BA-124), not yet on this branch) chooses the assistant's cross-session memory by a three-arm eval, with the same questions, model, signals, block format and embedding model in every arm: no memory, "Mastra only", and "Hindsight + Mastra". These rules are that eval's arm option and its two-part questions. The 36 questions, the "Mastra only" memory and the decision are [BA-81](https://halo-powered.atlassian.net/browse/BA-81)'s, which also specifies the memory's port (`LearningStore`), the text a signal is stored as, the redaction of row values and the learned block, in [agents.md](../../system/agents.md) 2.1 and 4.1 and the knowledge capability, on BA-4's branch. These rules are built here against BA-81's port: the port and two pure helpers (the signal text, which includes the redaction of row values, and the learned block) are carried into this branch byte-identical to BA-81's, in `backend/src/modules/memory/`, so the two branches merge cleanly. The "Mastra only" store itself is not on this branch, so `mastra` runs only on a build that has it, which this branch is once it merges `main` with BA-81; until then `mastra` is refused as not built (R232; decided by the user on 2026-11-02, option B, which amends the decision of 2026-10-30 that BA-81 lands first). A local integration build, this branch merged with BA-4's and never pushed, runs the real store. The mentions of ADR-0038 and BA-81 above and below become links to those specs when the merge brings them in. Where a rule below depends on a decision still open, it says so and the Open questions give the draft's default.
+Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), roadmap 1.1.13 and 1.1.14). The sets above ask every question as the first turn of a new session with no memory, so they cannot show what a memory of past sessions does. ADR-0050 (Proposed; added to [architecture.md](../../system/architecture.md) by [BA-124](https://halo-powered.atlassian.net/browse/BA-124), not yet on this branch) chooses the assistant's cross-session memory by a three-arm eval, with the same questions, model, signals, block format and embedding model in every arm: no memory, "Mastra only", and "Hindsight + Mastra". These rules are that eval's arm option and its two-part questions. The 36 questions, the "Mastra only" memory and the decision are [BA-81](https://halo-powered.atlassian.net/browse/BA-81)'s, which also specifies the memory's port (`LearningStore`), the text a signal is stored as, the redaction of row values and the learned block, in [agents.md](../../system/agents.md) 2.1 and 4.1 and the knowledge capability, on BA-4's branch. These rules are built here against BA-81's port: the port and two pure helpers (the signal text, which includes the redaction of row values, and the learned block) are carried into this branch byte-identical to BA-81's, in `backend/src/modules/memory/`, so the two branches merge cleanly. The "Mastra only" store itself is not on this branch, so `mastra` runs only on a build that has it, which this branch is once it merges `main` with BA-81; until then `mastra` is refused as not built (R232; decided by the user on 2026-11-02, option B, which amends the decision of 2026-10-30 that BA-81 lands first). A local integration build, this branch merged with BA-4's and never pushed, runs the real store. The mentions of ADR-0050 and BA-81 above and below become links to those specs when the merge brings them in. Where a rule below depends on a decision still open, it says so and the Open questions give the draft's default.
 
 - R231. A run SHALL take an **arm**, the configuration it measures, and SHALL record it as `arm`. Its `memory` part SHALL select the cross-session memory the assistant runs with: `none`, the default when none is given, which is what every run did before the option (nothing is stored or recalled); `mastra`, "Mastra only"; or `hindsight-mastra`, "Hindsight + Mastra". A run saved before the option SHALL read as `{ memory: 'none' }`. The user's own `memory` lever (BA-81) SHALL have no effect on a run: only the arm decides. (The other parts of an arm in Step 7 of [the BA-9 plan](../../../docs/plans/BA-9.md), knowledge on and off and a model override, come later.)
-- R232. The system SHALL refuse a start (R19 step 10, after the repeats), checking in this order: an unknown value, then an arm on another agent's set, then an arm that is not built. It refuses with `Unknown memory arm "<value>"; use none, mastra or hindsight-mastra` for any other value, `<value>` as sent (as R209 writes it), which includes an `arm` that is not an object or whose `memory` is not one of the three names (the API does not trim; `EVAL_MEMORY` does); with `The memory arm "hindsight-mastra" is not built in this version` for `hindsight-mastra`, which this version never builds (it is built only if ADR-0038's decision rule asks for it); with `The memory arm "mastra" is not built in this version` for `mastra` while the backend has no store for the memory port (BA-81's "Mastra only" memory is not on this branch until it merges `main` with BA-81, and a build that has it runs `mastra` with no further change); and with `Memory arms run only on the assistant` for `mastra` or `hindsight-mastra` on a set of another agent (the RFP Builder's `rfp`). The API SHALL take the arm as `arm: { memory }` on the start request. The command line SHALL read it from `EVAL_MEMORY` (unset or blank: `none`), refusing an unknown value before the backend boots and the other two before any model call, with the same messages.
-- R233. The memory questions SHALL live in one question bank file, `memory.json`, read with the others (R247). Its variants SHALL be one per sample, each a PostgreSQL set with no case-id prefix, listed after `marketing-analytics-databricks` and before the RFP Builder's `rfp` (R11): `memory-world-cup` ("Memory (World Cup)", sample `world-cup`), `memory-finance` ("Memory (Finance)", sample `finance`) and `memory-marketing-analytics` ("Memory (Marketing Analytics)", sample `marketing-analytics`). Each set SHALL hold, in file order, the file's cases whose `fixture` is its sample, and no other. The bank has no REST or Databricks variant and no reference in another dialect: R204 and R207 do not apply to it. A memory set runs like any set (R13 to R42, R209 to R223), under any arm; under `none` each question asks its probe alone.
+- R232. The system SHALL refuse a start (R19 step 10, after the repeats), checking in this order: an unknown value, then an arm on another agent's set, then an arm that is not built. It refuses with `Unknown memory arm "<value>"; use none, mastra or hindsight-mastra` for any other value, `<value>` as sent (as R209 writes it), which includes an `arm` that is not an object or whose `memory` is not one of the three names (the API does not trim; `EVAL_MEMORY` does); with `The memory arm "hindsight-mastra" is not built in this version` for `hindsight-mastra`, which this version never builds (it is built only if ADR-0050's decision rule asks for it); with `The memory arm "mastra" is not built in this version` for `mastra` while the backend has no store for the memory port (BA-81's "Mastra only" memory is not on this branch until it merges `main` with BA-81, and a build that has it runs `mastra` with no further change); and with `Memory arms run only on the assistant` for `mastra` or `hindsight-mastra` on a set of another agent (such as the Query Explainer's `query-explainer`). The API SHALL take the arm as `arm: { memory }` on the start request. The command line SHALL read it from `EVAL_MEMORY` (unset or blank: `none`), refusing an unknown value before the backend boots and the other two before any model call, with the same messages.
+- R233. The memory questions SHALL live in one question bank file, `memory.json`, read with the others (R247). Its variants SHALL be one per sample, each a PostgreSQL set with no case-id prefix, listed after `marketing-analytics-databricks` and before `schema-notes` (R11): `memory-world-cup` ("Memory (World Cup)", sample `world-cup`), `memory-finance` ("Memory (Finance)", sample `finance`) and `memory-marketing-analytics` ("Memory (Marketing Analytics)", sample `marketing-analytics`). Each set SHALL hold, in file order, the file's cases whose `fixture` is its sample, and no other. The bank has no REST or Databricks variant and no reference in another dialect: R204 and R207 do not apply to it. A memory set runs like any set (R13 to R42, R209 to R223), under any arm; under `none` each question asks its probe alone.
 - R234. A **memory case** SHALL carry:
   - `id` (lowercase words joined by hyphens, unique across all sets), `fixture` (its sample: `world-cup`, `finance` or `marketing-analytics`), `category` (R236), `split` (`dev` or `held-out`, default `dev`), `tags` (at least `lang:en` or `lang:es`, the probe's language, and one of `difficulty:easy`, `difficulty:medium` and `difficulty:hard`; `trap:<short name>` for the wrong reading it catches), `intent` (one sentence: what the memory must make the assistant do, or not do) and `notes` (why a turn without the memory would plausibly take the trap, where each fact was checked, the question of the other sets it repeats or closely rephrases if any, and for a held-out case where its wording came from);
   - `teach`: 1 to 3 **signals**, in time order, each `{ kind, at, question, sql, note? }`. `kind` is `verified_query` (an approval: `sql` the approved SQL, no `note`), `correction` (a reviewer's note on a wrong answer, an action apart from the thumbs: `sql` the wrong SQL that was corrected and `note` the correction in the reviewer's own words) or `rejection` (a thumbs-down: `sql` the rejected SQL, `note` the note written with it, optional). `at` is an ISO 8601 UTC time, later than the signal before it. A signal SHALL carry no answer text and no result rows. Its SQL is PostgreSQL as the assistant would write it on the sample, schema-qualified, and may hold string literals: the memory redacts them as it redacts a user's signal (BA-81);
   - `probe`: `question` (the user message of the real turn), `expectedSql` (`{ postgres }`, the reference query, whose result the result-set match compares, R31), `trapSql` (`{ postgres }`, the SQL of the wrong answer the case is built to catch, R237), `checks` (as a question bank case's, data-model 4.9, with the checks of R241 to R243) and optionally `resultSetOptions`.
 
   A memory case has no `question`, `expectedSql`, `agentTools` or `judgeRubric` of its own: its probe holds what a question holds, and the judge never runs on it. Every probe SHALL carry `calledTool` `run_readonly_sql` (D1) and `noToolErrors` (D3), and other checks of R30 only where they show what the result set cannot.
-- R235. The loader SHALL refuse to start, naming the file and the case as R108 does (`Eval set file memory.json, case "<id>": <what is wrong>`), when a memory case: lacks a field R234 requires or has one it does not list; names a `fixture` that no variant of the file has; has a category outside R236; has no teach signal or more than 3, a signal of another kind, an `at` that is not an ISO 8601 UTC time or is not later than the one before it, a correction without a note or an approval with one; is in category `memory-rejected` with no `rejection` signal; has a probe without `expectedSql.postgres` or `trapSql.postgres`; or lacks `noRowValuesRetained`, or, in category `memory-rejected`, `notRejectedSql`, or, in category `memory-abstain`, `teachNotRecalled`. A question bank file other than `memory.json` that holds one of those three check types SHALL be refused too, since they need a teach step (`check type "<type>" needs a teach step, so only memory.json may use it`), and a memory category in another bank file is refused as a category outside the eighteen. The loader SHALL also refuse, with the same shape: a memory case whose tags lack `lang:en` or `lang:es` or lack a difficulty tag (`"tags" must name the language with one of …`, `… the difficulty with one of …`); a `memory.json` variant that is not on PostgreSQL (`a memory set runs on PostgreSQL only; dialect "<dialect>" is not postgres`); a probe's `expectedSql` or `trapSql` that holds a key other than `postgres`; a memory check with `args` (`"<type>" takes no "args"`); and a `memory-rejected` case with no `rejection` signal (`a memory-rejected case needs a "rejection" teach signal`).
+- R235. The loader SHALL refuse to start, naming the file and the case as R248 does (`Eval set file memory.json, case "<id>": <what is wrong>`), when a memory case: lacks a field R234 requires or has one it does not list; names a `fixture` that no variant of the file has; has a category outside R236; has no teach signal or more than 3, a signal of another kind, an `at` that is not an ISO 8601 UTC time or is not later than the one before it, a correction without a note or an approval with one; is in category `memory-rejected` with no `rejection` signal; has a probe without `expectedSql.postgres` or `trapSql.postgres`; or lacks `noRowValuesRetained`, or, in category `memory-rejected`, `notRejectedSql`, or, in category `memory-abstain`, `teachNotRecalled`. A question bank file other than `memory.json` that holds one of those three check types SHALL be refused too, since they need a teach step (`check type "<type>" needs a teach step, so only memory.json may use it`), and a memory category in another bank file is refused as a category outside the eighteen. The loader SHALL also refuse, with the same shape: a memory case whose tags lack `lang:en` or `lang:es` or lack a difficulty tag (`"tags" must name the language with one of …`, `… the difficulty with one of …`); a `memory.json` variant that is not on PostgreSQL (`a memory set runs on PostgreSQL only; dialect "<dialect>" is not postgres`); a probe's `expectedSql` or `trapSql` that holds a key other than `postgres`; a memory check with `args` (`"<type>" takes no "args"`); and a `memory-rejected` case with no `rejection` signal (`a memory-rejected case needs a "rejection" teach signal`).
 - R236. A memory case's category SHALL be one of six, with 6 questions each, 4 dev and 2 held out. Four are **learning categories**, where what was taught should change the answer:
   - `memory-reuse`: an approval; the probe asks the same need another way (another language, a paraphrase, a close variant the approved SQL answers);
   - `memory-correction`: a correction; the probe is a different but related question where its note applies;
@@ -645,7 +643,7 @@ Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), ro
   - `memory-rejected`: a rejection, with or without a note; the probe asks the same or a near-same question.
 
   The other two test what a memory must not do: `memory-abstain` (signals about one topic; an unrelated question where applying them would change the result) and `memory-vs-curated` (a signal that contradicts a rule of the sample's curated knowledge seed, [testing-data](../testing-data/spec.md) R26; a question where the seed and the memory disagree, which the seed must win). In a learning category the taught fact SHALL NOT be in the sample's knowledge seed; in `memory-vs-curated` it SHALL contradict a seed rule, quoted in the notes, so those questions run on Finance or Marketing Analytics, which have a seed. The held-out wording SHALL come from a model other than the one that wrote the dev questions, chosen by the user, as for BA-243. The run summary (R148) SHALL list these categories after the eighteen, in this order; `EVAL_CATEGORY` (R222) and the judge's `categories` (R144) take the eighteen question categories only, and refuse the memory ones with their usual messages (Open questions); the loop's tools that read the full category list (`eval:diff --target`, R227, the failure export, R228) accept the six memory categories too.
-- R237. The validator (R110) SHALL take a memory set like any set, with no model call: for each case it runs the probe's reference as R110 runs a reference, then its trap and each teach signal's SQL. A case SHALL fail when its reference fails, returns 0 rows or is truncated (R110); when its trap fails to run, with `the trap failed to run — <error>`; when the trap's rows pass the result-set match against the reference's rows (R31), with `the trap returns the reference rows, so it catches nothing`; or when a teach signal's SQL fails to run, with `teach signal <n> failed to run — <error>`. A case that ran in full prints `✓ <case id>  postgres  <n> rows · trap <m> rows`. The trap and each teach signal's SQL run under the same 500-row limit as the reference but without its truncation refusal, which is the reference's only; a case stops at its first problem, in the order reference, trap run, trap match, teach signals. The set's summary line reads `<set>: <p> of <n> memory cases (reference, trap and teach queries) passed.`
+- R237. The validator (R250) SHALL take a memory set like any set, with no model call: for each case it runs the probe's reference as R250 runs a reference, then its trap and each teach signal's SQL. A case SHALL fail when its reference fails, returns 0 rows or is truncated (R250); when its trap fails to run, with `the trap failed to run — <error>`; when the trap's rows pass the result-set match against the reference's rows (R31), with `the trap returns the reference rows, so it catches nothing`; or when a teach signal's SQL fails to run, with `teach signal <n> failed to run — <error>`. A case that ran in full prints `✓ <case id>  postgres  <n> rows · trap <m> rows`. The trap and each teach signal's SQL run under the same 500-row limit as the reference but without its truncation refusal, which is the reference's only; a case stops at its first problem, in the order reference, trap run, trap match, teach signals. The set's summary line reads `<set>: <p> of <n> memory cases (reference, trap and teach queries) passed.`
 - R238. Under a memory arm, each attempt SHALL use a **memory scope** of its own, keyed `eval-<run id>-<case id>-<attempt>`: empty when the attempt starts, holding only what the attempt's teach step stored, with no background of other signals before the teach (decided by the user on 2026-10-30), and deleted when the attempt ends, whatever its outcome. Nothing an attempt stores SHALL reach another attempt, another question, another run or the user's own memory, whose scopes are their datasources. Scopes that a stopped backend left behind SHALL be deleted when the backend next starts.
 - R239. An attempt of a memory case SHALL first **teach**: it renders each teach signal as the memory renders a user's signal (its text and redaction, BA-81) at its `at`, each under a document id of its own that is unique across attempts (`<scope>:teach-<n>`, [agents.md](../../system/agents.md) 8.3), stores them in the attempt's scope through the memory's port in one call, and waits until the memory has finished its background work for the scope (its summary rewrite included), so that the probe meets what a user's next session would. There is no assistant turn and no model call besides the memory's own (embeddings, and the summary rewrite). A teach step that fails SHALL fail the attempt with `teach failed: <message>`, without running the probe, and the attempt records no memory. Under `none` the teach step stores nothing.
 - R240. The attempt SHALL then **probe**: it asks the probe question as every question is asked (R24, R210), as the first turn of a new session, except that under a memory arm the turn first recalls from the attempt's scope with the probe question, exactly as a chat turn recalls (the same relevance filter, budget and 2.5-second cut-off, BA-81), and sends what it recalled, after the memory's summary, in the learned block a chat turn sends, after the knowledge block. The attempt SHALL record, under a memory arm: every item the scope held after the teach step, as the port lists it, which includes every copy of a signal's text the store keeps, the vector index's copy beside each embedding among them (`held`); each signal the probe recalled, with its document id, kind and text, and the summary it sent (`recalled`, `summary`); and how long the recall took (`recallMs`; about 2,500 when the cut-off fired, in which case no block is sent). `recalled` and `summary` are the signals and the summary the learned block actually carried, after its 6,000-character budget, not everything the recall returned. If the scope's items cannot be listed, the attempt fails with the store's error. These are the attempt's **memory record**, `memory: { scope, held, recalled, summary?, recallMs? }` on the attempt and, as the representative attempt's, on its result; a run under `none` has none. It SHALL be scored on the probe: the result-set match against `expectedSql`, the probe's checks and those of R241 to R243. The three memory checks are not scorers of the agent's output, because they read the memory record, which no scorer sees: the loader keeps them on the case in file order, with the criterion as named or the type's default, and the runner scores them after the result-set check and before the custom checks, each as a check result with its id and criterion. They are scored under `none` too, where the record is absent and read as empty (R241 to R243 say what passes).
@@ -654,18 +652,17 @@ Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), ro
 - R243. `teachNotRecalled` (id `check-teach-not-recalled`, criterion M3) SHALL pass when no signal the attempt's teach step stored was recalled into the probe turn (R240), and fail naming the recalled signals. It measures the relevance filter: whether the answer is still right is the result-set match's to say, and a summary sent with an unrelated question is measured by that match too, since a summary is not a recalled signal. Under `none` nothing is recalled and the check passes.
 - R244. The criteria SHALL include a memory bucket after cost and latency: **M1**, no row value is retained (R241; hard requirement 100%); **M2**, a rejected SQL is not reused (R242); **M3**, what was learned stays out of unrelated questions (R243). The research's criteria list ([the BA-9 research, section 2.5](../../../docs/research/BA-9.md#25-the-criteria-list-for-this-app)) stops at C4; these three are defined here (Open questions). A check MAY name them (R125), and the run summary's `byCriterion` (R148) SHALL list them after C1 to C4, in this order.
 - R245. Under a memory arm, each attempt SHALL record the usage of the memory's own model calls under the agent `memory` (R219): the embeddings of the teach step and of the recall (OpenAI `text-embedding-3-small`, the same model in every arm), and the summary rewrite. They SHALL count in its tokens and cost (R218 to R221) and be shown as `Memory` in the Details panel's Tokens (R217); the embedding model is priced from the price table like any model (R220), so the table needs its rate, or the run is not priced. When the memory makes model calls outside the app (a Hindsight server's own fact extraction), the report's and the command line's cost line SHALL end with ` · excludes the memory server's own model calls`. The recall time of R240 SHALL be shown in the Details panel as `Recall: <ms> ms` after the duration, written in the report after the question's duration as `- **Recall:** <ms> ms`, and summed up per run as its median and 90th percentile over the attempts that recalled, `Recall: p50 <ms> ms · p90 <ms> ms`, after the report's and the command line's cost line; the percentiles interpolate linearly between the nearest values and are rounded to whole milliseconds. The line is left out under `none`, and reads `Recall: none` under a memory arm when no attempt recalled. The command line prints no per-question recall time. When a question's usage has a `memory` entry, the report's `- **Tokens:**` line is followed by one sub-line per agent and model, `  - <Assistant|SQL fixer|Designer|Judge|Memory> · <model>: <tokens as R218>`. The cost per question of R218 is the memory eval's cost per case.
-- R246. The report and the command line SHALL write the arm's memory after the repeats line, as `Memory: <none|mastra|hindsight-mastra>` (written in every report, `none` included); each execution in the Executions list SHALL show `Memory <arm>` after its repeats when its arm is not `none` (R216); a run SHALL be compared (R40) only with an earlier run of the same memory arm; and `eval:diff` (R226) SHALL warn when the memory arms of its two sides differ, with `the memory arm differs: <before> → <after>`, as it warns about the model, and when one side mixes arms with `the <before|after> side mixes memory arms (<a>, <b>)`; a run record without an arm reads `none`, and a bare results array, which records none, `not recorded`. Comparing two arms on the same questions, as ADR-0038's decision rule does, is an `eval:diff` with the run without memory as the before side.
+- R246. The report and the command line SHALL write the arm's memory after the repeats line, as `Memory: <none|mastra|hindsight-mastra>` (written in every report, `none` included); each execution in the Executions list SHALL show `Memory <arm>` after its repeats when its arm is not `none` (R216); a run SHALL be compared (R40) only with an earlier run of the same memory arm; and `eval:diff` (R226) SHALL warn when the memory arms of its two sides differ, with `the memory arm differs: <before> → <after>`, as it warns about the model, and when one side mixes arms with `the <before|after> side mixes memory arms (<a>, <b>)`; a run record without an arm reads `none`, and a bare results array, which records none, `not recorded`. Comparing two arms on the same questions, as ADR-0050's decision rule does, is an `eval:diff` with the run without memory as the before side.
 
 
 ## Edge cases and errors
 
 - Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".
-- A search typed under the Pinned or Mine filter that matches nothing shows `No agents match "<query>"`, not the filter's empty message.
+- A search typed under the Pinned pill or the owner Mine that matches nothing shows `No agents match "<query>"`, not the filter's empty message.
 - Pinning an agent under All keeps it in its own section and moves it to the front of that section; unpinning puts it back in alphabetical order after the pinned cards.
 - Deleting an agent that another window or the API already deleted shows the toast `Agent "<id>" not found` (R51) and stays on the detail; **All agents** returns to a hub without it.
 - Publishing a Live agent with no unpublished changes is not offered (no **Publish** button).
-- A Live agent with unpublished changes offers **Start chat**; the session uses the Live version, never the draft (sessions-chat R54).
-
+- A Live agent with unpublished changes keeps running its Live version where it is used (agent-answers R54, stored sessions only); Try it always runs the draft (R60).
 - Starting with zero ticked questions is blocked in the UI (button disabled); a direct request with an explicit empty list is refused with "Pick at least one question to run" and SHALL NOT be read as "run everything". A request with no list at all selects every question of every set (and so fails R19.6 when the sets span several samples).
 - A run started while another is active for the agent is refused with the conflict message; the UI shows it under the run controls.
 - A dataset-less datasource: "has no datasets" message, no run recorded, Executions stays empty ("No eval runs yet").
@@ -675,12 +672,12 @@ Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), ro
 - A failed individual question (model error, tool crash) records a run error on that question and the run continues with the next.
 - If the backend stops while a run is going, the run was persisted after its last finished question and stays marked `running` in history (see Open questions).
 - A question present in an old run but no longer in the suite (the suite changed) is not clickable from the Executions list (no details to open).
-- A question bank file the loader refuses (R108) stops the backend from starting. The error reads `Eval set file <file>, <case or variant>: <what is wrong>`, for example `Eval set file world-cup.json, case "champion-2022": "category" is required`. No set from any file is offered.
-- A reference query that fails (a renamed column, a typo, a dialect mistake) shows in the validator as `✗ <case id>  <dialect>  <reason>` with the database's error as the reason; the other cases still run and the validator exits non-zero (R110).
-- A reference query that reads a table or view the selected datasets do not hold (a table missing from the sample's required entities) fails in the validator as `✗ <case id>  <dialect>  the reference reads <entity>, which is not in the selected datasets`, without being run, even when the database has that table (R110).
+- A question bank file the loader refuses (R248) stops the backend from starting. The error reads `Eval set file <file>, <case or variant>: <what is wrong>`, for example `Eval set file world-cup.json, case "champion-2022": "category" is required`. No set from any file is offered.
+- A reference query that fails (a renamed column, a typo, a dialect mistake) shows in the validator as `✗ <case id>  <dialect>  <reason>` with the database's error as the reason; the other cases still run and the validator exits non-zero (R250).
+- A reference query that reads a table or view the selected datasets do not hold (a table missing from the sample's required entities) fails in the validator as `✗ <case id>  <dialect>  the reference reads <entity>, which is not in the selected datasets`, without being run, even when the database has that table (R250).
 - A deterministic check reads only what the run recorded. A question the assistant answered without SQL passes the SQL checks of R113, R118 and R119 and fails those that need a successful query (R122, R124); a clarification turn passes `optionCount` with one call of 2 to 4 options; a failed tool call grounds no number (R115) and is not executed SQL (R122, R124), but its written SQL is still read for the dialect and qualified names (R118, R119).
 - The validator against datasets that miss part of the sample, or that belong to a datasource of another kind, prints the preflight message of R20, runs no reference query and exits non-zero.
-- The command-line run with neither a set id nor case ids is refused before the backend boots and before any model call, with `Set EVAL_SET to one question set (<set ids>) or EVAL_CASES to comma-separated case ids` (R111; [agents.md](../../system/agents.md) 8.5).
+- The command-line run with neither a set id nor case ids is refused before the backend boots and before any model call, with `Set EVAL_SET to one question set (<set ids>) or EVAL_CASES to comma-separated case ids` (R251; [agents.md](../../system/agents.md) 8.5).
 - With the judge off, a question whose deterministic checks all pass passes, and its judge check shows "Not scored" beside them (R145 to R147). A question whose only check is the judge is not scored: it is neither passed nor failed, counts under `notScored` and in its category's Not scored column, and is skipped by the regression comparison (R40).
 - With `categories`, a question whose category is not listed is treated as with the judge off; a listed category that none of the selected questions has is accepted and changes nothing.
 - A judge that was called and failed (`judge error: …`) is a failed check, not a not-scored one (R146).
@@ -693,7 +690,7 @@ Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), ro
 - A model with no price makes the cost `Not priced`, and the report's `Cost: not priced (<models>)` names it; the tokens are still shown. A run whose designer ran on a model with no price while the assistant's model has one is not priced as a whole (R221).
 - A call whose result carries no token count is counted under `unreportedCalls`, adds no tokens and no cost, and is reported as `<n> calls reported no usage` in the Details panel and `<n> without usage` in the report (R219, R221).
 - A run compared with an earlier run of other repeats is compared verdict by verdict as always, and its report notes `Note: the previous run used Repeats <k>.` (R40, R218).
-- `EVAL_SPLIT=held-out` on a set with no held-out question (`formula-1`, or the RFP Builder's `rfp`, whose cases are `dev`) is refused before the backend boots with `No question of set "formula-1" matches EVAL_SPLIT=held-out`; `EVAL_CATEGORY=uncategorised` is refused as an unknown category (R222).
+- `EVAL_SPLIT=held-out` on a set with no held-out question (`formula-1`, or a set defined in code such as `query-explainer`, whose cases are `dev`) is refused before the backend boots with `No question of set "formula-1" matches EVAL_SPLIT=held-out`; `EVAL_CATEGORY=uncategorised` is refused as an unknown category (R222).
 - A command-line run and a run in the app on the same data directory at the same time are not kept apart: each process guards only its own runs (R28, R223).
 - `eval:diff` on two runs that ran different sets, models, repeats or judge options still prints its table, with a warning for each difference; a run id prefix that matches two runs is refused and the command exits with code 2 (R225, R226).
 - `eval:diff --target join` where `join` has no held-out question on either side does not meet the accept rule, whatever its dev rows say (R227).
@@ -701,7 +698,7 @@ Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), ro
 - The leak check ignores a line moved unchanged within a file, a literal in the allowlist and a common word, and only warns on a string literal of a reference query (R230).
 - A memory set run under `none` asks each probe alone. Its learning questions are expected to fail, since the trap is the reading a turn takes without the memory: that run is the control the memory arms are compared with (R233, R246).
 - `EVAL_MEMORY=hindsight-mastra` is refused with `The memory arm "hindsight-mastra" is not built in this version`, after the settings checks and before any model call; so is `EVAL_MEMORY=mastra` on a build with no store for the memory port, with `The memory arm "mastra" is not built in this version` (this branch, until it merges `main` with BA-81; a build that has the store runs it); `EVAL_MEMORY=hindsight` (not a value) is refused before the backend boots as an unknown memory arm (R232).
-- A memory arm on a set that has no memory cases (the `world-cup` set, say) runs every question with an empty memory, so nothing is recalled and the turns are those of `none` (R238, which stores no background of signals). So a memory arm cannot make those sets worse, and ADR-0038's condition that they get no worse holds by construction.
+- A memory arm on a set that has no memory cases (the `world-cup` set, say) runs every question with an empty memory, so nothing is recalled and the turns are those of `none` (R238, which stores no background of signals). So a memory arm cannot make those sets worse, and ADR-0050's condition that they get no worse holds by construction.
 - An attempt whose teach step fails (the memory refused a signal) fails with `teach failed: <message>`; its probe does not run and its scope is still deleted (R239, R238).
 - A recall cut off at 2.5 seconds sends no learned block; the attempt goes on, and its `recallMs` reads about 2,500 (R240).
 - A scope that could not be deleted when its attempt ended does not change the attempt's verdict; it is deleted at the backend's next start (R238).
@@ -714,33 +711,32 @@ Added 2026-10-30 ([BA-190](https://halo-powered.atlassian.net/browse/BA-190), ro
 - The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, attempt, check result, tool call, usage entry, regression summary): [../../system/data-model.md](../../system/data-model.md) section 3.8; the bundled price table (R220): section 4.11.
-- Question bank files (variants, cases, checks, reference queries, the allowed categories, splits and dialects): [../../system/data-model.md](../../system/data-model.md) section 4.9. The command-line run (R42, R111, R222, R223) and the validator (R110), with their settings: [../../system/delivery.md](../../system/delivery.md) and [../../system/api.md](../../system/api.md) section 6.1; how a set is loaded, a case scored and its usage recorded: [../../system/agents.md](../../system/agents.md) section 8.
+- Question bank files (variants, cases, checks, reference queries, the allowed categories, splits and dialects): [../../system/data-model.md](../../system/data-model.md) section 4.9. The command-line run (R42, R251, R222, R223) and the validator (R250), with their settings: [../../system/delivery.md](../../system/delivery.md) and [../../system/api.md](../../system/api.md) section 6.1; how a set is loaded, a case scored and its usage recorded: [../../system/agents.md](../../system/agents.md) section 8.
 - The improvement loop tools `eval:diff`, `eval:export-failures` and `eval:leak-check` (R225 to R230), the loop's runbook and the fixer's isolation: [../../system/delivery.md](../../system/delivery.md) section 2, *Improvement loop*.
 - The memory arms and memory sets (R231 to R246): how an attempt teaches and probes, [../../system/agents.md](../../system/agents.md) section 8.3. The arm on the start request (endpoint 36 of [../../system/api.md](../../system/api.md)), the `arm` and the memory fields of a run and an attempt ([../../system/data-model.md](../../system/data-model.md) 3.8), the shape of `memory.json` (section 4.9), the embedding model's rate (section 4.11) and `EVAL_MEMORY` ([../../system/delivery.md](../../system/delivery.md)) are written with the code of BA-190. The memory itself, its port and its learned block: [BA-81](https://halo-powered.atlassian.net/browse/BA-81); on this branch only the port and the two pure helpers are present (see the section intro).
-- The thirteen registered agents (the four showcase agents included, R106), the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
+- The twelve registered agents, the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
 - Sample fixtures and their required entities: [../testing-data/spec.md](../testing-data/spec.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, its tabs (the Chat Box tab, the System Prompt tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running with ` · attempt <a>/<k>` when Repeats is above 1, finished; the Judge select, R149; the Repeats select, R214; a category chip per question, R150, and a `held-out` chip on each held-out question, R215), Executions (loading, empty, populated, each row with its `Repeat <k>`, `<n> flaky` and cost or `Not priced`, R216; expanded with the dev and held-out line, the By category table with its Dev, Held-out, Flaky, Not scored and Total columns and the By criterion table, R152, R216, and result rows with a `held-out` chip and `<passes>/<k>`). A not-scored question reads "Not scored" in the question list, the execution's rows and the Details panel (R151). The Details panel adds a question's split and, when it has them, its attempts, tokens and cost (R217). Memory arms (BA-190): an execution shows `Memory <arm>` when its arm is not `none` (R246), and the Details panel shows a memory question's `Recall: <ms> ms` and its `Memory` tokens (R245). The Evals tab has no control for the arm: the API and the command line set it (R232; Open questions).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (one section per domain, pinned cards first), a domain pill, the owner menu, the Pinned pill's single Pinned section, no match, empty Pinned pill, empty owner Mine, no match for the filters. Hub cards and the agent detail carry no **Start chat** (R53); the agent detail's header carries the **Used in** line (R109); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the Try it panel in the Details panel (empty, no-dataset, running, result, stopped, reset). Agent detail: loading, error, its tabs (the Try it tab, the Job Description tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running with ` · attempt <a>/<k>` when Repeats is above 1, finished; the Judge select, R149; the Repeats select, R214; a category chip per question, R150, and a `held-out` chip on each held-out question, R215), Executions (loading, empty, populated, each row with its `Repeat <k>`, `<n> flaky` and cost or `Not priced`, R216; expanded with the dev and held-out line, the By category table with its Dev, Held-out, Flaky, Not scored and Total columns and the By criterion table, R152, R216, and result rows with a `held-out` chip and `<passes>/<k>`). A not-scored question reads "Not scored" in the question list, the execution's rows and the Details panel (R151). The Details panel adds a question's split and, when it has them, its attempts, tokens and cost (R217). Memory arms (BA-190): an execution shows `Memory <arm>` when its arm is not `none` (R246), and the Details panel shows a memory question's `Recall: <ms> ms` and its `Memory` tokens (R245). The Evals tab has no control for the arm: the API and the command line set it (R232; Open questions).
 
 ## Flows
 
-E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the System steps now open "Show more", R3). A run that reached its end needs a model, which the E2E suite does not have, so the "finished run" of the scenarios that need one is seeded rather than run. That the backend writes such a run (statuses, the not-scored judge check with no judge call, the summary; and since BA-242 the attempts, pass^k, splits, usage and cost) is proven by the backend unit tests `backend/src/mastra/evals/assistant.evals.spec.ts`, `backend/src/mastra/evals/eval-summary.spec.ts`, `backend/src/mastra/evals/eval-attempts.spec.ts`, `backend/src/mastra/evals/eval-usage.spec.ts`, `backend/src/mastra/evals/eval-stats.spec.ts` and `backend/src/modules/agents/eval-runs.service.spec.ts`. Every seeded run is stored without a summary, so the scenarios that read one also prove the summary and its intervals are computed on read; a run "saved before repeats" is stored as runs were before BA-242, with no repeats, split, usage or cost, so it also proves the read-time defaults (data-model 3.8). The scenarios that start a run hold the model's calls open with the local LLM stub, so a question is still running when the test looks at it. The repeats refusal is checked through the API, since the Repeats select offers only 1, 3 and 5 (R209, R214).
+E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the sections are the domains, R1, and have no "Show more", R3). A run that reached its end needs a model, which the E2E suite does not have, so the "finished run" of the scenarios that need one is seeded rather than run. That the backend writes such a run (statuses, the not-scored judge check with no judge call, the summary; and since BA-242 the attempts, pass^k, splits, usage and cost) is proven by the backend unit tests `backend/src/mastra/evals/assistant.evals.spec.ts`, `backend/src/mastra/evals/eval-summary.spec.ts`, `backend/src/mastra/evals/eval-attempts.spec.ts`, `backend/src/mastra/evals/eval-usage.spec.ts`, `backend/src/mastra/evals/eval-stats.spec.ts` and `backend/src/modules/agents/eval-runs.service.spec.ts`. Every seeded run is stored without a summary, so the scenarios that read one also prove the summary and its intervals are computed on read; a run "saved before repeats" is stored as runs were before BA-242, with no repeats, split, usage or cost, so it also proves the read-time defaults (data-model 3.8). The scenarios that start a run hold the model's calls open with the local LLM stub, so a question is still running when the test looks at it. The repeats refusal is checked through the API, since the Repeats select offers only 1, 3 and 5 (R209, R214).
 
 ```gherkin
 Feature: Agents
 
   Scenario: Opens an agent from the Agents list and switches between its tabs
     When I click "Agents"
-    Then I see "Questions to Insights Assistant" in the Official section
-    When I click "Show more" in the System section
-    Then I see the "sql-fixer" agent in the System section
-    When I open the "Questions to Insights Assistant" agent
-    Then I see the heading "Questions to Insights Assistant"
-    And the Chat Box tab is shown, with "Start chat"
-    When I open the System Prompt tab
+    Then I see "Emily" in the Analysis section
+    And I see the "sql-fixer" agent in the SQL Engineering section
+    When I open the "Emily" agent
+    Then I see the heading "Emily"
+    And there is no Try it tab, and the Job Description tab is shown
+    When I open the Job Description tab
     Then I see "You are the Questions to Insights assistant"
     When I open the Tools tab
     Then I see "run_readonly_sql" and "ask_clarification"
@@ -761,12 +757,10 @@ Feature: Agents
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
-    And I click "Show more" in the System section
-    Then I see the "sql-verifier" agent in the System section
+    Then I see the "sql-verifier" agent in the SQL Engineering section
 
   Scenario: Shows the stateless, no-tool agents accurately
     When I click "Agents"
-    And I click "Show more" in the System section
     And I open the "sql-fixer" agent
     And I open the Tools tab
     Then I see "This agent runs in a single step with no tools."
@@ -779,7 +773,7 @@ Feature: Agents
     Given a "World Cup PostgreSQL" datasource exists
     And a dataset containing the World Cup tables and views exists
     When I click "Agents"
-    And I open the "Questions to Insights Assistant" agent
+    And I open the "Emily" agent
     And I open the Evals tab and the "world-cup" set
     Then the datasource picker offers "World Cup PostgreSQL" and "PostgreSQL"
     And the run button reads "Run 63 selected"
@@ -1022,19 +1016,25 @@ Feature: Agent Hub
     And a Live user agent "Health plan analyst", described as "Answers questions about the 2026 health plan", over "World Cup Core"
     And a draft user agent "Claims triage", described as "Sorts incoming claims by urgency", with no datasets
 
-  Scenario: Shows the built-in agents and mine in sections
+  Scenario: Shows the built-in agents and mine in sections by domain
     When I click "Agents"
-    Then I see the sections "Official", "Mine" and "System", in that order, and no "Pinned" section
+    Then I see the sections "Data Foundations", "Analysis", "SQL Engineering", "Storytelling", "Quality & Evals" and "General", in that order, and no "Pinned" section
     And the "New agent" button is enabled
-    And the Official section shows "Questions to Insights Assistant" with "Owner: Official"
-    And the Mine section shows "Health plan analyst" with "Owner: You" and the chip "Live"
-    And the Mine section shows "Claims triage" with the chip "Draft"
-    And the Official section shows 8 cards, in order "Data Readiness Agent", "Questions to Insights Assistant", "Questions to Insights v2", "RFP Builder", "Benchmarking Agent", "LAD COE Agent", "Strategy Agent" and "Survey Agent", and no "Show more"
-    And the System section shows 3 cards and "Show more (2)"
-    When I click "Show more (2)" in the System section
-    Then the System section shows 5 cards, including "SQL Verifier"
-    When I click "Show less" in the System section
-    Then the System section shows 3 cards
+    And the Analysis section shows "Emily" with "Owner: Official", then "Michael" and "Olivia"
+    And the Data Foundations section shows "Sarah" and "Kevin"
+    And the SQL Engineering section shows "David" and "Rachel" (the SQL Verifier)
+    And the Storytelling section shows "Jessica" and "Ryan"
+    And the Quality & Evals section shows "Laura"
+    And the General section shows "Health plan analyst" with "Owner: You" and the chip "Live"
+    And the General section shows "Claims triage" with the chip "Draft"
+    And no section offers "Show more"
+
+  Scenario: A user agent moves to the section of the domain chosen in the editor
+    When I open "Claims triage" and click "Edit"
+    And I choose "SQL Engineering" in "Domain" and click "Save"
+    And I click "Agents"
+    Then the SQL Engineering section shows "Claims triage"
+    And the General section no longer shows it
 
   Scenario: Search narrows the agents by name or description
     When I click "Agents"
@@ -1045,34 +1045,38 @@ Feature: Agent Hub
     When I type "nothing here" into "Search agents by name or description"
     Then I see 'No agents match "nothing here"'
 
-  Scenario: Filters limit the hub to one kind of agent
+  Scenario: Pills and the owner menu limit the hub
     When I click "Agents"
-    And I click the "Mine" filter
+    And I choose "Mine" in "Filter by owner"
     Then I see only "Claims triage" and "Health plan analyst"
-    When I click the "Official" filter
-    Then I see only the Official section, with "Data Readiness Agent", "Questions to Insights Assistant", "Questions to Insights v2", "RFP Builder", "Benchmarking Agent", "LAD COE Agent", "Strategy Agent" and "Survey Agent", in that order, and no "Show more"
+    When I choose "Official" in "Filter by owner"
+    Then I see "Sarah" in Data Foundations, and "Emily" and "Michael" in Analysis, and no System agent
+    When I click the "Analysis" filter
+    Then I see only the Analysis section, with "Emily" and "Michael"
+    When I click the "SQL Engineering" filter
+    Then I see "No agents match these filters."
     When I click the "Pinned" filter
     Then I see "No pinned agents yet."
-    When I click the "All" filter
-    Then I see the System section again
+    When I choose "Any owner" in "Filter by owner" and click the "All" filter
+    Then I see every domain section again
 
   Scenario: Pinned agents come first in their own section and survive a restart
     When I click "Agents"
     And I click "Pin Health plan analyst"
-    And I click "Pin Questions to Insights Assistant"
-    Then the Official section shows "Questions to Insights Assistant" first, reading "Pinned"
-    And the Mine section shows "Health plan analyst" first, reading "Pinned"
+    And I click "Pin Emily"
+    Then the Analysis section shows "Emily" first, reading "Pinned"
+    And the General section shows "Health plan analyst" first, reading "Pinned"
     And there is no "Pinned" section
     When I click the "Pinned" filter
-    Then the Pinned section shows "Questions to Insights Assistant" and "Health plan analyst"
+    Then the Pinned section shows "Emily" and "Health plan analyst"
     When the app restarts
     And I click "Agents"
     And I click the "Pinned" filter
-    Then the Pinned section still shows "Questions to Insights Assistant" and "Health plan analyst"
+    Then the Pinned section still shows "Emily" and "Health plan analyst"
     When I click "Unpin Health plan analyst"
-    Then the Pinned section shows only "Questions to Insights Assistant"
+    Then the Pinned section shows only "Emily"
     When I click the "All" filter
-    Then the Mine section shows "Health plan analyst" reading "Pin"
+    Then the General section shows "Health plan analyst" reading "Pin"
 
   Scenario: Flags an agent whose dataset no longer exists
     Given the draft of "Claims triage" uses the dataset "Gone"
@@ -1087,10 +1091,10 @@ Feature: Agent Hub
     And I see the buttons "Edit", "Publish" and "Delete" and no "Start chat" button
     When I click "All agents"
     And I open "Health plan analyst"
-    Then I see the buttons "Start chat", "Edit" and "Delete" and no "Publish" button
+    Then I see the buttons "Edit" and "Delete" and no "Publish" or "Start chat" button
     When I click "All agents"
-    And I open "Questions to Insights Assistant"
-    Then I see the button "Start chat" and none of "Edit", "Publish" or "Delete"
+    And I open "Emily"
+    Then I see the "Used in" line and none of "Start chat", "Edit", "Publish" or "Delete"
 
   Scenario: Publishing a draft makes it Live
     When I click "Agents"
@@ -1102,7 +1106,7 @@ Feature: Agent Hub
     Then I see the toast 'Agent "Claims triage" is Live'
     And the "Publish" button is gone
     When I click "All agents"
-    Then the Mine section shows "Claims triage" with the chip "Live"
+    Then the General section shows "Claims triage" with the chip "Live"
 
   Scenario: Deleting an agent asks first
     When I click "Agents"
@@ -1122,60 +1126,80 @@ Feature: Agent Hub
     When I click "Back"
     Then I am back on the Agent Hub
 
-  Scenario: The showcase agents are Official cards that cannot chat yet
-    When I click "Agents"
-    Then the Official section shows "Benchmarking Agent", "LAD COE Agent", "Strategy Agent" and "Survey Agent" after "RFP Builder", each with "Owner: Official" and the chip "Showcase", with no "Show more"
-    And the "Showcase" chip of "Survey Agent" has the title "Showcase agent: not available to chat yet."
-    And "Start chat with Benchmarking Agent", "Start chat with Survey Agent", "Start chat with LAD COE Agent" and "Start chat with Strategy Agent" are disabled, each with the title "Showcase agent: not available to chat yet."
-    And "Start chat with Questions to Insights Assistant" is enabled and its card has no "Showcase" chip
+  Scenario: The Official owner holds only agents that can chat
+    When I open "Agents"
+    And I choose "Official" in "Filter by owner"
+    Then I see "Emily", "Michael" and "Sarah", and no other agent
+    And I see no "Showcase" chip and no "Benchmarking Agent", "Survey Agent", "LAD COE Agent" or "Strategy Agent"
 
-  Scenario: Questions to Insights v2 is an Official card that starts a chat
+  Scenario: Insights Analyst is an Official card
     When I click "Agents"
-    Then the Official section shows "Questions to Insights v2" after "Questions to Insights Assistant", with "Owner: Official" and no "Showcase" chip
-    And "Start chat with Questions to Insights v2" is enabled
+    Then the Analysis section shows "Michael" after "Emily", with "Owner: Official"
 
-  Scenario: Questions to Insights v2's page shows its prompt, three tools and no skills
+  Scenario: Insights Analyst's page shows its prompt, five tools and three skills
     When I click "Agents"
-    And I open "Questions to Insights v2"
-    Then I see the heading "Questions to Insights v2"
-    And I see "A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools."
-    And the Chat Box tab is shown, with "Start chat"
-    When I open the System Prompt tab
-    Then I see the chip "Built-in" and the prompt starting "You are Questions to Insights v2"
+    And I open "Michael"
+    Then I see the heading "Michael"
+    And I see "A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them."
+    And there is no Try it tab, and the Job Description tab is shown
+    When I open the Job Description tab
+    Then I see the chip "Built-in" and the prompt starting "You are Questions to Insights"
     When I open the Tools tab
-    Then I see "list_entities", "describe_entity" and "run_readonly_sql" and not "create_visual"
+    Then I see "Tools (5)" with "list_entities", "describe_entity", "sample_rows", "run_readonly_sql" and "ask_clarification" and not "create_visual"
     When I open the Skills tab
-    Then I see "Skills (0)"
+    Then I see "Skills (3)" with "curated-knowledge", "result-validation" and "sql-analysis", each "On demand"
     When I open the Memory tab
     Then I see "Recent messages replayed" and "40 messages"
 
-  Scenario: Saving a Questions to Insights v2 prompt that loses its identity line is refused
+  Scenario: Saving an Insights Analyst prompt that loses its identity line is refused
     When I click "Agents"
-    And I open "Questions to Insights v2"
-    And I open the System Prompt tab
+    And I open "Michael"
+    And I open the Job Description tab
     And I click "Edit"
     And I replace the prompt with "You are a data analyst."
-    And I click "Save prompt"
-    Then I see the error toast 'The Questions to Insights v2 prompt must start with "You are Questions to Insights v2"'
+    And I click "Save job description"
+    Then I see the error toast 'The Insights Analyst prompt must start with "You are Questions to Insights"'
     And the prompt is not marked "Modified"
-
-  Scenario: A showcase agent's page shows its description and System Prompt
-    When I click "Agents"
-    And I open "LAD COE Agent"
-    Then I see the heading "LAD COE Agent"
-    And I see "The Life, Absence and Disability Center of Excellence: reviews life, disability and leave programs against the market, claims experience and leave rules."
-    And "Start chat" is disabled with the title "Showcase agent: not available to chat yet."
-    And I see the text "Showcase agent: not available to chat yet." beside it
-    And I see neither "Publish" nor "Delete"
-    And there is no "Chat Box" tab and the "System Prompt" tab is open
-    And I see the chip "Built-in" and the prompt starting "You are the LAD COE Agent of the US Health Agentic Hub"
-    And the only "Edit" button is the System Prompt's
 
   Scenario: The hub has no detectable accessibility violations in either theme
     When I click "Agents"
-    And I click "Show more (2)" in the System section
     Then the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
+
+  Scenario: An agent shows the workflows that use it
+    When I open "Agents"
+    Then no card has "Start chat"
+    When I open "Michael"
+    Then I see "Used in" "Answer a Business Question"
+    When I click the "Answer a Business Question" chip
+    Then I see the "Answer a Business Question" workflow page and "Workflows" is the current rail item
+    When I open the "Sarah" agent
+    Then I see no "Try it" tab, and "Job Description" is open
+
+  Scenario: A user agent is used in no workflow, published or not
+    When I click "Agents"
+    And I open "Claims triage"
+    Then the "Used in" line says "Not used in any workflow."
+    And the Try it tab is shown
+    Given the draft of "Claims triage" uses the dataset "World Cup Core"
+    When I click "All agents"
+    And I open "Claims triage" and click "Publish"
+    Then the "Used in" line still says "Not used in any workflow."
+    And the agent has no "Run" or "Start chat" button and the Workflows page does not list "Claims triage"
+
+  Scenario: A System agent says the app calls it itself
+    When I click "Agents"
+    And I open "SQL Fixer"
+    Then the "Used in" line says "Not used in any workflow. The app calls this agent itself."
+    And there is no Try it tab and no "Start chat"
+
+  Scenario: The agent detail has no detectable accessibility violations in either theme
+    When I click "Agents"
+    And I open "Michael"
+    Then the axe scan reports no violations in the Light theme and in the Dark theme
+    When I click "All agents"
+    And I open "Claims triage"
+    Then the axe scan reports no violations in the Light theme and in the Dark theme
 ```
 
 E2E: `frontend/e2e/agent-skills.spec.ts`
@@ -1207,11 +1231,10 @@ Feature: Agent skills
 
   Scenario: The assistant gets only its built-in skills, and an old skills folder is ignored
     Given the data dir holds a skills folder from an older version, with a skill "sql-style"
-    When I open the "Questions to Insights Assistant" agent
+    When I open the "Emily" agent
     And I open the Skills tab
-    Then the tab reads "Skills (2)"
+    Then the tab reads "Skills (1)"
     And I see the skill "curated-knowledge", "On demand"
-    And I see the skill "deep-analysis", "Loaded by the app"
     And I don't see the skill "sql-style"
 
   Scenario: A user agent's Skills tab is its inline library, not the read-only list
@@ -1283,7 +1306,7 @@ Feature: Agents and evals behaviour not yet covered by Playwright
 
 E2E: `frontend/e2e/agent-editor.spec.ts`
 
-The model is the recording LLM stub described under the Feature "Sessions started from an agent" in [../sessions-chat/spec.md](../sessions-chat/spec.md).
+The model is the recording LLM stub described under the Feature "Sessions started from an agent" in [../agent-answers/spec.md](../agent-answers/spec.md).
 
 ```gherkin
 Feature: Agent editor
@@ -1292,22 +1315,22 @@ Feature: Agent editor
     Given a "World Cup Core" dataset exists
     And the model is the recording stub
 
-  Scenario: Creates an agent, previews it, publishes it and deletes it
+  Scenario: Creates an agent, tries it, publishes it and deletes it
     When I click "Agents"
     And I click "New agent"
     Then I see the heading "New agent"
     And "Save" is disabled
     When I type "Cup historian" into "Name"
-    And I type "Always name the tournament year." into "Instructions"
+    And I type "Always name the tournament year." into "Job description"
     And I tick "World Cup Core"
     And I add the starter question "Who won in 2014?"
     And I click "Save"
     Then I see the toast 'Agent "Cup historian" saved as draft'
     And the editor shows the chip "Draft"
-    When I click "Preview"
-    Then the Details panel shows "Preview" and the starter question "Who won in 2014?"
-    When I send "Who won in 2014?" in the preview
-    Then I see the stub's answer in the preview
+    When I click "Try it"
+    Then the Details panel shows "Try it"
+    When I run "Who won in 2014?" in Try it
+    Then I see the stub's answer in Try it
     And the model received "Always name the tournament year." as the agent's instructions
     And "Cup historian" is not listed in the "Sessions" list
     When I click "Publish"
@@ -1341,21 +1364,21 @@ Feature: Agent editor
     And I click "+ Link tool"
     And I pick "sample_rows"
     And I click "Save"
-    And I send "Who won in 2014?" in the preview
+    And I run "Who won in 2014?" in Try it
     Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
     And the model's prompt says "You can't ask the user a question back in this session."
     When I click "Back"
     Then the "Tools" tab lists "sample_rows" as "Linked" and "create_visual" as "Not linked"
 
-  Scenario: A linked skill reaches the preview, and the Live agent keeps its copy
+  Scenario: A linked skill reaches Try it, and the Live agent keeps its copy
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year." and the body "Our fiscal year starts on 1 July."
     When I click "Agents"
     And I click "New agent"
     And I type "Finance helper" into "Name"
     And I tick "World Cup Core"
-    And I type "/fis" in "Instructions" and pick "fiscal-calendar"
+    And I type "/fis" in "Job description" and pick "fiscal-calendar"
     And I click "Save"
-    And I send "What happened in fiscal 2018?" in the preview
+    And I run "What happened in fiscal 2018?" in Try it
     Then the model's skill catalog lists "fiscal-calendar"
     And the model's instructions contain 'the "fiscal-calendar" skill' and no "[["
     When I click "Publish"
@@ -1369,18 +1392,18 @@ Feature: Agent editor
     When I click "Agents" and click "New agent"
     And I type "Chart helper" into "Name"
     And I tick "World Cup Core"
-    And I type "/char" in "Instructions" and pick "chart-style"
+    And I type "/char" in "Job description" and pick "chart-style"
     And I click "Save"
-    And I send "Chart the goals per year." in the preview
+    And I run "Chart the goals per year." in Try it
     Then the model was offered "create_visual" and "update_visual" but not "sample_rows"
     When I click "Back"
     Then the "Tools" tab lists "create_visual" as "Linked" with "Linked by chart-style"
 
   Scenario: A slash inside a word does not open the link menu
     When I click "Agents" and click "New agent"
-    And I type "Speeds in km/h" into "Instructions"
+    And I type "Speeds in km/h" into "Job description"
     Then no link menu is open
-    When I type " /" into "Instructions"
+    When I type " /" into "Job description"
     Then the link menu is open with "Skills" and "Tools"
 
   Scenario: An unknown link is refused
@@ -1393,52 +1416,51 @@ Feature: Agent editor
   Scenario: An agent saved before links gets a links line
     Given a draft user agent "Old timer" over "World Cup Core" with no tools list and the instructions "Be brief."
     When I open "Old timer" from "Agents" and click "Edit"
-    Then the last line of "Instructions" is "Tools and skills:" followed by the chips "sample_rows", "ask_clarification" and "create_visual"
+    Then the last line of "Job description" is "Tools and skills:" followed by the chips "sample_rows", "ask_clarification" and "create_visual"
     And I see "Links were added for what this agent had. Save to keep them."
     And "Save" is enabled
 
-  Scenario: The Graph tab shows the chain from instructions to skill to tool
-    Given a skill "chart-style" that links the tool "create_visual" in its body
-    And a Live user agent "Chart helper" over "World Cup Core" whose instructions link "chart-style" and "sample_rows"
-    When I open "Chart helper" from "Agents" and open the Graph tab
-    Then I see the nodes "Instructions", "chart-style", "create_visual" and "sample_rows"
-    And the "create_visual" node is reached through "chart-style"
-    And I see "What happens on each message"
-    When I tick "Show unlinked"
-    Then "ask_clarification" is shown greyed
-
   Scenario: The LLM Config tab shows whether the key is set and never the key
     Given LLM settings with the API key "sk-secret-123" are saved
-    When I open the "Questions to Insights Assistant" agent and open the LLM Config tab
+    When I open the "Emily" agent and open the LLM Config tab
     Then I see "API key" with "Set"
     And I do not see "sk-secret-123" anywhere on the page
 
-  Scenario: Sending in the preview saves the form first
+  Scenario: Try it saves the form first
     Given a draft user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
     When I open "Cup historian" from "Agents" and click "Edit"
-    And I click "Preview"
+    And I click "Try it"
     And I replace the instructions with "Talk like a pirate."
-    And I send "Who won in 2014?" in the preview
+    And I run "Who won in 2014?" in Try it
     Then I see the toast "Draft saved"
     And the model received "Talk like a pirate."
 
-  Scenario: Reset and leaving the editor discard the preview
+  Scenario: Try it stores nothing, and Reset clears the result
     Given a draft user agent "Cup historian" over "World Cup Core"
     When I open "Cup historian" from "Agents" and click "Edit"
-    And I click "Preview" and send "Who won in 2014?" in the preview
-    And I click "Reset preview"
-    Then the preview shows no messages
-    When I send "And in 2010?" in the preview
-    And I click "Back"
-    Then the preview's memory and workspace are gone
-    And no session was created
+    And I click "Try it" and run "Who won in 2014?" in Try it
+    Then the run's workspace is gone and no run or session was created
+    When I click "Reset"
+    Then Try it shows no question and no answer
+    When I run "And in 2010?" in Try it
+    And I click "Back" and click "All agents"
+    Then no run or session was created
 
-  Scenario: Preview needs a dataset, and names must be unique
+  @demo @story-1.23.23
+  Scenario: Try it runs the draft, not the Live version
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents" and click "Edit"
+    And I replace the instructions with "Talk like a pirate."
+    And I click "Try it" and run "Who won in 2014?" in Try it
+    Then the model received "Talk like a pirate." as the agent's instructions
+    And the Live version still has "Answer in one sentence."
+
+  Scenario: Try it needs a dataset, and names must be unique
     Given a Live user agent "Health plan analyst" over "World Cup Core"
     When I click "Agents" and click "New agent"
     And I type "Cup historian" into "Name"
-    And I click "Preview"
-    Then the preview says "Select at least one dataset to preview"
+    And I click "Try it"
+    Then Try it says "Select at least one dataset to preview"
     When I replace the name with "Health plan analyst"
     And I click "Save"
     Then I see the toast 'An agent named "Health plan analyst" already exists'
@@ -1458,61 +1480,61 @@ Feature: Agent editor
     When I untick "Gone (missing)" and click "Save"
     Then the "Cup historian" card no longer shows a missing-dataset note
 
-  Scenario: Editing the System Prompt in place saves a draft with the link
+  Scenario: Editing the Job Description in place saves a draft with the link
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
     And a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
     When I open "Cup historian" from "Agents"
-    Then the Chat Box tab is shown
-    When I open the System Prompt tab
+    Then the Try it tab is shown
+    When I open the Job Description tab
     Then I see "Assistant core prompt (fixed)" collapsed and the instructions "Answer in one sentence."
     When I click "Edit"
     Then I see the hint "Type / to link a skill or tool. The agent only gets the skills and tools its instructions link."
-    And "Save prompt" is disabled
+    And "Save job description" is disabled
     When I type " /fis" after the instructions' text and pick "fiscal-calendar"
     Then the "Linked:" row shows the chip "fiscal-calendar"
-    When I click "Save prompt"
+    When I click "Save job description"
     Then I see the toast "Draft saved"
     And the header shows "Unpublished changes"
     And the Skills tab shows "fiscal-calendar" as "Linked"
 
-  Scenario: A broken link disables Save prompt
+  Scenario: A broken link disables Save job description
     Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
-    When I open "Cup historian" from "Agents", open the System Prompt tab and click "Edit"
+    When I open "Cup historian" from "Agents", open the Job Description tab and click "Edit"
     And I type "[[skill:gone]]" at the end of the instructions
     Then I see "No skill named gone. Remove the link or create the skill on the Skills tab."
-    And "Save prompt" is disabled
+    And "Save job description" is disabled
     When I remove the broken link
-    Then the error is gone and "Save prompt" is disabled because nothing changed
+    Then the error is gone and "Save job description" is disabled because nothing changed
 
-  Scenario: Leaving an unsaved System Prompt edit asks first
+  Scenario: Leaving an unsaved Job Description edit asks first
     Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
-    When I open "Cup historian" from "Agents", open the System Prompt tab and click "Edit"
+    When I open "Cup historian" from "Agents", open the Job Description tab and click "Edit"
     And I type " Be brief." and click "All agents"
     Then I am asked "Discard unsaved changes?"
     When I cancel
-    Then the System Prompt tab is still open with " Be brief." typed
+    Then the Job Description tab is still open with " Be brief." typed
 
-  Scenario: The Chat Box tab chats with the draft, and New chat starts over
+  Scenario: The Try it tab runs the draft, and Reset starts over
     Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
     When I open "Cup historian" from "Agents"
-    Then the Chat Box tab shows "Chat with the draft" and "New chat"
-    When I send "Who won in 2014?" in the Chat Box
-    Then I see the stub's answer in the Chat Box
+    Then the Try it tab shows "Try the draft" and "Reset"
+    When I run "Who won in 2014?" in the Try it tab
+    Then I see the stub's answer in the Try it tab
     And the model received "Answer in one sentence." as the agent's instructions
-    And "Cup historian" is not listed in the "Sessions" list
-    When I click "New chat"
-    Then the Chat Box is empty
+    And "Cup historian" is not listed in the "Sessions" list and no run is stored
+    When I click "Reset"
+    Then the Try it tab is empty
     When I click "All agents" and open "Cup historian" again
-    Then the Chat Box is empty
+    Then the Try it tab is empty
 
-  Scenario: The Chat Box needs a dataset
+  Scenario: Try it needs a dataset
     Given a draft user agent "Empty historian" with no dataset
     When I open "Empty historian" from "Agents"
-    Then the Chat Box tab shows "Add a dataset to this agent to chat with it." and an "Edit" link
+    Then the Try it tab shows "Add a dataset to this agent to try it." and an "Edit" link
 
-  Scenario: The Official agent's Chat Box offers Start chat
-    When I open "Questions to Insights Assistant" from "Agents"
-    Then the Chat Box tab shows "Chats with the assistant run over datasets you choose." and "Start chat"
+  Scenario: An Official agent has no Try it tab and opens on Job Description
+    When I open "Emily" from "Agents"
+    Then there is no Try it tab, and the Job Description tab is shown
 
   Scenario: The Skills tab shows what is linked and creates a skill inline
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
@@ -1533,7 +1555,7 @@ Feature: Agent editor
 
   Scenario: The editor has no detectable accessibility violations in either theme
     When I click "Agents" and click "New agent"
-    And I click "Preview"
+    And I click "Try it"
     Then the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
 ```
@@ -1611,25 +1633,18 @@ Feature: Skill library
     Given the model is the recording stub
     When I click "Agents"
     And I click "Skills"
-    Then the "Built-in · included in every agent" section lists "curated-knowledge", "deep-analysis" and "interactive-visuals"
+    Then the "Built-in · included in every agent" section lists "curated-knowledge" and "interactive-visuals"
     When I open "curated-knowledge"
     Then I see "Changes apply to every session and agent as soon as you save. Run the evals to check them."
     When I replace the description with "Use when the turn carries curated knowledge: glossary, rules and filters."
     And I click "Save"
     Then I see the toast 'Built-in skill "curated-knowledge" saved'
     And the row "curated-knowledge" shows "Modified"
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the model's catalog lists "curated-knowledge" with "Use when the turn carries curated knowledge: glossary, rules and filters."
     When I open "curated-knowledge" in the skills library and click "Reset to built-in" and confirm
     Then I see the toast 'Built-in skill "curated-knowledge" reset'
     And the row "curated-knowledge" no longer shows "Modified"
-
-  Scenario: An override that drops a placeholder is refused
-    Given I am in the built-in skill editor of "deep-analysis"
-    When I remove every "{{" placeholder from "phases/1-plan.md"
-    And I click "Save"
-    Then I see an error toast starting "phases/1-plan.md must use the placeholders"
-    And the row "deep-analysis" does not show "Modified"
 
 ```
 
@@ -1637,93 +1652,65 @@ E2E: `frontend/e2e/builtin-agent-prompts.spec.ts`
 
 ### Feature: Built-in agent prompts
 
-The System Prompt tab of the built-in agents (R97-R105). The model is the recording stub, so the system prompt of each request can be read.
+The Job Description tab of the built-in agents (R97-R105). The model is the recording stub, so the system prompt of each request can be read.
 
 ```gherkin
 Feature: Built-in agent prompts
 
   Scenario: I edit the assistant's prompt, and Reset restores it
     Given the model is the recording stub
-    When I open the "Questions to Insights Assistant" agent
-    And I open the System Prompt tab
+    When I open the "Emily" agent
+    And I open the Job Description tab
     Then I see the chip "Built-in" and no chip "Modified"
     When I click "Edit"
     Then I see "Changes apply to every session and agent as soon as you save. Run the evals to check them."
     And I see "The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules."
     When I append the line "Always end an answer with the word Done." to the prompt
-    And I click "Save prompt"
-    Then I see the toast 'System prompt of "Questions to Insights Assistant" saved'
+    And I click "Save job description"
+    Then I see the toast 'Job description of "Emily" saved'
     And I see the chip "Modified"
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the system prompt of the model's request contains "Always end an answer with the word Done."
     And it still contains "## Tools"
-    When I open the System Prompt tab of the assistant, click "Reset to built-in" and confirm
-    Then I see the toast 'System prompt of "Questions to Insights Assistant" reset'
+    When I open the Job Description tab of the assistant, click "Reset to built-in" and confirm
+    Then I see the toast 'Job description of "Emily" reset'
     And I no longer see the chip "Modified"
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the system prompt of the model's request does not contain "Always end an answer with the word Done."
 
   Scenario: A System agent's prompt is edited in a text area, with no link menu
     When I open the "SQL Fixer" agent
-    And I click "Edit" on the System Prompt tab
+    And I click "Edit" on the Job Description tab
     Then I see a text area with the counter "<n>/20,000"
     And I see no "+ Link tool" and no "+ Link skill"
     When I type "[[tool:sample_rows]]" in the text area
-    And I click "Save prompt"
+    And I click "Save job description"
     Then I see the error toast "This agent's prompt can't contain links"
     And the row of the agent does not show "Modified"
 
   Scenario: A skill link in the assistant's prompt is refused
-    Given I am editing the System Prompt of "Questions to Insights Assistant"
+    Given I am editing the Job Description of "Emily"
     When I append "[[skill:sql-style]]" to the prompt
-    And I click "Save prompt"
+    And I click "Save job description"
     Then I see the error toast "Only built-in skills can be linked here: this prompt is shared by every user"
     And the prompt is not modified
 
-  Scenario: The shipped assistant prompt shows its tools and skill as chips and the model reads plain mentions
+  Scenario: the shipped assistant prompt shows its tools and skill as chips
     Given the model is the recording stub
-    When I open the "Questions to Insights Assistant" agent
-    And I open the System Prompt tab
+    When I open the "Emily" agent
+    And I open the Job Description tab
     Then I see tool chips such as "ask_clarification" and "run_readonly_sql" and a "curated-knowledge" chip
     And I see "## Tools — generated from the tools the assistant gets"
     And I see no "[[" in the prompt view
-    When I ask the assistant "Who won in 2022?" in a new session
+    When I run the Assistant on "Who won in 2022?"
     Then the system prompt of the model's request contains 'Call the "ask_clarification" tool only when'
     And it does not contain "[["
 
   Scenario: A built-in skill link in the assistant's prompt is accepted
-    Given I am editing the System Prompt of "Questions to Insights Assistant"
+    Given I am editing the Job Description of "Emily"
     When I append "[[skill:curated-knowledge]]" to the prompt
-    And I click "Save prompt"
-    Then I see the toast 'System prompt of "Questions to Insights Assistant" saved'
-
-  Scenario: The shipped RFP Builder prompt shows its tools and skill as chips and in the Graph tab
-    When I open the "RFP Builder" agent
-    And I open the System Prompt tab
-    Then I see tool chips such as "get_rfp" and "update_rfp" and an "rfp-client-renewal" chip
-    And I see "## Tools — generated from the tools the RFP Builder gets"
-    And I see no "[[" in the prompt view
-    When I open the Graph tab
-    Then I see the Instructions joined to the "rfp-client-renewal" skill and to the "get_rfp" tool
-    And I see the "rfp-client-renewal" skill joined to the "list_clients" tool
-    And I see every RFP Builder tool marked "Always on"
-    And I do not see "This agent has no links: it gets all of its tools."
-
-  Scenario: The RFP Builder's prompt links only its own tools and skill
-    Given I am editing the System Prompt of "RFP Builder"
-    When I type "/" in the prompt
-    Then the menu offers "rfp-carriers" and not "run_readonly_sql"
-    When I continue with "list_cl"
-    Then the menu offers "list_clients"
-    When I type "/run_readonly" instead
-    Then the menu offers nothing named "run_readonly_sql"
-    When I append "[[tool:run_readonly_sql]]" to the prompt
-    And I click "Save prompt"
-    Then I see the error toast 'Unknown tool "run_readonly_sql"'
-    When I replace it with "[[skill:curated-knowledge]]"
-    And I click "Save prompt"
-    Then I see the error toast "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user"
-    And the prompt is not modified
+    And I click "Save job description"
+    Then I see the toast 'Job description of "Emily" saved'
 
 ```
 
@@ -1998,7 +1985,7 @@ Feature: Memory arms and memory sets
     Then it is refused with 'The memory arm "hindsight-mastra" is not built in this version'
     When I run it with "EVAL_MEMORY=mastra" on a build that has no store for the memory port
     Then it is refused with 'The memory arm "mastra" is not built in this version'
-    When I run the "rfp" set with "EVAL_MEMORY=mastra"
+    When I run the "query-explainer" set with "EVAL_MEMORY=mastra"
     Then it is refused with "Memory arms run only on the assistant"
     And each time no model was called
 
@@ -2058,7 +2045,7 @@ Feature: Memory arms and memory sets
 ```
 
 Covered by (backend unit tests):
-- *Refuses an unknown memory arm, or one this build does not have*: `memory-arm-option.spec.ts` (`parseMemoryArm`, `parseEvalArm`, `memoryArmFromEnv`); `run-assistant-evals.spec.ts` "refuses a memory arm the build has not after it boots, before any model call"; `eval-runs.service.spec.ts` "EvalRunsService memory arm": "refuses mastra on a build with no store for the memory port", "refuses a memory arm on the RFP Builder's set", "refuses bad repeats before a bad arm", "refuses a memory arm this build has not on the command line".
+- *Refuses an unknown memory arm, or one this build does not have*: `memory-arm-option.spec.ts` (`parseMemoryArm`, `parseEvalArm`, `memoryArmFromEnv`); `run-assistant-evals.spec.ts` "refuses a memory arm the build has not after it boots, before any model call"; `eval-runs.service.spec.ts` "EvalRunsService memory arm": "refuses mastra on a build with no store for the memory port", "refuses a memory arm on the Data Readiness set", "refuses bad repeats before a bad arm", "refuses a memory arm this build has not on the command line".
 - *Runs a memory set without memory, the control*: `eval-runs.service.spec.ts` "records the arm none when none is given, and reads no store"; `assistant.evals.spec.ts` "scores the memory checks on an empty record under none, with no store and no learned block"; `memory-arm-option.spec.ts` `LEGACY_ARM`.
 - *Teaches a memory, then asks in a new session*: `assistant.evals.spec.ts` "runAssistantEvalCase under a memory arm" (teach, recall into the learned block after the knowledge block, the record, the scope deleted, also when the teach step fails or the probe throws; no block when nothing is recalled or the recall is cut off); `eval-memory.spec.ts` (`teachSignals`, `teachMemory`, `recallForProbe`, the attempt's scope); `eval-runs.service.spec.ts` "runs mastra with the store it finds, each attempt in a scope of its own, and compares within the arm".
 - *Fails a question whose memory kept a row value*, *Fails a probe that runs the rejected SQL again*, *Fails an abstain question whose teach signal was recalled*: `checks/memory-checks.spec.ts` (`noRowValuesRetained`, `notRejectedSql`, `teachNotRecalled`); `eval-memory.spec.ts` `scoreMemoryChecks`.
@@ -2106,7 +2093,7 @@ Feature: Databricks samples
 
 - One real `world-cup` run on PostgreSQL with the judge off reports a pass rate per category and per criterion in its report and in the Evals tab, makes no judge call, and shows every judge check as not scored (BA-184).
 - The nineteen `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
-- The validator (R110) passes for `world-cup` (its last 11 questions the former golden set, R109) against the World Cup PostgreSQL datasource and for `world-cup-rest` against the World Cup REST datasource, and fails, naming the case, when one reference query is broken on purpose. A run of each moved set gives the same verdicts as a run before the move, within the run-to-run variation.
+- The validator (R250) passes for `world-cup` (its last 11 questions the former golden set, R249) against the World Cup PostgreSQL datasource and for `world-cup-rest` against the World Cup REST datasource, and fails, naming the case, when one reference query is broken on purpose. A run of each moved set gives the same verdicts as a run before the move, within the run-to-run variation.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.
@@ -2130,13 +2117,13 @@ Feature: Databricks samples
 - The cost per question with Repeats k covers k attempts, so it is comparable only between runs of the same repeats; `eval:diff` warns when they differ (R226).
 - That cached input tokens are part of the input tokens and reasoning tokens part of the output (R219, R221) follows the AI SDK and is to be checked against the provider's own figures after the first baseline run.
 - Open questions of the memory arms and memory sets (R231 to R246, BA-190), each written above with the draft's default; the ids are those of the BA-4 memory prep notes (`specs/NOTES.md` of that work), where each one's options are listed:
-  - OD-3: the eval's budget (about 15 USD proposed; ADR-0038 estimates 5 to 10 USD on the loop's model, more on Claude).
+  - OD-3: the eval's budget (about 15 USD proposed; ADR-0050 estimates 5 to 10 USD on the loop's model, more on Claude).
   - OD-5: the criteria of the new checks: a new memory bucket M1 to M3 (the default, R244), or existing criteria.
   - OD-6: where the memory questions live: one bank file `memory.json` beside the others (the default, R233), or a folder of their own. The bank file is covered by the failure export (R228) and the case index with no change to them, but the leak check needed one (R229).
   - OD-7: the arm option's name and setting: `arm: { memory }` on the API and `EVAL_MEMORY` on the command line, with no control in the Evals tab (the defaults, R231, R232).
-  - OD-13: the port's `items` and `settle`, which R239 to R241 use and ADR-0038's four operations do not name (BA-81).
+  - OD-13: the port's `items` and `settle`, which R239 to R241 use and ADR-0050's four operations do not name (BA-81).
   - OD-15: the cost of a Hindsight server's own model calls, which the run does not see (R245).
   - OD-17: whether `EVAL_CATEGORY` and the judge's `categories` take the six memory categories (default: no, R236).
-- Decided by the user at checkpoint D on 2026-10-30, and written above as rules: no background of signals before a teach step (OD-8, R238), so a memory arm on the other sets recalls nothing and ADR-0038's "the existing sets get no worse" holds by construction; OD-9 was decided on 2026-10-30 as BA-81 first, and amended by the user on 2026-11-02 (option B): the arm is built on this branch first, and `mastra` is refused as not built until the branch merges `main` with BA-81 (R232); `teachNotRecalled` checks only that no teach signal was recalled, the result being the result-set match's (R243).
+- Decided by the user at checkpoint D on 2026-10-30, and written above as rules: no background of signals before a teach step (OD-8, R238), so a memory arm on the other sets recalls nothing and ADR-0050's "the existing sets get no worse" holds by construction; OD-9 was decided on 2026-10-30 as BA-81 first, and amended by the user on 2026-11-02 (option B): the arm is built on this branch first, and `mastra` is refused as not built until the branch merges `main` with BA-81 (R232); `teachNotRecalled` checks only that no teach signal was recalled, the result being the result-set match's (R243).
 
 <!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals,validate-eval-sets,eval-stats,eval-usage,eval-case-index,eval-attempts,repeats-option}.ts, backend/src/mastra/evals/pricing.json, backend/src/mastra/evals/loop/, backend/src/mastra/usage-sink.ts, backend/scripts/{eval-diff,eval-export-failures,eval-leak-check}.ts, backend/src/mastra/evals/sets/*.json, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts, frontend/e2e/agent-hub.spec.ts -->

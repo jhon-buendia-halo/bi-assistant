@@ -32,16 +32,19 @@ const NARROW = { ...PANE, props: { ...PANE.props, bodyColumns: 96 } } as const
 type On = Parameters<Parameters<typeof test>[1]>[1]
 
 // Stubs for everything the mod calls, with a session cost the test can raise.
-const world = (on: On, opts: { claudeMd?: string; failCommands?: RegExp } = {}) => {
+const world = (on: On, opts: { claudeMd?: string; strictSkill?: string; failCommands?: RegExp } = {}) => {
   const state = { usd: 0 }
   const clock = mock.clock(on)
   on('session.start', () => ({ cwd: '/work' }))
   on('command.register', () => ({ value: undefined }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.toast', () => ({ value: undefined }))
-  on('fs.read', ($, e) =>
-    e.path.endsWith('CLAUDE.md') && opts.claudeMd !== null ? { value: opts.claudeMd ?? CLAUDE_MD } : { deny: 'no such file' },
-  )
+  on('fs.read', ($, e) => {
+    if (e.path.endsWith('workflow-strict/SKILL.md')) {
+      return opts.strictSkill !== undefined ? { value: opts.strictSkill } : { deny: 'no such file' }
+    }
+    return e.path.endsWith('CLAUDE.md') && opts.claudeMd !== null ? { value: opts.claudeMd ?? CLAUDE_MD } : { deny: 'no such file' }
+  })
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000 }, rateLimits: [], cost: { usd: state.usd } } }))
   on('tool.call', ($, e) => {
     const cmd = typeof (e as { command?: unknown }).command === 'string' ? ((e as { command: string }).command) : ''
@@ -80,7 +83,7 @@ test('task #1 runs from the start and every other step is queued with its future
   expect(await text(ui, /#2 +Ask clarifying questions.*step 2 +~main .*0%/)).toBeDefined()
   expect(await text(ui, /#8 +Implement changes.*step 8 +~main\+sub/)).toBeDefined()
   expect(await text(ui, /#11 +Retrospective.*step 11/)).toBeDefined()
-  expect(await text(ui, /retrospective read –/)).toBeDefined()
+  expect(await text(ui, /lessons read –/)).toBeDefined()
   await ui.unmount()
 })
 
@@ -93,7 +96,7 @@ test('reads stay in #1, a question and a roadmap edit are strong signals that st
   await edit($, '/work/roadmap.md')
   await edit($, '/work/roadmap.md')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await text(ui, /retrospective read ✓/)).toBeDefined()
+  expect(await text(ui, /lessons read ✓/)).toBeDefined()
   expect(await text(ui, /#1 +Understand the goal.*100%.*2 reads/)).toBeDefined()
   expect(await text(ui, /#2 +Ask clarifying questions.*100%.*1 question/)).toBeDefined()
   expect(await text(ui, /#3 +Update roadmap.*Edited roadmap\.md ×2/)).toBeDefined()
@@ -278,7 +281,7 @@ test("step 1's checks are the session's: the first action and reads before the f
   await read($, '/work/roadmap.md')
   await edit($, '/work/frontend/src/a.ts')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await text(ui, /retrospective read ✓/)).toBeDefined()
+  expect(await text(ui, /lessons read ✓/)).toBeDefined()
   expect(await text(ui, /#1 +Understand the goal.*100%/)).toBeDefined()
   await ui.unmount()
 })
@@ -318,13 +321,13 @@ test('a press opens a detail under the row, a second press closes it, and two ro
   await ui.press({ key: 'row-1' })
   await ui.unmount()
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await text(ui, /✓ retrospective\.md read/)).toBeDefined()
+  expect(await text(ui, /✓ lessons\.md read/)).toBeDefined()
   expect(await text(ui, /✓ roadmap\.md edited/)).toBeDefined()
   await ui.press({ key: 'row-2' })
   await ui.unmount()
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await text(ui, /roadmap\.md edited/)).toBeUndefined()
-  expect(await text(ui, /✓ retrospective\.md read/)).toBeDefined()
+  expect(await text(ui, /✓ lessons\.md read/)).toBeDefined()
   await ui.unmount()
 })
 
@@ -377,6 +380,26 @@ test("a subagent's own turn credits its tokens to it and to the task it was spaw
   expect(await text(ui, /Agents +main +2\.5k/)).toBeDefined()
   expect(await text(ui, /↳ general-purpose · claude-haiku-4-5 · "rules tests" +4\.1k +✓/)).toBeDefined()
   expect(await text(ui, /✓ no subagent still running/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('the steps come from the workflow-strict skill when CLAUDE.md has no Workflow section', async ($, on) => {
+  const router = '# Repo\n\n> **MANDATORY FIRST ACTION — read [lessons.md](lessons.md) before doing anything else.**\n\n## Choose the workflow\n'
+  const skill = CLAUDE_MD.replace('2. **Ask clarifying questions until the goal is 100% understood**', '2. **Clarify**')
+  world(on, { claudeMd: router, strictSkill: skill })
+  await start($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /From workflow-strict/)).toBeDefined()
+  expect(await text(ui, /#2 +Clarify.*step 2/)).toBeDefined()
+  expect(await text(ui, /#11 +Retrospective/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('the steps come from CLAUDE.md when the workflow-strict skill is missing', async ($, on) => {
+  world(on)
+  await start($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /From CLAUDE\.md/)).toBeDefined()
   await ui.unmount()
 })
 

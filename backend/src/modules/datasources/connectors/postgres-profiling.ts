@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Client } from 'pg';
+import { Client, type QueryConfig } from 'pg';
 import type { PostgresConfig } from '../entities/datasource.entity';
 import type {
   ColumnStats,
@@ -11,6 +11,17 @@ import type {
   ScopedProfiler,
   TablePrivilege,
 } from './profiling';
+import {
+  isAbort,
+  isShortRead,
+  limitMethod,
+  outcomeError,
+  retryPercent,
+  samplePercent,
+  type RowSampler,
+  type SampleOutcome,
+} from './sampling';
+import { SAMPLE_SIZE_MAX } from '../../synthetic-data/limits';
 
 const CONNECT_TIMEOUT_MS = 5_000;
 
@@ -45,6 +56,25 @@ function describeError(err: unknown): string {
     );
   }
   return 'unknown error';
+}
+
+/** Per-query parser set: every column comes back as the server's own text. */
+const RAW_TEXT_TYPES = {
+  getTypeParser: () => (value: string) => value,
+} as unknown as QueryConfig['types'];
+
+function rawQuery(text: string, values: unknown[]): QueryConfig {
+  return { text, values, types: RAW_TEXT_TYPES };
+}
+
+function toResult<R>(result: {
+  rows?: unknown[];
+  fields?: { name: string }[];
+}): { rows: R[]; columns: string[] } {
+  return {
+    rows: (result.rows ?? []) as R[],
+    columns: (result.fields ?? []).map((f) => f.name),
+  };
 }
 
 function abortError(): Error {
@@ -230,7 +260,9 @@ class SessionScope {
  * READ ONLY transaction. Ported from data-readiness-agent's PostgresService.
  */
 @Injectable()
-export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
+export class PostgresProfiler
+  implements ProfilingConnector<PostgresConfig>, RowSampler<PostgresConfig>
+{
   readonly kind = 'postgres' as const;
   private readonly logger = new Logger(PostgresProfiler.name);
   /** Set on the scoped copy `withSessions` hands to its callback. */
@@ -266,6 +298,95 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
       `SELECT COUNT(*)::bigint AS n FROM ${q(schema)}.${q(table)}`,
     );
     return Number(rows[0]?.n ?? 0);
+  }
+
+  /**
+   * Plan 2.1: the row estimate is `pg_class.reltuples` (no COUNT(*)). Up to
+   * `sampleSize` rows: read all; up to 1 M: BERNOULLI; above: SYSTEM; unknown,
+   * or TABLESAMPLE refused (view, foreign or partitioned table): LIMIT.
+   * Values are raw text. A failure leaves `error` and no rows; raw rows are
+   * never logged or put in an error message.
+   */
+  async sampleTable(
+    config: PostgresConfig,
+    namespace: string,
+    table: string,
+    opts: { sampleSize: number; repeatableSeed: number },
+  ): Promise<SampleOutcome> {
+    const started = Date.now();
+    const limit = Math.max(1, Math.min(opts.sampleSize, SAMPLE_SIZE_MAX));
+    const from = `${q(namespace)}.${q(table)}`;
+    const out: SampleOutcome = {
+      namespace,
+      table,
+      rowCountEstimate: null,
+      method: 'limit',
+      columns: [],
+      rows: [],
+      durationMs: 0,
+    };
+    const read = async (sql: string) => {
+      const r = await this.exec<Record<string, string | null>>(
+        config,
+        sql,
+        [],
+        true,
+      );
+      out.rows = r.rows;
+      out.columns = r.columns;
+    };
+    const readLimit = async () => {
+      await read(`SELECT * FROM ${from} LIMIT ${limit}`);
+      out.method = limitMethod(out.rows.length, limit);
+    };
+    try {
+      let estimate: number | null = null;
+      try {
+        const est = await this.run<{ n: string | number | null }>(
+          config,
+          `SELECT c.reltuples::bigint AS n FROM pg_class c
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname = $1 AND c.relname = $2`,
+          [namespace, table],
+        );
+        const raw = est[0]?.n;
+        const n = raw === null || raw === undefined ? NaN : Number(raw);
+        estimate = Number.isFinite(n) && n >= 0 ? n : null;
+      } catch (err) {
+        if (isAbort(err)) throw err;
+        estimate = null;
+      }
+      out.rowCountEstimate = estimate;
+
+      if (estimate === null) {
+        await readLimit();
+      } else if (estimate <= limit) {
+        await read(`SELECT * FROM ${from} LIMIT ${limit}`);
+        out.method = out.rows.length >= limit ? 'limit' : 'full';
+      } else {
+        const kind = estimate > 1_000_000 ? 'SYSTEM' : 'BERNOULLI';
+        const seed = Math.trunc(opts.repeatableSeed);
+        const tablesample = (p: number) =>
+          `SELECT * FROM ${from} TABLESAMPLE ${kind} (${p}) REPEATABLE (${seed}) LIMIT ${limit}`;
+        const p = samplePercent(limit, estimate);
+        try {
+          await read(tablesample(p));
+          out.method = 'tablesample';
+          if (p < 100 && isShortRead(out.rows.length, limit, estimate)) {
+            await read(tablesample(retryPercent(p)));
+          }
+        } catch (err) {
+          if (isAbort(err)) throw err;
+          await readLimit();
+        }
+      }
+    } catch (err) {
+      if (isAbort(err)) throw err;
+      out.rows = [];
+      out.error = outcomeError(err);
+    }
+    out.durationMs = Date.now() - started;
+    return out;
   }
 
   /**
@@ -571,14 +692,30 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
     sql: string,
     params: unknown[] = [],
   ): Promise<R[]> {
-    if (this.scope) return this.runScoped<R>(this.scope, sql, params);
+    return (await this.exec<R>(config, sql, params, false)).rows;
+  }
+
+  /**
+   * `raw` reads every value as the server's text (a per-query type parser, so
+   * `timestamp` never becomes a host-time-zone `Date`); the client config and
+   * the readiness statements are untouched.
+   */
+  private async exec<R>(
+    config: PostgresConfig,
+    sql: string,
+    params: unknown[],
+    raw: boolean,
+  ): Promise<{ rows: R[]; columns: string[] }> {
+    if (this.scope) return this.execScoped<R>(this.scope, sql, params, raw);
     const client = newClient(config);
     try {
       await client.connect();
       await client.query('BEGIN READ ONLY');
       try {
-        const result = await client.query(sql, params);
-        return result.rows as R[];
+        const result = raw
+          ? await client.query(rawQuery(sql, params))
+          : await client.query(sql, params);
+        return toResult<R>(result);
       } finally {
         await client.query('ROLLBACK').catch(() => undefined);
       }
@@ -589,11 +726,12 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
     }
   }
 
-  private async runScoped<R>(
+  private async execScoped<R>(
     scope: SessionScope,
     sql: string,
     params: unknown[],
-  ): Promise<R[]> {
+    raw: boolean,
+  ): Promise<{ rows: R[]; columns: string[] }> {
     let client: Client;
     try {
       client = await scope.acquire();
@@ -602,11 +740,11 @@ export class PostgresProfiler implements ProfilingConnector<PostgresConfig> {
     }
     let broken = false;
     try {
-      const result = await Promise.race([
-        client.query(sql, params),
-        scope.abortPromise,
-      ]);
-      return result.rows as R[];
+      const pending = raw
+        ? client.query(rawQuery(sql, params))
+        : client.query(sql, params);
+      const result = await Promise.race([pending, scope.abortPromise]);
+      return toResult<R>(result);
     } catch (err) {
       if (scope.aborted) {
         broken = true;

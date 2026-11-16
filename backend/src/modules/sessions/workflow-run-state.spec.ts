@@ -119,6 +119,19 @@ describe('stepEventOf', () => {
     ).toEqual({ kind: 'end', stepId: 'analyse', status: 'failed' });
   });
 
+  it('reads a suspended step as an end with status suspended, which leaves the bar as it was (ADR-0043)', () => {
+    const event = stepEventOf({
+      type: 'workflow-step-suspended',
+      payload: { id: 'analyse', status: 'suspended' },
+    });
+    expect(event).toEqual({
+      kind: 'end',
+      stepId: 'analyse',
+      status: 'suspended',
+    });
+    expect(workflowRunState(undefined, event!, IDS, NOW)).toBeUndefined();
+  });
+
   it('ignores every other event', () => {
     expect(stepEventOf({ type: 'workflow-start' })).toBeUndefined();
     expect(

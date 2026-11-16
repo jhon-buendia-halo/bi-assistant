@@ -16,6 +16,12 @@ jest.mock('@mastra/core/request-context', () => ({
   },
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
+// Every streamed turn runs its workflow (agents.md 5.1): the engine stand-in.
+jest.mock('@mastra/core/workflows', () =>
+  jest.requireActual<typeof import('../../mastra/testing/workflows.stub')>(
+    '../../mastra/testing/workflows.stub',
+  ),
+);
 jest.mock('../../mastra/model-resolver', () => ({
   AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
   isCustomAnthropicConfig: (c: unknown) =>
@@ -100,6 +106,10 @@ const userAgentsStub = {
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
+import {
+  QUERY_FACTS_CONTEXT_KEY,
+  queryFactsKey,
+} from './query-evidence/query-facts';
 import { sourceEntities } from './visualization-document';
 import { renderPdf } from '../../common/markdown-pdf';
 import { readWorkspaceFile } from './workspace-files';
@@ -108,7 +118,9 @@ import {
   StreamEvent,
   toolCallInput,
 } from './sessions.service';
+import { streamStored } from './testing/stream-stored';
 import type { SessionDoc } from './entities/session.entity';
+import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 
 describe('SessionsService streaming', () => {
@@ -247,6 +259,7 @@ describe('SessionsService streaming', () => {
           .mockImplementation((id: string) =>
             id === 'sql-verifier' ? verifier : agent,
           ),
+        streamWorkflow: streamTurnWorkflow,
         ensureSessionWorkspace: jest
           .fn()
           .mockResolvedValue({ id: 'workspace-1' }),
@@ -314,7 +327,8 @@ describe('SessionsService streaming', () => {
     });
     const { service, agent } = buildStreaming(toolOnlyStream(15));
 
-    await service.streamMessage(
+    await streamStored(
+      service,
       'session-1',
       'Why did Argentina win?',
       () => {},
@@ -365,7 +379,7 @@ describe('SessionsService streaming', () => {
       });
 
       await expect(
-        service.streamMessage('session-1', 'Why?', () => {}),
+        streamStored(service, 'session-1', 'Why?', () => {}),
       ).rejects.toThrow(message);
     },
   );
@@ -375,7 +389,7 @@ describe('SessionsService streaming', () => {
       errorChunkStream(apiCallError(401)),
     );
 
-    await service.streamMessage('session-1', 'Why?', () => {});
+    await streamStored(service, 'session-1', 'Why?', () => {});
 
     expect(session.messages.at(-1)?.role).toBe('assistant');
   });
@@ -384,7 +398,8 @@ describe('SessionsService streaming', () => {
     const { service, session, agent } = buildStreaming(toolOnlyStream(15));
     const events: StreamEvent[] = [];
 
-    await service.streamMessage(
+    await streamStored(
+      service,
       'session-1',
       'Why did Argentina win?',
       (event) => events.push(event),
@@ -402,7 +417,17 @@ describe('SessionsService streaming', () => {
     );
     expect(events.at(-1)).toEqual({
       type: 'done',
-      session: { ...session, panelItems: [] },
+      session: {
+        ...session,
+        panelItems: [],
+        // A plain session runs the assistant's one-step workflow (api.md 2.1).
+        workflowRef: {
+          id: 'agent:assistant',
+          name: 'Assistant',
+          kind: 'agent',
+          deleted: false,
+        },
+      },
     });
   });
 
@@ -415,11 +440,78 @@ describe('SessionsService streaming', () => {
       ]),
     );
 
-    await service.streamMessage('session-1', 'Why?', () => {});
+    await streamStored(service, 'session-1', 'Why?', () => {});
 
     expect(session.messages.at(-1)?.interpretation).toBe(
       'Computed from 2 queries over main.football.matches — 3 rows analyzed.',
     );
+  });
+
+  it('stores one evidence entry per data record, from the facts beside the results (plan m1-25 1.25.1)', async () => {
+    const streamed: { agent?: { stream: jest.Mock } } = {};
+    // The tools write their facts into the turn's map as they run; the
+    // stand-in stream does the same before it hands out the chunks.
+    function* withFacts(): Generator<unknown> {
+      const options = (
+        streamed.agent!.stream.mock.calls as unknown[][]
+      )[0][1] as {
+        requestContext: { get: (key: string) => unknown };
+      };
+      const facts = options.requestContext.get(QUERY_FACTS_CONTEXT_KEY) as Map<
+        string,
+        unknown
+      >;
+      facts.set('call-0', {
+        datasourceId: 'ds-1',
+        totalRows: 1870,
+        rowLimit: 2,
+      });
+      facts.set(queryFactsKey('run_readonly_sql', 'select 2'), {
+        datasourceId: 'ds-1',
+        totalRows: 1,
+        rowLimit: 100,
+      });
+      yield* answerChunks([
+        { sql: 'select 1', rows: [{ n: 1 }, { n: 2 }], truncated: true },
+        { sql: 'select 2', rows: [{ n: 3 }] },
+        { sql: 'select nope', error: 'column "nope" does not exist' },
+      ]);
+    }
+    const { service, session, agent } = buildStreaming(streamOf(withFacts()));
+    streamed.agent = agent;
+
+    await streamStored(service, 'session-1', 'Why?', () => {});
+
+    const answer = session.messages.at(-1);
+    expect(answer?.data).toHaveLength(3);
+    expect(answer?.evidence).toEqual([
+      {
+        index: 0,
+        coverage: 'partial',
+        datasourceId: 'ds-1',
+        totalRows: 1870,
+        rowLimit: 2,
+      },
+      {
+        index: 1,
+        coverage: 'whole-table',
+        datasourceId: 'ds-1',
+        totalRows: 1,
+        rowLimit: 100,
+      },
+      { index: 2 },
+    ]);
+  });
+
+  it('stores evidence on a clarification card too', async () => {
+    const { service, session } = buildStreaming(clarificationStream());
+
+    await streamStored(service, 'session-1', 'Who won?', () => {});
+
+    expect(session.messages.at(-1)?.clarification).toBeDefined();
+    expect(session.messages.at(-1)?.evidence).toEqual([
+      { index: 0, coverage: 'whole-table' },
+    ]);
   });
 
   it('records the curated knowledge the turn was given on the answer', async () => {
@@ -437,7 +529,7 @@ describe('SessionsService streaming', () => {
       { knowledgeBlock: 'Curated dataset knowledge', knowledgeUsed: used },
     );
 
-    await service.streamMessage('session-1', 'Why?', () => {});
+    await streamStored(service, 'session-1', 'Why?', () => {});
 
     expect(session.messages.at(-1)?.knowledge).toEqual(used);
   });
@@ -466,7 +558,7 @@ describe('SessionsService streaming', () => {
         { knowledgeBlock: BLOCK },
       );
 
-      await service.streamMessage('session-1', 'Who won?', () => {});
+      await streamStored(service, 'session-1', 'Who won?', () => {});
 
       expectBlockWithoutRules(streamedContext(agent));
     });
@@ -476,7 +568,7 @@ describe('SessionsService streaming', () => {
         answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
       );
 
-      await service.streamMessage('session-1', 'Who won?', () => {});
+      await streamStored(service, 'session-1', 'Who won?', () => {});
 
       const text = streamedContext(agent)
         .map((m) => m.content)
@@ -491,34 +583,13 @@ describe('SessionsService streaming', () => {
         answer: 'France won.',
       });
 
-      await service.streamMessage('session-1', 'Who won?', () => {});
+      await streamStored(service, 'session-1', 'Who won?', () => {});
 
       const [, corrective] = (agent.generate.mock.calls as unknown[][])[0] as [
         string,
         { context: Context },
       ];
       expectBlockWithoutRules(corrective.context);
-    });
-
-    it('gives a deep-analysis call the same block, without the skill', async () => {
-      const { service, session } = buildStreaming(answerStream([]), {
-        knowledgeBlock: BLOCK,
-      });
-
-      const options = await service.backgroundAgentOptions(session, 'Why?');
-
-      expectBlockWithoutRules(options.context);
-      expect(options).not.toHaveProperty('memory');
-    });
-
-    it('gives a deep-analysis call no rules when no knowledge applies', async () => {
-      const { service, session } = buildStreaming(answerStream([]));
-
-      const options = await service.backgroundAgentOptions(session, 'Why?');
-
-      expect(options.context.map((m) => m.content).join('\n')).not.toContain(
-        'Curated knowledge:',
-      );
     });
   });
 
@@ -527,7 +598,7 @@ describe('SessionsService streaming', () => {
       answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
     );
 
-    await service.streamMessage('session-1', 'Why?', () => {});
+    await streamStored(service, 'session-1', 'Why?', () => {});
 
     expect(session.messages.at(-1)?.knowledge).toBeUndefined();
   });
@@ -535,7 +606,7 @@ describe('SessionsService streaming', () => {
   it('omits the interpretation line when no SQL ran', async () => {
     const { service, session } = buildStreaming(answerStream([]));
 
-    await service.streamMessage('session-1', 'Hello', () => {});
+    await streamStored(service, 'session-1', 'Hello', () => {});
 
     expect(session.messages.at(-1)?.interpretation).toBeUndefined();
   });
@@ -549,7 +620,7 @@ describe('SessionsService streaming', () => {
       { verified: true },
     );
 
-    await service.streamMessage('session-1', 'Why?', () => {});
+    await streamStored(service, 'session-1', 'Why?', () => {});
 
     expect(verifiedQueries.isVerifiedSql).toHaveBeenCalledWith(
       'select 2',
@@ -563,7 +634,7 @@ describe('SessionsService streaming', () => {
       answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
     );
 
-    await service.streamMessage('session-1', 'Why?', () => {});
+    await streamStored(service, 'session-1', 'Why?', () => {});
 
     expect(session.messages.at(-1)?.verified).toBeUndefined();
   });
@@ -574,7 +645,7 @@ describe('SessionsService streaming', () => {
       metricsBlock: 'Governed metric definitions (curated — …):\n- Win rate',
     });
 
-    await service.streamMessage('session-1', 'Win rate?', () => {});
+    await streamStored(service, 'session-1', 'Win rate?', () => {});
 
     expect(metrics.definitionBlock).toHaveBeenCalledWith([
       'main.football.matches',
@@ -612,7 +683,7 @@ describe('SessionsService streaming', () => {
         userAgent: { id: 'agent-1', live: historian },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       const { context } = turnOptions(agent);
       const last = context[context.length - 1].content;
@@ -640,7 +711,7 @@ describe('SessionsService streaming', () => {
         },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       const options = turnOptions(agent);
       expect(options.requestContext.get('agent-overrides')).toEqual({
@@ -660,7 +731,7 @@ describe('SessionsService streaming', () => {
         userAgent: { id: 'agent-1', live: null },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       const options = turnOptions(agent);
       expect(
@@ -679,7 +750,7 @@ describe('SessionsService streaming', () => {
         userAgent: { id: 'agent-1', live: { ...historian, instructions: ' ' } },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       expect(
         turnOptions(agent).context.some((block) =>
@@ -696,7 +767,7 @@ describe('SessionsService streaming', () => {
         },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       const options = turnOptions(agent);
       expect(options.requestContext.get('agent-tools')).toEqual([
@@ -723,7 +794,7 @@ describe('SessionsService streaming', () => {
           },
         });
 
-        await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+        await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
         const options = turnOptions(agent);
         expect(options.requestContext.get('agent-tools')).toBeUndefined();
@@ -745,7 +816,7 @@ describe('SessionsService streaming', () => {
         },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       const options = turnOptions(agent);
       expect(options.requestContext.get('agent-tools')).toEqual(['visuals']);
@@ -774,7 +845,7 @@ describe('SessionsService streaming', () => {
         },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       expect(turnOptions(agent).requestContext.get('agent-skills')).toEqual([
         copy,
@@ -783,7 +854,7 @@ describe('SessionsService streaming', () => {
       const plain = buildStreaming(answerStream([]), {
         userAgent: { id: 'agent-1', live: historian },
       });
-      await plain.service.streamMessage('session-1', 'Who?', () => {});
+      await streamStored(plain.service, 'session-1', 'Who?', () => {});
       expect(
         turnOptions(plain.agent).requestContext.get('agent-skills'),
       ).toBeUndefined();
@@ -807,7 +878,7 @@ describe('SessionsService streaming', () => {
         },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       const skills = turnOptions(agent).requestContext.get('agent-skills') as {
         body: string;
@@ -827,7 +898,7 @@ describe('SessionsService streaming', () => {
         },
       });
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       const { context } = turnOptions(agent);
       const last = context[context.length - 1].content;
@@ -858,7 +929,7 @@ describe('SessionsService streaming', () => {
           currentSkills: [skill('Use [[tool:create_visual]].')],
         },
       });
-      await published.service.streamMessage('session-1', 'Who?', () => {});
+      await streamStored(published.service, 'session-1', 'Who?', () => {});
       expect(
         turnOptions(published.agent).requestContext.get('agent-tools'),
       ).toEqual(['sample_rows', 'ask_clarification']);
@@ -872,7 +943,7 @@ describe('SessionsService streaming', () => {
           currentSkills: [skill('Use [[tool:create_visual]].')],
         },
       });
-      await preview.service.streamMessage('session-1', 'Who?', () => {});
+      await streamStored(preview.service, 'session-1', 'Who?', () => {});
       expect(
         turnOptions(preview.agent).requestContext.get('agent-tools'),
       ).toEqual(['ask_clarification', 'visuals']);
@@ -886,7 +957,7 @@ describe('SessionsService streaming', () => {
         },
       );
 
-      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+      await streamStored(service, 'session-1', 'Who won in 2014?', () => {});
 
       expect(repository.update).toHaveBeenCalledWith('session-1', {
         agentName: 'Cup historian',
@@ -898,7 +969,7 @@ describe('SessionsService streaming', () => {
   it('omits the metrics block when no curated metric covers the session', async () => {
     const { service, agent } = buildStreaming(answerStream([]));
 
-    await service.streamMessage('session-1', 'Why?', () => {});
+    await streamStored(service, 'session-1', 'Why?', () => {});
 
     const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
       context: { content: string }[];
@@ -914,7 +985,7 @@ describe('SessionsService streaming', () => {
     (sourceEntities as jest.Mock).mockReturnValue(['main.football.matches']);
     const { service, session } = buildStreaming(clarificationStream());
 
-    await service.streamMessage('session-1', 'Which team?', () => {});
+    await streamStored(service, 'session-1', 'Which team?', () => {});
 
     const message = session.messages.at(-1)!;
     expect(message.clarification?.question).toBe('Which season?');
@@ -934,7 +1005,7 @@ describe('SessionsService streaming', () => {
       streamOf(retriedClarificationChunks()),
     );
 
-    await service.streamMessage('session-1', 'Which team?', () => {});
+    await streamStored(service, 'session-1', 'Which team?', () => {});
 
     const cards = session.messages.filter((m) => m.clarification);
     expect(cards).toHaveLength(1);
@@ -950,7 +1021,7 @@ describe('SessionsService streaming', () => {
       answerStream([{ sql: 'select *', rows }]),
     );
 
-    await service.streamMessage('session-1', 'Everything?', () => {});
+    await streamStored(service, 'session-1', 'Everything?', () => {});
 
     const record = session.messages.at(-1)?.data?.[0];
     expect(record?.truncated).toBe(true);
@@ -963,7 +1034,7 @@ describe('SessionsService streaming', () => {
       answerStream([{ sql: 'select *', rows: [{ n: 1 }], truncated: true }]),
     );
 
-    await service.streamMessage('session-1', 'Everything?', () => {});
+    await streamStored(service, 'session-1', 'Everything?', () => {});
 
     expect(session.messages.at(-1)?.data?.[0]?.truncated).toBe(true);
   });
@@ -980,7 +1051,7 @@ describe('SessionsService streaming', () => {
         ]),
       );
 
-      await service.streamMessage('session-1', 'Cost per member?', () => {});
+      await streamStored(service, 'session-1', 'Cost per member?', () => {});
 
       const message = session.messages.at(-1)!;
       expect(message.data?.map((record) => record.rationale)).toEqual([
@@ -1017,7 +1088,7 @@ describe('SessionsService streaming', () => {
         ]),
       );
 
-      await service.streamMessage('session-1', 'Cost per member?', () => {});
+      await streamStored(service, 'session-1', 'Cost per member?', () => {});
 
       const message = session.messages.at(-1)!;
       expect(message.data?.[0]).toEqual(
@@ -1049,7 +1120,7 @@ describe('SessionsService streaming', () => {
         answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
       );
 
-      await service.streamMessage('session-1', 'Why?', () => {});
+      await streamStored(service, 'session-1', 'Why?', () => {});
 
       expect(session.messages.at(-1)?.data).toHaveLength(1);
       expect(session.messages.at(-1)?.reasoning).toBeUndefined();
@@ -1058,7 +1129,7 @@ describe('SessionsService streaming', () => {
     it('keeps the reasoning done before a clarification on the card', async () => {
       const { service, session } = buildStreaming(clarificationStream());
 
-      await service.streamMessage('session-1', 'Which team?', () => {});
+      await streamStored(service, 'session-1', 'Which team?', () => {});
 
       expect(session.messages.at(-1)?.reasoning).toEqual([
         {
@@ -1077,7 +1148,7 @@ describe('SessionsService streaming', () => {
       );
       const events: StreamEvent[] = [];
 
-      await service.streamMessage('session-1', 'Why?', (event) =>
+      await streamStored(service, 'session-1', 'Why?', (event) =>
         events.push(event),
       );
 
@@ -1100,7 +1171,8 @@ describe('SessionsService streaming', () => {
         answerStream([{ sql: 'select stage_1', rows: [{ stage: 1, n: 10 }] }]),
       );
 
-      await service.streamMessage(
+      await streamStored(
+        service,
         'session-1',
         'Drill into stage 1 and tailor the chart',
         () => {},
@@ -1135,7 +1207,7 @@ describe('SessionsService streaming', () => {
     it('gives every turn its own empty array up front, before any tool has run', async () => {
       const { service, agent } = buildStreaming(answerStream([]));
 
-      await service.streamMessage('session-1', 'Hello', () => {});
+      await streamStored(service, 'session-1', 'Hello', () => {});
 
       const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
         requestContext: { set: jest.Mock };
@@ -1177,7 +1249,8 @@ describe('SessionsService streaming', () => {
     }
 
     const run = (service: SessionsService, careful: boolean) =>
-      service.streamMessage(
+      streamStored(
+        service,
         'session-1',
         'How many matches were played?',
         () => {},
@@ -1292,7 +1365,8 @@ describe('SessionsService streaming', () => {
         answer: 'According to the data, France won the 2022 tournament.',
       });
 
-      await service.streamMessage(
+      await streamStored(
+        service,
         'session-1',
         'Who won the 2022 World Cup?',
         () => {},
@@ -1321,7 +1395,7 @@ describe('SessionsService streaming', () => {
         answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
       );
 
-      await service.streamMessage('session-1', 'Why?', () => {});
+      await streamStored(service, 'session-1', 'Why?', () => {});
 
       expect(agent.generate).not.toHaveBeenCalled();
     });
@@ -1330,7 +1404,8 @@ describe('SessionsService streaming', () => {
       const { service, session, agent } = buildStreaming(answerStream([]));
       agent.generate.mockRejectedValueOnce(new Error('provider unavailable'));
 
-      await service.streamMessage(
+      await streamStored(
+        service,
         'session-1',
         'Who won the 2022 World Cup?',
         () => {},
@@ -1343,7 +1418,7 @@ describe('SessionsService streaming', () => {
     it('skips the guard on a clarification turn', async () => {
       const { service, agent } = buildStreaming(clarificationStream());
 
-      await service.streamMessage('session-1', 'Which team?', () => {});
+      await streamStored(service, 'session-1', 'Which team?', () => {});
 
       expect(agent.generate).not.toHaveBeenCalled();
     });
@@ -1367,7 +1442,7 @@ describe('SessionsService streaming', () => {
       );
 
       await expect(
-        service.streamMessage('session-1', 'Why did Argentina win?', () => {}),
+        streamStored(service, 'session-1', 'Why did Argentina win?', () => {}),
       ).rejects.toThrow('Provider request failed (404)');
 
       expect(session.messages).toHaveLength(1);
@@ -1633,6 +1708,34 @@ describe('SessionsService SQL self-correction', () => {
     expect(result.truncated).toBe(true);
     expect(result.note).toContain('row limit 100 reached');
   });
+
+  it('flags a result the connector cut at the limit', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ n }));
+    const runs = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows, totalRows: 2431 });
+    const { run } = await bridge({ runs });
+
+    const result = await run('SELECT n FROM main.health.claims');
+
+    expect(result.truncated).toBe(true);
+    expect(result.note).toContain('row limit 100 reached');
+  });
+
+  it('does not flag a result that lands exactly on the limit with nothing dropped', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ n }));
+    const runs = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows, totalRows: 100 });
+    const { run } = await bridge({ runs });
+
+    const result = await run(
+      'SELECT n FROM main.health.claims ORDER BY n LIMIT 100',
+    );
+
+    expect(result.truncated).toBeUndefined();
+    expect(result.note ?? '').not.toContain('row limit');
+  });
 });
 
 describe('SessionsService visual tool bridge (turn records)', () => {
@@ -1794,6 +1897,7 @@ describe('SessionsService answer feedback', () => {
     const verifiedQueries = {
       save: jest.fn().mockResolvedValue({}),
       removeForMessage: jest.fn().mockResolvedValue(1),
+      removeForRun: jest.fn().mockResolvedValue(1),
     };
     const service = new SessionsService(
       repository as never,
@@ -1850,12 +1954,13 @@ describe('SessionsService answer feedback', () => {
     ],
   });
 
-  it('saves the preceding question with the last successful SQL on thumbs-up', async () => {
-    const session = answered();
-    const { service, verifiedQueries } = build(session);
+  it('rates a run answer: the pair is keyed by the run, not a session', async () => {
+    const host = answered();
+    const { service, verifiedQueries } = build(host);
 
-    const updated = await service.recordFeedback(
-      'session-1',
+    const rated = await service.rateRunAnswer(
+      'run-1',
+      host,
       '2024-01-01T00:00:03.000Z',
       'up',
     );
@@ -1865,11 +1970,22 @@ describe('SessionsService answer feedback', () => {
       sql: 'SELECT count(*) FROM main.health.claims',
       datasourceId: 'ds-1',
       entities: ['main.health.claims'],
-      sourceSessionId: 'session-1',
+      sourceRunId: 'run-1',
       sourceMessageAt: '2024-01-01T00:00:03.000Z',
     });
-    expect(updated.messages.at(-1)?.feedback).toBe('up');
-    expect(updated.messages.at(-1)?.verified).toBe(true);
+    expect(rated.feedback).toBe('up');
+    expect(rated.verified).toBe(true);
+
+    const down = await service.rateRunAnswer(
+      'run-1',
+      host,
+      '2024-01-01T00:00:03.000Z',
+      'down',
+    );
+
+    expect(verifiedQueries.removeForRun).toHaveBeenCalledWith('run-1');
+    expect(down.feedback).toBe('down');
+    expect(down.verified).toBeUndefined();
   });
 
   it('clears the verified badge on thumbs-down', async () => {
@@ -1877,42 +1993,28 @@ describe('SessionsService answer feedback', () => {
     session.messages[3].verified = true;
     const { service } = build(session);
 
-    await service.recordFeedback(
-      'session-1',
+    const rated = await service.rateRunAnswer(
+      'run-1',
+      session,
       '2024-01-01T00:00:03.000Z',
       'down',
     );
-
-    expect(session.messages.at(-1)?.verified).toBeUndefined();
-  });
-
-  it('removes the stored pair on thumbs-down', async () => {
-    const session = answered();
-    const { service, verifiedQueries } = build(session);
-
-    await service.recordFeedback(
-      'session-1',
-      '2024-01-01T00:00:03.000Z',
-      'down',
-    );
-
-    expect(verifiedQueries.removeForMessage).toHaveBeenCalledWith(
-      'session-1',
-      '2024-01-01T00:00:03.000Z',
-    );
-    expect(verifiedQueries.save).not.toHaveBeenCalled();
-    expect(session.messages.at(-1)?.feedback).toBe('down');
+    expect(rated.verified).toBeUndefined();
   });
 
   it('records the rating but saves nothing when the answer ran no SQL', async () => {
     const session = answered();
     delete session.messages[3].data;
     const { service, verifiedQueries } = build(session);
-
-    await service.recordFeedback('session-1', '2024-01-01T00:00:03.000Z', 'up');
+    const rated = await service.rateRunAnswer(
+      'run-1',
+      session,
+      '2024-01-01T00:00:03.000Z',
+      'up',
+    );
 
     expect(verifiedQueries.save).not.toHaveBeenCalled();
-    expect(session.messages.at(-1)?.feedback).toBe('up');
+    expect(rated.feedback).toBe('up');
   });
 });
 
@@ -2169,82 +2271,54 @@ describe('SessionsService visual tailoring and repair', () => {
     return { service, session, visuals };
   }
 
-  it('tailors a visual and records the updated event in the chat', async () => {
+  it('runs a visual action on a run host: event and panel item returned, nothing persisted here', async () => {
     const { service, session, visuals } = build();
+    const host = { ...session, id: 'run-r1', run: true } as SessionDoc;
 
-    const result = await service.tailorVisualization(
-      'session-1',
-      'visual-1',
-      '  Change the visual to a line chart.  ',
-    );
-
+    const tailored = await service.runVisualAction(host, {
+      kind: 'tailor',
+      visualId: 'visual-1',
+      instruction: '  Make the bars green  ',
+    });
     expect(visuals.update).toHaveBeenCalledWith(
-      expect.anything(),
+      host,
       'visual-1',
-      'Change the visual to a line chart.',
+      'Make the bars green',
     );
-    expect(result.visualization.version).toBe(2);
-    const last = session.messages.at(-1);
-    expect(last?.role).toBe('assistant');
-    expect(last?.visual).toEqual({
+    expect(tailored.version).toBe(2);
+    expect(tailored.event).toEqual({
       visualId: 'visual-1',
       version: 2,
       title: 'Claims by month',
       action: 'updated',
     });
-    expect(last?.content).toContain('Updated interactive visual');
-  });
+    expect(tailored.panelItems).toEqual([
+      expect.objectContaining({ id: 'visual:visual-1', kind: 'visual' }),
+    ]);
 
-  it('rejects an empty tailoring instruction before running the designer', async () => {
-    const { service, visuals } = build();
-
+    const repaired = await service.runVisualAction(host, {
+      kind: 'repair',
+      visualId: 'visual-1',
+      error: 'blank',
+      version: 1,
+    });
+    expect(repaired.event).toBeUndefined();
     await expect(
-      service.tailorVisualization('session-1', 'visual-1', '   '),
+      service.runVisualAction(host, {
+        kind: 'repair',
+        visualId: 'visual-1',
+        error: 'blank',
+        version: 5,
+      }),
+    ).rejects.toThrow(/Only the current version can be repaired/);
+    await expect(
+      service.runVisualAction(host, {
+        kind: 'tailor',
+        visualId: 'visual-1',
+        instruction: ' ',
+      }),
     ).rejects.toThrow(/instruction is required/);
-    expect(visuals.update).not.toHaveBeenCalled();
-  });
-
-  it('repairs the current version without logging a chat event', async () => {
-    const { service, session, visuals } = build();
-
-    const result = await service.repairVisualization(
-      'session-1',
-      'visual-1',
-      'visual rendered blank',
-      1,
-    );
-
-    expect(visuals.repair).toHaveBeenCalledWith(
-      expect.anything(),
-      'visual-1',
-      'visual rendered blank',
-    );
-    expect(result.visualization.version).toBe(2);
     expect(session.messages).toHaveLength(0);
-    expect(session.visualizations?.[0].currentVersion).toBe(2);
-  });
-
-  it('refuses to repair anything but the current version', async () => {
-    const { service, visuals } = build(3);
-
-    await expect(
-      service.repairVisualization('session-1', 'visual-1', 'boom', 2),
-    ).rejects.toThrow(/Only the current version can be repaired/);
-    expect(visuals.repair).not.toHaveBeenCalled();
-  });
-
-  it('refuses a missing or non-numeric version from the client', async () => {
-    const { service, visuals } = build();
-
-    await expect(
-      service.repairVisualization(
-        'session-1',
-        'visual-1',
-        'boom',
-        Number(undefined),
-      ),
-    ).rejects.toThrow(/Only the current version can be repaired/);
-    expect(visuals.repair).not.toHaveBeenCalled();
   });
 });
 
@@ -2294,47 +2368,6 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
     return { service, repository, mastra };
   }
 
-  it('names the session after the Live agent and keeps only existing datasets', async () => {
-    const { service } = build(
-      { id: 'agent-1', draft: { ...live, name: 'Draft name' }, live },
-      ['World Cup Core'],
-    );
-
-    const session = await service.createFromAgent('agent-1');
-
-    expect(session).toMatchObject({
-      name: 'Cup historian',
-      datasets: ['World Cup Core'],
-      agentId: 'agent-1',
-      agentName: 'Cup historian',
-      messages: [],
-    });
-  });
-
-  it('uses a typed session name when given', async () => {
-    const { service } = build({ id: 'agent-1', draft: live, live }, [
-      'World Cup Core',
-    ]);
-    const session = await service.createFromAgent('agent-1', ' My chat ');
-    expect(session.name).toBe('My chat');
-  });
-
-  it('refuses an unknown agent, a draft-only agent and one with no dataset left', async () => {
-    await expect(
-      build(null, []).service.createFromAgent('nope'),
-    ).rejects.toThrow('Agent "nope" not found');
-    await expect(
-      build({ id: 'agent-1', draft: live }, [
-        'World Cup Core',
-      ]).service.createFromAgent('agent-1'),
-    ).rejects.toThrow('Publish "Cup historian" before starting a chat');
-    await expect(
-      build({ id: 'agent-1', draft: live, live }, []).service.createFromAgent(
-        'agent-1',
-      ),
-    ).rejects.toThrow("None of this agent's datasets exist");
-  });
-
   it('derives the agent from its Live version, or marks it deleted', async () => {
     const session: SessionDoc = {
       id: 's-1',
@@ -2370,54 +2403,74 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
     });
   });
 
-  describe('preview sessions (agents-evals R60, R61)', () => {
-    it('runs the draft in memory and is never stored', async () => {
+  describe('draft run hosts (api.md R12)', () => {
+    it('is a preview-shaped run host over the draft, never stored, discarded with its resources', async () => {
       const { service, repository, mastra } = build(
         { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
         ['World Cup Core'],
       );
-      const preview = await service.createPreview('agent-1');
+      const host = await service.createRunHost({
+        runId: 'r1',
+        workflowId: 'agent:agent-1',
+        name: 'Draft name',
+        draftAgentId: 'agent-1',
+      });
 
-      expect(preview).toMatchObject({
-        name: 'Preview: Draft name',
+      expect(host).toMatchObject({
+        id: 'run-r1',
         datasets: ['World Cup Core'],
         agentId: 'agent-1',
         preview: true,
+        run: true,
       });
-      expect(preview.id).toMatch(/^preview-/);
       expect(repository.insert).not.toHaveBeenCalled();
-      expect(await service.get(preview.id)).toMatchObject({ preview: true });
-      expect((await service.toView(preview)).agent?.name).toBe('Draft name');
+      expect((await service.toView(host)).agent?.name).toBe('Draft name');
 
-      await service.delete(preview.id);
-      expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
-      expect(repository.delete).not.toHaveBeenCalled();
-      await expect(service.get(preview.id)).rejects.toThrow('not found');
-    });
-
-    it('is reachable by its id until deleted', async () => {
-      const { service, mastra } = build(
-        { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
-        ['World Cup Core'],
-      );
-
-      const preview = await service.createPreview('agent-1');
-
-      expect(await service.get(preview.id)).toMatchObject({ preview: true });
-      expect(mastra.deleteSessionResources).not.toHaveBeenCalled();
-      await service.delete(preview.id);
-      expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
+      await service.deleteRunHostResources('run-r1');
+      expect(mastra.deleteSessionResources).toHaveBeenCalledWith('run-r1');
     });
 
     it('refuses an unknown agent and a draft with no existing dataset', async () => {
       await expect(
-        build(null, []).service.createPreview('nope'),
+        build(null, []).service.draftRunTarget('nope'),
       ).rejects.toThrow('Agent "nope" not found');
       await expect(
-        build({ id: 'agent-1', draft: live }, []).service.createPreview(
+        build({ id: 'agent-1', draft: live }, []).service.draftRunTarget(
           'agent-1',
         ),
       ).rejects.toThrow('Select at least one dataset to preview');
+    });
+  });
+
+  describe('saveMessage (api.md 144-146: what the query inspector caches)', () => {
+    it('writes one message back through the repository, keeping the recency; 404 for an unknown session', async () => {
+      const { service, repository } = build(null, []);
+      const stored: SessionDoc = {
+        id: 's-1',
+        name: 'Past chat',
+        datasets: [],
+        messages: [
+          { role: 'user', content: 'Q', at: 'a' },
+          { role: 'assistant', content: 'A', at: 'b' },
+        ],
+      };
+      const updateMessages = jest.fn().mockResolvedValue(stored);
+      Object.assign(repository, { updateMessages });
+      repository.get.mockImplementation((id: string) =>
+        Promise.resolve(id === 's-1' ? stored : null),
+      );
+      const answer = { ...stored.messages[1], evidence: [{ index: 0 }] };
+
+      await service.saveMessage('s-1', 1, answer);
+
+      expect(updateMessages).toHaveBeenCalledWith('s-1', [
+        stored.messages[0],
+        answer,
+      ]);
+      expect(repository.update).not.toHaveBeenCalled();
+      await expect(service.saveMessage('nope', 1, answer)).rejects.toThrow(
+        'Session nope not found',
+      );
     });
   });
 });
@@ -2835,22 +2888,24 @@ describe('SessionsService panel items (ADR-0029)', () => {
 
 describe('toolCallInput (api.md 3.1)', () => {
   it('names the skill a skill tool loads', () => {
-    expect(toolCallInput('skill', { name: 'rfp-client-renewal' })).toBe(
-      'rfp-client-renewal',
+    expect(toolCallInput('skill', { name: 'data-readiness' })).toBe(
+      'data-readiness',
     );
     expect(
       toolCallInput('skill_read', {
-        skillName: 'rfp-carriers',
+        skillName: 'readiness-drilldown',
         path: 'references/carriers.md',
       }),
-    ).toBe('rfp-carriers/references/carriers.md');
+    ).toBe('readiness-drilldown/references/carriers.md');
     expect(toolCallInput('skill_search', { query: 'stop-loss' })).toBe(
       'stop-loss',
     );
   });
 
   it("takes another tool's first text argument, flattened and clipped", () => {
-    expect(toolCallInput('get_rfp', { rfpId: 'e006cebc' })).toBe('e006cebc');
+    expect(toolCallInput('get_order', { orderId: 'e006cebc' })).toBe(
+      'e006cebc',
+    );
     expect(
       toolCallInput('run_readonly_sql', { sql: 'SELECT 1\n  FROM t' }),
     ).toBe('SELECT 1 FROM t');

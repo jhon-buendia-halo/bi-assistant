@@ -1,0 +1,123 @@
+@if (plan(); as p) {
+  <section
+    class="mb-3 flex flex-col gap-2.5 rounded-lg border border-border bg-surface p-3 text-[13px]"
+    data-testid="workflow-plan-view"
+    aria-labelledby="workflow-plan-view-title"
+  >
+    <h4
+      id="workflow-plan-view-title"
+      class="m-0 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+    >
+      Plan
+    </h4>
+    @if (p.needsClarification && p.clarification; as c) {
+      <div
+        class="rounded-md bg-warning-soft px-3 py-2 text-on-warning-soft"
+        data-testid="workflow-plan-clarification"
+      >
+        <p class="m-0 font-medium">Needs clarification</p>
+        <p class="m-0 mt-1" data-testid="workflow-plan-clarification-question">
+          {{ c.question }}
+        </p>
+        <ul class="m-0 mt-1 list-disc pl-5">
+          @for (option of c.options; track $index) {
+            <li data-testid="workflow-plan-clarification-option">{{ option }}</li>
+          }
+        </ul>
+      </div>
+    }
+    <dl class="m-0 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1.5">
+      <dt class="text-fg-muted">Question</dt>
+      <dd class="m-0 text-fg-strong" data-testid="workflow-plan-question">
+        {{ p.question || "—" }}
+      </dd>
+      <dt class="text-fg-muted">Measures</dt>
+      <dd class="m-0 text-fg">
+        <ng-container
+          *ngTemplateOutlet="list; context: { $implicit: p.measures, id: 'workflow-plan-measures' }"
+        />
+      </dd>
+      <dt class="text-fg-muted">Entities</dt>
+      <dd class="m-0 text-fg">
+        <ng-container
+          *ngTemplateOutlet="list; context: { $implicit: p.entities, id: 'workflow-plan-entities' }"
+        />
+      </dd>
+      <dt class="text-fg-muted">Scope</dt>
+      <dd class="m-0 text-fg" data-testid="workflow-plan-scope">
+        {{ p.scope || "—" }}
+      </dd>
+      <dt class="text-fg-muted">Assumptions</dt>
+      <dd class="m-0 text-fg">
+        <ng-container
+          *ngTemplateOutlet="list; context: { $implicit: p.assumptions, id: 'workflow-plan-assumptions' }"
+        />
+      </dd>
+    </dl>
+  </section>
+} @else if (validation(); as v) {
+  <section
+    class="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-[13px]"
+    data-testid="workflow-validate-view"
+    aria-labelledby="workflow-validate-view-title"
+  >
+    <div class="flex flex-wrap items-center gap-2">
+      <h4
+        id="workflow-validate-view-title"
+        class="m-0 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+      >
+        Validation
+      </h4>
+      <span
+        class="chip"
+        [class.chip-success]="v.ok"
+        [class.chip-danger]="!v.ok"
+        data-testid="workflow-validate-ok"
+        >{{ v.ok ? "Valid" : "Not valid" }}</span
+      >
+      <span class="text-[12px] text-fg-muted" data-testid="workflow-validate-attempt"
+        >Attempt {{ v.attempt }} · {{ passed() }} of
+        {{ v.findings.length }} checks passed</span
+      >
+    </div>
+    <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+      @for (finding of v.findings; track $index) {
+        <li
+          class="flex items-start gap-2"
+          data-testid="workflow-validate-finding"
+          [attr.data-passed]="finding.passed"
+        >
+          <lucide-angular
+            [img]="finding.passed ? CircleCheck : CircleX"
+            [size]="15"
+            class="mt-px shrink-0"
+            [class.text-on-success-soft]="finding.passed"
+            [class.text-on-danger-soft]="!finding.passed"
+            aria-hidden="true"
+          />
+          <span class="min-w-0">
+            <span class="sr-only">{{ finding.passed ? "Passed:" : "Failed:" }}</span>
+            <span class="font-medium text-fg-strong">{{ finding.check }}</span>
+            @if (finding.detail) {
+              <span class="text-fg-muted"> · {{ finding.detail }}</span>
+            }
+          </span>
+        </li>
+      } @empty {
+        <li class="text-fg-muted">No checks recorded.</li>
+      }
+    </ul>
+  </section>
+}
+
+<ng-template #list let-items let-id="id">
+  @if (items.length) {
+    <ul class="m-0 list-disc pl-5" [attr.data-testid]="id">
+      @for (item of items; track $index) {
+        <li>{{ item }}</li>
+      }
+    </ul>
+  } @else {
+    <span class="text-fg-muted" [attr.data-testid]="id">None</span>
+  }
+</ng-template>

@@ -1,5 +1,6 @@
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { Maturity } from '../../data-readiness/engine/types';
+import type { QueryEvidence } from '../query-evidence/query-evidence.types';
 
 export type { KnowledgeUse };
 
@@ -101,6 +102,12 @@ export interface ChatMessage {
    */
   reasoning?: ReasoningStep[];
   /**
+   * The query inspector's facts about each data-gathering call of `data`
+   * (one entry per `run_readonly_sql` / `sample_rows` record, failed ones
+   * included, in `data` order). Kept beside `data` so no model input changes.
+   */
+  evidence?: QueryEvidence[];
+  /**
    * The curated knowledge snippets this answer's context carried, recorded
    * when the block was assembled rather than reconstructed afterwards. Shown
    * beside the reasoning trail so a reader can see the standing terms,
@@ -109,16 +116,11 @@ export interface ChatMessage {
    */
   knowledge?: KnowledgeUse[];
   /**
-   * Present when a deep-analysis job produced a report. The message content is
-   * the report's executive summary; the full markdown lives in the workspace.
+   * Present when a deep-analysis job produced a report: stored data only,
+   * deep analysis was removed in 1.23.35. The message content is the
+   * report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
-  /**
-   * Present when this turn's `export_rfp_package` or `export_rfp_draft` call stored an RFP package
-   * in the session workspace (`rfp/<rfpId>/`; data-model 3.4.1). RFP Builder
-   * sessions only.
-   */
-  rfpPackage?: RfpPackageRef;
   /**
    * The last report this turn's `assess_data_readiness` or
    * `get_readiness_report` returned (data-model 3.4.1); drives the readiness
@@ -134,17 +136,6 @@ export interface ReadinessReportRef {
   overallScore: number;
   maturity: Maturity;
   generatedAt: string;
-}
-
-/** An RFP package stored in the session workspace (data-model 3.4.1). */
-export interface RfpPackageRef {
-  rfpId: string;
-  title: string;
-  /** Paths relative to `rfp/<rfpId>/`, e.g. `exhibits/exhibit-a-census.csv`. */
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** Present (true) for a draft exported by `export_rfp_draft`, stored under `rfp/<rfpId>/draft/`. */
-  draft?: true;
 }
 
 export interface AnalysisReport {
@@ -316,20 +307,65 @@ export interface SessionDoc {
   workspaceId?: string;
   /** Names of the datasets this session works over. */
   datasets: string[];
-  /** The user agent the session was started from (sessions-chat R52). */
+  /** The user agent the session was started from (agent-answers R52). */
   agentId?: string;
   /** The agent's Live name, re-stamped by each turn that applies it (R59). */
   agentName?: string;
   /**
-   * The registry key of the built-in agent the session is bound to (today
-   * only `rfp`; ADR-0028). Every turn runs that agent; never set with
+   * The registry key of the built-in agent the session is bound to
+   * (`insights-analyst`, `data-readiness`; ADR-0028). Every turn runs that agent; never set with
    * `agentId`.
    */
   agentKey?: string;
-  /** `agentKey: 'rfp'` only: the active RFP, stamped from `turn-rfp`. */
-  rfpId?: string;
+  /**
+   * The workflow the session runs (api.md 116; ADR-0040): set at creation
+   * from this version on, never changed. Absent on sessions saved before:
+   * derived at read time from `agentKey` / `agentId` (agents.md 5.12).
+   */
+  workflowId?: string;
   /** An agent editor's preview, held in memory only (agents-evals R60). */
   preview?: boolean;
+  /**
+   * A run host: the in-memory session one run of an agent workflow executes
+   * its agent turn on (ADR-0041; agents.md 5.14). Never stored or listed.
+   */
+  run?: boolean;
+  /**
+   * A run host's extra system block, put after the agent's own context on
+   * every turn: a node chat's context block (agents.md 5.16). In memory
+   * only, like the host.
+   */
+  contextBlock?: string;
+  /**
+   * A follow-up run's host whose memory threads are copies of the earlier
+   * run's (agents.md 5.14): its turn's input replays the earlier run's
+   * answer with the new question, as the copied thread does not hold it.
+   * In memory only, like the host.
+   */
+  continuesThreads?: boolean;
+  /**
+   * A run host of Answer a Business Question whose input ticked Check data
+   * quality (agents.md 5.11): its turn takes the branch to that step. In
+   * memory only, like the host.
+   */
+  checkDataQuality?: true;
+  /**
+   * A run host of Dashboard Image to Artifact (agents.md 5.17): the path of the
+   * run's input image in the host's workspace. In memory only, like the
+   * host.
+   */
+  inputImage?: string;
+  /**
+   * A run host whose input has reference images (workflows R35; agents.md
+   * 2.15): their paths in the host's workspace (`inputs/images/<n>.<ext>`),
+   * in order; Read images loads them. In memory only, like the host.
+   */
+  inputImages?: string[];
+  /**
+   * A run host of Dashboard Image to Artifact on a saved dashboard (agents.md
+   * 5.17): the artifact's id. In memory only, like the host.
+   */
+  inputArtifact?: string;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */
@@ -351,12 +387,22 @@ export interface SessionAgentRef {
   starterQuestions: string[];
 }
 
+/** The workflow a session runs, as the API shows it (api.md 2.1). */
+export interface SessionWorkflowRef {
+  id: string;
+  name: string;
+  kind: 'code' | 'agent';
+  /** A deleted user agent's workflow: `name` is the stored `agentName`. */
+  deleted: boolean;
+}
+
 /**
  * A session on the wire: the stored document plus its derived `agent`,
- * `workflow` and the full `panelItems` list (visuals included).
+ * `workflowRef`, `workflow` and the full `panelItems` list (visuals included).
  */
 export type SessionView = SessionDoc & {
   agent?: SessionAgentRef;
+  workflowRef: SessionWorkflowRef;
   panelItems: PanelItem[];
   workflow?: WorkflowView;
 };

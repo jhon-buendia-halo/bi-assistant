@@ -58,6 +58,11 @@ export function llmSettings(env) {
   };
 }
 
+/** The load body for one fixture: a seedable fixture loads with its own defaults. */
+export function fixtureBody(fixture) {
+  return fixture.seedable ? fixture.defaults : {};
+}
+
 async function main() {
   const base = (process.argv[2] || 'http://127.0.0.1:3000').replace(/\/+$/, '');
   const file = findEnvFile();
@@ -84,14 +89,13 @@ async function main() {
 
   const { fixtures } = await call('GET', '/testing-data');
   for (const f of fixtures) {
-    // Seedable Postgres fixtures load with their own defaults; the Intellify
-    // RFP API registers itself (api.md 56). Other REST fixtures are script-only.
-    if (!f.seedable && f.id !== 'intellify-api') continue;
+    // Seedable Postgres fixtures load with their own defaults. Other fixtures are script-only.
+    if (!f.seedable) continue;
     if (f.status?.loaded) {
       console.log(`${f.id}: already loaded`);
       continue;
     }
-    const res = await call('POST', `/testing-data/${f.id}/load`, f.seedable ? f.defaults : {});
+    const res = await call('POST', `/testing-data/${f.id}/load`, fixtureBody(f));
     console.log(`${f.id}:`, res.message);
     failed ||= !res.ok;
   }

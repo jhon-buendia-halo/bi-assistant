@@ -34,11 +34,6 @@ export interface RunningApp {
   close(): Promise<void>;
   /** Everything the app process wrote, for failure attachments. */
   output(): { stdout: string; stderr: string };
-  /**
-   * Web only: the embedded Intellify RFP API's URL from the CLI banner's
-   * `Intellify API:` line; null when the API did not start (api.md 2.16).
-   */
-  readonly intellifyApiUrl?: string | null;
 }
 
 export type Env = Record<string, string | undefined>;
@@ -191,8 +186,7 @@ export function startCli(
     ],
     {
       cwd: backendRoot,
-      // The embedded Intellify API takes a free port, so tests never collide.
-      env: mergedEnv({ INTELLIFY_API_PORT: '0', ...env }),
+      env: mergedEnv(env),
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -277,13 +271,6 @@ async function launchWeb(
       await stopCli(cli.child);
     },
     output: () => ({ stdout: stdout.join(''), stderr: stderr.join('') }),
-    get intellifyApiUrl() {
-      // The last banner wins: a restart prints a new one on a new port.
-      const all = [
-        ...stdout.join('').matchAll(/Intellify API:\s+(http:\/\/\S+)/g),
-      ];
-      return all.length ? all[all.length - 1][1] : null;
-    },
   };
 }
 

@@ -14,6 +14,7 @@ import type { JoinCandidate } from '../engine/infer-joins';
 import type { AssessScope } from '../engine/types';
 import {
   buildSourceProfile,
+  reachOf,
   utcTemporal,
   type BuildProfileOptions,
   type DialectRules,
@@ -752,6 +753,29 @@ describe('buildSourceProfile (BA-323 speed and progress)', () => {
     ).toHaveLength(1);
   });
 
+  it('hands the profiler the scope as its reach (R28)', async () => {
+    const scope: AssessScope = {
+      entities: [
+        { namespace: 's', name: 'a' },
+        { namespace: 's', name: 'b' },
+      ],
+    };
+    const { profiler, result } = run(source(), scope);
+    await result;
+    expect(
+      profiler.calls.find((c) => c.method === 'withSessions')?.args,
+    ).toEqual([
+      4,
+      {
+        namespaces: ['s'],
+        entities: [
+          { namespace: 's', name: 'a' },
+          { namespace: 's', name: 'b' },
+        ],
+      },
+    ]);
+  });
+
   it('uses the dialect concurrency: 8 for Databricks, 4 for PostgreSQL', async () => {
     const sessions = async (rules: DialectRules) => {
       const { profiler, result } = run(source(), undefined, undefined, rules);
@@ -885,5 +909,39 @@ describe('utcTemporal', () => {
     expect(Date.parse(utcTemporal('2024-01-05 10:00:00+00'))).toBe(
       Date.UTC(2024, 0, 5, 10),
     );
+  });
+});
+
+describe('reachOf', () => {
+  it('is absent for a whole-datasource assessment', () => {
+    expect(reachOf()).toBeUndefined();
+    expect(reachOf({})).toBeUndefined();
+  });
+
+  it('takes the distinct namespaces and the exact tables of an entity scope', () => {
+    expect(
+      reachOf({
+        entities: [
+          { namespace: 'cat.a', name: 't1' },
+          { namespace: 'cat.b', name: 't2' },
+          { namespace: 'cat.a', name: 't3' },
+        ],
+      }),
+    ).toEqual({
+      namespaces: ['cat.a', 'cat.b'],
+      entities: [
+        { namespace: 'cat.a', name: 't1' },
+        { namespace: 'cat.b', name: 't2' },
+        { namespace: 'cat.a', name: 't3' },
+      ],
+    });
+  });
+
+  it('takes the namespace, and its one entity when given, of a namespace scope', () => {
+    expect(reachOf({ namespace: 'cat.a' })).toEqual({ namespaces: ['cat.a'] });
+    expect(reachOf({ namespace: 'cat.a', entity: 't1' })).toEqual({
+      namespaces: ['cat.a'],
+      entities: [{ namespace: 'cat.a', name: 't1' }],
+    });
   });
 });

@@ -1,0 +1,273 @@
+<button
+  #button
+  type="button"
+  (click)="toggle()"
+  title="Background tasks"
+  [attr.aria-label]="label()"
+  aria-haspopup="dialog"
+  [attr.aria-expanded]="open()"
+  aria-controls="background-tasks-panel"
+  data-testid="background-tasks-button"
+  class="relative flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-icon transition-colors hover:bg-surface-muted"
+  [class.bg-surface-selected]="open()"
+>
+  @if (runningCount() > 0) {
+    <lucide-angular
+      class="shrink-0 animate-spin text-accent"
+      [img]="LoaderCircle"
+      [size]="18"
+    />
+  } @else {
+    <lucide-angular class="shrink-0" [img]="ListChecks" [size]="18" />
+  }
+  @if (expanded()) {
+    <span class="text-[13px] font-medium text-fg" aria-hidden="true"
+      >Background tasks</span
+    >
+  }
+  @if (runningCount() > 0) {
+    <span
+      data-testid="background-tasks-count"
+      aria-hidden="true"
+      class="absolute top-0.5 left-6 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-4 text-on-primary"
+      >{{ badge() }}</span
+    >
+  }
+</button>
+
+@if (open()) {
+  <section
+    id="background-tasks-panel"
+    role="dialog"
+    aria-label="Background tasks"
+    data-testid="background-tasks-panel"
+    class="menu fixed z-40 flex max-h-[70vh] w-[380px] flex-col overflow-hidden !p-0"
+    [style.left.px]="position().left"
+    [style.bottom.px]="position().bottom"
+  >
+    <header class="flex items-center gap-2 border-b border-border px-3.5 py-3">
+      <h2 class="flex-1 text-[14px] font-semibold text-fg-strong">
+        Background tasks
+      </h2>
+      <span class="text-[12px] text-fg-muted"
+        >Keep working, they run on their own</span
+      >
+      <button
+        type="button"
+        class="btn-icon"
+        title="Close"
+        aria-label="Close background tasks"
+        (click)="close()"
+      >
+        <lucide-angular [img]="X" [size]="14" />
+      </button>
+    </header>
+
+    <div class="min-h-0 flex-1 overflow-y-auto py-1">
+      @if (service.tasks().length === 0) {
+        <p
+          class="px-3.5 py-6 text-center text-[13px] text-fg-muted"
+          data-testid="background-tasks-empty"
+        >
+          Nothing is running. Saving a dataset, loading testing data, running
+          evals or a workflow shows up here.
+        </p>
+      }
+
+      @if (service.running().length > 0) {
+        <h3
+          class="px-3.5 pt-2 pb-1 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+        >
+          Running · {{ service.running().length }}
+        </h3>
+        <ul aria-label="Running tasks">
+          @for (task of service.running(); track task.id) {
+            <li
+              class="flex items-start gap-2.5 px-3.5 pt-2 pb-2.5"
+              data-testid="background-task"
+              [attr.data-status]="task.status"
+            >
+              @if (task.people?.length) {
+                <!-- A workflow run's agents: who did their part, who works now, who waits (ui.md 3.7). -->
+                <span
+                  class="flex shrink-0 -space-x-2 pt-px"
+                  data-testid="background-task-people"
+                >
+                  @for (person of task.people; track person.key) {
+                    <span
+                      class="rounded-full ring-2"
+                      [class.ring-primary]="person.state === 'active'"
+                      [class.ring-surface]="person.state !== 'active'"
+                      [class.opacity-50]="person.state === 'waiting'"
+                      [attr.data-state]="person.state"
+                      [title]="
+                        person.name +
+                        (person.state === 'active'
+                          ? ' · working now'
+                          : person.state === 'done'
+                            ? ' · done'
+                            : person.state === 'waiting'
+                              ? ' · waiting'
+                              : '')
+                      "
+                    >
+                      <app-agent-avatar
+                        [agentKey]="person.key"
+                        [name]="person.name"
+                        [size]="24"
+                      />
+                    </span>
+                  }
+                </span>
+              } @else {
+                <lucide-angular
+                  class="mt-px shrink-0 animate-spin text-accent"
+                  [img]="LoaderCircle"
+                  [size]="16"
+                />
+              }
+              <div class="min-w-0 flex-1">
+                <p
+                  class="truncate text-[13px] font-semibold text-fg-strong"
+                  [title]="task.title"
+                >
+                  {{ task.title }}
+                </p>
+                <p class="truncate text-[12px] text-fg-muted">
+                  @if (task.detail) {
+                    {{ task.detail }} ·
+                  }
+                  <span data-testid="background-task-elapsed">{{
+                    elapsed(task)
+                  }}</span>
+                </p>
+                <div
+                  class="mt-1.5 h-[3px] w-56 overflow-hidden rounded-full bg-border"
+                  aria-hidden="true"
+                >
+                  @if (percent(task); as pct) {
+                    <div
+                      class="h-full rounded-full bg-primary"
+                      [style.width.%]="pct"
+                    ></div>
+                  } @else {
+                    <div
+                      class="bg-task-indeterminate h-full w-1/3 rounded-full bg-primary"
+                    ></div>
+                  }
+                </div>
+              </div>
+              @if (task.canOpen) {
+                <button
+                  type="button"
+                  class="btn btn-outline shrink-0 px-2.5 py-0.5 text-[12px]"
+                  [attr.aria-label]="'Open ' + task.title"
+                  (click)="openTask(task)"
+                >
+                  Open
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+
+      @if (service.finished().length > 0) {
+        <h3
+          class="px-3.5 pt-2 pb-1 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+        >
+          Finished
+        </h3>
+        <ul aria-label="Finished tasks">
+          @for (task of service.finished(); track task.id) {
+            <li
+              class="flex items-start gap-2.5 px-3.5 pt-2 pb-2.5"
+              data-testid="background-task"
+              [attr.data-status]="task.status"
+            >
+              @switch (task.status) {
+                @case ("done") {
+                  <lucide-angular
+                    class="mt-px shrink-0 text-on-success-soft"
+                    [img]="CircleCheck"
+                    [size]="16"
+                  />
+                }
+                @case ("failed") {
+                  <lucide-angular
+                    class="mt-px shrink-0 text-on-danger-soft"
+                    [img]="CircleAlert"
+                    [size]="16"
+                  />
+                }
+                @default {
+                  <lucide-angular
+                    class="mt-px shrink-0 text-fg-muted"
+                    [img]="CircleStop"
+                    [size]="16"
+                  />
+                }
+              }
+              <div class="min-w-0 flex-1">
+                <p
+                  class="truncate text-[13px] font-semibold text-fg-strong"
+                  [title]="task.title"
+                >
+                  {{ task.title }}
+                </p>
+                <p
+                  class="line-clamp-2 text-[12px] text-fg-muted"
+                  [title]="task.detail ?? ''"
+                >
+                  {{ task.detail }} · {{ ago(task) }}
+                </p>
+                <div class="mt-1.5 flex gap-1.5">
+                  @if (task.canOpen && task.status !== "failed") {
+                    <button
+                      type="button"
+                      class="btn btn-outline px-2.5 py-0.5 text-[12px]"
+                      (click)="openTask(task)"
+                    >
+                      Open
+                    </button>
+                  }
+                  @if (task.status !== "done" && task.canRetry) {
+                    <button
+                      type="button"
+                      class="btn btn-outline px-2.5 py-0.5 text-[12px]"
+                      (click)="service.retry(task.id)"
+                    >
+                      Retry
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="btn btn-ghost px-2.5 py-0.5 text-[12px]"
+                    (click)="service.dismiss(task.id)"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    @if (service.finished().length > 0) {
+      <footer
+        class="flex items-center justify-between border-t border-border px-3.5 py-2 text-[12px] text-fg-muted"
+      >
+        <span>Finished tasks clear when the app restarts</span>
+        <button
+          type="button"
+          class="font-semibold text-accent hover:underline"
+          (click)="service.clearFinished()"
+        >
+          Clear finished
+        </button>
+      </footer>
+    }
+  </section>
+}

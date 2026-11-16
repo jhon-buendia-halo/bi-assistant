@@ -253,9 +253,18 @@ export class DatasourcesService {
     id: string,
     sql: string,
     rowLimit: number,
+    /** The clamp on `rowLimit` (default 500); a CSV export passes 50,001. */
+    maxRows?: number,
   ): Promise<QueryResult> {
     const ds = await this.get(id);
-    return this.connector(ds.kind).runReadOnlySql(ds.config, sql, rowLimit);
+    return maxRows === undefined
+      ? this.connector(ds.kind).runReadOnlySql(ds.config, sql, rowLimit)
+      : this.connector(ds.kind).runReadOnlySql(
+          ds.config,
+          sql,
+          rowLimit,
+          maxRows,
+        );
   }
 
   view(ds: Datasource): DatasourceView {

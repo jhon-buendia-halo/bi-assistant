@@ -4,7 +4,7 @@
 
 ## Goal
 
-A fresh install can load a synthetic Mercer US Health & Benefits world from Settings → Testing Data in one click. The Assistant, the Data Readiness Agent and the US Health showcase agents (Benchmarking, Survey, LAD COE, Strategy, epic [BA-233](../BA-233/spec.md)) then have one coherent dataset to answer from: the consulting firm and its clients, benefit plans and renewals, members and claims, market benchmarks, employee surveys, life/absence/disability, and strategy.
+A fresh install can load a synthetic US health & benefits consultancy world from Settings → Testing Data in one click. The Assistant, the Data Readiness Agent and the US Health showcase agents (Benchmarking, Survey, LAD COE, Strategy, epic [BA-233](../BA-233/spec.md)) then have one coherent dataset to answer from: the consulting firm and its clients, benefit plans and renewals, members and claims, market benchmarks, employee surveys, life/absence/disability, and strategy.
 
 ## Scope
 
@@ -21,8 +21,8 @@ A fresh install can load a synthetic Mercer US Health & Benefits world from Sett
   - views: `v_monthly_cost`, `v_large_claimants`, `v_lad_loss_ratio`, `v_client_revenue`
 - **Shape:** analytics tables with typed columns and readable text keys. Every foreign key is declared, and every table and column carries a comment with its grain and meaning.
 - **Data:** 60 fictional clients over plan years 2023–2027, with census and claims for 8 "deep-data" clients, about 0.6 M rows in total. The dataset's "today" is fixed at 2026-10-31.
-  - The national benchmark means follow Mercer's published National Survey headlines. Peer-group splits and everything else are synthetic.
-  - The benchmark source is labelled "Mercer National Survey (synthetic)".
+  - The national benchmark means follow published industry National Survey headlines. Peer-group splits and everything else are synthetic.
+  - The benchmark source is labelled "Industry National Survey (synthetic)".
   - Benefits administration appears only as a third-party vendor.
 - **Planted signals:** market-following cost trend, higher Rx trend with GLP-1 weight-loss coverage, HDHP cost vs satisfaction, a stop-loss-piercing claimant, an LTD loss ratio above 100%, a leave-policy shortfall against state law, and regional cost differences.
 - **Planted defects** (about 0.5% of rows): a late feed, duplicate claims, claims outside an enrollment, impossible dates, missing dependent birth years, and a survey subgroup below n = 10.
@@ -34,7 +34,7 @@ A fresh install can load a synthetic Mercer US Health & Benefits world from Sett
 - Eval sets that use the new fixture.
 - A REST variant of the fixture.
 - Changes to the Intellify, World Cup or Formula 1 fixtures, or to how the loader works.
-- Real Mercer data of any kind: every client, person, carrier and value outside the published national headlines is invented.
+- Real firm data of any kind: every client, person, carrier and value outside the published national headlines is invented.
 
 ## Stories
 

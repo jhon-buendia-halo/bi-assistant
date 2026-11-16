@@ -1,10 +1,146 @@
 # Changelog
 
-Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
+Running log of every meaningful change, newest first. One entry per epic, written when its PR opens; see step 10 of the `workflow-gate` skill. Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
+
+## 2026-11-15
+
+### Added
+- **Query inspector: every figure of an answer links to the query behind it** (epic M1-25, repo only, roadmap 1.25.1–1.25.7, PR #109; [specs/epics/M1-25/spec.md](specs/epics/M1-25/spec.md), plan [m1-25-query-inspector.md](docs/plans/m1-25-query-inspector.md); rules in [agent-answers](specs/capabilities/agent-answers/spec.md), *Query inspector*). A user of Answer a Business Question could not tell how its queries were built and distrusted an answer after seeing a `LIMIT 100`.
+  - 1.25.1: each query of an answer is stored with how much data it stands for (`whole-table`, `top-n`, `sample`, `partial`), the rows the statement produced before the tool's row cap and, on demand, the size of each table it reads; endpoints 139, 142 and 143. No tool result a model reads changed.
+  - 1.25.2: in a host that shows the inspector, each figure carries a chip (`Q1`) linked in code to the query whose rows hold it, and a coverage line and one row per query replace "How I worked this out" and "Data used".
+  - 1.25.3: the System agent `query-explainer` (Hannah) explains a query step by step when it is first opened; exact row counts per step are shown only when they pass the checks (endpoints 140, 141).
+  - 1.25.4: the inspector sheet beside the Run panel: Step by step, Result, SQL, with Download all rows (CSV), Re-run and Copy SQL.
+  - 1.25.5: the run detail page hosts the inspector too (since PR #108 a finished run opens on its workflow page, so this serves a run still running).
+  - `CLAUDE.md`: every agent that answers from data shows its evidence through this pattern.
+
+- **The query inspector in past chats and in Try it** (epic M1-25, roadmap 1.25.9–1.25.11; plan [m1-25-query-inspector.md](docs/plans/m1-25-query-inspector.md) section 5).
+  - 1.25.9: the inspector's backend works on any answer the app can show. A past chat's message gets endpoints 144 to 148, with its evidence and explanations stored in the message; a Try it run, still never stored, is kept in memory for 30 minutes behind 139 to 143.
+  - 1.25.10: every answer of a past chat that read data, of any agent, shows its figure chips, coverage and queries and opens the inspector. Scenario: `frontend/e2e/runs.spec.ts`, `@story-1.25.10`. Demo: [evidence/1.25.10/demo.webm](evidence/1.25.10/demo.webm).
+  - 1.25.11: Try it, the only place a user agent runs, shows the same; after 30 minutes the sheet asks to run the draft again. Scenario: `frontend/e2e/agent-editor.spec.ts`, `@story-1.25.11`. Demo: [evidence/1.25.11/demo.webm](evidence/1.25.11/demo.webm).
+  - The inspector loads deferred in every host, so it stays out of the initial bundle (974 kB against a 1 MB budget).
+- **Evals for the query explainer** (1.25.12): the set `query-explainer`, 8 statements over the World Cup data; her steps are checked for form and her step counts against the real data. First measured runs (`claude-sonnet-5-5`): 6, 6 and 5 of 8; after one line added to her instructions (a total without groups leaves one row) and a rubric reduced to one pass condition: 8, 7 and 8 of 8, every code check 3 of 3.
+
+### Fixed
+- **An answer that lists more than 50 rows shows all of them** (1.25.6). Write answer read 50 rows of each query, so a list of 100 stopped at 50 and said the rest was missing. It now puts a marker where the list goes and code writes the table from the stored rows (up to 200).
+- **Validate fails an attempt that rests on a sample** (1.25.7): a `LIMIT` with no `ORDER BY` that was reached, with no later query over the whole data, is run again instead of written up.
+- **A result that lands exactly on the row limit is no longer called cut** (1.25.8). A `LIMIT 100` that returned 100 rows under the default limit of 100 was told `row limit reached` and warned as cut short. The connector's count of the rows the statement produced now decides. Evals of `assistant` (sets `world-cup`, `formula-1`, `schema-notes`), `insights-analyst` and `data-readiness`, 3 runs per case per build (`claude-sonnet-5-5`): code checks 130 of 131 on the branch against 128 of 130 on the base; judged 88 of 89 against 89 of 89. Known-flaky on both builds at the same rate: `f1-monaco-2024-podium` (`result-set-match`, 2 of 3 on each). `f1-pole-to-win-2023` failed the judge once on the branch and passed 6 of 6 on each build when re-run. Runs lost to errors of the model endpoint: 2 on the base, 1 on the branch (re-run 3 of 3). The set `world-cup-rest` was not run: the local instance has no REST datasource.
+- Checks for 1.25.1–1.25.7 (Free style, no evidence folder): `qa.mjs --free` 6/6 on the branch merged with `main` (3,156 backend and 1,088 frontend unit tests, 37 selected Playwright tests) plus the `runs`, `workflows`, `data-readiness` and `visual-tailoring` specs (32); axe on the Run panel and the inspector's tabs in both themes; web only, desktop not run. Evals of `insights-analyst` (`claude-sonnet-5-5`, 10 cases, 3 runs per build): every code check passed in every run that reached the model. Known-flaky, not from the change, each re-run 3 of 3: two runs lost to errors of the model endpoint, one run where the model called a tool that does not exist, and one judged failure of `v2-no-clarify-total-goals` (5 of 6 on the branch, 5 of 5 judged on the base).
+
+### Changed
+- **A workflow's agent steps read like an artifact** (Free style, no roadmap story; [ui.md](specs/system/ui.md) 4.4b). Double-clicking Plan, Analyse, Check data quality or Write answer opens the step's chat beside a report of its run. Its **Preview** tells what the step received, what it did (one line per tool call, with the query's rationale and its SQL on demand), the last query's result with bars, and what it returned; it is built from the stored run data, without a model call. **Data** holds the Input and Output, **Config** the Parameters and Settings, and **Copy** copies the report as Markdown. The chat opens with the step's own words, a card to the report and suggested questions. Every other node's dialog stacks Input, its Parameters and Settings tabs and Output, with Input and Output collapsed.
+- **A workflow page's header fits on one line**: `Workflows / <name>`, the steps chip and the id; the canvas starts 62 px higher.
+- No evidence folder or demo (Free style); `qa.mjs --free` 6/6, the workflows E2E 14/14 and the agent-hub, navigation, workflow-runs and runs E2E 48/48 (web; desktop not run).
+
+## 2026-11-12
+
+### Added
+- **Two development workflows, Strict and Free style** (epic M0-6, repo only, roadmap 0.6.1–0.6.5, [specs/epics/M0-6/spec.md](specs/epics/M0-6/spec.md)). No app behaviour changes.
+  - 0.6.1: in a new session Claude asks which workflow to follow and saves the answer in `.context/workflow-mode`; "switch to strict/free style" changes it. `CLAUDE.md` went from 88 to 56 lines: a router with only the rules both workflows share. Evidence: [0.6.1](evidence/0.6.1/).
+  - 0.6.2: the eleven-step workflow moved, unchanged, into the `workflow-strict` skill. Evidence: [0.6.2](evidence/0.6.2/).
+  - 0.6.3: the `workflow-free-style` skill (understand, clarify, implement, checks; the other steps optional). Evidence: [0.6.3](evidence/0.6.3/).
+  - 0.6.4: `node scripts/qa.mjs --free` runs the gate's checks with no roadmap id and no evidence. Evidence: [0.6.4](evidence/0.6.4/).
+  - 0.6.5: the `workflow-steps` pane reads its steps from `workflow-strict`, then `CLAUDE.md`. Evidence: [0.6.5](evidence/0.6.5/).
+  - No UI and no Playwright specs touched; no demo (`--no-demo`).
+
+### Changed
+- **Workflow-first: every workflow runs on an input, chats are retired, and a faster development workflow** (epic M1-23, repo only, roadmap 1.23.1–1.23.33 and 1.23.26b, ADR-0040 and ADR-0041, [specs/epics/M1-23/spec.md](specs/epics/M1-23/spec.md); plans [m1-23-workflow-first.md](docs/plans/m1-23-workflow-first.md), [m1-23-retire-chats.md](docs/plans/m1-23-retire-chats.md), [m1-23-dev-speedup.md](docs/plans/m1-23-dev-speedup.md); new capabilities [workflows](specs/capabilities/workflows/spec.md), [agent-answers](specs/capabilities/agent-answers/spec.md), [past-chats](specs/capabilities/past-chats/spec.md)). Each story's evidence is in `evidence/<id>/`; demos were not published as Claude artifacts (no Artifact tool in the lead session) and play from each `demo-page.html`.
+  - **Workflows.**
+    - 1.23.1: v2's Graph tab draws its turn.
+    - 1.23.2: ADR-0040 makes the app workflow-first.
+    - 1.23.3: the workflow catalogue (`GET /workflows`, `GET /workflows/:id`).
+    - 1.23.4: every turn runs as a workflow run (`agent-turn`), with what reaches the model unchanged.
+    - 1.23.5: a **Workflows** rail area.
+    - 1.23.9: run workflows on a typed input, with the `seq-text-demo` test workflow.
+    - 1.23.10: **the workflow page is a designer.** The graph sits on a canvas (Start → steps → End, zoom, pan, selection), and the right panel holds the Workflow, Step, Run and Code tabs.
+    - Evidence: [1.23.1](evidence/1.23.1/), [1.23.2](evidence/1.23.2/), [1.23.3](evidence/1.23.3/), [1.23.4](evidence/1.23.4/), [1.23.5](evidence/1.23.5/), [1.23.9](evidence/1.23.9/), [1.23.10](evidence/1.23.10/).
+  - **Chats retired (ADR-0041).**
+    - 1.23.11: the decision and plan.
+    - 1.23.12: streamed runs of every agent workflow, sending the same model requests as a chat turn.
+    - 1.23.13: `AnswerView` extracted.
+    - 1.23.14: stored runs and the `/workflow-runs` API.
+    - 1.23.15: run the Assistant, v2 and user agents from the Run tab, with live steps, the answer, Follow up and Stop.
+    - 1.23.16: run the Data Readiness Agent on a dataset.
+    - 1.23.17: run the RFP Builder one exchange at a time, with Continue.
+    - 1.23.19: rating a run's answer saves a verified query.
+    - 1.23.20: Monitoring attributes calls to runs.
+    - 1.23.21: **Runs** replaces Sessions, past chats open read-only, and Run again.
+    - 1.23.22: chats can no longer start; the home page points to workflows, and the desktop probe moves to `GET /health`.
+    - 1.23.23: **Try it** runs an agent's draft.
+    - 1.23.24: deep analysis becomes a four-step workflow.
+    - 1.23.25: visual actions on a run's result.
+    - 1.23.26 and 1.23.26b: the turn engine is extracted (`sessions.service.ts` 3,496 → 1,498 lines), and evals and dev scripts move to run hosts.
+    - 1.23.27: the chat write routes (3, 5–8, 10–13, 46, 47) are removed and now answer 404. Past chats stay readable, and stored sessions are never migrated or lost.
+    - The agents' prompts and tool lists are byte-identical before and after (hashes in [evidence/1.23.4](evidence/1.23.4/), [1.23.12](evidence/1.23.12/), [1.23.26](evidence/1.23.26/), [1.23.26b](evidence/1.23.26b/)), so no eval run was needed.
+    - Evidence: `evidence/1.23.11/`–`evidence/1.23.27/`.
+  - **Agents and sessions on the way there** (later superseded by retiring chats):
+    - 1.23.6: the composer picked a workflow;
+    - 1.23.7: agents became a library with "Used in";
+    - 1.23.8: the four showcase agents were removed.
+    - Evidence: [1.23.6](evidence/1.23.6/), [1.23.7](evidence/1.23.7/), [1.23.8](evidence/1.23.8/).
+  - **A faster, cheaper development workflow.**
+    - 1.23.28: the lean story lane, model and effort routing, decide-before-build and Gherkin once; builders default to Sonnet.
+    - 1.23.29: `story-pack.mjs` and the generated `specs/INDEX.md`.
+    - 1.23.30: `roadmap.md` 277 KB → 40 KB, with `roadmap-archive.md` and `roadmap-backlog.md`.
+    - 1.23.31: `qa.mjs --wave`.
+    - 1.23.32: Playwright with 3 workers (full web suite 508 s → 186 s).
+    - 1.23.33: `app.ts`/`app.html` split by area (1,567 → 270 and 1,091 → 336 lines).
+    - Evidence: [1.23.28](evidence/1.23.28/)–[1.23.33](evidence/1.23.33/), wave reports in [evidence/waves/](evidence/waves/).
+  - **Gate (2026-11-12, macOS, web target).** One `qa.mjs --wave` over all 34 stories against `main`, plus the full suites on the final build:
+    - backend `tsc` clean, unit 3,078/3,078, e2e 87/87 (after merging `main` at v0.48.2, desktop readiness probe on `/health` with the `X-Backend-Instance` check);
+    - frontend unit 736/736;
+    - the full web Playwright suite 266 passed, 2 skipped, with the one known failure below;
+    - backend eslint on the changed files, clean after three test-file errors were fixed at the gate; `check-specs` green; initial bundle 935.7 kB (budget 1 MB).
+    - **Desktop not run.**
+  - **Known gaps:**
+    - `layout-accessibility`'s application-shell visual baseline has no darwin web image and its Linux image predates the Workflows rail item (no CI runs Playwright).
+    - An agent creating a visual inside a one-shot run fails as a chat's first turn always did (visuals R1).
+    - A document's PDF download exists only for past chats.
+
+## 2026-11-11
+
+### Added
+- **Sampled profiling and synthetic data** (epic M1-22, repo only, roadmap 1.22.1–1.22.6, ADR-0039 and its 2026-11-11 amendment, [specs/epics/M1-22/spec.md](specs/epics/M1-22/spec.md), [synthetic-data](specs/capabilities/synthetic-data/spec.md) R1–R44, [api.md](specs/system/api.md) 2.18 (111–114), [ui.md](specs/system/ui.md) 4.3, 4.3a, [agents.md](specs/system/agents.md) 2.10 (D12, D14), 3.13, 3.14, [data-readiness](specs/capabilities/data-readiness/spec.md) Concepts and R3, [data-model.md](specs/system/data-model.md), [tech-stack.md](specs/system/tech-stack.md), [glossary](specs/product/glossary.md); plan [docs/plans/m1-22-synthetic-data.md](docs/plans/m1-22-synthetic-data.md)).
+  - 1.22.1: a third dataset-editor tab, **Profile & synthesize**, profiles up to 1,000 rows per table of a PostgreSQL or Databricks dataset with native sampling: a full read of small tables, `TABLESAMPLE BERNOULLI`/`SYSTEM … REPEATABLE (7)` on PostgreSQL (estimate from `reltuples`), `TABLESAMPLE (p PERCENT)` on Databricks with a `LIMIT` read at 50 GiB or more (52 s cold on a 160 GB table, [sampling-timings.md](evidence/1.22.1/sampling-timings.md)), and `LIMIT` for views. Per column: type, null %, distinct, range or length, categorical values (only ≤ 20 distinct, each seen ≥ 3 times) or character-class patterns, and how it will be generated. The profile is approximate, separate from Data Readiness (R29 unchanged), kept 60 min in memory and never stored. `POST /synthetic-data/profiles`. Evidence: [evidence/1.22.1/](evidence/1.22.1/), demo https://claude.ai/artifact/XmNDHjkDkrynx74CNuQua2.
+  - 1.22.2: **Generate .sql** downloads a deterministic, seeded synthetic copy as a PostgreSQL script (`CREATE SCHEMA`, `CREATE TABLE`, `INSERT`s in batches of 500, FK constraints after the inserts): keys first so every foreign key resolves (composite keys, cycles and self-references included), per-column strategies, null rates kept, no LLM, and no real identifier, name or free text. Unique integers that are not keys stay in their observed range (`unique-range`, requested 2026-11-11). Same profile and seed give the same `X-Script-Sha256`. `POST /synthetic-data/scripts`. Evidence: [evidence/1.22.2/](evidence/1.22.2/) (the replay scenario loads the script into a scratch database), demo https://claude.ai/artifact/6VM8BvAdknGckXTf39Qh4L.
+  - 1.22.3: a Databricks dataset's Generate downloads Databricks SQL (backticks, Spark string escaping, typed literals, `USING DELTA`, informational Unity Catalog constraints, `catalog.schema` targets), checked by inline golden specs and a statement smoke check. Not yet run live in a Databricks workspace (plan Q1). Evidence: [evidence/1.22.3/](evidence/1.22.3/), demo https://claude.ai/artifact/Xu1XJN5jpHLZM12etmtN7u.
+  - 1.22.5: the synthetic copy also as a **CSV zip** (one RFC 4180 file per table plus `README.txt`) or an **Excel workbook** (an About sheet plus one sheet per table, typed cells), with the same values as the script for the same seed; **Export profile** as CSV or Excel. New backend dependencies `exceljs` 4.4.0 and `fflate` 0.8.3. `POST /synthetic-data/profile-exports`. Evidence: [evidence/1.22.5/](evidence/1.22.5/), demo https://claude.ai/artifact/WM5957VQ44HVjxL1i5jQ1E.
+  - 1.22.6: **Export sample rows** downloads the real sampled rows (`.sql` into a `sample` schema without constraints, CSV or Excel) after a confirm that the file holds real data. The rows are read again with the same sampling seed and streamed; they are never logged, cached, written to a session file or sent to a model. `POST /synthetic-data/sample-exports` refuses without `confirmRealData: true`. Evidence: [evidence/1.22.6/](evidence/1.22.6/), demo https://claude.ai/artifact/MuBFZgf81uTBBxeJTiRbuG.
+  - 1.22.4: the **Data Readiness Agent** gains `profile_data_sample` and `generate_synthetic_data` (chat limits 20 tables, 1,000 rows per table, a 256 KB script); the script is saved under `synthetic-data/` in the session and shown in the panel for download. Prompt D12 widened and D14 added (+1,040 characters). Evals: the `data-readiness` set 11/11 in each of 3 runs ([evals](evidence/1.22.4/evals/README.md)). Evidence: [evidence/1.22.4/](evidence/1.22.4/), demo https://claude.ai/artifact/AD2MCYtcqHcHXjLLvPjgzF.
+  - Gate (2026-11-11, Windows, web target): builds, frontend unit 631/631, backend lint, `check-specs` and every story's step-6 Playwright list passed (`tests.md` in each folder). Backend unit: 38 failures in 9 suites, all of them failing on `main` on this Windows checkout too (CRLF fixtures, file mode, symlink permission); none in the new code. `layout-accessibility`'s visual baseline has no Windows image in the repo, so it cannot pass here. Desktop not run.
+  - Known gaps: columns are generated independently (a start date can follow its end date); views are generated as plain tables; the Databricks script has not been run live.
+
+### Changed
+- **Faster workflow, repo-only planning** (epic M0-5, roadmap 0.5.1–0.5.5, [specs/epics/M0-5/spec.md](specs/epics/M0-5/spec.md), [delivery.md](specs/system/delivery.md) 2, 10–13). No app behaviour changes.
+  - 0.5.1: **Jira is no longer used.** The Jira MCP server, its skill, `.mcp.json`, the Jira settings and `.env.example` are removed. An epic is a roadmap milestone with the ID `M<R>-<M>` at the end of its heading and a spec in `specs/epics/`; `check-specs.py` checks those IDs (26 epics). Evidence: [evidence/0.5.1/](evidence/0.5.1/).
+  - 0.5.2: `CLAUDE.md` sizes every change **S / M / L**; an S change skips the new epic spec, the demo video, most of the gate and the retrospective. **`lessons.md`** (about 75 lines) replaces the 1,300-line `retrospective.md` as the first read. One changelog entry and one retrospective **per epic**. Nine workflow skills become four (`workflow-start`, `workflow-implement`, `verify`, `workflow-gate`); `builder` and `reviewer` skip `CLAUDE.md`; the `workflow-steps` mod treats `lessons.md` as the first action. Evidence: [evidence/0.5.2/](evidence/0.5.2/).
+  - 0.5.3: **`qa.mjs`** runs backend unit tests, lint and `check-specs` in parallel and the Karma suite alone after them; skips `build:all` when nothing changed (`--rebuild` forces it); holds the cross-worktree lock only around Playwright; adds `--draft-impact`, `--no-demo` and `--dry-run`. A full gate ran in about 50 s. Evidence: [evidence/0.5.3/](evidence/0.5.3/).
+  - 0.5.4: the **eval bar** in `verify`: three runs per build in parallel on data-dir copies; code checks 3 of 3; judged cases at least 2 of 3 and no worse than the base; cases flaky on both builds are listed, not chased. Evidence: [evidence/0.5.4/](evidence/0.5.4/).
+  - 0.5.5: **`scripts/bootstrap.mjs`** installs both packages, Playwright's Chromium and builds in one command (about 22 s on a clean copy); `.conductor/settings.toml` runs it when a workspace is created and adds a **web** run action. Evidence: [evidence/0.5.5/](evidence/0.5.5/).
+  - Gate (2026-11-11, macOS, web target, `--gate --no-demo` per story): builds, backend unit 2,808/2,808, frontend unit 631/631, backend lint, `check-specs`, and `builtin-agent-prompts.spec.ts` 7/7 for 0.5.5. Desktop not run.
+- **The Ontology panel loads lazily** in the dataset editor and on Context (roadmap 1.22.1). The initial frontend bundle had reached 1 MB + 196 bytes after merging main's Monitoring work on top of the new tab, failing the build budget; it is now 930.80 kB, the Ontology panel a 70 kB chunk.
+
+### Fixed
+- **No leftover desktop backend** (Bug Fixes BA-11, roadmap 1.7.21; [api.md](specs/system/api.md) 4.3, [delivery.md](specs/system/delivery.md) 1–2, [data-model.md](specs/system/data-model.md) 1.2, [app-shell](specs/capabilities/app-shell/spec.md) R54–R55). On Windows a backend could outlive its window (crash, End task) and keep port 3000, so the next launch or an upgraded version talked to the stale backend. The backend now exits within about 2 s of its window process ending; startup stops a backend recorded in `backend.pid` that is still running as the app's executable; the readiness probe accepts only the backend it just started (`X-Backend-Instance`); a second launch focuses the running window; and the installer and uninstaller (`frontend/build/installer.nsh`) force-end any `Halo BI Assistant.exe` the user still runs after the usual close prompt. Evidence: [evidence/1.7.21/](evidence/1.7.21/) ([tests.md](evidence/1.7.21/tests.md), [desktop-lifecycle.txt](evidence/1.7.21/desktop-lifecycle.txt): 11/11 against the real Electron app on macOS). Desktop not run in Playwright; the Windows installer was compiled locally but not installed on Windows.
+- **Windows install wrote 47,000 files** (Bug Fixes BA-11, roadmap 1.7.22; [delivery.md](specs/system/delivery.md) 2). Backend staging now prunes build-time leftovers from `node_modules` (type declarations, TypeScript sources, source maps, docs, lint/CI configs), keeping licences and leaving `@github/copilot-sdk*` whole: 46,955 → 22,906 installed files and a 301 → 259 MB installer on a local `--win nsis` build of 0.48.1. Install time on a Windows machine not yet measured. Evidence: [evidence/1.7.22/](evidence/1.7.22/) ([tests.md](evidence/1.7.22/tests.md), [pruned-backend-check.txt](evidence/1.7.22/pruned-backend-check.txt): every production dependency imports and 15 endpoints answer).
+- **A fresh install failed to build the web UI** (`Could not resolve "@floating-ui/dom"`): `npm ci --legacy-peer-deps` skips peer dependencies, and `@tiptap/suggestion`'s peer was not a direct dependency. It now is (roadmap 0.5.5).
+- **`setup-local.mjs` could not register the Intellify RFP API** on a fresh machine: it loaded the Intellify sample into `intellify` while the API reads `intellify_mercer_demo`. It now loads it where the API reads it and says to restart the app once (roadmap 0.5.5).
+- **Two flaky frontend unit tests**: `UiPreferencesService` depended on a theme other specs left in `localStorage`, and `PromptEditor` "inserts the chosen link" on document focus another spec left elsewhere. Both now set up their own state. Before: 5 failed runs in 10 under load, 1 in 12 alone; after: 0 in 12 alone and 5 green gates (roadmap 0.5.3).
 
 ## 2026-11-10
 
 ### Added
+- **Monitoring area: LLM calls, the call's context window and the session execution flow** (epic [BA-320](https://halo-powered.atlassian.net/browse/BA-320), roadmap 1.21.13–1.21.16, ADR-0038, [monitoring](specs/capabilities/monitoring/spec.md), [app-shell](specs/capabilities/app-shell/spec.md) R3, R3b, R37, [api.md](specs/system/api.md) 2.8c, [data-model.md](specs/system/data-model.md), [ui.md](specs/system/ui.md) 4.8d–4.8h).
+  - 1.21.13: a **Monitoring** item on the rail after Sessions opens the Monitoring page. Evidence: [evidence/1.21.13/](evidence/1.21.13/), demo https://claude.ai/artifact/1AM7aay5ZtepxSTgA3f3T9.
+  - 1.21.14: the **LLM calls** table, one row per agent run's model call read in-process from Mastra's trace store (`observability.duckdb`, `span_events`): started, agent, model and provider, session, tokens in / out, duration, estimated cost (a shipped price table of Claude models, cache reads and writes priced apart), status. Filters for agent, model, provider, status, session and date range with Clear filters; 25 / 50 / 100 rows per page. `GET /monitoring/llm-calls`. Evidence: [evidence/1.21.14/](evidence/1.21.14/), demo https://claude.ai/artifact/AboL8p2paoviyVzicp6MyJ.
+  - 1.21.15: a call's page with its facts, the **context window** as a stacked bar and seven boxes (System prompt, Skill injection, Tools injection: US Health; Chat history, Dataset, User prompt, Tool calls and results: Custom) with estimated tokens and the exact text, and the run's steps; Back keeps the filters and page. `GET /monitoring/llm-calls/:id`. Evidence: [evidence/1.21.15/](evidence/1.21.15/), demo https://claude.ai/artifact/9KVEKfADQYge7sHbBKQYtC.
+  - 1.21.16: a **Sessions** tab (one row per session with turns, wall and model time, tool calls, tokens, cost and status); the session page shows each turn as a trajectory (question, each model request with what it said, grouped tool calls, the answer) with Open call per request, and **Open timeline** shows the turn's trace as a waterfall with a detail panel and a **Show framework spans** switch. The answer is the last request's text, not the call's output, which joins every request's commentary. `GET /monitoring/sessions`, `GET /monitoring/sessions/:id`, `GET /monitoring/traces/:traceId`. Evidence: [evidence/1.21.16/](evidence/1.21.16/), demo https://claude.ai/artifact/4zrihEbPH6rcvJKu65TnjW.
+  - Known gaps: a run cut off before it ended stays **Running**, and an agent run with no session (no thread id) is listed as a call but under no session.
+- **GitHub Copilot as an LLM provider** (epic BA-159, roadmap 1.10.3, ADR-0037, [specs/epics/BA-159/spec.md](specs/epics/BA-159/spec.md), [llm-settings](specs/capabilities/llm-settings/spec.md) R55–R66).
+  - Settings → LLM Configuration offers **GitHub Copilot**: every agent runs on the developer's own Copilot seat, signed in with the GitHub login already on the machine (GitHub CLI, Copilot CLI or app). No API key, base URL or API style; the form shows who is signed in, or how to sign in. Model `auto` lets Copilot choose; **Load models** lists the seat's models (none on a Free seat). Test connection, real streaming, reasoning effort by model name, and `<model> · GitHub Copilot` in the composer, the agent page and the catalogue. Saving Copilot removes any stored API key.
+  - Backend: the official `@github/copilot-sdk` 1.0.30 (pinned) drives one local Copilot runtime per process. An AI SDK model over it declares the agents' tools without handlers, so Mastra keeps the tool loop; Copilot's built-in tools stay off and the system prompt is replaced. New `GET /llm/copilot/status`; `POST /llm/models` and the effort levels take the provider ([api.md](specs/system/api.md), [agents.md](specs/system/agents.md), [data-model.md](specs/system/data-model.md), [ui.md](specs/system/ui.md), [tech-stack.md](specs/system/tech-stack.md)).
+  - R66, found by the evals: when the model writes a tool's arguments as its message instead of calling the tool, the message is never shown and the model is asked once, in the same session, to make the call.
+  - Evidence: [evidence/1.10.3/](evidence/1.10.3/): [tests.md](evidence/1.10.3/tests.md), [demo.webm](evidence/1.10.3/demo.webm), [evals.md](evidence/1.10.3/evals.md) (custom endpoint 100%; GitHub Copilot on a Free seat 32/36 after R66, the rest answer quality of the auto-routed model, documented), [unit-baseline.txt](evidence/1.10.3/unit-baseline.txt). E2E `llm-copilot.spec.ts` runs against a stub of the Copilot runtime written from a recorded trace of the real one. Desktop not run; the installers and the npm package are story 1.10.4.
+  - Demo: https://claude.ai/artifact/3mMmBUs1DtfRaTjP91gBDh
 - **Visuals library on the Context page** (epic [BA-320](https://halo-powered.atlassian.net/browse/BA-320), roadmap 1.21.12, [visuals-library](specs/capabilities/visuals-library/spec.md), [app-shell](specs/capabilities/app-shell/spec.md) R3a, [api.md](specs/system/api.md) 2.8b, [data-model.md](specs/system/data-model.md) 3.9b, [ui.md](specs/system/ui.md) 4.8c).
   - A **Visuals** card, third on Context, opens a library of chart types grouped by what they show: 30 defaults in 9 categories (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables), each with a drawn preview thumbnail, description, when to use, when to avoid, the data it needs and a "Drawn by the app" badge for the 10 charts the visual runtime draws.
   - Search and category chips narrow the list; a card opens its editor in place; charts can be added, disabled (faded) and deleted. Backend module `visuals`, collection `visual_charts` seeded once (`visuals-seed`; a deleted default stays deleted), `GET/POST /visuals`, `PATCH/DELETE /visuals/:id`. Agents do not use the library yet.

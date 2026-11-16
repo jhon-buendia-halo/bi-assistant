@@ -8,61 +8,61 @@ backend/    NestJS API
 specs/      the complete specification of the app
 ```
 
-**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds the always-on rules for working in the repo; each workflow stage's conventions live in a project skill under [.claude/skills/](.claude/skills/), loaded when that stage starts. Developer tools (MCP servers and scripts, such as the Jira tools) live in [.claude/tools/](.claude/tools/README.md).
+**What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds only what every session needs; the workflows and their steps live in project skills under [.claude/skills/](.claude/skills/), and developer tools in [.claude/tools/](.claude/tools/README.md).
 
-Process documents (see **Workflow** below):
+> **MANDATORY FIRST ACTION — read [lessons.md](lessons.md) before doing anything else.** Before you restate the goal, ask a question, run a command or touch a file, on every task, read it. It is short on purpose.
 
-- [roadmap.md](roadmap.md) — pre-implementation plan for all work. Skill `workflow-plan`. Longer-form phase plans live in [docs/plans/](docs/plans/); roadmap features link to them rather than duplicating them.
-- [changelog.md](changelog.md) — running log of every change. Skill `workflow-ship`.
-- [specs/](specs/README.md) — the product, system, capability and epic specs; an LLM given only this folder can rebuild the app. Architecture and ADRs are in [specs/system/architecture.md](specs/system/architecture.md); user flows in Gherkin are in each capability spec. Skills `workflow-specs`, `workflow-architecture` and `workflow-plan` (Epic gate).
-- [retrospective.md](retrospective.md) — what went well and wrong on each completed change. Skill `workflow-retrospective`.
-- [evidence/](evidence/) — verifiable artifacts for each shipped change, linked from the changelog. Skill `workflow-ship`.
+## Choose the workflow
 
-## Workflow — order of operations
+Right after reading `lessons.md` in a new session, settle which workflow the session follows:
 
-> **MANDATORY FIRST ACTION — read [retrospective.md](retrospective.md) before doing anything else.** Before you restate the goal, ask a question, run a command, or touch a file — on *every* task, not just large ones — open [retrospective.md](retrospective.md) and read the lessons. They are recorded specifically so past mistakes are not repeated. This precedes step 1.
+- If `.context/workflow-mode` exists (`strict` or `free-style`), say in one line which mode you are continuing in and go on.
+- Otherwise ask with one picker: **Strict** (the full eleven steps: roadmap, epic spec, specs, E2E, evidence, changelog, retrospective) or **Free style** (understand, clarify, implement, checks; the rest optional). Write the answer to `.context/workflow-mode`.
+- Then load the skill: [`workflow-strict`](.claude/skills/workflow-strict/SKILL.md) or [`workflow-free-style`](.claude/skills/workflow-free-style/SKILL.md).
+- "Switch to strict" or "switch to free style" changes the mode at any point: rewrite the file and load the other skill.
 
-Every meaningful change follows this eleven-step workflow. Do not skip a step. The steps run in two loops, a **fast loop** and an **acceptance gate** (see **When the steps run** below the list). Within each loop the steps are sequential gates; *within* a step, independent units still fan out to parallel subagents per **Model usage** below.
+Subagents that work from a brief (`builder`, `reviewer`) skip this.
 
-**Load a step's skill before you start that step, and follow it**: it holds the conventions, commands and checks for that step, as the RFP Builder loads a stage's skill before that stage. One skill may cover two steps.
+## Choose the brand
 
-1. **Understand the goal** — restate the request in your own words before touching anything. Skill: `workflow-understand`.
-2. **Ask clarifying questions until the goal is 100% understood** — scope, behaviour, edge cases, acceptance criteria. Skill: `workflow-understand`.
-3. **Update roadmap** — find or add the feature in [roadmap.md](roadmap.md), pass the **Epic gate**, then work on the epic's branch and worktree. Skill: `workflow-plan`.
-4. **Update architecture** — if the change involves an architectural decision, record it as an ADR in [specs/system/architecture.md](specs/system/architecture.md) *before* any code is written. Skill: `workflow-architecture`.
-5. **Update specs** — before any test or code, update every spec the change affects. Skill: `workflow-specs`.
-6. **Component impact-based analysis on E2E** — for every component, page, service or backend module touched, decide per Gherkin scenario: *add / update / delete / re-run-as-is*. Skill: `workflow-e2e`.
-7. **Implement / update / delete E2E** — apply the step-6 decisions to the Playwright and API-level E2E specs, each asserting what the change introduced. Skill: `workflow-e2e`.
-8. **Implement changes** — production code, built against the Acceptance criteria and the step-5 Gherkin. Skill: `workflow-implement`.
-9. **Run E2E and fix until green** — the impacted E2E specs, `check-specs`, unit tests, lint, builds and, when an agent's input changed, its evals at 100%. Skill: `verify`.
-10. **Update changelog with evidence** — only after step 9 is green, add a dated changelog entry, capture the evidence and mark the roadmap entry `✅ Done`. Skill: `workflow-ship`.
-11. **Retrospective** — add a dated entry to [retrospective.md](retrospective.md): what went well, what went wrong, what to do differently. Skill: `workflow-retrospective`.
+**Every session asks which brand it works on, even when an earlier answer exists.** Right after the workflow is settled (in the same picker when the workflow question is asked too), ask: **Halo Powered** (`halo`, the default build) or **Agentic Hub** (`mercer`, the pre-rebrand look). Offer the value in `.context/brand`, if any, as the recommended option.
 
-**When the steps run — fast loop, then acceptance gate.** Adopted 2026-10-14 so the user can test a change by hand before the slow steps run, instead of the whole workflow running from scratch for every request.
+- Write the answer to `.context/brand` and say it in one line.
+- Use it for every build, app run and E2E run of the session: `BRAND=<id>` on `build:all`, `build:web`, `electron`, `electron:dist` and `test:e2e` (ADR-0045, [delivery.md](specs/system/delivery.md)).
+- The E2E suite targets the Halo build. On `mercer`, run only `e2e/brand-mercer.spec.ts`, then rebuild without `BRAND` before any other suite.
+- Subagents get the brand in their brief and skip the question.
 
-- **Fast loop, every change the user requests:** steps 1–5 scaled to the change, then step 8. For a UI story, step 8 also writes the story's main Gherkin scenario as a Playwright test tagged `@demo` and `@story-<roadmap-id>`, with `scenarioStep` captions; the other scenarios wait for step 7. Then the quick checks and the demo: `node scripts/qa.mjs <roadmap-id> --fast` (the unit tests of the code touched, the builds, `check-specs`, the Playwright specs of the Features touched, then the demo video `evidence/<roadmap-id>/demo.webm`, or `demo.txt` for a story with no UI). Then `node scripts/demo-page.mjs <roadmap-id>`, published as a Claude artifact. Then hand the user the running web app to test by hand **together with the demo artifact link**. Never hand over without the demo: the `--gate` run fails a story with no demo or no artifact link, and a hook reminds the session when it starts the app from a worktree with a story's demo missing. Steps 6, 7, 9, 10 and 11 wait. A follow-up request on the same story goes round the fast loop again and re-records the demo. Skill: `verify`.
-- **Acceptance gate, once the user accepts the change by hand:** steps 6, 7, 9, 10 and 11, in order, once per story. Several accepted stories may go through the gate together before the epic PR opens.
-- **No epic PR opens** while one of its stories has not passed the acceptance gate.
+## Rules for both workflows
 
-Versioning stays automatic (see **Versioning** below): the changelog is the human-readable record of *what* shipped, Conventional Commit subjects still drive the version bump.
+- **Never on `main`.** Work on a branch; nothing goes directly on `main`.
+- **Specs change with the code, on the same branch.** `python3 scripts/check-specs.py` must pass. Skill: `workflow-start` (where a fact belongs).
+- **Ask the target before starting the app or the Postgres stack from a worktree; check the default ports first; stop by PID.** Skill: `workflow-implement`.
+- **Every local instance is ready to test.** Default LLM: CLIProxyAPI (provider `custom`, Anthropic style, `http://127.0.0.1:8317`, model `claude-sonnet-5-5`), its key in `.env.llm.local` of the main checkout (gitignored; template `.env.llm.example`). Once the app answers, run `node scripts/setup-local.mjs <url>`: it saves that LLM and loads the Testing Data fixtures, including the "World Cup PostgreSQL" datasource and "World Cup" dataset (Postgres on 55432). Never leave an instance without an LLM.
+- **New or changed workflows start from Mastra's docs.** Before building a new workflow or changing an existing one, read the Mastra workflows documentation ([overview](https://mastra.ai/docs/workflows/overview) and the pages it links that apply), check which existing agents, tools and workflows can be reused or serve as a reference, then offer the user **three possible approaches** with their trade-offs and say which one you recommend and why; build only after the user picks one. Skill: `mastra-workflows`.
+- **Every agent that answers from data shows its evidence the same way** (the *query inspector* pattern; existing agents, new ones and user agents alike). Each figure in an answer links to the query behind it. Each query is explained step by step in business words, with the rows at each stage and a coverage label (whole table, top N after ranking, sample, partial result), and any `LIMIT` or row cap is explained in plain words. The full result is one click away. Build it once in the shared layer (the `run_readonly_sql` bridge, the captured tool data, the answer view), never in one agent's prompt or screen, so an agent gets it by using the dataset tools. When you add or change an agent, check that its answers pass through that layer; an agent that cannot use it says why in its spec. Rules: [agent-answers](specs/capabilities/agent-answers/spec.md), *Query inspector*. A host turns it on with the answer view's `queryInspector` input and provides `QUERY_EVIDENCE_API`; today the hosts are the Run panel and the run detail page, for runs of Answer a Business Question. Connect another host to it rather than add another way of showing an agent's queries.
+- **All planning lives in this repository** ([roadmap.md](roadmap.md), [specs/epics/](specs/README.md)); don't ask for or create Jira issues.
+- **Read and output.** Never read a file over 500 lines whole: `grep -n` or use [specs/INDEX.md](specs/INDEX.md), then read the range. Run builds and tests quietly, to a log file, and read back only the summary or the failure block.
+- **Versioning is automatic:** Conventional Commit subjects drive the bump. Never edit `version` by hand; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
+- **Session hygiene.** Before starting a new session, write `.context/handoff.md` (template in `workflow-gate`).
 
-## Hard gates — they apply in every turn, inside a step or not
+New checkout or worktree: run `node scripts/bootstrap.mjs` once (installs, builds the backend and web UI, reports whether the shared Postgres on 55432 is up; never starts the app).
 
-Each gate's details are in the skill named after it.
+## Process documents
 
-- **Epic gate — no Jira epic, no code change.** Every new code change must map to a Jira epic in project BA, and the epic must have a confirmed spec. If it does not, do not branch, edit code or open a PR. Checked before step 3. Skill: `workflow-plan`.
-- **Never on `main`.** Every epic is built on one branch, in one worktree, and ships as one PR; nothing goes directly on `main`. Skill: `workflow-plan` (branching), `workflow-ship` (PR and cleanup).
-- **Specs change with the code, on the same branch.** Skill: `workflow-specs`.
-- **Ask the target before starting the app or the Postgres stack from a worktree; check the default ports first; stop by PID.** Skill: `workflow-implement` (Worktree deploy convention).
-
-### Versioning
-
-Never edit `version` by hand. Conventional Commit subjects drive the automatic bump on merge; installers and the npm package are built manually. See [delivery.md](specs/system/delivery.md).
+- [lessons.md](lessons.md) — rules learned the hard way. Read first, every task.
+- [roadmap.md](roadmap.md) — epics (milestones) and stories (features); longer plans in [docs/plans/](docs/plans/).
+- [specs/](specs/README.md) — product, system, capability and epic specs; ADRs in [specs/system/architecture.md](specs/system/architecture.md).
+- [changelog.md](changelog.md) and [evidence/](evidence/) — what shipped and its test reports and demos.
+- [retrospective.md](retrospective.md) — full history, one entry per epic; read an entry only when a lesson needs its context.
 
 ## Model usage: plan vs. execute
 
-For planning purposes, Opus 5.5 (`claude-opus-5-5`) at high effort creates the plan.
+Plan an M or L change with Opus 5.5 (`claude-opus-5-5`) at high effort. An S change needs no separate plan. Execute by fanning out independent units to parallel subagents in one message; keep sequential only what depends on a previous result.
 
-For execution, do not pin a fixed model. Once the execution plan is well defined, the session LLM picks whichever model version it judges best for the work at hand (capability vs. speed vs. cost for that plan) and runs the plan with it.
+| Work | Model | Effort |
+|---|---|---|
+| Plans, ADRs, design, critical or risky paths | Opus | high for plans, default for code |
+| UI on an existing pattern, tests, test migrations, deletions, docs | Sonnet | default or low |
+| Search, inventories, "where is X" | Haiku (`Explore`) | low |
 
-Execute by fanning out: split the plan into independent units of work and dispatch them to parallel subagents (all agent calls for independent units go out in a single message so they run concurrently). Keep sequential only what genuinely depends on a previous result. The session LLM chooses the model per subagent the same way — cheap/fast models for mechanical or narrow-scope units, stronger models for units needing design judgment or cross-file reasoning.
+When two or more builders run in parallel, at most two use Opus. The `builder` agent defaults to Sonnet; pass `model: opus` only for a row above that calls for it.

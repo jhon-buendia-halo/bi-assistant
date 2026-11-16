@@ -1,7 +1,7 @@
 // Claude Code PreToolUse hook (Bash|PowerShell), registered in .claude/settings.json.
 // When a command starts the web app (backend/dist/cli.js) from a worktree and a
 // story in progress has no demo yet, it reminds the session to record and
-// publish the demo before handing the app to the user (CLAUDE.md fast loop,
+// publish the demo before handing the app to the user (workflow-strict fast loop,
 // delivery.md 13). It never blocks the command and stays silent on any error.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -36,7 +36,7 @@ try {
   const text =
     `No demo yet for ${ids.join(', ')}. Before handing the app to the user, run ` +
     ids.map((id) => `node scripts/qa.mjs ${id} --fast`).join(', ') +
-    ' (write the story\'s main scenario tagged @demo @story-<id> first for a UI story), then node scripts/demo-page.mjs <id> and publish the page as a Claude artifact (CLAUDE.md fast loop).';
+    ' (write the story\'s main scenario tagged @demo @story-<id> first for a UI story), then node scripts/demo-page.mjs <id> and publish the page as a Claude artifact (workflow-strict fast loop).';
   process.stdout.write(JSON.stringify({
     systemMessage: `Demo reminder: ${text}`,
     hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: text },

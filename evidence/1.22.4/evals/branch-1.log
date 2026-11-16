@@ -1,0 +1,430 @@
+[33mWARN[39m [2026-11-11 11:26:31.887 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:26:31.890 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-assess  (13446ms)
+      pass check-called-tool: Checks that "assess_data_readiness" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-the-first-data-tool-call-is-assess-data-readiness: the first data tool call is "assess_data_readiness"
+      pass dr-the-data-readiness-skill-is-loaded-before-the-first-assessme: the "data-readiness" skill is loaded before the first assessment
+      pass dr-the-answer-quotes-the-overall-score-the-tool-returned: the answer quotes the overall score the tool returned
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked for a fresh readiness assessment of the session data. Score pass=true only if the answer gives
+[33mWARN[39m [2026-11-11 11:26:45.403 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-scores-from-tool  (8585ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-assess-data-readiness-or-get-readiness-report-was-called-and: "assess_data_readiness" or "get_readiness_report" was called and succeeded
+      pass dr-the-answer-quotes-the-overall-score-the-tool-returned: the answer quotes the overall score the tool returned
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass dr-accuracy-and-currency-are-given-no-score: accuracy and currency are given no score
+[33mWARN[39m [2026-11-11 11:26:47.010 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-refuse-adjust  (3365ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-assess-data-readiness-called-at-most-1: "assess_data_readiness" called at most 1×
+      pass dr-readiness-tools-were-called-only-with-dataset-and-reportid: readiness tools were called only with dataset and reportId
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked the Data Readiness Agent to raise the completeness score to 100 and give a new overall score. 
+[33mWARN[39m [2026-11-11 11:26:51.962 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:26:51.962 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:26:51.963 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-list-reports  (4450ms)
+      pass check-called-tool: Checks that "list_readiness_reports" was called
+      pass check-did-not-call: Checks that "assess_data_readiness" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked to see the past readiness assessments. Score pass=true only if the answer lists the reports th
+[33mWARN[39m [2026-11-11 11:27:53.829 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-explain-weakest  (66609ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-get-readiness-report-or-assess-data-readiness-was-called-and: "get_readiness_report" or "assess_data_readiness" was called and succeeded
+      pass dr-the-answer-names-the-lowest-scoring-assessed-dimension: the answer names the lowest-scoring assessed dimension
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass dr-accuracy-and-currency-are-given-no-score: accuracy and currency are given no score
+      pass llm-judge: LLM judge: The user asked which dimension is worst and what to fix first. Score pass=true only if the answer names the l
+[33mWARN[39m [2026-11-11 11:28:06.626 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-accuracy-not-assessed  (8060ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-accuracy-and-currency-are-given-no-score: accuracy and currency are given no score
+      pass dr-every-score-like-number-in-the-answer-is-one-a-readiness-too: every score-like number in the answer is one a readiness tool returned
+      pass llm-judge: LLM judge: The user asked for the accuracy score. The engine does not assess accuracy or currency: they need reference d
+[33mWARN[39m [2026-11-11 11:28:10.637 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:28:10.638 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-no-sql  (4217ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass check-did-not-call: Checks that "assess_data_readiness" was NOT called
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass dr-answer-states-no-match-count: answer states no match count
+      pass llm-judge: LLM judge: The user asked the Data Readiness Agent to run a SQL query and give a match count. That is general analysis, 
+[33mWARN[39m [2026-11-11 11:28:23.435 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:28:23.435 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-drilldown-nulls  (15099ms)
+      pass check-called-tool: Checks that "run_readonly_sql" was called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-run-readonly-sql-read-goals-with-assist-player-id-is-null: run_readonly_sql read goals with "assist_player_id IS NULL"
+      pass dr-no-new-assessment-unless-no-report-exists: no new assessment unless no report exists
+      pass llm-judge: LLM judge: The user asked the Data Readiness Agent for the records behind the completeness finding on goals.assist_playe
+[33mWARN[39m [2026-11-11 11:28:28.936 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:28:28.937 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-out-of-scope  (3271ms)
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass check-did-not-call: Checks that "assess_data_readiness" was NOT called
+      pass dr-answer-names-no-winner: answer names no winner
+      pass llm-judge: LLM judge: The user asked who won the 2022 World Cup, a question about the content of the data, not its readiness. Score
+[33mWARN[39m [2026-11-11 11:28:36.294 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:28:36.294 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:28:36.294 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-profile-sample  (10099ms)
+      pass check-called-tool: Checks that "profile_data_sample" was called
+      pass check-did-not-call: Checks that "assess_data_readiness" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-profile-data-sample-profiled-players: profile_data_sample profiled "players"
+      pass dr-every-sampled-number-in-the-answer-is-one-profile-data-sampl: every sampled number in the answer is one profile_data_sample returned
+      pass dr-no-sampled-number-is-called-a-score: no sampled number is called a score
+      pass llm-judge: LLM judge: The user asked for a profile of a sample of the players table. Score pass=true only if the answer summarises 
+[33mWARN[39m [2026-11-11 11:28:44.405 -0500] (Mastra): [36mFailed to save score for scorer check-called-tool:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-called-tool not found",
+      "stack":
+          Error: Scorer with id check-called-tool not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:22)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:28:44.406 -0500] (Mastra): [36mFailed to save score for scorer check-did-not-call:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-did-not-call not found",
+      "stack":
+          Error: Scorer with id check-did-not-call not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+[33mWARN[39m [2026-11-11 11:28:44.406 -0500] (Mastra): [36mFailed to save score for scorer check-no-tool-errors:[39m
+    err: {
+      "type": "MastraError",
+      "message": "Scorer with id check-no-tool-errors not found",
+      "stack":
+          Error: Scorer with id check-no-tool-errors not found
+              at Mastra.getScorerById (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\mastra-De7KUlhk.cjs:2850:17)
+              at saveSingleScore (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10981:39)
+              at saveScoresToStorage (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10914:156)
+              at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at async pMap.concurrency.concurrency (C:\Users\jhonc\Documents\projects\bi-assistant\.claude\worktrees\M1-22-synthetic-data\backend\node_modules\@mastra\core\dist\agent-BMi0F5ou.cjs:10164:16)
+              at async file:///C:/Users/jhonc/Documents/projects/bi-assistant/.claude/worktrees/M1-22-synthetic-data/backend/node_modules/p-map/index.js:131:20
+      "id": "MASTRA_GET_SCORER_BY_ID_NOT_FOUND",
+      "domain": "MASTRA",
+      "category": "USER",
+      "details": {}
+    }
+PASS  dr-synthetic-script  (7834ms)
+      pass check-called-tool: Checks that "generate_synthetic_data" was called
+      pass check-did-not-call: Checks that "run_readonly_sql" was NOT called
+      pass check-no-tool-errors: Checks that no tool calls resulted in errors
+      pass dr-generate-synthetic-data-called-with-rowspertable-50: "generate_synthetic_data" called with rowsPerTable 50
+      pass dr-the-answer-names-the-script-file-and-says-it-is-in-the-panel: the answer names the script file and says it is in the panel
+      pass dr-no-sampled-number-is-called-a-score: no sampled number is called a score
+      pass llm-judge: LLM judge: The user asked for 50 synthetic rows per table of World Cup. Score pass=true only if the answer says a synthe
+
+11/11 questions passed

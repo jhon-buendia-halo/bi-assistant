@@ -46,7 +46,7 @@ done
 grep -q "POSTGRES READY" "$WORK/pg.log" || { cat "$WORK/pg.log"; exit 1; }
 echo "postgres pid $PG_PID on $PG_PORT"
 
-(cd "$BACKEND" && INTELLIFY_API_PORT=0 exec node dist/cli.js --no-open --port "$APP_PORT" --data-dir "$WORK/appdata") >"$WORK/app.log" 2>&1 &
+(cd "$BACKEND" && exec node dist/cli.js --no-open --port "$APP_PORT" --data-dir "$WORK/appdata") >"$WORK/app.log" 2>&1 &
 APP_PID=$!
 for _ in $(seq 1 60); do
   curl -s -o /dev/null "http://127.0.0.1:$APP_PORT/datasources" && break

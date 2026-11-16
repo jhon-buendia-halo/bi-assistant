@@ -13,6 +13,7 @@ import { AgentLlm } from '../../services/agents-api.service';
 function providerLabel(llm: AgentLlm): string {
   if (llm.providerName) return llm.providerName;
   if (llm.provider === 'custom') return 'Custom endpoint';
+  if (llm.provider === 'copilot') return 'GitHub Copilot';
   return llm.provider ?? '—';
 }
 

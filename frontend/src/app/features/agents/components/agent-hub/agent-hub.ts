@@ -1,16 +1,16 @@
 import {
   Component,
+  DestroyRef,
   OnInit,
   computed,
   inject,
-  input,
   output,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { catchError, of, switchMap, timer } from 'rxjs';
 import {
   BookOpen,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   LucideAngularModule,
   Plus,
@@ -18,20 +18,26 @@ import {
 } from 'lucide-angular';
 import { Agent, AgentsApiService } from '../../services/agents-api.service';
 import {
-  HUB_FILTERS,
   HubFilter,
-  HubSectionId,
+  OWNER_FILTERS,
+  OwnerFilter,
   buildHubSections,
   hubEmptyMessage,
-  visibleCards,
+  hubFilters,
 } from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
+import { WorkflowRunSummary } from '../../../workflows/models/workflow.model';
+import { AgentActivity, agentActivity } from '../../services/agent-activity';
 import { AgentCard } from '../agent-card/agent-card';
 
+/** How often the hub re-reads the run history for the agents' status. */
+export const ACTIVITY_REFRESH_MS = 15_000;
+
 /**
- * The Agents screen (agents-evals R1-R4, R53, ui.md 4.4). Search, filter and
- * expanded sections live in this component, so they reset each time the hub
- * opens.
+ * The Agents screen (agents-evals R1-R4, R53, ui.md 4.4): one section per
+ * domain. Search, filter and owner live in this component, so they reset
+ * each time the hub opens.
  */
 @Component({
   selector: 'app-agent-hub',
@@ -40,53 +46,65 @@ import { AgentCard } from '../agent-card/agent-card';
 })
 export class AgentHub implements OnInit {
   readonly BookOpen = BookOpen;
-  readonly ChevronDown = ChevronDown;
-  readonly ChevronUp = ChevronUp;
   readonly Loader2 = Loader2;
   readonly Plus = Plus;
   readonly Search = Search;
 
-  readonly filters = HUB_FILTERS;
+  readonly owners = OWNER_FILTERS;
 
   private readonly api = inject(AgentsApiService);
   private readonly toast = inject(ToastService);
+  private readonly runsApi = inject(WorkflowRunsApiService);
+  private readonly destroyRef = inject(DestroyRef);
   readonly openAgent = output<Agent>();
   /** New agent; the shell opens the agent editor (R54). */
   readonly newAgent = output<void>();
   /** Skills; the shell opens the skills library (R68). */
   readonly openSkills = output<void>();
-  /** Start chat on a card; the shell creates or composes the session (R53). */
-  readonly startChat = output<Agent>();
-  /** Key of the agent whose session is being created, if any. */
-  readonly startingAgentKey = input<string | null>(null);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly agents = signal<Agent[]>([]);
   readonly query = signal('');
   readonly filter = signal<HubFilter>('all');
-  readonly expanded = signal<ReadonlySet<HubSectionId>>(new Set());
+  readonly owner = signal<OwnerFilter>('any');
+  /** The run history; null until it loads or when it cannot be read. */
+  readonly runs = signal<WorkflowRunSummary[] | null>(null);
+
+  /**
+   * Each agent's status, by key (ui.md 4.4). Empty while the run history is
+   * unknown, so a card never claims an agent is available without knowing.
+   */
+  readonly activities = computed(() => {
+    const runs = this.runs();
+    const map = new Map<string, AgentActivity>();
+    if (!runs) return map;
+    for (const agent of this.agents()) {
+      map.set(agent.key, agentActivity(agent, runs));
+    }
+    return map;
+  });
+
+  /** All, Pinned and the domains that have agents (R2). */
+  readonly filters = computed(() => hubFilters(this.agents()));
 
   readonly sections = computed(() =>
-    buildHubSections(this.agents(), this.filter(), this.query()).map(
-      (section) => ({
-        ...section,
-        expanded: this.expanded().has(section.id),
-        // The Official section shows every card and no Show more, so the
-        // showcase agents are seen at once (R3, R106); the others start on
-        // their first row.
-        ...(section.id === 'official'
-          ? { shown: section.agents, hidden: 0 }
-          : visibleCards(section.agents, this.expanded().has(section.id))),
-      }),
-    ),
+    buildHubSections(this.agents(), this.filter(), this.owner(), this.query()),
   );
 
   readonly emptyMessage = computed(() =>
-    hubEmptyMessage(this.filter(), this.query(), this.sections()),
+    hubEmptyMessage(this.filter(), this.owner(), this.query(), this.sections()),
   );
 
   ngOnInit(): void {
+    timer(0, ACTIVITY_REFRESH_MS)
+      .pipe(
+        switchMap(() =>
+          this.runsApi.list().pipe(catchError(() => of({ runs: null }))),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((res) => this.runs.set(res.runs));
     this.api.getAgents().subscribe({
       next: (res) => {
         this.agents.set(res.agents);
@@ -103,11 +121,8 @@ export class AgentHub implements OnInit {
     this.query.set((event.target as HTMLInputElement).value);
   }
 
-  toggleSection(id: HubSectionId): void {
-    const next = new Set(this.expanded());
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    this.expanded.set(next);
+  onOwner(event: Event): void {
+    this.owner.set((event.target as HTMLSelectElement).value as OwnerFilter);
   }
 
   /**

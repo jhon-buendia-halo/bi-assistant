@@ -1,6 +1,6 @@
 # Retrospective
 
-Lessons from each completed change, newest first. **Read this file before starting any task.** See *Retrospective convention* in [CLAUDE.md](CLAUDE.md).
+Lessons from each completed epic, newest first. This is the full history: the rules still in force are distilled into [lessons.md](lessons.md), which every task reads first. See step 11 of the `workflow-gate` skill.
 
 Entry template:
 
@@ -14,6 +14,205 @@ Entry template:
 
 ---
 
+## 2026-11-15 — M1-25 Query inspector: every figure links to its query (1.25.1–1.25.7)
+
+### What went well
+- **Three wireframed proposals, one pick, four decisions in one picker.** Nothing was re-planned after the builders started.
+- **The contract came first** (types, endpoints, copy, test ids, the hard parts decided). Two waves of builders worked in parallel against it, the frontend before its backend existed, and only one integration slip reached the merge (the Show step read its verb twice).
+- **Facts beside the tool result, never in it.** No model's input changed in the first delivery, so no evals were owed.
+- **Looking at the real app after each wave paid three times**: two chips per figure crowded an answer's table, a rank cell linked unrelated numbers, and the explainer wrote two-sentence steps. All were fixed before hand-over.
+- **The inspector found a real defect on its first real question**: Write answer read 50 rows of each query, so a list of 100 stopped at 50.
+- **More runs separated an effect from noise.** With 3 runs a judged case read 2 of 3; with 12 against 9 it showed the new rule putting an unchecked assumption into 7 of 12 answers against 1 of 9, and the rule was narrowed.
+
+### What went wrong
+- **`main` moved under the epic and was merged only when the PR was due.** PR #108 changed where a stored run opens; story 1.25.5 had been built for the page it left, its scenario had to be rewritten, and two spec files conflicted.
+- **The plan listed two hosts of the answer view; the app has four.** The run detail page was found by clicking through the real app, the other two by a grep that the plan should have started with.
+- **The base build was overwritten before the eval comparison was over.** A second worktree had to be built to measure the base rate of the one case in doubt.
+- **A new rule in the middle of an agent's instructions changed answers it was not about.** "More than 10 rows" also fired on results the writer saw whole.
+- **Fifteen eval processes at once made the local model endpoint time out** (and answer a 520), which cost two runs and a re-run.
+- **`npx playwright test` with no project ran the desktop project too**, which failed to launch, and a command chained after it hid the exit code.
+- **The story packs carried another plan's text.** "plan section 2" in a roadmap entry matched section 2 of every plan file.
+- **After `main` was merged, `qa.mjs --free` selected 37 Playwright tests instead of 69**: the specs `main` had changed were no longer in the selection and were run by hand.
+- **A test edited through a script failed prettier**, seen only at the lint step of the full run.
+
+### What to do differently
+- Fetch and merge `origin/main` before each wave, not only before the PR; in a Conductor workspace the ref moves without a fetch of your own.
+- Before planning a change to a shared component, list its hosts (`grep -rn "<app-<name>" frontend/src`) and open the real app on each entry point.
+- Before an eval comparison, build the base in its own worktree and keep it until the comparison is closed; run a judged case that differs by one run 6 times or more on both builds before naming it noise or a regression; keep the eval processes at 6 or fewer.
+- Put a new instruction rule last, make it fire on a cue the request itself carries, and measure before widening it.
+- Run Playwright by hand with `--project=web`, and never chain a command after a test run whose exit code you read.
+- In a roadmap entry cite the plan by story id (`plan 1.25.3`) or by link, never `plan section 2`.
+- After merging `main` late, run by hand the E2E specs `main` changed.
+- Run `npx prettier --check` on any file edited through a script.
+
+## 2026-11-12 — M0-6 Workflow modes: Strict and Free style (0.6.1–0.6.5)
+
+### What went well
+- **The sketch before building settled the shape in one round.** The user changed the free-style steps once, in the confirmation reply, and nothing was re-planned afterwards.
+- **One Sonnet builder for the only code-heavy story (`qa.mjs --free`) ran while the lead moved the docs.** Its diff was small and right on first review: 17/17 `qa-lib` tests and a dry run.
+- **The real `qa.mjs --free` run was green on the first try** (3078 backend and 736 frontend unit tests, lint, check-specs).
+
+### What went wrong
+- **The free-style steps the user wrote named `qa.mjs --gate`, which needs a roadmap id and writes evidence.** This was found only while planning, after the confirmation, so a fifth story (0.6.4) was added without asking again.
+- **Moving the `## Workflow` section out of `CLAUDE.md` would have silently switched the workflow pane to its 2026-10-10 built-in copy.** It was caught only by grepping for `CLAUDE.md` readers before the move.
+
+### What to do differently
+- Before moving or renaming a section of `CLAUDE.md` or a skill, grep `.claude/mods`, `scripts/` and `.claude/agents` for code that parses it.
+- When a user's step list names a command, check that command's required arguments against the new workflow before confirming the plan.
+
+---
+
+## 2026-11-12 — M1-23 Workflow-first, chats retired, faster workflow (1.23.1–1.23.33, 1.23.26b)
+
+### What went well
+- **The fan-out pipeline delivered 34 stories in two days.** Each story went through the same loop: builder in its own worktree from a brief → merge → the lead re-verifies → clean up. The re-verification caught real defects that the builders' reports missed:
+  - duplicated v2 phases;
+  - a read-only chat that a test still typed into;
+  - an RFP run offering visuals against rfp R15;
+  - a stale kind-chip test;
+  - TS2783 errors that Jest does not see.
+- **Contracts in `docs/plans/` let independent stories run in parallel.** Two or three builders at a time; the conflicts were small and mechanical (unions of imports and tests, one renumbering of `api.md`).
+- **The speed-up stories paid off immediately.**
+  - Story packs of 4–18 KB replaced exploring a 2 MB spec set.
+  - `roadmap.md` went from 277 to 40 KB.
+  - A wave check of two stories took 14 s.
+  - Playwright with 3 workers took the full suite from 508 to 186 s.
+  - Sonnet builders cost 44–270k tokens per story, against ~280k average for Opus builders.
+- **No change to what any agent receives, proven each time.** Prompt and tool-list hashes, plus request-parity tests (run vs chat turn; eval requests before vs after), so no eval runs were needed for a large refactor of the turn path.
+
+### What went wrong
+- **Direction changed four times in one day:** agent Graph tab → workflow-first with chats → run workflows → chats retired. Stories 1.23.4–1.23.7 were built and then largely superseded. That was about 1.1 M tokens and several hours.
+- **Builders inherited the lead's Opus.** `builder.md` said `model: inherit`, and `/usage` showed builders at 61 % of usage. The 5-hour Opus limit was hit mid-story (1.23.15 paused about an hour).
+- **A `qa.mjs` usage error left a stale `dist`.** `qa.mjs --wave` rejected the id `1.23.26b` and exited before building. The next backend e2e and Playwright runs tested the pre-Phase-C build, and that was only noticed because one e2e returned 201 where 404 was expected.
+- **Merges stopped silently twice.** One merge stopped on a conflict (`MERGE_HEAD` left), and its tests ran on a half-merged tree. Separately, two builders took the same `api.md` number (129).
+- **Visual baselines.** A first Playwright run on macOS writes the missing darwin baseline, and a second run then "passes" against it. The Linux baseline went stale with the new rail item, and no CI runs Playwright to notice.
+- **The lead session itself grew huge.** Every turn re-sent a very long history. The handoff file came late.
+- **Heredocs and `sed` for edits, against lessons.md.** Several regex/heredoc edits slipped through; one non-POSIX `sed` alternation silently did nothing.
+
+### What to do differently
+- **Decide before building.** For a feature whose end state is unclear, show a 10-minute mock and get one confirmation of the end state before any story. Now in `CLAUDE.md`.
+- **Pin `model:` on every subagent definition.** Never `inherit`. `builder.md` is now `sonnet`; pass `opus` only for design or critical stories.
+- **After every merge**, check `git diff --name-only --diff-filter=U` and the absence of `MERGE_HEAD` before running anything.
+- **Treat a non-zero exit before the build as "the build did not happen".** Run `npm --prefix backend run build:all` explicitly before any backend e2e or Playwright run that follows a failed `qa.mjs`.
+- **After every Playwright run on macOS**, delete `*-snapshots/*-darwin.png` that git does not track, before the next run.
+- **A parallel brief that adds `api.md` endpoints names its number range.** For example, "use 130–139".
+- **Write the handoff file at the start of the second wave.** Then continue in a fresh session.
+
+---
+
+## 2026-11-11 — BA-11 Desktop leftover processes and slow Windows install (1.7.21, 1.7.22)
+
+### What went well
+- Reading electron-builder's NSIS templates first showed the installer already uninstalls the previous version, which turned "add uninstall" into the real question (a leftover backend process) before any code was written.
+- A scripted check against the real Electron app (stale backend, second launch, hard kill, foreign server on the port) proved all four guards in one run, and the same script is kept with the evidence.
+- Counting the installed files by extension found the cause of the slow install in minutes: over half of the 46,955 files were declarations, source maps, sources and docs.
+
+### What went wrong
+- The first `installer.nsh` did not compile: defining `customCheckAppRunning` makes electron-builder skip `getProcessInfo.nsh` and `Var pid`, which its own `_CHECK_APP_RUNNING` (reused inside the hook) needs. It was caught only because the installer was built locally before CI.
+- Spec edits were made with a Python heredoc against the lessons rule; asserted anchor counts kept it safe, but it was the wrong tool.
+- The gate's demo-link check needs the Artifact tool, which this session did not have, so both stories ran the gate with `--no-demo`.
+- Nothing was run on Windows: the `tasklist`/`taskkill` paths and the install time saving are unmeasured there.
+
+### What to do differently
+- Before pushing a change to `frontend/build/installer.nsh` or the `build` config, compile the Windows installer locally: `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis --x64 -c.win.signAndEditExecutable=false -c.directories.output=<scratch>` runs on macOS without Wine.
+- When an override hook replaces an electron-builder macro, read the template's `!ifmacrondef` guards and include what they skip.
+
+---
+
+## 2026-11-11 — M0-5 Faster workflow, repo-only planning (0.5.1–0.5.5)
+
+### What went well
+- Starting from evidence, not a guess: the retrospective's own complaints (five eval rounds, a merge that waited a day, the whole workflow re-run per request) and today's failed fresh build pointed at the slow steps before any change was proposed.
+- Two subagents ran the independent pieces (the `qa.mjs` changes, distilling `lessons.md`) while the docs, skills and Jira removal were done in the main session; neither touched the other's files.
+- Keeping the `<n>. **<title>** — …` step format meant the `workflow-steps` mod parsed the new `CLAUDE.md` unchanged; only its first-action file and labels moved to `lessons.md`.
+- Testing `bootstrap.mjs` on an rsync'd copy without `node_modules` proved the dependency fix with CI's own install flags without disturbing the running app.
+- The first real gate run of the parallel `qa.mjs` caught a regression the unit tests of the script could not: Karma under load.
+
+### What went wrong
+- The parallel checks made the frontend suite fail in 3 of 5 gate runs. The subagent had only tested the runner on dummy commands. It took two rounds to separate the two causes: CPU contention made it worse, and two order-dependent tests (shared `localStorage`, document focus) were flaky even alone (1 of 12).
+- My first install used `--legacy-peer-deps` as documented, which silently dropped `@floating-ui/dom`; the user had to say "try again".
+- `docker compose up -d` from this worktree recreated the shared Postgres container (an existing lesson) — the data survived on the volume, but I should have checked first.
+- `setup-local.mjs` printed a failure for the Intellify RFP API on a fresh machine, and fixing it by hand needed the `intellify-api` runbook and an app restart.
+
+### What to do differently
+- When a change makes test steps run concurrently, run the real gate several times before calling it done, and compare with the same suite run alone.
+- Before blaming a change for a failing test, count its flake rate on unchanged code (run it alone 5–10 times).
+- Reset shared browser state a unit test reads (`localStorage`, focus) in its own `beforeEach`; Jasmine shuffles the order on every run.
+
+---
+
+## 2026-11-10 — 1.21.13–1.21.16 Monitoring: LLM calls, context window, session flow (BA-320)
+
+### What went well
+- Probing the real trace store first (an isolated instance, one real chat turn, the `span_events` rows exported to a fixture) pinned the reader to Mastra's actual shape; the context boxes summed to the real 18,040 input tokens on the first check.
+- Reading the store in-process through Mastra's own DuckDB connection avoided the file lock the running app holds.
+- The options page (waterfall, trajectory, graph) before building let the user pick the design in one answer.
+- The demo was recorded and published in the fast loop for every story, so each hand-over came with its video.
+
+### What went wrong
+- The session answer first showed the first request's commentary ("I'll start by checking…"): a model call's output joins the text of every request. A unit test had pinned the wrong value, so it passed; only reading the real session in the running app found it.
+- The user did not see the changes after the rebuild: the open browser tab still ran the old bundle. The hand-over did not say to reload.
+- The first E2E draft asserted the caption text where the "Context window" label is a separate heading.
+- Some Gherkin scenarios (a failed call, two agents, more than 25 calls) need data the LLM stub cannot produce, so they are covered only by component unit tests.
+
+### What to do differently
+- Check what a unit test pins against the real data before trusting it, especially derived text such as an answer.
+- When handing over a restarted instance, tell the user to hard-reload the open tab (Ctrl+Shift+R).
+- Give the LLM stub an error reply, so failed-call scenarios can run end to end.
+
+---
+
+## 2026-11-10 — 1.10.3 GitHub Copilot as an LLM provider (BA-159)
+
+### What went well
+- A spike against the real Copilot SDK came before the epic spec. It settled the hard facts first: a Free seat auto-routes and lists no models, built-in tools must be overridden, and declaration-only tools let Mastra keep the tool loop. The design held through implementation.
+- The E2E stub of the Copilot runtime was written from a recorded trace of the real runtime, captured through a logging proxy that the SDK's own `COPILOT_CLI_PATH` launches. Production code needed no test hook, and the stub matched the protocol on the first smoke run.
+- The assistant evals on the real seat found a defect that no unit or E2E test would have: the model sometimes writes a tool call's arguments as its answer. A second proxy trace located the cause (in-session model behaviour, not the adapter's history replay, which was my first guess) before any code changed. The fix (R66) has unit tests and an E2E scenario.
+- Running the full unit suites on a detached `main` checkout (junctioned `node_modules`) made "pre-existing" provable: the same 10 suites and 43 tests fail on both.
+
+### What went wrong
+- The first E2E run failed every test at teardown with EPERM. The tests listed `{ launchApp, appDataDir }`, and `launchApp` does not depend on `appDataDir`, so Playwright deleted the data dir before stopping the app. About 20 minutes went to the wrong suspects (the stub log, Windows Defender) before reading the fixture order.
+- A "custom endpoint" regression eval ran on Copilot. The user had saved Copilot in the scratch copy while testing, which removed the endpoint key (R55), and I did not check the copy's saved provider before starting. It wasted Copilot credits, and the stray loop survived `TaskStop`: two node children kept running until killed by PID.
+- I guessed the raw-JSON cause (transcript replay) before tracing it, and the guess was wrong.
+- The demo recording failed once: under `DEMO=1` the caption itself contains the asserted text ("Configuration saved"), so `getByText` matched two elements.
+- `sed` edits mangled two shell scripts (a command substitution inside an env-prefix line, an `if` inside a line continuation), against an earlier retrospective lesson.
+- The Copilot evals do not reach 100%. On a Free seat, Copilot also judges its own answers, so the remaining failures mix model and judge quality. The user chose to ship with them documented.
+
+### What to do differently
+- In a Playwright test that uses `launchApp`, destructure `appDataDir` first (`{ appDataDir, launchApp }`), so the app stops before its data dir is removed.
+- Before an eval run, print the data copy's saved provider and model (`scratchpad/read-llm-settings.js` pattern), and use `EVAL_LLM_*` for any target other than the saved one.
+- After `TaskStop` on a looping script, list `run-assistant-evals` node processes and kill leftovers by PID.
+- Trace before theorising: for a provider-side misbehaviour, record the runtime traffic (logging proxy) on one failing case first.
+- In a `@demo` test, assert texts the captions also contain with `{ exact: true }`.
+- Write multi-line shell helpers with the Write tool, never with `sed` edits.
+
+---
+
+## 2026-11-11 — 1.22.1–1.22.6 Sampled profiling and synthetic data (M1-22)
+
+### What went well
+- Timing the sampling statements live before integration (1.20 lesson) found what the plan could not: a cold `TABLESAMPLE` on a 6-billion-row Databricks table took 52 s, over the 15 s timeout, and never-analysed PostgreSQL tables (`reltuples = -1`) would have been labelled "sampling not supported". Both became plan changes before any unit started.
+- A lead-written contract file (`generator/contract.ts`: types, function signatures, error class) let eight units across two waves build the generator, both writers, the exports, the API, the UI, the E2E and the specs in parallel; every merge was clean and the API and E2E units met on the first run.
+- Asking before reversing a privacy decision. "Export the sample" was ambiguous; asking turned up a real choice (statistics vs. real rows) that reversed ADR-0039's "raw rows never leave the server", and the answer shaped a narrow, confirmed, logged-nowhere path instead of a general one.
+- Looking at the running app before hand-off caught two candidate issues; reading computed styles instead of trusting a screenshot showed the dark-theme "faded" buttons were a transient toast state, not a bug.
+- Evals ran three times in parallel on fresh data-dir copies: 11/11 each, in under 3 minutes.
+
+### What went wrong
+- Two sessions worked the same epic in one worktree. The user said "keep going" to this session while another (`bi-assistant-ff`) was building 1.22.1; only spotting a file changing under a read prevented duplicate units. The takeover needed the other session stopped by hand.
+- Merging `main` at the start of the gate surfaced three things the fast loop never saw: an ADR number collision (main had taken 0037 and 0038; ours became 0039, 33 references renamed by context), a lockfile conflict, and an initial bundle 196 bytes over the 1 MB budget. The failed build then left a stale `backend/public`, which made two navigation tests fail for a reason unrelated to them.
+- `npm run lint` is `eslint --fix`: it rewrote line endings in nine unrelated `backend/test` files, and `npm ci` was interrupted midway because the app I had started held the native SQLite module open (Windows file lock), leaving `node_modules` half-deleted.
+- Mechanical lint fixes made by string replacement broke parentheses twice (turning `async () => ({…})` into `() => Promise.resolve({…})` needs a closing paren only when the body was a bare array).
+- E2E runs again overwrote committed evidence screenshots (1.14.17–1.14.19) and wrote an unreviewed Windows visual baseline that would have made the screenshot test pass against itself.
+- The 1.22.4 builder raised the bundle budget locally to get a build, an unrequested config change it reverted only because it was told not to commit outside its scope.
+
+### What to do differently
+- At the start of a "keep going" with no context, run `ListAgents` and check for commits in the last minutes on the epic branch before touching anything; if another session is live on it, ask which one owns the work.
+- Merge `origin/main` into the epic branch **before the fast loop of the last story**, not only at the gate, and run `build:all` right after: ADR numbers, lockfiles and bundle budgets drift while an epic is open. Pick ADR numbers by reading `main`'s architecture.md at that moment.
+- When a build fails in the gate, fix it before reading any Playwright failure: `backend/public` is then stale and every UI result is suspect.
+- Run backend lint as `npx eslint <files>` on the changed files, not `npm run lint` (`--fix` on the whole tree); then `git status` and restore anything outside scope.
+- Stop any app you started from a worktree (by PID) before `npm ci`/`npm install` there.
+- After every Playwright run: `git status -- evidence/ frontend/e2e/*-snapshots/`, restore changed evidence and delete new snapshot files unless a visual change was intended (they are written when a baseline is missing).
+- Brief builders: "If a build or budget blocks you, report it; do not change build config, even locally."
 ## 2026-11-10 — Merge of `main` (v0.45.0) into the BA-9, BA-123 and BA-124 branches (PRs #81, #61, #60)
 
 ### What went well

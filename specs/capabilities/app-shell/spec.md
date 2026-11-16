@@ -1,34 +1,36 @@
 # App shell
 
-The app shell is the frame every other capability lives in: a navigation rail, a "US Health Agentic Hub" banner, a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
+The app shell is the frame every other capability lives in: a navigation rail, a "Halo Workbench" header, a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
 
 ## Concepts
 
 Defined in [../../product/glossary.md](../../product/glossary.md): session, dataset, datasource, entity, diagnostics (System logs), eval run.
 
 Capability-local vocabulary, used only for UI words:
-- **Navigation rail** — the narrow, always-visible left column of icon buttons: the four workspace areas at the top, and the account avatar, system logs and Settings at the bottom.
-- **Area** — what the rail selects: Datasets, Agents, Context, Sessions or Settings. Sessions and Settings show a list pane beside their content.
-- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Context (its section cards) or one of its sections (Ontologies, User personas, Visuals), the Sessions area (with nothing open), new-session composer, a session's chat, or a Settings section.
+- **Navigation rail** — the narrow, always-visible left column of icon buttons: the six workspace areas at the top, and system logs and Settings at the bottom.
+- **Area** — what the rail selects: Datasets, Workflows, Agents, Artifacts, Sessions, Costs, Monitoring or Settings. Sessions and Settings show a list pane beside their content.
+- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Artifacts, an artifact's page, the Runs area (with nothing open), an open run, a past chat (read-only), or a Settings section.
 - **Details panel** — the right-hand column. What it shows depends on the main view (see R14).
 - **Backend status** — one of `starting`, `ready`, `restarting`, `down`, reported by the desktop shell's backend supervisor.
 
 ## Rules
 
 Layout and navigation
-- R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "US Health Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
+- R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Halo Workbench" header above the main area and, when open, the details panel. In the default `halo` brand the shell is flat (ADR-0044; a `mercer` build differs, R56): the rail runs the full height beside the column, with no frame, gaps or rounded panels.
 - R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
-- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Context** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Sessions**, in a chat or the composer: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL open the Sessions page with the list of sessions (R46), also from an open chat or the composer, and SHALL NOT change the drawer.
-- R3a. Choosing **Context** SHALL show the Context page: the level-two heading "Context", the note "What agents are given besides your data." and one card per section, laid out like the Agent Hub cards (three to a row). Each card SHALL show the section's icon tile, name and a two-line description, and clicking it SHALL open that section, with Context still the current rail item and a **Context** back control above the section that returns to the cards. Choosing **Context** on the rail from a section SHALL also return to the cards (as Sessions returns to its list, R3). The sections, in this order, are **Ontologies** ("Each dataset's concepts, relations, constraints and instructions the assistant applies.", network icon), which shows every dataset's ontology ([../dataset-ontology/spec.md](../dataset-ontology/spec.md) R40), and **User personas** ("Who asks the questions: their role, goals, typical questions and the answers they prefer.", Users icon), which shows the User personas section ([../user-personas/spec.md](../user-personas/spec.md)), and **Visuals** ("Chart types for data visualization, grouped by category, with when to use each.", chart-column icon), which shows the Visuals library section ([../visuals-library/spec.md](../visuals-library/spec.md)). Context replaced the rail's Knowledge item on 2026-11-09 (roadmap 1.21.4), User personas was added the same day (roadmap 1.21.6), and the Knowledge card left Context when knowledge became each dataset's ontology, edited in the dataset editor ([../dataset-ontology/spec.md](../dataset-ontology/spec.md), roadmap 1.21.8); the Ontologies card brought those ontologies back to Context the same day (roadmap 1.21.11), and the Visuals card was added on 2026-11-10 (roadmap 1.21.12). Later sections are added as cards.
-- R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
+- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Workflows**, **Agents**, **Artifacts**, **Runs**, **Costs** and **Monitoring**, in that order (**Runs** replaced **Sessions** on 2026-11-11, roadmap 1.23.21; **Artifacts** was added on 2026-11-15, [../workflows/spec.md](../workflows/spec.md) R33; **Costs** the same day, [../monitoring/spec.md](../monitoring/spec.md) R47). Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor and, for **Runs**, in a run or a past chat: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Workflows while a workflow's page is open, Datasets while the dataset editor is open, and Runs while a run, the composer or a chat is open. Choosing **Workflows** on a workflow's page SHALL return to the Workflows page ([workflows](../workflows/spec.md) R5, R7). Choosing **Runs** SHALL open the Runs page (R46), also from an open run, past chat or composer, and SHALL NOT change the drawer.
+- R3a. (Removed 2026-11-15.) The rail's **Context** item and its page are gone, with the User personas and Visuals library sections. Ontologies are edited only in the dataset editor's **Ontology** tab ([../dataset-ontology/spec.md](../dataset-ontology/spec.md)).
+- R3b. Choosing **Monitoring** SHALL show the Monitoring page, with Monitoring the current rail item: the level-two heading "Monitoring" and the LLM calls page ([../monitoring/spec.md](../monitoring/spec.md)): the note "LLM calls made by the app's agents, newest first.", the filters and the table of calls, or "No LLM calls yet." when there are none. A call opens its own page with Monitoring still current, and choosing **Monitoring** on the rail from it returns to the table (as Runs returns to its page, R3). The item and an empty page were added on 2026-11-10 (roadmap 1.21.13); the LLM calls table and the call page the same day (roadmap 1.21.14, 1.21.15).
+- R4. Below the workspace items the rail SHALL offer **Open system logs** (tooltip "System logs and diagnostics") and **Settings**; in the `halo` brand nothing follows them (the LenAI mark and "Powered by LenAI" were removed, ADR-0044; the `mercer` brand keeps the badge, R56). The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". The rail SHALL show no account avatar, no account menu and no Admin item: the app has one built-in super admin and nothing in the UI shows a user name.
 - R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
 - R6. Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: the Collapse sidebar and Expand sidebar controls.)
-- R7. The banner SHALL be the page's only level-one heading and SHALL read "US Health Agentic Hub" (since 2026-10-15, BA-234; it read "Agentic Hub" before). Only the banner carries "US Health": the window and document title (R33), the Settings build identity (R32), the welcome heading (R51) and the drawer label beside the menu button SHALL keep reading "Agentic Hub". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
+- R3c. Choosing **Costs** SHALL show the Costs page, with Costs the current rail item: the level-two heading "Costs" and the usage and cost overview of the app's LLM calls ([../monitoring/spec.md](../monitoring/spec.md) R47–R57): the period choice, the Today, This month, period, per-run and per-question tiles, the daily and monthly cost charts, the cost per workflow run, the most expensive runs, where the cost goes and the rankings by model and agent, or "No LLM calls in this period." when the period has none. A model or an agent opens Monitoring's LLM calls filtered to it, with Monitoring then current (monitoring R52).
+- R7. In the `halo` brand the header (the `banner` landmark, above the main area) SHALL hold the page's only level-one heading, which SHALL read "Halo Workbench" (a `mercer` build reads "US Health Agentic Hub", R56; since 2026-11-15, ADR-0044; it read "US Health Agentic Hub" before). While an area is open (Datasets, Workflows, Agents, Artifacts, Runs, Costs, Monitoring or Settings) the heading SHALL be followed by "/" and the area's name (`data-testid="header-area"`), the heading muted and the area name strong; on the home view there SHALL be no area name. The window and document title (R33), the Settings build identity (R32), the welcome heading (R51) and the rail's brand (the HALO wordmark, named "Halo Workbench", with "Workbench" beside it; only the "O" mark when the rail is collapsed) SHALL all read "Halo Workbench". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
 - R8. The sidebar and details panel SHALL keep a fixed minimum usable width for the main area (see R12) so the main content is never squeezed to nothing.
 
 Details panel: collapse and resize
-- R9. The system SHALL provide a **Collapse right panel** control inside the details panel. When collapsed, the panel and its resize separator SHALL be hidden and the top bar SHALL show an **Expand right panel** control at its right edge.
-- R10. The details panel SHALL open (if collapsed) whenever the user selects a dataset element for detail, selects an eval question, opens or generates a visual, switches the visual being shown, an agent shows an item in the panel ([agent-panel](../agent-panel/spec.md) R12), or clicks **Preview** in the agent editor. Otherwise it stays as the user left it.
+- R9. The system SHALL provide a **Collapse right panel** control inside the details panel. When collapsed, the panel and its resize separator SHALL be hidden and the top bar SHALL show an **Expand right panel** control at its right edge. On a workflow's page (`workflow-detail`, Settings not open) the system SHALL NOT render the details panel, its separator or the Expand control (the page's Run panel holds what it needs, [workflows](../workflows/spec.md) R7); the panel's open state is kept, so it returns as it was in every other view.
+- R10. The details panel SHALL open (if collapsed) whenever the user selects a dataset element for detail, selects an eval question, opens or generates a visual, switches the visual being shown, an agent shows an item in the panel ([agent-panel](../agent-panel/spec.md) R12), or clicks **Preview** in the agent editor. Opening a workflow's page, selecting a step or clicking **Execute** on it SHALL NOT open it ([workflows](../workflows/spec.md) R7; R9). Otherwise it stays as the user left it.
 - R11. The details panel width SHALL default to 572 px and SHALL always lie between a minimum of 360 px and a maximum of 960 px, as whole pixels.
 - R12. The maximum SHALL additionally be limited to the viewport width minus 240 px (the minimum main-content width), but SHALL never fall below the 360 px minimum. The system SHALL re-apply this limit whenever the window is resized; a resize SHALL NOT change the remembered width.
 - R13. The details panel SHALL have a vertical separator on its left edge, labelled **Resize right panel**, focusable, exposing its current, minimum and maximum width as value-now, value-min and value-max. Its tooltip SHALL read "Drag to resize · Double-click to reset".
@@ -43,30 +45,44 @@ Backend status banner
 - R20. For `restarting` the banner SHALL read "Backend restarting…" on an amber background. For `down` it SHALL read "Backend unavailable — restart the app" on a red background.
 - R21. When the app runs without the desktop shell (a plain browser, as in web mode or a dev server), the system SHALL assume the backend is externally managed: status stays `ready` and the banner SHALL never show.
 - R22. The desktop shell SHALL run the backend as a supervised child process and publish status changes to the window: `starting` when the app opens, `ready` once the backend answers its readiness probe, `restarting` while a crashed backend is being relaunched, `down` once relaunching is abandoned. It SHALL re-send the current status every time the window finishes loading, so a reloaded window is never stale.
+- R54. The desktop app SHALL run as a single instance per profile: launching it again SHALL NOT open a second window or start a second backend, and SHALL bring the running window to the front (restored if minimised).
+- R56. The brand SHALL be fixed at build time (`BRAND=halo|mercer`, default `halo`; ADR-0045). The rules above that name "Halo Workbench" (R1, R4, R7, R32, R33, R51) describe the `halo` build. A `BRAND=mercer` build SHALL instead show: the document title and Settings build identity "Agentic Hub" (R32, R33); the welcome heading "Welcome to Agentic Hub" (R51); the level-one heading "US Health Agentic Hub" in a photo banner with no area crumb (R7); the framed shell (textured gradient frame, rounded panels, gaps; R1); in the rail the text "Agentic Hub" and, after Settings, the "Powered by LenAI" badge (R4); and no HALO wordmark. It SHALL NOT contain any Halo name or image, and a halo build SHALL NOT contain Agentic Hub or LenAI-badge imagery. The Agentic Hub brand is distributed as a desktop installer, never in the npm package. Screens, navigation and behaviour are identical in both brands.
+- R55. The desktop shell SHALL NOT report `ready` for a server it did not start: a backend left running by an earlier launch SHALL be stopped at startup, a backend SHALL exit once its desktop shell is gone, and another process answering on the backend port SHALL keep the status off `ready` and record an error diagnostic ([api.md](../../system/api.md) 4.3).
 - R23. The readiness probe SHALL be an HTTP GET of the sessions list on the loopback address at the backend port (default 3000, overridable by the backend-port environment variable), counted ready only on a 200 response. It SHALL be retried every 100 ms, each attempt timing out after 500 ms, until 30 seconds have passed.
 - R24. The window SHALL open as soon as the backend is ready, or after the 30-second probe deadline expires. If the deadline expires the shell SHALL record an error diagnostic ("Backend did not become ready before timeout"), SHALL keep probing in the background, and SHALL publish `ready` if the backend answers later.
-- R25. When the backend exits unexpectedly (anything other than the app quitting), the shell SHALL publish `restarting` and relaunch it after a delay of 1 s, then 2 s, then 4 s for the first, second and third consecutive failure, each time probing for readiness. After the third failed relaunch the shell SHALL publish `down` and record an error diagnostic ("Backend restart budget exhausted…"). `down` SHALL NOT recover without restarting the app.
+- R25. When the backend exits unexpectedly (anything other than the app quitting), the shell SHALL publish `restarting` and relaunch it after a delay of 1 s, then 2 s, then 4 s for the first, second and third consecutive failure, each time probing for readiness. After the third failed relaunch the shell SHALL publish `down` and record an error diagnostic ("Backend restart budget exhausted…"). `down` SHALL NOT recover without restarting the app. When the backend exits with the dedicated port-in-use code (98, its port is taken by another program), the shell SHALL NOT retry: it SHALL publish `down` at once and record one error diagnostic that names the port and says another program or another copy of the app is using it.
 - R26. A backend that has stayed ready for 60 seconds SHALL be treated as healthy again: the next crash SHALL get a fresh three-attempt budget instead of inheriting an earlier streak.
 - R27. Quitting the app SHALL stop the backend and SHALL NOT trigger a relaunch.
 
 Toasts
 - R28. The system SHALL show short messages as toasts stacked at the bottom-right of the window, newest last, above all other content, without blocking the content beneath them.
 - R29. A toast SHALL be one of three kinds: `success`, `error` or `info`, each with its own icon (check, alert, info) and colour. Success and info toasts SHALL disappear after 4 seconds; error toasts SHALL disappear after 8 seconds.
-- R30. Each toast SHALL have a dismiss button, named "Dismiss notification", that removes it immediately. The toasts SHALL sit in a region named "Notifications" that assistive technology announces politely. Several toasts MAY be visible at once; there is no de-duplication.
+- R30. Each toast SHALL have a dismiss button, named "Dismiss notification", that removes it immediately. A toast MAY carry one action button (**Open**, **Retry**; R61) that runs the action and removes the toast. The toasts SHALL sit in a region named "Notifications" that assistive technology announces politely. Several toasts MAY be visible at once; there is no de-duplication.
 - R31. Every error toast SHALL also be recorded as an error entry with source `user-visible` in diagnostics (see [../diagnostics/spec.md](../diagnostics/spec.md)).
 
 App identity and version
-- R32. The Settings list pane SHALL end with the build identity: the text "Agentic Hub" followed by `v` and the shipped version, for example "Agentic Hub v0.24.3". The version SHALL be the same number the installer and release tag carry.
-- R33. The window title and the document title SHALL be "Agentic Hub". The operating-system app name (the macOS menu bar and Dock, the installers and the data directory) SHALL stay "Halo BI Assistant".
+- R32. The Settings list pane SHALL end with the build identity: the brand's product name followed by `v` and the shipped version, for example "Halo Workbench v0.24.3" ("Agentic Hub v0.24.3" in a `mercer` build, R56). The version SHALL be the same number the installer and release tag carry.
+- R33. In the `halo` brand the window title and the document title SHALL be "Halo Workbench". The operating-system app name (the macOS menu bar and Dock, the installers and the data directory) SHALL be "Halo Workbench" too (since ADR-0046; it was "Halo BI Assistant", and "Questions to Insights" before that). An install made under an earlier name SHALL keep its data directory (R57). (A `mercer` build uses "Agentic Hub" for all of them, R56.)
+- R57. The desktop app SHALL keep the data of an install made under an earlier product name ("Halo BI Assistant", then "Questions to Insights"): when the profile or Windows local data directory of the current name does not exist, it SHALL use the newest earlier-named one that does, in place, without moving it; and at startup it SHALL stop a backend recorded in that directory that still runs as the app's executable under an earlier name (ADR-0046).
+
+Background tasks (M1-26, ADR-0047)
+- R58. Long work the user starts (saving a dataset, loading a datasource inventory, loading testing data, ontology suggestions, a synthetic-data profile, tailoring or refreshing a visual, an eval run) SHALL keep running when the user opens another area, view, tab or Settings, and its result SHALL NOT be lost: the screen that started it, shown again, SHALL show it still running, or its result once it has ended.
+- R59. The rail SHALL show a **Background tasks** button above **System logs** (title "Background tasks", accessible name "Background tasks" or "Background tasks, <n> running"; label "Background tasks" in the drawer). While tasks run, its icon SHALL spin and a badge SHALL show how many run (capped at "99+"); with none running, no badge.
+- R60. The button SHALL open a panel named "Background tasks" listing the running tasks (title, current step when known, elapsed time `m:ss`, a progress bar: proportional when the work reports done and total, indeterminate otherwise) and then the finished ones, newest first (done, failed with the error, or stopped; how long ago). A finished task SHALL offer **Open** (when it has a place to open) and **Dismiss**; a failed or stopped one also **Retry**, which starts the same work again. **Clear finished** SHALL remove every finished task. Escape, the close button or a click outside SHALL close the panel.
+- R60a. A running workflow run's row SHALL show its agents' faces and, when the app knows it, which agent works now and the run's step (`<agent> is <doing> · step <n> of <total>`); with no step known yet, the faces SHALL NOT mark anyone as working ([ui.md](../../system/ui.md) 3.7).
+- R61. When a task ends, the app SHALL toast its outcome with the server's message: a success toast with an **Open** button when the task has a place to open, an error toast with a **Retry** button. A task MAY skip the success toast while its own screen is showing the result. The screen that started the task SHALL NOT toast the same outcome again.
+- R62. Starting work that is already running for the same object (the same dataset, fixture, datasource, visual or agent) SHALL NOT start it twice; the running task is shown instead.
+- R63. The task list SHALL live only in the running app: it starts empty on launch and keeps at most the 20 newest finished tasks.
+
 - R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
 
 Sessions area
-- R46. In the Sessions area the content shows the open session's chat, the new-session composer, or, with nothing open (the **Sessions** page), the list of sessions in the middle of the page card (sessions-chat R63). The navigation rail and drawer SHALL NOT list sessions (moved to the page on 2026-10-14, BA-230). Selecting a row SHALL open that session's chat; **Start New Conversation** in the page header SHALL open the composer. Deleting the open session SHALL return to the Sessions page, where the list no longer shows it.
+- R46. In the Runs area the content shows an open run of a removed workflow (`run-detail`: its workflow and status, input, steps and answer, read-only; any other run, a running one included (where its live view continues, ADR-0048), opens on its workflow's page drawn with that run, with **Run again** there; [workflows](../workflows/spec.md) R19), an open past chat (read-only; past-chats R66), or, with nothing open (the **Runs** page), two tabs: **Runs**, the stored runs, newest first, ten to a page under a "Search runs by title, workflow or ID…" field, each row with its title, workflow chip, status chip (`Done`, `Failed`, `Stopped`, `Running`), `ID <first 8 characters>` and start time and an options menu with **Delete run**; and **Past chats**, the old sessions (past-chats R63). The navigation rail and drawer SHALL NOT list runs or sessions. Selecting a run row SHALL open its run; selecting a past-chat row SHALL open that session read-only. Deleting the open run or session SHALL return to the Runs page, where the list no longer shows it.
 - R47. Removed in roadmap 1.8.8: the separate, collapsible session list pane is replaced by the drawer (R48).
 - R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon. Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
-- R49. In the Sessions area the page SHALL start with a header: an icon, then the title — the open session's name, "New conversation" in the composer, or "Sessions" — with the session's context under the title while a chat is open (its agent, when it was started from one, then its datasources; sessions-chat R57), and a **Start New Conversation** button that opens the composer.
+- R49. In the Runs area the page SHALL start with a header: an icon, then the title — the open past chat's name, or "Runs" — with the past chat's context under the title while one is open (its agent, when it was started from one, then its datasources; past-chats R57). It has no button that starts a conversation (the **Start New Conversation** button is gone since 1.23.22).
 - R50. Clicking **Expand navigation** or **Collapse navigation** SHALL remember the new state in the backend's `ui-preferences` document (ADR-0009), with a browser-local copy under `questions-to-insights:nav-expanded` (`true` / `false`) applied before the first paint. Nothing remembered means expanded; the backend wins over the copy.
-- R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230): the heading "Welcome to Agentic Hub", the line "Ask questions about your data in plain English, or let an agent walk you through a process step by step.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Ask a question" (button "Start a conversation", opens the New conversation composer), 3 "Work with an agent" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
+- R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230; steps 2 and 3 replaced in 1.23.22): the heading "Welcome to Halo Workbench" ("Welcome to Agentic Hub" in a `mercer` build, R56), the line "Run a workflow on your data and read the result, with the steps and agents behind it.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Run a workflow" (button "Workflows", opens the Workflows area), 3 "Agents are the building blocks" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
 
 Single user
 - R52. The shell SHALL appear at once on launch, with no sign-in page, and every control SHALL be shown: the Settings area offers **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** and **Appearance** to the one user (the built-in super admin).
@@ -84,7 +100,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Context, Sessions, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Workflows, Agents, Artifacts, Sessions, Costs, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel, Background tasks and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -112,9 +128,10 @@ Accessibility and visual stability
 
 Lives in the shell itself: [../../system/ui.md](../../system/ui.md). States:
 - Banner: hidden (starting, ready), amber (restarting), red (down).
-- Rail: one current area (Datasets, Agents, Context, Sessions or Settings), or none on home.
+- Rail: one current area (Datasets, Workflows, Agents, Artifacts, Runs, Costs, Monitoring or Settings), or none on home.
 - Details panel: expanded at the remembered width, collapsed.
-- Toasts: success, info, error, several stacked.
+- Toasts: success, info, error, several stacked; with or without an action button (Open, Retry).
+- Background tasks: button idle, button running (spinning icon and count), panel empty, panel with running and finished tasks.
 
 ## Flows
 
@@ -144,13 +161,13 @@ Feature: Layout and accessibility
 
   Scenario: Has no automatically detectable accessibility violations on any screen in either theme
     Given the World Cup datasource and dataset exist
-    When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, Context (User personas), the Sessions area, the new-session composer, and each Settings section
+    When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, the Runs area, and each Settings section
     Then it finds no violations
 
   Scenario: Text in the app can be selected
     Given the app is open on the home view
-    When I triple-click the heading "Welcome to Agentic Hub"
-    Then the selection contains "Welcome to Agentic Hub"
+    When I triple-click the heading "Welcome to Halo Workbench"
+    Then the selection contains "Welcome to Halo Workbench"
     When I expand the right panel and press on its resize separator and move the pointer
     Then nothing is selected while the page is being resized
 
@@ -167,29 +184,43 @@ Feature: Navigation rail
   Scenario: Moves between areas from the rail
     When I click "Datasets" on the rail
     Then I see the "Datasets" page and "Datasets" is the current rail item
+    When I click "Workflows" on the rail
+    Then I see the "Workflows" page and "Workflows" is the current rail item
     When I click "Agents" on the rail
     Then I see the "Agents" page and "Agents" is the current rail item
     When I click "Agents" on the rail again
     Then I still see the "Agents" page
-    When I click "Context" on the rail
-    Then "Context" is the current rail item and I see the "Context" page with an "Ontologies" card, a "User personas" card and a "Visuals" card, and no "Knowledge" card
-    When I click the "User personas" card
-    Then I see the "User personas" page and "Context" is still the current rail item
-    When I click the "Context" back control
-    Then I see the "Context" page with its cards
-    When I click the "Visuals" card
-    Then I see the "Visuals" page and "Context" is still the current rail item
-    When I click the "Context" back control
-    Then I see the "Context" page with its cards
     When I click "Sessions" on the rail
-    Then I see the "Sessions" list in the middle of the page and the "Start New Conversation" button
+    Then I see the Runs page with its tabs and no "Start New Conversation" button
     And the drawer does not list sessions
+
+  Scenario: Opens the Monitoring page from the rail
+    When I click "Monitoring" on the rail
+    Then I see the "Monitoring" heading, "Monitoring" is the current rail item and, on a new data dir, I see "No LLM calls yet."
+    When I click "Sessions" on the rail
+    Then I see the "Sessions" list and "Monitoring" is no longer the current rail item
+
+  Scenario: Opens the empty Costs page from the rail
+    When I click "Costs" on the rail
+    Then I see the "Costs" heading, "Costs" is the current rail item, $0.00 today and this month, the monthly chart, "Last 30 days" chosen and, on a new data dir, "No LLM calls in this period."
 
   Scenario: The start page explains how the product works
     When I open the app
-    Then I see "Welcome to Agentic Hub" and the four steps "Pick your data", "Ask a question", "Work with an agent" and "Read, refine, download"
+    Then I see "Welcome to Halo Workbench" and the four steps "Pick your data", "Run a workflow", "Agents are the building blocks" and "Read, refine, download"
     When I click "Datasets" in the first step
     Then I see the "Datasets" page
+
+  @demo @story-1.23.22
+  Scenario: Chats can no longer be started: home points to workflows, and nothing offers a chat
+    Given I open the app on its home page
+    Then home shows "Run a workflow"
+    When I open Workflows
+    Then every workflow has "Run" and none has "Start chat"
+    When I open Runs, then there is no "Start New Conversation"
+
+  Scenario: No Start chat, New conversation or Send message control exists outside the agent editor
+    When I visit home, Workflows, a workflow's page, Agents, Runs and Past chats
+    Then none of them offers "Start chat", "New conversation", "Start New Conversation" or "Send message"
 
   Scenario: Opens with the navigation drawer expanded
     Given I have never collapsed the navigation drawer
@@ -206,7 +237,7 @@ Feature: Navigation rail
   Scenario: Expands the rail into a drawer with labels
     Given the navigation drawer is collapsed
     When I click "Expand navigation"
-    Then I see the labels "Datasets", "Agents", "Context" and "Sessions" next to their icons
+    Then I see the labels "Datasets", "Agents" and "Sessions" next to their icons
     And I see no list of sessions in the drawer
     When I click "Collapse navigation"
     Then the labels are hidden
@@ -233,10 +264,12 @@ Feature: Navigation rail
     Then the "Appearance" section is still shown
 
   Scenario: Shows the product name
-    Then the page's level-one heading reads "US Health Agentic Hub"
-    And the document title is "Agentic Hub"
+    Then the page's level-one heading reads "Halo Workbench" and no area name follows it
+    And the document title is "Halo Workbench"
+    And the rail shows the "Halo Workbench" wordmark
     When I click "Settings" on the rail
-    Then the settings list ends with "Agentic Hub v" followed by the version
+    Then the header shows the area name "Settings" after the heading
+    And the settings list ends with "Halo Workbench v" followed by the version
 
   Scenario: The app opens straight into the shell
     When I open the app
@@ -297,6 +330,23 @@ Feature: Appearance
     Then an automated accessibility scan of the section finds no violations in either
 ```
 
+E2E: `frontend/e2e/brand-mercer.spec.ts` for the Feature below (runs only on a `BRAND=mercer` web build; skipped otherwise).
+
+```gherkin
+Feature: Agentic Hub brand build
+
+  Scenario: Shows the Agentic Hub shell, names and badge
+    Given the web app was built with BRAND=mercer
+    When I open the app
+    Then the page's level-one heading reads "US Health Agentic Hub"
+    And the document title is "Agentic Hub"
+    And I see the heading "Welcome to Agentic Hub"
+    And the navigation rail shows "Agentic Hub" and the image "Powered by LenAI"
+    And there is no header area crumb and no "Halo Workbench" image
+    When I open Settings
+    Then the build identity reads "Agentic Hub v" followed by the version
+```
+
 E2E: none yet for the Feature below.
 
 ```gherkin
@@ -312,6 +362,12 @@ Feature: App shell behaviour not yet covered by Playwright
     Given the backend has failed to come back after three relaunches
     Then I see "Backend unavailable — restart the app"
     And the banner stays until I restart the app
+
+  Scenario: Focuses the running app instead of opening a second one
+    Given the desktop app is open and minimised
+    When I launch the desktop app again
+    Then no second window opens
+    And the first window is restored and in front
 
   Scenario: Never shows the banner outside the desktop shell
     Given I am using the app in a plain browser
@@ -345,6 +401,25 @@ Feature: App shell behaviour not yet covered by Playwright
     Then the details panel is collapsed again
 ```
 
+E2E: `frontend/e2e/background-tasks.spec.ts` for the Feature below (M1-26).
+
+```gherkin
+Feature: Background tasks
+
+  Scenario: a dataset save keeps running in the background while the user is elsewhere
+    Given a saved dataset "World Cup" whose next save takes a few seconds
+    When I open it and press Save dataset
+    Then the Datasets list shows at once, with "World Cup" marked Saving
+    And the rail's Background tasks button says 1 running
+    When I open Workflows and the Background tasks panel
+    Then "Saving dataset "World Cup"" is listed as running
+    When I go back to Datasets
+    Then the row is still marked Saving
+    When the save ends
+    Then the Saving mark goes away, the button shows nothing running and a toast says the dataset was saved
+    And the panel lists the save as finished, and its Open button opens the dataset in the editor
+```
+
 ## Acceptance
 
 - The three `layout-accessibility.spec.ts` scenarios pass in the real desktop app.
@@ -354,7 +429,8 @@ Feature: App shell behaviour not yet covered by Playwright
 ## Open questions
 
 - Toast messages carry no live-region announcement and the toast dismiss button has no accessible name, so a screen reader neither announces a toast nor labels its close control. The axe scan does not catch this because it runs with no toast on screen. Decide whether R37 and the accessibility rules should cover toasts.
-- The display name is "Halo BI Assistant" (window title, About, version line) while the hidden heading, diagnostics report title and package are "Questions to Insights". Confirm which is the product name.
+- Resolved 2026-11-15 (ADR-0046, superseding the name in ADR-0044): the product is "Halo Workbench" in the UI and in the operating system alike (window and document title, header heading, rail brand, Settings build identity, welcome heading, OS app name, installers, data directory). "Halo Powered" stays the company and brand name; the diagnostics report title and package keep "Questions to Insights".
+- Superseded 2026-11-15 (ADR-0044): the product's display name in the UI was "Halo Powered" (window and document title, header heading, rail brand, Settings build identity, welcome heading). The operating-system app name, installers and data directory stay "Halo BI Assistant" (R33); the diagnostics report title and package keep "Questions to Insights".
 - The `starting` status is published but never shown. If the backend does not become ready within 30 seconds the window opens with no banner at all, and nothing tells the user why requests fail until the first error toast. Should `starting` (or a timeout state) get a banner?
 
-<!-- sources: frontend/src/app/app.ts, frontend/src/app/app.html, frontend/src/app/app.scss, frontend/src/app/core/backend-status/, frontend/src/app/core/toast/toast.service.ts, frontend/src/app/core/config/, frontend/src/app/shared/components/{backend-status-banner,toast-container,app-logo}/, frontend/electron/main.cjs, frontend/electron/preload.cjs, frontend/e2e/layout-accessibility.spec.ts -->
+<!-- sources: frontend/src/app/app.ts, frontend/src/app/app.html, frontend/src/app/app.scss, frontend/src/app/core/backend-status/, frontend/src/app/core/toast/toast.service.ts, frontend/src/app/core/config/, frontend/src/app/shared/components/{backend-status-banner,toast-container,app-logo}/, frontend/electron/main.cjs, frontend/electron/preload.cjs, frontend/e2e/layout-accessibility.spec.ts, frontend/e2e/brand-mercer.spec.ts, frontend/src/app/core/brand/, frontend/brands/ -->

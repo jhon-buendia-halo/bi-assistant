@@ -143,11 +143,13 @@ beforeEach(() => {
 });
 
 describe('the readiness tools (agents.md 3.13)', () => {
-  it('are the three readiness tools, the drill-down dataset tools, then show_in_panel and ask_clarification', () => {
+  it('are the three readiness tools, the two synthetic-data tools, the drill-down dataset tools, then show_in_panel and ask_clarification', () => {
     expect(Object.keys(readinessTools)).toEqual([
       'assess_data_readiness',
       'get_readiness_report',
       'list_readiness_reports',
+      'profile_data_sample',
+      'generate_synthetic_data',
       'describe_entity',
       'run_readonly_sql',
       'show_in_panel',
@@ -188,6 +190,16 @@ describe('the readiness tools (agents.md 3.13)', () => {
       });
       expect(result).toEqual({ report: REPORT, summary: SUMMARY });
       expect(readinessReportFromToolResult(result)).toBe(REPORT);
+    });
+
+    it('refuses once an Assess Data Readiness run has assessed, pointing at its report (agents.md 5.13)', async () => {
+      const context = contextWith();
+      context.set('readiness-assessed-report', 'rep-9');
+      await expect(run('assess_data_readiness', {}, context)).resolves.toEqual({
+        error:
+          'This run has already assessed the dataset. Call get_readiness_report with reportId "rep-9" instead.',
+      });
+      expect(assess).not.toHaveBeenCalled();
     });
 
     it('passes the abort signal and a progress listener that writes data-readiness-progress chunks', async () => {

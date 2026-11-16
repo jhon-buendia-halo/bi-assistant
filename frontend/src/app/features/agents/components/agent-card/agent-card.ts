@@ -1,52 +1,40 @@
 import { Component, computed, input, output } from '@angular/core';
 import {
-  Loader2,
   LucideAngularModule,
-  MessageSquarePlus,
   Pin,
   PinOff,
-  Sparkles,
   TriangleAlert,
 } from 'lucide-angular';
 import { Agent } from '../../services/agents-api.service';
-import {
-  agentKind,
-  canStartChat,
-  startChatBlockedReason,
-} from '../../services/agent-hub.util';
+import { agentKind } from '../../services/agent-hub.util';
+import { agentDomain, domainInfo } from '../../services/agent-domains';
+import { AgentActivity } from '../../services/agent-activity';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 
 /**
- * One agent on the hub (ui.md 4.4). The open control, the pin toggle and
- * Start chat are sibling buttons, so no interactive control sits inside
- * another.
+ * One agent on the hub (ui.md 4.4). The open control and the pin toggle are
+ * sibling buttons, so no interactive control sits inside another. A card
+ * never starts a chat: chats start from a workflow (agents-evals R53).
  */
 @Component({
   selector: 'app-agent-card',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, AgentAvatar],
   templateUrl: './agent-card.html',
   host: { class: 'block h-full' },
 })
 export class AgentCard {
-  readonly Loader2 = Loader2;
-  readonly MessageSquarePlus = MessageSquarePlus;
   readonly Pin = Pin;
   readonly PinOff = PinOff;
-  readonly Sparkles = Sparkles;
   readonly TriangleAlert = TriangleAlert;
 
   readonly agent = input.required<Agent>();
-  /** True while a session is being created from this agent. */
-  readonly starting = input(false);
+  /** What the agent is doing now; absent until the run history loads. */
+  readonly activity = input<AgentActivity | null>(null);
   readonly open = output<void>();
   readonly togglePin = output<void>();
-  readonly startChat = output<void>();
 
-  /** Official and Live user agents only (agents-evals R53). */
-  readonly showStartChat = computed(() => canStartChat(this.agent()));
-  /** Set when none of the agent's datasets exist; disables Start chat. */
-  readonly blockedReason = computed(() =>
-    startChatBlockedReason(this.agent()),
-  );
+  /** The domain's label and the icon of the badge on the portrait (ui.md 4.4). */
+  readonly domain = computed(() => domainInfo(agentDomain(this.agent())));
 
   readonly isUser = computed(() => agentKind(this.agent()) === 'user');
 

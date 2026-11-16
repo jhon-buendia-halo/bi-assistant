@@ -1,5 +1,6 @@
 import {
   AgentConfig,
+  AgentDomain,
   AgentStatus,
   SaveAgentInput,
 } from './agents-api.service';
@@ -8,6 +9,7 @@ import { linkedNames, withLegacyLinks } from './prompt-links';
 /** The R43 limits the editor's fields enforce as the user types (R55). */
 export const AGENT_FIELD_LIMITS = {
   name: 64,
+  role: 64,
   description: 280,
   instructions: 4000,
   starterQuestion: 200,
@@ -29,6 +31,10 @@ export const REASONING_EFFORT_CHOICES: {
 /** The agent editor's form, as typed. `''` model or effort = the default. */
 export interface AgentForm {
   name: string;
+  /** The optional job title shown under the name. */
+  role: string;
+  /** The hub section; `general` is saved as no domain. */
+  domain: AgentDomain;
   description: string;
   instructions: string;
   datasets: string[];
@@ -40,6 +46,8 @@ export interface AgentForm {
 export function emptyAgentForm(): AgentForm {
   return {
     name: '',
+    role: '',
+    domain: 'general',
     description: '',
     instructions: '',
     datasets: [],
@@ -53,6 +61,8 @@ export function emptyAgentForm(): AgentForm {
 export function agentFormFromConfig(config: AgentConfig): AgentForm {
   return {
     name: config.name ?? '',
+    role: config.role ?? '',
+    domain: config.domain ?? 'general',
     description: config.description ?? '',
     instructions: config.instructions ?? '',
     datasets: [...(config.datasets ?? [])],
@@ -70,6 +80,8 @@ export function agentFormFromConfig(config: AgentConfig): AgentForm {
 export function normalizeAgentForm(form: AgentForm): AgentForm {
   return {
     name: form.name.trim(),
+    role: form.role.trim(),
+    domain: form.domain,
     description: form.description.trim(),
     instructions: form.instructions.trim(),
     datasets: uniqueNonBlank(form.datasets),
@@ -85,6 +97,8 @@ export function agentFormChanged(form: AgentForm, saved: AgentForm): boolean {
   const b = normalizeAgentForm(saved);
   return (
     a.name !== b.name ||
+    a.role !== b.role ||
+    a.domain !== b.domain ||
     a.description !== b.description ||
     a.instructions !== b.instructions ||
     // Ticking order carries no meaning.
@@ -125,6 +139,8 @@ export function agentSaveInput(form: AgentForm): SaveAgentInput {
   const normalized = normalizeAgentForm(form);
   return {
     name: normalized.name,
+    ...(normalized.role ? { role: normalized.role } : {}),
+    ...(normalized.domain !== 'general' ? { domain: normalized.domain } : {}),
     description: normalized.description,
     instructions: normalized.instructions,
     datasets: normalized.datasets,

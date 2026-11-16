@@ -47,7 +47,7 @@ export interface ReferenceRun {
 
 /**
  * What a statement is to the validator: a case's reference when `role` is
- * absent (refused when truncated, R110), else a memory case's trap or a
+ * absent (refused when truncated, R250), else a memory case's trap or a
  * teach signal's SQL, run under the same row limit with no truncation rule.
  */
 export type ReferenceRole = 'trap' | 'teach';
@@ -84,7 +84,7 @@ function lastParts(parts: readonly string[], count: number): string {
 
 /**
  * The first table or view a reference reads that is not an entity of the
- * selected datasets (agents-evals R110), or undefined when it reads none.
+ * selected datasets (agents-evals R250), or undefined when it reads none.
  * Names compare as the dataset preflight compares them (R20): on the last
  * two name parts, ignoring case; a one-part name on its only part. The
  * reading is conservative (`tableReferences`): a name it cannot tell is a
@@ -113,7 +113,7 @@ export function referenceOutsideDatasets(
  * a time, print `✓ <id>  <dialect>  <n> rows` or `✗ <id>  <dialect>  <reason>`
  * per case, then a summary. A failed case does not stop the others. A
  * preflight error prints and runs nothing. A reference that reads a table
- * outside `datasetEntities` fails without running (R110): the database may
+ * outside `datasetEntities` fails without running (R250): the database may
  * hold the table, but a run scoped to the datasets cannot read it. A
  * reference that returns no rows fails too: it is almost always a filter on
  * a misspelled value, and an empty answer is better written as a count.
@@ -170,7 +170,7 @@ export async function validateEvalSet(
     }
     let line: string;
     try {
-      // `<n> rows` whatever n is: the line format of agents-evals R110.
+      // `<n> rows` whatever n is: the line format of agents-evals R250.
       const reference = await run(inCatalog(evalCase.expectedSql), evalCase.id);
       if (reference.rowCount === 0) {
         line = `✗ ${evalCase.id}  ${set.dialect}  the reference returned 0 rows`;
@@ -329,7 +329,7 @@ async function validateOnApp(
     set,
     preflightError,
     async (sql, _caseId, role) => {
-      // A reference is refused when truncated (R110); a trap or teach SQL
+      // A reference is refused when truncated (R250); a trap or teach SQL
       // runs under the same row limit, as the assistant's query would.
       const rows = role
         ? (await execute(sql, RESULT_SET_ROW_LIMIT)).rows

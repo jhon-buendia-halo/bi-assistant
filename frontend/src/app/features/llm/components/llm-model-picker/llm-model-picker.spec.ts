@@ -197,4 +197,38 @@ describe('LlmModelPicker', () => {
     expect(error).not.toHaveBeenCalled();
     expect(menu()).toBeNull();
   });
+
+  describe('copilot', () => {
+    beforeEach(() => {
+      fixture.componentRef.setInput('provider', 'copilot');
+      fixture.componentRef.setInput('baseUrl', '');
+      fixture.componentRef.setInput('signedIn', true);
+      fixture.detectChanges();
+    });
+
+    it('is enabled when signed in and disabled otherwise', () => {
+      expect(button().disabled).toBeFalse();
+      fixture.componentRef.setInput('signedIn', false);
+      fixture.detectChanges();
+      expect(button().disabled).toBeTrue();
+    });
+
+    it('posts only the provider', () => {
+      clickLoad();
+      const req = http.expectOne(URL);
+      expect(req.request.body).toEqual({ provider: 'copilot' });
+      req.flush({ ok: true, models: ['gpt-5'] });
+      fixture.detectChanges();
+      expect(options().map((o) => o.textContent?.trim())).toEqual(['gpt-5']);
+    });
+
+    it('shows the Copilot empty line', () => {
+      clickLoad();
+      http.expectOne(URL).flush({ ok: true, models: [] });
+      fixture.detectChanges();
+      expect(menu()?.textContent).toContain(
+        'Your Copilot plan lists no models to choose — leave the model as auto.',
+      );
+    });
+  });
 });

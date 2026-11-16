@@ -1,14 +1,16 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { MetricsApiService } from '../../../datasets/services/metrics-api.service';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { OntologyItem } from '../../models/ontology.model';
 import {
   OntologyApiService,
   OntologyBootstrapProgress,
+  OntologyBootstrapRun,
 } from '../../services/ontology-api.service';
+import { BackgroundTasksService } from '../../../../core/background-tasks/background-tasks.service';
 import { OntologyPanel } from './ontology-panel';
 
 const DATASET: Dataset = {
@@ -22,7 +24,9 @@ const DATASET: Dataset = {
   ],
 };
 
-function item(partial: Partial<OntologyItem> & Pick<OntologyItem, 'id' | 'kind' | 'name'>): OntologyItem {
+function item(
+  partial: Partial<OntologyItem> & Pick<OntologyItem, 'id' | 'kind' | 'name'>,
+): OntologyItem {
   return {
     dataset: 'market insight',
     description: '',
@@ -40,12 +44,37 @@ const ITEMS: OntologyItem[] = [
     kind: 'concept',
     name: 'Active order',
     description: 'An order still open',
-    mappings: [{ entity: 'main.sales.orders', column: 'status', expression: "status = 'open'" }],
+    mappings: [
+      {
+        entity: 'main.sales.orders',
+        column: 'status',
+        expression: "status = 'open'",
+      },
+    ],
   }),
   item({ id: 'c2', kind: 'concept', name: 'Order', description: 'A purchase' }),
-  item({ id: 'r1', kind: 'relation', name: 'Active order is-a Order', from: 'c1', type: 'is-a', to: 'c2' }),
-  item({ id: 'r2', kind: 'relation', name: 'Order measured-by Revenue', from: 'c2', type: 'measured-by', metricId: 'm1' }),
-  item({ id: 'k1', kind: 'constraint', name: 'No tests', predicate: 'is_test = false' }),
+  item({
+    id: 'r1',
+    kind: 'relation',
+    name: 'Active order is-a Order',
+    from: 'c1',
+    type: 'is-a',
+    to: 'c2',
+  }),
+  item({
+    id: 'r2',
+    kind: 'relation',
+    name: 'Order measured-by Revenue',
+    from: 'c2',
+    type: 'measured-by',
+    metricId: 'm1',
+  }),
+  item({
+    id: 'k1',
+    kind: 'constraint',
+    name: 'No tests',
+    predicate: 'is_test = false',
+  }),
   item({
     id: 'i1',
     kind: 'instruction',
@@ -70,11 +99,23 @@ describe('OntologyPanel', () => {
     list: jasmine.Spy;
     update: jasmine.Spy;
     remove: jasmine.Spy;
-    bootstrapStream: jasmine.Spy;
+    bootstrap: jasmine.Spy;
   };
+  let run: Subject<OntologyBootstrapRun>;
+  let steps: OntologyBootstrapProgress[];
   /** Drives the fake stream: emit a stage, or finish the run. */
-  let emit: (progress: OntologyBootstrapProgress) => void;
-  let finish: () => void;
+  function emit(progress: OntologyBootstrapProgress): void {
+    const last = steps[steps.length - 1];
+    steps =
+      last?.key === progress.key
+        ? [...steps.slice(0, -1), progress]
+        : [...steps, progress];
+    run.next({ steps });
+  }
+  function finish(): void {
+    run.next({ steps, created: [] });
+    run.complete();
+  }
 
   beforeEach(async () => {
     api = {
@@ -85,27 +126,23 @@ describe('OntologyPanel', () => {
           of({ ...ITEMS.find((i) => i.id === id)!, ...patch }),
         ),
       remove: jasmine.createSpy('remove').and.returnValue(of(null)),
-      bootstrapStream: jasmine
-        .createSpy('bootstrapStream')
-        .and.callFake(
-          (
-            _dataset: string,
-            handlers: {
-              onProgress?: (p: OntologyBootstrapProgress) => void;
-              onDone?: (created: unknown[]) => void;
-            },
-          ) => {
-            emit = (progress) => handlers.onProgress?.(progress);
-            finish = () => handlers.onDone?.([]);
-            return Promise.resolve();
-          },
-        ),
+      bootstrap: jasmine.createSpy('bootstrap').and.callFake(() => {
+        run = new Subject<OntologyBootstrapRun>();
+        steps = [];
+        return run.asObservable();
+      }),
     };
     const metrics = {
       list: () =>
         of({
           metrics: [
-            { id: 'm1', name: 'revenue', label: 'Revenue', entity: 'main.sales.orders', expression: 'SUM(x)' },
+            {
+              id: 'm1',
+              name: 'revenue',
+              label: 'Revenue',
+              entity: 'main.sales.orders',
+              expression: 'SUM(x)',
+            },
           ],
         }),
     };
@@ -136,20 +173,22 @@ describe('OntologyPanel', () => {
     const sections = Array.from(
       el().querySelectorAll('[data-testid^="ontology-section-"]'),
     );
-    expect(sections.map((s) => s.querySelector('h3 span')?.textContent?.trim())).toEqual([
-      'Concepts',
-      'Relations',
-      'Constraints',
-      'Instructions',
-    ]);
+    expect(
+      sections.map((s) => s.querySelector('h3 span')?.textContent?.trim()),
+    ).toEqual(['Concepts', 'Relations', 'Constraints', 'Instructions']);
     const concepts = q('ontology-section-concept')!;
-    expect(concepts.querySelector('[data-testid="ontology-item-c1"]')).toBeTruthy();
-    expect(concepts.querySelector('[data-testid="ontology-item-r1"]')).toBeNull();
+    expect(
+      concepts.querySelector('[data-testid="ontology-item-c1"]'),
+    ).toBeTruthy();
+    expect(
+      concepts.querySelector('[data-testid="ontology-item-r1"]'),
+    ).toBeNull();
   });
 
   it('summarises each kind', () => {
     const summary = (id: string) =>
-      q(`ontology-item-${id}`)!.querySelector('[data-testid="ontology-item-summary"]')!
+      q(`ontology-item-${id}`)!
+        .querySelector('[data-testid="ontology-item-summary"]')!
         .textContent!.trim();
     expect(summary('c1')).toBe(
       "An order still open · maps to status = 'open' (main.sales.orders.status)",
@@ -195,7 +234,11 @@ describe('OntologyPanel', () => {
 
     it('opens the editor where the row was, from the pencil', () => {
       const row = q('ontology-item-k1')!;
-      (row.querySelector('[data-testid="edit-ontology-item"]') as HTMLButtonElement).click();
+      (
+        row.querySelector(
+          '[data-testid="edit-ontology-item"]',
+        ) as HTMLButtonElement
+      ).click();
       fixture.detectChanges();
 
       // The row itself became the form, inside its own section.
@@ -210,7 +253,11 @@ describe('OntologyPanel', () => {
     });
 
     it('opens the editor by clicking the row text, and Cancel returns the row', () => {
-      (q('ontology-item-i1')!.querySelector('[data-testid="open-ontology-item"]') as HTMLElement).click();
+      (
+        q('ontology-item-i1')!.querySelector(
+          '[data-testid="open-ontology-item"]',
+        ) as HTMLElement
+      ).click();
       fixture.detectChanges();
       expect(anchors()[0].getAttribute('data-editing')).toBe('i1');
 
@@ -261,7 +308,9 @@ describe('OntologyPanel', () => {
 
   describe('graph view', () => {
     const graphNodes = () =>
-      Array.from(el().querySelectorAll('[data-testid^="ontology-graph-node-"]')).map((n) =>
+      Array.from(
+        el().querySelectorAll('[data-testid^="ontology-graph-node-"]'),
+      ).map((n) =>
         n.getAttribute('data-testid')!.replace('ontology-graph-node-', ''),
       );
 
@@ -273,10 +322,16 @@ describe('OntologyPanel', () => {
     it('swaps the sections for the graph and back to the list with another filter', () => {
       expect(q('ontology-graph')).toBeTruthy();
       expect(q('ontology-section-concept')).toBeNull();
-      expect(q('ontology-filter-graph')!.getAttribute('aria-pressed')).toBe('true');
-      expect(q('ontology-filter-all')!.getAttribute('aria-pressed')).toBe('false');
+      expect(q('ontology-filter-graph')!.getAttribute('aria-pressed')).toBe(
+        'true',
+      );
+      expect(q('ontology-filter-all')!.getAttribute('aria-pressed')).toBe(
+        'false',
+      );
       expect(graphNodes()).toEqual(['c1', 'c2', 'metric:m1']);
-      expect(el().querySelectorAll('[data-testid^="ontology-graph-edge-"]').length).toBe(2);
+      expect(
+        el().querySelectorAll('[data-testid^="ontology-graph-edge-"]').length,
+      ).toBe(2);
 
       (q('ontology-filter-all') as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -285,7 +340,9 @@ describe('OntologyPanel', () => {
     });
 
     it('opens the existing editor from the details card and keeps the graph', () => {
-      q('ontology-graph-node-c1')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      q('ontology-graph-node-c1')!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
       fixture.detectChanges();
       (q('ontology-graph-edit') as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -294,7 +351,9 @@ describe('OntologyPanel', () => {
       expect(component.editingItem()?.id).toBe('c1');
       expect(el().querySelector('app-ontology-item-form')).toBeTruthy();
       // The editor opens under the graph, not at the top of the panel.
-      const anchor = el().querySelector('[data-testid="ontology-form-anchor"]')!;
+      const anchor = el().querySelector(
+        '[data-testid="ontology-form-anchor"]',
+      )!;
       expect(
         q('ontology-graph')!.compareDocumentPosition(anchor) &
           Node.DOCUMENT_POSITION_FOLLOWING,
@@ -309,7 +368,13 @@ describe('OntologyPanel', () => {
     it('draws only pending items and their endpoints with Pending suggestions on', () => {
       const pendingItems: OntologyItem[] = [
         ...ITEMS,
-        item({ id: 'c3', kind: 'concept', name: 'Lead', source: 'mined', enabled: false }),
+        item({
+          id: 'c3',
+          kind: 'concept',
+          name: 'Lead',
+          source: 'mined',
+          enabled: false,
+        }),
         item({
           id: 'r3',
           kind: 'relation',
@@ -334,9 +399,9 @@ describe('OntologyPanel', () => {
       expect(q('ontology-graph-node-c3')!.classList).toContain('faded');
       expect(q('ontology-graph-node-c2')!.classList).not.toContain('faded');
       expect(
-        Array.from(el().querySelectorAll('[data-testid^="ontology-graph-edge-"]')).map((e) =>
-          e.getAttribute('data-testid'),
-        ),
+        Array.from(
+          el().querySelectorAll('[data-testid^="ontology-graph-edge-"]'),
+        ).map((e) => e.getAttribute('data-testid')),
       ).toEqual(['ontology-graph-edge-r3']);
     });
   });
@@ -353,7 +418,7 @@ describe('OntologyPanel', () => {
     }
 
     it('runs for this dataset and shows a starting line first', () => {
-      expect(api.bootstrapStream.calls.mostRecent().args[0]).toBe('market insight');
+      expect(api.bootstrap.calls.mostRecent().args[0]).toBe('market insight');
       expect(progressText()).toContain('Starting');
     });
 
@@ -387,6 +452,43 @@ describe('OntologyPanel', () => {
       expect(component.generateSteps()).toEqual([]);
       expect(component.pendingOnly()).toBe(true);
       expect(progressText()).toBe('');
+    });
+
+    it('keeps the run and its steps when the panel is destroyed and re-created', () => {
+      emit({ key: 'schema', message: 'Reading schema — 3 tables' });
+      fixture.destroy();
+
+      fixture = TestBed.createComponent(OntologyPanel);
+      fixture.componentRef.setInput('dataset', DATASET);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+
+      expect(component.generating()).toBe(true);
+      expect(component.generateOpen()).toBe(true);
+      expect(progressText()).toContain('Reading schema — 3 tables');
+    });
+
+    it('unsubscribing aborts the stream through the task Stop', () => {
+      const tasks = TestBed.inject(BackgroundTasksService);
+      expect(tasks.active('ontology-bootstrap', 'market insight')).toBeTruthy();
+      tasks.cancel(tasks.active('ontology-bootstrap', 'market insight')!.id);
+      fixture.detectChanges();
+      expect(component.generating()).toBe(false);
+      expect(run.observed).toBe(false);
+    });
+
+    it('applies the result when the run ended while the panel was gone', () => {
+      fixture.destroy();
+      finish();
+
+      fixture = TestBed.createComponent(OntologyPanel);
+      fixture.componentRef.setInput('dataset', DATASET);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+
+      expect(component.generating()).toBe(false);
+      expect(component.generateOpen()).toBe(false);
+      expect(api.list.calls.count()).toBe(2);
     });
   });
 });

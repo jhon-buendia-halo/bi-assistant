@@ -28,7 +28,9 @@ jest.mock('@mastra/evals/checks', () => ({
   checks: new Proxy({}, { get: () => () => ({ id: 'stub-check' }) }),
 }));
 jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
-jest.mock('../agents/rfp.agent', () => ({ rfpAgent: {} }));
+jest.mock('../agents/insights-analyst.agent', () => ({
+  insightsAnalystAgent: {},
+}));
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessAgent: {},
 }));

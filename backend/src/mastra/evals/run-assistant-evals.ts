@@ -104,8 +104,8 @@ export async function main(
     out.error(selection.error);
     return 1;
   }
-  // The agent the questions run on: the assistant, or the RFP Builder for
-  // EVAL_SET=rfp (agents.md 8.1).
+  // The agent the questions run on: the assistant, or the agent of the set,
+  // e.g. the Query Explainer for EVAL_SET=query-explainer (agents.md 8.1).
   const agent = agentForCases(selection.caseIds);
   if ('error' in agent) {
     out.error(agent.error);

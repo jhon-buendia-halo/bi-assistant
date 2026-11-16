@@ -4,6 +4,7 @@ import type {
   ReadinessReport,
   Severity,
 } from '../data-readiness/engine/types';
+import type { PreparedAssessment } from '../data-readiness/data-readiness.service';
 import {
   ReadinessBridge,
   readinessOrientationBlock,
@@ -89,6 +90,31 @@ function build(sessionDatasets: string[]) {
             )
           : Promise.resolve(report(id)),
       ),
+    // The phases of an assessment (the Assess Data Readiness workflow).
+    prepare: jest.fn((input: { datasourceId: string; runId?: string }) =>
+      Promise.resolve({
+        datasource: {
+          id: input.datasourceId,
+          name:
+            input.datasourceId === 'ds-pg'
+              ? 'World Cup DB'
+              : `name of ${input.datasourceId}`,
+        },
+        kind: input.datasourceId === 'ds-dbx' ? 'databricks' : 'postgres',
+        ...(input.runId ? { runId: input.runId } : {}),
+      } as unknown as PreparedAssessment),
+    ),
+    profileSource: jest.fn().mockResolvedValue({
+      sourceId: 'ds-pg',
+      sourceType: 'postgres',
+      entities: [
+        { namespace: 'public', name: 'matches' },
+        { namespace: 'public', name: 'teams', notProfiled: 'too-large' },
+      ],
+      relationships: [{}],
+    }),
+    scoreProfile: jest.fn(() => report('r-scored', [finding('high', 'teams')])),
+    saveReport: jest.fn((scored: ReadinessReport) => Promise.resolve(scored)),
   };
   const deps: ReadinessBridgeDeps = {
     sessionDatasetNames: jest.fn().mockResolvedValue(sessionDatasets),
@@ -259,6 +285,86 @@ describe('the readiness panel item and answer reference (data-model 3.4)', () =>
   });
 });
 
+describe('ReadinessBridge.startAssessment (agents.md 5.13)', () => {
+  it('runs one assessment of the run dataset phase by phase, recording the run', async () => {
+    const ctx = build(['World Cup']);
+    const assessment = await ctx.bridge.startAssessment({
+      sessionId: 'run-7f3a',
+      datasetName: 'World Cup',
+    });
+    expect(ctx.readiness.prepare).toHaveBeenCalledWith({
+      datasourceId: 'ds-pg',
+      entities: ['wc.public.matches', 'wc.public.teams'],
+      runId: '7f3a',
+    });
+    expect(assessment).toMatchObject({
+      dataset: 'World Cup',
+      datasourceName: 'World Cup DB',
+      datasourceKind: 'postgres',
+      tableCount: 2,
+    });
+    const signal = new AbortController().signal;
+    await expect(assessment.profile({ signal })).resolves.toEqual({
+      entityCount: 2,
+      relationshipCount: 1,
+      notProfiledCount: 1,
+    });
+    expect(ctx.readiness.profileSource).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: '7f3a' }),
+      { signal },
+    );
+    const summary = assessment.score();
+    expect(summary).toMatchObject({
+      reportId: 'r-scored',
+      overallScore: 88,
+      findingCount: 1,
+    });
+    expect(ctx.readiness.saveReport).not.toHaveBeenCalled();
+    const saved = await assessment.save();
+    expect(ctx.readiness.saveReport).toHaveBeenCalledTimes(1);
+    expect(saved.report.id).toBe('r-scored');
+    expect(saved.summary.reportId).toBe('r-scored');
+    // The stored report is remembered for the readiness-report event.
+    await expect(ctx.bridge.reportFor('r-scored')).resolves.toBe(saved.report);
+  });
+
+  it('refuses to score before profiling, and to save before scoring', async () => {
+    const ctx = build(['World Cup']);
+    const assessment = await ctx.bridge.startAssessment({
+      sessionId: 'run-1',
+    });
+    expect(() => assessment.score()).toThrow(
+      'The source has not been profiled',
+    );
+    await expect(assessment.save()).rejects.toThrow(
+      'The assessment has not been scored',
+    );
+  });
+
+  it('names the datasource when it cannot be reached', async () => {
+    const ctx = build(['World Cup']);
+    ctx.readiness.profileSource.mockRejectedValueOnce(
+      new BadGatewayException('connect ECONNREFUSED'),
+    );
+    const assessment = await ctx.bridge.startAssessment({
+      sessionId: 'run-1',
+    });
+    await expect(assessment.profile()).rejects.toThrow(
+      'Could not reach "World Cup DB": connect ECONNREFUSED',
+    );
+  });
+
+  it('refuses a dataset that is not PostgreSQL or Databricks before preparing', async () => {
+    const ctx = build(['Api']);
+    await expect(
+      ctx.bridge.startAssessment({ sessionId: 'run-1' }),
+    ).rejects.toThrow(
+      'Data readiness supports PostgreSQL and Databricks datasources only',
+    );
+    expect(ctx.readiness.prepare).not.toHaveBeenCalled();
+  });
+});
+
 describe('ReadinessBridge (agents.md 3.13)', () => {
   describe('dataset resolution', () => {
     it('uses the only session dataset when none is named', async () => {
@@ -271,6 +377,16 @@ describe('ReadinessBridge (agents.md 3.13)', () => {
       });
       expect(result.report.id).toBe('r-new');
       expect(result.summary.reportId).toBe('r-new');
+    });
+
+    it('a report from a run stores runId and no sessionId (1.23.16)', async () => {
+      const ctx = build(['World Cup']);
+      await ctx.bridge.assessReadiness({ sessionId: 'run-7f3a' });
+      expect(ctx.readiness.assess).toHaveBeenCalledWith({
+        datasourceId: 'ds-pg',
+        entities: ['wc.public.matches', 'wc.public.teams'],
+        runId: '7f3a',
+      });
     });
 
     it('asks to name one when the session has several', async () => {

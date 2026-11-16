@@ -1,10 +1,13 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { inspectResult } from '../../modules/sessions/result-guards';
+import type { QueryFacts } from '../../modules/sessions/query-evidence/query-evidence.types';
 import {
   getDatasetToolServices,
   DatasetColumnSnapshot,
   DatasetSnapshot,
+  QUERY_FACTS_CONTEXT_KEY,
+  queryFactsKey,
 } from '../tool-services';
 import { usageSinkFrom } from '../usage-sink';
 import {
@@ -14,6 +17,40 @@ import {
 
 /** requestContext key carrying the session's dataset names. */
 export const DATASETS_CONTEXT_KEY = 'datasets';
+
+/**
+ * Take `totalRows` off a result before the model sees it, and write what the
+ * tool knew into the turn's facts map (plan m1-25 1.25.1), keyed by the tool
+ * call id and by the statement that ran. The model's input stays exactly as
+ * it was before the query inspector existed.
+ */
+function withoutFacts<T extends object>(
+  result: T,
+  facts: {
+    tool: string;
+    input: string;
+    datasourceId: string;
+    rowLimit: number;
+  },
+  context: {
+    requestContext: { get: (key: string) => unknown };
+    agent?: { toolCallId?: string };
+  },
+): Omit<T, 'totalRows'> {
+  const { totalRows, ...rest } = result as T & { totalRows?: unknown };
+  const map = context.requestContext.get(QUERY_FACTS_CONTEXT_KEY);
+  if (map instanceof Map) {
+    const known: QueryFacts = {
+      datasourceId: facts.datasourceId,
+      ...(typeof totalRows === 'number' ? { totalRows } : {}),
+      rowLimit: facts.rowLimit,
+    };
+    const callId = context.agent?.toolCallId;
+    if (callId) map.set(callId, known);
+    map.set(queryFactsKey(facts.tool, facts.input), known);
+  }
+  return rest;
+}
 
 interface EntityAccess {
   entity: string;
@@ -252,7 +289,8 @@ export const sampleRowsTool = createTool({
     limit: z.number().int().min(1).max(100).optional(),
     rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
-  execute: async ({ entity, datasourceId, limit }, { requestContext }) => {
+  execute: async ({ entity, datasourceId, limit }, context) => {
+    const { requestContext } = context;
     const entities = allowedEntities(await sessionDatasets(requestContext));
     const access = resolveEntity(entities, entity, datasourceId);
     if ('error' in access) return { error: access.error };
@@ -261,10 +299,21 @@ export const sampleRowsTool = createTool({
         error: `Entity "${entity}" has no datasource bound — re-save its dataset`,
       };
     }
-    return getDatasetToolServices().sampleRows(
+    const rowLimit = limit ?? 10;
+    const result = await getDatasetToolServices().sampleRows(
       access.datasourceId,
       entity,
-      limit ?? 10,
+      rowLimit,
+    );
+    return withoutFacts(
+      result,
+      {
+        tool: 'sample_rows',
+        input: entity,
+        datasourceId: access.datasourceId,
+        rowLimit,
+      },
+      context,
     );
   },
 });
@@ -295,7 +344,8 @@ export const runReadOnlySqlTool = createTool({
       .describe('Max rows returned (default 100)'),
     rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
-  execute: async ({ sql, datasourceId, limit }, { requestContext }) => {
+  execute: async ({ sql, datasourceId, limit }, context) => {
+    const { requestContext } = context;
     const datasets = await sessionDatasets(requestContext);
     const target = resolveDatasource(datasets, datasourceId);
     if ('error' in target) return { error: target.error };
@@ -317,14 +367,21 @@ export const runReadOnlySqlTool = createTool({
           ? (result as { correctedSql: string }).correctedSql
           : sql;
       const rows = (result as { rows?: Record<string, unknown>[] }).rows ?? [];
+      // The call's own cap is a reason to warn only when it dropped rows:
+      // the connector's count of what the statement produced says so.
+      const produced = (result as { totalRows?: unknown }).totalRows;
+      const capHeldRows =
+        typeof produced !== 'number' || produced > rows.length;
       const deadFilters = ineffectiveLeftJoinFilters(
         executed,
         snapshotColumns(datasets),
       );
       const warnings = [
-        ...inspectResult(executed, rows, rowLimit).map(
-          (warning) => warning.message,
-        ),
+        ...inspectResult(
+          executed,
+          rows,
+          capHeldRows ? rowLimit : undefined,
+        ).map((warning) => warning.message),
         ...(deadFilters.length ? [ineffectiveFilterWarning(deadFilters)] : []),
       ];
       // Joined like the service's own notes, so the agent reads one note.
@@ -332,11 +389,17 @@ export const runReadOnlySqlTool = createTool({
         ...(result.note ? [result.note] : []),
         ...(isBreakdown(executed, rows) ? [ACROSS_ROWS_NOTE] : []),
       ];
-      return {
-        ...result,
-        ...(notes.length ? { note: notes.join('; ') } : {}),
-        ...(warnings.length ? { warnings } : {}),
-      };
+      const shown = withoutFacts(
+        { ...result, ...(notes.length ? { note: notes.join('; ') } : {}) },
+        {
+          tool: 'run_readonly_sql',
+          input: executed,
+          datasourceId: target.id,
+          rowLimit,
+        },
+        context,
+      );
+      return warnings.length ? { ...shown, warnings } : shown;
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }

@@ -83,7 +83,7 @@ export class AgentsController {
     return styleA(async () => {
       const name = await this.prompts.save(key, body);
       return {
-        message: `System prompt of "${name}" saved`,
+        message: `Job description of "${name}" saved`,
         agent: (await this.agents.get(key)) ?? undefined,
       };
     });
@@ -95,7 +95,7 @@ export class AgentsController {
     return styleA(async () => {
       const name = await this.prompts.reset(key);
       return {
-        message: `System prompt of "${name}" reset`,
+        message: `Job description of "${name}" reset`,
         agent: (await this.agents.get(key)) ?? undefined,
       };
     });
@@ -264,6 +264,8 @@ function toInput(dto: SaveAgentDto): AgentConfigInput {
     typeof value === 'string' ? value : undefined;
   return {
     name: text(dto?.name),
+    role: text(dto?.role),
+    domain: text(dto?.domain),
     description: text(dto?.description),
     instructions: text(dto?.instructions),
     datasets: strings(dto?.datasets),

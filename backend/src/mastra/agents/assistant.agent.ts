@@ -127,7 +127,6 @@ export const assistantAgent = new Agent({
     if (typeof workspaceId !== 'string' || !mastra) return undefined;
     return mastra.listWorkspaces()[workspaceId]?.workspace;
   },
-  // Harness-loaded skills (deep-analysis) are sent by their callers.
   tools: ({ requestContext }) =>
     assistantVariant(toolSelectionFrom(requestContext)).tools,
 });

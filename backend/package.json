@@ -1,6 +1,6 @@
 {
   "name": "@jhon-buendia-halo/questions-to-insights",
-  "version": "0.45.0",
+  "version": "0.71.0",
   "description": "Ask questions of your data in plain language and get answers, SQL and interactive visuals. Runs locally: npx @jhon-buendia-halo/questions-to-insights",
   "license": "UNLICENSED",
   "repository": {
@@ -59,13 +59,13 @@
     "eval:leak-check": "ts-node -T -P tsconfig.json scripts/eval-leak-check.ts",
     "build:web": "npm --prefix ../frontend run build:web && node scripts/copy-web.js",
     "build:all": "npm run build && npm run build:web",
-    "prepack": "npm run build:all",
-    "start:web": "node dist/cli.js",
-    "intellify-api": "node dist/intellify-api/main.js"
+    "prepack": "npm run build:all && node scripts/assert-publishable-brand.js",
+    "start:web": "node dist/cli.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.130",
     "@databricks/sql": "2.1.0",
+    "@github/copilot-sdk": "1.0.30",
     "@mastra/arize": "1.3.16",
     "@mastra/core": "1.66.0",
     "@mastra/duckdb": "1.8.0",
@@ -77,7 +77,6 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
-    "@nestjs/swagger": "11.4.7",
     "@opentelemetry/api": "1.9.1",
     "@opentelemetry/api-logs": "0.222.0",
     "@opentelemetry/auto-instrumentations-node": "0.80.0",
@@ -89,8 +88,8 @@
     "@opentelemetry/sdk-metrics": "2.11.0",
     "@opentelemetry/sdk-node": "0.222.0",
     "better-sqlite3": "13.0.3",
-    "class-transformer": "0.5.1",
-    "class-validator": "0.15.1",
+    "exceljs": "4.4.0",
+    "fflate": "0.8.3",
     "marked": "18.0.13",
     "pdfkit": "0.17.2",
     "pg": "8.23.0",
@@ -113,6 +112,7 @@
     "@types/pg": "8.23.1",
     "@types/sanitize-html": "2.16.1",
     "@types/supertest": "^6.0.2",
+    "esbuild": "0.28.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",

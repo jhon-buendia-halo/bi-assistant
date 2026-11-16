@@ -12,7 +12,6 @@ import {
   ReadinessReportRef,
   Session,
 } from '../../models/session.model';
-import { SessionsApiService } from '../../services/sessions-api.service';
 import { ReadinessCard } from './readiness-card';
 import { SessionChat } from './session-chat';
 
@@ -131,40 +130,6 @@ describe('SessionChat readiness', () => {
         },
       },
     ]);
-  });
-
-  it('shows the scorecard and the card live on a readiness-report event', () => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    const report = sampleReadinessReport();
-    const panelItem = sampleReadinessPanelItem('r1');
-    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
-      handlers.onReadinessReport?.({ report, panelItem });
-      handlers.onText?.('The World Cup data scores 82.');
-      return Promise.resolve();
-    });
-    const emitted: PanelItemEvent[] = [];
-    fixture.componentInstance.panelItem.subscribe((e) => emitted.push(e));
-
-    fixture.componentInstance.draft.set('Assess the readiness of this dataset');
-    fixture.componentInstance.send();
-    fixture.detectChanges();
-
-    expect(emitted).toEqual([{ item: panelItem }]);
-    expect(fixture.componentInstance.streamingReadiness()).toEqual(ref);
-    expect(
-      el.querySelector('[data-testid="readiness-card-score"]')?.textContent,
-    ).toBe('82/100 · Managed');
-
-    // Stopping keeps the card on the rescued answer.
-    fixture.componentInstance.stop();
-    fixture.detectChanges();
-    const last = fixture.componentInstance.messages().at(-1)!;
-    expect(last.readinessReport).toEqual(ref);
-    expect(fixture.componentInstance.streamingReadiness()).toBeNull();
-    expect(
-      el.querySelectorAll('[data-testid="readiness-card"]').length,
-    ).toBe(1);
   });
 
   it('reduces a report to the reference the answer carries', () => {

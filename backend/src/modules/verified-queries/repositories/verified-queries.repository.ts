@@ -45,10 +45,12 @@ export class VerifiedQueriesRepository implements OnModuleInit {
   /** Upsert on the source answer so re-rating the same message never forks. */
   async save(doc: VerifiedQueryDoc): Promise<VerifiedQueryDoc> {
     const saved = await this.store.update(
-      {
-        sourceSessionId: doc.sourceSessionId,
-        sourceMessageAt: doc.sourceMessageAt,
-      },
+      doc.sourceRunId
+        ? { sourceRunId: doc.sourceRunId }
+        : {
+            sourceSessionId: doc.sourceSessionId ?? '',
+            sourceMessageAt: doc.sourceMessageAt,
+          },
       doc,
       { upsert: true },
     );
@@ -60,5 +62,10 @@ export class VerifiedQueriesRepository implements OnModuleInit {
       sourceSessionId: sessionId,
       sourceMessageAt: messageAt,
     });
+  }
+
+  /** Drop the pair that came from a workflow run's answer. */
+  deleteForRun(runId: string): Promise<number> {
+    return this.store.deleteMany({ sourceRunId: runId });
   }
 }

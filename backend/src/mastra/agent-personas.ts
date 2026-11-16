@@ -1,0 +1,156 @@
+/**
+ * The user persona of each built-in agent (agents.md 1.1, api.md 33): the
+ * human name, job title and domain the hub and the agent page show. The
+ * Mastra agent keeps its technical `name` (traces, monitoring, workflow
+ * steps); the model never sees the persona. Kept here, with no framework
+ * import, so the catalogue and its tests can read it without Mastra.
+ */
+
+/**
+ * The domain (specialty) an agent belongs to; the Agent Hub groups its cards
+ * by domain, in this order (agents-evals R1). `general` is the domain of a
+ * user agent whose owner chose none; no built-in agent is `general`.
+ */
+export const AGENT_DOMAINS = [
+  'data-foundations',
+  'analysis',
+  'sql',
+  'storytelling',
+  'quality',
+  'general',
+] as const;
+
+export type AgentDomain = (typeof AGENT_DOMAINS)[number];
+
+/** The domain a user agent has when none was chosen. */
+export const DEFAULT_AGENT_DOMAIN = 'general' satisfies AgentDomain;
+
+/** True for a known domain id. */
+export function isAgentDomain(value: unknown): value is AgentDomain {
+  return (
+    typeof value === 'string' &&
+    (AGENT_DOMAINS as readonly string[]).includes(value)
+  );
+}
+
+export interface AgentPersona {
+  /** A human first name, shown as the agent's name. */
+  name: string;
+  /** The job title, shown under the name. */
+  role: string;
+  /** The specialty the hub groups the agent under. */
+  domain: AgentDomain;
+  /**
+   * How the agent introduces itself, in the first person (agents.md 1.1):
+   * one or two short sentences the hub card and the agent page show instead
+   * of the technical description. The model never sees it.
+   */
+  intro: string;
+}
+
+/** By registry key; every registered built-in agent has one. */
+export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
+  assistant: {
+    name: 'Emily',
+    role: 'Data Analyst',
+    domain: 'analysis',
+    intro:
+      "Ask me a business question about your data. I'll plan the analysis, run the queries and show you how I got the answer.",
+  },
+  'insights-analyst': {
+    name: 'Michael',
+    role: 'Insights Analyst',
+    domain: 'analysis',
+    intro:
+      'I dig into your datasets to answer the question we planned: I explore the tables, write the SQL and bring back the findings.',
+  },
+  'data-readiness': {
+    name: 'Sarah',
+    role: 'Data Quality Analyst',
+    domain: 'data-foundations',
+    intro:
+      'I check whether a dataset is ready for analysis. I score its quality dimension by dimension and explain what needs fixing.',
+  },
+  visualization: {
+    name: 'Ryan',
+    role: 'Visualization Designer',
+    domain: 'storytelling',
+    intro:
+      'I pick the chart that tells the story of a result at a glance, and say what to take away from it.',
+  },
+  'sql-fixer': {
+    name: 'David',
+    role: 'SQL Developer',
+    domain: 'sql',
+    intro:
+      "Send me a query that failed and I'll read the database error, fix the SQL and try again.",
+  },
+  'sql-verifier': {
+    name: 'Rachel',
+    role: 'SQL Reviewer',
+    domain: 'sql',
+    intro:
+      "I'm the second opinion: I work out the SQL for a question on my own, so we can check the answer holds up.",
+  },
+  'knowledge-bootstrap': {
+    name: 'Kevin',
+    role: 'Knowledge Engineer',
+    domain: 'data-foundations',
+    intro:
+      'I learn what your data means: I describe its concepts and decode the values of its coded columns.',
+  },
+  'assistant-eval-judge': {
+    name: 'Laura',
+    role: 'QA Evaluator',
+    domain: 'quality',
+    intro:
+      "I grade the team's answers in evals: I compare what an agent did and said against the rubric, and explain the score.",
+  },
+  'analysis-planner': {
+    name: 'Olivia',
+    role: 'Analysis Lead',
+    domain: 'analysis',
+    intro:
+      'I plan the analysis before anyone writes a query: the measures, the tables, the scope, and whether to ask you something first.',
+  },
+  'answer-writer': {
+    name: 'Jessica',
+    role: 'Insights Writer',
+    domain: 'storytelling',
+    intro:
+      'I turn the rows and findings of an analysis into a clear answer you can act on.',
+  },
+  'dashboard-reader': {
+    name: 'Grace',
+    role: 'Dashboard Analyst',
+    domain: 'storytelling',
+    intro:
+      "Show me a picture of any dashboard and I'll describe its layout, filters, charts and the data behind them, ready to rebuild.",
+  },
+  'data-mapper': {
+    name: 'Daniel',
+    role: 'Data Mapping Analyst',
+    domain: 'data-foundations',
+    intro:
+      "I match the columns a dashboard needs to the columns in your datasets, and tell you what's missing.",
+  },
+  'image-reader': {
+    name: 'Zoe',
+    role: 'Image Analyst',
+    domain: 'storytelling',
+    intro:
+      "Attach a chart, a table or a screenshot to your question and I'll describe what it shows, so the team can work with it.",
+  },
+  'query-explainer': {
+    name: 'Hannah',
+    role: 'Query Explainer',
+    domain: 'sql',
+    intro:
+      'I explain a SQL query step by step in business words, with how many rows are left after each step.',
+  },
+};
+
+/** The persona of a built-in agent, or undefined for an unknown key. */
+export function builtinAgentPersona(key: string): AgentPersona | undefined {
+  return BUILTIN_AGENT_PERSONAS[key];
+}

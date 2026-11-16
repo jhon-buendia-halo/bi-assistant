@@ -2,12 +2,16 @@ import { Mastra } from '@mastra/core';
 import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
-import { assistantV2Agent } from './agents/assistant-v2.agent';
+import { analysisPlannerAgent } from './agents/analysis-planner.agent';
+import { answerWriterAgent } from './agents/answer-writer.agent';
+import { queryExplainerAgent } from './agents/query-explainer.agent';
+import { insightsAnalystAgent } from './agents/insights-analyst.agent';
+import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
+import { dataMapperAgent } from './agents/data-mapper.agent';
+import { imageReaderAgent } from './agents/image-reader.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
-import { rfpAgent } from './agents/rfp.agent';
-import { showcaseAgents } from './agents/showcase.agents';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
@@ -15,7 +19,11 @@ import { developerTraceExporters } from './developer-exporters';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
-import { qtiV2TurnWorkflow } from './workflows/qti-v2-turn.workflow';
+import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
+import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
+import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
+import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
+import { recreateDashboardWorkflow } from './workflows/recreate-dashboard.workflow';
 
 // Validate every bundled skill before anything is served: a broken skill
 // stops the backend here (agents.md 7.3).
@@ -27,23 +35,35 @@ appSkills();
 export const mastra = new Mastra({
   agents: {
     assistant: assistantAgent,
-    'assistant-v2': assistantV2Agent,
+    'insights-analyst': insightsAnalystAgent,
     visualization: visualizationAgent,
     'sql-fixer': sqlFixerAgent,
     'sql-verifier': sqlVerifierAgent,
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
-    rfp: rfpAgent,
     'data-readiness': dataReadinessAgent,
-    // Showcase agents (agents.md 2.9), Official cards that cannot chat.
-    benchmarking: showcaseAgents.benchmarking,
-    survey: showcaseAgents.survey,
-    'lad-coe': showcaseAgents['lad-coe'],
-    strategy: showcaseAgents.strategy,
+    // The agents of v2's Plan and Write answer steps (agents.md 2.11).
+    'analysis-planner': analysisPlannerAgent,
+    'answer-writer': answerWriterAgent,
+    // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
+    'dashboard-reader': dashboardReaderAgent,
+    'data-mapper': dataMapperAgent,
+    // The agent of Read images, the optional first step of three workflows
+    // (agents.md 2.15; workflows R35).
+    'image-reader': imageReaderAgent,
+    // The query inspector's explainer (agents.md 2.12).
+    'query-explainer': queryExplainerAgent,
   },
-  // Code-defined turn workflows (agents.md 5.11, ADR-0034).
+  // The turn workflows (agents.md 1.2, 5.1): `answer-business-question`, the one
+  // catalogue workflow (5.11, ADR-0034; api.md 118, 119), and `agent-turn`,
+  // the engine of a turn bound to an agent (draft runs, evals and stored
+  // sessions; 5.12, ADR-0040).
   workflows: {
-    'qti-v2-turn': qtiV2TurnWorkflow,
+    'agent-turn': agentTurnWorkflow,
+    'answer-business-question': answerBusinessQuestionWorkflow,
+    'data-readiness-assessment': dataReadinessAssessmentWorkflow,
+    'recreate-dashboard': recreateDashboardWorkflow,
+    'map-dashboard-data': mapDashboardDataWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

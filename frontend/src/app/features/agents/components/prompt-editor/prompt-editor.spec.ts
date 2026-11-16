@@ -110,6 +110,10 @@ describe('PromptEditor', () => {
 
   it('inserts the chosen link as [[kind:name]]', async () => {
     const editor = await create('Ask ');
+    // An element another spec left focused (e.g. an iframe) leaves this
+    // document without a selection, and ProseMirror's collapseToEnd throws.
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    editor.view.dom.focus();
     editor.commands.focus('end');
     editor.commands.insertContent('/plan');
     await settle();

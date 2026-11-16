@@ -10,6 +10,7 @@ import { AgentsController } from './agents.controller';
 import { AgentPromptsService } from './agent-prompts.service';
 import { AgentsService } from './agents.service';
 import { EvalRunsService } from './eval-runs.service';
+import { QueryExplainerEvalBridge } from './query-explainer-eval-bridge';
 import { AgentPromptOverridesRepository } from './repositories/agent-prompt-overrides.repository';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
 
@@ -34,6 +35,9 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
     AgentPromptOverridesRepository,
     EvalRunsService,
     EvalRunsRepository,
+    QueryExplainerEvalBridge,
   ],
+  // WorkflowsModule builds the workflow catalogue from the agent catalogue.
+  exports: [AgentsService],
 })
 export class AgentsModule {}

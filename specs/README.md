@@ -22,7 +22,7 @@ specs/
     ui.md                          app shell, navigation, panels, design tokens, UI states
     delivery.md                    build, packaging, distribution, versioning and release
   capabilities/<capability>/spec.md  one per capability: rules, edge cases, flows (Gherkin), acceptance
-  epics/<EPIC-ID>/spec.md          one high-level spec per Jira epic
+  epics/<EPIC-ID>/spec.md          one high-level spec per epic (roadmap milestone)
 ```
 
 ### Capabilities
@@ -36,17 +36,17 @@ specs/
 | [datasets](capabilities/datasets/spec.md) | Catalog browser, entity selection, entity details, relationships | — (covered by the datasources Feature) |
 | [testing-data](capabilities/testing-data/spec.md) | Sample / test data setup | — |
 | [developer-settings](capabilities/developer-settings/spec.md) | Developer observability switch, endpoints, restart to apply | Developer settings (`developer-settings.spec.ts`), Developer observability export (`developer-observability.spec.ts`) |
-| [sessions-chat](capabilities/sessions-chat/spec.md) | Sessions, streamed chat, tools, SQL repair and verification, clarification, memory | Chat and visuals (`chat-and-visuals.spec.ts`) |
+| [agent-answers](capabilities/agent-answers/spec.md) | How an agent answers: the streamed turn, tools, SQL repair and verification, clarification, memory, the agent-bound rules | Chat and visuals (`chat-and-visuals.spec.ts`) |
+| [past-chats](capabilities/past-chats/spec.md) | The stored sessions of earlier versions: the Past chats list, the read-only chat, delete, downloads | Session management (`runs.spec.ts`) |
 | [visuals](capabilities/visuals/spec.md) | Interactive visuals: create, tailor, version, revert, refresh, repair, export | — (covered by the Chat and visuals Feature) |
 | [dataset-ontology](capabilities/dataset-ontology/spec.md) | Each dataset's ontology: concepts, relations, constraints and instructions, shared items, bootstrap from data; the Ontology tab and "Ontology in context" | Dataset ontology (`dataset-ontology.spec.ts`) |
-| [user-personas](capabilities/user-personas/spec.md) | User personas: who asks the questions (role, goals, typical questions, expertise, answer style); manage-only | User personas (`user-personas.spec.ts`) |
-| [visuals-library](capabilities/visuals-library/spec.md) | Visuals library: a catalog of chart types grouped by category (default catalog of 30, previews, when to use, which the app draws); manage-only | Visuals library (E2E: none yet) |
+| [monitoring](capabilities/monitoring/spec.md) | Monitoring: the LLM calls table (filters, paging, estimated cost, status) and a call's page with its context window in seven boxes and its steps; read-only, from Mastra's trace store | LLM calls, LLM call detail (`monitoring.spec.ts`) |
 | [verified-queries](capabilities/verified-queries/spec.md) | Saved, trusted question → SQL pairs | — |
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
-| [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
-| [rfp](capabilities/rfp/spec.md) | The RFP Builder agent, the Intellify RFP API, RFP records and the RFP package | RFP builder (E2E: none yet), Intellify RFP API (API-level) |
+| [workflows](capabilities/workflows/spec.md) | The workflow catalogue (Answer a Business Question only), the Workflows pages, runs and legacy runs | Workflows (`workflows.spec.ts`) |
 | [agent-panel](capabilities/agent-panel/spec.md) | `show_in_panel`: what an agent shows in the right panel (file, document, table, visual), the workflow bar and its Details, its history and download | Agent panel (E2E: none yet) |
+| [synthetic-data](capabilities/synthetic-data/spec.md) | Sampled profile of a dataset's tables (native sampling, up to 1,000 rows per table, approximate, separate from readiness) in the dataset editor's Profile & synthesize tab; synthetic data scripts follow in later stories | Synthetic data (`synthetic-data.spec.ts`) |
 | [data-readiness](capabilities/data-readiness/spec.md) | The Data Readiness Agent, the deterministic DMBOK readiness engine, profiling, saved readiness reports and the scorecard | Data readiness (E2E: none yet) |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
@@ -79,7 +79,13 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-302 Desktop installer builds | [epics/BA-302](epics/BA-302/spec.md) |
 | BA-305 US Health testing data | [epics/BA-305](epics/BA-305/spec.md) |
 | BA-318 Schema metadata in datasets | [epics/BA-318](epics/BA-318/spec.md) |
-| BA-320 Questions to Insights v2 | [epics/BA-320](epics/BA-320/spec.md) |
+| BA-320 Insights Analyst | [epics/BA-320](epics/BA-320/spec.md) |
+| M1-22 Sampled profiling and synthetic data | [epics/M1-22](epics/M1-22/spec.md) |
+| M1-23 Workflow-first: chats run workflows, agents are building blocks | [epics/M1-23](epics/M1-23/spec.md) |
+| M1-25 Query inspector: every figure links to its query | [epics/M1-25](epics/M1-25/spec.md) |
+| M1-26 Background tasks survive navigation | [epics/M1-26](epics/M1-26/spec.md) |
+| M0-5 Faster workflow, repo-only planning | [epics/M0-5](epics/M0-5/spec.md) |
+| M0-6 Workflow modes: Strict and Free style | [epics/M0-6](epics/M0-6/spec.md) |
 
 ## Stack neutrality
 
@@ -142,7 +148,7 @@ How to tell the capability works end to end: the Flows above plus anything not c
 ```markdown
 # <EPIC-ID> — <Epic name>
 
-- **Jira:** <link> · **Roadmap:** Milestone R.M · **Status:** Draft | Confirmed
+- **Roadmap:** Milestone R.M · **Status:** Draft | Confirmed (<date>)
 
 ## Goal
 The user-observable outcome the epic delivers, and why.
@@ -158,7 +164,9 @@ Epic-level success criteria.
 ## Dependencies, risks and open questions
 ```
 
-Keep it high level: story detail lives in the roadmap and Jira, behaviour in the capability specs.
+Keep it high level: story detail lives in the roadmap, behaviour in the capability specs.
+
+Epic IDs: since 2026-11-11 planning lives only in this repository (no Jira). An epic is a roadmap milestone and its ID is `M<R>-<M>` (Milestone 1.22 → `M1-22`), written at the end of the milestone heading. Epics created earlier keep their former Jira key (`BA-<n>`) as their ID.
 
 ## Lifecycle
 

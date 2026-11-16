@@ -43,17 +43,25 @@ import {
   officialPromptCopy,
 } from '../../services/official-links';
 import { LinkedText } from '../linked-text/linked-text';
+import { AgentCv } from '../agent-cv/agent-cv';
+import { NgTemplateOutlet } from '@angular/common';
 import { PromptEditor } from '../prompt-editor/prompt-editor';
 
 /**
- * The System Prompt tab (agents-evals R86, R87, ui.md 4.5): the core prompt
+ * The Job Description tab (agents-evals R86, R87, ui.md 4.5): the core prompt
  * read-only, and for a user agent its own instructions with Edit, as in the
  * agent-poc reference: link toolbar, a `Linked:` row, broken-link error,
- * Cancel and Save prompt. Save stores the draft with its other fields kept.
+ * Cancel and Save job description. Save stores the draft with its other fields kept.
  */
 @Component({
   selector: 'app-agent-system-prompt',
-  imports: [LucideAngularModule, LinkedText, PromptEditor],
+  imports: [
+    LucideAngularModule,
+    LinkedText,
+    PromptEditor,
+    AgentCv,
+    NgTemplateOutlet,
+  ],
   templateUrl: './agent-system-prompt.html',
 })
 export class AgentSystemPrompt implements OnDestroy {
@@ -89,6 +97,8 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly builtInLimit = 20000;
 
   readonly editing = signal(false);
+  /** How the read-only job description shows: as a CV or as stored (ui.md 4.5). */
+  readonly view = signal<'cv' | 'text'>('cv');
   readonly showShipped = signal(false);
   readonly resetting = signal(false);
   readonly draft = signal('');
@@ -111,7 +121,7 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly officialSkills = computed(() =>
     officialLinkSkills(this.builtInSkills(), this.agent().key),
   );
-  /** The editor hint and notes, naming the agent (`the assistant`, `the RFP Builder`). */
+  /** The editor hint and notes, naming the agent (`the assistant`, `the Data Readiness Agent`). */
   readonly officialCopy = computed(() => officialPromptCopy(this.agent()));
   readonly builtInKnown = computed(() =>
     knownLinks([], this.officialTools(), this.officialSkills()),
@@ -203,7 +213,7 @@ export class AgentSystemPrompt implements OnDestroy {
     const agent = this.agent();
     if (
       !window.confirm(
-        `Reset the system prompt of "${agent.name}" to the built-in version?`,
+        `Reset the job description of "${agent.name}" to the built-in version?`,
       )
     )
       return;

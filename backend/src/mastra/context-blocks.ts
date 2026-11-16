@@ -125,7 +125,7 @@ function fitColumns(columns: string[], budget: number): string {
  * Dataset/entity orientation lines: which datasets are in scope, the
  * fully-qualified entities they expose with their columns and types, and how
  * those entities join. This is the dataset-grounding half of
- * `SessionsService.agentContext`'s first system block — extracted so the
+ * `TurnOptions.agentContext`'s first system block — extracted so the
  * assistant eval harness, which has no session, can still ground the model in
  * the same datasets/join-hints a real turn would see.
  *
@@ -220,7 +220,7 @@ export function schemaNotesBlock(datasets: DatasetSnapshot[]): string {
  * `entity(column type [e.g. a, b], …)` lines with real sample values —
  * richer than a bare schema listing because sample values let a model match
  * filter literals (or a knowledge-mining pass match enum-like values) to
- * real data. Shared by the SQL verifier (`SessionsService.verifierContext`)
+ * real data. Shared by the SQL verifier (`SqlChecks.verifierContext`)
  * and the knowledge-bootstrap agent (`OntologyBootstrapService.bootstrap`) so
  * neither duplicates this formatting.
  */

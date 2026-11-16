@@ -27,7 +27,7 @@ print(json.dumps([{"email_domain":{"domain":d.strip()}} for d in sys.argv[1].spl
 
 echo "> Creating self-hosted Access application for ${PAGES_DOMAIN}"
 APP_ID=$(curl -sS "${AUTH[@]}" -X POST "${API}" \
-  --data "{\"name\":\"Halo BI Assistant - download\",\"domain\":\"${PAGES_DOMAIN}\",\"type\":\"self_hosted\",\"session_duration\":\"24h\"}" \
+  --data "{\"name\":\"Halo Workbench - download\",\"domain\":\"${PAGES_DOMAIN}\",\"type\":\"self_hosted\",\"session_duration\":\"24h\"}" \
   | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["result"]["id"]) if d.get("success") else sys.exit(json.dumps(d["errors"]))')
 echo "  app id: ${APP_ID}"
 

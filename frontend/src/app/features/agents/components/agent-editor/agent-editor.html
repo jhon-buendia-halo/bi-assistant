@@ -27,13 +27,13 @@
     <div class="ml-auto flex shrink-0 items-center gap-2">
       <button
         type="button"
-        data-testid="agent-preview"
-        (click)="startPreview()"
+        data-testid="agent-try-it"
+        (click)="tryIt()"
         [disabled]="editor.loading() || !!editor.loadError()"
         class="btn btn-secondary"
       >
         <lucide-angular [img]="MessageSquare" [size]="14" />
-        <span>Preview</span>
+        <span>Try it</span>
       </button>
       <button
         type="button"
@@ -99,6 +99,42 @@
       </div>
 
       <div class="flex flex-col gap-1.5">
+        <label for="agent-editor-role" class="field-label"
+          >Job title <span class="text-fg-muted">(optional)</span></label
+        >
+        <input
+          id="agent-editor-role"
+          type="text"
+          placeholder="e.g. Claims Analyst"
+          [maxLength]="limits.role"
+          [value]="editor.form().role"
+          (input)="onText('role', $event)"
+          class="field"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="agent-editor-domain" class="field-label">Domain</label>
+        <select
+          id="agent-editor-domain"
+          (change)="onDomain($event)"
+          class="field"
+        >
+          @for (domain of domains; track domain.id) {
+            <option
+              [value]="domain.id"
+              [selected]="editor.form().domain === domain.id"
+            >
+              {{ domain.label }}
+            </option>
+          }
+        </select>
+        <p class="text-[12px] text-fg-muted">
+          The Agents screen groups agents by domain.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
         <label for="agent-editor-description" class="field-label"
           >Description</label
         >
@@ -114,7 +150,7 @@
 
       <div class="flex flex-col gap-1.5">
         <span id="agent-editor-instructions-label" class="field-label"
-          >Instructions</span
+          >Job description</span
         >
         <p
           id="agent-editor-instructions-hint"
@@ -136,7 +172,7 @@
             [value]="editor.form().instructions"
             [skills]="editor.librarySkills()"
             [builtInSkills]="editor.builtInSkills()"
-            label="Instructions"
+            label="Job description"
             [maxLength]="limits.instructions"
             countTestId="agent-instructions-count"
             (valueChange)="onInstructions($event)"

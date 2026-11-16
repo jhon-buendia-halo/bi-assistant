@@ -8,12 +8,25 @@ export type AgentKind = 'official' | 'system' | 'user';
 export type AgentStatus = 'builtin' | 'draft' | 'live';
 export type AgentOwner = 'Official' | 'System' | 'You';
 
+/** The specialty the hub groups an agent under (api.md 33, agents.md 1.2). */
+export type AgentDomain =
+  | 'data-foundations'
+  | 'analysis'
+  | 'sql'
+  | 'storytelling'
+  | 'quality'
+  | 'general';
+
 /** The tools an agent's author can switch on or off (agents-evals R55). */
 export type AgentToolId = 'sample_rows' | 'ask_clarification' | 'visuals';
 
 /** A user agent's stored configuration (draft or Live version). */
 export interface AgentConfig {
   name: string;
+  /** Optional job title shown under the name (api.md 41). */
+  role?: string;
+  /** The hub section the agent shows in; absent = General (api.md 41). */
+  domain?: AgentDomain;
   description: string;
   instructions: string;
   datasets: string[];
@@ -30,9 +43,18 @@ export interface Agent {
   /** Registry key of a built-in agent, or a user agent's id. */
   key: string;
   id: string;
+  /** The persona's human name (api.md 33). */
   name: string;
+  /** The persona's job title; empty when a user agent has none. */
+  role?: string;
+  /** A built-in persona's first-person intro; empty for a user agent (api.md 33). */
+  intro?: string;
+  /** The specialty the hub groups the agent under; absent reads as General. */
+  domain?: AgentDomain;
   description: string;
   tools: string[];
+  /** The workflows whose steps call the agent (api.md 33-34). */
+  usedInWorkflows?: { id: string; name: string }[];
   kind?: AgentKind;
   status?: AgentStatus;
   pinned?: boolean;
@@ -41,10 +63,6 @@ export interface Agent {
   /** Dataset names in the effective configuration that no longer exist. */
   missingDatasets?: string[];
   datasets?: string[];
-  /** Official agents with a dataset: what must exist before Start chat. */
-  chatRequirement?: string;
-  /** A showcase agent: an Official card that cannot chat (agents-evals R106). */
-  showcase?: boolean;
   starterQuestions?: string[];
 }
 
@@ -69,6 +87,25 @@ export interface AgentToolLink {
   name: string;
   status: ToolLinkStatus;
   linkedVia: { instructions: boolean; skills: string[] };
+}
+
+/** One step of a workflow-backed agent's turn (api.md 34, agents-evals R108). */
+export interface AgentWorkflowStep {
+  id: string;
+  title: string;
+  kind: 'code' | 'agent';
+  summary: string;
+  input: string[];
+  output: string[];
+  /** The agent step only: its persona's name and job title, tools and step limit. */
+  agent?: { name: string; role?: string; tools: string[]; maxSteps: number };
+  exits: { label: string; outcome: 'fails' | 'stops' | 'waits' }[];
+}
+
+/** A workflow-backed agent's turn workflow, its steps in run order. */
+export interface AgentWorkflow {
+  id: string;
+  steps: AgentWorkflowStep[];
 }
 
 /** The LLM the agent runs on; the key is never sent, only whether it is set. */
@@ -98,6 +135,14 @@ export interface AgentDetail extends Agent {
   prompt?: AgentPromptView;
   /** User agents only: each library tool with its link status. */
   toolLinks?: AgentToolLink[];
+  /** Workflow-backed built-in agents only (Insights Analyst). */
+  workflow?: AgentWorkflow;
+  /**
+   * The workflows whose steps call this agent, in catalogue order (api.md
+   * 34): Insights Analyst for `insights-analyst`, empty for every other
+   * agent (agents are a library, not workflows).
+   */
+  usedInWorkflows: { id: string; name: string }[];
   /** The LLM configuration the agent uses (LLM Config tab). */
   llm?: AgentLlm;
   /** User agents only: the working copy and the published copy. */

@@ -32,6 +32,8 @@ test('before the first write every read is step 1, and retrospective.md is the f
   expect(classify({ tool: 'Read', file_path: '/work/README.md' }, false)).toMatchObject({ step: 1, strong: false })
   expect(classify({ tool: 'Grep', pattern: 'x', path: '/work' }, false)).toMatchObject({ step: 1, strong: false })
   expect(classify({ tool: 'Read', file_path: '/work/retrospective.md' }, false)).toMatchObject({ step: 1, firstAction: true })
+  expect(classify({ tool: 'Read', file_path: '/work/lessons.md' }, false)).toMatchObject({ step: 1, firstAction: true })
+  expect(classify({ tool: 'Edit', file_path: '/work/lessons.md' }, true)).toMatchObject({ step: 11, strong: true })
   // After the first write, an unowned read matches nothing.
   expect(classify({ tool: 'Read', file_path: '/work/README.md' }, true)).toMatchObject({ step: null })
 })

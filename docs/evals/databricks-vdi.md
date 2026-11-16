@@ -1,6 +1,6 @@
 # Databricks evals in the VDI (BA-186)
 
-The Databricks samples, their reference queries and the loader are built and unit-tested outside the VDI, with no warehouse (decided 2026-10-13). This runbook is the part that needs one: load the three samples into Unity Catalog, validate every Databricks reference, run the sets, and bring the evidence back. Rules: [testing-data](../../specs/capabilities/testing-data/spec.md) R23 to R25, [agents-evals](../../specs/capabilities/agents-evals/spec.md) R184 to R192.
+The Databricks samples, their reference queries and the loader are built and unit-tested outside the VDI, with no warehouse (decided 2026-10-13). This runbook is the part that needs one: load the three samples into Unity Catalog, validate every Databricks reference, run the sets, and bring the evidence back. Rules: [testing-data](../../specs/capabilities/testing-data/spec.md) R24, R25 and R28, [agents-evals](../../specs/capabilities/agents-evals/spec.md) R184 to R192.
 
 ## What you need
 

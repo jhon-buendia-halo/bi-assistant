@@ -1,6 +1,12 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  TestBed,
+  discardPeriodicTasks,
+  fakeAsync,
+  tick,
+} from '@angular/core/testing';
 import { of } from 'rxjs';
 import {
   AgentDetail as AgentDetailModel,
@@ -25,6 +31,7 @@ const ASSISTANT: AgentDetailModel = {
   toolDetails: [],
   memory: null,
   model: null,
+  usedInWorkflows: [],
 };
 
 const WORLD_CUP: AgentEvalSet = {
@@ -268,7 +275,7 @@ describe('AgentDetail evals', () => {
     expect(api.startEvalRun.calls.mostRecent().args[4]).toBe(3);
   });
 
-  it('disables Repeats while a run is in flight and shows its attempt', () => {
+  it('disables Repeats while a run is in flight and shows its attempt', fakeAsync(() => {
     api.getEvalRun.and.returnValue(
       of({
         ok: true,
@@ -284,12 +291,15 @@ describe('AgentDetail evals', () => {
     select.value = '3';
     select.dispatchEvent(new Event('change'));
     byTestId('eval-run')!.click();
+    // The run's first poll lands after 1.5 s.
+    tick(1500);
     fixture.detectChanges();
 
     expect((byTestId('eval-repeats') as HTMLSelectElement).disabled).toBeTrue();
     expect(el.textContent).toContain('· attempt 2/3');
     fixture.destroy();
-  });
+    discardPeriodicTasks();
+  }));
 
   it('marks a held-out question with a chip, and a dev one with none', () => {
     expect(byTestId('eval-split-out-of-scope')?.textContent?.trim()).toBe(
@@ -456,8 +466,9 @@ describe('AgentDetail evals', () => {
     expect(cost.getAttribute('title')).toBe('No price for acme-1');
   });
 
-  it('shows a not-scored question and check as "Not scored"', () => {
+  it('shows a not-scored question and check as "Not scored"', fakeAsync(() => {
     byTestId('eval-run')!.click();
+    tick(1500);
     fixture.detectChanges();
 
     const verdict = byTestId('eval-result-out-of-scope');
@@ -470,7 +481,7 @@ describe('AgentDetail evals', () => {
     );
     // The progress line counts it.
     expect(el.textContent).toContain('1 not scored');
-  });
+  }));
 
   it('shows the headline and the summary of a finished run in Executions', () => {
     fixture.componentInstance.selectEvalTab('runs');
@@ -497,7 +508,7 @@ describe('AgentDetail evals', () => {
     ).toContain('Not scored');
   });
 
-  it('keeps a listed run current while it goes (R152)', () => {
+  it('keeps a listed run current while it goes (R152)', fakeAsync(() => {
     const going: EvalRunView = {
       ...FINISHED_RUN,
       status: 'running',
@@ -520,6 +531,7 @@ describe('AgentDetail evals', () => {
       }),
     );
     fixture.componentInstance.startRun();
+    tick(1500);
     fixture.detectChanges();
 
     const card = byTestId('eval-run-job-1')!;
@@ -529,5 +541,6 @@ describe('AgentDetail evals', () => {
     expect(byTestId('eval-run-summary-job-1')).not.toBeNull();
     // Stop polling.
     fixture.destroy();
-  });
+    discardPeriodicTasks();
+  }));
 });

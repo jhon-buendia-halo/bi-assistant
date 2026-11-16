@@ -3,8 +3,10 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
+  CopilotStatusView,
   EffortLevelsView,
   LlmActionResult,
+  LlmProvider,
   LlmSettings,
   LlmSettingsView,
   ReasoningEffort,
@@ -31,10 +33,19 @@ export class LlmApiService {
     });
   }
 
-  effortLevels(model: string): Observable<EffortLevelsView> {
+  effortLevels(
+    model: string,
+    provider?: LlmProvider,
+  ): Observable<EffortLevelsView> {
     return this.http.get<EffortLevelsView>(`${API_BASE_URL}/llm/effort-levels`, {
-      params: { model },
+      params: provider ? { model, provider } : { model },
     });
+  }
+
+  copilotStatus(): Observable<CopilotStatusView> {
+    return this.http.get<CopilotStatusView>(
+      `${API_BASE_URL}/llm/copilot/status`,
+    );
   }
 
   testConnection(settings: LlmSettings): Observable<LlmActionResult> {

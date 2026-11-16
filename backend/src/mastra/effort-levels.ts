@@ -6,6 +6,8 @@
 // pages and Anthropic's Effort page on 2026-10-10; the table lives in
 // specs/system/agents.md section 1.4.
 
+import { COPILOT_EFFORT_LEVELS } from './copilot/copilot-contracts';
+
 /** Every effort any provider takes, lowest first. */
 export const EFFORT_SCALE = [
   'none',
@@ -89,6 +91,23 @@ export function effortLevelsFor(model: string): ReasoningEffort[] {
   if (claude) return claude;
   if (O_SERIES.test(name)) return ['low', 'medium', 'high'];
   return FALLBACK;
+}
+
+/**
+ * The levels `model` accepts on `provider` (R60). GitHub Copilot takes only
+ * low to max, and none at all for `auto`; every other provider uses the
+ * model's own table.
+ */
+export function effortLevelsForProvider(
+  provider: string | undefined,
+  model: string,
+): ReasoningEffort[] {
+  if (provider !== 'copilot') return effortLevelsFor(model);
+  const name = model.trim();
+  if (!name || name.toLowerCase() === 'auto') return [];
+  return effortLevelsFor(name).filter((level) =>
+    (COPILOT_EFFORT_LEVELS as readonly string[]).includes(level),
+  );
 }
 
 /** `high` when the model offers it, else its first level. */

@@ -2,14 +2,25 @@ import axe from 'axe-core';
 import type { Page } from '@playwright/test';
 import { expect, RunningApp, test } from './fixtures/app.fixture';
 import { apiUrl } from './helpers/app-actions';
+import { brandConfig, BrandId, builtBrand } from './helpers/brand';
 
 type Theme = 'light' | 'dark';
 
 /** Canvas and surface tokens per theme (specs/system/ui.md §6.0). */
-const THEME_COLOURS: Record<Theme, { canvas: string; surface: string }> = {
-  light: { canvas: 'rgba(255, 255, 255, 0.95)', surface: 'rgb(255, 255, 255)' },
-  dark: { canvas: 'rgba(11, 22, 38, 0.95)', surface: 'rgb(18, 35, 58)' },
+/** The canvas and surface tokens of the built brand (ADR-0045; frontend/brands/<id>/tokens.css). */
+const BRAND_COLOURS: Record<BrandId, Record<Theme, { canvas: string; surface: string }>> = {
+  halo: {
+    light: { canvas: 'rgb(242, 242, 240)', surface: 'rgb(255, 255, 255)' },
+    dark: { canvas: 'rgb(28, 28, 28)', surface: 'rgb(36, 36, 36)' },
+  },
+  mercer: {
+    light: { canvas: 'rgba(255, 255, 255, 0.95)', surface: 'rgb(255, 255, 255)' },
+    dark: { canvas: 'rgba(11, 22, 38, 0.95)', surface: 'rgb(18, 35, 58)' },
+  },
 };
+const THEME_COLOURS = BRAND_COLOURS[builtBrand()];
+/** The Electron window's background per theme (app-shell R44), from the brand's brand.json. */
+const WINDOW = brandConfig().canvas;
 
 /**
  * Stands in for the operating system's light/dark setting by emulating the
@@ -73,7 +84,7 @@ test('opens in the light theme by default', async ({ app, page }) => {
   await setOsTheme(page, 'dark');
   await page.reload();
   await expectTheme(page, 'light');
-  await expectWindowBackground(app, '#0077a0');
+  await expectWindowBackground(app, WINDOW.light);
 
   await openAppearance(page);
   await expect(themeOption(page, 'Light')).toBeChecked();
@@ -89,14 +100,14 @@ test('follows the operating system theme when System is chosen', async ({
 
   await expect(themeOption(page, 'System')).toBeChecked();
   await expectTheme(page, 'light');
-  await expectWindowBackground(app, '#0077a0');
+  await expectWindowBackground(app, WINDOW.light);
 
   const url = page.url();
   await setOsTheme(page, 'dark');
   await expectTheme(page, 'dark');
   expect(page.url()).toBe(url);
   await expect(themeOption(page, 'System')).toBeChecked();
-  await expectWindowBackground(app, '#003a52');
+  await expectWindowBackground(app, WINDOW.dark);
 });
 
 test('forces a theme regardless of the operating system', async ({
@@ -108,7 +119,7 @@ test('forces a theme regardless of the operating system', async ({
 
   await themeOption(page, 'Dark').check();
   await expectTheme(page, 'dark');
-  await expectWindowBackground(app, '#003a52');
+  await expectWindowBackground(app, WINDOW.dark);
 
   await setOsTheme(page, 'dark');
   await setOsTheme(page, 'light');
@@ -116,7 +127,7 @@ test('forces a theme regardless of the operating system', async ({
 
   await themeOption(page, 'Light').check();
   await expectTheme(page, 'light');
-  await expectWindowBackground(app, '#0077a0');
+  await expectWindowBackground(app, WINDOW.light);
 });
 
 test('remembers the chosen theme after a restart', async ({

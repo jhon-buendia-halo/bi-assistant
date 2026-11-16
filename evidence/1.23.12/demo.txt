@@ -1,0 +1,50 @@
+1.23.12 — Streamed runs of agent workflows on the backend (plan 1.24.2)
+=========================================================================
+
+No UI in this story. What it adds, all on the backend:
+
+- The agent workflows declare a typed input (api.md 116): the Assistant
+  `question`, `datasets`, `careful`; Questions to Insights v2 `question`,
+  `datasets`; the Data Readiness Agent `dataset` (PostgreSQL or Databricks)
+  and an optional `question`; the RFP Builder `message` and a hidden `rfpId`;
+  a user agent `question`, `careful`. New field types: `boolean`, `datasets`,
+  `dataset`. Each carries `runRequirement` (the chat requirement's text).
+  They keep `trigger: 'chat'`, so chats work unchanged until 1.23.22.
+- `POST /workflows/:id/runs/stream` (api.md 119, 3.6): refusals with their
+  real status before any stream; then SSE `run`, `step` events, the agent
+  turn's events unchanged, and `done { run }` or `error { content }`.
+  `POST /workflows/:id/runs` (118) accepts any workflow with input fields.
+- A run of an agent workflow is one agent turn on a run host (an in-memory
+  session `run-<run id>`, workspace `session-run-<run id>`) through the chat
+  turn path, so its model request equals a chat turn's (agents.md 5.14).
+  The host's memory thread is deleted when the run ends. A run can take one
+  earlier run as context (`context.fromRunId`): its question and answer go
+  first. Runs are held in memory (the last 50); 1.23.14 stores them.
+
+Trace before theorising: the first recorded diff of a chat turn's and a
+run's model request (Assistant, stub model) differed in exactly one system
+message, the workspace line Mastra adds:
+
+  Local filesystem at ".../workspaces/session-<session id>". ...
+  Local filesystem at ".../workspaces/session-run-<run id>". ...
+
+Two chats differ there too (each session has its own workspace), so the e2e
+compares the requests with that path normalised; everything else (every
+system block, the skills list, tools, model, reasoning effort, the
+grounding guard's corrective call) is byte-equal for the Assistant, v2, the
+Data Readiness Agent and the RFP Builder.
+
+Checks run on unit/M1-23-1.23.12:
+
+- backend `npx jest`: 183 suites, 3035 tests passed.
+- backend e2e `npx jest --config ./test/jest-e2e.json`: 9 suites, 94 tests
+  passed, including the new `test/workflow-runs.e2e-spec.ts` (16 tests).
+- agent hashes equal on base and branch: agent-hashes.md.
+- SSE transcript of one Assistant run and one v2 run with the stub model:
+  sse-transcript.txt (written by the e2e with
+  `WORKFLOW_RUNS_TRANSCRIPT=<file>`).
+
+Reproduce:
+
+  cd backend && npm run build
+  npx jest --config ./test/jest-e2e.json test/workflow-runs.e2e-spec.ts

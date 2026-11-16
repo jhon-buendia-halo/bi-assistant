@@ -34,9 +34,7 @@ export const showInPanelTool = createTool({
     path: z
       .string()
       .optional()
-      .describe(
-        'file: workspace-relative path, e.g. rfp/<rfpId>/rfp.md or notes/summary.md',
-      ),
+      .describe('file: workspace-relative path, e.g. notes/summary.md'),
     markdown: z
       .string()
       .optional()

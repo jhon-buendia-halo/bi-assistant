@@ -1,0 +1,25 @@
+Story 1.23.4 - SSE of one assistant turn and one RFP Builder turn on the branch
+(POST /sessions/:id/messages/stream; stubbed model: frontend/e2e/helpers/llm-stub.ts,
+bundled with esbuild; backend built from unit/M1-23-1.23.4, own port and data dir).
+The `done` event is shortened to its last message, `workflow`, `workflowState` and
+`workflowRef`; every other event is as sent.
+
+== Assistant (plain session, workflow agent:assistant, engine agent-turn)
+POST /sessions/538c0112-20c3-406d-82e7-61cc2942c8b4/messages/stream {"content":"How many matches were played?"}
+
+data: {"type":"text","content":"The stub model answered this question."}
+
+data: {"type":"done","lastMessage":{"role":"assistant","content":"The stub model answered this question.","at":"2026-11-11T21:28:12.044Z"},"workflow":null,"workflowState":null,"workflowRef":{"id":"agent:assistant","name":"Assistant","kind":"agent","deleted":false}}
+
+Same events as on feat/M1-23-workflow-first (base), timestamps aside: yes
+
+== RFP Builder (session bound to rfp, workflow agent:rfp, engine agent-turn)
+POST /sessions/ba2867db-7640-4c6c-be99-6a8690f56941/messages/stream {"content":"Start a new RFP"}
+
+data: {"type":"text","content":"Which client is this RFP for?"}
+
+data: {"type":"done","lastMessage":{"role":"assistant","content":"Which client is this RFP for?","at":"2026-11-11T21:28:12.179Z"},"workflow":{"phases":[{"number":1,"title":"Client and renewal","skill":"rfp-client-renewal","action":"Pick the client and confirm the plan year and renewal date."},{"number":2,"title":"Current program","skill":"rfp-current-program","action":"Review today's plans, carriers, premiums and renewal increase."},{"number":3,"title":"What to market","skill":"rfp-market-scope","action":"Decide which lines go out to bid."},{"number":4,"title":"Carriers to invite","skill":"rfp-carriers","action":"Choose the carriers to invite for each line."},{"number":5,"title":"Requirements and questionnaire","skill":"rfp-requirements","action":"Confirm the requirements and the questions carriers must answer."},{"number":6,"title":"Timeline","skill":"rfp-timeline","action":"Agree the milestones from release to the effective date."},{"number":7,"title":"Assemble and review","skill":"rfp-package","action":"Review the RFP document and approve the export."}],"source":"prompt","current":null,"done":[],"skipped":[]},"workflowState":null,"workflowRef":{"id":"agent:rfp","name":"RFP Builder","kind":"agent","deleted":false}}
+
+Same events as on feat/M1-23-workflow-first (base), timestamps aside: yes
+
+Also checked: a Questions to Insights v2 turn (qti-v2-turn) sends the same 10 events as on base: yes.

@@ -48,8 +48,12 @@ describe('seedSampleOf', () => {
   });
 
   it('finds none for a REST sample that is not a copy of a seeded one', () => {
-    // Same schema as `intellify`, but other tables: the RFP API's own.
-    expect(seedSampleOf(fixture('intellify-api'))).toBeUndefined();
+    // Same schema as `world-cup`, but tables no seed has.
+    const apiOnly: SampleFixture = {
+      ...fixture('world-cup-rest'),
+      requiredTables: ['api_only_table'],
+    };
+    expect(seedSampleOf(apiOnly)).toBeUndefined();
   });
 });
 

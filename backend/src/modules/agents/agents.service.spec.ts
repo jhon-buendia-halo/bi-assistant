@@ -113,7 +113,12 @@ function build(extra: Record<string, unknown> = {}) {
     ...extra,
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
-  return { db, skills, service: new AgentsService(mastra, userAgents) };
+  return {
+    db,
+    skills,
+    userAgents,
+    service: new AgentsService(mastra, userAgents),
+  };
 }
 
 describe('AgentsService (built-in and user agents)', () => {
@@ -130,11 +135,17 @@ describe('AgentsService (built-in and user agents)', () => {
     asDemoUser(async () => {
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.key)).toEqual([
+        'sql-fixer',
         'assistant',
         'assistant-eval-judge',
-        'sql-fixer',
       ]);
-      expect(agents[0]).toMatchObject({
+      // Built-ins show their persona: a human name and a job title,
+      // sorted by that name (David, Emily, Laura).
+      expect(agents[1]).toMatchObject({
+        key: 'assistant',
+        name: 'Emily',
+        role: 'Data Analyst',
+        domain: 'analysis',
         kind: 'official',
         owner: 'Official',
         status: 'builtin',
@@ -142,64 +153,107 @@ describe('AgentsService (built-in and user agents)', () => {
         hasUnpublishedChanges: false,
         missingDatasets: [],
         datasets: [],
-        starterQuestions: [],
+        starterQuestions: [], // No workflow step calls the assistant (api.md 33).
+        usedInWorkflows: [],
       });
-      expect(agents[2]).toMatchObject({ kind: 'system', owner: 'System' });
+      // And its first-person intro (agents.md 1.1).
+      expect(agents[1].intro).toMatch(/^Ask me a business question/);
+      expect(agents[0]).toMatchObject({
+        key: 'sql-fixer',
+        name: 'David',
+        role: 'SQL Developer',
+        domain: 'sql',
+        kind: 'system',
+        owner: 'System',
+      });
+      expect(agents[2]).toMatchObject({
+        key: 'assistant-eval-judge',
+        domain: 'quality',
+      });
     }),
   );
 
   it(
-    'lists a showcase agent as Official, blocked with its reason (agents-evals R106)',
+    'ignores a pin saved for a removed showcase agent (1.23.8)',
     asDemoUser(async () => {
-      const showcase = build({ survey: fakeAgent('Survey Agent', []) });
-      const agents = await showcase.service.list();
-      expect(agents.find((agent) => agent.key === 'survey')).toMatchObject({
-        kind: 'official',
-        owner: 'Official',
-        showcase: true,
-        chatRequirement: 'Showcase agent: not available to chat yet.',
-        datasets: [],
-      });
-      expect(
-        agents.find((agent) => agent.key === 'assistant'),
-      ).not.toHaveProperty('showcase');
-      showcase.db.close();
+      await ctx.service.setPinned('assistant', true);
+      // A pin left behind by an earlier version, for an agent no longer registered.
+      await ctx.userAgents.setBuiltinPin('strategy', true);
+      const agents = await ctx.service.list();
+      expect(agents.map((agent) => agent.key)).toEqual([
+        'sql-fixer',
+        'assistant',
+        'assistant-eval-judge',
+      ]);
+      expect(agents.find((agent) => agent.key === 'assistant')?.pinned).toBe(
+        true,
+      );
+      expect(await ctx.service.get('strategy')).toBeNull();
     }),
   );
 
   it(
-    'lists Questions to Insights v2 as Official, with no datasets or requirement, and details its tools (BA-320)',
+    'lists Insights Analyst as Official, with no datasets or requirement, and details its tools (BA-320)',
     asDemoUser(async () => {
       const v2 = build({
-        'assistant-v2': fakeAgent('Questions to Insights v2', [
+        'insights-analyst': fakeAgent('Insights Analyst', [
           'list_entities',
           'describe_entity',
+          'sample_rows',
           'run_readonly_sql',
+          'ask_clarification',
         ]),
       });
       const agents = await v2.service.list();
-      const entry = agents.find((agent) => agent.key === 'assistant-v2');
+      const entry = agents.find((agent) => agent.key === 'insights-analyst');
       expect(entry).toMatchObject({
         kind: 'official',
         owner: 'Official',
         status: 'builtin',
-        tools: ['describe_entity', 'list_entities', 'run_readonly_sql'],
+        tools: [
+          'ask_clarification',
+          'describe_entity',
+          'list_entities',
+          'run_readonly_sql',
+          'sample_rows',
+        ],
         datasets: [],
         missingDatasets: [],
         starterQuestions: [],
       });
       expect(entry).not.toHaveProperty('chatRequirement');
-      expect(entry).not.toHaveProperty('showcase');
-      const detail = await v2.service.get('assistant-v2');
+      const detail = await v2.service.get('insights-analyst');
       expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
+        'ask_clarification',
         'describe_entity',
         'list_entities',
         'run_readonly_sql',
+        'sample_rows',
       ]);
-      expect(await v2.service.skills('assistant-v2')).toMatchObject({
-        skills: [],
-      });
-      expect(v2.service.evalSets('assistant-v2')).toEqual([]);
+      // Its turn workflow, for the Graph tab (api.md 34, R108).
+      expect(detail?.workflow?.id).toBe('answer-business-question');
+      expect(detail?.workflow?.steps.map((step) => step.title)).toEqual([
+        'Read images',
+        'Receive question',
+        'Load catalog',
+        'Plan',
+        'Clarify',
+        'Analyse',
+        'Validate',
+        'Check data quality',
+        'Write answer',
+        'Wrap up',
+      ]);
+      expect((await v2.service.get('assistant'))?.workflow).toBeUndefined();
+      // Its built-in skills, on demand (agents.md 7.4).
+      const skills = (await v2.service.skills('insights-analyst')).skills;
+      expect(
+        skills.map(({ name, level, loading }) => ({ name, level, loading })),
+      ).toEqual(
+        ['curated-knowledge', 'result-validation', 'sql-analysis'].map(
+          (name) => ({ name, level: 'built-in', loading: 'on-demand' }),
+        ),
+      );
       v2.db.close();
     }),
   );
@@ -238,22 +292,28 @@ describe('AgentsService (built-in and user agents)', () => {
     asDemoUser(async () => {
       const created = await ctx.service.create({
         name: 'Health plan analyst',
+        role: '  Claims Analyst  ',
         description: 'Plans',
         datasets: ['World Cup Core', 'Gone'],
         starterQuestions: ['Who won?'],
       });
       const agents = await ctx.service.list();
       expect(agents.map((agent) => agent.name)).toEqual([
-        'assistant',
-        'assistant-eval-judge',
+        'David',
+        'Emily',
         'Health plan analyst',
-        'sql-fixer',
+        'Laura',
       ]);
       const user = agents.find((agent) => agent.key === created.id);
       expect(user).toEqual({
         key: created.id,
         id: created.id,
         name: 'Health plan analyst',
+        role: 'Claims Analyst',
+        // A user agent has no persona intro: its card shows the description.
+        intro: '',
+        // No domain chosen: General.
+        domain: 'general',
         description: 'Plans',
         // No links: only the always-on tools (ADR-0024).
         tools: ['run_readonly_sql'],
@@ -265,6 +325,7 @@ describe('AgentsService (built-in and user agents)', () => {
         missingDatasets: ['Gone'],
         datasets: ['World Cup Core', 'Gone'],
         starterQuestions: ['Who won?'],
+        usedInWorkflows: [],
       });
     }),
   );
@@ -278,7 +339,7 @@ describe('AgentsService (built-in and user agents)', () => {
       });
       await ctx.service.publish(created.id);
       await ctx.service.saveDraft(created.id, {
-        name: 'Analyst v2',
+        name: 'Insights Analyst',
         datasets: ['World Cup Core'],
       });
       const user = (await ctx.service.list()).find(
@@ -444,7 +505,8 @@ describe('AgentsService (built-in and user agents)', () => {
       const names = (view: { skills: { name: string }[] }) =>
         view.skills.map((skill) => skill.name);
       const assistant = await ctx.service.skills('assistant');
-      expect(names(assistant)).toEqual(['curated-knowledge', 'deep-analysis']);
+      // Deep analysis and its harness skill were removed in 1.23.35.
+      expect(names(assistant)).toEqual(['curated-knowledge']);
       expect(assistant.skills[0]).toEqual({
         name: 'curated-knowledge',
         description: expect.stringMatching(/^Use when /) as string,
@@ -453,7 +515,16 @@ describe('AgentsService (built-in and user agents)', () => {
         files: [expect.objectContaining({ path: 'SKILL.md' })],
       });
       expect(Object.keys(assistant)).toEqual(['skills']);
-      expect(assistant.skills[1]).toMatchObject({ loading: 'harness' });
+      // The one agent with a harness skill since deep analysis went.
+      ctx.db.close();
+      ctx = build({ visualization: fakeAgent('visualization', []) });
+      const visualization = await ctx.service.skills('visualization');
+      expect(visualization.skills).toEqual([
+        expect.objectContaining({
+          name: 'interactive-visuals',
+          loading: 'harness',
+        }),
+      ]);
 
       const created = await ctx.service.create({ name: 'Analyst' });
       expect(names(await ctx.service.skills(created.id))).toEqual(
@@ -469,27 +540,38 @@ describe('AgentsService (built-in and user agents)', () => {
   it(
     "serves a skill file and refuses what is not one of the agent's files",
     asDemoUser(async () => {
+      ctx.db.close();
+      ctx = build({ visualization: fakeAgent('visualization', []) });
       const file = await ctx.service.skillFile(
-        'assistant',
-        'deep-analysis',
-        'phases/1-plan.md',
+        'visualization',
+        'interactive-visuals',
+        'reference/freeform.md',
       );
-      expect(file.path).toBe('phases/1-plan.md');
-      expect(file.content).toContain('{{');
+      expect(file.path).toBe('reference/freeform.md');
+      expect(file.content?.length).toBeGreaterThan(0);
 
       await expect(
-        ctx.service.skillFile('sql-fixer', 'deep-analysis', 'SKILL.md'),
-      ).rejects.toThrow('Agent "sql-fixer" has no skill "deep-analysis"');
+        ctx.service.skillFile('sql-fixer', 'interactive-visuals', 'SKILL.md'),
+      ).rejects.toThrow('Agent "sql-fixer" has no skill "interactive-visuals"');
+      await expect(
+        ctx.service.skillFile('assistant', 'deep-analysis', 'SKILL.md'),
+      ).rejects.toThrow('Agent "assistant" has no skill "deep-analysis"');
       await expect(
         ctx.service.skillFile(
-          'assistant',
-          'deep-analysis',
+          'visualization',
+          'interactive-visuals',
           '../../app-skills.ts',
         ),
       ).rejects.toThrow('Invalid skill file path "../../app-skills.ts"');
       await expect(
-        ctx.service.skillFile('assistant', 'deep-analysis', 'phases/9.md'),
-      ).rejects.toThrow('Skill "deep-analysis" has no file "phases/9.md"');
+        ctx.service.skillFile(
+          'visualization',
+          'interactive-visuals',
+          'phases/9.md',
+        ),
+      ).rejects.toThrow(
+        'Skill "interactive-visuals" has no file "phases/9.md"',
+      );
     }),
   );
   describe("a user agent's in-app skills (ADR-0022; api.md 34a, 34b)", () => {
@@ -740,6 +822,42 @@ describe('AgentsService (built-in and user agents)', () => {
           reasoningEffort: null,
         });
       }
+      db.close();
+    });
+
+    it('names GitHub Copilot and reports it as configured without a key', async () => {
+      const db = new BetterSqlite3(':memory:');
+      const llm = {
+        getView: jest.fn().mockResolvedValue({
+          provider: 'copilot',
+          model: 'auto',
+          baseUrl: null,
+          apiKeyMasked: null,
+          reasoningEffort: 'high',
+          configured: true,
+          apiStyle: null,
+        }),
+      };
+      const service = new AgentsService(
+        {
+          listAgents: () => ({ assistant: fakeAgent('assistant', []) }),
+        } as unknown as MastraService,
+        new UserAgentsService(
+          new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
+          new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings')),
+          {
+            list: jest.fn().mockResolvedValue([]),
+          } as unknown as DatasetsRepository,
+          new SkillsRepository(new SqliteDocStore(db, 'skills')),
+        ),
+        llm as never,
+      );
+      expect((await service.get('assistant'))?.llm).toMatchObject({
+        provider: 'copilot',
+        providerName: 'GitHub Copilot',
+        model: 'auto',
+        apiKeyConfigured: true,
+      });
       db.close();
     });
 

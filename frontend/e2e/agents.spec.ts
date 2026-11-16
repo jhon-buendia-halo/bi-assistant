@@ -693,26 +693,26 @@ test('opens an agent from the Agents list and switches between its tabs', async 
     .getByRole('button', { name: 'Agents' })
     .click();
 
-  // The hub lists the harness registry in sections; the System section
-  // shows its first row of 3 until "Show more" (R3).
+  // The hub lists the harness registry in domain sections, every card
+  // shown (R1, R3).
   const assistantRow = page.getByTestId('agent-assistant');
   await expect(
-    page.getByTestId('agent-section-official').getByTestId('agent-assistant'),
-  ).toContainText('Questions to Insights Assistant');
-  await page.getByTestId('agent-show-more-system').click();
+    page.getByTestId('agent-section-analysis').getByTestId('agent-assistant'),
+  ).toContainText('Emily');
   await expect(
-    page.getByTestId('agent-section-system').getByTestId('agent-sql-fixer'),
+    page.getByTestId('agent-section-sql').getByTestId('agent-sql-fixer'),
   ).toBeVisible();
 
   await assistantRow.click();
 
   // Detail header, then one tab at a time.
   await expect(
-    page.getByRole('heading', { name: 'Questions to Insights Assistant' }),
+    page.getByRole('heading', { name: 'Emily', exact: true }),
   ).toBeVisible();
 
-  // The Chat Box is the first tab, with Start chat (R90).
-  await expect(page.getByTestId('agent-chat-start')).toBeVisible();
+  // An Official agent has no Chat Box and opens on Job Description (R5, R90).
+  await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
+  await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
 
   await page.getByTestId('agent-tab-prompt').click();
   await expect(page.getByTestId('agent-prompt-view')).toContainText(
@@ -729,7 +729,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(page.getByText('Recent messages replayed')).toBeVisible();
-  await expect(page.getByText('40 messages')).toBeVisible();
+  await expect(page.getByText('40 messages', { exact: true })).toBeVisible();
 
   await page.getByTestId('agent-tab-model').click();
   await expect(page.getByText('Provider')).toBeVisible();
@@ -774,11 +774,10 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await page.getByTestId('eval-set-world-cup').click();
   await expect(page.locator(CASE_ROWS)).toHaveCount(0);
 
-  // Back returns to the hub, with the System section collapsed again.
+  // Back returns to the hub.
   await page.getByRole('button', { name: 'All agents' }).click();
-  await page.getByTestId('agent-show-more-system').click();
   await expect(
-    page.getByTestId('agent-section-system').getByTestId('agent-sql-verifier'),
+    page.getByTestId('agent-section-sql').getByTestId('agent-sql-verifier'),
   ).toBeVisible();
   await stub.close();
 });
@@ -788,7 +787,6 @@ test('shows the stateless, no-tool agents accurately', async ({ page }) => {
     .getByRole('complementary', { name: 'Navigation rail' })
     .getByRole('button', { name: 'Agents' })
     .click();
-  await page.getByTestId('agent-show-more-system').click();
   await page.getByTestId('agent-sql-fixer').click();
 
   await page.getByTestId('agent-tab-tools').click();
@@ -1024,7 +1022,7 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
 /**
  * The sets the question bank files produce (agents-evals R11, R247): the World
  * Cup file gives three variants, PostgreSQL, REST and Databricks, and holds the
- * former golden set as its last 11 questions (R109). Test ids are
+ * former golden set as its last 11 questions (R249). Test ids are
  * `eval-set-<set id>` and match exactly, so `eval-set-world-cup` never matches
  * the `-rest` or `-databricks` sets.
  */
@@ -1070,7 +1068,7 @@ test('lists every question set, the former golden set inside the World Cup sets'
     await expect(set).toContainText(name);
     await expect(set).toContainText(`${questions} questions`);
   }
-  // The golden set is no longer a set of its own (R109).
+  // The golden set is no longer a set of its own (R249).
   await expect(page.getByText('World Cup (golden set)')).toHaveCount(0);
 
   // Its 11 questions close the World Cup set: the nine golden-set questions

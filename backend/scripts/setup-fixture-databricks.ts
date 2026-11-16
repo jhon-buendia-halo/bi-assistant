@@ -1,7 +1,7 @@
 /**
  * Loads a sample fixture's JSON dump into a Databricks Unity Catalog schema,
  * checks the row counts, and registers the sample's datasource and dataset in
- * a RUNNING backend (BA-9 Step 2, BA-186; testing-data R23 to R25). Runbook:
+ * a RUNNING backend (BA-9 Step 2, BA-186; testing-data R24, R25 and R28). Runbook:
  * docs/evals/databricks-vdi.md.
  *
  *   npm run fixture:databricks -- --fixture world-cup --dry-run

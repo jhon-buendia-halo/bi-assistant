@@ -26,7 +26,7 @@ export interface EvalCaseIndexEntry {
   question: string;
 }
 
-/** Index the cases of `sets` by case id; case ids are unique (R108). */
+/** Index the cases of `sets` by case id; case ids are unique (R248). */
 export function buildEvalCaseIndex(
   sets: readonly EvalSetDefinition[],
 ): ReadonlyMap<string, EvalCaseIndexEntry> {

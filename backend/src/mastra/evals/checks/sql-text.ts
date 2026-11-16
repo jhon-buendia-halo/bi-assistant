@@ -1,6 +1,6 @@
 /**
  * Just enough SQL reading for the deterministic checks and the validator
- * (agents-evals R112, R110): comments and string literals set aside, and the
+ * (agents-evals R112, R250): comments and string literals set aside, and the
  * table references of a statement. No parser dependency, the same decision
  * as `failure-labels.ts` on `feat/engine-eval-loop`, whose tokenizer this
  * follows: a parser adds dialect gaps and packaging weight, and these rules

@@ -30,6 +30,53 @@ function build(docs: VerifiedQueryDoc[] = stored) {
   };
 }
 
+describe('a pair from a workflow run (1.23.19)', () => {
+  const runPair: VerifiedQueryDoc = {
+    id: 'r1',
+    question: 'Which team scored the most goals?',
+    sql: 'SELECT team FROM goals',
+    entities: [],
+    sourceRunId: 'run-1',
+    sourceMessageAt: '2024-02-01T00:00:00.000Z',
+  };
+
+  it('saves keyed by the run, with no session id', async () => {
+    const { service, repository } = build([]);
+
+    await service.save({
+      question: ' Which team scored the most goals? ',
+      sql: ' SELECT team FROM goals ',
+      sourceRunId: 'run-1',
+      sourceMessageAt: runPair.sourceMessageAt,
+    });
+
+    const calls = repository.save.mock.calls as unknown as [VerifiedQueryDoc][];
+    const saved = calls[0][0];
+    expect(saved.sourceRunId).toBe('run-1');
+    expect(saved).not.toHaveProperty('sourceSessionId');
+    expect(saved.question).toBe('Which team scored the most goals?');
+  });
+
+  it('is found by retrieval and by an exact SQL match', async () => {
+    const { service } = build([runPair]);
+
+    expect((await service.findSimilar('most goals scored'))[0].id).toBe('r1');
+    expect(await service.referenceBlock('most goals scored')).toContain(
+      'SQL: SELECT team FROM goals',
+    );
+    expect(await service.isVerifiedSql('select team from goals;')).toBe(true);
+  });
+
+  it('is removed by run on a thumbs-down', async () => {
+    const repository = { deleteForRun: jest.fn().mockResolvedValue(1) };
+    const service = new VerifiedQueriesService(repository as never);
+
+    await service.removeForRun('run-1');
+
+    expect(repository.deleteForRun).toHaveBeenCalledWith('run-1');
+  });
+});
+
 describe('VerifiedQueriesService.findSimilar', () => {
   it('ranks pairs by shared content words', async () => {
     const { service } = build();

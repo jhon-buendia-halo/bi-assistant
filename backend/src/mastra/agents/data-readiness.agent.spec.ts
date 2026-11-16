@@ -54,19 +54,22 @@ import { DATA_READINESS_PROMPT } from './system-prompts';
  * sentences and input names written from the spec, not from the code)
  * inserted before `## Working rules`.
  */
+// A Windows checkout may turn the fixtures' LF into CRLF.
 const SHIPPED = readFileSync(
   join(__dirname, '__fixtures__', 'data-readiness-prompt.shipped.txt'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 const GOLDEN = readFileSync(
   join(__dirname, '__fixtures__', 'data-readiness-prompt.full.txt'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 const TOOL_NAMES = [
   'assess_data_readiness',
   'get_readiness_report',
   'list_readiness_reports',
+  'profile_data_sample',
+  'generate_synthetic_data',
   'describe_entity',
   'run_readonly_sql',
   'show_in_panel',
@@ -90,7 +93,7 @@ describe('the Data Readiness Agent (agents.md 2.10)', () => {
     );
   });
 
-  it('has the three readiness tools, describe_entity, run_readonly_sql, show_in_panel and ask_clarification, in order, and nothing else', async () => {
+  it('has the three readiness tools, the two synthetic-data tools, describe_entity, run_readonly_sql, show_in_panel and ask_clarification, in order, and nothing else', async () => {
     expect(Object.keys(await dataReadinessAgent.listTools())).toEqual(
       TOOL_NAMES,
     );
@@ -151,12 +154,31 @@ describe("the Data Readiness Agent's prompt (agents.md 2.10, Appendix D)", () =>
         'ask_clarification',
         'assess_data_readiness',
         'describe_entity',
+        'generate_synthetic_data',
         'get_readiness_report',
         'list_readiness_reports',
+        'profile_data_sample',
         'run_readonly_sql',
       ].sort(),
     );
     for (const tool of links.tools) expect(TOOL_NAMES).toContain(tool);
+  });
+
+  it('has D14 and the widened D12 scope: sampled numbers are never scores, scripts are never run (story 1.22.4)', () => {
+    const served = dataReadinessInstructions();
+    expect(served).toContain('Sample profiles and synthetic data:');
+    expect(served).toContain(
+      'call the "profile_data_sample" tool;\n  for a synthetic copy of it, call the "generate_synthetic_data" tool.',
+    );
+    expect(served).toContain(
+      '- Sampled numbers are approximate and never readiness scores',
+    );
+    expect(served).toContain(
+      '- Never run a synthetic script against the datasource',
+    );
+    expect(served).toContain(
+      'Profiling a sample of it\n  and generating a synthetic copy of it are in scope too.',
+    );
   });
 
   it('sends the model plain mentions, never link syntax', () => {

@@ -1,0 +1,515 @@
+@let l = layout();
+
+<!-- The canvas: scrolls when the graph is larger; dragging the background pans -->
+<div
+  #viewport
+  data-testid="workflow-canvas"
+  class="canvas-viewport min-h-0 flex-1 overflow-auto"
+  [class.panning]="panning()"
+  (pointerdown)="onPointerDown($event)"
+  (pointermove)="onPointerMove($event)"
+  (pointerup)="onPointerUp()"
+  (pointercancel)="onPointerCancel()"
+  (scroll)="onViewportScroll()"
+>
+  <div
+    class="canvas-size"
+    [style.width.px]="l.width * zoom()"
+    [style.height.px]="l.height * zoom()"
+  >
+    <div
+      class="canvas-stage"
+      role="group"
+      [attr.aria-label]="workflow().name + ' graph'"
+      [style.width.px]="l.width"
+      [style.height.px]="l.height"
+      [style.transform]="'scale(' + zoom() + ')'"
+    >
+      <svg
+        class="canvas-wires"
+        aria-hidden="true"
+        [attr.width]="l.width"
+        [attr.height]="l.height"
+        [attr.viewBox]="'0 0 ' + l.width + ' ' + l.height"
+      >
+        <defs>
+          <marker
+            id="workflow-canvas-arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path class="edge-arrow" d="M 0 0 L 10 5 L 0 10 z" />
+          </marker>
+          <marker
+            id="workflow-canvas-arrow-done"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path class="edge-arrow done" d="M 0 0 L 10 5 L 0 10 z" />
+          </marker>
+          <marker
+            id="workflow-canvas-arrow-violation"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path class="edge-arrow violation" d="M 0 0 L 10 5 L 0 10 z" />
+          </marker>
+        </defs>
+        @for (edge of l.edges; track edge.id) {
+          @let followed = edgeDone(edge);
+          <path
+            class="edge"
+            [class.done]="followed"
+            [class.violation]="violated(edge)"
+            [class.skipped]="edgeSkipped(edge)"
+            [attr.d]="edge.path"
+            [attr.data-testid]="'workflow-connector-' + edge.id"
+            [attr.data-kind]="edge.kind"
+            [attr.data-done]="followed ? 'true' : 'false'"
+            [attr.data-skipped]="edgeSkipped(edge) ? 'true' : null"
+            [attr.data-violation]="violated(edge) ? 'true' : null"
+            [attr.marker-end]="
+              violated(edge)
+                ? 'url(#workflow-canvas-arrow-violation)'
+                : followed
+                  ? 'url(#workflow-canvas-arrow-done)'
+                  : 'url(#workflow-canvas-arrow)'
+            "
+          />
+        }
+        @for (sub of l.subEdges; track sub.id) {
+          <path
+            class="sub-edge"
+            [class.done]="done(sub.nodeId)"
+            [attr.d]="sub.path"
+            [attr.data-subnode]="sub.subNodeId"
+            [attr.data-done]="done(sub.nodeId) ? 'true' : 'false'"
+          />
+        }
+      </svg>
+
+      @for (edge of l.edges; track edge.id) {
+        @if (edge.label) {
+          <span
+            class="edge-label absolute -translate-x-1/2 -translate-y-1/2 rounded bg-surface px-1 font-mono text-[11px] leading-4 whitespace-nowrap text-fg-muted"
+            [attr.data-testid]="'workflow-connector-label-' + edge.id"
+            [attr.title]="edgeText(edge)"
+            [style.left.px]="edge.labelX"
+            [style.top.px]="edge.labelY"
+            ><span aria-hidden="true">{{ edge.label }}</span
+            ><span class="sr-only">{{ edgeText(edge) }}</span></span
+          >
+        }
+        @if (edge.branchLabel) {
+          <!-- A branch's condition or the loop's: on its edge, muted with it -->
+          <span
+            class="edge-branch-label absolute -translate-x-1/2 -translate-y-1/2 rounded border border-border bg-surface px-1.5 text-center text-[11px] leading-[14px] font-medium whitespace-nowrap text-fg"
+            [attr.data-testid]="
+              'workflow-edge-label-' + edge.from + '-' + edge.to
+            "
+            [attr.data-kind]="edge.kind"
+            [attr.data-skipped]="edgeSkipped(edge) ? 'true' : null"
+            [style.left.px]="edge.branchLabelX"
+            [style.top.px]="edge.branchLabelY"
+          >
+            @for (line of edge.branchLabelLines; track $index) {
+              <span class="block">{{ $first ? "" : " " }}{{ line }}</span>
+            }
+          </span>
+        }
+      }
+
+      @for (node of l.nodes; track node.id) {
+        @let s = status(node.id);
+        <button
+          type="button"
+          class="canvas-node"
+          [attr.data-kind]="node.kind"
+          [attr.data-status]="s"
+          [attr.data-skipped]="s === 'skipped' ? 'true' : null"
+          [attr.data-testid]="'workflow-node-' + node.id"
+          [attr.aria-pressed]="selectedId() === node.id"
+          [style.left.px]="node.x"
+          [style.top.px]="node.y"
+          [style.width.px]="node.width"
+          [style.height.px]="node.height"
+          (click)="onNodeClick(node.id)"
+          (dblclick)="onNodeDblClick(node.id)"
+          (keydown.enter)="onNodeEnter($event, node.id)"
+        >
+          @if (node.kind !== "trigger") {
+            <span class="handle in" aria-hidden="true"></span>
+          }
+          @if (node.kind !== "output") {
+            <span class="handle out" aria-hidden="true"></span>
+          }
+          @if (node.number !== null) {
+            <span class="sr-only">Step {{ node.number }}:</span>
+          }
+
+          @if (node.agent?.key) {
+            <!-- An agent step shows who does it: its portrait (ui.md 4.4b). -->
+            <app-agent-avatar
+              class="flex-none"
+              data-testid="workflow-node-portrait"
+              [agentKey]="node.agent!.key"
+              [name]="node.agent!.name"
+              [size]="40"
+            />
+          } @else {
+            <span
+              class="node-icon"
+              [attr.data-kind]="node.kind"
+              aria-hidden="true"
+            >
+              <lucide-angular
+                [img]="nodeIcons[node.kind]"
+                [size]="node.kind === 'agent' ? 18 : 20"
+              />
+            </span>
+          }
+
+          <!-- The agent's text sits inside it, beside its icon tile; a square's label hangs below it. -->
+          <span
+            [class]="
+              node.kind === 'agent'
+                ? 'flex min-w-0 flex-1 flex-col gap-px text-left'
+                : 'pointer-events-none absolute top-[calc(100%+8px)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-px text-center'
+            "
+            [style.width.px]="node.kind === 'agent' ? null : labelWidth"
+          >
+            @if (node.kind === "agent") {
+              <!-- The action in bold, then who does it: the agent's name and job title. -->
+              <span
+                class="node-title max-w-full truncate text-[13px] leading-[18px] font-semibold text-fg-strong"
+                data-testid="workflow-node-title"
+                >{{ node.title }}</span
+              >
+            } @else {
+              <span
+                class="node-title line-clamp-2 max-w-full text-[13px] leading-[18px] font-medium text-fg-strong"
+                [attr.data-testid]="
+                  node.step !== null ? 'workflow-node-title' : null
+                "
+                >{{ node.title }}</span
+              >
+            }
+            @if (node.kind !== "agent" && runLine(node.id); as line) {
+              <!-- During a run, what the step did instead of its id: one line, its story's headline on hover. -->
+              <span
+                class="max-w-full truncate text-[11px] leading-[14px]"
+                data-testid="workflow-node-run-line"
+                [attr.data-tone]="line.tone"
+                [attr.title]="line.title || null"
+                [class.text-on-success-soft]="line.tone === 'success'"
+                [class.text-on-warning-soft]="line.tone === 'warning'"
+                [class.text-on-danger-soft]="line.tone === 'danger'"
+                [class.text-primary]="line.tone === 'active'"
+                [class.italic]="line.tone === 'active'"
+                [class.text-fg-muted]="line.tone === 'muted'"
+                >{{ line.text }}</span
+              >
+            } @else if (node.subtitle && node.kind !== "agent") {
+              <span
+                class="node-subtitle line-clamp-3 max-w-full text-[11px] leading-[14px] [overflow-wrap:anywhere] text-fg-muted"
+                [class.font-mono]="node.step !== null"
+                [attr.data-testid]="
+                  node.step !== null ? 'workflow-node-id' : null
+                "
+                >{{ node.subtitle }}</span
+              >
+            }
+            @if (node.agent; as agent) {
+              <span class="flex max-w-full min-w-0 items-center gap-1">
+                <span
+                  class="min-w-0 truncate text-[12px] leading-4 text-fg"
+                  data-testid="workflow-node-agent"
+                  >{{ agent.name }}</span
+                >
+                <!-- Agents look human; the badge says it is AI. -->
+                <span
+                  class="flex-none rounded-[3px] border border-border-strong px-[3px] text-[9px] leading-[12px] font-semibold tracking-wide text-fg-muted"
+                  data-testid="workflow-node-ai"
+                  >AI</span
+                >
+              </span>
+              @if (activity(node.id); as story) {
+                <!-- During a run, what the agent is doing instead of its title. -->
+                <span
+                  class="max-w-full truncate text-[11px] leading-[14px]"
+                  data-testid="workflow-node-activity"
+                  [attr.data-state]="story.state"
+                  [class.text-primary]="story.state === 'active'"
+                  [class.italic]="story.state === 'active'"
+                  [attr.data-concern]="story.concern ? 'true' : null"
+                  [class.text-on-success-soft]="
+                    story.state === 'done' && !story.concern
+                  "
+                  [class.text-on-danger-soft]="story.state === 'failed'"
+                  [class.text-on-warning-soft]="
+                    story.state === 'asking' || story.concern
+                  "
+                  [class.text-fg-muted]="
+                    story.state === 'waiting' ||
+                    story.state === 'stopped' ||
+                    story.state === 'skipped'
+                  "
+                  >{{ story.line }}</span
+                >
+              } @else if (agent.role) {
+                <span
+                  class="max-w-full truncate text-[11px] leading-[14px] text-fg-muted"
+                  data-testid="workflow-node-agent-role"
+                  >{{ agent.role }}</span
+                >
+              }
+            }
+          </span>
+
+          @for (exit of node.exits; track exit.text) {
+            <span
+              class="pointer-events-none absolute flex w-max items-start gap-1 px-1 text-left text-[11px] leading-4"
+              [class.-translate-x-1/2]="exit.align === 'center'"
+              [class.text-on-danger-soft]="exit.outcome === 'fails'"
+              [class.text-fg-muted]="exit.outcome === 'stops'"
+              [class.text-on-warning-soft]="exit.outcome === 'waits'"
+              data-testid="workflow-node-exit"
+              [style.left.px]="exit.x - node.x"
+              [style.top.px]="exit.y - node.y"
+              [style.max-width.px]="exit.width"
+            >
+              <lucide-angular
+                class="mt-[2.5px] flex-none"
+                [img]="
+                  exit.outcome === 'fails'
+                    ? CircleX
+                    : exit.outcome === 'waits'
+                      ? Hourglass
+                      : Square
+                "
+                [size]="11"
+                aria-hidden="true"
+              /><span>{{ exit.text }}</span>
+            </span>
+          }
+
+          @if (node.step !== null) {
+            <span
+              class="kind-badge"
+              [attr.data-kind]="node.kind"
+              data-testid="workflow-node-kind"
+              >{{ node.kind === "agent" ? "LLM" : "CODE" }}</span
+            >
+          }
+
+          @if (attemptCount(node.id); as count) {
+            <span class="attempts-badge">
+              <span aria-hidden="true" data-testid="workflow-node-attempts"
+                >×{{ count }}</span
+              ><span class="sr-only">, ran {{ count }} times</span>
+            </span>
+          }
+
+          @if (s !== null) {
+            <span
+              class="status-badge"
+              [attr.data-status]="s"
+              data-testid="workflow-node-status"
+            >
+              <lucide-angular
+                [img]="statusIcons[s]"
+                [size]="12"
+                [class.animate-spin]="s === 'running'"
+                aria-hidden="true"
+              />
+              <span class="sr-only">{{ statusLabel(s) }}</span>
+            </span>
+          }
+        </button>
+
+        @for (port of node.ports; track port.kind) {
+          <span
+            class="port"
+            aria-hidden="true"
+            [style.left.px]="port.x"
+            [style.top.px]="port.y"
+          >
+            <span class="diamond"></span>
+            <span
+              class="port-label absolute top-2.5 left-0 -translate-x-1/2 text-[11px] leading-[14px] whitespace-nowrap text-fg-muted"
+              [attr.data-required]="port.kind === 'model' ? '' : null"
+              >{{ port.label }}</span
+            >
+          </span>
+        }
+
+        @for (sub of node.subNodes; track sub.id) {
+          <button
+            type="button"
+            class="sub-node"
+            [attr.data-kind]="sub.kind"
+            [attr.data-step]="node.id"
+            [attr.data-testid]="'workflow-subnode-' + sub.id"
+            [attr.aria-label]="subNodeLabel(node, sub)"
+            [attr.aria-haspopup]="sub.kind === 'tools' ? 'menu' : null"
+            [attr.aria-expanded]="
+              sub.kind === 'tools' ? toolsMenu()?.stepId === node.id : null
+            "
+            [attr.title]="
+              sub.kind === 'tools' ? sub.tools.join(', ') : sub.label
+            "
+            [style.left.px]="sub.x"
+            [style.top.px]="sub.y"
+            [style.width.px]="sub.size"
+            [style.height.px]="sub.size"
+            (click)="onSubNodeClick(node, sub, $event)"
+            (dblclick)="
+              sub.kind === 'tools' && onSubNodeClick(node, sub, $event)
+            "
+          >
+            <span class="diamond top" aria-hidden="true"></span>
+            <lucide-angular
+              [img]="subIcons[sub.kind]"
+              [size]="20"
+              aria-hidden="true"
+            />
+            <span
+              class="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 flex -translate-x-1/2 flex-col items-center text-center"
+              aria-hidden="true"
+              [style.width.px]="subLabelWidth(sub)"
+            >
+              <span
+                class="node-title line-clamp-2 max-w-full text-[12px] leading-4 font-medium [overflow-wrap:anywhere] text-fg-strong"
+                >{{ sub.label }}</span
+              >
+              @if (sub.subtitle) {
+                <span
+                  class="node-subtitle text-[11px] leading-[14px] text-fg-muted"
+                  >{{ sub.subtitle }}</span
+                >
+              }
+            </span>
+          </button>
+        }
+      }
+    </div>
+  </div>
+</div>
+
+<!-- The Tools sub-node's list: unscaled, anchored to the sub-node -->
+@if (toolsMenu(); as menu) {
+  <div
+    #toolsMenu
+    role="menu"
+    class="tools-menu menu absolute z-30 min-w-[180px] -translate-x-1/2"
+    [class.-translate-y-full]="menu.above"
+    [attr.data-testid]="'workflow-tools-menu-' + menu.stepId"
+    [attr.aria-label]="'Tools of ' + menu.stepTitle"
+    [style.left.px]="menu.left"
+    [style.top.px]="menu.top"
+    (keydown)="onMenuKeydown($event)"
+  >
+    @for (tool of menu.tools; track tool) {
+      <button
+        type="button"
+        role="menuitem"
+        tabindex="-1"
+        class="menu-item"
+        [attr.data-testid]="'workflow-tools-menu-item-' + tool"
+        (click)="chooseTool(menu.stepId, tool)"
+      >
+        <lucide-angular
+          class="flex-none"
+          [img]="Wrench"
+          [size]="14"
+          aria-hidden="true"
+        />
+        <span class="font-mono text-[12px]">{{ tool }}</span>
+      </button>
+    }
+  </div>
+}
+
+<!-- Execute workflow, pinned to the canvas top-right -->
+<div class="absolute top-3 right-3 z-10">
+  <button
+    type="button"
+    class="btn btn-primary shadow-subtle"
+    data-testid="workflow-execute"
+    (click)="execute.emit()"
+  >
+    <lucide-angular [img]="Play" [size]="14" aria-hidden="true" />
+    <span>Execute workflow</span>
+  </button>
+</div>
+
+<!-- Zoom toolbar, pinned to the canvas bottom-left -->
+<div
+  role="toolbar"
+  aria-label="Canvas zoom"
+  data-testid="workflow-canvas-toolbar"
+  class="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-[10px] border border-border bg-surface p-1 shadow-subtle"
+>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Fit to screen"
+    title="Fit to screen"
+    data-testid="workflow-zoom-fit"
+    [attr.aria-pressed]="autoFit()"
+    (click)="fit()"
+  >
+    <lucide-angular [img]="Maximize" [size]="16" />
+  </button>
+  <span class="mx-0.5 h-4 w-px bg-border" aria-hidden="true"></span>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Zoom in"
+    title="Zoom in"
+    data-testid="workflow-zoom-in"
+    [disabled]="zoom() >= MAX_ZOOM"
+    (click)="zoomIn()"
+  >
+    <lucide-angular [img]="ZoomIn" [size]="16" />
+  </button>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Zoom out"
+    title="Zoom out"
+    data-testid="workflow-zoom-out"
+    [disabled]="zoom() <= MIN_ZOOM"
+    (click)="zoomOut()"
+  >
+    <lucide-angular [img]="ZoomOut" [size]="16" />
+  </button>
+  <button
+    type="button"
+    class="btn-icon"
+    aria-label="Reset zoom"
+    title="Reset zoom"
+    data-testid="workflow-zoom-reset"
+    (click)="resetZoom()"
+  >
+    <lucide-angular [img]="RotateCcw" [size]="16" />
+  </button>
+  <span
+    data-testid="workflow-zoom-level"
+    aria-live="polite"
+    class="w-11 text-center text-[12px] font-medium text-fg tabular-nums"
+    >{{ zoomPercent() }}</span
+  >
+</div>

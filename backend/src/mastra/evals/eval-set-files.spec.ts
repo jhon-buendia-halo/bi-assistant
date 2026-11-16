@@ -345,7 +345,7 @@ describe('eval set files', () => {
         /^From the former World Cup golden set \(world-cup-golden, merged into this bank on 2026-10-20\)\. /,
       );
       // The two checks it moved with, now with their criteria, then the
-      // deterministic checks of its category (R109, R126).
+      // deterministic checks of its category (R249, R126).
       expect(evalCase.checks.slice(0, 2)).toEqual([
         {
           type: 'calledTool',

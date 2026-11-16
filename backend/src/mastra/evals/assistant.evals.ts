@@ -1,6 +1,7 @@
 import { checks } from '@mastra/evals/checks';
 import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
+import { randomUUID } from 'node:crypto';
 import type { MastraScorer } from '@mastra/core/evals';
 import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
@@ -308,16 +309,22 @@ export interface EvalOrientationInput {
 
 /**
  * The agent a set's cases run on and what each case sends it (agents.md
- * 8.1, `agentKey`): the assistant by default, the RFP Builder for the `rfp`
- * set (`rfp.evals.ts`).
+ * 8.1, `agentKey`): the assistant by default, the Data Readiness Agent for
+ * the `data-readiness` set (`data-readiness.evals.ts`).
  */
 export interface EvalTarget {
   /** Registry key of the agent. */
   agentKey: string;
   agent: Agent;
+  /**
+   * What a case runs, when not the agent alone: Insights Analyst's
+   * cases run its whole `answer-business-question` workflow (agents.md 8.1). A run of it
+   * never gets the tool-only synthesis: its answer is its Write answer's.
+   */
+  runTarget?: Agent;
   /** The sets that run on this agent. */
   sets: AssistantEvalSet[];
-  /** The orientation system message of a case (Block 1's dataset half, or Block R1). */
+  /** The orientation system message of a case (Block 1's dataset half, or Block D1). */
   orientation(input: EvalOrientationInput): string | Promise<string>;
   /** Whether the curated-knowledge block (Block 3) is sent. */
   sendsKnowledge: boolean;
@@ -341,8 +348,8 @@ export interface EvalTarget {
   sessionAgentKey?: string;
   /**
    * How much of each tool input and output the LLM judge reads; the
-   * report's 2,000 characters when unset. The RFP Builder's tools answer
-   * whole records, so its judge reads more of them.
+   * report's 2,000 characters when unset. An agent whose tools answer
+   * whole reports (Data Readiness) has its judge read more of them.
    */
   judgeTraceChars?: number;
   /**
@@ -698,7 +705,7 @@ export function fixtureForCases(
  * plus, when a throwaway eval session exists, the same `session-id` and a
  * live turn-records array `create_visual`/`update_visual` read via
  * `TURN_RECORDS_CONTEXT_KEY` in a real chat turn (see
- * `SessionsService.streamMessage`), and the attempt's usage sink, which the
+ * `TurnEngine.streamTurn`), and the attempt's usage sink, which the
  * SQL fixer, the visual designer and the tool-only synthesis report their
  * model calls to (agents.md 8.3). The sink is not part of any prompt.
  */
@@ -725,13 +732,13 @@ function evalRequestContext(
 }
 
 /**
- * Mirrors `toolRecords()` in `SessionsService` (the non-streaming turn path)
+ * Mirrors `toolRecords()` (the turn engine)
  * but incrementally, per step, via `targetOptions.onStepFinish` — so a
  * `create_visual`/`update_visual` call later in the *same* run sees the SQL
  * earlier steps already captured, the same way production threads a live
- * records array through requestContext during `streamMessage`.
+ * records array through requestContext during `streamTurn`.
  */
-function captureStepRecords(
+export function captureStepRecords(
   step: unknown,
   turnRecords: ToolDataRecord[],
 ): void {
@@ -750,66 +757,72 @@ function captureStepRecords(
   }
 }
 
-/** A throwaway session created purely to give `create_visual`/`update_visual`
- * somewhere to write during an eval run. */
-export interface EvalSession {
+/** A throwaway run host created purely to give `create_visual`/`update_visual`
+ * somewhere to write during an eval run (agents.md 8.3). */
+export interface EvalHost {
   id: string;
 }
 
 /**
- * `create_visual` looks up the session's latest completed answer before it
- * will do anything — a throwaway session with no chat history has none, so
- * seed one generic placeholder once. The chart's actual data comes from the
- * run's own captured records (merged over this placeholder via
+ * `create_visual` looks up the host's latest completed answer before it
+ * will do anything — a throwaway host with no history has none, so seed one
+ * generic placeholder once (the host's `context`). The chart's actual data
+ * comes from the run's own captured records (merged over this placeholder via
  * `TURN_RECORDS_CONTEXT_KEY`), not from this message's (empty) data.
  */
-const EVAL_SESSION_PLACEHOLDER_ANSWER =
-  'This is a throwaway session created for the assistant eval suite.';
+const EVAL_HOST_PLACEHOLDER = {
+  question: 'Eval suite placeholder question',
+  answer: 'This is a throwaway host created for the assistant eval suite.',
+};
 
 /**
- * A real, disposable session so `create_visual`/`update_visual` — which read
- * `session-id` from requestContext and look up session state — behave the
- * same way they do in a real chat turn. The one runner of the eval suite,
+ * A real, disposable run host (the temporary host a workflow run's agent
+ * turn runs on, agents.md 5.14) so `create_visual`/`update_visual` — which
+ * read `session-id` from requestContext and look up host state — behave the
+ * same way they do in a real turn. The one runner of the eval suite,
  * `EvalRunsService`, serves both the app and the CLI (`run-assistant-evals.ts`
  * boots the full Nest app); a run that cannot create one still runs, and
  * `create_visual` then reports "No session in context", scored like any
  * other tool error.
  */
-export async function createEvalSession(
+export async function createEvalHost(
   sessions: SessionsService,
   datasets: string[],
-  /** Bind the session to this built-in agent (`EvalTarget.sessionAgentKey`). */
+  /** Bind the host to this built-in agent (`EvalTarget.sessionAgentKey`). */
   agentKey?: string,
-): Promise<EvalSession> {
-  const name =
-    `${agentKey ?? 'assistant'} eval ${new Date().toISOString()}`.slice(0, 64);
-  let session = agentKey
-    ? await sessions.createFromAgent(agentKey, name)
-    : await sessions.create(name, datasets);
+): Promise<EvalHost> {
+  // An agent that declares its own datasets (Data Readiness)
+  // takes them; the assistant runs over the run's.
+  // An agent host: the agent's turn on the agent-turn engine, with no
+  // catalogue workflow behind it (agents are a library since 1.23.35).
+  const host = await sessions.createRunHost({
+    runId: `eval-${randomUUID()}`,
+    agentKey: agentKey ?? 'assistant',
+    name: `${agentKey ?? 'assistant'} eval`,
+    ...(agentKey ? {} : { datasets }),
+    context: EVAL_HOST_PLACEHOLDER,
+  });
   // An agent that binds every qualifying dataset (Data Readiness) is narrowed
   // to the run's datasets, matching the orientation the case is given.
   if (agentKey && datasets.length > 0) {
-    session = (await sessions.narrowDatasets(session.id, datasets)) ?? session;
+    sessions.narrowRunHost(host.id, datasets);
   }
-  await sessions.appendAssistantMessage(session.id, {
-    content: EVAL_SESSION_PLACEHOLDER_ANSWER,
-  });
-  return { id: session.id };
+  return { id: host.id };
 }
 
-/** Best-effort cleanup — a throwaway session must never outlive its run. */
-export async function cleanupEvalSession(
+/** Best-effort cleanup — a throwaway host must never outlive its run. */
+export async function cleanupEvalHost(
   sessions: SessionsService | undefined,
-  session: EvalSession | undefined,
+  host: EvalHost | undefined,
 ): Promise<void> {
-  if (!sessions || !session) return;
-  await sessions.delete(session.id).catch(() => undefined);
+  if (!sessions || !host) return;
+  await sessions.deleteRunHostResources(host.id).catch(() => undefined);
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it —
- * mirrors `parseJsonObject` in `SessionsService`/`DeepAnalysisService`,
- * duplicated here rather than imported so this module's judge check stays
- * usable without pulling in either of those heavier services. */
+ * mirrors `parseJsonObject` in `SqlChecks`, duplicated here rather than
+ * imported so this module's judge check stays usable without pulling in
+ * that heavier service. */
 function parseJsonObject(text: string | undefined): unknown {
   const trimmed = (text ?? '').trim();
   if (!trimmed) return undefined;
@@ -1028,7 +1041,7 @@ export async function runAssistantEvalCase(
   /**
    * The curated-knowledge system block (`OntologyService.definitionBlock`)
    * for these datasets — same block a real chat turn gets from
-   * `SessionsService.agentContext`. `EvalRunsService`, which runs the suite
+   * `TurnOptions.agentContext`. `EvalRunsService`, which runs the suite
    * for the app and the CLI, populates this from `OntologyService`; omitted
    * (or empty) when no caller wires one in.
    */
@@ -1148,9 +1161,9 @@ export async function runAssistantEvalCase(
         },
       ],
       scorers: evalCase.scorers,
-      target: target.agent,
+      target: target.runTarget ?? target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
-      // turn gets from SessionsService.agentContext — without this the model
+      // turn gets from TurnOptions.agentContext — without this the model
       // used to run out of steps mid-analysis (the AI-SDK default cap is 5)
       // and every case died with empty answer text.
       targetOptions: {
@@ -1182,7 +1195,7 @@ export async function runAssistantEvalCase(
       },
     });
 
-    // Mirrors SessionsService.streamMessage's tool-only-turn fallback: a run
+    // Mirrors TurnEngine.streamTurn's tool-only-turn fallback: a run
     // that spent every step on tools and never produced prose still gets a
     // reported answer built from what the tools actually returned, instead
     // of scoring/reporting an empty string. Note: `runEvals` scores the
@@ -1192,7 +1205,7 @@ export async function runAssistantEvalCase(
     // production this path should be rare — the empty-answer failures in the
     // original bug report were caused by the 5-step default, not by the
     // model routinely finishing without prose.
-    if (!answer.trim() && toolCalls.length > 0) {
+    if (!target.runTarget && !answer.trim() && toolCalls.length > 0) {
       answer = await synthesizeToolOnlyTurn(
         target.agent,
         question,

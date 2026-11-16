@@ -1,0 +1,149 @@
+import { agentWorkflow } from './agent-workflows';
+
+const V2_TOOLS = [
+  'list_entities',
+  'describe_entity',
+  'sample_rows',
+  'run_readonly_sql',
+  'ask_clarification',
+];
+
+describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
+  it("returns v2's turn workflow with its ten steps in catalogue order", () => {
+    const workflow = agentWorkflow('insights-analyst');
+    expect(workflow?.id).toBe('answer-business-question');
+    expect(workflow?.steps.map((step) => [step.title, step.kind])).toEqual([
+      ['Read images', 'agent'],
+      ['Receive question', 'code'],
+      ['Load catalog', 'code'],
+      ['Plan', 'agent'],
+      ['Clarify', 'code'],
+      ['Analyse', 'agent'],
+      ['Validate', 'code'],
+      ['Check data quality', 'agent'],
+      ['Write answer', 'agent'],
+      ['Wrap up', 'code'],
+    ]);
+  });
+
+  // agents.md 2.15, 5.11, 5.13, 5.18; plan D5, D6.
+  it.each(['insights-analyst', 'data-readiness'])(
+    "gives %s's Read images to Zoe, in one model call without tools",
+    (key) => {
+      const steps = agentWorkflow(key)!.steps;
+      expect(steps[0].id).toBe('read-images');
+      expect(steps[0].agent).toEqual({
+        key: 'image-reader',
+        name: 'Zoe',
+        role: 'Image Analyst',
+        tools: [],
+        maxSteps: 1,
+      });
+    },
+  );
+
+  it('gives Check data quality to Sarah, in one model call without tools', () => {
+    const steps = agentWorkflow('insights-analyst')!.steps;
+    expect(
+      steps.find((step) => step.id === 'check-data-quality')?.agent,
+    ).toEqual({
+      key: 'data-readiness',
+      name: 'Sarah',
+      role: 'Data Quality Analyst',
+      tools: [],
+      maxSteps: 1,
+    });
+  });
+
+  it('gives each agent step its own agent: Michael analyses with his tools, Olivia plans and Jessica writes in one model call without tools', () => {
+    const steps = agentWorkflow('insights-analyst')!.steps;
+    const agentOf = (id: string) => steps.find((step) => step.id === id)?.agent;
+    // Each agent by its key and persona (agents.md 1.1, 5.11).
+    expect(agentOf('analyse')).toEqual({
+      key: 'insights-analyst',
+      name: 'Michael',
+      role: 'Insights Analyst',
+      tools: V2_TOOLS,
+      maxSteps: 15,
+    });
+    expect(agentOf('plan')).toEqual({
+      key: 'analysis-planner',
+      name: 'Olivia',
+      role: 'Analysis Lead',
+      tools: [],
+      maxSteps: 1,
+    });
+    expect(agentOf('write-answer')).toEqual({
+      key: 'answer-writer',
+      name: 'Jessica',
+      role: 'Insights Writer',
+      tools: [],
+      maxSteps: 1,
+    });
+    expect(
+      steps.filter((step) => step.kind === 'code').map((step) => step.agent),
+    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    // The catalogue's own flag stays out of the API's step.
+    expect(steps.every((step) => !('modelOnly' in step))).toBe(true);
+  });
+
+  it('carries each step’s fields and other exits', () => {
+    const steps = agentWorkflow('insights-analyst')!;
+    const step = (id: string) => steps.steps.find((s) => s.id === id)!;
+    expect(step('load-catalog')).toMatchObject({
+      input: ['question', 'datasets', 'imageNotes'],
+      output: ['question', 'catalog', 'columns', 'imageNotes'],
+      exits: [],
+    });
+    // Receive question has no exit: the input node checks the question first.
+    expect(step('receive-question').exits).toEqual([]);
+    // Analyse can ask a clarifying question: the run waits for the answer.
+    expect(step('analyse').exits).toEqual([
+      { label: 'the model returns an error', outcome: 'fails' },
+      { label: 'you stop it', outcome: 'stops' },
+      { label: 'if it asks you a question', outcome: 'waits' },
+    ]);
+    expect(step('plan').exits).toEqual([
+      { label: 'the model returns an error', outcome: 'fails' },
+      { label: 'you stop it', outcome: 'stops' },
+    ]);
+    expect(step('write-answer').output).toEqual([
+      'headline',
+      'answer',
+      'calls',
+    ]);
+  });
+
+  it('is Assess Data Readiness for data-readiness: its one agent step is Explain report (agents.md 5.13)', () => {
+    const workflow = agentWorkflow('data-readiness')!;
+    expect(workflow.id).toBe('data-readiness-assessment');
+    expect(
+      workflow.steps.flatMap((step) =>
+        step.agent ? [[step.id, step.agent.key, step.agent.maxSteps]] : [],
+      ),
+    ).toEqual([
+      ['read-images', 'image-reader', 1],
+      ['explain-report', 'data-readiness', 10],
+    ]);
+  });
+
+  it.each(['assistant', 'rfp', 'constructor', 'nope'])(
+    'is undefined for %p, which is not workflow-backed',
+    (key) => {
+      expect(agentWorkflow(key)).toBeUndefined();
+    },
+  );
+
+  it('returns a copy the caller can change safely', () => {
+    const first = agentWorkflow('insights-analyst')!;
+    first.steps[1].input.push('x');
+    first.steps[5].agent!.tools.push('y');
+    const second = agentWorkflow('insights-analyst')!;
+    expect(second.steps[1].input).toEqual([
+      'question',
+      'datasets',
+      'imageNotes',
+    ]);
+    expect(second.steps[5].agent!.tools).toHaveLength(5);
+  });
+});

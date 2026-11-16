@@ -20,12 +20,17 @@
 // OpenAICompatibleChatLanguageModel). The Anthropic style
 // (`{ kind: "custom-anthropic", id: "anthropic/<model>" }`) has no `url` and
 // files under `anthropic`, exactly like the native provider.
+//
+// GitHub Copilot (BA-159, R60) files `reasoningEffort` under `copilot`, fitted
+// to the Copilot levels, and sends no output-token cap (the runtime has no such
+// option).
 
 // Type-only: model-resolver imports the model factory (and through it the
 // provider SDKs), which this plain-data module must not load.
-import type { AgentModelConfig } from './model-resolver';
+import type { AgentModelConfig, CopilotModelConfig } from './model-resolver';
 import {
   effortLevelsFor,
+  effortLevelsForProvider,
   isReasoningEffort,
   nearestEffort,
   type ReasoningEffort,
@@ -69,6 +74,15 @@ export function isOpenAiCompatible(config: AgentModelConfig): boolean {
   );
 }
 
+/** A GitHub Copilot config (kind check, no import of the resolver). */
+function isCopilotConfig(
+  config: AgentModelConfig,
+): config is CopilotModelConfig {
+  return (
+    typeof config === 'object' && 'kind' in config && config.kind === 'copilot'
+  );
+}
+
 /** The provider segment of a custom endpoint's OpenAI-style id. */
 const CUSTOM_PROVIDER = 'custom';
 
@@ -96,12 +110,31 @@ export function providerOptionsFor(
 ): ProviderOptions {
   const modelId = modelIdOf(config);
   const key = providerOptionsKey(modelId);
+  if (isCopilotConfig(config)) {
+    const copilot = copilotBucket(modelId, bucket);
+    return Object.keys(copilot).length ? { copilot } : {};
+  }
   const tuned = fitEffort(modelId, bucket);
   if (key === 'anthropic') return { [key]: anthropicBucket(modelId, tuned) };
   if (key === CUSTOM_PROVIDER && isOpenAiCompatible(config)) {
     return { [key]: customOpenAiBucket(modelId, tuned) };
   }
   return { [key]: tuned };
+}
+
+/**
+ * Copilot's bucket (R60): the effort fitted to the model's Copilot levels,
+ * dropped when it has none (`auto`); nothing else is forwarded.
+ */
+function copilotBucket(
+  modelId: string,
+  bucket: Record<string, ProviderOptionValue>,
+): Record<string, ProviderOptionValue> {
+  const model = modelId.slice('copilot/'.length);
+  const levels = effortLevelsForProvider('copilot', model);
+  const effort = bucket.reasoningEffort;
+  if (!isReasoningEffort(effort) || !levels.length) return {};
+  return { reasoningEffort: nearestEffort(levels, effort) };
 }
 
 /**
@@ -195,7 +228,8 @@ export function modelCallTuning(
   const bucket: Record<string, ProviderOptionValue> = {};
   if (options.reasoningEffort) bucket.reasoningEffort = options.reasoningEffort;
 
-  const cap = options.maxOutputTokens;
+  // The Copilot runtime has no output-token option: the cap is dropped.
+  const cap = isCopilotConfig(config) ? undefined : options.maxOutputTokens;
   // The native OpenAI provider does the rename itself; only the compatible
   // client needs the cap moved out of `modelSettings`.
   const needsRename =

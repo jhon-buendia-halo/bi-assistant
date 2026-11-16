@@ -53,6 +53,11 @@ describe('AgentLlmConfig', () => {
     expect(value(el, 'Provider')).toBe('Custom endpoint');
   });
 
+  it('names GitHub Copilot even without a server providerName', () => {
+    const el = render({ ...LLM, provider: 'copilot', providerName: null });
+    expect(value(el, 'Provider')).toBe('GitHub Copilot');
+  });
+
   it('marks a model the agent sets itself', () => {
     expect(value(render(LLM, true), 'Model')).toBe('gpt-4.1 (agent override)');
   });

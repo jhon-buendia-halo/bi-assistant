@@ -148,7 +148,7 @@ describe('eval:validate', () => {
     expect(run.mock.calls[0][0]).toContain('FROM api.world_cup.tournaments');
   });
 
-  describe('references read only dataset entities (R110, BA-183)', () => {
+  describe('references read only dataset entities (R250, BA-183)', () => {
     // The last 11 questions of the World Cup bank, the former golden set.
     const BANK = loadEvalSets().find((set) => set.id === 'world-cup')!;
     const GOLDEN = { ...BANK, cases: BANK.cases.slice(-11) };

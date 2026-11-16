@@ -1,6 +1,6 @@
 # Vision
 
-Questions to Insights (shipped as the desktop app "Halo BI Assistant") lets a person ask a question about their own data in plain English and get back an answer, the SQL behind it, and an interactive visual they can reshape by talking to it. One person runs it on their own machine, as the desktop app or from the browser through an npm command. It has one user and no sign-in.
+Questions to Insights (shipped as the desktop app "Halo Workbench", by Halo Powered) lets a person ask a question about their own data in plain English and get back an answer, the SQL behind it, and an interactive visual they can reshape by talking to it. One person runs it on their own machine, as the desktop app or from the browser through an npm command. It has one user and no sign-in.
 
 ## The problem
 
