@@ -13,7 +13,9 @@ import {
 import {
   EXPLORABLE_QUERIES_CONTEXT_KEY,
   explorerCandidateOfQuery,
+  findBySource,
   findExplorableQuery,
+  sourceNumberIn,
   unknownQueryError,
   type ExplorableQuery,
 } from '../../modules/sessions/query-evidence/explorable-queries';
@@ -246,9 +248,15 @@ export const exploreResultTool = createTool({
     const queries = explorableQueries(requestContext);
     if (!queries.length) return { error: NO_QUERY_ERROR };
     const named = input.query?.trim();
+    const words = input.filterText?.trim();
+    // "Source 3" in the user's words picks the query the reader saw as
+    // Source 3 (agent-answers R69), before any model reads them.
+    const spoken = !named && words ? sourceNumberIn(words) : undefined;
+    const pinned =
+      spoken !== undefined ? findBySource(queries, spoken) : undefined;
     let target = named
       ? findExplorableQuery(queries, named)
-      : queries[queries.length - 1];
+      : (pinned ?? queries[queries.length - 1]);
     if (!target) return { error: unknownQueryError(queries) };
     const services = getDatasetToolServices();
     if (!services.pageQuery) {
@@ -257,7 +265,6 @@ export const exploreResultTool = createTool({
 
     let base = requestOfView(target.view);
     let understood: string | undefined;
-    const words = input.filterText?.trim();
     if (words) {
       if (!services.interpretResult) {
         return { error: 'Reading a filter in words is not available here' };
@@ -266,7 +273,9 @@ export const exploreResultTool = createTool({
       try {
         spec = await services.interpretResult({
           text: words,
-          candidates: queries.map(explorerCandidateOfQuery),
+          candidates: (pinned ? [pinned] : queries).map(
+            explorerCandidateOfQuery,
+          ),
           view: target.view ?? null,
           pageCount: pageCountOf(target.view ?? null),
         });
@@ -277,7 +286,7 @@ export const exploreResultTool = createTool({
       }
       if (spec.action === 'new-question') return { error: NEW_QUESTION_ERROR };
       // A named query stays the one explored; otherwise the model's pick.
-      if (!named) target = queries[spec.query] ?? target;
+      if (!named && !pinned) target = queries[spec.query] ?? target;
       base = spec.interpretation.request;
       understood = spec.interpretation.understood;
     }

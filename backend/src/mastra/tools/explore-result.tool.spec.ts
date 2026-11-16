@@ -76,7 +76,8 @@ let interpretResult: jest.Mock;
 
 /** The source and request of the first page call. */
 function paged(): { source: ExploredQuerySource; request: PageRequest } {
-  const [source, , request] = pageQuery.mock.calls[0] as [
+  // The latest call: a test may page twice.
+  const [source, , request] = pageQuery.mock.calls.at(-1) as [
     ExploredQuerySource,
     string[],
     PageRequest,
@@ -236,6 +237,32 @@ describe('explore_result (agents.md 3.15; plan 0.4)', () => {
       page: 3,
     });
     expect(result.understood).toBe('Country is Brazil');
+  });
+
+  it('pages the query the user names as a source, and reads the words over that one alone', async () => {
+    interpretResult.mockResolvedValue({
+      action: 'explore',
+      query: 0,
+      interpretation: { request: { page: 2 }, understood: 'Page 2' },
+    });
+    const { requestContext } = turnContext([
+      { ...GOALS, source: 1 },
+      { ...MATCHES, source: 3 },
+    ]);
+    // Without the source the latest query would be paged: here it is the
+    // one the reader saw as Source 1.
+    await execute(
+      { filterText: 'next page of source 1', rationale: 'Next page.' },
+      { requestContext },
+    );
+    expect(interpreted().candidates.map((c) => c.ref)).toEqual([GOALS.ref]);
+    expect(paged().source).toMatchObject({ sql: GOALS.sql });
+    const named = await execute(
+      { query: 'Source 3', rationale: 'Source 3.' },
+      { requestContext },
+    );
+    expect(named).not.toHaveProperty('error');
+    expect(paged().source).toMatchObject({ sql: MATCHES.sql });
   });
 
   it('refuses words that ask a new question', async () => {

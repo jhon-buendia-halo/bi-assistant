@@ -1017,6 +1017,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         kinds: { year: 'number', winner: 'text' },
         sampleValues: { year: [2002, 2006], winner: ['Brazil', 'Italy'] },
         rationale: 'Every winner.',
+        // The number the reader saw it under (agent-answers R69).
+        source: 1,
       },
     ]);
   });

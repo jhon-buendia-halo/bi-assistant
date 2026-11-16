@@ -54,6 +54,12 @@ export interface ExplorableQuery {
   rationale?: string;
   /** An `explore_result` record's view, so "next page" moves from it. */
   view?: ResultView;
+  /**
+   * The number the reader saw it under in its answer (`Source 3`: its
+   * record's index + 1, agent-answers R69); absent for a query of the turn
+   * still running, which no reader has seen yet.
+   */
+  source?: number;
 }
 
 /** A statement compared as text: whitespace collapsed, no trailing `;`. */
@@ -123,7 +129,7 @@ export function explorableQueriesOf(
       datasourceId: entry?.datasourceId,
       view: entry?.view,
     });
-    if (query) queries.push(query);
+    if (query) queries.push({ ...query, source: index + 1 });
   });
   return queries;
 }
@@ -154,6 +160,11 @@ export function findExplorableQuery(
   query: string,
 ): ExplorableQuery | undefined {
   const named = query.trim();
+  const source = SOURCE_NAME.exec(named);
+  if (source) {
+    const bySource = findBySource(queries, Number(source[1]));
+    if (bySource) return bySource;
+  }
   const byRef = /^q\d+$/i.test(named)
     ? queries.find((q) => q.ref.toLowerCase() === named.toLowerCase())
     : undefined;
@@ -162,10 +173,36 @@ export function findExplorableQuery(
   return [...queries].reverse().find((q) => sqlKey(q.sql) === key);
 }
 
+/** A query named the way the reader sees it: `Source 3`, `fuente 3`, `S3`. */
+const SOURCE_NAME = /^(?:source|fuente|s)\s*#?\s*(\d{1,4})$/i;
+
+/** A source named inside the user's words: "page 2 of source 3". */
+const SOURCE_IN_WORDS = /\b(?:source|fuente)\s*#?\s*(\d{1,4})\b/i;
+
+/** The source number the user's words name, if any. */
+export function sourceNumberIn(words: string): number | undefined {
+  const match = SOURCE_IN_WORDS.exec(words);
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * The query the reader saw as `Source <n>`: the latest answer's, when
+ * several answers had one.
+ */
+export function findBySource(
+  queries: readonly ExplorableQuery[],
+  source: number,
+): ExplorableQuery | undefined {
+  return [...queries].reverse().find((q) => q.source === source);
+}
+
 /** The refusal of a query no earlier call ran, listing those that ran. */
 export function unknownQueryError(queries: readonly ExplorableQuery[]): string {
   const listed = queries
-    .map((q) => `${q.ref} ${sqlKey(q.sql).slice(0, 80)}`)
+    .map(
+      (q) =>
+        `${q.source ? `Source ${q.source}` : q.ref} ${sqlKey(q.sql).slice(0, 80)}`,
+    )
     .join('; ');
   return `Unknown query. Earlier queries: ${listed}`;
 }

@@ -2,9 +2,12 @@ import type { ChatMessage, ToolDataRecord } from '../entities/session.entity';
 import {
   CONTEXT_QUERIES_MAX,
   explorableQueriesOf,
+  findBySource,
   findExplorableQuery,
   sessionExplorableQueries,
+  sourceNumberIn,
   sqlKey,
+  unknownQueryError,
   type ExplorableQuery,
 } from './explorable-queries';
 
@@ -59,6 +62,7 @@ describe('explorableQueriesOf (plan 2; agents.md 3.15)', () => {
         kinds: { country: 'text', goals: 'number' },
         sampleValues: { country: ['Brazil', 'France'], goals: [8, 5, '6'] },
         rationale: 'Top scorers.',
+        source: 1,
       },
       {
         ref: 'Q2',
@@ -68,6 +72,8 @@ describe('explorableQueriesOf (plan 2; agents.md 3.15)', () => {
         kinds: { year: 'number' },
         sampleValues: { year: [2018] },
         view,
+        // The reader saw it as Source 4: its record's index + 1.
+        source: 4,
       },
     ]);
     // No whole rows travel with a query.
@@ -93,6 +99,19 @@ describe('findExplorableQuery', () => {
     const twice = explorableQueriesOf([sql, explored, sql]);
     expect(findExplorableQuery(twice, sql.input!)?.ref).toBe('Q3');
     expect(findExplorableQuery(queries, 'SELECT 2')).toBeUndefined();
+  });
+
+  it('takes the number the reader saw: Source 2 is the second record, not the second query', () => {
+    // A failed record keeps its number, so the explored query is Source 3.
+    const shown = explorableQueriesOf([sql, failed, explored]);
+    expect(findExplorableQuery(shown, 'Source 3')?.sql).toBe(explored.input);
+    expect(findExplorableQuery(shown, 'fuente 3')?.sql).toBe(explored.input);
+    expect(findExplorableQuery(shown, 's1')?.sql).toBe(sql.input);
+    expect(findBySource(shown, 2)).toBeUndefined();
+    expect(sourceNumberIn('next page of source 3 please')).toBe(3);
+    expect(sourceNumberIn('solo Brasil en la fuente 1')).toBe(1);
+    expect(sourceNumberIn('only Brazil')).toBeUndefined();
+    expect(unknownQueryError(shown)).toContain('Source 3 SELECT year');
   });
 });
 
