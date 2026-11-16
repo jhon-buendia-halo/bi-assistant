@@ -111,7 +111,7 @@
                   data-testid="workflow-ndv-artifact-card"
                   [attr.aria-label]="artifactTitle() + ', ' + artifactCaption()"
                   class="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-left hover:border-border-selected"
-                  (click)="selectView('preview')"
+                  (click)="selectView('story')"
                 >
                   <span
                     class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-muted text-fg-muted"
@@ -195,7 +195,7 @@
             type="button"
             class="btn btn-secondary ml-auto shrink-0 px-2.5 py-0.5 text-[12px]"
             data-testid="workflow-ndv-copy"
-            [disabled]="!run()"
+            [disabled]="!run()?.story"
             (click)="copyNarrative()"
           >
             <lucide-angular [img]="copied() ? Check : Copy" [size]="12" />
@@ -211,13 +211,8 @@
           tabindex="0"
         >
           @switch (view()) {
-            @case ("preview") {
-              <app-workflow-step-narrative
-                [narrative]="narrative()"
-                [output]="run()?.output"
-                [inputFields]="node().step?.input ?? []"
-                [notRunText]="inputEmpty()"
-              />
+            @case ("story") {
+              <ng-container *ngTemplateOutlet="storyBody" />
             }
             @case ("data") {
               <section
@@ -259,8 +254,25 @@
       </section>
     </div>
   } @else {
-  <!-- Input, the configuration and Output, top to bottom; Input and Output start collapsed. -->
+  <!-- A code step's Story, then Input, the configuration and Output, top to bottom; Input and Output start collapsed. -->
   <div class="flex min-h-0 flex-1 flex-col">
+    @if (hasStory()) {
+      <section
+        class="max-h-[50%] shrink-0 overflow-y-auto border-b border-border px-7 py-5"
+        data-testid="workflow-ndv-story"
+        role="group"
+        aria-labelledby="workflow-ndv-story-heading"
+        tabindex="0"
+      >
+        <h3
+          id="workflow-ndv-story-heading"
+          class="m-0 mb-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          Story
+        </h3>
+        <ng-container *ngTemplateOutlet="storyBody" />
+      </section>
+    }
     <!-- Input -->
     <section
       class="flex min-h-0 flex-col border-b border-border"
@@ -391,6 +403,30 @@
 </ng-template>
 
 <!-- What the node received in the run shown. -->
+<!-- A step's Story (api.md 3.6 `step.story`): the attempt shown. -->
+<ng-template #storyBody>
+  <div class="max-w-[760px]" data-testid="workflow-ndv-story-body">
+    @if (run()?.story; as story) {
+      <app-workflow-step-story
+        [story]="story"
+        [queryIndexOf]="queryIndexOf()"
+        (openQuery)="openQuery.emit($event)"
+      />
+    } @else if (run()?.error; as error) {
+      <p
+        class="m-0 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+        data-testid="workflow-ndv-story-error"
+      >
+        {{ error }}
+      </p>
+    } @else {
+      <p class="m-0 text-[13px] text-fg-muted" data-testid="workflow-ndv-story-empty">
+        {{ storyEmpty() }}
+      </p>
+    }
+  </div>
+</ng-template>
+
 <ng-template #inputBody>
   @if (tool(); as tool) {
     <ul class="m-0 flex list-none flex-col gap-1.5 p-0">

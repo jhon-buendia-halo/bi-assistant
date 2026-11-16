@@ -5,17 +5,24 @@
  * stubbed: Jest cannot load Mastra's ESM.
  */
 const stream = jest.fn<Promise<unknown>, unknown[]>();
+const generate = jest.fn<Promise<unknown>, unknown[]>();
 jest.mock('../agents/answer-writer.agent', () => ({
   answerWriterAgent: { stream: (...args: unknown[]) => stream(...args) },
 }));
 jest.mock('../agents/analysis-planner.agent', () => ({
-  analysisPlannerAgent: {},
+  analysisPlannerAgent: {
+    generate: (...args: unknown[]) => generate(...args),
+  },
 }));
 jest.mock('../agents/data-readiness.agent', () => ({
   dataReadinessStepAgent: {},
 }));
 
-import { writeAnswerWithModel } from './answer-business-question.agents';
+import {
+  planWithModel,
+  writeAnswerWithModel,
+} from './answer-business-question.agents';
+import { writeAnswerRequest } from './answer-business-question.prompts';
 import type {
   AnalyseQuery,
   AnalysisPlan,
@@ -90,5 +97,41 @@ describe('writeAnswerWithModel (plan 1.25.6)', () => {
       {},
     );
     expect(answer.answer).toBe('Nothing to list.');
+  });
+});
+
+// Read images' notes (agents.md 2.15, 5.11): what the model receives.
+describe("the model calls with Read images' notes", () => {
+  const NOTES = '## Reference images\nA bar chart of race starts.';
+  const INPUT = {
+    question: PLAN.question,
+    plan: PLAN,
+    queries: [QUERY],
+    findings: [],
+  };
+
+  beforeEach(() => {
+    stream.mockReset();
+    generate.mockReset();
+  });
+
+  it("sends Write answer's request unchanged without notes, and with them after the plan", async () => {
+    stream.mockResolvedValue(reply('Lewis leads.', 'Lewis leads.'));
+    await writeAnswerWithModel({ ...INPUT, imageNotes: '' }, {});
+    await writeAnswerWithModel({ ...INPUT, imageNotes: NOTES }, {});
+    const [plain, noted] = stream.mock.calls.map((call) => call[0] as string);
+    expect(plain).toBe(writeAnswerRequest(INPUT));
+    expect(noted).toContain(`${JSON.stringify(PLAN)}\n\n${NOTES}\n\n`);
+  });
+
+  it("sends Plan's request unchanged without notes, and with them after the catalog", async () => {
+    generate.mockResolvedValue({ object: PLAN, text: JSON.stringify(PLAN) });
+    const base = { messages: 'Q', question: 'Q', catalogBlock: 'CAT' };
+    await planWithModel({ ...base, imageNotes: '' }, {});
+    await planWithModel({ ...base, imageNotes: NOTES }, {});
+    expect(generate.mock.calls.map((call) => call[0])).toEqual([
+      'Question: Q\n\nCAT',
+      `Question: Q\n\nCAT\n\n${NOTES}`,
+    ]);
   });
 });

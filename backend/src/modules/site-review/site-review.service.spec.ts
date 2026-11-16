@@ -266,7 +266,10 @@ describeWithBrowser(
         .map((capture) => capture.thumbnail)
         .filter((path): path is string => path !== null);
       expect(thumbnails).toHaveLength(8);
-      const images = await work.readImages([...thumbnails, '../escape.jpg']);
+      const images = await work.loadReportImages([
+        ...thumbnails,
+        '../escape.jpg',
+      ]);
       expect(Object.keys(images)).toHaveLength(8);
       expect(Object.values(images)[0]).toMatch(/^data:image\/jpeg;base64,/);
     });

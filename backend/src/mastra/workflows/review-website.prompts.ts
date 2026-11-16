@@ -1,5 +1,5 @@
 /**
- * The shipped instructions of the Site Reviewer (agents.md 2.15), the agent
+ * The shipped instructions of the Site Reviewer (agents.md 2.16), the agent
  * of Review a Website (5.19). In phase 1 no step calls her: every finding is
  * measured in the browser. She answers the questions asked about a run's
  * report (a follow-up or a node chat), from the report she is given.

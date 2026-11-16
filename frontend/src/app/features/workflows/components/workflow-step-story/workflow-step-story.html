@@ -1,0 +1,92 @@
+<div data-testid="workflow-step-story" class="flex flex-col gap-3 text-[13px]">
+  <p
+    data-testid="workflow-step-story-headline"
+    class="m-0 text-[14px] leading-relaxed text-fg-strong"
+  >
+    {{ story().headline }}
+  </p>
+  @if (story().facts?.length) {
+    <dl
+      data-testid="workflow-step-story-facts"
+      class="m-0 grid grid-cols-[minmax(96px,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5"
+    >
+      @for (fact of story().facts; track $index) {
+        <dt class="flex items-start gap-1.5 text-fg-muted">
+          @if (fact.verdict === "passed") {
+            <lucide-angular
+              [img]="CircleCheck"
+              [size]="14"
+              class="mt-0.5 shrink-0 text-on-success-soft"
+              aria-hidden="true"
+            />
+            <span class="sr-only">Passed:</span>
+          } @else if (fact.verdict === "failed") {
+            <lucide-angular
+              [img]="CircleX"
+              [size]="14"
+              class="mt-0.5 shrink-0 text-on-danger-soft"
+              aria-hidden="true"
+            />
+            <span class="sr-only">Failed:</span>
+          }
+          <span>{{ fact.label }}</span>
+        </dt>
+        <dd class="m-0 min-w-0 break-words text-fg">
+          @if (fact.code) {
+            <span class="flex flex-wrap gap-1">
+              @for (value of fact.values; track $index) {
+                <code
+                  class="rounded border border-border bg-surface-muted px-1.5 font-mono text-[12px]"
+                  >{{ value }}</code
+                >
+              }
+            </span>
+          } @else if (fact.values.length === 1) {
+            {{ fact.values[0] }}
+            @let index = queryIndex(fact);
+            @if (index !== null) {
+              <button
+                type="button"
+                [attr.data-testid]="'workflow-step-story-query-' + $index"
+                class="ml-1 inline-flex items-center gap-1 text-[12px] whitespace-nowrap text-primary hover:underline"
+                (click)="
+                  openQuery.emit({
+                    index: index,
+                    opener: $any($event.currentTarget),
+                  })
+                "
+              >
+                Open query
+                <lucide-angular
+                  [img]="OpenIcon"
+                  [size]="12"
+                  aria-hidden="true"
+                />
+                <span class="sr-only">: {{ fact.label }}</span>
+              </button>
+            }
+          } @else {
+            <ul class="m-0 list-none p-0">
+              @for (value of fact.values; track $index) {
+                <li>{{ value }}</li>
+              }
+            </ul>
+          }
+        </dd>
+      }
+    </dl>
+  }
+  @if (story().next; as next) {
+    <p
+      data-testid="workflow-step-story-next"
+      class="m-0 rounded-r-md border-l-2 border-border-strong bg-surface-muted px-3 py-1.5 text-fg-muted"
+    >
+      {{ next }}
+    </p>
+  }
+  @if (story().source === "generic" && story().facts?.length) {
+    <p class="m-0 text-[12px] text-fg-muted">
+      Told from what the step returned. Data has the full input and output.
+    </p>
+  }
+</div>

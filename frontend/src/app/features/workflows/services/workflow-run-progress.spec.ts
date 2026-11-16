@@ -131,6 +131,33 @@ describe('progressSteps (ui.md 4.4b run progress)', () => {
   });
 });
 
+describe('progressSteps with the optional Read images step (workflows R35)', () => {
+  const WITH_READ = {
+    steps: [
+      { id: 'read-images', title: 'Read images' },
+      { id: 'plan', title: 'Plan' },
+    ],
+    edges: [
+      { from: 'start', to: 'read-images', kind: 'branch' as const, label: 'Reference images' },
+      { from: 'start', to: 'plan', kind: 'next' as const, label: 'No images' },
+      { from: 'read-images', to: 'plan', kind: 'next' as const },
+      { from: 'plan', to: 'end', kind: 'next' as const },
+    ],
+  } as unknown as typeof W;
+
+  it('leaves it out of a run without images and lists it first when it ran', () => {
+    expect(
+      progressSteps(WITH_READ, run('running', [])).map((s) => s.id),
+    ).toEqual(['plan']);
+    const reading = progressSteps(
+      WITH_READ,
+      run('running', [{ id: 'read-images', status: 'running' }]),
+    );
+    expect(reading.map((s) => s.id)).toEqual(['read-images', 'plan']);
+    expect(reading[0].state).toBe('current');
+  });
+});
+
 describe('activityLine (ui.md 4.4b activity copy)', () => {
   const on = (id: string) =>
     progressSteps(W, run('running', [{ id, status: 'running' }]));
@@ -145,6 +172,16 @@ describe('activityLine (ui.md 4.4b activity copy)', () => {
     expect(activityLine(on('write-answer'), 'running', [])).toBe(
       'Writing the answer…',
     );
+  });
+
+  it('Read images says it reads the images', () => {
+    expect(
+      activityLine(
+        [{ id: 'read-images', title: 'Read images', state: 'current', attempts: 1 }],
+        'running',
+        [],
+      ),
+    ).toBe('Reading your images…');
   });
 
   it('Analyse uses the latest tool rationale, else Analysing…', () => {

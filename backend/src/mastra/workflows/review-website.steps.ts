@@ -161,7 +161,7 @@ export interface ReviewWebsiteRuntime {
     input: DiscoveredSite,
   ): Promise<Pick<CheckedSite, 'captures' | 'findings'>>;
   /** Save report: the images, as `data:` URIs, by workspace path. */
-  readImages(paths: readonly string[]): Promise<Record<string, string>>;
+  loadReportImages(paths: readonly string[]): Promise<Record<string, string>>;
   /**
    * Save report: stores the report as a visual of the run, the findings as
    * a file of the run, and shows the answer.

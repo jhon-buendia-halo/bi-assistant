@@ -171,7 +171,7 @@ const saveReportStep = createStep({
         ...site.findings.map((finding) => finding.crop),
         ...site.captures.map((capture) => capture.thumbnail),
       ].filter((path): path is string => typeof path === 'string');
-      const images = await runtime.readImages([...new Set(paths)]);
+      const images = await runtime.loadReportImages([...new Set(paths)]);
       const answer = reviewAnswer(site);
       const saved = await runtime.saveReport({
         bundle: renderReportBundle({

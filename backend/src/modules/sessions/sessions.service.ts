@@ -169,6 +169,13 @@ export interface RunHostSpec {
    * host's workspace at `path` before the turn.
    */
   image?: { path: string; data: Buffer };
+  /**
+   * Every reference image file of the run's input (R35): each written to the
+   * host's workspace at `path` before the turn.
+   */
+  inputFiles?: { path: string; data: Buffer }[];
+  /** The workspace paths of the run's reference images, for the turn engine. */
+  inputImages?: string[];
   /** Dashboard Image to Artifact's saved dashboard: the artifact's id. */
   artifact?: string;
   /** The run's whole checked input (Review a Website, agents.md 5.19). */
@@ -544,15 +551,18 @@ export class SessionsService implements OnModuleInit {
       ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
       ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
+      ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
     };
-    if (spec.image) {
-      await writeWorkspaceFile(id, spec.image.path, spec.image.data);
-    }
+    // `image` and `inputFiles` may name the same file: it is written once.
+    const files = new Map<string, Buffer>();
+    if (spec.image) files.set(spec.image.path, spec.image.data);
+    for (const file of spec.inputFiles ?? []) files.set(file.path, file.data);
+    for (const [path, data] of files) await writeWorkspaceFile(id, path, data);
     if (spec.continuesThreadsOf) {
       try {
         const copied = await this.mastra.copyMemoryResource(

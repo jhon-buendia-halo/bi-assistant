@@ -20,6 +20,7 @@ import {
   mapDataWithModel,
   readDashboardWithModel,
 } from './workflows/recreate-dashboard.agents';
+import { readImagesWithModel } from './workflows/read-images.agents';
 import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
@@ -135,6 +136,18 @@ export class MastraService {
     ...args: Parameters<typeof readDashboardWithModel>
   ): ReturnType<typeof readDashboardWithModel> {
     return readDashboardWithModel(...args);
+  }
+
+  /**
+   * The Read images step model call of Answer a Business Question, Assess
+   * Data Readiness and Map a Dashboard to Data (agents.md 2.15; workflows
+   * R35): Zoe, the Image Reader, over every reference image of the run in
+   * one call, her notes rendered from the reply. A model error rejects.
+   */
+  readImages(
+    ...args: Parameters<typeof readImagesWithModel>
+  ): ReturnType<typeof readImagesWithModel> {
+    return readImagesWithModel(...args);
   }
 
   /**

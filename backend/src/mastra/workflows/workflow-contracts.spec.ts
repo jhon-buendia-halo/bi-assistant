@@ -332,7 +332,7 @@ const FIXTURES: Record<string, ContractFixture> = {
               },
             ],
           }),
-        readImages: () => Promise.resolve({}),
+        loadReportImages: () => Promise.resolve({}),
         saveReport: () =>
           Promise.resolve({
             visualId: 'v-1',
@@ -370,8 +370,11 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
         }
       }
       expect((await output.result).status).toBe('success');
-      // The clear path: every step but Clarify, whose branch is not taken.
-      const ran = source.steps.filter((step) => step.id !== 'clarify');
+      // The clear path: every step but Clarify and Read images, whose
+      // branches are not taken (the sample input has no images).
+      const ran = source.steps.filter(
+        (step) => step.id !== 'clarify' && step.id !== 'read-images',
+      );
       expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
       for (const step of ran) {
         const parsed = fixture.schemas[step.id].output.safeParse(

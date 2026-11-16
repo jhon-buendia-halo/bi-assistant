@@ -17,6 +17,7 @@ import {
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
+  IMAGE_READER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
@@ -73,10 +74,12 @@ import {
   type WorkflowEdge,
 } from './workflow-contract';
 import {
+  IMAGES_MAX_COUNT,
   type WorkflowInputField,
   type WorkflowInputValue,
   type WorkflowInputValues,
 } from './workflow-input';
+import { READ_IMAGES_STEP_ID } from './read-images.steps';
 
 export type {
   InputDatasourceKind,
@@ -113,6 +116,20 @@ const DATASETS_FIELD: WorkflowInputField = {
   label: 'Datasets',
   type: 'datasets',
   required: true,
+};
+/**
+ * A run's reference images (workflows R35; api.md 116): up to
+ * `IMAGES_MAX_COUNT` PNG, JPEG or WebP images that Read images describes
+ * for the later steps (agents.md 2.15). Right after the question in every
+ * workflow that has Read images; `max` is the most images.
+ */
+const IMAGES_FIELD: WorkflowInputField = {
+  name: 'images',
+  label: 'Reference images',
+  type: 'images',
+  required: false,
+  max: IMAGES_MAX_COUNT,
+  help: `Paste, drop or attach up to ${IMAGES_MAX_COUNT} PNG, JPEG or WebP images, 5 MB each.`,
 };
 const CAREFUL_FIELD: WorkflowInputField = {
   name: 'careful',
@@ -188,13 +205,16 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       trigger: 'run',
       input: [
         { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
+        IMAGES_FIELD,
         DATASETS_FIELD,
         CHECK_DATA_QUALITY_FIELD,
       ],
       steps: ANSWER_BUSINESS_QUESTION_STEPS,
-      // Olivia plans and Jessica writes the answer; Michael analyses; Sarah
-      // checks the data quality when the run asks for it.
+      // Zoe reads the reference images when there are some; Olivia plans
+      // and Jessica writes the answer; Michael analyses; Sarah checks the
+      // data quality when the run asks for it.
       stepAgents: {
+        [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY,
         plan: ANALYSIS_PLANNER_AGENT_KEY,
         'check-data-quality': DATA_READINESS_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,
@@ -226,8 +246,11 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           default: READINESS_DEFAULT_QUESTION,
           maxLength: QUESTION_MAX_LENGTH,
         },
+        IMAGES_FIELD,
       ],
       steps: DATA_READINESS_ASSESSMENT_STEPS,
+      // Zoe reads the reference images when there are some.
+      stepAgents: { [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY },
       edges: DATA_READINESS_ASSESSMENT_EDGES,
       bar: 'steps',
     },
@@ -286,8 +309,11 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           default: MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
           maxLength: QUESTION_MAX_LENGTH,
         },
+        IMAGES_FIELD,
       ],
       steps: MAP_DASHBOARD_DATA_STEPS,
+      // Zoe reads the reference images when there are some.
+      stepAgents: { [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY },
       edges: MAP_DASHBOARD_DATA_EDGES,
       bar: 'steps',
     },

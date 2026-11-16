@@ -356,6 +356,12 @@ export interface SessionDoc {
    */
   inputImage?: string;
   /**
+   * A run host whose input has reference images (workflows R35; agents.md
+   * 2.15): their paths in the host's workspace (`inputs/images/<n>.<ext>`),
+   * in order; Read images loads them. In memory only, like the host.
+   */
+  inputImages?: string[];
+  /**
    * A run host of Dashboard Image to Artifact on a saved dashboard (agents.md
    * 5.17): the artifact's id. In memory only, like the host.
    */

@@ -13,6 +13,7 @@ import {
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
+  IMAGE_READER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
@@ -64,7 +65,17 @@ import {
   type AnswerBusinessQuestionInput,
   type AnswerBusinessQuestionRuntime,
 } from '../../../mastra/workflows/answer-business-question.steps';
-import { DATA_QUALITY_FINDINGS_CAP } from '../../../mastra/workflows/answer-business-question.prompts';
+import {
+  DATA_QUALITY_FINDINGS_CAP,
+  analyseSystemBlocks,
+} from '../../../mastra/workflows/answer-business-question.prompts';
+import {
+  READ_IMAGES_RUNTIME_KEY,
+  imageNotesBlock,
+  type ReadImagesRuntime,
+} from '../../../mastra/workflows/read-images.steps';
+import type { StepImage } from '../../../mastra/workflows/recreate-dashboard.agents';
+import { withImageNotes } from './image-notes';
 import {
   AGENT_TURN_RUNTIME_KEY,
   AGENT_TURN_WORKFLOW_ID,
@@ -609,16 +620,23 @@ export class TurnEngine {
         {
           // v2's steps (agents.md 5.11): Plan and Write answer call the
           // agent's model without tools; Analyse streams the agent itself.
-          plan: async ({ question, catalogBlock, clarification: answered }) => {
+          plan: async ({
+            question,
+            catalogBlock,
+            clarification: answered,
+            imageNotes,
+          }) => {
             try {
-              // After Clarify, Plan plans with its question and the answer.
+              // After Clarify, Plan plans with its question and the answer;
+              // with reference images, with Zoe's notes (agents.md 2.15).
               const planned = await this.deps.mastra.planAnalysis(
-                {
+                withImageNotes({
                   messages: planInput,
                   question,
                   catalogBlock,
                   ...(answered ? { answered } : {}),
-                },
+                  imageNotes,
+                }),
                 stepModelOf(ANALYSIS_PLANNER_AGENT_KEY),
               );
               return {
@@ -629,7 +647,13 @@ export class TurnEngine {
               throw await stepError(error);
             }
           },
-          analyse: async ({ catalogBlock, planBlock, attempt, answered }) => {
+          analyse: async ({
+            catalogBlock,
+            planBlock,
+            attempt,
+            answered,
+            imageNotes,
+          }) => {
             // A resumed attempt keeps the records it made before it asked.
             if (answered) answers.push(answered);
             else attemptStart = data.length;
@@ -657,10 +681,18 @@ export class TurnEngine {
                   {
                     ...attemptOptions,
                     abortSignal: stop.signal,
+                    // The catalog and plan blocks, then Zoe's notes only
+                    // when the run has images (agents.md 5.11).
                     context: [
                       ...options.context,
-                      { role: 'system' as const, content: catalogBlock },
-                      { role: 'system' as const, content: planBlock },
+                      ...analyseSystemBlocks({
+                        catalogBlock,
+                        planBlock,
+                        imageNotes,
+                      }).map((content) => ({
+                        role: 'system' as const,
+                        content,
+                      })),
                     ],
                   },
                 ),
@@ -803,13 +835,17 @@ export class TurnEngine {
           },
           writeAnswer: async (written) => {
             try {
-              const result = await this.deps.mastra.writeAnswer(written, {
-                ...stepModelOf(ANSWER_WRITER_AGENT_KEY),
-                onText: (delta) => {
-                  text += delta;
-                  emit({ type: 'text', content: delta });
+              // Zoe's notes only when the run has images (agents.md 5.11).
+              const result = await this.deps.mastra.writeAnswer(
+                withImageNotes(written),
+                {
+                  ...stepModelOf(ANSWER_WRITER_AGENT_KEY),
+                  onText: (delta) => {
+                    text += delta;
+                    emit({ type: 'text', content: delta });
+                  },
                 },
-              });
+              );
               // The stored answer is the step's whole answer.
               if (result.answer.answer) text = result.answer.answer;
               return {
@@ -888,10 +924,13 @@ export class TurnEngine {
             if (shown) readinessReport = shown;
             return { reportId: saved.report.id };
           },
-          explain: async ({ dataset, reportId }) => {
+          explain: async ({ dataset, reportId, imageNotes }) => {
             // The run has assessed: the agent reads the stored report and
             // `assess_data_readiness` refuses (agents.md 3.13, 5.13).
             options.requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
+            // Zoe's notes follow the report block only when the run has
+            // images (agents.md 2.15, 5.13).
+            const notes = imageNotesBlock(imageNotes);
             await consume(
               await agent.stream(input, {
                 ...options,
@@ -901,6 +940,9 @@ export class TurnEngine {
                     role: 'system' as const,
                     content: explainReportBlock({ dataset, reportId }),
                   },
+                  ...(notes
+                    ? [{ role: 'system' as const, content: notes }]
+                    : []),
                 ],
               }),
             );
@@ -962,13 +1004,38 @@ export class TurnEngine {
           loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
           mapData: async (input) => {
             try {
+              // Zoe's notes only when the run has images (agents.md 5.18).
               const mapped = await this.deps.mastra.mapData(
-                input,
+                withImageNotes(input),
                 stepModelOf(DATA_MAPPER_AGENT_KEY),
               );
               return {
                 mapping: mapped.mapping,
                 stopped: mapped.stopped || turn.signal.aborted,
+              };
+            } catch (error) {
+              throw await stepError(error);
+            }
+          },
+          // Read images (agents.md 2.15), the optional first step of Answer
+          // a Business Question, Assess Data Readiness and Map a Dashboard
+          // to Data: the run's stored images, loaded from its workspace in
+          // order, described by Zoe in one model call recorded in her
+          // thread. A model error fails the step with its own message.
+          readImages: async ({ question, images }) => {
+            const loaded: StepImage[] = [];
+            for (const path of images) {
+              const { data, mediaType } = await this.deps.readImage(id, path);
+              loaded.push({ data, mediaType });
+            }
+            try {
+              const read = await this.deps.mastra.readImages(
+                { question, images: loaded },
+                stepModelOf(IMAGE_READER_AGENT_KEY),
+              );
+              return {
+                ...read,
+                stopped: read.stopped || turn.signal.aborted,
               };
             } catch (error) {
               throw await stepError(error);
@@ -1205,7 +1272,7 @@ export class TurnEngine {
       finishSignIn: (input) => parts.work().finishSignIn(input),
       discoverPages: (input) => parts.work().discoverPages(input),
       captureAndCheck: (input) => parts.work().captureAndCheck(input),
-      readImages: (paths) => parts.work().readImages(paths),
+      loadReportImages: (paths) => parts.work().loadReportImages(paths),
       saveReport: parts.saveReport,
       showAnswer: parts.showAnswer,
     };
@@ -1222,6 +1289,7 @@ export class TurnEngine {
       DataReadinessAssessmentRuntime &
       RecreateDashboardRuntime &
       MapDashboardDataRuntime &
+      ReadImagesRuntime &
       ReviewWebsiteRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
@@ -1282,7 +1350,8 @@ export class TurnEngine {
         discoverPages: (input) => captured(() => runtime.discoverPages(input)),
         captureAndCheck: (input) =>
           captured(() => runtime.captureAndCheck(input)),
-        readImages: (paths) => captured(() => runtime.readImages(paths)),
+        loadReportImages: (paths) =>
+          captured(() => runtime.loadReportImages(paths)),
         saveReport: (input) => captured(() => runtime.saveReport(input)),
         showAnswer: (text) => captured(() => runtime.showAnswer(text)),
       } satisfies ReviewWebsiteRuntime);
@@ -1297,14 +1366,34 @@ export class TurnEngine {
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
       } satisfies AnswerBusinessQuestionRuntime);
     }
+    // Read images, the optional first step of every workflow but the
+    // agent turn and Dashboard Image to Artifact (agents.md 2.15).
+    const readsImages =
+      workflow.engineId !== AGENT_TURN_WORKFLOW_ID && !recreate;
+    if (readsImages) {
+      requestContext.set(READ_IMAGES_RUNTIME_KEY, {
+        readImages: (input) => captured(() => runtime.readImages(input)),
+      } satisfies ReadImagesRuntime);
+    }
+    // The run's reference images (their stored paths), only when it has
+    // some: without them the engine's input is what it was before.
+    const images =
+      readsImages && session.inputImages?.length
+        ? { images: [...session.inputImages] }
+        : {};
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).
     // Dashboard Image to Artifact runs on the run's image (agents.md 5.17); Map a
     // Dashboard to Data on a saved dashboard and the run's datasets (5.18).
     const turnInput:
       | AnswerBusinessQuestionInput
-      | { question: string; dataset: string }
+      | { question: string; dataset: string; images?: string[] }
       | { question: string; image: string }
-      | { question: string; artifact: string; datasets: string[] }
+      | {
+          question: string;
+          artifact: string;
+          datasets: string[];
+          images?: string[];
+        }
       | ReviewWebsiteInput = review
       ? // Review a Website reads the whole form (agents.md 5.19).
         reviewWebsiteInputOf(session.inputValues ?? { url: question })
@@ -1315,11 +1404,16 @@ export class TurnEngine {
               question,
               artifact: session.inputArtifact ?? '',
               datasets: session.datasets,
+              ...images,
             }
           : readiness
-            ? { question, dataset: session.datasets[0] ?? '' }
-            : { question, datasets: session.datasets };
+            ? { question, dataset: session.datasets[0] ?? '', ...images }
+            : { question, datasets: session.datasets, ...images };
     let state = session.workflowState;
+    // A new run starts the bar over at its first step event, whichever step
+    // that is: Read images, step 1, is optional, so a run without images
+    // starts at Receive question (agent-panel R8a). A resume goes on.
+    let startsOver = true;
     // Drive one stream of the run (its start, or a resume) to its outcome.
     const drive = async (
       run: WorkflowRunStream,
@@ -1361,8 +1455,13 @@ export class TurnEngine {
         if (workflow.bar !== 'steps') continue;
         const stepEvent = stepEventOf(event);
         if (!stepEvent) continue;
-        const next = workflowRunState(state, stepEvent, workflow.stepIds);
+        const next = workflowRunState(
+          startsOver && !resumed ? undefined : state,
+          stepEvent,
+          workflow.stepIds,
+        );
         if (!next) continue;
+        startsOver = false;
         state = next;
         await this.deps.updateDoc(session.id, { workflowState: state });
         session.workflowState = state;

@@ -31,7 +31,7 @@ Bring the goal of the `site-mapping-agent` prototype into the app as a workflow:
 
 ## Specs touched
 
-- [agents.md](../../system/agents.md) 1.1, 2.15, 5.12, 5.19.
+- [agents.md](../../system/agents.md) 1.1, 2.16, 5.12, 5.19.
 - [data-model.md](../../system/data-model.md) 2.3, 3.19.
 - [api.md](../../system/api.md) 34, 116.
 - [workflows](../../capabilities/workflows/spec.md) R1, R2.

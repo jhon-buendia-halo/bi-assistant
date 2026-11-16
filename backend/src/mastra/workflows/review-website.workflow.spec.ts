@@ -134,7 +134,7 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
         findings: [FINDING],
       }),
     ),
-    readImages: jest.fn((paths: string[]) =>
+    loadReportImages: jest.fn((paths: string[]) =>
       Promise.resolve(
         Object.fromEntries(
           paths.map((path) => [path, 'data:image/jpeg;base64,AAAA']),
@@ -220,7 +220,7 @@ describe('review-website workflow (agents.md 5.19)', () => {
       }),
     );
     // Only the images the report shows are read.
-    expect(given.readImages).toHaveBeenCalledWith([
+    expect(given.loadReportImages).toHaveBeenCalledWith([
       'site-review/mobile/home.0.crop.jpg',
       'site-review/mobile/home.thumb.jpg',
     ]);

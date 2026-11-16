@@ -24,13 +24,24 @@ export type WorkflowInputFieldType =
    * keeps the file's path as the field's value.
    */
   | 'image'
+  /**
+   * Reference images (workflows R35): a list of at most `max` (and never
+   * more than `IMAGES_MAX_COUNT`) images, each sent as a `data:` URL of a
+   * PNG, JPEG or WebP file of at most `IMAGE_MAX_BYTES`. A run stores each
+   * as a file of its workspace, `inputs/<field>/<n>.<extension>` (`n` from
+   * 1, in the list's order), and keeps the paths as the field's value.
+   */
+  | 'images'
   /** The id of one stored artifact (data-model 3.18). */
   | 'artifact';
 
-/** The largest image an `image` field takes, in bytes. */
+/** The largest image an `image` field, or one of an `images` field, takes, in bytes. */
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
-/** The image types an `image` field takes, with their file extension. */
+/** The most images an `images` field takes (workflows R35). */
+export const IMAGES_MAX_COUNT = 4;
+
+/** The image types an `image` or `images` field takes, with their file extension. */
 export const IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
@@ -100,7 +111,10 @@ export interface WorkflowInputField {
   maxLength?: number;
   /** `number`: the smallest value. */
   min?: number;
-  /** `number`: the largest value. */
+  /**
+   * `number`: the largest value. `images`: the most images (at most
+   * `IMAGES_MAX_COUNT`, which is also the limit when it is absent).
+   */
   max?: number;
 }
 
@@ -248,6 +262,40 @@ function numberCheck(field: WorkflowInputField, value: number): FieldCheck {
   return { ok: true, value };
 }
 
+/**
+ * An `images` field's value (workflows R35): a list of `data:` URLs, blank
+ * entries dropped; none is a missing field. More than the field's `max`
+ * (never more than `IMAGES_MAX_COUNT`), an entry that is no PNG, JPEG or
+ * WebP image, or one over `IMAGE_MAX_BYTES` is refused, in that order.
+ */
+function imagesCheck(field: WorkflowInputField, value: unknown): FieldCheck {
+  if (value === undefined || value === null || value === '') {
+    return missingField(field);
+  }
+  const wrongType: FieldCheck = {
+    ok: false,
+    error: `${field.label} must be PNG, JPEG or WebP images`,
+  };
+  if (!Array.isArray(value)) return wrongType;
+  const given = value.filter(
+    (entry) => !(typeof entry === 'string' && entry.trim() === ''),
+  );
+  if (!given.length) return missingField(field);
+  const max = Math.min(field.max ?? IMAGES_MAX_COUNT, IMAGES_MAX_COUNT);
+  if (given.length > max) {
+    return { ok: false, error: `${field.label} must be at most ${max} images` };
+  }
+  const images = given.map((entry) => imageOfDataUrl(entry));
+  if (images.some((image) => !image)) return wrongType;
+  if (images.some((image) => image!.data.byteLength > IMAGE_MAX_BYTES)) {
+    return {
+      ok: false,
+      error: `${field.label} must be at most ${IMAGE_MAX_BYTES / (1024 * 1024)} MB each`,
+    };
+  }
+  return { ok: true, value: given.map((entry) => String(entry).trim()) };
+}
+
 /** One field's value checked against its type and rules (plan 4.1). */
 function checkField(
   field: WorkflowInputField,
@@ -281,6 +329,7 @@ function checkField(
     }
     return { ok: true, value: names };
   }
+  if (field.type === 'images') return imagesCheck(field, value);
   const usable =
     (typeof value === 'string' && value.trim() !== '') ||
     typeof value === 'number';
@@ -339,7 +388,9 @@ function checkField(
  * number within its `min` and `max`, a boolean as a boolean, a text within
  * its `maxLength` (trimmed), datasets as trimmed names in order without
  * repeats, an image as a base64 `data:` URL of a PNG, JPEG or WebP file of
- * at most `IMAGE_MAX_BYTES`, an artifact as the id of a stored artifact of
+ * at most `IMAGE_MAX_BYTES`, reference images (`images`) as a list of at
+ * most `max` such URLs (blank entries dropped; workflows R35), an
+ * artifact as the id of a stored artifact of
  * the field's kinds. Of two fields that name each other in
  * `requiredWithout`, one must be given (`<label> or <other label> is
  * required`, on the first of the two); when both are, an image gives way. A field that is missing, `""` or whitespace-only takes its
@@ -413,16 +464,23 @@ export function validateWorkflowInput(
 export interface InputImageFile {
   /** The field it came from. */
   field: string;
-  /** Its path in the run's workspace: `inputs/<field>.<extension>`. */
+  /**
+   * Its path in the run's workspace: `inputs/<field>.<extension>` for an
+   * `image` field, `inputs/<field>/<n>.<extension>` for each image of an
+   * `images` field (`n` from 1, in the list's order: `inputs/images/1.png`).
+   */
   path: string;
   mediaType: string;
   data: Buffer;
 }
 
 /**
- * A checked input with every `image` field's `data:` URL taken out: the
- * field's value becomes the path the run stores the file at, so the image
- * is never stored in the run's document nor sent back with it.
+ * A checked input with every image's `data:` URL taken out, so no image is
+ * stored in the run's document nor sent back with it: an `image` field's
+ * value becomes the path the run stores the file at, and each entry of an
+ * `images` field becomes its own path (`inputs/images/<n>.<ext>`, `n` from
+ * 1; an entry that is no `data:` URL is kept as it is). `images` lists
+ * every file to write, in field then list order.
  */
 export function withStoredImages(
   workflow: { input: readonly WorkflowInputField[] },
@@ -431,6 +489,18 @@ export function withStoredImages(
   const stored: WorkflowInputValues = { ...input };
   const images: InputImageFile[] = [];
   for (const field of workflow.input) {
+    if (field.type === 'images') {
+      const list = input[field.name];
+      if (!Array.isArray(list)) continue;
+      stored[field.name] = list.map((entry, index) => {
+        const image = imageOfDataUrl(entry);
+        if (!image) return entry;
+        const path = `inputs/${field.name}/${index + 1}.${IMAGE_EXTENSIONS[image.mediaType]}`;
+        images.push({ field: field.name, path, ...image });
+        return path;
+      });
+      continue;
+    }
     if (field.type !== 'image') continue;
     const image = imageOfDataUrl(input[field.name]);
     if (!image) continue;

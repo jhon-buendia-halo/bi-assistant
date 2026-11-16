@@ -119,6 +119,57 @@ describe('agent step stories (ui.md 4.4b, Agents at work)', () => {
     expect(handoffLine(analyse, write)).toBeNull();
   });
 
+  it("says a done or skipped step's story in a few words on its line, a concern flagged", () => {
+    const stories = agentStepStories({
+      steps: STEPS,
+      running: false,
+      runSteps: [
+        {
+          ...PLANNED,
+          story: {
+            headline: 'Read the question as …',
+            brief: 'Needs your answer',
+            concern: true,
+            source: 'step',
+          },
+        },
+        {
+          id: 'analyse',
+          title: 'Analyse',
+          status: 'skipped',
+          story: { headline: 'Skipped: off.', brief: 'Off for this run', source: 'step' },
+        },
+      ],
+    });
+    expect(stories.get('plan')!.line).toBe('Needs your answer · 1.2 s');
+    expect(stories.get('plan')!.concern).toBeTrue();
+    expect(stories.get('analyse')!.line).toBe('Off for this run');
+    expect(stories.get('analyse')!.concern).toBeFalse();
+  });
+
+  it('tells how many reference images the Image Reader described', () => {
+    const emily = {
+      key: 'image-reader',
+      name: 'Zoe',
+      role: 'Image Analyst',
+    };
+    const reading = (imageCount: number): WorkflowRunStep => ({
+      id: 'read-images',
+      title: 'Read images',
+      status: 'success',
+      output: { imageNotes: '## Reference images', imageCount },
+    });
+    const sentence = (imageCount: number) =>
+      agentStepStories({
+        steps: [step('read-images', 'Read images', emily, ['imageNotes'])],
+        running: false,
+        runSteps: [reading(imageCount)],
+        liveToolCalls: [],
+      }).get('read-images')!.sentence;
+    expect(sentence(1)).toBe('I described 1 reference image for the team.');
+    expect(sentence(3)).toBe('I described 3 reference images for the team.');
+  });
+
   it('prefers the streamed tool calls of the running step', () => {
     const stories = agentStepStories({
       steps: STEPS,

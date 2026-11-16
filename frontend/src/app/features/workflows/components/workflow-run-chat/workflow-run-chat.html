@@ -1,7 +1,7 @@
 @if (designer.workflow(); as w) {
   <!-- The Chat column of the Run panel (workflows R21; ui.md 4.4b): the
-       question, the run's answer as it forms, and the composer. The steps
-       are in the Logs column beside it, never here. -->
+       question, the run's answer as it forms, How it ran once it ended, and
+       the composer. Each step's state is on the canvas. -->
   <div
     class="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 px-4 pt-2.5 pb-1"
   >
@@ -91,6 +91,24 @@
         >
           {{ question }}
         </p>
+        @if (questionImages().length > 0) {
+          <ul
+            data-testid="workflow-run-question-images"
+            aria-label="Reference images"
+            class="m-0 flex max-w-[85%] list-none flex-wrap justify-end gap-2 self-end p-0"
+          >
+            @for (src of questionImages(); track $index) {
+              <li>
+                <img
+                  [src]="src"
+                  [alt]="'Reference image ' + ($index + 1)"
+                  [attr.data-testid]="'workflow-run-question-image-' + $index"
+                  class="block h-16 w-16 rounded-md border border-border object-cover"
+                />
+              </li>
+            }
+          </ul>
+        }
       }
       @if (designer.waitingFor(); as waiting) {
         <app-workflow-run-input-required
@@ -277,6 +295,18 @@
         }
       }
 
+      <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->
+      @if (
+        result.status !== "running" &&
+        result.status !== "suspended" &&
+        !designer.running()
+      ) {
+        <app-workflow-run-story
+          [nodes]="designer.nodes()"
+          (openNode)="designer.openNode($event)"
+        />
+      }
+
       @if (runOutput().length > 0) {
         <div data-testid="workflow-run-output">
           <h4 class="m-0 text-[12px] font-medium text-fg-muted">Output</h4>
@@ -346,39 +376,62 @@
       @if (followUpMode()) {
         <form
           data-testid="workflow-run-composer"
-          class="composer flex items-end gap-2"
+          class="composer flex flex-col gap-2"
+          [class.composer-dragging]="dragging()"
           (submit)="$event.preventDefault(); sendFollowUp()"
+          (paste)="onPaste($event)"
+          (dragover)="onDragOver($event)"
+          (dragleave)="dragging.set(false)"
+          (drop)="onDrop($event)"
         >
-          <textarea
-            data-testid="workflow-follow-up-input"
-            aria-label="Follow-up question"
-            aria-describedby="workflow-follow-up-hint"
-            placeholder="Ask a follow-up about this result"
-            rows="1"
-            [value]="designer.followUpText()"
-            (input)="onFollowUpInput($event)"
-            (keydown.enter)="onEnter($event, 'follow-up')"
-            class="composer-input min-w-0 flex-1 self-center"
-          ></textarea>
-          <span id="workflow-follow-up-hint" class="sr-only"
-            >Follows up on this run</span
-          >
-          <button
-            type="submit"
-            data-testid="workflow-run-follow-up"
-            [disabled]="!designer.followUpText().trim()"
-            class="btn btn-primary shrink-0 px-2.5 py-1"
-          >
-            <lucide-angular [img]="MessageSquareReply" [size]="14" />
-            <span>Follow up</span>
-          </button>
+          @if (imagesField(); as images) {
+            <app-workflow-run-attachments
+              [images]="composerThumbs()"
+              [label]="images.label"
+              [showLabel]="false"
+              [max]="images.max ?? 4"
+              [error]="imagesError()"
+              (picked)="addImages($event)"
+              (removed)="removeImage($event)"
+            />
+          }
+          <div class="flex items-end gap-2">
+            <textarea
+              data-testid="workflow-follow-up-input"
+              aria-label="Follow-up question"
+              aria-describedby="workflow-follow-up-hint"
+              placeholder="Ask a follow-up about this result"
+              rows="1"
+              [value]="designer.followUpText()"
+              (input)="onFollowUpInput($event)"
+              (keydown.enter)="onEnter($event, 'follow-up')"
+              class="composer-input min-w-0 flex-1 self-center"
+            ></textarea>
+            <span id="workflow-follow-up-hint" class="sr-only"
+              >Follows up on this run</span
+            >
+            <button
+              type="submit"
+              data-testid="workflow-run-follow-up"
+              [disabled]="!designer.followUpText().trim()"
+              class="btn btn-primary shrink-0 px-2.5 py-1"
+            >
+              <lucide-angular [img]="MessageSquareReply" [size]="14" />
+              <span>Follow up</span>
+            </button>
+          </div>
         </form>
       } @else {
         <form
           data-testid="workflow-run-composer"
           aria-label="Input"
           class="composer composer-form flex flex-col gap-2"
+          [class.composer-dragging]="dragging()"
           (submit)="$event.preventDefault(); designer.execute()"
+          (paste)="onPaste($event)"
+          (dragover)="onDragOver($event)"
+          (dragleave)="dragging.set(false)"
+          (drop)="onDrop($event)"
         >
           @for (field of composerFields(); track field.name) {
             @switch (field.type) {
@@ -596,6 +649,17 @@
                     </p>
                   }
                 </div>
+              }
+              @case ("images") {
+                <app-workflow-run-attachments
+                  [images]="composerThumbs()"
+                  [label]="field.label"
+                  [max]="field.max ?? 4"
+                  [help]="field.help ?? null"
+                  [error]="imagesError()"
+                  (picked)="addImages($event)"
+                  (removed)="removeImage($event)"
+                />
               }
               @case ("image") {
                 <div class="flex flex-col gap-1">

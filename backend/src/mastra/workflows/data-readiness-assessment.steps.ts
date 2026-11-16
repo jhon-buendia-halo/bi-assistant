@@ -20,6 +20,7 @@ import {
   type ContractStepEntry,
   type WorkflowStepExit,
 } from './answer-business-question.steps';
+import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
 import type { WorkflowEdge } from './workflow-contract';
 
 /** The workflow's registry key and id. */
@@ -54,6 +55,7 @@ const SOURCE_EXITS: readonly WorkflowStepExit[] = [
  * `DATA_READINESS_ASSESSMENT_EDGES`.
  */
 export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
+  readImagesStepEntry(),
   contractStepEntry(
     {
       id: 'resolve-dataset',
@@ -132,7 +134,7 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
 
 /** The edges of the workflow (api.md 117), from Start to End. */
 export const DATA_READINESS_ASSESSMENT_EDGES: readonly WorkflowEdge[] = [
-  { from: 'start', to: 'resolve-dataset', kind: 'next' },
+  ...readImagesEdges('resolve-dataset'),
   { from: 'resolve-dataset', to: 'profile-source', kind: 'next' },
   { from: 'profile-source', to: 'score-readiness', kind: 'next' },
   { from: 'score-readiness', to: 'save-report', kind: 'next' },
@@ -143,7 +145,7 @@ export const DATA_READINESS_ASSESSMENT_EDGES: readonly WorkflowEdge[] = [
 
 export type AssessmentTarget = Omit<
   z.output<typeof assessmentTargetSchema>,
-  'question'
+  'question' | 'imageNotes'
 >;
 export type ProfileOutcome = Pick<
   z.output<typeof profiledSourceSchema>,
@@ -175,6 +177,11 @@ export interface DataReadinessAssessmentRuntime {
     question: string;
     dataset: string;
     reportId: string;
+    /**
+     * Read images' notes (agents.md 2.15): the turn adds them after the
+     * report block only when not `''`; absent or `''` without images.
+     */
+    imageNotes?: string;
   }): Promise<{ answer: string; stopped: boolean }>;
 }
 

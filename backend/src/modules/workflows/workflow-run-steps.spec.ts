@@ -8,8 +8,11 @@ import {
   runHostDoc,
   runSummaryOf,
   runTitle,
+  withStepStories,
+  type StepTeller,
   type WorkflowRunDoc,
 } from './workflow-run-steps';
+import type { StepStory } from '../../mastra/workflows/workflow-story';
 
 const base: WorkflowRunDoc = {
   id: 'r-1',
@@ -672,6 +675,68 @@ describe('noteToolFrame (api.md 3.1 `tool`, `tool-result`)', () => {
         durationMs: 0,
       },
       { tool: 'describe_entity' },
+    ]);
+  });
+});
+
+describe('RunStepTracker: step stories (ui.md 4.4b, Logs Story)', () => {
+  it('tells a step as it ends from its full output, even one over the cap, with the run so far', () => {
+    const tell = jest.fn<StepStory | undefined, Parameters<StepTeller>>(
+      (step) => ({
+        headline: `${step.id}: ${String(step.output?.['text']).length}`,
+        source: 'step',
+      }),
+    );
+    const tracker = new RunStepTracker(STEPS, fakeClock().now, tell);
+    expect(tracker.apply(start('load', {}))).not.toHaveProperty('story');
+    tracker.apply(result('load', { text: 'x'.repeat(20_001) }));
+    const ended = tracker.finish('success');
+    expect(ended.steps[0]).toMatchObject({
+      outputTruncated: true,
+      story: { headline: 'load: 20001', source: 'step' },
+    });
+    // The other steps never started: told as skipped, with the run's status.
+    expect(tell).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'wrap', status: 'skipped' }),
+      expect.arrayContaining([expect.objectContaining({ id: 'load' })]),
+      'success',
+    );
+    expect(ended.changed.map((step) => step.story?.headline)).toEqual([
+      'answer: 9',
+      'wrap: 9',
+    ]);
+  });
+
+  it('keeps a step without a story when the teller throws', () => {
+    const tracker = new RunStepTracker(STEPS, fakeClock().now, () => {
+      throw new Error('bad');
+    });
+    tracker.apply(start('load', {}));
+    expect(tracker.apply(result('load', { a: 1 }))).not.toHaveProperty('story');
+  });
+});
+
+describe('withStepStories (a run stored before stories)', () => {
+  it('tells only the steps without a story, with the run status', () => {
+    const told = withStepStories(
+      [
+        {
+          id: 'a',
+          title: 'A',
+          status: 'success',
+          story: { headline: 'kept', source: 'step' },
+        },
+        { id: 'b', title: 'B', status: 'skipped' },
+      ],
+      (step, _steps, status) => ({
+        headline: `${step.id} ${status}`,
+        source: 'generic',
+      }),
+      'stopped',
+    );
+    expect(told.map((step) => step.story?.headline)).toEqual([
+      'kept',
+      'b stopped',
     ]);
   });
 });

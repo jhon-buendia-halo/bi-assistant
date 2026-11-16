@@ -5,7 +5,7 @@ import { resolveAgentModel } from '../model-resolver';
 import { SITE_REVIEWER_INSTRUCTIONS } from '../workflows/review-website.prompts';
 
 /**
- * Iris, Website Reviewer (agents.md 1.1, 2.15, 5.19): the agent of Review a
+ * Iris, Website Reviewer (agents.md 1.1, 2.16, 5.19): the agent of Review a
  * Website. In phase 1 no step of the workflow calls her (every finding is
  * measured in the browser); she answers what the user asks about a run's
  * report. A System agent with no tools; her job description is the shipped

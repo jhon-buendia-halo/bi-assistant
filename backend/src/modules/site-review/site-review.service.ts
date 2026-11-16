@@ -53,7 +53,7 @@ export type SiteReviewWork = Pick<
   | 'finishSignIn'
   | 'discoverPages'
   | 'captureAndCheck'
-  | 'readImages'
+  | 'loadReportImages'
 >;
 
 type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
@@ -181,7 +181,7 @@ export class SiteReviewService implements OnApplicationShutdown {
         this.finishSignIn(io.sessionId, url, loginUrl),
       discoverPages: (input) => this.discoverPages(input, io),
       captureAndCheck: (input) => this.captureAndCheck(input, io),
-      readImages: (paths) => this.readImages(io.sessionId, paths),
+      loadReportImages: (paths) => this.readImages(io.sessionId, paths),
     };
   }
 

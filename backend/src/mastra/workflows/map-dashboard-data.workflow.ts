@@ -8,9 +8,15 @@ import type { z } from 'zod';
 import { loadCatalog } from './answer-business-question.steps';
 import {
   MAP_DASHBOARD_DATA_STEP_SCHEMAS,
-  mapDashboardInputSchema,
+  mapDashboardRunInputSchema,
   mapDashboardResultSchema,
 } from './map-dashboard-data.schemas';
+import {
+  READ_IMAGES_OUTCOME_ID,
+  hasReferenceImages,
+  readImagesOutcome,
+  readImagesStep,
+} from './read-images.workflow';
 import {
   MAP_DASHBOARD_DATA_RUNTIME_KEY,
   MAP_DASHBOARD_DATA_STEPS,
@@ -96,6 +102,7 @@ const loadDashboardStep = createStep({
         datasets,
         artifactName: loaded.name,
         blueprint: loaded.blueprint,
+        imageNotes: params.inputData.imageNotes,
       };
     },
   ),
@@ -127,13 +134,21 @@ const mapDataStep = createStep({
     SCHEMAS['map-data'],
     async (params: StepParams<(typeof SCHEMAS)['map-data']>) => {
       const runtime = runtimeOf(params, STEP['map-data'].title);
-      const { question, datasets, artifactName, blueprint, catalog, columns } =
-        params.inputData;
+      const {
+        question,
+        datasets,
+        artifactName,
+        blueprint,
+        catalog,
+        columns,
+        imageNotes,
+      } = params.inputData;
       const mapped = await runtime.mapData({
         question,
         blueprint,
         catalog,
         columns,
+        imageNotes,
       });
       const output = {
         datasets,
@@ -180,10 +195,10 @@ export const mapDashboardDataWorkflow = createWorkflow({
   id: MAP_DASHBOARD_DATA_WORKFLOW_ID,
   description:
     "Map a saved dashboard to the run's datasets: tie each widget and filter to the datasets' columns, draw the dashboard with what the data cannot feed marked, and explain the mapping.",
-  inputSchema: mapDashboardInputSchema,
+  inputSchema: mapDashboardRunInputSchema,
   outputSchema: mapDashboardResultSchema,
   options: {
-    // The run's input is validated against `mapDashboardInputSchema` before
+    // The run's input is validated against `mapDashboardRunInputSchema` before
     // the first step (the input node has already checked it, api.md 118).
     validateInputs: true,
     // The run never waits, and its runtime on the RequestContext must never
@@ -191,6 +206,10 @@ export const mapDashboardDataWorkflow = createWorkflow({
     shouldPersistSnapshot: () => false,
   },
 })
+  // Reference images (agents.md 2.15, 5.18): Read images runs first only
+  // when the run has images; the map passes the input on with its notes.
+  .branch([[hasReferenceImages, readImagesStep]])
+  .map(readImagesOutcome, { id: READ_IMAGES_OUTCOME_ID })
   .then(loadDashboardStep)
   .then(loadCatalogStep)
   .then(mapDataStep)

@@ -138,17 +138,9 @@ async function fillRun(page: Page, question: string, dataset?: string): Promise<
   await page.getByTestId('workflow-input-question').fill(question);
 }
 
-/** A node's row in the Logs under the canvas; its state is `data-state`. */
+/** A step's node on the canvas; its status in the run shown is `data-status`. */
 function runStep(page: Page, id: string): Locator {
-  return page.getByTestId('workflow-logs-dock').getByTestId(`workflow-state-node-${id}`);
-}
-
-/** The Logs start folded to their header: unfolds them to show their rows. */
-async function unfoldLogs(page: Page): Promise<void> {
-  const toggle = page.getByTestId('workflow-logs-dock').getByTestId('workflow-logs-toggle');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  return page.getByTestId(`workflow-node-${id}`);
 }
 
 function nodeStatus(page: Page, id: string): Locator {
@@ -203,8 +195,7 @@ test.describe('Feature: Workflow runs', () => {
         'Then the Analyse step is running on the canvas and in the Run tab, with its SQL call',
         async () => {
           await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
-          await unfoldLogs(page);
-          await expect(runStep(page, 'analyse')).toHaveAttribute('data-state', 'current');
+          await expect(runStep(page, 'analyse')).toHaveAttribute('data-status', 'running');
           await expect(page.getByTestId('workflow-run-live')).toContainText('Thinking');
           await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
           await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
@@ -223,15 +214,18 @@ test.describe('Feature: Workflow runs', () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
           for (const id of V2_STEPS) {
             await expect(nodeStatus(page, id)).toHaveText('Done');
-            await expect(runStep(page, id)).toHaveAttribute('data-state', 'done');
+            await expect(runStep(page, id)).toHaveAttribute('data-status', 'success');
           }
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
-          // The data-quality check runs only when asked for.
+          // The data-quality check runs only when asked for, and its line says so.
           await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Skipped');
           await expect(runStep(page, 'check-data-quality')).toHaveAttribute(
-            'data-state',
+            'data-status',
             'skipped',
           );
+          await expect(
+            runStep(page, 'check-data-quality').getByTestId('workflow-node-activity'),
+          ).toHaveText('Off for this run');
         },
       );
       await scenarioStep(page, `When I follow up with "${FOLLOW_UP}"`, async () => {
@@ -432,18 +426,17 @@ test.describe('Feature: Workflow runs', () => {
       );
       await scenarioStep(
         page,
-        'Then "Check data quality" ends Done, after Validate and before Write answer in the Logs',
+        'Then "Check data quality" ends Done, after Validate and before Write answer in How it ran',
         async () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
           await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Done');
-          await unfoldLogs(page);
-          await expect(runStep(page, 'check-data-quality')).toHaveAttribute('data-state', 'done');
+          await expect(runStep(page, 'check-data-quality')).toHaveAttribute('data-status', 'success');
           const order = await page
-            .getByTestId('workflow-logs-dock')
-            .locator('[data-testid^="workflow-state-node-"]')
+            .getByTestId('workflow-run-story')
+            .locator('[data-testid^="workflow-run-story-step-"]')
             .evaluateAll((els) =>
               els.map((e) =>
-                (e.getAttribute('data-testid') ?? '').replace('workflow-state-node-', ''),
+                (e.getAttribute('data-testid') ?? '').replace('workflow-run-story-step-', ''),
               ),
             );
           expect(order.indexOf('check-data-quality')).toBeGreaterThan(order.indexOf('validate'));
@@ -628,8 +621,7 @@ test.describe('Feature: Workflow runs', () => {
       });
       await test.step('Then the run reads "Run stopped" and its Analyse step "Stopped"', async () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run stopped');
-        await unfoldLogs(page);
-        await expect(runStep(page, 'analyse')).toHaveAttribute('data-state', 'stopped');
+        await expect(runStep(page, 'analyse')).toHaveAttribute('data-status', 'stopped');
         await expect(nodeStatus(page, 'analyse')).toHaveText('Stopped');
         await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
         await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);

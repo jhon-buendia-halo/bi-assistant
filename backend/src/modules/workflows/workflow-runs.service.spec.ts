@@ -174,6 +174,9 @@ function build(
         runId: string;
         draftAgentId?: string;
         context?: { question: string; answer: string };
+        image?: unknown;
+        inputFiles?: { path: string; data: Buffer }[];
+        inputImages?: string[];
       }) => {
         draftHost = !!spec.draftAgentId;
         hostMessages = spec.context
@@ -276,6 +279,11 @@ function build(
         }),
     ),
     runHostWorkspaceIds: jest.fn((): string[] => []),
+    // A run's input image from its host's workspace: gone unless a test sets it.
+    runHostImage: jest.fn<
+      Promise<{ data: Buffer; mediaType: string }>,
+      [hostId: string, path: string]
+    >(() => Promise.reject(new Error('gone'))),
     // A run-backed host as the API shows it (api.md 2.1): derived fields.
     toView: jest.fn((host: { id: string; panelItems?: unknown[] }) =>
       Promise.resolve({
@@ -613,7 +621,9 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'write-answer:success',
       'wrap-up:running',
       'wrap-up:success',
-      // The steps the run never took end skipped: the Clarify branch.
+      // The steps the run never took end skipped: Read images (no image
+      // attached) and the Clarify branch.
+      'read-images:skipped',
       'clarify:skipped',
       'check-data-quality:skipped',
       'done',
@@ -645,6 +655,13 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       endedAt: expect.any(String) as string,
       // The turn's `tool` event is the step's call; no result came for it.
       toolCalls: [{ tool: 'run_readonly_sql' }],
+      // Its story is told as it ends (ui.md 4.4b, Logs Story).
+      story: {
+        headline: 'Ran 1 query on the data.',
+        brief: '1 query',
+        stats: [{ value: '1', label: 'query' }],
+        source: 'step',
+      },
     });
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
@@ -656,6 +673,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       },
       status: 'success',
       steps: [
+        { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success', output: { entities: 1 } },
         { id: 'plan', status: 'success', output: PLAN_OUTPUT },
@@ -788,6 +806,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       status: 'failed',
       error: 'The endpoint rejected the API key (401)',
       steps: [
+        { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
         { id: 'plan', status: 'success' },
@@ -845,8 +864,19 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'text',
     ]);
     expect(run.status).toBe('stopped');
-    expect(run.steps.slice(3)).toEqual([
-      { id: 'clarify', title: 'Clarify', status: 'skipped' },
+    // A step the stop kept from running says so (ui.md 4.4b, the node Story).
+    const notReached = {
+      headline: 'Did not run: the run was stopped before it got here.',
+      brief: 'Not reached',
+      source: 'generic',
+    };
+    expect(run.steps.slice(4)).toEqual([
+      {
+        id: 'clarify',
+        title: 'Clarify',
+        status: 'skipped',
+        story: expect.objectContaining({ source: 'step' }) as unknown,
+      },
       {
         id: 'analyse',
         title: 'Analyse',
@@ -855,15 +885,36 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         input: { question: 'Who won in 2002?' },
         startedAt: expect.any(String) as string,
         endedAt: expect.any(String) as string,
+        story: {
+          headline: 'You stopped the analysis before it ran a query.',
+          brief: 'No queries',
+          stats: [{ value: '0', label: 'queries' }],
+          source: 'step',
+        },
       },
-      { id: 'validate', title: 'Validate', status: 'skipped' },
+      {
+        id: 'validate',
+        title: 'Validate',
+        status: 'skipped',
+        story: notReached,
+      },
       {
         id: 'check-data-quality',
         title: 'Check data quality',
         status: 'skipped',
+        story: {
+          headline: 'Skipped: the data quality check was off for this run.',
+          brief: 'Off for this run',
+          source: 'step',
+        },
       },
-      { id: 'write-answer', title: 'Write answer', status: 'skipped' },
-      { id: 'wrap-up', title: 'Wrap up', status: 'skipped' },
+      {
+        id: 'write-answer',
+        title: 'Write answer',
+        status: 'skipped',
+        story: notReached,
+      },
+      { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
     ]);
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -1167,6 +1218,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       status: 'failed',
       error: message,
       steps: [
+        { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
         { id: 'plan', status: 'success' },
@@ -1227,6 +1279,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     expect(stored).toMatchObject({
       status: 'success',
       steps: [
+        { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
         { id: 'plan', status: 'success' },
@@ -1274,6 +1327,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       status: 'failed',
       error: 'Model error',
       steps: [
+        { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
         { id: 'plan', status: 'success' },
@@ -1297,6 +1351,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
     await expect(ctx.repository.get(stopped.run.id)).resolves.toMatchObject({
       status: 'stopped',
       steps: [
+        { id: 'read-images', status: 'skipped' },
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
         { id: 'plan', status: 'success' },
@@ -2479,5 +2534,175 @@ describe('WorkflowRunsController /workflow-runs/:id/events/stream and /stop (api
     } finally {
       await app.close();
     }
+  });
+});
+
+describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  // Bytes that carry the PNG signature, as the input check requires.
+  const png = (tail: string) =>
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from(tail),
+    ]);
+  const PNG = png('first');
+  const url = (bytes: Buffer) =>
+    `data:image/png;base64,${bytes.toString('base64')}`;
+
+  /** Answer a Business Question with an `images` field (the catalogue's, once it has one). */
+  function withImagesField() {
+    const workflows = ctx.workflows;
+    type Definition = Awaited<ReturnType<WorkflowsService['definition']>>;
+    const real = workflows.definition.bind(workflows) as (
+      id: string,
+    ) => Promise<Definition>;
+    jest.spyOn(workflows, 'definition').mockImplementation(async (id) => {
+      const definition = await real(id);
+      return {
+        ...definition,
+        input: [
+          ...definition.input.filter((field) => field.name !== 'images'),
+          {
+            name: 'images',
+            label: 'Reference images',
+            type: 'images',
+            required: false,
+            max: 4,
+            usedBy: [],
+          },
+        ],
+      };
+    });
+  }
+
+  const ASK = {
+    question: 'What is in the chart?',
+    datasets: ['World Cup Core'],
+  };
+
+  it('stores paths only in the input and hands every file to the host', async () => {
+    ctx = build();
+    withImagesField();
+    const second = png('second');
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: { ...ASK, images: [url(PNG), url(second)] },
+    });
+    expect(run.input.images).toEqual([
+      'inputs/images/1.png',
+      'inputs/images/2.png',
+    ]);
+    expect(ctx.sessions.createRunHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputFiles: [
+          { path: 'inputs/images/1.png', data: PNG },
+          { path: 'inputs/images/2.png', data: second },
+        ],
+        inputImages: ['inputs/images/1.png', 'inputs/images/2.png'],
+      }),
+    );
+    // Not the recreate-dashboard single image.
+    expect(ctx.sessions.createRunHost.mock.lastCall?.[0]).not.toHaveProperty(
+      'image',
+    );
+  });
+
+  it('a run without images sends no files', async () => {
+    ctx = build();
+    withImagesField();
+    await streamed(ctx, 'answer-business-question', { input: ASK });
+    const spec = ctx.sessions.createRunHost.mock.lastCall?.[0];
+    expect(spec).not.toHaveProperty('inputFiles');
+    expect(spec).not.toHaveProperty('inputImages');
+  });
+
+  it('a follow-up turns earlier paths into their files and leaves new images alone', async () => {
+    ctx = build();
+    withImagesField();
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: { ...ASK, images: [url(PNG)] },
+    });
+    ctx.sessions.runHostImage.mockImplementation((_host, path) =>
+      path === 'inputs/images/1.png'
+        ? Promise.resolve({ data: PNG, mediaType: 'image/png' })
+        : Promise.reject(new Error('gone')),
+    );
+    const fresh = png('fresh');
+    await streamed(ctx, 'answer-business-question', {
+      input: { ...ASK, images: ['inputs/images/1.png', url(fresh)] },
+      context: { fromRunId: first.run.id },
+    });
+    expect(ctx.sessions.runHostImage).toHaveBeenCalledWith(
+      `run-${first.run.id}`,
+      'inputs/images/1.png',
+    );
+    const spec = ctx.sessions.createRunHost.mock.lastCall?.[0];
+    expect(spec?.inputFiles).toEqual([
+      { path: 'inputs/images/1.png', data: PNG },
+      { path: 'inputs/images/2.png', data: fresh },
+    ]);
+  });
+
+  it('a follow-up naming a path the earlier run does not hold, or a missing file, is refused by the input check', async () => {
+    ctx = build();
+    withImagesField();
+    const first = await streamed(ctx, 'answer-business-question', {
+      input: { ...ASK, images: [url(PNG)] },
+    });
+    await expect(
+      ctx.service.prepare('answer-business-question', {
+        input: { ...ASK, images: ['inputs/images/1.png'] }, // file is gone
+        context: { fromRunId: first.run.id },
+      }),
+    ).rejects.toThrow('Reference images must be PNG, JPEG or WebP images');
+  });
+
+  describe('inputImage (151)', () => {
+    it('serves a path of the stored input, and answers 404 for any other', async () => {
+      ctx = build();
+      withImagesField();
+      const { run } = await streamed(ctx, 'answer-business-question', {
+        input: { ...ASK, images: [url(PNG)] },
+      });
+      ctx.sessions.runHostImage.mockResolvedValue({
+        data: PNG,
+        mediaType: 'image/png',
+      });
+      await expect(
+        ctx.service.inputImage(run.id, 'inputs/images/1.png'),
+      ).resolves.toEqual({
+        data: PNG,
+        mediaType: 'image/png',
+      });
+      expect(ctx.sessions.runHostImage).toHaveBeenCalledWith(
+        `run-${run.id}`,
+        'inputs/images/1.png',
+      );
+      for (const path of [
+        'inputs/images/2.png',
+        '../x.png',
+        'inputs/images/1.gif',
+        '',
+      ]) {
+        await expect(ctx.service.inputImage(run.id, path)).rejects.toThrow(
+          `Run "${run.id}" has no image "${path}"`,
+        );
+      }
+      await expect(
+        ctx.service.inputImage('nope', 'inputs/images/1.png'),
+      ).rejects.toThrow('Run "nope" not found');
+    });
+
+    it('answers 404 when the file is gone', async () => {
+      ctx = build();
+      withImagesField();
+      const { run } = await streamed(ctx, 'answer-business-question', {
+        input: { ...ASK, images: [url(PNG)] },
+      });
+      await expect(
+        ctx.service.inputImage(run.id, 'inputs/images/1.png'),
+      ).rejects.toThrow(`Run "${run.id}" has no image "inputs/images/1.png"`);
+    });
   });
 });

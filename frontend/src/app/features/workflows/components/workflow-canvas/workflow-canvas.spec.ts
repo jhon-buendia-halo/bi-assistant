@@ -713,6 +713,26 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     ).not.toBeNull();
   });
 
+  it("shows a code step's run line in place of its id while a run is shown", () => {
+    const node = () => q('workflow-node-load-catalog')!;
+    expect(node().querySelector('[data-testid="workflow-node-id"]')).not.toBeNull();
+    fixture.componentRef.setInput('runLines', {
+      'load-catalog': {
+        text: '9 tables · 2 ms',
+        tone: 'success',
+        title: 'Read the catalog: 9 tables.',
+      },
+    });
+    fixture.detectChanges();
+    const line = node().querySelector<HTMLElement>(
+      '[data-testid="workflow-node-run-line"]',
+    )!;
+    expect(text(line)).toBe('9 tables · 2 ms');
+    expect(line.getAttribute('title')).toBe('Read the catalog: 9 tables.');
+    expect(line.getAttribute('data-tone')).toBe('success');
+    expect(node().querySelector('[data-testid="workflow-node-id"]')).toBeNull();
+  });
+
   it('pans the running node into view once, when the graph is wider than the canvas', async () => {
     await fixture.whenStable();
     fixture.detectChanges();

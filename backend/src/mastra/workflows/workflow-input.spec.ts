@@ -1,6 +1,7 @@
 import { CODE_WORKFLOWS } from './workflow-catalog';
 import {
   IMAGE_MAX_BYTES,
+  IMAGES_MAX_COUNT,
   inputFieldsWithUsage,
   validateWorkflowInput,
   withStoredImages,
@@ -19,7 +20,8 @@ describe('usedBy: the steps that read a field from the input (api.md 116)', () =
         usedBy,
       })),
     ).toEqual([
-      { name: 'question', usedBy: ['receive-question'] },
+      { name: 'question', usedBy: ['read-images', 'receive-question'] },
+      { name: 'images', usedBy: ['read-images'] },
       { name: 'datasets', usedBy: ['receive-question'] },
       { name: 'checkDataQuality', usedBy: [] },
     ]);
@@ -586,5 +588,142 @@ describe('one of an image or an artifact (agents.md 5.17)', () => {
         },
       ],
     });
+  });
+});
+
+describe('an images field (workflows R35)', () => {
+  const workflow = {
+    input: [
+      { name: 'question', label: 'Question', type: 'text', required: true },
+      {
+        name: 'images',
+        label: 'Reference images',
+        type: 'images',
+        required: false,
+        max: IMAGES_MAX_COUNT,
+      },
+    ] satisfies WorkflowInputField[],
+  };
+  const PNG = Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('rest of the file'),
+  ]);
+  const JPEG = Buffer.from('ffd8ffe000104a464946', 'hex');
+  const WEBP = Buffer.concat([
+    Buffer.from('RIFF'),
+    Buffer.alloc(4),
+    Buffer.from('WEBPVP8 '),
+  ]);
+  const url = (mediaType: string, data: Buffer) =>
+    `data:${mediaType};base64,${data.toString('base64')}`;
+  const refusal = (message: string) => ({
+    ok: false,
+    errors: [{ field: 'images', message }],
+  });
+
+  it('takes up to four PNG, JPEG or WebP data URLs, in order', () => {
+    const images = [
+      url('image/png', PNG),
+      url('image/jpeg', JPEG),
+      url('image/webp', WEBP),
+      url('image/png', PNG),
+    ];
+    expect(IMAGES_MAX_COUNT).toBe(4);
+    expect(validateWorkflowInput(workflow, { question: 'q', images })).toEqual({
+      ok: true,
+      input: { question: 'q', images },
+    });
+  });
+
+  it('leaves out a missing or empty list: the field is optional', () => {
+    for (const images of [undefined, null, '', [], ['', '  ']]) {
+      expect(
+        validateWorkflowInput(workflow, { question: 'q', images }),
+      ).toEqual({ ok: true, input: { question: 'q' } });
+    }
+  });
+
+  it('refuses more than its max, another type, and bytes that are not the type', () => {
+    const five = Array.from({ length: 5 }, () => url('image/png', PNG));
+    expect(
+      validateWorkflowInput(workflow, { question: 'q', images: five }),
+    ).toEqual(refusal('Reference images must be at most 4 images'));
+    const wrong = refusal('Reference images must be PNG, JPEG or WebP images');
+    for (const images of [
+      [url('image/png', PNG), url('image/gif', PNG)],
+      ['inputs/images/1.png'],
+      [url('image/png', Buffer.from('<svg onload=alert(1)>'))],
+      [42],
+      url('image/png', PNG),
+    ]) {
+      expect(
+        validateWorkflowInput(workflow, { question: 'q', images }),
+      ).toEqual(wrong);
+    }
+  });
+
+  it('refuses an image over 5 MB', () => {
+    const large = Buffer.concat([PNG, Buffer.alloc(IMAGE_MAX_BYTES)]);
+    expect(
+      validateWorkflowInput(workflow, {
+        question: 'q',
+        images: [url('image/png', PNG), url('image/png', large)],
+      }),
+    ).toEqual(refusal('Reference images must be at most 5 MB each'));
+  });
+
+  it('is required when the field says so', () => {
+    const required = {
+      input: [{ ...workflow.input[1], required: true }],
+    };
+    expect(validateWorkflowInput(required, { images: [] })).toEqual(
+      refusal('Reference images is required'),
+    );
+  });
+
+  it('takes every image out of the input a run stores, as inputs/images/<n>.<ext>', () => {
+    const stored = withStoredImages(workflow, {
+      question: 'q',
+      images: [url('image/png', PNG), url('image/jpeg', JPEG)],
+    });
+    expect(stored.input).toEqual({
+      question: 'q',
+      images: ['inputs/images/1.png', 'inputs/images/2.jpg'],
+    });
+    expect(stored.images).toEqual([
+      {
+        field: 'images',
+        path: 'inputs/images/1.png',
+        mediaType: 'image/png',
+        data: PNG,
+      },
+      {
+        field: 'images',
+        path: 'inputs/images/2.jpg',
+        mediaType: 'image/jpeg',
+        data: JPEG,
+      },
+    ]);
+  });
+
+  it('keeps the image field and the images field apart', () => {
+    const both = {
+      input: [
+        { name: 'image', label: 'Image', type: 'image', required: false },
+        ...workflow.input,
+      ] satisfies WorkflowInputField[],
+    };
+    const stored = withStoredImages(both, {
+      image: url('image/webp', WEBP),
+      images: [url('image/png', PNG)],
+    });
+    expect(stored.input).toEqual({
+      image: 'inputs/image.webp',
+      images: ['inputs/images/1.png'],
+    });
+    expect(stored.images.map((image) => image.path)).toEqual([
+      'inputs/image.webp',
+      'inputs/images/1.png',
+    ]);
   });
 });

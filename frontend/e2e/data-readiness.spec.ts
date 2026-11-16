@@ -459,20 +459,14 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
             .getByTestId('workflow-node-status'),
         ).toHaveText('Done');
       }
-      // The Logs start folded to their header: unfold them to read their rows.
-      const logsToggle = page
-        .getByTestId('workflow-logs-dock')
-        .getByTestId('workflow-logs-toggle');
-      await logsToggle.click();
-      await expect(logsToggle).toHaveAttribute('aria-expanded', 'true');
+      // How it ran, under the answer, lists the steps in run order.
       const logged = await page
-        // The Logs sit under the canvas since the three-zone page.
-        .getByTestId('workflow-logs-dock')
-        .locator('[data-testid^="workflow-state-node-"]')
+        .getByTestId('workflow-run-story')
+        .locator('[data-testid^="workflow-run-story-step-"]')
         .evaluateAll((els) =>
           els.map((e) =>
             (e.getAttribute('data-testid') ?? '').replace(
-              'workflow-state-node-',
+              'workflow-run-story-step-',
               '',
             ),
           ),

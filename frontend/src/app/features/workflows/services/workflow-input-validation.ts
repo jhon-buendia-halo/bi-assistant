@@ -56,6 +56,30 @@ function imageBytes(dataUrl: string): number {
   return Math.floor((base64.length * 3) / 4) - padding;
 }
 
+/** An image a follow-up keeps: the stored path of one the earlier run had. */
+const STORED_IMAGE_PATH = /^inputs\/.+\.(png|jpg|webp)$/;
+
+/** The most reference images an `images` field takes when it names no `max`. */
+export const IMAGES_MAX_COUNT = 4;
+
+/** An `images` field's refusal for its list (type, size, then count); null when it is fine. */
+function imagesError(field: WorkflowInputField, value: unknown): string | null {
+  const list = Array.isArray(value) ? (value as string[]) : [];
+  if (list.length === 0) return missing(field);
+  const limit = field.max ?? IMAGES_MAX_COUNT;
+  for (const item of list) {
+    if (!IMAGE_DATA_URL.test(item) && !STORED_IMAGE_PATH.test(item)) {
+      return `${field.label} must be PNG, JPEG or WebP images`;
+    }
+    if (IMAGE_DATA_URL.test(item) && imageBytes(item) > IMAGE_MAX_BYTES) {
+      return `${field.label} must be at most ${IMAGE_MAX_BYTES / (1024 * 1024)} MB each`;
+    }
+  }
+  return list.length > limit
+    ? `${field.label} must be at most ${limit} images`
+    : null;
+}
+
 function datasetError(
   field: WorkflowInputField,
   name: string,
@@ -79,6 +103,7 @@ function fieldError(
   datasets: readonly RunFormDataset[] | null,
 ): string | null {
   if (field.type === 'boolean') return null;
+  if (field.type === 'images') return imagesError(field, value);
   if (field.type === 'datasets') {
     const names = Array.isArray(value)
       ? [...new Set(value.map((name) => name.trim()).filter(Boolean))]
@@ -207,7 +232,11 @@ export function fieldRulesLabel(field: WorkflowInputField): string {
     rules.push(`Max ${field.maxLength} characters`);
   }
   if (field.min !== undefined) rules.push(`Min ${field.min}`);
-  if (field.max !== undefined) rules.push(`Max ${field.max}`);
+  if (field.max !== undefined) {
+    rules.push(
+      field.type === 'images' ? `Max ${field.max} images` : `Max ${field.max}`,
+    );
+  }
   if (field.datasourceKinds?.length) {
     rules.push(
       `${orList(field.datasourceKinds.map((kind) => KIND_LABELS[kind]))} datasets`,
