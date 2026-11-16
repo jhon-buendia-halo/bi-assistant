@@ -15,8 +15,8 @@ Running log of every meaningful change, newest first. One entry per epic, writte
 
 - **The query inspector in past chats and in Try it** (epic M1-25, roadmap 1.25.9–1.25.11; plan [m1-25-query-inspector.md](docs/plans/m1-25-query-inspector.md) section 5).
   - 1.25.9: the inspector's backend works on any answer the app can show. A past chat's message gets endpoints 144 to 148, with its evidence and explanations stored in the message; a Try it run, still never stored, is kept in memory for 30 minutes behind 139 to 143.
-  - 1.25.10: every answer of a past chat that read data, of any agent, shows its figure chips, coverage and queries and opens the inspector. Scenario: `frontend/e2e/runs.spec.ts`, `@story-1.25.10`.
-  - 1.25.11: Try it, the only place a user agent runs, shows the same; after 30 minutes the sheet asks to run the draft again. Scenario: `frontend/e2e/agent-editor.spec.ts`, `@story-1.25.11`.
+  - 1.25.10: every answer of a past chat that read data, of any agent, shows its figure chips, coverage and queries and opens the inspector. Scenario: `frontend/e2e/runs.spec.ts`, `@story-1.25.10`. Demo: [evidence/1.25.10/demo.webm](evidence/1.25.10/demo.webm).
+  - 1.25.11: Try it, the only place a user agent runs, shows the same; after 30 minutes the sheet asks to run the draft again. Scenario: `frontend/e2e/agent-editor.spec.ts`, `@story-1.25.11`. Demo: [evidence/1.25.11/demo.webm](evidence/1.25.11/demo.webm).
   - The inspector loads deferred in every host, so it stays out of the initial bundle (974 kB against a 1 MB budget).
 - **Evals for the query explainer** (1.25.12): the set `query-explainer`, 8 statements over the World Cup data; her steps are checked for form and her step counts against the real data. First measured runs (`claude-sonnet-5-5`): 6, 6 and 5 of 8; after one line added to her instructions (a total without groups leaves one row) and a rubric reduced to one pass condition: 8, 7 and 8 of 8, every code check 3 of 3.
 
