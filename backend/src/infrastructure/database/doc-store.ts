@@ -83,6 +83,8 @@ export const WORKFLOW_RUN_NODE_CHATS_STORE =
   'DOC_STORE_workflow_run_node_chats';
 /** The stored artifacts (data-model 3.18). */
 export const ARTIFACTS_STORE = 'DOC_STORE_artifacts';
+/** The saved website sign-ins, encrypted (data-model 3.19). */
+export const SITE_SIGNINS_STORE = 'DOC_STORE_site_signins';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;

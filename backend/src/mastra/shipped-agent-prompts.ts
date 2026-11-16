@@ -10,6 +10,7 @@ import {
   READ_DASHBOARD_INSTRUCTIONS,
 } from './workflows/recreate-dashboard.prompts';
 import { READ_IMAGES_INSTRUCTIONS } from './workflows/read-images.prompts';
+import { SITE_REVIEWER_INSTRUCTIONS } from './workflows/review-website.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
@@ -41,6 +42,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'data-mapper': MAP_DATA_INSTRUCTIONS,
   'image-reader': READ_IMAGES_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
+  'site-reviewer': SITE_REVIEWER_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */
