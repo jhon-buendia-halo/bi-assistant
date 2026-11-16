@@ -29,6 +29,37 @@ export interface UsageByWorkflow extends UsageAmount {
   id: string | null;
   name: string;
   kind: 'workflow' | 'none';
+  /** Per-run statistics; null for the calls outside workflow runs. */
+  runs: number | null;
+  avgCostUsd: number | null;
+  medianCostUsd: number | null;
+  p95CostUsd: number | null;
+}
+
+export interface UsageUnitCost {
+  count: number;
+  avgCostUsd: number;
+}
+
+export interface UsageCostSplit {
+  inputUsd: number;
+  cacheReadUsd: number;
+  cacheWriteUsd: number;
+  outputUsd: number;
+  cacheSavedUsd: number;
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  outputTokens: number;
+}
+
+export interface UsageTopRun extends UsageAmount {
+  runId: string;
+  /** null when the run was deleted. */
+  workflowId: string | null;
+  workflowName: string;
+  title: string | null;
+  startedAt: string;
 }
 
 export interface UsageByAgent extends UsageAmount {
@@ -49,6 +80,10 @@ export interface UsageSummary {
   };
   daily: UsageDay[];
   monthly: UsageMonth[];
+  perRun: UsageUnitCost;
+  perQuestion: UsageUnitCost;
+  split: UsageCostSplit;
+  topRuns: UsageTopRun[];
   byModel: UsageByModel[];
   byWorkflow: UsageByWorkflow[];
   byAgent: UsageByAgent[];

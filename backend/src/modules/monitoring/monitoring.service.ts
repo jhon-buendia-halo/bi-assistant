@@ -127,7 +127,11 @@ export class MonitoringService {
     const workflows = new Map<string, RunWorkflow>(
       runs.map((run) => [
         run.id,
-        { workflowId: run.workflowId, workflowName: run.workflowName },
+        {
+          workflowId: run.workflowId,
+          workflowName: run.workflowName,
+          title: runTitle(run, []),
+        },
       ]),
     );
     return summarizeUsage({ rows, from, to, now, timeZone, runs: workflows });

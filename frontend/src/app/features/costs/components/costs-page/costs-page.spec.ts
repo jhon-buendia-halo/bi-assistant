@@ -6,6 +6,7 @@ import {
 } from '@angular/common/http/testing';
 import { ShellState } from '../../../../core/shell/shell-state';
 import { MonitoringStateService } from '../../../monitoring/services/monitoring-state.service';
+import { RunsState } from '../../../runs/services/runs-state';
 import { UsageSummary, periodStart } from '../../models/usage.model';
 import { CostsPage, niceCeiling } from './costs-page';
 
@@ -58,8 +59,55 @@ const SUMMARY: UsageSummary = {
       kind: 'workflow',
       costUsd: 15,
       calls: 40,
+      runs: 10,
+      avgCostUsd: 1.5,
+      medianCostUsd: 1.25,
+      p95CostUsd: 3.5,
     },
-    { id: null, name: 'No workflow', kind: 'none', costUsd: 5, calls: 21 },
+    {
+      id: null,
+      name: 'No workflow',
+      kind: 'none',
+      costUsd: 5,
+      calls: 21,
+      runs: null,
+      avgCostUsd: null,
+      medianCostUsd: null,
+      p95CostUsd: null,
+    },
+  ],
+  perRun: { count: 10, avgCostUsd: 1.5 },
+  perQuestion: { count: 8, avgCostUsd: 0.625 },
+  split: {
+    inputUsd: 4,
+    cacheReadUsd: 1,
+    cacheWriteUsd: 3,
+    outputUsd: 12,
+    cacheSavedUsd: 9,
+    inputTokens: 800_000,
+    cacheReadTokens: 2_000_000,
+    cacheWriteTokens: 400_000,
+    outputTokens: 45_000,
+  },
+  topRuns: [
+    {
+      runId: 'run-a',
+      workflowId: 'wf-1',
+      workflowName: 'Answer a Business Question',
+      title: 'Top scorers by season?',
+      startedAt: '2026-11-14T15:00:00.000Z',
+      costUsd: 3.5,
+      calls: 6,
+    },
+    {
+      runId: 'deadbeef-1234',
+      workflowId: null,
+      workflowName: 'Deleted workflow run',
+      title: null,
+      startedAt: '2026-11-13T15:00:00.000Z',
+      costUsd: 2,
+      calls: 4,
+    },
   ],
   byAgent: [{ id: 'assistant', name: 'Assistant', costUsd: 20, calls: 61 }],
 };
@@ -115,6 +163,52 @@ describe('CostsPage', () => {
     expect(
       el.querySelector('[data-testid="costs-by-model"]')?.textContent,
     ).toContain('No price');
+  });
+
+  it('shows the cost per run and per question, and the per-workflow statistics', () => {
+    const { fixture, req, el } = render();
+    req.flush(SUMMARY);
+    fixture.detectChanges();
+    const text = (id: string) =>
+      el.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+    expect(text('kpi-per-run')).toContain('$1.50');
+    expect(text('kpi-per-run')).toContain('10 runs');
+    expect(text('kpi-per-question')).toContain('$0.63');
+    expect(text('kpi-per-question')).toContain('8 questions');
+    const rows = el.querySelectorAll('[data-testid="costs-workflow-row"]');
+    expect(rows[0].textContent).toContain('Answer a Business Question');
+    expect(rows[0].textContent).toContain('$1.25');
+    expect(rows[0].textContent).toContain('$3.50');
+    expect(rows[1].textContent).toContain('No workflow');
+    expect(rows[1].textContent).toContain('—');
+  });
+
+  it('splits the cost by token kind and shows what the cache saved', () => {
+    const { fixture, req, el } = render();
+    req.flush(SUMMARY);
+    fixture.detectChanges();
+    const output = el.querySelector('[data-testid="costs-split-output"]');
+    expect(output?.textContent).toContain('$12.00');
+    expect(output?.textContent).toContain('60.0 %');
+    expect(
+      el.querySelector('[data-testid="costs-cache-saved"]')?.textContent,
+    ).toContain('$9.00');
+  });
+
+  it('opens a stored run from the most expensive runs; a deleted one is not a link', () => {
+    const { fixture, req, el } = render();
+    req.flush(SUMMARY);
+    fixture.detectChanges();
+    const runs = TestBed.inject(RunsState);
+    const open = spyOn(runs, 'openRun');
+    const items = el.querySelectorAll('[data-testid="costs-top-run"]');
+    expect(items.length).toBe(2);
+    expect(items[0].tagName).toBe('BUTTON');
+    expect(items[0].textContent).toContain('Top scorers by season?');
+    (items[0] as HTMLButtonElement).click();
+    expect(open).toHaveBeenCalledOnceWith('run-a');
+    expect(items[1].tagName).toBe('DIV');
+    expect(items[1].textContent).toContain('Run deadbeef');
   });
 
   it('asks again without a start for All time', () => {
@@ -176,6 +270,9 @@ describe('CostsPage', () => {
       byModel: [],
       byWorkflow: [],
       byAgent: [],
+      topRuns: [],
+      perRun: { count: 0, avgCostUsd: 0 },
+      perQuestion: { count: 0, avgCostUsd: 0 },
     });
     fixture.detectChanges();
     expect(

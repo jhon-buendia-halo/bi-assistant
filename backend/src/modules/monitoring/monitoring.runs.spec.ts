@@ -64,7 +64,13 @@ async function serviceWith(): Promise<MonitoringService> {
       ),
     list: () =>
       Promise.resolve([
-        { id: 'found', workflowId: 'wf-assistant', workflowName: 'Assistant' },
+        {
+          id: 'found',
+          workflowId: 'wf-assistant',
+          workflowName: 'Assistant',
+          question: 'Top scorers?',
+          input: {},
+        },
       ]),
   } as unknown as WorkflowRunsRepository;
   return new MonitoringService(new SpanEventsRepository(db), sessions, runs);
@@ -158,6 +164,26 @@ describe('MonitoringService: runs (ADR-0041)', () => {
     expect(agentCalls).toBe(page.total);
     expect(modelCalls).toBe(page.total);
     expect(dayCalls).toBe(page.total);
+
+    // Three runs (found, deleted, unknown); the found one is titled.
+    expect(usage.perRun.count).toBe(3);
+    expect(usage.topRuns.map((r) => r.runId).sort()).toEqual([
+      'deleted',
+      'found',
+      'unknown',
+    ]);
+    expect(usage.topRuns.find((r) => r.runId === 'found')).toMatchObject({
+      workflowName: 'Assistant',
+      title: 'Top scorers?',
+      calls: callsOf(FOUND),
+    });
+    const split = usage.split;
+    expect(
+      split.inputUsd +
+        split.cacheReadUsd +
+        split.cacheWriteUsd +
+        split.outputUsd,
+    ).toBeCloseTo(usage.totals.costUsd, 10);
   });
 
   it('lists the run among the sessions', async () => {

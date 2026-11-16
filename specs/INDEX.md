@@ -1069,7 +1069,7 @@ specs/capabilities/metrics/spec.md:134-137  ## Acceptance
 specs/capabilities/metrics/spec.md:139-146  ## Open questions
 
 specs/capabilities/monitoring/spec.md:7-13  ## Concepts
-specs/capabilities/monitoring/spec.md:15-117  ## Rules
+specs/capabilities/monitoring/spec.md:15-121  ## Rules
 specs/capabilities/monitoring/spec.md:18-18  R1 The system SHALL list **LLM calls**: one row per model call of one age
 specs/capabilities/monitoring/spec.md:19-19  R2 Rows SHALL be ordered by start time, newest first.
 specs/capabilities/monitoring/spec.md:20-20  R3 Each row SHALL show: **Started** (local date and time), **Agent** (its
@@ -1118,16 +1118,20 @@ specs/capabilities/monitoring/spec.md:107-107  R45 A workflow run's agent turn r
 specs/capabilities/monitoring/spec.md:108-110  R46 The Plan and Write answer steps of Answer a Business Question run two
 specs/capabilities/monitoring/spec.md:111-111  R47 The **Costs** page (its own rail item, [../app-shell/spec.md](../app-s
 specs/capabilities/monitoring/spec.md:112-112  R48 A **Period** choice SHALL offer This month, Last 30 days (the default)
-specs/capabilities/monitoring/spec.md:113-113  R49 Four tiles SHALL show: **Today** and **This month** (cost and number o
+specs/capabilities/monitoring/spec.md:113-113  R49 Five tiles SHALL show: **Today** and **This month** (cost and number o
 specs/capabilities/monitoring/spec.md:114-114  R50 **Daily cost** SHALL show one bar per day of the period, days without
-specs/capabilities/monitoring/spec.md:115-115  R51 Three rankings over the period SHALL list the cost and calls, highest
+specs/capabilities/monitoring/spec.md:115-115  R51 Two rankings over the period SHALL list the cost and calls, highest co
 specs/capabilities/monitoring/spec.md:116-116  R52 Choosing a model or an agent in a ranking SHALL open Monitoring's LLM
 specs/capabilities/monitoring/spec.md:117-117  R53 With no calls in the period the page SHALL show the tiles, "No LLM cal
-specs/capabilities/monitoring/spec.md:119-137  ## Edge cases and errors
-specs/capabilities/monitoring/spec.md:139-144  ## Contracts
-specs/capabilities/monitoring/spec.md:146-155  ## UI
-specs/capabilities/monitoring/spec.md:157-324  ## Flows
-specs/capabilities/monitoring/spec.md:326-338  ## Acceptance
+specs/capabilities/monitoring/spec.md:118-118  R54 A **workflow run** is every call whose thread is the run's host `run-<
+specs/capabilities/monitoring/spec.md:119-119  R55 **Cost per workflow run** SHALL list, for each workflow with runs in t
+specs/capabilities/monitoring/spec.md:120-120  R56 **Most expensive runs** SHALL list the period's 10 costliest workflow
+specs/capabilities/monitoring/spec.md:121-121  R57 **Where the cost goes** SHALL split the period's cost into **Input** (
+specs/capabilities/monitoring/spec.md:123-141  ## Edge cases and errors
+specs/capabilities/monitoring/spec.md:143-148  ## Contracts
+specs/capabilities/monitoring/spec.md:150-159  ## UI
+specs/capabilities/monitoring/spec.md:161-328  ## Flows
+specs/capabilities/monitoring/spec.md:330-342  ## Acceptance
 
 specs/capabilities/past-chats/spec.md:5-7  ## Concepts
 specs/capabilities/past-chats/spec.md:9-36  ## Rules
@@ -2060,7 +2064,7 @@ specs/system/ui.md:179-189  ### 3.3 Toast container
 specs/system/ui.md:191-193  ### 3.4 App logo
 specs/system/ui.md:195-197  ### 3.5 Markdown rendering
 specs/system/ui.md:199-223  ### 3.6 Shared component classes
-specs/system/ui.md:225-856  ## 4. Screens and panels
+specs/system/ui.md:225-858  ## 4. Screens and panels
 specs/system/ui.md:229-237  ### 4.1 Home (welcome)
 specs/system/ui.md:239-245  ### 4.2 Datasets list
 specs/system/ui.md:247-261  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
@@ -2089,35 +2093,35 @@ specs/system/ui.md:617-625  ### 4.8e Monitoring: LLM call page
 specs/system/ui.md:627-634  ### 4.8f Monitoring: Runs tab
 specs/system/ui.md:636-648  ### 4.8g Monitoring: session page
 specs/system/ui.md:650-660  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:662-670  ### 4.8i Costs
-specs/system/ui.md:672-676  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:678-689  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:691-695  ### 4.11 Testing data (settings)
-specs/system/ui.md:698-710  ### 4.12 Developer (settings)
-specs/system/ui.md:711-779  ### 4.12 Past chat (read-only transcript)
-specs/system/ui.md:733-746  #### 4.12.1 Workflow bar
-specs/system/ui.md:748-779  #### 4.12.2 Query inspector (M1-25)
-specs/system/ui.md:781-839  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:794-801  #### 4.13.1 Visual view
-specs/system/ui.md:803-805  #### 4.13.2 Document view
-specs/system/ui.md:807-809  #### 4.13.3 File view
-specs/system/ui.md:811-813  #### 4.13.4 Table view
-specs/system/ui.md:815-839  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:841-843  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:845-847  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:849-856  ### 4.16 Appearance (settings)
-specs/system/ui.md:858-870  ## 5. Cross-cutting behaviour
-specs/system/ui.md:860-862  ### 5.1 State that survives view changes
-specs/system/ui.md:864-866  ### 5.2 Selection state
-specs/system/ui.md:868-870  ### 5.3 Toast policy
-specs/system/ui.md:872-961  ## 6. Design tokens
-specs/system/ui.md:876-919  ### 6.0 Theme tokens
-specs/system/ui.md:921-926  ### 6.1 Colour usage
-specs/system/ui.md:928-933  ### 6.2 Typography
-specs/system/ui.md:935-940  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:942-949  ### 6.4 Icons
-specs/system/ui.md:951-961  ### 6.5 Theming
-specs/system/ui.md:963-1005  ## 7. Copy that tests or users rely on
-specs/system/ui.md:1007-1018  ## 8. Accessibility
-specs/system/ui.md:1020-1022  ## 9. Visual baseline
-specs/system/ui.md:1025-1032  ## 10. Open questions and gaps
+specs/system/ui.md:662-672  ### 4.8i Costs
+specs/system/ui.md:674-678  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:680-691  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:693-697  ### 4.11 Testing data (settings)
+specs/system/ui.md:700-712  ### 4.12 Developer (settings)
+specs/system/ui.md:713-781  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:735-748  #### 4.12.1 Workflow bar
+specs/system/ui.md:750-781  #### 4.12.2 Query inspector (M1-25)
+specs/system/ui.md:783-841  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:796-803  #### 4.13.1 Visual view
+specs/system/ui.md:805-807  #### 4.13.2 Document view
+specs/system/ui.md:809-811  #### 4.13.3 File view
+specs/system/ui.md:813-815  #### 4.13.4 Table view
+specs/system/ui.md:817-841  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:843-845  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:847-849  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:851-858  ### 4.16 Appearance (settings)
+specs/system/ui.md:860-872  ## 5. Cross-cutting behaviour
+specs/system/ui.md:862-864  ### 5.1 State that survives view changes
+specs/system/ui.md:866-868  ### 5.2 Selection state
+specs/system/ui.md:870-872  ### 5.3 Toast policy
+specs/system/ui.md:874-963  ## 6. Design tokens
+specs/system/ui.md:878-921  ### 6.0 Theme tokens
+specs/system/ui.md:923-928  ### 6.1 Colour usage
+specs/system/ui.md:930-935  ### 6.2 Typography
+specs/system/ui.md:937-942  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:944-951  ### 6.4 Icons
+specs/system/ui.md:953-963  ### 6.5 Theming
+specs/system/ui.md:965-1007  ## 7. Copy that tests or users rely on
+specs/system/ui.md:1009-1020  ## 8. Accessibility
+specs/system/ui.md:1022-1024  ## 9. Visual baseline
+specs/system/ui.md:1027-1034  ## 10. Open questions and gaps

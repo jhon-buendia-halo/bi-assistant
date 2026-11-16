@@ -6,6 +6,9 @@ import {
   NO_AGENT_NAME,
   NO_WORKFLOW_NAME,
   dayKey,
+  median,
+  percentile,
+  runIdOf,
   summarizeUsage,
   type UsageCallRecord,
 } from './usage-summary';
@@ -18,6 +21,7 @@ function call(
 ): UsageCallRecord {
   return {
     startedAt,
+    traceId: `t-${startedAt}`,
     agentId: 'assistant',
     agentName: 'Assistant',
     sessionId: 'chat-1',
@@ -42,7 +46,11 @@ const NOW = new Date('2026-11-15T12:00:00Z');
 const RUNS = new Map([
   [
     'r1',
-    { workflowId: 'wf-answer', workflowName: 'Answer a Business Question' },
+    {
+      workflowId: 'wf-answer',
+      workflowName: 'Answer a Business Question',
+      title: 'Top scorers?',
+    },
   ],
 ]);
 
@@ -147,8 +155,9 @@ describe('summarizeUsage (Costs)', () => {
     const summary = summarizeUsage({
       rows: [
         call('2026-11-15T09:00:00Z', { sessionId: 'run-r1' }),
+        // A step agent's own thread belongs to the same run (agent-threads.ts).
         call('2026-11-15T09:01:00Z', {
-          sessionId: 'run-r1',
+          sessionId: 'run-r1:answer-writer',
           agentId: 'writer',
           agentName: 'Answer Writer',
         }),
@@ -191,6 +200,10 @@ describe('summarizeUsage (Costs)', () => {
         kind: 'workflow',
         costUsd: 2 * ONE_CALL,
         calls: 2,
+        runs: 1,
+        avgCostUsd: 2 * ONE_CALL,
+        medianCostUsd: 2 * ONE_CALL,
+        p95CostUsd: 2 * ONE_CALL,
       },
       {
         id: null,
@@ -198,6 +211,10 @@ describe('summarizeUsage (Costs)', () => {
         kind: 'none',
         costUsd: ONE_CALL,
         calls: 2,
+        runs: null,
+        avgCostUsd: null,
+        medianCostUsd: null,
+        p95CostUsd: null,
       },
       {
         id: null,
@@ -205,6 +222,10 @@ describe('summarizeUsage (Costs)', () => {
         kind: 'workflow',
         costUsd: ONE_CALL,
         calls: 1,
+        runs: 1,
+        avgCostUsd: ONE_CALL,
+        medianCostUsd: ONE_CALL,
+        p95CostUsd: ONE_CALL,
       },
     ]);
 
@@ -213,6 +234,103 @@ describe('summarizeUsage (Costs)', () => {
       ['writer', 'Answer Writer', 1],
       [null, NO_AGENT_NAME, 1],
     ]);
+  });
+
+  it('costs each run and each question outside runs, and lists the top runs', () => {
+    const summary = summarizeUsage({
+      rows: [
+        // Run r1: two calls (host and a step agent) = 2 units.
+        call('2026-11-15T08:00:00Z', { sessionId: 'run-r1' }),
+        call('2026-11-15T08:05:00Z', { sessionId: 'run-r1:planner' }),
+        // Run r2 (deleted): one call.
+        call('2026-11-15T09:00:00Z', { sessionId: 'run-r2' }),
+        // One chat question (trace q1) with two calls, one with none (q2).
+        call('2026-11-15T10:00:00Z', { traceId: 'q1' }),
+        call('2026-11-15T10:01:00Z', { traceId: 'q1' }),
+        call('2026-11-15T10:02:00Z', { traceId: 'q2', sessionId: null }),
+      ],
+      from: null,
+      to: NOW,
+      now: NOW,
+      timeZone: 'UTC',
+      runs: RUNS,
+    });
+
+    expect(summary.perRun.count).toBe(2);
+    expect(summary.perRun.avgCostUsd).toBeCloseTo(1.5 * ONE_CALL);
+    expect(summary.perQuestion.count).toBe(2);
+    expect(summary.perQuestion.avgCostUsd).toBeCloseTo(1.5 * ONE_CALL);
+
+    expect(summary.topRuns).toEqual([
+      {
+        runId: 'r1',
+        workflowId: 'wf-answer',
+        workflowName: 'Answer a Business Question',
+        title: 'Top scorers?',
+        startedAt: '2026-11-15T08:00:00.000Z',
+        costUsd: 2 * ONE_CALL,
+        calls: 2,
+      },
+      {
+        runId: 'r2',
+        workflowId: null,
+        workflowName: DELETED_WORKFLOW_NAME,
+        title: null,
+        startedAt: '2026-11-15T09:00:00.000Z',
+        costUsd: ONE_CALL,
+        calls: 1,
+      },
+    ]);
+  });
+
+  it('splits the cost by token kind and counts what the cache saved', () => {
+    const summary = summarizeUsage({
+      rows: [
+        call('2026-11-15T09:00:00Z', {
+          inputTokens: 1_000_000,
+          cacheReadTokens: 600_000,
+          cacheWriteTokens: 100_000,
+          outputTokens: 10_000,
+        }),
+      ],
+      from: null,
+      to: NOW,
+      now: NOW,
+      timeZone: 'UTC',
+      runs: RUNS,
+    });
+    const { split, totals } = summary;
+    expect(split.inputTokens).toBe(300_000);
+    expect(split.cacheReadTokens).toBe(600_000);
+    expect(split.cacheWriteTokens).toBe(100_000);
+    expect(split.outputTokens).toBe(10_000);
+    expect(
+      split.inputUsd +
+        split.cacheReadUsd +
+        split.cacheWriteUsd +
+        split.outputUsd,
+    ).toBeCloseTo(totals.costUsd, 12);
+    expect(split.cacheSavedUsd).toBeGreaterThan(split.cacheReadUsd);
+  });
+});
+
+describe('run ids and statistics', () => {
+  it('reads the run of a host or step-agent thread', () => {
+    expect(runIdOf('run-abc')).toBe('abc');
+    expect(runIdOf('run-abc:answer-writer')).toBe('abc');
+    expect(runIdOf('chat-1')).toBeNull();
+    expect(runIdOf(null)).toBeNull();
+    expect(runIdOf('run-')).toBeNull();
+  });
+
+  it('takes the median and the nearest-rank percentile', () => {
+    expect(median([])).toBe(0);
+    expect(median([1, 2, 3])).toBe(2);
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+    const values = Array.from({ length: 20 }, (_, i) => i + 1);
+    expect(percentile(values, 0.95)).toBe(19);
+    expect(percentile([7], 0.95)).toBe(7);
+    expect(percentile([], 0.95)).toBe(0);
   });
 });
 

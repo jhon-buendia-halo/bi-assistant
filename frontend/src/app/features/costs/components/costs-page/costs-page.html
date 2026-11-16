@@ -42,7 +42,7 @@
       [attr.aria-busy]="loading()"
     >
       <!-- KPI tiles -->
-      <div class="grid grid-cols-2 gap-3 @3xl:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 @3xl:grid-cols-3 @5xl:grid-cols-5">
         <div class="card flex flex-col gap-1 px-4 py-3" data-testid="kpi-today">
           <span class="text-[12px] text-fg-muted">Today</span>
           <span
@@ -78,21 +78,35 @@
         </div>
         <div
           class="card flex flex-col gap-1 px-4 py-3"
-          data-testid="kpi-tokens"
+          data-testid="kpi-per-run"
         >
-          <span class="text-[12px] text-fg-muted"
-            >Tokens · {{ periodLabel() }}</span
-          >
+          <span class="text-[12px] text-fg-muted">Avg per workflow run</span>
           <span
             class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
             >{{
-              formatCompact(s.totals.inputTokens + s.totals.outputTokens)
+              s.perRun.count > 0 ? formatUsd(s.perRun.avgCostUsd) : "—"
             }}</span
           >
-          <span class="text-[12px] text-fg-muted tabular-nums">
-            {{ formatCompact(s.totals.inputTokens) }} in ·
-            {{ formatCompact(s.totals.outputTokens) }} out
-          </span>
+          <span class="text-[12px] text-fg-muted">{{
+            countText(s.perRun.count, "run", "runs")
+          }}</span>
+        </div>
+        <div
+          class="card flex flex-col gap-1 px-4 py-3"
+          data-testid="kpi-per-question"
+        >
+          <span class="text-[12px] text-fg-muted">Avg per chat question</span>
+          <span
+            class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
+            >{{
+              s.perQuestion.count > 0
+                ? formatUsd(s.perQuestion.avgCostUsd)
+                : "—"
+            }}</span
+          >
+          <span class="text-[12px] text-fg-muted">{{
+            countText(s.perQuestion.count, "question", "questions")
+          }}</span>
         </div>
       </div>
 
@@ -199,22 +213,214 @@
       </section>
 
       @if (s.totals.calls > 0) {
+        <!-- Cost per workflow run -->
+        <section
+          class="card flex min-w-0 flex-col gap-2 px-4 py-3"
+          data-testid="costs-per-workflow"
+        >
+          <h3 class="text-[14px] font-medium text-fg-strong">
+            Cost per workflow run
+            <span class="font-normal text-fg-muted">· {{ periodLabel() }}</span>
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left text-[12px]">
+              <thead>
+                <tr
+                  class="border-b border-border bg-surface-muted text-fg-muted"
+                >
+                  <th scope="col" class="px-3 py-2 font-medium">Workflow</th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium">
+                    Runs
+                  </th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium">
+                    Avg per run
+                  </th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium">
+                    Median
+                  </th>
+                  <th
+                    scope="col"
+                    class="px-3 py-2 text-right font-medium"
+                    title="95 % of runs cost this or less"
+                  >
+                    p95
+                  </th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (w of workflowRows(); track w.key) {
+                  <tr
+                    class="border-b border-border text-fg last:border-b-0"
+                    data-testid="costs-workflow-row"
+                  >
+                    <td class="px-3 py-2">
+                      {{ w.name }}
+                      @if (w.kind === "none") {
+                        <span class="text-[11px] text-fg-muted"
+                          >· chats, the agent panel, previews</span
+                        >
+                      }
+                    </td>
+                    <td class="px-3 py-2 text-right tabular-nums">
+                      {{ w.runs !== null ? formatCount(w.runs) : "—" }}
+                    </td>
+                    <td class="px-3 py-2 text-right tabular-nums">
+                      {{
+                        w.avgCostUsd !== null ? formatUsd(w.avgCostUsd) : "—"
+                      }}
+                    </td>
+                    <td class="px-3 py-2 text-right tabular-nums">
+                      {{
+                        w.medianCostUsd !== null
+                          ? formatUsd(w.medianCostUsd)
+                          : "—"
+                      }}
+                    </td>
+                    <td class="px-3 py-2 text-right tabular-nums">
+                      {{
+                        w.p95CostUsd !== null ? formatUsd(w.p95CostUsd) : "—"
+                      }}
+                    </td>
+                    <td
+                      class="px-3 py-2 text-right font-medium tabular-nums text-fg-strong"
+                    >
+                      {{ formatUsd(w.costUsd) }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="grid grid-cols-1 items-start gap-3 @4xl:grid-cols-2">
+          <!-- The most expensive runs; a stored run opens its page -->
+          <section
+            class="card flex min-w-0 flex-col gap-2 px-4 py-3"
+            data-testid="costs-top-runs"
+          >
+            <h3 class="text-[14px] font-medium text-fg-strong">
+              Most expensive runs
+              <span class="font-normal text-fg-muted"
+                >· {{ periodLabel() }}</span
+              >
+            </h3>
+            @if (topRuns().length === 0) {
+              <p class="px-2 py-1.5 text-[12px] text-fg-muted">
+                No workflow runs in this period.
+              </p>
+            } @else {
+              <ol class="flex flex-col">
+                @for (run of topRuns(); track run.runId) {
+                  <li>
+                    @if (run.workflowId !== null) {
+                      <button
+                        type="button"
+                        class="group flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+                        data-testid="costs-top-run"
+                        [attr.aria-label]="
+                          'Open the run ' +
+                          (run.title ?? run.workflowName) +
+                          ': ' +
+                          formatUsd(run.costUsd)
+                        "
+                        (click)="openRun(run)"
+                      >
+                        <ng-container
+                          *ngTemplateOutlet="
+                            topRunBody;
+                            context: { $implicit: run, link: true }
+                          "
+                        />
+                      </button>
+                    } @else {
+                      <div
+                        class="flex items-center justify-between gap-3 px-2 py-1.5"
+                        data-testid="costs-top-run"
+                      >
+                        <ng-container
+                          *ngTemplateOutlet="
+                            topRunBody;
+                            context: { $implicit: run, link: false }
+                          "
+                        />
+                      </div>
+                    }
+                  </li>
+                }
+              </ol>
+            }
+          </section>
+
+          <!-- Where the cost goes: input, cache writes, cache reads, output -->
+          <section
+            class="card flex min-w-0 flex-col gap-2 px-4 py-3"
+            data-testid="costs-split"
+          >
+            <h3 class="text-[14px] font-medium text-fg-strong">
+              Where the cost goes
+              <span class="font-normal text-fg-muted"
+                >· {{ periodLabel() }}</span
+              >
+            </h3>
+            <ul class="flex flex-col">
+              @for (row of splitRows(); track row.key) {
+                <li
+                  class="flex flex-col gap-1 px-2 py-1.5"
+                  [attr.data-testid]="'costs-split-' + row.key"
+                >
+                  <div
+                    class="flex items-baseline justify-between gap-2 text-[12px]"
+                  >
+                    <span class="text-fg">{{ row.label }}</span>
+                    <span class="tabular-nums text-fg-strong">
+                      {{ formatUsd(row.usd) }}
+                      <span class="text-fg-muted"
+                        >· {{ formatShare(row.share) }}</span
+                      >
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <div
+                      class="h-1.5 min-w-0 flex-1 rounded-full bg-surface-muted"
+                    >
+                      <div
+                        class="h-full rounded-full bg-primary"
+                        [style.width.%]="row.share"
+                      ></div>
+                    </div>
+                    <span
+                      class="w-24 shrink-0 text-right text-[11px] text-fg-muted tabular-nums"
+                      >{{ formatCompact(row.tokens) }} tokens</span
+                    >
+                  </div>
+                </li>
+              }
+            </ul>
+            @if (s.split.cacheSavedUsd > 0) {
+              <p
+                class="px-2 text-[12px] text-fg-muted"
+                data-testid="costs-cache-saved"
+              >
+                Cache reads saved about
+                <span class="font-medium text-fg-strong tabular-nums">{{
+                  formatUsd(s.split.cacheSavedUsd)
+                }}</span>
+                against the full input price.
+              </p>
+            }
+          </section>
+        </div>
+
         <!-- Rankings over the period -->
-        <div class="grid grid-cols-1 gap-3 @4xl:grid-cols-3">
+        <div class="grid grid-cols-1 gap-3 @4xl:grid-cols-2">
           <ng-container
             *ngTemplateOutlet="
               rankCard;
               context: { $implicit: byModel(), title: 'By model', id: 'model' }
-            "
-          />
-          <ng-container
-            *ngTemplateOutlet="
-              rankCard;
-              context: {
-                $implicit: byWorkflow(),
-                title: 'By workflow',
-                id: 'workflow',
-              }
             "
           />
           <ng-container
@@ -417,6 +623,33 @@
       }
     </ul>
   </section>
+</ng-template>
+
+<!-- One of the most expensive runs: title, workflow, start, calls and cost -->
+<ng-template #topRunBody let-run let-link="link">
+  <span class="flex min-w-0 flex-col">
+    <span
+      class="truncate text-[12px] text-fg"
+      [title]="run.title ?? run.workflowName"
+      >{{ run.title ?? "Run " + run.runId.slice(0, 8) }}</span
+    >
+    <span class="truncate text-[11px] text-fg-muted">
+      {{ run.workflowName }} · {{ formatStarted(run.startedAt) }} ·
+      {{ callsText(run.calls) }}
+    </span>
+  </span>
+  <span
+    class="flex shrink-0 items-center gap-1 text-[12px] tabular-nums text-fg-strong"
+  >
+    {{ formatUsd(run.costUsd) }}
+    @if (link) {
+      <lucide-angular
+        [img]="ChevronRight"
+        [size]="12"
+        class="text-fg-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+      />
+    }
+  </span>
 </ng-template>
 
 <ng-template #rankBody let-row let-link="link">

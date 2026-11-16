@@ -40,6 +40,46 @@ export interface UsageByWorkflow extends UsageAmount {
   id: string | null;
   name: string;
   kind: 'workflow' | 'none';
+  /** Distinct runs with calls in the period; null for `none`. */
+  runs: number | null;
+  /** Cost per run (mean, median, 95th percentile); null for `none`. */
+  avgCostUsd: number | null;
+  medianCostUsd: number | null;
+  p95CostUsd: number | null;
+}
+
+/** The average cost of one unit of work (a run, a question). */
+export interface UsageUnitCost {
+  count: number;
+  /** 0 when count is 0. */
+  avgCostUsd: number;
+}
+
+/** The period's cost split by token kind, with the tokens of each. */
+export interface UsageCostSplit {
+  /** Uncached input. */
+  inputUsd: number;
+  cacheReadUsd: number;
+  cacheWriteUsd: number;
+  outputUsd: number;
+  /** What the cache reads would have cost more at the input price. */
+  cacheSavedUsd: number;
+  inputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  outputTokens: number;
+}
+
+/** One of the period's most expensive workflow runs. */
+export interface UsageTopRun extends UsageAmount {
+  runId: string;
+  /** null when the run was deleted. */
+  workflowId: string | null;
+  workflowName: string;
+  /** The run's title (question), null when deleted. */
+  title: string | null;
+  /** Its first call in the period, ISO. */
+  startedAt: string;
 }
 
 export interface UsageByAgent extends UsageAmount {
@@ -69,6 +109,12 @@ export interface UsageSummary {
   daily: UsageDay[];
   /** The 12 calendar months ending with the current one, oldest first. */
   monthly: UsageMonth[];
+  /** Over the period: per workflow run, and per question outside runs. */
+  perRun: UsageUnitCost;
+  perQuestion: UsageUnitCost;
+  split: UsageCostSplit;
+  /** The 10 most expensive workflow runs of the period, highest first. */
+  topRuns: UsageTopRun[];
   /** Over the period, highest cost first, then most calls. */
   byModel: UsageByModel[];
   byWorkflow: UsageByWorkflow[];

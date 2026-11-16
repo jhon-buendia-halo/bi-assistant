@@ -285,7 +285,7 @@ SELECT COUNT(*) AS n FROM calls ${where.sql}`,
     const where = whereClause(since ? { from: since } : {});
     return this.db.query<UsageCallRecord>(
       `${CALLS_CTE}
-SELECT startedAt, agentId, agentName, sessionId, model, provider,
+SELECT startedAt, traceId, agentId, agentName, sessionId, model, provider,
        inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens
   FROM calls ${where.sql}`,
       where.params,

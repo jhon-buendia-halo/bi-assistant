@@ -11,11 +11,13 @@ import {
 import { ShellState } from '../../../../core/shell/shell-state';
 import { EMPTY_FILTERS } from '../../../monitoring/models/llm-call.model';
 import { MonitoringStateService } from '../../../monitoring/services/monitoring-state.service';
+import { RunsState } from '../../../runs/services/runs-state';
 import {
   DEFAULT_USAGE_PERIOD,
   USAGE_PERIODS,
   UsagePeriod,
   UsageSummary,
+  UsageTopRun,
   formatCompact,
   formatCount,
   formatDay,
@@ -90,10 +92,11 @@ function ranking(items: Omit<RankRow, 'width'>[]): RankRow[] {
 }
 
 /**
- * The Costs (rail item): the estimated LLM cost of the app's agents
- * today, this month and over a chosen period, by day, by month and ranked by
- * model, workflow and agent. A model or agent opens Monitoring's LLM calls
- * filtered to it.
+ * The Costs page (rail item): the estimated LLM cost of the app's agents
+ * today, this month and over a chosen period; by day and month; per
+ * workflow run and per question; split by token kind; the most expensive
+ * runs; and ranked by model and agent. A run opens its page, and a model or
+ * an agent opens Monitoring's LLM calls filtered to it.
  */
 @Component({
   selector: 'app-costs-page',
@@ -113,6 +116,7 @@ export class CostsPage {
   private readonly api = inject(UsageApiService);
   private readonly shell = inject(ShellState);
   private readonly monitoring = inject(MonitoringStateService);
+  private readonly runs = inject(RunsState);
 
   readonly period = signal<UsagePeriod>(DEFAULT_USAGE_PERIOD);
   readonly loading = signal(true);
@@ -180,19 +184,45 @@ export class CostsPage {
     ),
   );
 
-  readonly byWorkflow = computed(() =>
-    ranking(
-      (this.summary()?.byWorkflow ?? []).map((w) => ({
-        key: `${w.kind}:${w.id ?? w.name}`,
-        name: w.name,
-        detail: w.kind === 'none' ? 'Chats, the agent panel, previews' : null,
-        costUsd: w.costUsd,
-        calls: w.calls,
-        filter: null,
-        unpriced: false,
-      })),
-    ),
-  );
+  /** Cost per workflow run: the workflows first, the calls outside last. */
+  readonly workflowRows = computed(() => {
+    const rows = this.summary()?.byWorkflow ?? [];
+    return [
+      ...rows.filter((w) => w.kind === 'workflow'),
+      ...rows.filter((w) => w.kind === 'none'),
+    ].map((w) => ({ ...w, key: `${w.kind}:${w.id ?? w.name}` }));
+  });
+
+  /** Where the cost goes: one row per token kind, sized to the period total. */
+  readonly splitRows = computed(() => {
+    const s = this.summary()?.split;
+    if (!s) return [];
+    const total = s.inputUsd + s.cacheWriteUsd + s.cacheReadUsd + s.outputUsd;
+    const share = (usd: number) => (total > 0 ? (usd / total) * 100 : 0);
+    return [
+      { key: 'input', label: 'Input', usd: s.inputUsd, tokens: s.inputTokens },
+      {
+        key: 'cache-write',
+        label: 'Cache writes',
+        usd: s.cacheWriteUsd,
+        tokens: s.cacheWriteTokens,
+      },
+      {
+        key: 'cache-read',
+        label: 'Cache reads',
+        usd: s.cacheReadUsd,
+        tokens: s.cacheReadTokens,
+      },
+      {
+        key: 'output',
+        label: 'Output',
+        usd: s.outputUsd,
+        tokens: s.outputTokens,
+      },
+    ].map((row) => ({ ...row, share: share(row.usd) }));
+  });
+
+  readonly topRuns = computed(() => this.summary()?.topRuns ?? []);
 
   readonly byAgent = computed(() =>
     ranking(
@@ -252,6 +282,31 @@ export class CostsPage {
 
   callsText(calls: number): string {
     return `${formatCount(calls)} ${calls === 1 ? 'call' : 'calls'}`;
+  }
+
+  countText(count: number, one: string, many: string): string {
+    return `${formatCount(count)} ${count === 1 ? one : many}`;
+  }
+
+  /** "45.2 %". */
+  formatShare(share: number): string {
+    return `${share.toFixed(1)} %`;
+  }
+
+  /** "Nov 14, 3:05 PM" of an ISO instant, in local time. */
+  formatStarted(iso: string): string {
+    return new Date(iso).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  /** A stored run opens on its page (its workflow's canvas or the run). */
+  openRun(run: UsageTopRun): void {
+    if (run.workflowId === null) return;
+    this.runs.openRun(run.runId);
   }
 
   /**

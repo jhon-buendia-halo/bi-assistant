@@ -4,15 +4,18 @@ import type {
   UsageByModel,
   UsageByWorkflow,
   UsageDay,
+  UsageCostSplit,
   UsageMonth,
   UsageSummary,
+  UsageTopRun,
 } from './entities/usage.entity';
-import { estimateCostUsd } from './model-prices';
+import { costParts } from './model-prices';
 import { num } from './span-values';
 
 /** One LLM call as the usage query returns it. */
 export interface UsageCallRecord {
   startedAt: Date | string;
+  traceId: string;
   agentId: string | null;
   agentName: string | null;
   sessionId: string | null;
@@ -28,6 +31,8 @@ export interface UsageCallRecord {
 export interface RunWorkflow {
   workflowId: string;
   workflowName: string;
+  /** The run's title, as the run history shows it. */
+  title: string;
 }
 
 export interface UsageSummaryInput {
@@ -52,6 +57,40 @@ export const NO_AGENT_NAME = 'No agent';
 
 /** Days of zero-filled daily series at most (10 years). */
 const MAX_DAYS = 3660;
+
+/** The most expensive runs listed. */
+const TOP_RUNS = 10;
+
+/**
+ * The run id of a workflow run's thread: its host `run-<id>` or a step
+ * agent's `run-<id>:<agent key>` (agent-threads.ts); null for any other.
+ */
+export function runIdOf(threadId: string | null): string | null {
+  if (!threadId?.startsWith(RUN_HOST_ID_PREFIX)) return null;
+  const rest = threadId.slice(RUN_HOST_ID_PREFIX.length);
+  const id = rest.split(':')[0];
+  return id === '' ? null : id;
+}
+
+/** The nearest-rank percentile (0..1) of ascending values; 0 for none. */
+export function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const rank = Math.max(1, Math.ceil(p * sorted.length));
+  return sorted[Math.min(sorted.length, rank) - 1];
+}
+
+/** The median of ascending values (mean of the two middle ones); 0 for none. */
+export function median(sorted: number[]): number {
+  const n = sorted.length;
+  if (n === 0) return 0;
+  const mid = Math.floor(n / 2);
+  return n % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+interface RunBucket extends UsageAmount {
+  workflowKey: string;
+  firstAt: Date;
+}
 
 /** `YYYY-MM-DD` of an instant in a time zone. */
 export function dayKey(date: Date, timeZone: string): string {
@@ -128,6 +167,20 @@ export function summarizeUsage(input: UsageSummaryInput): UsageSummary {
   const models = new Map<string, UsageByModel>();
   const workflows = new Map<string, UsageByWorkflow>();
   const agents = new Map<string, UsageByAgent>();
+  const runBuckets = new Map<string, RunBucket>();
+  /** Cost of each trace (question) of the calls outside workflow runs. */
+  const questions = new Map<string, number>();
+  const split: UsageCostSplit = {
+    inputUsd: 0,
+    cacheReadUsd: 0,
+    cacheWriteUsd: 0,
+    outputUsd: 0,
+    cacheSavedUsd: 0,
+    inputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    outputTokens: 0,
+  };
   let firstDay: string | null = null;
 
   for (const row of rows) {
@@ -139,7 +192,11 @@ export function summarizeUsage(input: UsageSummaryInput): UsageSummary {
       cacheReadTokens: num(row.cacheReadTokens),
       cacheWriteTokens: num(row.cacheWriteTokens),
     };
-    const estimate = estimateCostUsd(row.model, tokens);
+    const parts = costParts(row.model, tokens);
+    const estimate =
+      parts === null
+        ? null
+        : parts.input + parts.cacheRead + parts.cacheWrite + parts.output;
     const cost = estimate ?? 0;
     const day = dayKey(started, timeZone);
     const month = day.slice(0, 7);
@@ -178,15 +235,51 @@ export function summarizeUsage(input: UsageSummaryInput): UsageSummary {
     if (estimate !== null) model.priced = true;
     models.set(modelKey, model);
 
-    const workflow = workflowOf(row.sessionId, runs);
+    if (parts) {
+      split.inputUsd += parts.input;
+      split.cacheReadUsd += parts.cacheRead;
+      split.cacheWriteUsd += parts.cacheWrite;
+      split.outputUsd += parts.output;
+      split.cacheSavedUsd += parts.cacheSaved;
+    }
+    const cacheRead = tokens.cacheReadTokens ?? 0;
+    const cacheWrite = tokens.cacheWriteTokens ?? 0;
+    split.cacheReadTokens += cacheRead;
+    split.cacheWriteTokens += cacheWrite;
+    split.inputTokens += Math.max(
+      0,
+      (tokens.inputTokens ?? 0) - cacheRead - cacheWrite,
+    );
+    split.outputTokens += tokens.outputTokens ?? 0;
+
+    const runId = runIdOf(row.sessionId);
+    const workflow = workflowOf(runId, runs);
     const workflowKey = `${workflow.kind}\u0000${workflow.id ?? ''}`;
     const workflowBucket = workflows.get(workflowKey) ?? {
       ...workflow,
       costUsd: 0,
       calls: 0,
+      runs: null,
+      avgCostUsd: null,
+      medianCostUsd: null,
+      p95CostUsd: null,
     };
     add(workflowBucket, cost);
     workflows.set(workflowKey, workflowBucket);
+
+    if (runId !== null) {
+      const run = runBuckets.get(runId) ?? {
+        workflowKey,
+        firstAt: started,
+        costUsd: 0,
+        calls: 0,
+      };
+      add(run, cost);
+      if (started < run.firstAt) run.firstAt = started;
+      runBuckets.set(runId, run);
+    } else {
+      questions.set(row.traceId, (questions.get(row.traceId) ?? 0) + cost);
+    }
 
     const agentKey = row.agentId ?? '';
     const agent = agents.get(agentKey) ?? {
@@ -199,6 +292,45 @@ export function summarizeUsage(input: UsageSummaryInput): UsageSummary {
     agents.set(agentKey, agent);
   }
 
+  // Per-run statistics of each workflow.
+  const runCosts = new Map<string, number[]>();
+  for (const run of runBuckets.values()) {
+    const list = runCosts.get(run.workflowKey) ?? [];
+    list.push(run.costUsd);
+    runCosts.set(run.workflowKey, list);
+  }
+  for (const [key, costs] of runCosts) {
+    const bucket = workflows.get(key);
+    if (!bucket) continue;
+    costs.sort((a, b) => a - b);
+    bucket.runs = costs.length;
+    bucket.avgCostUsd = bucket.costUsd / costs.length;
+    bucket.medianCostUsd = median(costs);
+    bucket.p95CostUsd = percentile(costs, 0.95);
+  }
+
+  const runTotal = [...runBuckets.values()].reduce((s, r) => s + r.costUsd, 0);
+  const questionTotal = [...questions.values()].reduce((s, c) => s + c, 0);
+
+  const topRuns: UsageTopRun[] = [...runBuckets.entries()]
+    .sort(
+      ([ia, a], [ib, b]) =>
+        b.costUsd - a.costUsd || b.calls - a.calls || ia.localeCompare(ib),
+    )
+    .slice(0, TOP_RUNS)
+    .map(([runId, bucket]) => {
+      const run = runs.get(runId);
+      return {
+        runId,
+        workflowId: run?.workflowId ?? null,
+        workflowName: run?.workflowName ?? DELETED_WORKFLOW_NAME,
+        title: run?.title ?? null,
+        startedAt: bucket.firstAt.toISOString(),
+        costUsd: bucket.costUsd,
+        calls: bucket.calls,
+      };
+    });
+
   return {
     from: from ? from.toISOString() : null,
     to: to.toISOString(),
@@ -206,6 +338,16 @@ export function summarizeUsage(input: UsageSummaryInput): UsageSummary {
     today,
     thisMonth,
     totals,
+    perRun: {
+      count: runBuckets.size,
+      avgCostUsd: runBuckets.size ? runTotal / runBuckets.size : 0,
+    },
+    perQuestion: {
+      count: questions.size,
+      avgCostUsd: questions.size ? questionTotal / questions.size : 0,
+    },
+    split,
+    topRuns,
     daily: fillDays(
       daily,
       from ? dayKey(from, timeZone) : firstDay,
@@ -219,18 +361,16 @@ export function summarizeUsage(input: UsageSummaryInput): UsageSummary {
   };
 }
 
-/** The workflow of a call's thread: a run host's workflow, else none. */
+/** The workflow of a call's run: its workflow, else none. */
 function workflowOf(
-  sessionId: string | null,
+  runId: string | null,
   runs: Map<string, RunWorkflow>,
-): Omit<UsageByWorkflow, 'costUsd' | 'calls'> {
-  if (sessionId?.startsWith(RUN_HOST_ID_PREFIX)) {
-    const run = runs.get(sessionId.slice(RUN_HOST_ID_PREFIX.length));
-    return run
-      ? { id: run.workflowId, name: run.workflowName, kind: 'workflow' }
-      : { id: null, name: DELETED_WORKFLOW_NAME, kind: 'workflow' };
-  }
-  return { id: null, name: NO_WORKFLOW_NAME, kind: 'none' };
+): Pick<UsageByWorkflow, 'id' | 'name' | 'kind'> {
+  if (runId === null) return { id: null, name: NO_WORKFLOW_NAME, kind: 'none' };
+  const run = runs.get(runId);
+  return run
+    ? { id: run.workflowId, name: run.workflowName, kind: 'workflow' }
+    : { id: null, name: DELETED_WORKFLOW_NAME, kind: 'workflow' };
 }
 
 /** Every day from `start` to `to`'s day, days without calls at 0. */
