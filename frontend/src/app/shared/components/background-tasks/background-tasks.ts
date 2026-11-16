@@ -24,7 +24,7 @@ import {
 } from '../../../core/background-tasks/background-tasks.service';
 
 /**
- * The rail's Background tasks button and its panel (app-shell R57–R63,
+ * The rail's Background tasks button and its panel (app-shell R58–R63,
  * ui.md 1.3 and 3.7): the count of running tasks on the button, and the
  * list of running and finished tasks with Open, Retry, Dismiss and Stop.
  */

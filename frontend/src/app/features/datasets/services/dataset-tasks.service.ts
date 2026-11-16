@@ -31,7 +31,7 @@ export interface PendingSaveInfo {
 
 /**
  * Saving a dataset and loading a datasource inventory run as background
- * tasks (datasets spec, app-shell R57–R63): leaving the screen neither
+ * tasks (datasets spec, app-shell R58–R63): leaving the screen neither
  * cancels them nor loses their result.
  */
 @Injectable({ providedIn: 'root' })

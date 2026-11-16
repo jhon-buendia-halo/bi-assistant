@@ -27,10 +27,14 @@ import {
   Wand2,
   X,
 } from 'lucide-angular';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   OntologyApiService,
   OntologyBootstrapProgress,
+  OntologyBootstrapRun,
 } from '../../services/ontology-api.service';
+import { BackgroundTasksService } from '../../../../core/background-tasks/background-tasks.service';
+import { ShellState } from '../../../../core/shell/shell-state';
 import {
   ONTOLOGY_KINDS,
   OntologyItem,
@@ -58,7 +62,12 @@ type KindFilter = 'all' | OntologyKind | 'graph';
  */
 @Component({
   selector: 'app-ontology-panel',
-  imports: [LucideAngularModule, NgTemplateOutlet, OntologyItemForm, OntologyGraph],
+  imports: [
+    LucideAngularModule,
+    NgTemplateOutlet,
+    OntologyItemForm,
+    OntologyGraph,
+  ],
   templateUrl: './ontology-panel.html',
 })
 export class OntologyPanel implements OnInit {
@@ -81,6 +90,8 @@ export class OntologyPanel implements OnInit {
   private readonly api = inject(OntologyApiService);
   private readonly metricsApi = inject(MetricsApiService);
   private readonly toast = inject(ToastService);
+  private readonly tasks = inject(BackgroundTasksService);
+  private readonly shell = inject(ShellState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
 
@@ -99,9 +110,17 @@ export class OntologyPanel implements OnInit {
   readonly editingItem = signal<OntologyItem | null>(null);
 
   readonly generateOpen = signal(false);
-  readonly generating = signal(false);
+  /** The run for this dataset, read from the background task so it is live again when the tab is reopened. */
+  private readonly generateTask = computed(() =>
+    this.tasks.active('ontology-bootstrap', this.dataset().name),
+  );
+  readonly generating = computed(() => !!this.generateTask());
   /** What the run is doing, oldest first — the last one is still in flight. */
-  readonly generateSteps = signal<OntologyBootstrapProgress[]>([]);
+  readonly generateSteps = computed<OntologyBootstrapProgress[]>(
+    () =>
+      (this.generateTask()?.result as OntologyBootstrapRun | undefined)
+        ?.steps ?? [],
+  );
 
   readonly togglingId = signal<string | null>(null);
   readonly deletingId = signal<string | null>(null);
@@ -148,7 +167,26 @@ export class OntologyPanel implements OnInit {
       }));
   });
 
+  constructor() {
+    // When the run ends while this tab is shown, show what it made. The
+    // service toasts the outcome; a failed run leaves the panel open to retry.
+    this.tasks.finished$.pipe(takeUntilDestroyed()).subscribe((task) => {
+      if (
+        task.kind !== 'ontology-bootstrap' ||
+        task.key !== this.dataset().name ||
+        task.status !== 'done'
+      ) {
+        return;
+      }
+      this.generateOpen.set(false);
+      this.pendingOnly.set(true);
+      this.loadItems();
+    });
+  }
+
   ngOnInit(): void {
+    // Back on the tab while a run is going: show its live steps.
+    if (this.generating()) this.generateOpen.set(true);
     this.loadItems();
     this.metricsApi.list(this.dataset().tables ?? []).subscribe({
       next: (res) => this.metrics.set(res.metrics ?? []),
@@ -340,14 +378,12 @@ export class OntologyPanel implements OnInit {
 
   openGenerate(): void {
     this.formOpen.set(false);
-    this.generateSteps.set([]);
     this.generateOpen.set(true);
   }
 
   cancelGenerate(): void {
     if (this.generating()) return;
     this.generateOpen.set(false);
-    this.generateSteps.set([]);
   }
 
   /**
@@ -371,43 +407,36 @@ export class OntologyPanel implements OnInit {
 
   generateSuggestions(): void {
     if (this.generating()) return;
-    this.generating.set(true);
-    this.generateSteps.set([]);
-    void this.api.bootstrapStream(this.dataset().name, {
-      onProgress: (progress) => this.recordStep(progress),
-      onDone: (created) => {
-        this.generating.set(false);
-        this.generateOpen.set(false);
-        this.generateSteps.set([]);
-        const count = created.length;
-        this.toast.success(
-          count === 0
-            ? 'No new suggestions this time'
-            : `${count} suggestion${count === 1 ? '' : 's'} generated — review in Pending suggestions`,
-        );
-        this.pendingOnly.set(true);
-        this.loadItems();
+    const name = this.dataset().name;
+    // A root task: leaving the tab neither stops the run nor loses its
+    // result, and the service toasts the end (app-shell R58–R63).
+    this.tasks.start<OntologyBootstrapRun>({
+      kind: 'ontology-bootstrap',
+      key: name,
+      title: `Suggesting ontology for "${name}"`,
+      work: () => this.api.bootstrap(name),
+      onValue: (run, task) => {
+        const current = run.steps[run.steps.length - 1];
+        if (current) task.update({ detail: current.message });
       },
-      onError: (message) => {
-        this.generating.set(false);
-        this.generateSteps.set([]);
-        this.toast.error(
-          message || 'Could not generate suggestions — try again shortly',
-        );
+      outcome: (run) => {
+        const count = run?.created?.length ?? 0;
+        return {
+          ok: true,
+          message:
+            count === 0
+              ? 'No new suggestions this time'
+              : `${count} suggestion${count === 1 ? '' : 's'} generated — review in Pending suggestions`,
+        };
       },
+      open: () => this.openDatasets(),
     });
   }
 
-  /**
-   * Append a step, or replace the last one when it is the same stage — a
-   * stage that counts up (sampling 2 of 5 tables) rewrites its own line.
-   */
-  private recordStep(progress: OntologyBootstrapProgress): void {
-    this.generateSteps.update((steps) => {
-      const last = steps[steps.length - 1];
-      return last?.key === progress.key
-        ? [...steps.slice(0, -1), progress]
-        : [...steps, progress];
-    });
+  /** Where the result is: the Datasets list, to open the dataset's Ontology tab. */
+  private openDatasets(): void {
+    if (!this.shell.confirmLeaveAgentEditor()) return;
+    this.shell.settingsOpen.set(false);
+    this.shell.mainView.set('dataset');
   }
 }

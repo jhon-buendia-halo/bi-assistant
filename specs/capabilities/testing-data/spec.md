@@ -59,6 +59,10 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 - R20. Every testing-data action SHALL be available to the user; the app has no roles or permissions.
 
+### Background task
+
+- R23. Loading a fixture SHALL run as a background task of kind `testing-data-load`, keyed by the fixture id and titled `Loading testing data "<name>"` ([app-shell](../app-shell/spec.md) R58–R63). Leaving Settings SHALL NOT cancel the load; the card reads its loading state, and the error of a failed load, from the task, so they are shown again when Testing Data is reopened. The service toasts the outcome (the loader's message) with **Open** (Settings → Testing Data), and the status refreshes when the task ends.
+
 ### Retired
 
 - R21. Retired (2026-11-12). The self-registering `intellify-api` sample and the Intellify RFP API it registered were removed with the RFP Builder; loading `intellify-api` answers the unknown-fixture error and the number is not reused. A datasource or dataset already registered under that name stays as stored data and is not touched.
@@ -93,7 +97,7 @@ Settings → **Testing Data** (see [ui.md](../../system/ui.md)). Heading "Testin
 - "Connection" form: Host (placeholder "localhost"), Port (placeholder 5432), Database, User (placeholder "postgres"), Password (placeholder `••••••••`), "Use SSL". Prefilled from the loaded datasource's connection when there is one, else the fixture's defaults; the password always starts as the fixture's development default, never from a saved datasource. Editing any field clears the last test result.
 - **Test connection** (becomes "Testing…") runs a PostgreSQL connection test with the form values and shows the message inline, green on success and red on failure. Disabled when Host, Database or User is empty or the card is busy.
 - Primary action: seedable and not loaded → **Load testing data**; seedable and loaded → **Recreate testing data**; register-only → **Register testing data**. While running: "Loading…" or "Registering…". Same disabled rule.
-- Pressing the primary action opens a confirmation panel (amber) instead of acting: seedable — "This drops and recreates schema `<schema>` on `<host>:<port>/<database>`. Everything in that schema will be lost."; register-only — `This registers "<name>" as a datasource and dataset against the existing database at <target>. No schema changes are made.` With **Confirm** and **Cancel**. On success a toast shows the loader's message and the status refreshes.
+- Pressing the primary action opens a confirmation panel (amber) instead of acting: seedable — "This drops and recreates schema `<schema>` on `<host>:<port>/<database>`. Everything in that schema will be lost."; register-only — `This registers "<name>" as a datasource and dataset against the existing database at <target>. No schema changes are made.` With **Confirm** and **Cancel**. Confirming starts the load as a background task (R22); the card shows "Loading…" until it ends, whichever screen is open. On success a toast (from the Background tasks service, with **Open**) shows the loader's message and the status refreshes; on failure the toast carries **Retry** and the card's error banner shows the message.
 - "Remove" section: "Deletes the "<name>" datasource and dataset records from the app only. It does not touch the database itself." A **Remove** button ("Removing…"), disabled unless the fixture is loaded or the card is busy, opens an amber confirmation ("This removes the "<name>" datasource and dataset records from the app. The database and its data are not touched.") with **Confirm** / **Cancel**. Opening one confirmation closes the other.
 
 ## Flows

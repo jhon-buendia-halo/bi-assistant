@@ -71,13 +71,16 @@ Graph view
 
 - R40. (Removed 2026-11-15.) The Context page and its Ontologies overview are gone. A dataset's ontology is edited only in its **Ontology** tab (R1-R39 apply unchanged).
 
+Background task
+- R41. Generating suggestions SHALL run as a background task of kind `ontology-bootstrap`, keyed by the dataset name and titled `Suggesting ontology for "<dataset>"` ([app-shell](../app-shell/spec.md) R58–R63). The stream is read at the root, so leaving the Ontology tab SHALL NOT stop the run; its stages SHALL be the task's steps, and stopping the task SHALL abort the stream request. A re-created Ontology tab SHALL show the live steps and, when the run ends while it is shown, reload the items and switch to Pending suggestions. The outcome toast comes from the service, with **Open** (the Datasets list) on success and **Retry** on failure.
+
 ## Edge cases and errors
 
 - A dataset with no items: the Ontology tab shows "No ontology yet" with a hint and both "New item" and "Generate suggestions" actions.
 - Filters that match nothing: "No items match these filters."; with Pending suggestions active and none pending: "No pending suggestions right now — generate some or check back later."
 - Backend unreachable on load: the tab shows the error text (`Backend unreachable` when no message is available). On toggle, delete or save failures a toast shows the server message or `Backend unreachable`.
 - Bootstrap request fails to start: `Could not generate suggestions (<status>)`; connection failure: `Backend unreachable`; stream closes without a terminal event: `Stream interrupted` or `Stream ended unexpectedly`; empty error: `Could not generate suggestions — try again shortly`.
-- Bootstrap yields zero new drafts: toast `No new suggestions this time`.
+- Bootstrap yields zero new drafts: toast `No new suggestions this time` (from the Background tasks service, R41).
 - A relation that points at a concept that is later deleted is deleted with it (R19), so a relation never dangles. A `measured-by` relation whose metric is deleted stays stored but is skipped in the block and the per-answer record (R22), and shown without its metric label in the tab.
 - A shared item with a mapping to an entity that is not in the dataset being viewed is shown as usual; the entity check (R10) is made only against a dataset's own items.
 - An item whose line alone exceeds the remaining budget stops the block, so a very long newest item can hide older ones. (Known limitation of newest-first selection; roadmap 1.3.3 replaces it.)
@@ -109,7 +112,7 @@ Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset f
   - Constraint: Name, Predicate, When to apply (optional), Concept (optional) and Entities (optional).
   - Instruction: Name, Text and Entities (optional).
   - A "Share with all datasets" checkbox, only when creating. Buttons "Cancel" and "Create item" / "Save changes" (disabled until the required fields of the kind are filled; shows "Saving…"). A server message (for example an unresolved concept) is shown inline. The panel does not edit the enabled flag; new items are enabled.
-- Generate suggestions panel: explanation ("The assistant reviews this dataset and drafts concepts, relations, constraints and instructions as pending suggestions — nothing is applied until you approve it. This can take up to a minute."), "Cancel" and "Generate" (shows "Generating…"; cancel is blocked while running). There is no dataset picker: it runs on the open dataset. A live progress list shows finished stages with a check mark and the current stage with a spinner. On success the panel closes, a toast reads "<n> suggestion(s) generated — review in Pending suggestions", and the tab switches to the Pending suggestions view.
+- Generate suggestions panel: explanation ("The assistant reviews this dataset and drafts concepts, relations, constraints and instructions as pending suggestions — nothing is applied until you approve it. This can take up to a minute."), "Cancel" and "Generate" (shows "Generating…"; cancel is blocked while running). There is no dataset picker: it runs on the open dataset. A live progress list shows finished stages with a check mark and the current stage with a spinner. The run is a background task (R41): leaving the tab does not stop it, and reopening the tab shows the live steps again. On success the panel closes, a toast (from the Background tasks service, with **Open**) reads "<n> suggestion(s) generated — review in Pending suggestions", and the tab, when shown, switches to the Pending suggestions view.
 - In chat: each assistant answer that carried ontology items shows a collapsed "Ontology in context (<n>)" disclosure listing, per item, its kind label (Concept, Constraint, Instruction or Relation), name, dataset (or "all datasets" for a shared item) and body, plus the note "The dataset ontology the assistant was given before answering. Edit it in the dataset's Ontology tab; disabled items are never included." Clarification cards show it too.
 
 ## Flows

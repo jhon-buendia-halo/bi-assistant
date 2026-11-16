@@ -9,7 +9,7 @@ import { Observable, Subject, Subscription } from 'rxjs';
 import { ToastService } from '../toast/toast.service';
 
 /**
- * Long work the user starts and may walk away from (app-shell R57–R63,
+ * Long work the user starts and may walk away from (app-shell R58–R63,
  * ADR-0047). The work is subscribed here, at the root, so leaving the
  * screen that started it neither cancels it nor loses its result: the
  * rail's Background tasks button lists it, the screen reads its state back

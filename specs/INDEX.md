@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-609  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-611  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -311,15 +311,15 @@ roadmap.md:550-555  #### 1.25.9 — Answer evidence for a session's message and 
 roadmap.md:557-562  #### 1.25.10 — Past chats host the inspector  `✅ Done`
 roadmap.md:564-569  #### 1.25.11 — Try it hosts the inspector  `✅ Done`
 roadmap.md:571-576  #### 1.25.12 — Evals for the query explainer  `✅ Done`
-roadmap.md:578-609  ### Milestone 1.26 — Background tasks survive navigation (M1-26)
+roadmap.md:578-611  ### Milestone 1.26 — Background tasks survive navigation (M1-26)
 roadmap.md:582-586  #### 1.26.1 — The background tasks layer and the rail indicator  `🚧 In progress`
 roadmap.md:588-592  #### 1.26.2 — Saving a dataset and loading an inventory run in the background  `🚧 In progress`
 roadmap.md:594-598  #### 1.26.3 — Testing Data, ontology suggestions and the synthetic profile run in the background  `🚧 In progress`
 roadmap.md:600-604  #### 1.26.4 — Visual tailor and refresh, and eval runs, run in the background  `🚧 In progress`
-roadmap.md:606-609  #### 1.26.5 — Workflow runs keep running when the user leaves their page  `📋 Planned`
-roadmap.md:611-615  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:615-615  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:617-619  ## Backlog
+roadmap.md:606-611  #### 1.26.5 — Workflow runs keep running when the user leaves their page  `🚧 In progress`
+roadmap.md:613-617  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:617-617  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:619-621  ## Backlog
 
 specs/README.md:7-88  ## Layout
 specs/README.md:28-52  ### Capabilities
@@ -456,7 +456,7 @@ specs/capabilities/agent-panel/spec.md:103-138  ### Feature: Agent panel
 specs/capabilities/agent-panel/spec.md:140-151  ## Acceptance
 
 specs/capabilities/agents-evals/spec.md:5-16  ## Concepts
-specs/capabilities/agents-evals/spec.md:18-286  ## Rules
+specs/capabilities/agents-evals/spec.md:18-287  ## Rules
 specs/capabilities/agents-evals/spec.md:21-21  R1 The **Agents** screen SHALL be the Agent Hub. It SHALL show the headin
 specs/capabilities/agents-evals/spec.md:22-22  R2 Search SHALL match the trimmed query, case-insensitively, as a substri
 specs/capabilities/agents-evals/spec.md:23-23  R3 Every section SHALL show all its cards; there is no `Show more` or `Sh
@@ -482,7 +482,7 @@ specs/capabilities/agents-evals/spec.md:57-59  R22 A successful start SHALL reco
 specs/capabilities/agents-evals/spec.md:60-60  R23 A run SHALL execute the questions one at a time, in set order, never i
 specs/capabilities/agents-evals/spec.md:61-61  R24 Each question SHALL run the assistant exactly as a chat turn would: sc
 specs/capabilities/agents-evals/spec.md:62-62  R25 The system SHALL record each question's result as soon as it finishes
-specs/capabilities/agents-evals/spec.md:63-63  R26 While running, the UI SHALL poll the run every 1.5 seconds and show "<
+specs/capabilities/agents-evals/spec.md:63-63  R26 While running, the app SHALL poll the run every 1.5 seconds (from a ba
 specs/capabilities/agents-evals/spec.md:64-64  R27 A run SHALL end `completed` when every ticked question has a result (i
 specs/capabilities/agents-evals/spec.md:65-67  R28 At most one run SHALL be active per agent for each user (two users MAY
 specs/capabilities/agents-evals/spec.md:68-68  R29 A question SHALL pass only if it has at least one check and every chec
@@ -571,22 +571,23 @@ specs/capabilities/agents-evals/spec.md:254-254  R102 **Reset to built-in**, sho
 specs/capabilities/agents-evals/spec.md:255-255  R103 A save or a reset SHALL apply to the next call of every session, user
 specs/capabilities/agents-evals/spec.md:256-256  R104 When a modified prompt's shipped text has changed since the override w
 specs/capabilities/agents-evals/spec.md:257-257  R105 The Job Description tab of an Official agent (the assistant and Insigh
-specs/capabilities/agents-evals/spec.md:259-286  ### Retired agents
+specs/capabilities/agents-evals/spec.md:259-287  ### Retired agents
 specs/capabilities/agents-evals/spec.md:261-261  R106 Retired (1.23.8): the four showcase agents were removed from the app.
 specs/capabilities/agents-evals/spec.md:262-266  R107 **Insights Analyst** (`insights-analyst`; BA-320, [agents.md](../../sy
 specs/capabilities/agents-evals/spec.md:267-281  R108 The Graph tab of a **workflow-backed agent** SHALL open with a drawing
 specs/capabilities/agents-evals/spec.md:282-285  R109 The agent detail's header SHALL carry the line **Used in** under the i
 specs/capabilities/agents-evals/spec.md:286-286  R110 **Personas.** Every built-in agent SHALL be a persona: a human first n
-specs/capabilities/agents-evals/spec.md:288-304  ## Edge cases and errors
-specs/capabilities/agents-evals/spec.md:306-315  ## Contracts
-specs/capabilities/agents-evals/spec.md:317-319  ## UI
-specs/capabilities/agents-evals/spec.md:321-1263  ## Flows
-specs/capabilities/agents-evals/spec.md:646-742  ### Feature: Agent skills
-specs/capabilities/agents-evals/spec.md:744-1012  ### Feature: Agent editor
-specs/capabilities/agents-evals/spec.md:1014-1100  ### Feature: Skill library
-specs/capabilities/agents-evals/spec.md:1102-1263  ### Feature: Built-in agent prompts
-specs/capabilities/agents-evals/spec.md:1265-1271  ## Acceptance
-specs/capabilities/agents-evals/spec.md:1273-1282  ## Open questions
+specs/capabilities/agents-evals/spec.md:287-287  R111 **Eval runs are background tasks** (ADR-0047, [app-shell](../app-shell
+specs/capabilities/agents-evals/spec.md:289-305  ## Edge cases and errors
+specs/capabilities/agents-evals/spec.md:307-316  ## Contracts
+specs/capabilities/agents-evals/spec.md:318-320  ## UI
+specs/capabilities/agents-evals/spec.md:322-1264  ## Flows
+specs/capabilities/agents-evals/spec.md:647-743  ### Feature: Agent skills
+specs/capabilities/agents-evals/spec.md:745-1013  ### Feature: Agent editor
+specs/capabilities/agents-evals/spec.md:1015-1101  ### Feature: Skill library
+specs/capabilities/agents-evals/spec.md:1103-1264  ### Feature: Built-in agent prompts
+specs/capabilities/agents-evals/spec.md:1266-1272  ## Acceptance
+specs/capabilities/agents-evals/spec.md:1274-1283  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
 specs/capabilities/app-shell/spec.md:16-103  ## Rules
@@ -711,7 +712,7 @@ specs/capabilities/data-readiness/spec.md:262-315  ### Feature: Data readiness
 specs/capabilities/data-readiness/spec.md:317-329  ## Acceptance
 
 specs/capabilities/dataset-ontology/spec.md:5-9  ## Concepts
-specs/capabilities/dataset-ontology/spec.md:11-72  ## Rules
+specs/capabilities/dataset-ontology/spec.md:11-75  ## Rules
 specs/capabilities/dataset-ontology/spec.md:14-14  R1 The system SHALL store each ontology item with: a unique id, the name
 specs/capabilities/dataset-ontology/spec.md:15-15  R2 The system SHALL accept exactly four kinds: `concept`, `relation`, `co
 specs/capabilities/dataset-ontology/spec.md:16-16  R3 A **concept** (a business term or the meaning of an enum-like code) SH
@@ -751,16 +752,17 @@ specs/capabilities/dataset-ontology/spec.md:63-65  R36 On the first start after 
 specs/capabilities/dataset-ontology/spec.md:66-68  R37 Ontology items, including mined suggestions, SHALL belong to the one u
 specs/capabilities/dataset-ontology/spec.md:69-69  R38 The Ontology tab's filter row SHALL end with a **Graph** option. Choos
 specs/capabilities/dataset-ontology/spec.md:70-70  R39 The graph SHALL support pan, zoom (with +, − and Fit controls) and dra
-specs/capabilities/dataset-ontology/spec.md:72-72  R40 (Removed 2026-11-15.) The Context page and its Ontologies overview are
-specs/capabilities/dataset-ontology/spec.md:74-84  ## Edge cases and errors
-specs/capabilities/dataset-ontology/spec.md:86-93  ## Contracts
-specs/capabilities/dataset-ontology/spec.md:95-113  ## UI
-specs/capabilities/dataset-ontology/spec.md:115-256  ## Flows
-specs/capabilities/dataset-ontology/spec.md:258-266  ## Acceptance
-specs/capabilities/dataset-ontology/spec.md:268-275  ## Open questions
+specs/capabilities/dataset-ontology/spec.md:72-74  R40 (Removed 2026-11-15.) The Context page and its Ontologies overview are
+specs/capabilities/dataset-ontology/spec.md:75-75  R41 Generating suggestions SHALL run as a background task of kind `ontolog
+specs/capabilities/dataset-ontology/spec.md:77-87  ## Edge cases and errors
+specs/capabilities/dataset-ontology/spec.md:89-96  ## Contracts
+specs/capabilities/dataset-ontology/spec.md:98-116  ## UI
+specs/capabilities/dataset-ontology/spec.md:118-259  ## Flows
+specs/capabilities/dataset-ontology/spec.md:261-269  ## Acceptance
+specs/capabilities/dataset-ontology/spec.md:271-278  ## Open questions
 
 specs/capabilities/datasets/spec.md:5-18  ## Concepts
-specs/capabilities/datasets/spec.md:20-100  ## Rules
+specs/capabilities/datasets/spec.md:20-107  ## Rules
 specs/capabilities/datasets/spec.md:22-27  ### What a dataset is
 specs/capabilities/datasets/spec.md:24-24  R1 A dataset SHALL have a name, a list of entity keys, a schema snapshot
 specs/capabilities/datasets/spec.md:25-25  R2 A dataset SHALL draw all its entities from one datasource. Choosing a
@@ -783,7 +785,7 @@ specs/capabilities/datasets/spec.md:45-45  R16 The system SHALL reject a save wi
 specs/capabilities/datasets/spec.md:46-46  R17 On save the system SHALL store the schema snapshot the browser sent (c
 specs/capabilities/datasets/spec.md:47-47  R18 On save the system SHALL enrich each snapshotted entity with sample va
 specs/capabilities/datasets/spec.md:48-48  R19 On save the system SHALL attach relationships to the snapshot (R23–R29
-specs/capabilities/datasets/spec.md:49-49  R20 A successful save SHALL toast `Dataset "<name>" saved — <n> entities`,
+specs/capabilities/datasets/spec.md:49-49  R20 Saving SHALL run as a background task, `dataset-save`, keyed by the tr
 specs/capabilities/datasets/spec.md:51-54  ### Entity details
 specs/capabilities/datasets/spec.md:53-53  R21 The right panel SHALL show details for the current selection. For a **
 specs/capabilities/datasets/spec.md:54-54  R22 The details panel SHALL NOT show sample rows or sample values; those a
@@ -821,13 +823,18 @@ specs/capabilities/datasets/spec.md:97-97  R47 Selecting a schema in the browser
 specs/capabilities/datasets/spec.md:98-98  R48 Opening a **saved** dataset from the list SHALL show the editor with t
 specs/capabilities/datasets/spec.md:99-99  R49 The Ontology tab SHALL act on the dataset it was opened from, by name.
 specs/capabilities/datasets/spec.md:100-100  R50 The Profile & synthesize tab SHALL act on the **saved** dataset it was
-specs/capabilities/datasets/spec.md:102-113  ## Edge cases and errors
-specs/capabilities/datasets/spec.md:115-121  ## Contracts
-specs/capabilities/datasets/spec.md:123-135  ## UI
-specs/capabilities/datasets/spec.md:137-258  ## Flows
-specs/capabilities/datasets/spec.md:139-141  ### Feature: Datasources, datasets, and sessions (World Cup database)
-specs/capabilities/datasets/spec.md:143-258  ### Feature: Dataset management
-specs/capabilities/datasets/spec.md:260-273  ## Acceptance
+specs/capabilities/datasets/spec.md:102-107  ### Background saves and loads
+specs/capabilities/datasets/spec.md:104-104  R51 While a `dataset-save` task runs, the dataset list SHALL show a **pend
+specs/capabilities/datasets/spec.md:105-105  R52 The list row of a dataset being saved again SHALL show the same `Savin
+specs/capabilities/datasets/spec.md:106-106  R53 A failed save SHALL leave a row in the list with the error text and **
+specs/capabilities/datasets/spec.md:107-107  R54 Leaving the catalog browser SHALL NOT cancel an inventory load; only t
+specs/capabilities/datasets/spec.md:109-120  ## Edge cases and errors
+specs/capabilities/datasets/spec.md:122-128  ## Contracts
+specs/capabilities/datasets/spec.md:130-142  ## UI
+specs/capabilities/datasets/spec.md:144-265  ## Flows
+specs/capabilities/datasets/spec.md:146-148  ### Feature: Datasources, datasets, and sessions (World Cup database)
+specs/capabilities/datasets/spec.md:150-265  ### Feature: Dataset management
+specs/capabilities/datasets/spec.md:267-280  ## Acceptance
 
 specs/capabilities/datasources/spec.md:5-16  ## Concepts
 specs/capabilities/datasources/spec.md:18-110  ## Rules
@@ -1187,7 +1194,7 @@ specs/capabilities/past-chats/spec.md:85-168  ### Feature: Session management
 specs/capabilities/past-chats/spec.md:170-178  ## Acceptance
 
 specs/capabilities/synthetic-data/spec.md:7-18  ## Concepts
-specs/capabilities/synthetic-data/spec.md:20-126  ## Rules
+specs/capabilities/synthetic-data/spec.md:20-129  ## Rules
 specs/capabilities/synthetic-data/spec.md:23-23  R1 The sampled profile SHALL be a separate, approximate view. It SHALL NO
 specs/capabilities/synthetic-data/spec.md:24-26  R2 A sampled profile SHALL be offered for datasets on a PostgreSQL or Dat
 specs/capabilities/synthetic-data/spec.md:27-27  R3 The sample size SHALL be at most 1,000 rows per table (`SAMPLE_SIZE_MA
@@ -1203,7 +1210,7 @@ specs/capabilities/synthetic-data/spec.md:54-56  R12 The profile SHALL be kept *
 specs/capabilities/synthetic-data/spec.md:57-59  R13 A profile SHALL hold real data values **only** for categorical columns
 specs/capabilities/synthetic-data/spec.md:60-60  R14 The dataset editor's **Profile & synthesize** tab ([datasets](../datas
 specs/capabilities/synthetic-data/spec.md:61-61  R15 A profile request SHALL be refused, with the texts of **Edge cases and
-specs/capabilities/synthetic-data/spec.md:62-64  R16 When the client disconnects (Cancel, or navigating away) the sampling
+specs/capabilities/synthetic-data/spec.md:62-64  R16 When the client disconnects (Cancel, which Stops the background task)
 specs/capabilities/synthetic-data/spec.md:65-65  R17 A synthetic copy SHALL be generated from the cached profile by a **pur
 specs/capabilities/synthetic-data/spec.md:66-66  R18 Pseudo-random numbers SHALL come from a seeded generator (sfc32) seede
 specs/capabilities/synthetic-data/spec.md:67-67  R19 **Keys first, topological order.** Key columns (primary and unique) SH
@@ -1231,15 +1238,16 @@ specs/capabilities/synthetic-data/spec.md:122-122  R40 The Data Readiness Agent 
 specs/capabilities/synthetic-data/spec.md:123-123  R41 **Agent limits** (in a chat or a run): at most 20 tables per call (no
 specs/capabilities/synthetic-data/spec.md:124-124  R42 `profile_data_sample` SHALL return a projection of the profile of R7-R
 specs/capabilities/synthetic-data/spec.md:125-125  R43 `generate_synthetic_data` SHALL build the `.sql` script of R24-R30 in
-specs/capabilities/synthetic-data/spec.md:126-126  R44 A tool call with no `profileId` SHALL profile the tables first; with a
-specs/capabilities/synthetic-data/spec.md:128-182  ## Edge cases and errors
-specs/capabilities/synthetic-data/spec.md:184-313  ## Contracts
-specs/capabilities/synthetic-data/spec.md:315-332  ## UI
-specs/capabilities/synthetic-data/spec.md:334-437  ## Flows
-specs/capabilities/synthetic-data/spec.md:439-454  ## Acceptance
+specs/capabilities/synthetic-data/spec.md:126-128  R44 A tool call with no `profileId` SHALL profile the tables first; with a
+specs/capabilities/synthetic-data/spec.md:129-129  R45 Profiling a dataset SHALL run as a background task of kind `synthetic-
+specs/capabilities/synthetic-data/spec.md:131-185  ## Edge cases and errors
+specs/capabilities/synthetic-data/spec.md:187-316  ## Contracts
+specs/capabilities/synthetic-data/spec.md:318-335  ## UI
+specs/capabilities/synthetic-data/spec.md:337-440  ## Flows
+specs/capabilities/synthetic-data/spec.md:442-457  ## Acceptance
 
 specs/capabilities/testing-data/spec.md:5-13  ## Concepts
-specs/capabilities/testing-data/spec.md:15-64  ## Rules
+specs/capabilities/testing-data/spec.md:15-68  ## Rules
 specs/capabilities/testing-data/spec.md:17-32  ### The catalogue
 specs/capabilities/testing-data/spec.md:19-19  R1 The catalogue SHALL be the single definition of every sample: the pane
 specs/capabilities/testing-data/spec.md:20-30  R2 The system SHALL ship these fixtures, in this panel order:
@@ -1265,14 +1273,16 @@ specs/capabilities/testing-data/spec.md:55-55  R18 Removing a fixture SHALL dele
 specs/capabilities/testing-data/spec.md:56-56  R19 Because fixtures are matched to records by **name**, a datasource or d
 specs/capabilities/testing-data/spec.md:58-60  ### Availability
 specs/capabilities/testing-data/spec.md:60-60  R20 Every testing-data action SHALL be available to the user; the app has
-specs/capabilities/testing-data/spec.md:62-64  ### Retired
-specs/capabilities/testing-data/spec.md:64-64  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
-specs/capabilities/testing-data/spec.md:66-75  ## Edge cases and errors
-specs/capabilities/testing-data/spec.md:77-83  ## Contracts
-specs/capabilities/testing-data/spec.md:85-97  ## UI
-specs/capabilities/testing-data/spec.md:99-190  ## Flows
-specs/capabilities/testing-data/spec.md:101-190  ### Feature: Testing data
-specs/capabilities/testing-data/spec.md:192-202  ## Acceptance
+specs/capabilities/testing-data/spec.md:62-64  ### Background task
+specs/capabilities/testing-data/spec.md:64-64  R23 Loading a fixture SHALL run as a background task of kind `testing-data
+specs/capabilities/testing-data/spec.md:66-68  ### Retired
+specs/capabilities/testing-data/spec.md:68-68  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
+specs/capabilities/testing-data/spec.md:70-79  ## Edge cases and errors
+specs/capabilities/testing-data/spec.md:81-87  ## Contracts
+specs/capabilities/testing-data/spec.md:89-101  ## UI
+specs/capabilities/testing-data/spec.md:103-194  ## Flows
+specs/capabilities/testing-data/spec.md:105-194  ### Feature: Testing data
+specs/capabilities/testing-data/spec.md:196-206  ## Acceptance
 
 specs/capabilities/verified-queries/spec.md:5-7  ## Concepts
 specs/capabilities/verified-queries/spec.md:9-39  ## Rules
@@ -1302,7 +1312,7 @@ specs/capabilities/verified-queries/spec.md:111-115  ## Acceptance
 specs/capabilities/verified-queries/spec.md:117-124  ## Open questions
 
 specs/capabilities/visuals/spec.md:12-14  ## Concepts
-specs/capabilities/visuals/spec.md:16-203  ## Rules
+specs/capabilities/visuals/spec.md:16-204  ## Rules
 specs/capabilities/visuals/spec.md:18-24  ### Creating
 specs/capabilities/visuals/spec.md:20-20  R1 The system SHALL create a visual only from a completed assistant answe
 specs/capabilities/visuals/spec.md:21-22  R2 Every answer with text SHALL offer "Generate interactive visuals". Whi
@@ -1316,52 +1326,53 @@ specs/capabilities/visuals/spec.md:51-51  R8 A freeform visual's script SHALL be
 specs/capabilities/visuals/spec.md:52-52  R9 Tailoring a freeform visual SHALL stay freeform. Tailoring a spec visu
 specs/capabilities/visuals/spec.md:53-53  R10 Each designer call SHALL time out after 120 seconds with "interactive
 specs/capabilities/visuals/spec.md:54-60  R11 A spec visual SHALL be drawn by one fixed, hand-written chart runtime,
-specs/capabilities/visuals/spec.md:62-80  ### Tailoring and versions
+specs/capabilities/visuals/spec.md:62-81  ### Tailoring and versions
 specs/capabilities/visuals/spec.md:64-64  R12 Tailoring (from chat or the panel) SHALL require a non-blank instructi
 specs/capabilities/visuals/spec.md:65-65  R13 In chat, the assistant SHALL tailor the visual open in the panel by de
 specs/capabilities/visuals/spec.md:66-71  R14 The panel's Tailor form SHALL turn its fields into one plain-English i
-specs/capabilities/visuals/spec.md:72-72  R15 Each version SHALL record its number, creation time, the instruction t
-specs/capabilities/visuals/spec.md:73-76  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
-specs/capabilities/visuals/spec.md:77-77  R17 Reverting SHALL only move the current-version pointer to an existing v
-specs/capabilities/visuals/spec.md:78-78  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
-specs/capabilities/visuals/spec.md:79-79  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
-specs/capabilities/visuals/spec.md:80-80  R20 Opening a session SHALL load into the panel the latest item the agent
-specs/capabilities/visuals/spec.md:82-90  ### Refresh data in place
-specs/capabilities/visuals/spec.md:84-84  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
-specs/capabilities/visuals/spec.md:85-89  R22 During a refresh:
-specs/capabilities/visuals/spec.md:90-90  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
-specs/capabilities/visuals/spec.md:92-110  ### Runtime errors and silent auto-repair
-specs/capabilities/visuals/spec.md:94-97  R24 The sandboxed visual SHALL report to the host:
-specs/capabilities/visuals/spec.md:98-104  R25 On a reported error the panel SHALL silently request one repair, but o
-specs/capabilities/visuals/spec.md:105-109  R26 A repair SHALL regenerate the current version with the runtime error,
-specs/capabilities/visuals/spec.md:110-110  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
-specs/capabilities/visuals/spec.md:112-158  ### Readable frame
-specs/capabilities/visuals/spec.md:114-123  R28 Every visual SHALL render inside a fixed frame. The frame's content co
-specs/capabilities/visuals/spec.md:124-127  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
-specs/capabilities/visuals/spec.md:128-128  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
-specs/capabilities/visuals/spec.md:129-129  R31 The designer's styles SHALL be confined to the visual's own area so th
-specs/capabilities/visuals/spec.md:130-130  R32 The visual SHALL read its rows from the embedded data at runtime, neve
-specs/capabilities/visuals/spec.md:131-131  R33 A frame generated or refreshed at a given time SHALL show that time. O
-specs/capabilities/visuals/spec.md:133-158  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
-specs/capabilities/visuals/spec.md:160-166  ### Sandboxing
-specs/capabilities/visuals/spec.md:162-165  R34 The visual SHALL run in a sandboxed frame:
-specs/capabilities/visuals/spec.md:166-166  R35 The visual SHALL talk to the host only through messages: runtime error
-specs/capabilities/visuals/spec.md:168-175  ### Click to follow up
-specs/capabilities/visuals/spec.md:170-175  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
-specs/capabilities/visuals/spec.md:177-191  ### Export
-specs/capabilities/visuals/spec.md:179-190  R37 "Download bundle" SHALL download a zip of the visual. It always contai
-specs/capabilities/visuals/spec.md:191-191  R38 The downloaded file SHALL be named after the visual's title, slugged a
-specs/capabilities/visuals/spec.md:193-203  ### Storage
-specs/capabilities/visuals/spec.md:195-203  R39 Each version's files SHALL live in the session workspace under the vis
-specs/capabilities/visuals/spec.md:205-226  ## Edge cases and errors
-specs/capabilities/visuals/spec.md:228-241  ## Contracts
-specs/capabilities/visuals/spec.md:243-270  ## UI
-specs/capabilities/visuals/spec.md:272-429  ## Flows
-specs/capabilities/visuals/spec.md:274-276  ### Covered: Chat and visuals
-specs/capabilities/visuals/spec.md:278-287  ### Visual actions on a run
-specs/capabilities/visuals/spec.md:289-405  ### Feature: Visual tailoring
-specs/capabilities/visuals/spec.md:407-429  ### Feature: Skills the designer is given
-specs/capabilities/visuals/spec.md:431-443  ## Acceptance
+specs/capabilities/visuals/spec.md:72-72  R41 **Tailor and Refresh data are background tasks** (ADR-0047, [app-shell
+specs/capabilities/visuals/spec.md:73-73  R15 Each version SHALL record its number, creation time, the instruction t
+specs/capabilities/visuals/spec.md:74-77  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
+specs/capabilities/visuals/spec.md:78-78  R17 Reverting SHALL only move the current-version pointer to an existing v
+specs/capabilities/visuals/spec.md:79-79  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
+specs/capabilities/visuals/spec.md:80-80  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
+specs/capabilities/visuals/spec.md:81-81  R20 Opening a session SHALL load into the panel the latest item the agent
+specs/capabilities/visuals/spec.md:83-91  ### Refresh data in place
+specs/capabilities/visuals/spec.md:85-85  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
+specs/capabilities/visuals/spec.md:86-90  R22 During a refresh:
+specs/capabilities/visuals/spec.md:91-91  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
+specs/capabilities/visuals/spec.md:93-111  ### Runtime errors and silent auto-repair
+specs/capabilities/visuals/spec.md:95-98  R24 The sandboxed visual SHALL report to the host:
+specs/capabilities/visuals/spec.md:99-105  R25 On a reported error the panel SHALL silently request one repair, but o
+specs/capabilities/visuals/spec.md:106-110  R26 A repair SHALL regenerate the current version with the runtime error,
+specs/capabilities/visuals/spec.md:111-111  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
+specs/capabilities/visuals/spec.md:113-159  ### Readable frame
+specs/capabilities/visuals/spec.md:115-124  R28 Every visual SHALL render inside a fixed frame. The frame's content co
+specs/capabilities/visuals/spec.md:125-128  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
+specs/capabilities/visuals/spec.md:129-129  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
+specs/capabilities/visuals/spec.md:130-130  R31 The designer's styles SHALL be confined to the visual's own area so th
+specs/capabilities/visuals/spec.md:131-131  R32 The visual SHALL read its rows from the embedded data at runtime, neve
+specs/capabilities/visuals/spec.md:132-132  R33 A frame generated or refreshed at a given time SHALL show that time. O
+specs/capabilities/visuals/spec.md:134-159  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
+specs/capabilities/visuals/spec.md:161-167  ### Sandboxing
+specs/capabilities/visuals/spec.md:163-166  R34 The visual SHALL run in a sandboxed frame:
+specs/capabilities/visuals/spec.md:167-167  R35 The visual SHALL talk to the host only through messages: runtime error
+specs/capabilities/visuals/spec.md:169-176  ### Click to follow up
+specs/capabilities/visuals/spec.md:171-176  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
+specs/capabilities/visuals/spec.md:178-192  ### Export
+specs/capabilities/visuals/spec.md:180-191  R37 "Download bundle" SHALL download a zip of the visual. It always contai
+specs/capabilities/visuals/spec.md:192-192  R38 The downloaded file SHALL be named after the visual's title, slugged a
+specs/capabilities/visuals/spec.md:194-204  ### Storage
+specs/capabilities/visuals/spec.md:196-204  R39 Each version's files SHALL live in the session workspace under the vis
+specs/capabilities/visuals/spec.md:206-227  ## Edge cases and errors
+specs/capabilities/visuals/spec.md:229-242  ## Contracts
+specs/capabilities/visuals/spec.md:244-271  ## UI
+specs/capabilities/visuals/spec.md:273-430  ## Flows
+specs/capabilities/visuals/spec.md:275-277  ### Covered: Chat and visuals
+specs/capabilities/visuals/spec.md:279-288  ### Visual actions on a run
+specs/capabilities/visuals/spec.md:290-406  ### Feature: Visual tailoring
+specs/capabilities/visuals/spec.md:408-430  ### Feature: Skills the designer is given
+specs/capabilities/visuals/spec.md:432-444  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-87  ## Rules
