@@ -1832,7 +1832,7 @@ specs/system/agents.md:1120-1257  ## 4. Per-turn context
 specs/system/agents.md:1122-1224  ### 4.1 System context blocks
 specs/system/agents.md:1226-1246  ### 4.2 requestContext keys
 specs/system/agents.md:1248-1257  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1259-1821  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1259-1829  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1261-1291  ### 5.1 Streamed chat turn
 specs/system/agents.md:1293-1297  ### 5.2 Read-only enforcement
 specs/system/agents.md:1299-1313  ### 5.3 Execution-guided repair
@@ -1852,41 +1852,41 @@ specs/system/agents.md:1616-1637  ### 5.16 Node chats: chatting with a run step'
 specs/system/agents.md:1639-1682  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
 specs/system/agents.md:1684-1717  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
 specs/system/agents.md:1719-1774  ### 5.19 Workflow: `review-website` (Review a Website)
-specs/system/agents.md:1776-1821  ### 5.20 Workflow: `consumption-gap-analysis` (Consumption Gap Analysis)
-specs/system/agents.md:1823-1996  ## 6. Visual designer pipeline
-specs/system/agents.md:1827-1837  ### 6.1 Entry points
-specs/system/agents.md:1839-1841  ### 6.2 Data handed to the designer
-specs/system/agents.md:1843-1859  ### 6.3 Modes and loop
-specs/system/agents.md:1861-1896  ### 6.4 Designer prompt
-specs/system/agents.md:1898-1903  ### 6.5 Repair
-specs/system/agents.md:1905-1907  ### 6.6 Assembled files
-specs/system/agents.md:1909-1911  ### 6.7 Call options
-specs/system/agents.md:1913-1956  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1958-1996  ### 6.9 Chart runtime contract
-specs/system/agents.md:1998-2172  ## 7. Skills and workspaces
-specs/system/agents.md:2000-2009  ### 7.1 Session workspaces
-specs/system/agents.md:2011-2052  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:2054-2080  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:2082-2166  ### 7.4 Skills per agent
-specs/system/agents.md:2168-2172  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2174-2349  ## 8. Evals
-specs/system/agents.md:2178-2304  ### 8.1 Case and set format
-specs/system/agents.md:2306-2313  ### 8.2 Data preflight
-specs/system/agents.md:2315-2326  ### 8.3 Executing a case
-specs/system/agents.md:2328-2333  ### 8.4 Runs, regression and report
-specs/system/agents.md:2335-2349  ### 8.5 Other entry points
-specs/system/agents.md:2351-2355  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2357-2370  ## Open questions and gaps
-specs/system/agents.md:2372-2511  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2513-2549  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2551-2553  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2555-2638  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2640-2744  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2746-2798  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2752-2771  ### Plan
-specs/system/agents.md:2773-2798  ### Write answer
-specs/system/agents.md:2800-2816  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2818-2837  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:1776-1829  ### 5.20 Workflow: `consumption-gap-analysis` (Consumption Gap Analysis)
+specs/system/agents.md:1831-2004  ## 6. Visual designer pipeline
+specs/system/agents.md:1835-1845  ### 6.1 Entry points
+specs/system/agents.md:1847-1849  ### 6.2 Data handed to the designer
+specs/system/agents.md:1851-1867  ### 6.3 Modes and loop
+specs/system/agents.md:1869-1904  ### 6.4 Designer prompt
+specs/system/agents.md:1906-1911  ### 6.5 Repair
+specs/system/agents.md:1913-1915  ### 6.6 Assembled files
+specs/system/agents.md:1917-1919  ### 6.7 Call options
+specs/system/agents.md:1921-1964  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1966-2004  ### 6.9 Chart runtime contract
+specs/system/agents.md:2006-2180  ## 7. Skills and workspaces
+specs/system/agents.md:2008-2017  ### 7.1 Session workspaces
+specs/system/agents.md:2019-2060  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:2062-2088  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:2090-2174  ### 7.4 Skills per agent
+specs/system/agents.md:2176-2180  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:2182-2357  ## 8. Evals
+specs/system/agents.md:2186-2312  ### 8.1 Case and set format
+specs/system/agents.md:2314-2321  ### 8.2 Data preflight
+specs/system/agents.md:2323-2334  ### 8.3 Executing a case
+specs/system/agents.md:2336-2341  ### 8.4 Runs, regression and report
+specs/system/agents.md:2343-2357  ### 8.5 Other entry points
+specs/system/agents.md:2359-2363  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2365-2378  ## Open questions and gaps
+specs/system/agents.md:2380-2519  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2521-2557  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2559-2561  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2563-2646  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2648-2752  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2754-2806  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2760-2779  ### Plan
+specs/system/agents.md:2781-2806  ### Write answer
+specs/system/agents.md:2808-2824  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2826-2845  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
