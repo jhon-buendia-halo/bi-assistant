@@ -53,21 +53,21 @@ describe('SkillsApiService', () => {
       http.expectOne(`${API_BASE_URL}/skills/built-in`).request.method,
     ).toBe('GET');
 
-    api.getBuiltIn('deep-analysis').subscribe();
+    api.getBuiltIn('interactive-visuals').subscribe();
     expect(
-      http.expectOne(`${API_BASE_URL}/skills/built-in/deep-analysis`).request
+      http.expectOne(`${API_BASE_URL}/skills/built-in/interactive-visuals`).request
         .method,
     ).toBe('GET');
 
     const body = { description: 'Use when x', body: 'b', files: [] };
-    api.saveBuiltIn('deep-analysis', body).subscribe();
-    const put = http.expectOne(`${API_BASE_URL}/skills/built-in/deep-analysis`);
+    api.saveBuiltIn('interactive-visuals', body).subscribe();
+    const put = http.expectOne(`${API_BASE_URL}/skills/built-in/interactive-visuals`);
     expect(put.request.method).toBe('PUT');
     expect(put.request.body).toEqual(body);
 
-    api.resetBuiltIn('deep-analysis').subscribe();
+    api.resetBuiltIn('interactive-visuals').subscribe();
     expect(
-      http.expectOne(`${API_BASE_URL}/skills/built-in/deep-analysis`).request
+      http.expectOne(`${API_BASE_URL}/skills/built-in/interactive-visuals`).request
         .method,
     ).toBe('DELETE');
   });

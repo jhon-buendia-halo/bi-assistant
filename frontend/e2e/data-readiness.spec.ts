@@ -5,16 +5,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { apiJson } from './helpers/api';
 import { saveLenaiSettings } from './helpers/agents-api';
-import { WORLD_CUP_DATASOURCE } from './helpers/app-actions';
-
-/** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
-async function evidence(page: Page, folder: string, name: string) {
-  const root = process.env['E2E_EVIDENCE_DIR'];
-  if (!root) return;
-  const dir = path.join(root, folder);
-  fs.mkdirSync(dir, { recursive: true });
-  await page.screenshot({ path: path.join(dir, name), fullPage: true });
-}
+import { WORLD_CUP_DATASOURCE, openSessions } from './helpers/app-actions';
 import {
   LlmStub,
   StubReply,
@@ -23,78 +14,64 @@ import {
   startLlmStub,
   systemTexts,
 } from './helpers/llm-stub';
+import { seedPastChat } from './helpers/past-chats';
 import {
-  WORLD_CUP_DB,
-  worldCupKey,
-  worldCupScalar,
-} from './helpers/world-cup-db';
+  openRunTab,
+  openWorkflowPage,
+  railItem,
+  runAnswer,
+} from './helpers/run-ui';
+import { scenarioStep } from './support/demo-captions';
+import { WORLD_CUP_DB, worldCupKey } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Data readiness" in
- * specs/capabilities/data-readiness/spec.md. The model is the recording
- * OpenAI-compatible stub, scripted to call the Data Readiness Agent's tools;
- * the tools run for real: the deterministic engine profiles the seeded World
- * Cup PostgreSQL (docker compose, port 55432, or E2E_WORLD_CUP_DB_*). Every
- * number the UI shows is checked against the stored report the API returns,
- * never against a hard-coded value, since the scores depend on the data.
+ * specs/capabilities/data-readiness/spec.md. The Data Readiness Agent is a
+ * library agent (no chat); the Assess Data Readiness workflow
+ * (`data-readiness-assessment`) runs it from the Workflows page, covered by
+ * the `@demo` scenario below. Its page (prompt, Used in) is covered by
+ * `agent-hub.spec.ts`.
  *
- * UI details this spec relies on (ui.md is silent on them). Drafted before
- * units 7-11 were wired (BA-251 unit 14); every one was confirmed against the
- * integrated app at the acceptance gate, where all five scenarios pass:
+ * Stored reports stay viewable: the scorecard scenarios make a report with
+ * `POST /data-readiness/assessments` (api.md 108; the deterministic engine
+ * profiles the seeded World Cup PostgreSQL, docker compose, port 55432, or
+ * E2E_WORLD_CUP_DB_*), seed a past Data Readiness chat whose answer carries
+ * the report's readiness card, and open its scorecard in the session panel.
+ * Every number the UI shows is checked against the stored report the API
+ * returns, never against a hard-coded value, since the scores depend on the
+ * data.
+ *
+ * UI details this spec relies on (ui.md is silent on them):
  *  1. The datasets API accepts a dataset whose entity snapshots carry no
- *     columns (`columns: []`); the assessment profiles the datasource itself,
- *     so the snapshot's columns are not needed.
+ *     columns (`columns: []`); the assessment profiles the datasource itself.
  *  2. A dimension row's text reads, in DOM order, the label (the dimension
- *     name capitalised: "Completeness" … "Currency"), the score, then
- *     `<n> findings · <m> checks` (matched as `findings?`/`checks?` in case the
- *     UI singularises). Accuracy and currency read `Not assessed` in place of
- *     the score.
+ *     name capitalised), the score, then `<n> findings · <m> checks`.
+ *     Accuracy and currency read `Not assessed` in place of the score.
  *  3. The Dimension filter's options are labelled with the capitalised
- *     dimension name ("Completeness"); the Severity filter's options read
- *     `All`, `High`, `Medium`, `Low`, `Info` (ui.md 4.13.5).
- *  4. A finding row (`readiness-finding`) shows the severity pill and the
- *     dimension as text, capitalised ("High", "Completeness"); matched
- *     case-insensitively.
- *  5. The maturity pill (`readiness-maturity`) reads exactly the band
- *     (`Managed`), and `readiness-overall` holds the score with `/100` beside
- *     it, so its text starts with the score.
+ *     dimension name; the Severity filter's read `All`, `High`, `Medium`,
+ *     `Low`, `Info` (ui.md 4.13.5).
+ *  4. A finding row (`readiness-finding`) shows the severity and the
+ *     dimension as text, capitalised; matched case-insensitively.
+ *  5. The maturity pill (`readiness-maturity`) reads exactly the band, and
+ *     `readiness-overall` holds the score with `/100` beside it.
  *  6. The Past assessments menu has `role="menu"` and each report is a
  *     `role="menuitem"` (or `menuitemradio`) showing `<score>/100` and the
- *     band; the selected one carries `aria-checked="true"` or
- *     `aria-current="true"`.
+ *     band; the selected one carries `aria-checked` or `aria-current`.
  *  7. Choosing a past report fetches it with
- *     `GET /data-readiness/assessments/<id>` (ui.md 4.13.5: "It fetches the
- *     report when the item opens"), so the spec waits on that response.
- *  8. The World Cup sample yields findings in at least two dimensions, so the
- *     filter scenario has something to narrow (asserted as a precondition).
- *  9. The engine raises no `info` findings (R12-R19 have none), so
- *     Severity = `Info` is a combination that always matches nothing; the
- *     spec still derives the empty combination from the report.
- * 10. The session ID button (`session-id`, `Copy session ID <id>`) is in the
- *     header of an agent-bound session, as in an assistant session.
- * 11. Block D1 names the kind `PostgreSQL` and counts the dataset's tables
- *     as `<n> entities` (agents.md 4.1).
+ *     `GET /data-readiness/assessments/<id>` (ui.md 4.13.5).
+ *  8. The World Cup sample yields findings in at least two dimensions.
+ *  9. The engine raises no `info` findings, so Severity = `Info` always
+ *     matches nothing; the spec still derives the empty combination from the
+ *     report.
  */
 
 const AGENT = 'Data Readiness Agent';
 const AGENT_KEY = 'data-readiness';
 const SESSION = 'Data Readiness';
 const DATASET = 'World Cup';
-const REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
-const DESCRIPTION =
-  'Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings.';
-const STARTERS = [
-  'Assess the readiness of this dataset',
-  'What are the worst data-quality problems?',
-  'Show my past assessments',
-];
-const READINESS_TOOLS = [
-  'assess_data_readiness',
-  'get_readiness_report',
-  'list_readiness_reports',
-];
-/** The shared dataset tools the agent drills down with (R3, ADR-0035). */
-const DRILLDOWN_TOOLS = ['describe_entity', 'run_readonly_sql'];
+const ASSESS_QUESTION = 'Assess the readiness of this dataset';
+const ASSESS_ANSWER =
+  'The World Cup dataset has been assessed: the scorecard is in the panel.';
 /** Every table of the seeded `world_cup` schema (docker/postgres/init). */
 const WORLD_CUP_TABLES = [
   'confederations',
@@ -125,11 +102,6 @@ const DIMENSIONS = [
 ] as const;
 const UNASSESSED = ['accuracy', 'currency'];
 const SEVERITIES = ['high', 'medium', 'low', 'info'] as const;
-const ASSESS_QUESTION = STARTERS[0];
-const ASSESS_ANSWER =
-  'The World Cup dataset has been assessed: the scorecard is in the panel.';
-/** An assessment profiles twelve tables; allow it time on a cold database. */
-const TURN_TIMEOUT = 90_000;
 
 type Dimension = (typeof DIMENSIONS)[number];
 type Severity = (typeof SEVERITIES)[number];
@@ -155,20 +127,12 @@ interface ReadinessReport {
   dimensionScores: DimensionScore[];
   findings: { dimension: Dimension; severity: Severity }[];
   sessionId?: string;
+  runId?: string;
   notProfiled?: {
     entity: string;
     reason: 'too-large' | 'timed-out';
     rowCount?: number;
   }[];
-}
-
-/** The `data:` frames of an SSE body, parsed in order. */
-function sseFrames(body: string): { type: string; content?: string }[] {
-  return body
-    .split(/\r?\n\r?\n/)
-    .map((block) => block.replace(/^data: ?/, '').trim())
-    .filter((json) => json.startsWith('{'))
-    .map((json) => JSON.parse(json) as { type: string; content?: string });
 }
 
 interface ReadinessReportSummary {
@@ -183,47 +147,21 @@ let cappedDir: string | undefined;
 
 // ------------------------------------------------------------ helpers
 
+/** Saves an evidence screenshot when E2E_EVIDENCE_DIR names a folder. */
+async function evidence(page: Page, folder: string, name: string) {
+  const root = process.env['E2E_EVIDENCE_DIR'];
+  if (!root) return;
+  const dir = path.join(root, folder);
+  fs.mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, name), fullPage: true });
+}
+
 function capitalise(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-/** The last user message of a request: which turn it belongs to. */
-function lastUserText(request: StubRequest): string {
-  const users = request.messages.filter((m) => m.role === 'user');
-  return users.length ? messageText(users[users.length - 1]) : '';
-}
-
-/** Tool results since the last user message: the step of the turn. */
-function turnToolResults(request: StubRequest): string[] {
-  let last = -1;
-  request.messages.forEach((m, i) => {
-    if (m.role === 'user') last = i;
-  });
-  return request.messages
-    .slice(last + 1)
-    .filter((m) => m.role === 'tool')
-    .map(messageText);
-}
-
-/**
- * Scripts the stub per turn: the reply is the script of the turn (found by
- * its last user message, never by any user message in the history) at the
- * index of the step; past the end it answers the script's last entry.
- */
-function script(
-  turns: Record<string, StubReply[]>,
-): (r: StubRequest) => StubReply {
-  return (request) => {
-    const steps = turns[lastUserText(request)];
-    if (!steps) return { text: 'Noted.' };
-    const step = turnToolResults(request).length;
-    return steps[Math.min(step, steps.length - 1)];
-  };
-}
-
-/** The streamed requests of the turn that asked `question`, oldest first. */
-function requestsOf(question: string): StubRequest[] {
-  return stub.requests.filter((r) => r.stream && lastUserText(r) === question);
+function escape(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -287,81 +225,49 @@ async function assessThroughApi(
   });
 }
 
-async function openHub(page: Page): Promise<void> {
-  await page
-    .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
-    .click();
-  await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
-  ).toBeVisible();
-}
-
-function startChatButton(page: Page): Locator {
-  return page.getByRole('button', { name: `Start chat with ${AGENT}` });
-}
-
-/** Starts a chat from the hub card and waits for its session's welcome. */
-async function startReadinessChat(page: Page): Promise<void> {
-  await openHub(page);
-  await expect(startChatButton(page)).toBeEnabled();
-  await startChatButton(page).click();
-  await expect(page.getByText(`Session "${SESSION}" created`)).toBeVisible();
-  await expect(page.getByTestId('session-welcome')).toBeVisible();
-}
-
-/** The current session's id, read from the header's session ID button. */
-async function sessionId(page: Page): Promise<string> {
-  const label = await page
-    .locator('header')
-    .getByTestId('session-id')
-    .getAttribute('aria-label');
-  const id = /^Copy session ID (.+)$/.exec(label ?? '')?.[1];
-  if (!id) throw new Error('The session did not expose its id');
-  return id;
-}
-
-/** Sends `question` and waits for `answer` and the composer to be free. */
-async function send(
+/**
+ * Seeds a past Data Readiness chat whose answer carries `report`'s readiness
+ * card, opens it from Runs → Past chats, checks the card and clicks
+ * "Open scorecard": the session panel shows the report's scorecard.
+ */
+async function openScorecardFromPastChat(
   page: Page,
-  question: string,
-  answer: string,
+  appDataDir: string,
+  report: ReadinessReport,
 ): Promise<void> {
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(answer)).toBeVisible({ timeout: TURN_TIMEOUT });
-  await expect(
-    page.getByRole('button', { name: 'Send message' }),
-  ).toBeVisible();
-}
-
-/** Scripts the assessment turn: one `assess_data_readiness`, then the answer. */
-function scriptAssessment(): void {
-  stub.reply = script({
-    [ASSESS_QUESTION]: [
+  seedPastChat(appDataDir, {
+    name: SESSION,
+    datasets: [DATASET],
+    agentKey: AGENT_KEY,
+    agentName: AGENT,
+    turns: [
       {
-        toolCall: {
-          name: 'assess_data_readiness',
-          arguments: { dataset: DATASET },
+        question: ASSESS_QUESTION,
+        answer: ASSESS_ANSWER,
+        readinessReport: {
+          reportId: report.id,
+          datasourceName: report.datasourceName,
+          overallScore: report.overallScore,
+          maturity: report.maturity,
+          generatedAt: report.generatedAt,
         },
       },
-      { text: ASSESS_ANSWER },
     ],
   });
-}
-
-/** Starts a chat and runs one assessment from it; returns the stored report. */
-async function assessFromChat(
-  page: Page,
-  datasourceId: string,
-): Promise<ReadinessReport> {
-  scriptAssessment();
-  await startReadinessChat(page);
-  await send(page, ASSESS_QUESTION, ASSESS_ANSWER);
+  await page.reload();
+  await openSessions(page);
+  await page
+    .getByRole('navigation', { name: 'Past chats', exact: true })
+    .getByRole('button', { name: new RegExp(`^${SESSION}`) })
+    .click();
+  await expect(page.getByTestId('past-chat-banner')).toBeVisible();
+  const card = page.getByTestId('readiness-card');
+  await expect(card).toContainText(report.datasourceName);
+  await expect(card.getByTestId('readiness-card-score')).toContainText(
+    `${report.overallScore}/100 · ${report.maturity}`,
+  );
+  await card.getByTestId('readiness-open-scorecard').click();
   await expect(scorecard(page)).toBeVisible();
-  const [newest] = await listReports(page, datasourceId);
-  expect(newest, 'the chat stored a report').toBeTruthy();
-  return getReport(page, newest.id);
 }
 
 function scorecard(page: Page): Locator {
@@ -374,10 +280,6 @@ function dimensionRow(page: Page, dimension: Dimension): Locator {
 
 function findingRows(page: Page): Locator {
   return scorecard(page).getByTestId('readiness-finding');
-}
-
-function escape(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** Asserts the scorecard shows `report`'s overall score, band and ten rows. */
@@ -446,212 +348,168 @@ test.afterEach(async () => {
 
 // ------------------------------------------------------------ scenarios
 
-test('start chat is blocked without a PostgreSQL or Databricks dataset', async ({
+test('the Data Readiness Agent is an Official library agent used by Assess Data Readiness', async ({
   page,
 }) => {
-  // Given no dataset is bound to a PostgreSQL or Databricks datasource.
-  await openHub(page);
-  const official = page.getByTestId('agent-section-official');
-  const card = official.getByTestId(`agent-card-${AGENT_KEY}`);
-  await expect(card).toBeVisible();
-  await expect(card.getByTestId(`agent-${AGENT_KEY}`)).toContainText(AGENT);
-  await expect(card).toContainText('Owner: Official');
-  await expect(card).toContainText(DESCRIPTION.slice(0, 60));
+  // Given I open Agents.
+  await railItem(page, 'Agents').click();
+  await expect(
+    page.getByRole('heading', { name: 'Agents', exact: true }),
+  ).toBeVisible();
 
-  const button = startChatButton(page);
-  await expect(button).toBeVisible();
-  await expect(button).toHaveAttribute(
-    'data-testid',
-    `agent-start-chat-${AGENT_KEY}`,
+  // Then the Data Readiness Agent is listed under Data Foundations, Official.
+  const foundations = page.getByTestId('agent-section-data-foundations');
+  const card = foundations.getByTestId(`agent-card-${AGENT_KEY}`);
+  await expect(card).toBeVisible();
+  // Its card shows its persona: Sarah, Data Quality Analyst.
+  await expect(card.getByTestId(`agent-${AGENT_KEY}`)).toContainText('Sarah');
+  await expect(card.getByTestId(`agent-role-${AGENT_KEY}`)).toHaveText(
+    'Data Quality Analyst',
   );
-  await expect(button).toBeDisabled();
-  await expect(button).toHaveAttribute('title', REQUIREMENT);
+  await expect(card).toContainText('Owner: Official');
+  // It introduces itself in the first person instead of its description.
+  await expect(card.getByTestId(`agent-intro-${AGENT_KEY}`)).toContainText(
+    'I check whether a dataset is ready for analysis.',
+  );
+  // The agent card never starts a chat, and chats cannot start at all.
+  await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
+
+  // When I open Workflows, then no one-step agent workflow exists for it.
+  await railItem(page, 'Workflows').click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId('workflow-answer-business-question'),
+  ).toBeVisible();
+  await expect(page.getByTestId(`workflow-agent:${AGENT_KEY}`)).toHaveCount(0);
   expect(stub.requests, 'nothing reached the model').toHaveLength(0);
 });
 
-test('assessing a dataset from the chat shows the scorecard', async ({
+/** The Explain report step's turn: read the stored report, then answer. */
+function readReportThenAnswer(request: StubRequest): StubReply {
+  const tool = request.tools.find((name) =>
+    name.endsWith('get_readiness_report'),
+  );
+  if (tool === undefined) return { text: ASSESS_ANSWER };
+  if (request.messages.at(-1)?.role === 'tool') return { text: ASSESS_ANSWER };
+  const text = [
+    ...systemTexts(request),
+    ...request.messages.map(messageText),
+  ].join('\n');
+  const reportId = /readiness report ([\w-]+)/.exec(text)?.[1] ?? '';
+  return { toolCall: { name: tool, arguments: { reportId } } };
+}
+
+test('Assess Data Readiness profiles, scores and explains one dataset @demo', async ({
   page,
-}, testInfo) => {
-  const datasourceId = await seedWorldCup(page);
-  scriptAssessment();
+}) => {
+  let datasourceId = '';
+  stub.reply = readReportThenAnswer;
+  const steps = [
+    'resolve-dataset',
+    'profile-source',
+    'score-readiness',
+    'save-report',
+    'explain-report',
+    'wrap-up',
+  ];
 
-  // When I click "Start chat with Data Readiness Agent".
-  await startReadinessChat(page);
-  await expect(page.getByTestId('session-agent')).toHaveText(AGENT);
-  await expect(
-    page.getByRole('heading', { name: SESSION, exact: true }),
-  ).toBeVisible();
-  const welcome = page.getByTestId('session-welcome');
-  await expect(welcome).toContainText(DESCRIPTION);
-  for (const starter of STARTERS) {
-    await expect(
-      welcome.getByRole('button', { name: starter, exact: true }),
-    ).toBeVisible();
-  }
-  // R15 of rfp, shared by Data Readiness sessions: no assistant-only toggles.
-  await expect(page.getByRole('button', { name: 'Careful mode' })).toHaveCount(
-    0,
+  await scenarioStep(
+    page,
+    `Given the "${DATASET}" dataset exists`,
+    async () => {
+      datasourceId = await seedWorldCup(page);
+    },
   );
-  await expect(page.getByRole('button', { name: 'Deep analysis' })).toHaveCount(
-    0,
+  await scenarioStep(
+    page,
+    'When I open "Assess Data Readiness" from Workflows and click Execute',
+    async () => {
+      await openWorkflowPage(
+        page,
+        'data-readiness-assessment',
+        'Assess Data Readiness',
+      );
+      await openRunTab(page);
+    },
   );
-  expect(stub.requests, 'no message has been sent').toHaveLength(0);
-  const session = await sessionId(page);
-
-  // When I ask "Assess the readiness of this dataset" (the starter fills the composer).
-  await welcome
-    .getByRole('button', { name: ASSESS_QUESTION, exact: true })
-    .click();
-  await expect(page.getByPlaceholder('Ask a follow-up question…')).toHaveValue(
-    ASSESS_QUESTION,
+  await scenarioStep(
+    page,
+    `And I pick "${DATASET}", leave the question empty and click Execute`,
+    async () => {
+      await page
+        .getByTestId('workflow-input-dataset')
+        .selectOption({ label: DATASET });
+      await page.getByTestId('workflow-run').click();
+    },
   );
-  const streamed = page.waitForResponse((r) =>
-    r.url().endsWith('/messages/stream'),
+  await scenarioStep(
+    page,
+    'Then its six steps end successfully, in that order',
+    async () => {
+      await expect(page.getByTestId('workflow-run-status')).toHaveText(
+        'Run succeeded',
+        { timeout: 60_000 },
+      );
+      for (const id of steps) {
+        await expect(
+          page
+            .getByTestId(`workflow-node-${id}`)
+            .getByTestId('workflow-node-status'),
+        ).toHaveText('Done');
+      }
+      // How it ran, under the answer, lists the steps in run order.
+      const logged = await page
+        .getByTestId('workflow-run-story')
+        .locator('[data-testid^="workflow-run-story-step-"]')
+        .evaluateAll((els) =>
+          els.map((e) =>
+            (e.getAttribute('data-testid') ?? '').replace(
+              'workflow-run-story-step-',
+              '',
+            ),
+          ),
+        );
+      expect(logged.filter((id) => steps.includes(id))).toEqual(steps);
+    },
   );
-  await page.getByRole('button', { name: 'Send message' }).click();
-
-  // And the agent calls "assess_data_readiness": the step shows in the chat.
-  await expect(
-    page.getByText('assess_data_readiness', { exact: true }).first(),
-  ).toBeVisible({ timeout: TURN_TIMEOUT });
-  await expect(page.getByText(ASSESS_ANSWER)).toBeVisible({
-    timeout: TURN_TIMEOUT,
-  });
-
-  // R32: the stream carries `tool-progress` frames between the tool call and
-  // its result, in phase order, profiling counting done 1..N of N.
-  const frames = sseFrames((await (await streamed).body()).toString('utf8'));
-  const toolAt = frames.findIndex(
-    (f) =>
-      f.type === 'tool' &&
-      (JSON.parse(f.content ?? '{}') as { name?: string }).name ===
-        'assess_data_readiness',
+  await scenarioStep(
+    page,
+    "And one readiness report is stored with the run's id",
+    async () => {
+      const reports = await listReports(page, datasourceId);
+      expect(reports).toHaveLength(1);
+      const report = await getReport(page, reports[0].id);
+      expect(report.runId, 'the report keeps its run id').toBeTruthy();
+    },
   );
-  const resultAt = frames.findIndex((f) => f.type === 'tool-result');
-  expect(toolAt, 'the tool frame').toBeGreaterThanOrEqual(0);
-  expect(resultAt, 'the tool-result frame').toBeGreaterThan(toolAt);
-  const progress = frames
-    .slice(toolAt + 1, resultAt)
-    .filter((f) => f.type === 'tool-progress')
-    .map(
-      (f) =>
-        JSON.parse(f.content ?? '{}') as {
-          tool: string;
-          phase: string;
-          message: string;
-          done?: number;
-          total?: number;
-        },
-    );
-  expect(
-    progress.length,
-    'progress frames between tool and result',
-  ).toBeGreaterThan(0);
-  for (const frame of progress) {
-    expect(frame.tool).toBe('assess_data_readiness');
-  }
-  const phases = [...new Set(progress.map((f) => f.phase))];
-  expect(phases).toEqual([
-    'inventory',
-    'profiling',
-    'relationships',
-    'scoring',
-    'storing',
-  ]);
-  const profiling = progress.filter((f) => f.phase === 'profiling');
-  expect(profiling.every((f) => f.total === WORLD_CUP_TABLES.length)).toBe(
-    true,
+  await scenarioStep(
+    page,
+    'And the answer shows the agent explanation and a readiness card',
+    async () => {
+      await expect(runAnswer(page)).toContainText(ASSESS_ANSWER);
+      const card = runAnswer(page).getByTestId('readiness-card');
+      await expect(card).toBeVisible();
+      await expect(card).toContainText(WORLD_CUP_DATASOURCE);
+      await expect(card.getByTestId('readiness-card-score')).toContainText(
+        /\d+\/100/,
+      );
+    },
   );
-  const doneCounts = profiling
-    .map((f) => f.done)
-    .filter((d): d is number => d !== undefined);
-  expect(Math.max(...doneCounts)).toBe(WORLD_CUP_TABLES.length);
-  expect(doneCounts).toEqual([...doneCounts].sort((a, b) => a - b));
-  expect(
-    profiling.some((f) => /^Profiling .+ \(\d+\/\d+\)…$/.test(f.message)),
-  ).toBe(true);
-  // The UI part (the running row's `tool-progress`) is not asserted: the
-  // World Cup run lasts about 0.3 s and the fixture has no stream throttle.
-
-  // The turn ran the Data Readiness Agent, not the assistant (R2, R3, Block D1).
-  const requests = requestsOf(ASSESS_QUESTION);
-  expect(requests.length).toBeGreaterThanOrEqual(2);
-  const first = requests[0];
-  // The drill-down tools are offered besides the readiness tools (R3,
-  // ADR-0035); no other dataset-browsing, visual or workspace tool is.
-  expect(first.tools).toEqual(
-    expect.arrayContaining([
-      ...READINESS_TOOLS,
-      ...DRILLDOWN_TOOLS,
-      'show_in_panel',
-      'ask_clarification',
-    ]),
+  await scenarioStep(
+    page,
+    'When I click Open scorecard, then the scorecard shows under the answer, and Close hides it',
+    async () => {
+      await runAnswer(page).getByTestId('readiness-open-scorecard').click();
+      const panel = page.getByTestId('workflow-run-scorecard');
+      await expect(panel.getByTestId('readiness-scorecard')).toContainText(
+        WORLD_CUP_DATASOURCE,
+      );
+      await panel.getByTestId('workflow-run-scorecard-close').click();
+      await expect(panel).toHaveCount(0);
+    },
   );
-  for (const forbidden of [
-    'list_entities',
-    'sample_rows',
-    'update_workflow',
-    'create_visual',
-    'mastra_workspace_write_file',
-  ]) {
-    expect(first.tools).not.toContain(forbidden);
-  }
-  expect(
-    systemTexts(first)[0].startsWith('You are the Data Readiness Agent'),
-  ).toBe(true);
-  const system = systemTexts(first).join('\n');
-  expect(system).toContain('Datasets for this session (data readiness):');
-  // Each dataset line carries the datasource id and an example entity key
-  // for the drill-down tools (ADR-0035, agents.md 4.1).
-  expect(system).toContain(
-    `- ${DATASET} — PostgreSQL datasource "${WORLD_CUP_DATASOURCE}" (datasourceId ${datasourceId}), ${WORLD_CUP_TABLES.length} entities, named like ${worldCupKey(WORLD_CUP_TABLES[0])}`,
-  );
-  expect(system).toContain(
-    `Today is ${new Date().toISOString().slice(0, 10)}.`,
-  );
-
-  // The stored report: from this session, over the World Cup datasource (R24).
-  const reports = await listReports(page, datasourceId);
-  expect(reports).toHaveLength(1);
-  const report = await getReport(page, reports[0].id);
-  expect(report.datasourceName).toBe(WORLD_CUP_DATASOURCE);
-  expect(report.datasourceKind).toBe('postgres');
-  expect(report.sessionId).toBe(session);
-  expect(report.entityCount).toBe(WORLD_CUP_TABLES.length);
-
-  // The model saw the compact summary only (R5): the report id, no full list.
-  const toolResult = turnToolResults(requests[1])[0];
-  expect(toolResult).toContain(report.id);
-  expect(toolResult).toContain('topFindings');
-  // The full list is never sent: no `findings` key, only `topFindings`.
-  expect(toolResult).not.toMatch(/findings\\*"\s*:/);
-
-  // Then the right panel shows the scorecard for the World Cup datasource,
-  // with an overall score out of 100, a band and ten dimension bars.
-  await expect(scorecard(page)).toBeVisible();
-  await expectScorecardShows(page, report);
-  for (const dimension of UNASSESSED) {
-    await expect(dimensionRow(page, dimension as Dimension)).toContainText(
-      'Not assessed',
-    );
-  }
-
-  // And the answer carries a readiness card with "Open scorecard" (R25).
-  const readinessCard = page.getByTestId('readiness-card');
-  await expect(readinessCard).toHaveCount(1);
-  await expect(readinessCard).toContainText(WORLD_CUP_DATASOURCE);
-  await expect(readinessCard.getByTestId('readiness-card-score')).toContainText(
-    `${report.overallScore}/100 · ${report.maturity}`,
-  );
-  const open = readinessCard.getByTestId('readiness-open-scorecard');
-  await expect(open).toHaveText(/Open scorecard/);
-  await open.click();
-  await expect(scorecard(page)).toBeVisible();
-  await expectScorecardShows(page, report);
-
-  await page.screenshot({
-    path: testInfo.outputPath('data-readiness-scorecard.png'),
-  });
 });
 
 test('A table too large to profile is listed as not profiled', async ({
@@ -665,11 +523,11 @@ test('A table too large to profile is listed as not profiled', async ({
   const { page } = await launchApp(cappedDir, {
     READINESS_MAX_PROFILED_ROWS: String(cap),
   });
-  await saveLenaiSettings(page, stub.baseUrl);
   const datasourceId = await seedWorldCup(page);
 
-  // When I assess the dataset from the chat.
-  const report = await assessFromChat(page, datasourceId);
+  // When the dataset is assessed and I open its scorecard from a past chat.
+  const report = await assessThroughApi(page, datasourceId);
+  await openScorecardFromPastChat(page, cappedDir, report);
 
   // Then the stored report lists those tables as not profiled (R31).
   const listed = report.notProfiled ?? [];
@@ -694,11 +552,17 @@ test('A table too large to profile is listed as not profiled', async ({
   await evidence(page, '1.20.3', 'readiness-not-profiled.png');
 });
 
-test('the scorecard shows the same numbers as the API', async ({ page }) => {
-  // Given an assessment of the World Cup datasource was run from the chat.
+test('the scorecard shows the same numbers as the API', async ({
+  appDataDir,
+  page,
+}) => {
+  // Given an assessment of the World Cup datasource is stored and its
+  // scorecard is open from a past chat.
   const datasourceId = await seedWorldCup(page);
-  await assessFromChat(page, datasourceId);
+  const stored = await assessThroughApi(page, datasourceId);
+  await openScorecardFromPastChat(page, appDataDir, stored);
   const [newest] = await listReports(page, datasourceId);
+  expect(newest.id).toBe(stored.id);
 
   // When I request GET /data-readiness/assessments/<report id>.
   const report = await getReport(page, newest.id);
@@ -720,15 +584,19 @@ test('the scorecard shows the same numbers as the API', async ({ page }) => {
   }
 });
 
-test('past assessments lists and reopens earlier reports', async ({ page }) => {
-  // Given two assessments of the World Cup datasource were run: an earlier
-  // one through the API, then one from the chat.
+test('past assessments lists and reopens earlier reports', async ({
+  appDataDir,
+  page,
+}) => {
+  // Given two assessments of the World Cup datasource are stored, and the
+  // newer one's scorecard is open from a past chat.
   const datasourceId = await seedWorldCup(page);
   const older = await assessThroughApi(page, datasourceId);
-  const newer = await assessFromChat(page, datasourceId);
+  const newer = await assessThroughApi(page, datasourceId);
   expect(newer.id).not.toBe(older.id);
   const listed = await listReports(page, datasourceId);
   expect(listed.map((r) => r.id)).toEqual([newer.id, older.id]);
+  await openScorecardFromPastChat(page, appDataDir, newer);
 
   // The scorecard opens on the newer report.
   await expectScorecardShows(page, newer);
@@ -771,10 +639,14 @@ test('past assessments lists and reopens earlier reports', async ({ page }) => {
   await expect(selected(items.nth(0))).toHaveCount(0);
 });
 
-test('filtering findings by dimension and severity', async ({ page }) => {
+test('filtering findings by dimension and severity', async ({
+  appDataDir,
+  page,
+}) => {
   // Given the scorecard shows a report with findings in several dimensions.
   const datasourceId = await seedWorldCup(page);
-  const report = await assessFromChat(page, datasourceId);
+  const report = await assessThroughApi(page, datasourceId);
+  await openScorecardFromPastChat(page, appDataDir, report);
   const dimensionsWithFindings = new Set(
     report.findings.map((f) => f.dimension),
   );
@@ -859,99 +731,4 @@ test('filtering findings by dimension and severity', async ({ page }) => {
   await dimensionFilter.selectOption({ label: 'All' });
   await severityFilter.selectOption({ label: 'All' });
   await expect(findingRows(page)).toHaveCount(report.findings.length);
-});
-
-test('the agent shows the records behind a finding', async ({ page }) => {
-  // The Gherkin's Formula 1 `driver.second_nationality_country_id` stands in
-  // here as the World Cup `goals.assist_player_id`, null for unassisted goals:
-  // the suite's database is the World Cup sample.
-  const datasourceId = await seedWorldCup(page);
-  const before = await assessThroughApi(page, datasourceId);
-  const nulls = Number(
-    await worldCupScalar(
-      'select count(*) from world_cup.goals where assist_player_id is null',
-    ),
-  );
-  expect(nulls, 'the sample has unassisted goals').toBeGreaterThan(0);
-  const shown = Math.min(nulls, 20);
-  const goals = worldCupKey('goals');
-  const question =
-    'what are the records with assist_player_id null values in goals';
-  const sql = `SELECT id, scorer_player_id, assist_player_id FROM ${goals} WHERE assist_player_id IS NULL ORDER BY id LIMIT 20`;
-
-  // The model drills down: describe_entity, run_readonly_sql, then answers
-  // with the count first and a table built from the rows the query returned.
-  stub.reply = (request) => {
-    if (lastUserText(request) !== question) return { text: 'Noted.' };
-    const results = turnToolResults(request);
-    if (results.length === 0) {
-      return {
-        toolCall: {
-          name: 'describe_entity',
-          arguments: { entity: goals, datasourceId },
-        },
-      };
-    }
-    if (results.length === 1) {
-      return {
-        toolCall: {
-          name: 'run_readonly_sql',
-          arguments: {
-            sql,
-            datasourceId,
-            rationale: 'List the goals with no assist.',
-          },
-        },
-      };
-    }
-    const { rows = [] } = JSON.parse(results[1]) as {
-      rows?: Record<string, unknown>[];
-    };
-    const table = [
-      '| id | scorer_player_id |',
-      '| --- | --- |',
-      ...rows.map((row) => `| ${String(row['id'])} | ${String(row['scorer_player_id'])} |`),
-    ].join('\n');
-    return {
-      text: `There are ${rows.length} goals with a null assist_player_id.\n\n${table}`,
-    };
-  };
-
-  await startReadinessChat(page);
-  await send(
-    page,
-    question,
-    `There are ${shown} goals with a null assist_player_id.`,
-  );
-
-  // The agent ran one read-only IS NULL query on goals, which returned rows.
-  const requests = requestsOf(question);
-  expect(requests[0].tools).toEqual(expect.arrayContaining(DRILLDOWN_TOOLS));
-  const last = requests[requests.length - 1];
-  const sqlResult = JSON.parse(turnToolResults(last)[1]) as {
-    rows?: Record<string, unknown>[];
-    error?: string;
-  };
-  expect(sqlResult.error).toBeUndefined();
-  expect(sqlResult.rows).toHaveLength(shown);
-  expect(sqlResult.rows!.every((row) => row['assist_player_id'] === null)).toBe(
-    true,
-  );
-
-  // The answer leads with the count and shows the rows in a table.
-  const answer = page.locator('table').last();
-  await expect(answer.locator('tbody tr')).toHaveCount(shown);
-  await expect(answer.locator('tbody tr').first()).toContainText(
-    String(sqlResult.rows![0]['id']),
-  );
-  await page.getByText('Data used (1 query)').click();
-  await expect(page.getByText(`run_readonly_sql — ${shown} rows`)).toBeVisible();
-  await expect(page.getByText('WHERE assist_player_id IS NULL')).toBeVisible();
-
-  // No score changes: the stored report is the same one, unchanged.
-  const reports = await listReports(page, datasourceId);
-  expect(reports).toHaveLength(1);
-  const after = await getReport(page, before.id);
-  expect(after.overallScore).toBe(before.overallScore);
-  expect(after.dimensionScores).toEqual(before.dimensionScores);
 });

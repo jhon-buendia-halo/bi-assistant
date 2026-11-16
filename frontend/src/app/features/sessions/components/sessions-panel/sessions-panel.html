@@ -1,0 +1,18 @@
+@if (state.activeSession(); as session) {
+  <!-- Deferred: the panel views stay out of the initial bundle. -->
+  @defer (on immediate) {
+    <app-session-panel
+      class="min-h-0 flex-1"
+      [session]="session"
+      [item]="state.activePanelItem()"
+      (selectItem)="state.onSelectPanelItem($event)"
+      [visualization]="state.activeVisualization()"
+      [error]="state.visualizationError()"
+      [downloading]="
+        state.downloadingVisualization() === state.activeVisualization()?.id
+      "
+      (downloadVisual)="state.downloadVisualization($event)"
+      (selectVersion)="state.selectVisualVersion($event)"
+    />
+  }
+}

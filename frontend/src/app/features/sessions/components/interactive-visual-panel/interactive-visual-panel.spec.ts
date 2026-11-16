@@ -78,7 +78,11 @@ function visual(
     createdAt: '2026-01-01T00:00:00.000Z',
     currentVersion: 2,
     versions: [
-      { version: 1, createdAt: '2026-01-01T00:00:00.000Z', sourceMessageAt: '2026-01-01T00:00:00.000Z' },
+      {
+        version: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        sourceMessageAt: '2026-01-01T00:00:00.000Z',
+      },
       {
         version: 2,
         createdAt: '2026-01-02T00:00:00.000Z',
@@ -96,7 +100,7 @@ function errorMessage(message: string): MessageEvent {
   return { data: { type: 'visual-error', message } } as MessageEvent;
 }
 
-const repairUrl = `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/repair`;
+const repairUrl = `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/repair`;
 
 describe('InteractiveVisualPanel auto-repair', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
@@ -111,7 +115,7 @@ describe('InteractiveVisualPanel auto-repair', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -202,7 +206,11 @@ describe('InteractiveVisualPanel auto-repair', () => {
     );
 
     panel.onFrameMessage({
-      data: { type: 'visual-select', value: 'Cardiology', label: 'Cardiology (312)' },
+      data: {
+        type: 'visual-select',
+        value: 'Cardiology',
+        label: 'Cardiology (312)',
+      },
     } as MessageEvent);
     panel.onFrameMessage({
       data: { type: 'visual-select', value: 'Oncology' },
@@ -228,7 +236,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -245,7 +253,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     panel.applyTailoring();
 
     const req = http.expectOne(
-      `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
     );
     expect(req.request.body).toEqual({
       instruction:
@@ -270,7 +278,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     expect(panel.tailorInstruction()).toBe('');
     panel.applyTailoring();
     http.expectNone(
-      `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
+      `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
     );
     expect(panel.tailoring()).toBeFalse();
   });
@@ -280,7 +288,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     panel.applyTailoring();
     http
       .expectOne(
-        `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
+        `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/tailor`,
       )
       .flush({ ok: false, message: 'Instruction required' });
 
@@ -289,7 +297,7 @@ describe('InteractiveVisualPanel tailoring', () => {
   });
 });
 
-const refreshUrl = `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/refresh`;
+const refreshUrl = `${API_BASE_URL}/workflow-runs/session-1/visualizations/visual-1/refresh`;
 
 describe('InteractiveVisualPanel data refresh', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
@@ -304,7 +312,7 @@ describe('InteractiveVisualPanel data refresh', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -372,7 +380,7 @@ describe('InteractiveVisualPanel data point selection', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -402,13 +410,24 @@ describe('InteractiveVisualPanel data point selection', () => {
 
 describe('withVisualTheme', () => {
   it('writes the theme on the document root', () => {
-    expect(withVisualTheme('<!doctype html>\n<html lang="en"><body></body></html>', 'dark')).toBe(
-      '<!doctype html>\n<html data-theme="dark" lang="en"><body></body></html>',
+    expect(
+      withVisualTheme(
+        '<!doctype html>\n<html lang="en"><body></body></html>',
+        'dark',
+      ),
+    ).toBe(
+      '<!doctype html>\n<html data-theme="dark" data-brand="halo" lang="en"><body></body></html>',
     );
   });
 
   it('leaves an empty document alone', () => {
     expect(withVisualTheme('', 'light')).toBe('');
+  });
+
+  it('writes the brand an Agentic Hub build passes (ADR-0045)', () => {
+    expect(
+      withVisualTheme('<html><body></body></html>', 'light', 'mercer'),
+    ).toBe('<html data-theme="light" data-brand="mercer"><body></body></html>');
   });
 });
 
@@ -424,7 +443,7 @@ describe('InteractiveVisualPanel theme', () => {
     theme = TestBed.inject(ThemeService);
     theme.setPreference('light');
     fixture = TestBed.createComponent(InteractiveVisualPanel);
-    fixture.componentRef.setInput('sessionId', session.id);
+    fixture.componentRef.setInput('runId', session.id);
     fixture.componentRef.setInput(
       'visualization',
       visual({ document: '<html lang="en"><body></body></html>' }),
@@ -442,7 +461,7 @@ describe('InteractiveVisualPanel theme', () => {
 
   it('opens the visual in the app theme', () => {
     expect(frame().getAttribute('srcdoc')).toContain(
-      '<html data-theme="light" lang="en">',
+      '<html data-theme="light" data-brand="halo" lang="en">',
     );
   });
 
@@ -462,5 +481,154 @@ describe('InteractiveVisualPanel theme', () => {
       '*',
     ]);
     expect(frame().getAttribute('srcdoc')).toBe(before);
+  });
+});
+
+describe('InteractiveVisualPanel on a run (visuals R12-R24; api.md 131, 133, 134)', () => {
+  let fixture: ComponentFixture<InteractiveVisualPanel>;
+  let panel: InteractiveVisualPanel;
+  let http: HttpTestingController;
+  const base = `${API_BASE_URL}/workflow-runs/r1/visualizations/visual-1`;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [InteractiveVisualPanel],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(InteractiveVisualPanel);
+    panel = fixture.componentInstance;
+    http = TestBed.inject(HttpTestingController);
+    fixture.componentRef.setInput('runId', 'r1');
+    fixture.componentRef.setInput('visualization', visual());
+    fixture.detectChanges();
+  });
+
+  afterEach(() => http.verify());
+
+  it('tailors through the run route and emits the stored run with the new version', () => {
+    const results: unknown[] = [];
+    panel.visualRefreshed.subscribe((result) => results.push(result));
+    panel.tailorChartType.set('bar');
+    panel.applyTailoring();
+
+    const req = http.expectOne(`${base}/tailor`);
+    expect(req.request.body).toEqual({
+      instruction: 'Change the visual to a bar chart.',
+    });
+    const result = {
+      ok: true,
+      message: 'Updated to version 3',
+      run: { id: 'r1' },
+      visualization: visual({ version: 3, currentVersion: 3 }),
+    };
+    req.flush(result);
+    expect(results).toEqual([result]);
+    expect(panel.tailorMenuOpen()).toBeFalse();
+  });
+
+  it('refreshes through the run route', () => {
+    panel.refreshData();
+    const req = http.expectOne(`${base}/refresh`);
+    expect(req.request.method).toBe('POST');
+    req.flush({
+      ok: true,
+      message: 'Refreshed data for version 2',
+      run: { id: 'r1' },
+      visualization: visual(),
+    });
+    expect(panel.refreshingData()).toBeFalse();
+  });
+
+  it('repairs through the run route', () => {
+    panel.onFrameMessage(errorMessage('x is not defined'));
+    const req = http.expectOne(`${base}/repair`);
+    expect(req.request.body).toEqual({ error: 'x is not defined', version: 2 });
+    req.flush({ ok: false, message: 'no' });
+  });
+});
+
+describe('InteractiveVisualPanel as a background task (ADR-0047)', () => {
+  const base = `${API_BASE_URL}/workflow-runs/r1/visualizations/visual-1`;
+  let http: HttpTestingController;
+
+  function open(
+    onRefreshed?: (result: unknown) => void,
+  ): ComponentFixture<InteractiveVisualPanel> {
+    const fixture = TestBed.createComponent(InteractiveVisualPanel);
+    // Subscribed before the first change detection, which applies a result
+    // the panel missed.
+    if (onRefreshed)
+      fixture.componentInstance.visualRefreshed.subscribe(onRefreshed);
+    fixture.componentRef.setInput('runId', 'r1');
+    fixture.componentRef.setInput('visualization', visual());
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [InteractiveVisualPanel],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('keeps Tailor busy after the panel is destroyed and shown again', () => {
+    const first = open();
+    first.componentInstance.tailorChartType.set('bar');
+    first.componentInstance.applyTailoring();
+    const req = http.expectOne(`${base}/tailor`);
+    first.destroy();
+    expect(req.cancelled).toBeFalse();
+
+    const second = open();
+    expect(second.componentInstance.tailoring()).toBeTrue();
+    expect(second.componentInstance.refreshingData()).toBeFalse();
+    req.flush({ ok: false, message: 'Instruction required' });
+  });
+
+  it('applies the result in a panel created after the task ended', () => {
+    const first = open();
+    const gone: unknown[] = [];
+    first.componentInstance.visualRefreshed.subscribe((r) => gone.push(r));
+    first.componentInstance.refreshData();
+    const req = http.expectOne(`${base}/refresh`);
+    first.destroy();
+
+    const result = {
+      ok: true,
+      message: 'Refreshed',
+      run: { id: 'r1' },
+      visualization: visual({ version: 3, currentVersion: 3 }),
+    };
+    req.flush(result);
+    expect(gone).toEqual([]);
+
+    const applied: unknown[] = [];
+    const second = open((r) => applied.push(r));
+    expect(applied).toEqual([result]);
+    expect(second.componentInstance.refreshingData()).toBeFalse();
+
+    // A third panel does not apply the same result again.
+    const again: unknown[] = [];
+    open((r) => again.push(r));
+    expect(again).toEqual([]);
+  });
+
+  it('shows the tailor error from the failed task in a new panel', () => {
+    const first = open();
+    first.componentInstance.tailorSort.set('asc');
+    first.componentInstance.applyTailoring();
+    http
+      .expectOne(`${base}/tailor`)
+      .flush({ ok: false, message: 'Instruction required' });
+    first.destroy();
+
+    const second = open();
+    expect(second.componentInstance.tailorError()).toBe('Instruction required');
+    second.componentInstance.toggleTailorMenu();
+    expect(second.componentInstance.tailorError()).toBeNull();
   });
 });

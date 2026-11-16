@@ -53,6 +53,18 @@ export interface ReadinessToolServices {
   }): Promise<ReadinessReportList>;
 }
 
+/**
+ * The RequestContext key of the report a workflow run has just stored
+ * (the Assess Data Readiness workflow's Explain report step): while set,
+ * `assess_data_readiness` refuses and points at that report.
+ */
+export const ASSESSED_REPORT_CONTEXT_KEY = 'readiness-assessed-report';
+
+/** What `assess_data_readiness` answers once the run has assessed. */
+export function alreadyAssessed(reportId: string): string {
+  return `This run has already assessed the dataset. Call get_readiness_report with reportId "${reportId}" instead.`;
+}
+
 /** The stream event the session emits when a readiness tool returns a report. */
 export const READINESS_REPORT_EVENT = 'readiness-report';
 

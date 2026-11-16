@@ -77,17 +77,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
         updatedAt: null,
       });
     }
-    // The RFP Builder, the other Official agent, links too (BA-228).
-    expect(await service.view('rfp')).toMatchObject({
-      editable: shippedAgentPrompt('rfp'),
-      linksAllowed: true,
-    });
-    // Its detail shows the links as written, for the chips and the Graph tab.
-    expect((await service.view('rfp'))?.editable).toContain(
-      '1. Client and renewal — [[skill:rfp-client-renewal]]',
-    );
-    expect((await service.view('rfp'))?.editable).toContain('[[tool:get_rfp]]');
-    // So does the Data Readiness Agent (agents.md 2.10).
+    // The Data Readiness Agent, another Official agent, links too (agents.md 2.10).
     expect(await service.view('data-readiness')).toMatchObject({
       editable: shippedAgentPrompt('data-readiness'),
       linksAllowed: true,
@@ -98,10 +88,45 @@ describe('AgentPromptsService (ADR-0026)', () => {
     expect(await service.view('user-1')).toBeUndefined();
   });
 
+  it('ignores a prompt override saved for a removed showcase agent (1.23.8)', async () => {
+    const { service, store } = build();
+    await store.insert({
+      key: 'strategy',
+      prompt: 'Old text.',
+      baseHash: 'x',
+      updatedBy: 'u',
+    });
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+    expect(await service.view('strategy')).toBeUndefined();
+    await expect(service.save('strategy', { prompt: 'x' })).rejects.toThrow(
+      'Agent "strategy" not found',
+    );
+    // The other agents still read their own prompts.
+    expect(await service.view('sql-fixer')).toMatchObject({ modified: false });
+  });
+
+  it('ignores a prompt override saved for the removed RFP Builder', async () => {
+    const { service, store } = build();
+    await store.insert({
+      key: 'rfp',
+      prompt: 'You are the RFP Builder. Old text.',
+      baseHash: 'x',
+      updatedBy: 'u',
+    });
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+    expect(shippedAgentPrompt('rfp')).toBeUndefined();
+    expect(await service.view('rfp')).toBeUndefined();
+    await expect(service.save('rfp', { prompt: 'x' })).rejects.toThrow(
+      'Agent "rfp" not found',
+    );
+    await expect(service.reset('rfp')).rejects.toThrow('Agent "rfp" not found');
+    expect(await service.view('sql-fixer')).toMatchObject({ modified: false });
+  });
+
   it('saves, serves on the next call and shows the override as the editable text', async () => {
     const { service } = build();
     const name = await service.save('sql-fixer', { prompt: '  Fix it.  ' });
-    expect(name).toBe('SQL Fixer');
+    expect(name).toBe('David');
     // Trimmed, and mirrored into the bridge the agent reads per call.
     expect(agentPromptOverrideFor('sql-fixer')?.prompt).toBe('Fix it.');
     const view = await service.view('sql-fixer');
@@ -131,16 +156,12 @@ describe('AgentPromptsService (ADR-0026)', () => {
   it('resets, also when there was no override', async () => {
     const { service } = build();
     await service.save('visualization', { prompt: 'Edited.' });
-    expect(await service.reset('visualization')).toBe(
-      'Interactive Visual Designer',
-    );
+    expect(await service.reset('visualization')).toBe('Ryan');
     expect(agentPromptOverrideFor('visualization')).toBeUndefined();
     expect(await service.view('visualization')).toMatchObject({
       modified: false,
     });
-    await expect(service.reset('visualization')).resolves.toBe(
-      'Interactive Visual Designer',
-    );
+    await expect(service.reset('visualization')).resolves.toBe('Ryan');
   });
 
   it('loads the stored overrides into the bridge on init', async () => {
@@ -184,49 +205,6 @@ describe('AgentPromptsService (ADR-0026)', () => {
       );
     });
 
-    it("the RFP Builder's identity, then skill links, then tools not its own", async () => {
-      expect(await refusal('rfp', 'Be brief.')).toBe(
-        'The RFP Builder\'s prompt must start with "You are the RFP Builder"',
-      );
-      const skillRefusal =
-        "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user";
-      expect(
-        await refusal('rfp', 'You are the RFP Builder. [[skill:x]] [[tool:x]]'),
-      ).toBe(skillRefusal);
-      // The assistant's built-in skill is not the RFP Builder's.
-      expect(
-        await refusal(
-          'rfp',
-          'You are the RFP Builder. [[skill:curated-knowledge]]',
-        ),
-      ).toBe(skillRefusal);
-      expect(await refusal('rfp', 'You are the RFP Builder. [[tool:x]]')).toBe(
-        'Unknown tool "x"',
-      );
-      // An assistant-only tool is not one of its tools.
-      expect(
-        await refusal(
-          'rfp',
-          'You are the RFP Builder. [[skill:rfp-carriers]] [[tool:run_readonly_sql]]',
-        ),
-      ).toBe('Unknown tool "run_readonly_sql"');
-    });
-
-    it("accepts the RFP Builder's own tools and skill in its prompt", async () => {
-      const { service } = build();
-      await service.save('rfp', {
-        prompt:
-          'You are the RFP Builder. Load [[skill:rfp-client-renewal]] and [[skill:rfp-package]], then call [[tool:list_clients]], [[tool:set_rfp_timeline]] and [[tool:ask_clarification]].',
-      });
-      expect(agentPromptOverrideFor('rfp')?.prompt).toContain(
-        '[[skill:rfp-client-renewal]]',
-      );
-      // Its shipped prompt, links and all, saves as an override.
-      await expect(
-        service.save('rfp', { prompt: shippedAgentPrompt('rfp') }),
-      ).resolves.toBe('rfp');
-    });
-
     it("the Data Readiness Agent's identity, then skill links, then tools not its own", async () => {
       const identity = 'You are the Data Readiness Agent';
       expect(await refusal('data-readiness', 'Be brief.')).toBe(
@@ -243,7 +221,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
           await refusal('data-readiness', `${identity}. [[skill:${skill}]]`),
         ).toBe(skillRefusal);
       }
-      // Neither an assistant-only tool, an RFP tool nor update_workflow.
+      // Neither an assistant-only tool, a removed RFP tool nor update_workflow.
       for (const tool of ['x', 'sample_rows', 'get_rfp', 'update_workflow']) {
         expect(
           await refusal(
@@ -268,24 +246,24 @@ describe('AgentPromptsService (ADR-0026)', () => {
         service.save('data-readiness', {
           prompt: shippedAgentPrompt('data-readiness'),
         }),
-      ).resolves.toBe('data-readiness');
+      ).resolves.toBe('Sarah');
     });
 
-    it("Questions to Insights v2's identity, then any skill link, then tools not its own (BA-320)", async () => {
-      const identity = 'You are Questions to Insights v2';
-      expect(await refusal('assistant-v2', 'Be brief.')).toBe(
-        `The Questions to Insights v2 prompt must start with "${identity}"`,
+    it("Insights Analyst's identity, then skills not its own, then tools not its own (BA-320)", async () => {
+      const identity = 'You are Questions to Insights';
+      expect(await refusal('insights-analyst', 'Be brief.')).toBe(
+        `The Insights Analyst prompt must start with "${identity}"`,
       );
       // The assistant's identity is not v2's.
-      expect(await refusal('assistant-v2', `${IDENTITY}.`)).toBe(
-        `The Questions to Insights v2 prompt must start with "${identity}"`,
+      expect(await refusal('insights-analyst', `${IDENTITY}.`)).toBe(
+        `The Insights Analyst prompt must start with "${identity}"`,
       );
       const skillRefusal =
-        "Skills can't be linked here: Questions to Insights v2 has no skills";
-      for (const skill of ['x', 'curated-knowledge', 'data-readiness']) {
+        "Only Insights Analyst's own skills can be linked here: this prompt is shared by every user";
+      for (const skill of ['x', 'data-readiness', 'readiness-drilldown']) {
         expect(
           await refusal(
-            'assistant-v2',
+            'insights-analyst',
             `${identity}. [[skill:${skill}]] [[tool:x]]`,
           ),
         ).toBe(skillRefusal);
@@ -293,58 +271,47 @@ describe('AgentPromptsService (ADR-0026)', () => {
       // Neither the assistant's other tools nor another agent's.
       for (const tool of [
         'x',
-        'sample_rows',
         'create_visual',
-        'ask_clarification',
+        'update_visual',
         'show_in_panel',
         'update_workflow',
+        'assess_data_readiness',
         'get_rfp',
       ]) {
         expect(
-          await refusal('assistant-v2', `${identity}. [[tool:${tool}]]`),
+          await refusal(
+            'insights-analyst',
+            `${identity}. [[skill:sql-analysis]] [[tool:${tool}]]`,
+          ),
         ).toBe(`Unknown tool "${tool}"`);
       }
     });
 
-    it("accepts Questions to Insights v2's own tools in its prompt, and shows it with links allowed", async () => {
+    it("accepts Insights Analyst's own tools and skills in its prompt, and shows it with links allowed", async () => {
       const { service } = build();
-      expect(await service.view('assistant-v2')).toEqual({
-        editable: shippedAgentPrompt('assistant-v2'),
-        shipped: shippedAgentPrompt('assistant-v2'),
+      expect(await service.view('insights-analyst')).toEqual({
+        editable: shippedAgentPrompt('insights-analyst'),
+        shipped: shippedAgentPrompt('insights-analyst'),
         modified: false,
         builtInChanged: false,
         linksAllowed: true,
         updatedAt: null,
       });
-      await service.save('assistant-v2', {
+      await service.save('insights-analyst', {
         prompt:
-          'You are Questions to Insights v2. Call [[tool:list_entities]], [[tool:describe_entity]] and [[tool:run_readonly_sql]].',
+          'You are Questions to Insights. Call [[tool:list_entities]], [[tool:describe_entity]], [[tool:sample_rows]], [[tool:run_readonly_sql]] and [[tool:ask_clarification]]. Load [[skill:curated-knowledge]], [[skill:sql-analysis]] and [[skill:result-validation]].',
       });
-      expect(agentPromptOverrideFor('assistant-v2')?.prompt).toContain(
-        '[[tool:run_readonly_sql]]',
+      expect(agentPromptOverrideFor('insights-analyst')?.prompt).toContain(
+        '[[skill:result-validation]]',
       );
       await expect(
-        service.save('assistant-v2', {
-          prompt: shippedAgentPrompt('assistant-v2'),
+        service.save('insights-analyst', {
+          prompt: shippedAgentPrompt('insights-analyst'),
         }),
-      ).resolves.toBe('assistant-v2');
+      ).resolves.toBe('Michael');
     });
 
     it("refuses the Data Readiness Agent's tools and skill in other agents' prompts", async () => {
-      expect(
-        await refusal(
-          'rfp',
-          'You are the RFP Builder. [[skill:data-readiness]]',
-        ),
-      ).toBe(
-        "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
-      );
-      expect(
-        await refusal(
-          'rfp',
-          'You are the RFP Builder. [[tool:assess_data_readiness]]',
-        ),
-      ).toBe('Unknown tool "assess_data_readiness"');
       expect(
         await refusal('assistant', `${IDENTITY}. [[skill:data-readiness]]`),
       ).toBe(
@@ -352,7 +319,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       );
     });
 
-    it("refuses the RFP Builder's tools and skill in the assistant prompt", async () => {
+    it("refuses the removed RFP Builder's tools and skill in the assistant prompt", async () => {
       expect(
         await refusal('assistant', `${IDENTITY}. [[skill:rfp-timeline]]`),
       ).toBe(
@@ -372,7 +339,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       const { service } = build();
       await expect(
         service.save('sql-fixer', { prompt: 'x'.repeat(20000) }),
-      ).resolves.toBe('SQL Fixer');
+      ).resolves.toBe('David');
     });
 
     it("the assistant's identity, then skill links, then unknown tools", async () => {
@@ -401,7 +368,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
         service.save('assistant', {
           prompt: `${IDENTITY}. See [[skill:curated-knowledge]] and [[tool:sample_rows]].`,
         }),
-      ).resolves.toBe('Questions to Insights Assistant');
+      ).resolves.toBe('Emily');
     });
 
     it('any link in a System agent prompt', async () => {
@@ -466,12 +433,12 @@ describe('AgentsController prompt routes (api.md 103-104)', () => {
       controller.savePrompt('sql-fixer', { prompt: 'Fix it.' }),
     ).resolves.toEqual({
       ok: true,
-      message: 'System prompt of "SQL Fixer" saved',
+      message: 'Job description of "David" saved',
       agent: { key: 'sql-fixer', name: 'SQL Fixer' },
     });
     await expect(controller.resetPrompt('sql-fixer')).resolves.toMatchObject({
       ok: true,
-      message: 'System prompt of "SQL Fixer" reset',
+      message: 'Job description of "David" reset',
     });
     await expect(
       controller.savePrompt('sql-fixer', { prompt: '' }),

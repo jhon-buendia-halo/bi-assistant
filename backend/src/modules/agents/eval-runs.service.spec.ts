@@ -11,11 +11,18 @@ jest.mock('../ontology/ontology.service', () => ({
 jest.mock('../../mastra/evals/eval-sets', () => {
   const sets = [
     { id: 'world-cup', cases: [{ id: 'champion-2022' }] },
-    { id: 'rfp', agentKey: 'rfp', cases: [{ id: 'rfp-skill-first' }] },
+    {
+      id: 'data-readiness',
+      agentKey: 'data-readiness',
+      cases: [{ id: 'dr-first' }],
+    },
   ];
   const targets: Record<string, unknown> = {
     assistant: { agentKey: 'assistant' },
-    rfp: { agentKey: 'rfp', finish: jest.fn().mockResolvedValue(undefined) },
+    'data-readiness': {
+      agentKey: 'data-readiness',
+      finish: jest.fn().mockResolvedValue(undefined),
+    },
   };
   return {
     evalSetsFor: (key: string) =>
@@ -27,8 +34,8 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
   selectEvalCases: jest.fn(() => [
     { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
   ]),
-  createEvalSession: jest.fn().mockResolvedValue({ id: 'session' }),
-  cleanupEvalSession: jest.fn().mockResolvedValue(undefined),
+  createEvalHost: jest.fn().mockResolvedValue({ id: 'session' }),
+  cleanupEvalHost: jest.fn().mockResolvedValue(undefined),
   runAssistantEvalCase: jest
     .fn()
     .mockResolvedValue({ id: 'champion-2022', passed: true }),
@@ -45,7 +52,7 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
 
 import { EvalRunsService } from './eval-runs.service';
 import {
-  createEvalSession,
+  createEvalHost,
   fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
@@ -98,7 +105,7 @@ describe('EvalRunsService dataset validation', () => {
         error: expect.stringContaining('bundled World Cup sample') as string,
       });
       expect(repository.insert).not.toHaveBeenCalled();
-      expect(createEvalSession).not.toHaveBeenCalled();
+      expect(createEvalHost).not.toHaveBeenCalled();
       expect(runAssistantEvalCase).not.toHaveBeenCalled();
     }),
   );
@@ -189,39 +196,43 @@ describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
     expect(repository.insert).not.toHaveBeenCalled();
   });
 
-  it("runs the rfp set on the RFP Builder's target and cleans up after it", async () => {
+  it("runs another agent's set on its own target and cleans up after it", async () => {
     jest
       .mocked(selectEvalCases)
       .mockReturnValueOnce([
-        { id: 'rfp-skill-first', question: 'Start an RFP for Orchard' },
+        { id: 'dr-first', question: 'Assess Claims' },
       ] as never);
     jest
       .mocked(runAssistantEvalCase)
-      .mockResolvedValueOnce({ id: 'rfp-skill-first', passed: true } as never);
+      .mockResolvedValueOnce({ id: 'dr-first', passed: true } as never);
 
-    const started = await service().start('rfp', 'wc', ['rfp-skill-first']);
+    const started = await service().start('data-readiness', 'wc', ['dr-first']);
 
     expect(started).toEqual({ jobId: expect.any(String) as string });
-    const rfpSets = [
-      { id: 'rfp', agentKey: 'rfp', cases: [{ id: 'rfp-skill-first' }] },
+    const agentSets = [
+      {
+        id: 'data-readiness',
+        agentKey: 'data-readiness',
+        cases: [{ id: 'dr-first' }],
+      },
     ];
-    expect(selectEvalCases).toHaveBeenCalledWith(['rfp-skill-first'], rfpSets);
-    expect(fixtureForCases).toHaveBeenCalledWith(['rfp-skill-first'], rfpSets);
+    expect(selectEvalCases).toHaveBeenCalledWith(['dr-first'], agentSets);
+    expect(fixtureForCases).toHaveBeenCalledWith(['dr-first'], agentSets);
     expect(repository.insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentKey: 'rfp',
-        caseIds: ['rfp-skill-first'],
+        agentKey: 'data-readiness',
+        caseIds: ['dr-first'],
         totalCases: 1,
       }),
     );
     for (let i = 0; i < 5; i++) {
       await new Promise((resolve) => setImmediate(resolve));
     }
-    const target = evalTargetFor('rfp', 'any') as unknown as {
+    const target = evalTargetFor('data-readiness') as unknown as {
       finish: jest.Mock;
     };
     expect(runAssistantEvalCase).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'rfp-skill-first' }),
+      expect.objectContaining({ id: 'dr-first' }),
       ['Sample'],
       'session',
       '',

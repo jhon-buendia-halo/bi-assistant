@@ -15,6 +15,7 @@ Capability-local vocabulary:
   - Per **relationship**: the from and to namespace, entity and field, the orphan count, and its origin (`declared` or `inferred`).
   - No row values ever enter the profile.
 - **Check.** One rule applied to the profile. It returns its dimension, how many things it checked (*checks run*), and its findings. Entity checks run once per entity. Source checks run once per assessment.
+- **Sampled profile.** A separate, approximate view of a dataset's tables read from row samples, defined by [synthetic-data](../synthetic-data/spec.md) (ADR-0039). It never feeds a readiness score and never changes the exact statistics below: R29 stands as written.
 - **Assessment scope.** The entities assessed:
   - the entities of one dataset, on that dataset's datasource;
   - or, through the API, a given entity list or the whole datasource.
@@ -27,13 +28,20 @@ Capability-local vocabulary:
 - R1. The Data Readiness Agent SHALL be a built-in agent shown on the Agent Hub in the **Official** section.
   - Registry key `data-readiness`, `Owner: Official`.
   - Description: "Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings."
-  - Its card and detail view SHALL offer **Start chat**, with the accessible name `Start chat with Data Readiness Agent`.
-  - While no dataset bound to a PostgreSQL or Databricks datasource exists, Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
-  - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5):
+  - Since 2026-11-12 (ADR-0042) the agent is a library entry, not a workflow: its card and detail view offer no **Start chat** and no **Run**, and it has no workflow of its own (`agent:data-readiness` no longer exists, [workflows](../workflows/spec.md) R2). Since 2026-11-13 it runs the Explain report step of the **Assess Data Readiness** workflow (R2) and the optional **Check data quality** step of **Answer a Business Question** ([workflows](../workflows/spec.md) R27: it judges which engine findings on the tables an analysis read affect its answer), so its detail's **Used in** line shows both workflows (agents-evals R109). Reports already stored stay viewable wherever they were (a stored run or past chat, a stored report). The agent's evals still run it on its own agent turn.
+  - While no dataset bound to a PostgreSQL or Databricks datasource exists, that Start chat SHALL be disabled, and its title SHALL read `Add a PostgreSQL or Databricks dataset first`.
+  - Its detail view SHALL have the Official agent's tabs ([agents-evals](../agents-evals/spec.md) R5), with no Chat Box, opening on System Prompt:
     - the System Prompt tab shows the prompt as served and allows the built-in prompt edit; an edited prompt SHALL still start with `You are the Data Readiness Agent`;
     - the Skills tab lists the skills `data-readiness` and `readiness-drilldown` as Built-in and On demand;
     - the Tools tab lists its own tools.
-- R2. **Start chat** on the Data Readiness Agent SHALL create a session at once, with no form.
+- R2. Since 2026-11-13 the **Assess Data Readiness** workflow (`data-readiness-assessment`; [workflows](../workflows/spec.md) R1, R29; [agents.md](../../system/agents.md) 5.13) SHALL run an assessment of one dataset from its page (**Execute workflow**, the Run panel; [workflows](../workflows/spec.md) R21), one run per assessment ([workflows](../workflows/spec.md) R18-R20). (From 1.23.16 to 2026-11-12 the agent's own one-step workflow did this; ADR-0042 removed it.)
+  - Its input is `dataset`, a list of the datasets bound to a PostgreSQL or Databricks datasource (required), and `question`, a text area that starts as `Assess the readiness of this dataset` (an empty question means that text). The three starter questions of R2a are example chips under it.
+  - Its code steps profile the dataset's tables, score them with the deterministic engine and store the report with the run's id (R6-R33, R24); its **Explain report** step runs the Data Readiness Agent on the stored report, which reads it with `get_readiness_report` and SHALL NOT run a second assessment (while the step runs, `assess_data_readiness` answers an error naming the stored report).
+  - The run host covers that one dataset only, so the agent never asks which dataset.
+  - A dataset that is not PostgreSQL or Databricks SHALL be refused before the run with `Dataset "<name>" is not a PostgreSQL or Databricks dataset`.
+  - The run's answer, its readiness card and its files show in the Run panel (R5; [synthetic-data](../synthetic-data/spec.md) R43). **Follow up** asks a further question as a new run with this run as its context, which assesses again; **Stop** cancels a running assessment (R33) and stores no report.
+  - The assistant-only passes SHALL NOT apply ([agent-answers](../agent-answers/spec.md) R61).
+- R2a. Until chats are retired (1.23.22), **Start chat** on the workflow (R1) SHALL also still create a session at once, with no form.
   - The session is named "Data Readiness" and bound to the agent. It covers every dataset bound to a PostgreSQL or Databricks datasource, ordered by dataset name.
   - The app SHALL show the toast `Session "Data Readiness" created` and open the session on its welcome block.
   - The welcome block uses the agent's description and offers the starter questions:
@@ -42,7 +50,7 @@ Capability-local vocabulary:
     - "Show my past assessments"
   - The session header and session-list row SHALL show the agent chip "Data Readiness Agent".
   - Without a qualifying dataset the system SHALL refuse, creating nothing, with `Add a PostgreSQL or Databricks dataset first`.
-  - Every turn of the session SHALL run the Data Readiness Agent, not the assistant. The assistant-only passes SHALL NOT apply ([sessions-chat](../sessions-chat/spec.md) R61).
+  - Every turn of the session SHALL run the Data Readiness Agent, as a run does.
 
 ### How the agent works
 
@@ -50,6 +58,7 @@ Capability-local vocabulary:
   - `assess_data_readiness` runs an assessment of one session dataset and stores the report.
   - `get_readiness_report` reads a stored report.
   - `list_readiness_reports` lists the stored reports of a session dataset's datasource, newest first.
+  - `profile_data_sample` profiles a sample of a session dataset's tables, and `generate_synthetic_data` saves a synthetic copy as a SQL script the user downloads from the panel ([../synthetic-data/spec.md](../synthetic-data/spec.md) R40-R44, [agents.md](../../system/agents.md) 3.14). Their numbers are approximate and never a readiness score (R29 stands).
   - `describe_entity` and `run_readonly_sql`, the assistant's shared dataset tools, to show the records behind a finding (R4, ADR-0035). They are session-scoped, read-only and guarded as in [agents.md](../../system/agents.md) 3.2 and 3.4.
 
   It SHALL have no workspace tool and no other dataset-browsing tool. A tool SHALL never fail the turn: errors reach the model as `{ error }` text ([agents.md](../../system/agents.md) 3.13).
@@ -59,8 +68,9 @@ Capability-local vocabulary:
   - A query result SHALL never change, recompute or replace a score or a finding. When a query's count differs from a finding's, the agent SHALL give both and say the data may have changed since the report was generated.
   - R6 is about the assessment's profiler only. It does not limit the chat's drill-down queries.
 - R5. After a successful `assess_data_readiness` or `get_readiness_report`, the app SHALL:
-  - show that report's **scorecard** in the right panel and open the panel (R25);
-  - attach a readiness card to the answer that carries the report (R25).
+  - attach a readiness card to the answer that carries the report (R25);
+  - in a chat, show that report's **scorecard** in the right panel and open the panel (R25);
+  - in a run, show the scorecard, with Past assessments, in the Run tab under the answer when **Open scorecard** on the card is clicked, with a Close button. A new run closes it.
 
   The model sees only a compact summary (overall score, band, the ten dimension scores, the finding count and up to 20 findings, most severe first, and the not-profiled entities, R31), never the full finding list.
 
@@ -100,7 +110,7 @@ Capability-local vocabulary:
   Each dialect writes the pattern in its own regex flavour.
 - R10. A readable `text` column with between 2 and 1,000 distinct values SHALL also get a **normalized distinct count**: the distinct count of its values lower-cased and trimmed.
 - R11. The profile's relationships SHALL be:
-  - **declared:** every declared foreign key whose child entity is in scope; the parent may lie outside the scope (it is still a valid join target), as in the reference engine;
+  - **declared:** every declared foreign key whose child entity is in scope; the parent may lie outside the scope (it is still a valid join target), as in the reference engine; on Databricks, a scoped assessment's join targets are the tables of the scope's schemas (R28);
   - **inferred:** join candidates found by name in the same namespace, at most 20 per assessment. A column named `<base>_id` or `<base>Id`, whose (namespace, entity, column) is not already a declared foreign key, points to the first entity named `<base>`, `<base>s`, `dim_<base>`, `<base>_dim` or `dim<base>` (case-insensitive, never the entity itself). The target column is that entity's column named `id`, or else its column with the same name. With neither, there is no candidate.
 
   Each relationship's **orphan count** SHALL be the number of child rows whose non-null value has no matching parent row.
@@ -174,7 +184,7 @@ Thresholds are fixed at these defaults, with no setting to change them:
   - the number of entities assessed;
   - the ten dimension scores, the overall score and the band;
   - every finding;
-  - the session it was run from, when it came from a chat.
+  - where it was run from: the chat session (`sessionId`) when it came from a chat, or the workflow run (`runId`) when it came from a run, never both.
 
   Reports are never edited. They can be listed per datasource, newest first, and read by id ([api.md](../../system/api.md) 2.17).
 - R25. The **scorecard** SHALL show:
@@ -200,6 +210,8 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 - R28. **One pooled session per assessment.** An assessment SHALL profile through one connection and session per worker, reused for every statement of that assessment, and SHALL read the inventory once.
   - It profiles 8 tables at a time on Databricks and 4 on PostgreSQL.
   - Each statement keeps the 15 s timeout (R6) and the read-only guard.
+  - On Databricks, an assessment of a dataset (or of named entities) SHALL read the inventory, keys and foreign keys of the scope's `catalog.schema` namespaces only, never every catalog of the workspace: one large unrelated catalog must not time out the inventory and leave the dataset's tables out. When a namespace's inventory statement fails, the profiler SHALL read the scope's own tables in it alone, so they are still assessed. A whole-datasource assessment reads every catalog the user can list.
+  - A catalogue read that has to skip catalogs (no privilege, timed out) SHALL log one warning per read naming how many it skipped, the first ten with their reason on one line, not one warning per catalog.
 - R29. **Per-table statistics.** A readable entity's statistics statement SHALL also hold the normalized distinct counts (R10) and the invalid-format counts (R9) of its text columns.
   - When that statement fails, the profiler SHALL fall back to separate per-column statements for the same statistics.
   - Statistics SHALL be exact aggregates. No approximate count and no sampling is used.
@@ -239,8 +251,9 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 
 See [ui.md](../../system/ui.md).
 
-- **Agent Hub** (section 4.4): the Data Readiness Agent card in the Official section, with Start chat disabled, titled with the requirement, while no PostgreSQL or Databricks dataset exists.
-- **Agent detail** (section 4.5): the Official agent's tabs; the System Prompt tab is editable.
+- **Agent Hub** (section 4.4): the Data Readiness Agent card in the Data Foundations section (owner Official), with no Start chat.
+- **Workflows** (sections 4.4a and 4.4b): the `Data Readiness Agent` workflow card and page, whose Start chat and Execute are disabled, titled with the requirement, while no PostgreSQL or Databricks dataset exists. The page's Run tab: the `dataset` list, the question with its example chips, the running tool row's progress, the answer with its readiness card, the scorecard under it, and the run's files.
+- **Agent detail** (section 4.5): the Official agent's tabs (no Chat Box) and **Used in** `Data Readiness Agent`; the System Prompt tab is editable.
 - **Session chat** (section 4.12): the agent chip; each tool call shown as a step; the readiness card on the answer.
 - **Right panel**: the readiness scorecard, its filters and Past assessments (section 4.13).
 
@@ -256,33 +269,30 @@ Feature: Data readiness
   Background:
     Given the app runs with the LLM stub as its provider
 
-  Scenario: Start chat is blocked without a PostgreSQL or Databricks dataset
-    Given no dataset is bound to a PostgreSQL or Databricks datasource
+  Scenario: the Data Readiness Agent is an Official library agent used by Assess Data Readiness
+    Given the app runs with the LLM stub as its provider
     When I open "Agents"
-    Then the "Official" section shows "Data Readiness Agent" with "Owner: Official"
-    And "Start chat with Data Readiness Agent" is disabled with the title "Add a PostgreSQL or Databricks dataset first"
+    Then the "Official" section shows "Data Readiness Agent" with "Owner: Official" and no "Start chat" or "Run"
+    When I open "Workflows"
+    Then I see "Assess Data Readiness" and do not see "Data Readiness Agent"
+    When I open the "Data Readiness Agent" agent
+    Then its "Used in" line shows "Assess Data Readiness"
 
-  Scenario: Assessing a dataset from the chat shows the scorecard
-    Given the World Cup sample datasource and a dataset "World Cup" over it exist
-    When I click "Start chat with Data Readiness Agent"
-    Then I see the toast "Session \"Data Readiness\" created"
-    And the session header shows the agent chip "Data Readiness Agent"
-    When I ask "Assess the readiness of this dataset"
-    And the agent calls "assess_data_readiness"
-    Then the right panel shows the readiness scorecard for the World Cup datasource
-    And the scorecard shows an overall score out of 100 and a maturity band
-    And it shows ten dimension bars, with "Accuracy" and "Currency" marked "Not assessed"
-    And while it runs the tool row shows the assessment progress
-    And the answer carries a readiness card with "Open scorecard"
+  Scenario: Assess Data Readiness profiles, scores and explains one dataset
+    Given the World Cup PostgreSQL dataset
+    When I run "Assess Data Readiness" on it with no question
+    Then Resolve dataset, Profile source, Score readiness, Save report, Explain report and Wrap up end successfully, in that order
+    And one readiness report is stored with the run's id
+    And the run's answer explains it and carries its readiness card
 
   Scenario: A table too large to profile is listed as not profiled
     Given a table in the dataset has more than 100,000,000 rows
-    When I assess the dataset from the chat
+    When the dataset is assessed (an Assess Data Readiness run, an evals or an API assessment)
     Then the scorecard lists that table as not profiled, with the reason "too-large" and its row count
     And the assessment finishes without waiting on that table's statistics
 
   Scenario: The scorecard shows the same numbers as the API
-    Given an assessment of the World Cup datasource was run from the chat
+    Given a stored assessment of the World Cup datasource
     When I request "GET /data-readiness/assessments/<report id>"
     Then its overall score, maturity band and dimension scores equal those on the scorecard
     And the overall score is the rounded mean of the eight assessed dimension scores
@@ -302,19 +312,6 @@ Feature: Data readiness
     When a filter combination matches nothing
     Then the table reads "No findings match these filters."
 
-  Scenario: The agent shows the records behind a finding
-    Given a Data Readiness session on the "Formula 1" dataset
-    When I ask "what are the records with second_nationality_country_id null values"
-    Then the agent runs a read-only query on "driver" for rows where "second_nationality_country_id" is null
-    And the answer leads with the number of such rows and shows them in a table
-    And no score changes
-
-  Scenario: A general analysis question is declined
-    Given a Data Readiness session on the "Formula 1" dataset
-    When I ask "how many races were there in 2010?"
-    Then the agent declines in one sentence
-    And it says Questions to Insights answers that
-    And it runs no query
 ```
 
 ## Acceptance
@@ -329,4 +326,4 @@ Feature: Data readiness
 3. `POST /data-readiness/assessments` on the World Cup PostgreSQL sample stores a report whose overall score is the mean of its eight assessed dimension scores. `GET` lists it and reads it back.
 4. The hub shows the Data Readiness Agent under Official. A session started from it runs the agent: its first request offers `describe_entity` and `run_readonly_sql` besides the readiness tools. An assessment shows the scorecard, and Past assessments reopens an earlier one.
 5. An assessment profiles through one pooled session per worker, folds the text-column probes into the per-table statement, lists tables above 100,000,000 rows as not profiled, shows its phases on the running tool row, and is cancelled by Stop without storing a report (R28 to R33). Its scores equal those of the unpooled profiler for the same profile.
-6. The Data readiness Feature passes on the web target at the acceptance gate. The `data-readiness` eval set passes at 100 % over 3 runs, and the assistant's and RFP Builder's eval sets are unchanged.
+6. The Data readiness Feature passes on the web target at the acceptance gate. The `data-readiness` eval set passes at 100 % over 3 runs, and the assistant's eval sets are unchanged.

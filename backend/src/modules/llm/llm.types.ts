@@ -4,7 +4,8 @@ import type { ReasoningEffort } from '../../mastra/effort-levels';
 // 1.5.3 / ADR-0026). OpenAI, Anthropic and LenAI (Halo's internal
 // OpenAI-compatible gateway) are wired; adding another provider later is a new
 // union member + a branch in the test service, not a restructure.
-export type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom';
+export type LlmProvider =
+  'openai' | 'anthropic' | 'lenai' | 'custom' | 'copilot';
 
 /** Which API a custom endpoint speaks (BA-281, llm-settings). */
 export type ApiStyle = 'openai' | 'anthropic';
@@ -16,9 +17,11 @@ export const SUPPORTED_PROVIDERS: LlmProvider[] = [
   'anthropic',
   'lenai',
   'custom',
+  'copilot',
 ];
 
 export type { ReasoningEffort };
+export type { CopilotStatusView } from '../../mastra/copilot/copilot-contracts';
 
 /**
  * The efforts the composer menu and agent overrides offer. Settings → LLM
@@ -42,13 +45,15 @@ export interface SaveLlmSettingsDto {
 }
 
 /** Body of `POST /llm/models` (BA-281): list a custom endpoint's models. */
-export interface ListModelsDto {
-  provider: 'custom';
-  apiStyle: ApiStyle;
-  baseUrl: string;
-  /** Blank = use the key stored for the custom provider, if any. */
-  apiKey?: string;
-}
+export type ListModelsDto =
+  | {
+      provider: 'custom';
+      apiStyle: ApiStyle;
+      baseUrl: string;
+      /** Blank = use the key stored for the custom provider, if any. */
+      apiKey?: string;
+    }
+  | { provider: 'copilot' };
 
 /** Style A answer of `POST /llm/models`. */
 export type ListModelsResult =

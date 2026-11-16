@@ -1,26 +1,40 @@
 ---
 name: verify
-description: Use at workflow step 9 (run the impacted E2E specs, check-specs, unit tests, lint, builds and, when an agent's input changed, its evals at 100%; fix until green), and to verify a change in the running web app (build, launch an isolated CLI instance, drive it in Chromium with Playwright).
+description: Use for the wave check (qa.mjs --wave, the demo and hand-over), the plain-session fast run (qa.mjs --fast) and at workflow step 9 (qa.mjs --gate: builds, unit tests, lint, check-specs, the impacted E2E specs and, when an agent's input changed, its evals against the base; fix until green), and to verify a change in the running web app (build, launch an isolated CLI instance, drive it in Chromium with Playwright).
 ---
 
-# Step 9 — Run E2E and fix until green; verify in the running app
+# Wave check, step 9, and the running app
 
-Part of the workflow in [CLAUDE.md](../../../CLAUDE.md), which keeps the always-on core (the mandatory first action, the step list, the fast loop and acceptance gate, the hard gates). Load this skill before the step starts.
+Part of the [`workflow-strict`](../workflow-strict/SKILL.md) workflow (the wave check, the fast run and step 9) and step 4 of [`workflow-free-style`](../workflow-free-style/SKILL.md) (`node scripts/qa.mjs --free`: the gate's checks with no story and no evidence). Load this skill before the wave check and before step 9. Run test commands quietly (Playwright `--reporter=dot`, Jest `--silent`, output to a log file) and read back only the summary or the failure block.
 
 ## The step
 
-9. **Run E2E and fix until green** — `npm run test:e2e` in [frontend/](../../../frontend/) (builds the backend with the web UI, then drives the **web app** in Chromium through `e2e/fixtures/app.fixture`; global setup starts the World Cup Postgres with `docker compose up -d --wait postgres` unless `E2E_SKIP_DOCKER=1`). Run `npm run test:e2e:desktop` only when the user asks for a desktop run. See **Test target convention** (in the `workflow-e2e` skill). Also run `python3 scripts/check-specs.py` at the repo root, `npm test` / `npm run lint` / `npm run build` in [backend/](../../../backend/) and `npm test` / `npm run build` in [frontend/](../../../frontend/). **Run only the impacted E2E specs**, the spec files step 6 lists (added, updated and re-run-as-is), never the whole suite unless the user asks for it: `npm run test:e2e -- e2e/<spec>.spec.ts …`, and `npm run test:e2e:org -- e2e/<spec>.spec.ts …` for impacted org specs. **The evals must pass** whenever the change touches what an agent receives (its prompt, skills, tools, context blocks or model routing): run its eval set on the base commit and on the branch, same model and data dir (`npm run evals:assistant` with `EVAL_SET` or `EVAL_CASES`, see [delivery.md](../../../specs/system/delivery.md)). Passing means a **100% pass rate** on the branch: every case passes, and every case is re-run until it has 3 runs with all 3 passing. The base run tells which failures the change caused, but a failure on the base doesn't excuse one on the branch. Diagnose root causes; fix the test if the test was wrong, the implementation if it was wrong. Repeat until every impacted spec and the evals are green.
+9. **Run checks and fix until green** — `node scripts/qa.mjs <roadmap-id> --gate` ([delivery.md](../../../specs/system/delivery.md) 13). It runs the builds (skipped when up to date; `--rebuild` forces them), the unit suites, backend lint and `check-specs.py` in parallel, then the story's step-6 Playwright list with JSON and HTML reporters; it fails if a listed spec did not run, checks the demo evidence (skipped with `--no-demo` for an S change), and writes `evidence/<roadmap-id>/tests.md`. **Run only the impacted E2E specs** (the step-6 list), never the whole suite unless the user asks. The web app is the target; `npm run test:e2e:desktop` only when the user asks for a desktop run (Test target convention, `workflow-gate`). Diagnose root causes; fix the test if the test was wrong, the implementation if it was wrong; repeat until green.
 
-   **Run it with `node scripts/qa.mjs <roadmap-id> --gate`** ([delivery.md](../../../specs/system/delivery.md) 13): it takes the single QA lane, runs the builds, the unit suites, backend lint, `check-specs.py` and the story's step-6 Playwright list with JSON and HTML reporters, fails if a listed spec did not run, and writes `evidence/<roadmap-id>/tests.md`. In the fast loop, `node scripts/qa.mjs <roadmap-id> --fast` runs the related unit tests, builds, `check-specs.py` and the selected Playwright specs, and records the demo (`demo.webm` for a UI story, `demo.txt` otherwise). After `--fast`, generate and publish the demo artifact (`node scripts/demo-page.mjs <roadmap-id>`, then the Artifact tool, see `workflow-ship`) so the user can review the demo before the gate. The evals below still run separately.
+   **Wave check (agent-built stories):** the lead merges the wave's unit branches into the epic branch (confirm each with `git merge-base --is-ancestor`), then runs `node scripts/qa.mjs --wave <id>,<id> --base <ref> [--demo <id>]`: the builds, the related unit tests, `check-specs.py` and the Playwright specs of the Features the wave touched, once for all of it. Add `--demo <id>` only for the wave's user-visible milestone. This replaces re-running each builder's gates and satisfies "do not trust a subagent's report". Fix failures, then hand over the running app (with the demo link when there is one).
+
+   **Plain-session fast run:** with no builder agent, and for an S change, `node scripts/qa.mjs <roadmap-id> --fast` runs the same checks for one story and records its demo (`demo.webm` for a UI story, `demo.txt` otherwise; `--no-demo` for an S change). Publish the demo artifact (`node scripts/demo-page.mjs <roadmap-id>`, then the Artifact tool, see `workflow-gate`) and hand over the running app with the link.
+
+## Evals — when the change touches what an agent receives
+
+Its prompt, skills, tools, context blocks or model routing. Run the agent's eval set (`npm run evals:assistant` with `EVAL_SET` or `EVAL_CASES`, see [delivery.md](../../../specs/system/delivery.md) 2) on the **base commit and on the branch**, same model, same data:
+
+- **Run in parallel.** Three runs per build at once, each on its own copy of the data dir and its own `EVAL_RESULTS_FILE`, not one after another. Before starting, print the copy's saved provider and model; use `EVAL_LLM_*` for any other target.
+- **Pass bar on the branch:**
+  - every **code check** (tool calls made, SQL valid, no tool errors, required fields and formats) passes in **3 of 3** runs of every case;
+  - every **judged** case (`judgeRubric`) passes in **at least 2 of 3** runs and **no less often than on the base**.
+- A case below the bar is a regression the change caused: trace one failing run (its results file) before theorising, fix, and re-run only the failing cases, 3 runs.
+- A judged case that is flaky on **both** builds at the same rate is not chased: list it as known-flaky, with both pass rates, in the changelog entry and the PR. If the user wants it fixed, that's a separate story.
+- Stop a round as soon as a run fails a code check; there is no point finishing it.
+- After stopping a looping eval script, list leftover `run-assistant-evals` node processes and kill them by PID.
 
 ## Check the running web app
 
 1. Build: `npm --prefix backend run build:all` (backend dist + web UI in `backend/public`).
 2. Launch an isolated instance on free ports with a throwaway data dir (copy a real data dir to test migrations on real data):
-   `node backend/dist/cli.js --no-open --port 3400 --data-dir <tmp>/verify-data --intellify-api-port 3420`
+   `node backend/dist/cli.js --no-open --port 3400 --data-dir <tmp>/verify-data`
    Never use 3000 or a port another app/session runs; stop it by its task/PID afterwards.
-   Once it answers, configure it: `node scripts/setup-local.mjs http://127.0.0.1:3400`. It saves the LLM from `.env.llm.local` (custom endpoint, Anthropic style by default) and loads every Testing Data fixture plus the Intellify RFP API ([delivery.md](../../../specs/system/delivery.md) 2). If `.env.llm.local` is missing, ask the user for the endpoint rather than guessing.
-   RFP Builder / Intellify API flows need its database loaded and the app restarted first: see the `intellify-api` skill.
+   Once it answers, configure it: `node scripts/setup-local.mjs http://127.0.0.1:3400`. It saves the LLM from `.env.llm.local` (custom endpoint, Anthropic style by default) and loads every Testing Data fixture ([delivery.md](../../../specs/system/delivery.md) 2). If `.env.llm.local` is missing, ask the user for the endpoint rather than guessing.
 3. Drive it with Playwright from Node, resolving the package from the frontend:
    `const { chromium } = require(require.resolve('playwright', { paths: ['<worktree>/frontend'] }))`.
    No sign-in exists (ADR-0030): `page.goto(url)` lands on the welcome page.

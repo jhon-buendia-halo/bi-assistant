@@ -25,11 +25,13 @@ import {
   ReasoningEffortChoice,
   modelPlaceholder,
 } from '../../services/agent-editor.util';
+import { AgentDomain } from '../../services/agents-api.service';
+import { AGENT_DOMAINS } from '../../services/agent-domains';
 
 /**
  * The agent editor (agents-evals R54-R59, ui.md 4.5.1): a user agent's draft
- * as a form, with Preview, Save and Publish. Its state lives in
- * `AgentEditorService`, which the preview chat and the app shell share.
+ * as a form, with Try it, Save and Publish. Its state lives in
+ * `AgentEditorService`, which the Try it panel and the app shell share.
  */
 @Component({
   selector: 'app-agent-editor',
@@ -47,6 +49,7 @@ export class AgentEditor implements OnInit, OnDestroy {
 
   readonly limits = AGENT_FIELD_LIMITS;
   readonly efforts = REASONING_EFFORT_CHOICES;
+  readonly domains = AGENT_DOMAINS;
   readonly instructionsHint =
     "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.";
   readonly linksHint =
@@ -60,8 +63,8 @@ export class AgentEditor implements OnInit, OnDestroy {
   readonly agentId = input<string | null>(null);
   /** Back; the shell asks first when there are unsaved changes (R59). */
   readonly back = output<void>();
-  /** Preview; the shell opens the Details panel on the preview chat (R60). */
-  readonly preview = output<void>();
+  /** Try it; the shell opens the Details panel on Try it (R60). */
+  readonly tryItOpened = output<void>();
 
   readonly modelPlaceholder = computed(() =>
     modelPlaceholder(this.editor.configuredModel()),
@@ -84,11 +87,14 @@ export class AgentEditor implements OnInit, OnDestroy {
     this.editor.update({ instructions: value });
   }
 
-  onText(
-    field: 'name' | 'description' | 'model',
-    event: Event,
-  ): void {
+  onText(field: 'name' | 'role' | 'description' | 'model', event: Event): void {
     this.editor.update({ [field]: (event.target as HTMLInputElement).value });
+  }
+
+  onDomain(event: Event): void {
+    this.editor.update({
+      domain: (event.target as HTMLSelectElement).value as AgentDomain,
+    });
   }
 
   onEffort(event: Event): void {
@@ -106,9 +112,8 @@ export class AgentEditor implements OnInit, OnDestroy {
     this.editor.setStarter(index, (event.target as HTMLInputElement).value);
   }
 
-  startPreview(): void {
-    void this.editor.startPreview();
-    this.preview.emit();
+  tryIt(): void {
+    this.tryItOpened.emit();
   }
 
   save(): void {

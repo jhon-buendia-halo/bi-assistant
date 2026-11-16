@@ -2,6 +2,7 @@ import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { MastraCompositeStore } from '@mastra/core/storage';
 import { DuckDBStore } from '@mastra/duckdb';
+import type { DuckDBConnection } from '@mastra/duckdb';
 import { LibSQLStore } from '@mastra/libsql';
 
 // Mastra Studio changes process.cwd() to its public directory after bundling,
@@ -16,12 +17,22 @@ const runtimeStorage = new LibSQLStore({
   url: `file:${join(mastraDataDir, 'mastra.sqlite')}`,
 });
 
-const observabilityStorage = new DuckDBStore({
+export const observabilityStorage = new DuckDBStore({
   id: 'questions-to-insights-observability',
   path: join(mastraDataDir, 'observability.duckdb'),
   memoryLimit: '512MB',
   threads: 2,
 });
+
+/**
+ * The trace store's DuckDB connection (`span_events` and the other
+ * observability tables). Monitoring reads it in-process through this same
+ * instance: the app holds the file open, so a second instance would hit
+ * DuckDB's file lock.
+ */
+export function getObservabilityDb(): DuckDBConnection {
+  return observabilityStorage.db;
+}
 
 /**
  * Keep transactional runtime data in LibSQL and route Studio's traces,

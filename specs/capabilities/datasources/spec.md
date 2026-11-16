@@ -126,7 +126,6 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 - Endpoints (list, test, save, delete, inventory with `refresh` / `cachedOnly`, REST discover): see [api.md](../../system/api.md), section Datasources.
 - Collections: `connections` (datasource documents; the legacy anonymous Databricks shape is migrated on read) and `datasource_inventories` (one snapshot per datasource id): see [data-model.md](../../system/data-model.md).
 - Datasources are consumed by sessions (read-only SQL, sampling), datasets (inventory, sampling, foreign keys), the dataset ontology, metrics, evals and testing-data. They use no agent directly; the SQL repair and verification agents that operate on top of read-only SQL are in [agents.md](../../system/agents.md).
-- The Intellify RFP API is registered as a REST datasource (see [../rfp/spec.md](../rfp/spec.md)).
 - Terms: [glossary](../../product/glossary.md).
 
 ## UI
@@ -172,15 +171,16 @@ Feature: Datasources, datasets, and sessions (World Cup database)
   Background:
     Given the seeded World Cup PostgreSQL database is running
 
-  Scenario: Creates a PostgreSQL datasource, dataset, and session using the real World Cup database
-    Given I have created the "World Cup PostgreSQL" datasource, the "World Cup Core" dataset and the "World Cup analysis" session
+  Scenario: Creates a PostgreSQL datasource, dataset, and run using the real World Cup database
+    Given I have created the "World Cup PostgreSQL" datasource and the "World Cup Core" dataset
+    When I run the Assistant on "World Cup Core" with "How many World Cup matches are in the data?"
+    Then I see the answer, its coverage line and a query row, and opening the query shows the SQL that ran on the real database
     When I reload the application
     Then I see "Open system logs"
-    When I click "Sessions" on the rail
-    Then I see the "World Cup analysis" session
-    When I click "World Cup analysis"
-    Then the header shows "World Cup PostgreSQL" and "PostgreSQL"
-    And I see the "Ask a follow-up question…" box
+    When I click "Runs" on the rail
+    Then I see the run "How many World Cup matches are in the data?"
+    When I open it
+    Then I see its answer and the dataset "World Cup Core"
 
   Scenario: Preserves masked credentials when editing and supports datasource deletion
     Given the "World Cup PostgreSQL" datasource exists

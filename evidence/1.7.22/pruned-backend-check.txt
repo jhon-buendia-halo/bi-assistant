@@ -1,0 +1,21 @@
+staged node_modules: 21784 files
+PASS  all 37 production dependencies import
+PASS  staged backend starts and answers /sessions
+PASS  GET /agents  (200)
+PASS  GET /data-readiness/assessments?datasourceId=none  (200)
+PASS  GET /datasets  (200)
+PASS  GET /datasources  (200)
+PASS  GET /developer-settings  (200)
+PASS  GET /llm/settings  (200)
+PASS  GET /metrics  (200)
+PASS  GET /metrics/candidates  (200)
+PASS  GET /monitoring/llm-calls  (200)
+PASS  GET /monitoring/sessions  (200)
+PASS  GET /sessions  (200)
+PASS  GET /skills  (200)
+PASS  GET /skills/built-in  (200)
+PASS  GET /testing-data  (200)
+PASS  GET /ui-preferences  (200)
+PASS  no missing-module or missing-file errors in the backend log
+
+18/18 checks passed

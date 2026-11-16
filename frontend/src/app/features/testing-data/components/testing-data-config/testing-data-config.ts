@@ -13,9 +13,13 @@ import {
   PostgresConnectionConfig,
   TestingDataApiService,
   TestingDataFixture,
+  TestingDataLoadResult,
 } from '../../services/testing-data-api.service';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { BackgroundTasksService } from '../../../../core/background-tasks/background-tasks.service';
+import { ShellState } from '../../../../core/shell/shell-state';
+import { SettingsState } from '../../../settings/services/settings-state';
 
 const EMPTY_CONNECTION: PostgresConnectionConfig = {
   host: '',
@@ -35,15 +39,18 @@ interface InlineResult {
 interface FixtureFormState {
   connection: PostgresConnectionConfig;
   testing: boolean;
-  loadingAction: boolean;
   removing: boolean;
   testResult: InlineResult | null;
   errorMessage: string | null;
+  /** A failed load task the card no longer shows (a later Remove started). */
+  hiddenTaskId: number | null;
   confirmingLoad: boolean;
   confirmingRemove: boolean;
 }
 
-function buildConnection(fixture: TestingDataFixture): PostgresConnectionConfig {
+function buildConnection(
+  fixture: TestingDataFixture,
+): PostgresConnectionConfig {
   const source = fixture.status.connection ?? fixture.defaults;
   return {
     host: source.host,
@@ -61,10 +68,10 @@ function emptyFormState(fixture: TestingDataFixture): FixtureFormState {
   return {
     connection: buildConnection(fixture),
     testing: false,
-    loadingAction: false,
     removing: false,
     testResult: null,
     errorMessage: null,
+    hiddenTaskId: null,
     confirmingLoad: false,
     confirmingRemove: false,
   };
@@ -88,6 +95,9 @@ export class TestingDataConfig implements OnInit {
   private readonly api = inject(TestingDataApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
   private readonly toast = inject(ToastService);
+  private readonly tasks = inject(BackgroundTasksService);
+  private readonly shell = inject(ShellState);
+  private readonly settings = inject(SettingsState);
 
   // Fixture list, driven entirely by the API — no hardcoded fixture knowledge.
   readonly statusLoading = signal(false);
@@ -173,7 +183,8 @@ export class TestingDataConfig implements OnInit {
     const s = this.state(fixtureId);
     return (
       this.statusLoading() ||
-      !!(s && (s.testing || s.loadingAction || s.removing))
+      this.loadingFor(fixtureId) ||
+      !!(s && (s.testing || s.removing))
     );
   }
 
@@ -182,7 +193,9 @@ export class TestingDataConfig implements OnInit {
   }
 
   loadingFor(fixtureId: string): boolean {
-    return !!this.state(fixtureId)?.loadingAction;
+    // Read from the background task, so it is right again after the user
+    // leaves Settings and comes back while the load still runs.
+    return !!this.tasks.active('testing-data-load', fixtureId);
   }
 
   removingFor(fixtureId: string): boolean {
@@ -194,7 +207,13 @@ export class TestingDataConfig implements OnInit {
   }
 
   errorFor(fixtureId: string): string | null {
-    return this.state(fixtureId)?.errorMessage ?? null;
+    const state = this.state(fixtureId);
+    if (state?.errorMessage) return state.errorMessage;
+    const last = this.tasks.latest('testing-data-load', fixtureId);
+    if (last?.status === 'failed' && last.id !== state?.hiddenTaskId) {
+      return last.detail ?? 'Backend unreachable';
+    }
+    return null;
   }
 
   confirmingLoadFor(fixtureId: string): boolean {
@@ -221,25 +240,23 @@ export class TestingDataConfig implements OnInit {
     const state = this.state(fixtureId);
     if (!state) return;
     this.updateState(fixtureId, { testing: true, testResult: null });
-    this.datasourcesApi
-      .testConnection('postgres', state.connection)
-      .subscribe({
-        next: (res) => {
-          this.updateState(fixtureId, {
-            testing: false,
-            testResult: { ok: res.ok, message: res.message },
-          });
-        },
-        error: (err) => {
-          this.updateState(fixtureId, {
-            testing: false,
-            testResult: {
-              ok: false,
-              message: err?.error?.message ?? 'Backend unreachable',
-            },
-          });
-        },
-      });
+    this.datasourcesApi.testConnection('postgres', state.connection).subscribe({
+      next: (res) => {
+        this.updateState(fixtureId, {
+          testing: false,
+          testResult: { ok: res.ok, message: res.message },
+        });
+      },
+      error: (err) => {
+        this.updateState(fixtureId, {
+          testing: false,
+          testResult: {
+            ok: false,
+            message: err?.error?.message ?? 'Backend unreachable',
+          },
+        });
+      },
+    });
   }
 
   requestLoad(fixtureId: string): void {
@@ -260,25 +277,24 @@ export class TestingDataConfig implements OnInit {
     if (!state) return;
     this.updateState(fixtureId, {
       confirmingLoad: false,
-      loadingAction: true,
       errorMessage: null,
     });
-    this.api.load(fixtureId, state.connection).subscribe({
-      next: (res) => {
-        this.updateState(fixtureId, { loadingAction: false });
-        if (res.ok) {
-          this.toast.success(res.message);
-          this.refreshStatus();
-        } else {
-          this.updateState(fixtureId, { errorMessage: res.message });
-        }
+    const connection = state.connection;
+    const name =
+      this.fixtures().find((f) => f.id === fixtureId)?.name ?? fixtureId;
+    // A root task: leaving Settings does not cancel the load, and the
+    // service toasts how it ended (app-shell R58–R63).
+    this.tasks.start<TestingDataLoadResult>({
+      kind: 'testing-data-load',
+      key: fixtureId,
+      title: `Loading testing data "${name}"`,
+      work: () => this.api.load(fixtureId, connection),
+      outcome: (res) => ({ ok: !!res?.ok, message: res?.message }),
+      open: () => {
+        this.shell.selectArea('settings');
+        this.settings.settingsSection.set('testing-data');
       },
-      error: (err) => {
-        this.updateState(fixtureId, {
-          loadingAction: false,
-          errorMessage: err?.error?.message ?? 'Backend unreachable',
-        });
-      },
+      onFinish: () => this.refreshStatus(),
     });
   }
 
@@ -300,6 +316,8 @@ export class TestingDataConfig implements OnInit {
       confirmingRemove: false,
       removing: true,
       errorMessage: null,
+      hiddenTaskId:
+        this.tasks.latest('testing-data-load', fixtureId)?.id ?? null,
     });
     this.api.remove(fixtureId).subscribe({
       next: (res) => {

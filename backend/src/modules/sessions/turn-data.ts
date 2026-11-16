@@ -1,5 +1,5 @@
 // Tool-result capture and tool-only-turn synthesis, shared by
-// `SessionsService.streamMessage` (a real chat turn) and the assistant eval
+// `TurnEngine.streamTurn` (a real chat turn) and the assistant eval
 // harness — extracted so both measure/build the same way rather than
 // duplicating the logic.
 import type { RequestContext } from '@mastra/core/request-context';
@@ -34,7 +34,7 @@ export function statedRationale(value: unknown): string | undefined {
 /**
  * Turn a data-bearing tool result into a compact, storable record: a SQL run
  * or a sample, or any other tool's result that carries `columns` and `rows`
- * (the RFP Builder's `get_client_financials`; agents.md 5.1).
+ * (agents.md 5.1).
  */
 export function toolDataRecord(
   tool: string,

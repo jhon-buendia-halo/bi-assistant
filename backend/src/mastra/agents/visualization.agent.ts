@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import {
+  isCopilotConfig,
   isCustomAnthropicConfig,
   resolveAgentModelConfig,
   type AgentModelConfig,
@@ -62,6 +63,13 @@ function miniSibling<T extends `${string}/${string}`>(id: T): T | undefined {
 export async function resolveVisualizationModel(): Promise<AgentModelConfig> {
   const configured = await resolveAgentModelConfig();
   const override = visualModelOverride();
+  if (isCopilotConfig(configured)) {
+    // Never swapped for a mini sibling or the public fallback: the seat's
+    // plan decides the models. VISUAL_MODEL moves only the model name.
+    if (!override) return configured;
+    const name = override.slice(override.indexOf('/') + 1);
+    return { ...configured, id: `copilot/${name}` };
+  }
   if (isCustomAnthropicConfig(configured)) {
     if (override) {
       // The provider segment stays `anthropic`; only the model name moves.

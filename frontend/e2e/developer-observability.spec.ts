@@ -1,6 +1,7 @@
 import { Page } from '@playwright/test';
 import { test, expect, RunningApp } from './fixtures/app.fixture';
-import { createWorldCupWorkspace, openSessions } from './helpers/app-actions';
+import { seedWorldCupDataset } from './helpers/agents-api';
+import { runQuestion } from './helpers/runs-api';
 import { OtlpReceiver, startOtlpReceiver } from './helpers/otlp-receiver';
 
 // Mirrors the "Developer observability export" Feature in
@@ -94,21 +95,22 @@ test('backend traces reach the OTLP endpoint when observability is on', async ({
   expect(payload).toContain('/llm/settings');
 });
 
-test('agent runs reach Phoenix when observability is on', async ({
+test('workflow runs reach Phoenix when observability is on', async ({
   app,
   page,
 }) => {
-  const sessionId = await createWorldCupWorkspace(page);
+  await seedWorldCupDataset(page);
   await saveAndRestart(app, true);
 
-  await openSessions(page);
-  await page.getByTestId(`session-${sessionId}`).click();
-  await page.getByPlaceholder(/Ask a/).fill('Who won the 2022 World Cup?');
-  await page.getByLabel('Send message').click();
+  // A run of Insights Analyst. No model is configured, so the run
+  // fails before its agent step; the spans of the steps that ran (the first
+  // is `receive-question`) are exported all the same.
+  const run = await runQuestion(page, 'Who won the 2022 World Cup?');
+  expect(run.status, run.body).toBe(200);
 
   await expect
     .poll(() => payloadOf(phoenix, '/v1/traces'), { timeout: 30_000 })
-    .toContain('assistant');
+    .toContain('receive-question');
   expect(phoenix.received('/v1/traces')[0].contentType).toContain(
     'application/x-protobuf',
   );

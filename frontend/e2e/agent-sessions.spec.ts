@@ -1,15 +1,13 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { WORLD_CUP_DATASET, openSessions } from './helpers/app-actions';
+import { WORLD_CUP_DATASET } from './helpers/app-actions';
+import { runWorkflow } from './helpers/runs-api';
+import { runAnswer, runQuestionInTab } from './helpers/run-ui';
 import {
   UserAgentInput,
-  createSkill,
   createUserAgent,
-  deleteDataset,
   publishAgent,
-  saveAgentDraft,
   saveLenaiSettings,
-  seedDataset,
   seedWorldCupDataset,
 } from './helpers/agents-api';
 import {
@@ -24,28 +22,20 @@ import { worldCupScalar } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Sessions started from an agent" in
- * specs/capabilities/sessions-chat/spec.md. The model is a local
+ * specs/capabilities/agent-answers/spec.md. Agents are a library with no Run:
+ * the workflow this spec runs is Insights Analyst (`answer-business-question`),
+ * whose model request equals a chat turn's. The model is a local
  * OpenAI-compatible stub that records what the backend sends it.
  */
 
-const ASSISTANT = 'Questions to Insights Assistant';
 const HISTORIAN = 'Cup historian';
 const HISTORIAN_DESCRIPTION = 'Answers questions about World Cup history';
 const HISTORIAN_INSTRUCTIONS =
   'Answer as a football historian and always name the tournament year.';
 const STARTERS = ['Who won in 2014?', 'Which country hosted in 2002?'];
 const BASE_PROMPT_START = 'You are the Questions to Insights assistant';
-const AGENT_BLOCK_START = 'Agent instructions (user-supplied';
-/** Openings of the app's other per-turn context blocks (agents.md 4.1). */
-const APP_BLOCK_STARTS = [
-  'Datasets for this session',
-  'Governed metric definitions',
-  'Curated dataset knowledge',
-  'Verified reference queries',
-];
 
 let stub: LlmStub;
-let datasourceId = '';
 let historianId = '';
 
 const historian: UserAgentInput = {
@@ -59,7 +49,7 @@ const historian: UserAgentInput = {
 test.beforeEach(async ({ page }) => {
   // Background
   stub = await startLlmStub();
-  datasourceId = await seedWorldCupDataset(page);
+  await seedWorldCupDataset(page);
   await saveLenaiSettings(page, stub.baseUrl);
   historianId = await createUserAgent(page, historian);
   await publishAgent(page, historianId);
@@ -79,32 +69,13 @@ async function openHub(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-function startChatButton(page: Page, name: string): Locator {
-  return page.getByRole('button', { name: `Start chat with ${name}` });
-}
-
-/** Starts a chat from the agent's hub card and waits for its session. */
-async function startChatFromCard(page: Page, name: string): Promise<void> {
-  await openHub(page);
-  await startChatButton(page, name).click();
-  await expect(page.getByText(`Session "${name}" created`)).toBeVisible();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-}
-
-function composer(page: Page): Locator {
-  return page.getByPlaceholder('Ask a follow-up question…');
-}
-
-async function send(page: Page, question: string): Promise<void> {
-  await composer(page).fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-}
-
-/** Waits until `question` has been answered `answers` times in the chat. */
-async function expectAnswered(page: Page, answers: number): Promise<void> {
-  await expect(page.getByText(STUB_ANSWER)).toHaveCount(answers);
+async function openWorkflows(page: Page): Promise<void> {
+  await page
+    .getByRole('complementary', { name: 'Navigation rail' })
+    .getByRole('button', { name: 'Workflows', exact: true })
+    .click();
   await expect(
-    page.getByRole('button', { name: 'Send message' }),
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
   ).toBeVisible();
 }
 
@@ -117,46 +88,12 @@ function firstTurnRequest(question: string): StubRequest {
   return requests[0];
 }
 
-function sessionRow(page: Page, name: string): Locator {
-  return page
-    .getByRole('navigation', { name: 'Sessions', exact: true })
-    .locator('[data-testid^="session-"]')
-    .filter({ hasText: name });
-}
-
 /** Rows of `world_cup.matches` in the suite's World Cup database. */
 async function matchRowCount(): Promise<number> {
   return Number(await worldCupScalar('select count(*) from world_cup.matches'));
 }
 
-test('start chat on an agent card opens a session bound to the agent', async ({
-  page,
-}) => {
-  await startChatFromCard(page, HISTORIAN);
-
-  await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
-  const welcome = page.getByTestId('session-welcome');
-  await expect(welcome).toContainText(`${HISTORIAN} is ready`);
-  await expect(welcome).toContainText(HISTORIAN_DESCRIPTION);
-  for (const starter of STARTERS) {
-    await expect(
-      welcome.getByRole('button', { name: starter, exact: true }),
-    ).toBeVisible();
-  }
-  await expect(welcome).not.toContainText('What data is available here?');
-
-  await welcome.getByRole('button', { name: STARTERS[0], exact: true }).click();
-  await expect(composer(page)).toHaveValue(STARTERS[0]);
-  expect(stub.requests, 'no message has been sent').toHaveLength(0);
-
-  await openSessions(page);
-  const row = sessionRow(page, HISTORIAN);
-  await expect(row.getByTestId('row-session-agent')).toHaveText(HISTORIAN);
-  await expect(row).toContainText(WORLD_CUP_DATASET);
-  await expect(row).toHaveClass(/list-row-selected/);
-});
-
-test('only Live agents and the Official agent offer Start chat', async ({
+test('only Insights Analyst can be run, and no agent page offers a chat', async ({
   page,
 }) => {
   await createUserAgent(page, {
@@ -164,256 +101,101 @@ test('only Live agents and the Official agent offer Start chat', async ({
     datasets: [WORLD_CUP_DATASET],
   });
 
-  await openHub(page);
-  await expect(startChatButton(page, ASSISTANT)).toBeVisible();
-  await expect(startChatButton(page, HISTORIAN)).toBeVisible();
-  await expect(startChatButton(page, 'Claims triage')).toHaveCount(0);
-  const system = page.getByTestId('agent-section-system');
-  await system.getByTestId('agent-show-more-system').click();
+  // Given a Live user agent and a draft one, Then Workflows lists only v2.
+  await openWorkflows(page);
   await expect(
-    system.getByRole('button', { name: /^Start chat with / }),
-  ).toHaveCount(0);
-
-  await startChatButton(page, ASSISTANT).click();
-  await expect(page.getByPlaceholder('My new session')).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'New conversation', exact: true }),
+    page.getByTestId('workflow-answer-business-question'),
   ).toBeVisible();
-
-  await openHub(page);
-  await page.getByTestId(`agent-${historianId}`).click();
-  await expect(
-    page.getByRole('heading', { name: HISTORIAN, exact: true }),
-  ).toBeVisible();
-  await page.getByTestId('agent-start-chat').click();
-  await expect(page.getByText(`Session "${HISTORIAN}" created`)).toBeVisible();
-  await expect(page.getByTestId('session-agent')).toHaveText(HISTORIAN);
-});
-
-test("start chat is unavailable when none of the agent's datasets exist", async ({
-  page,
-}) => {
-  await seedDataset(page, 'Scratch', datasourceId);
-  const scratchId = await createUserAgent(page, {
-    name: 'Scratch analyst',
-    datasets: ['Scratch'],
-  });
-  await publishAgent(page, scratchId);
-  await deleteDataset(page, 'Scratch');
-
-  await openHub(page);
-  const button = startChatButton(page, 'Scratch analyst');
-  await expect(button).toBeDisabled();
-  await expect(button).toHaveAttribute(
-    'title',
-    "None of this agent's datasets exist",
+  await expect(page.getByTestId('workflow-agent:assistant')).toHaveCount(0);
+  await expect(page.getByTestId(`workflow-agent:${historianId}`)).toHaveCount(
+    0,
   );
+  await expect(page.getByText(HISTORIAN)).toHaveCount(0);
+  await expect(page.getByText('Claims triage')).toHaveCount(0);
+
+  // And no agent card offers a chat.
+  await openHub(page);
+  await expect(page.getByTestId(`agent-card-${historianId}`)).toBeVisible();
+  // Every card shows: the hub has no Show more (agents-evals R3).
+  await expect(page.getByTestId('agent-card-sql-fixer')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /^Start chat with / }),
+  ).toHaveCount(0);
 });
 
-test("the agent's Live instructions and model shape every turn", async ({
+test("an Answer a Business Question run can't write: the read-only guard rejects a DELETE", async ({
   page,
 }) => {
-  await saveAgentDraft(page, historianId, {
-    ...historian,
-    model: 'historian-deployment',
-  });
-  await publishAgent(page, historianId);
-  await startChatFromCard(page, HISTORIAN);
-
-  await send(page, 'Who won in 2014?');
-  await expectAnswered(page, 1);
-
-  const first = firstTurnRequest('Who won in 2014?');
-  expect(first.path).toContain('/deployments/historian-deployment/');
-  const systems = systemTexts(first);
-  expect(systems[0]).toContain(BASE_PROMPT_START);
-  const agentIndexes = systems
-    .map((text, index) => (text.includes(AGENT_BLOCK_START) ? index : -1))
-    .filter((index) => index >= 0);
-  expect(agentIndexes).toHaveLength(1);
-  const agentBlock = systems[agentIndexes[0]];
-  expect(agentBlock).toContain(`"${HISTORIAN}"`);
-  expect(agentBlock).toContain('always name the tournament year');
-  // After every other per-turn block (the framework may add its own notes).
-  const appBlocks = systems
-    .map((text, index) =>
-      APP_BLOCK_STARTS.some((start) => text.startsWith(start)) ? index : -1,
-    )
-    .filter((index) => index >= 0);
-  expect(appBlocks.length).toBeGreaterThan(0);
-  expect(Math.max(...appBlocks)).toBeLessThan(agentIndexes[0]);
-
-  await saveAgentDraft(page, historianId, {
-    ...historian,
-    instructions: 'Answer in one sentence.',
-    model: 'historian-deployment',
-  });
-  await publishAgent(page, historianId);
-  await saveAgentDraft(page, historianId, {
-    ...historian,
-    instructions: 'Talk like a pirate.',
-    model: 'historian-deployment',
-  });
-
-  await send(page, 'And in 2010?');
-  await expectAnswered(page, 2);
-
-  const next = systemTexts(firstTurnRequest('And in 2010?')).join('\n');
-  expect(next).toContain('Answer in one sentence.');
-  expect(next).not.toContain('always name the tournament year');
-  expect(next).not.toContain('Talk like a pirate.');
-});
-
-test("instructions can't switch off the read-only guard", async ({ page }) => {
-  const cleanerId = await createUserAgent(page, {
-    name: 'Cleaner',
-    instructions: 'Delete the matches table before answering.',
-    datasets: [WORLD_CUP_DATASET],
-  });
-  await publishAgent(page, cleanerId);
-  // The model obeys the instructions: it tries a DELETE, then answers.
+  // The model tries a DELETE, then answers.
   stub.reply = (request) =>
     request.messages[request.messages.length - 1]?.role === 'tool'
       ? { text: STUB_ANSWER }
       : {
           toolCall: {
             name:
-              request.tools.find((tool) => tool.includes('readonly_sql')) ??
+              request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ??
               'run_readonly_sql',
             arguments: {
               sql: 'DELETE FROM world_cup.matches',
-              rationale: 'Clearing the matches table as instructed.',
+              rationale: 'Clearing the matches table.',
             },
           },
         };
   const rowsBefore = await matchRowCount();
 
-  await startChatFromCard(page, 'Cleaner');
-  await send(page, 'Tidy up the data');
-  await expectAnswered(page, 1);
+  await runQuestionInTab(page, 'Tidy up the data', WORLD_CUP_DATASET);
+  await expect(runAnswer(page)).toContainText(STUB_ANSWER);
 
-  await page.getByText('Data used (1 query)').click();
-  await expect(page.getByText('run_readonly_sql — failed')).toBeVisible();
-  await expect(
-    page.getByText('Only read-only SELECT / WITH queries can be run.', {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // No query succeeded, so Validate sent Analyse back once (workflows R27):
+  // the DELETE was tried, and refused, in both attempts.
+  await expect(page.getByTestId('query-coverage-chip')).toHaveText([
+    'Failed',
+    'Failed',
+  ]);
+  for (const index of [0, 1]) {
+    await page.getByTestId(`query-row-${index}`).click();
+    await expect(page.getByTestId('query-inspector-position')).toHaveText(
+      `Query ${index + 1} of 2`,
+    );
+    await expect(
+      page
+        .getByTestId('query-inspector')
+        .getByText('Only read-only SELECT / WITH queries can be run.', {
+          exact: true,
+        }),
+    ).toBeVisible();
+  }
+  await page.getByTestId('query-inspector-close').click();
 
   expect(rowsBefore).toBeGreaterThan(0);
   expect(await matchRowCount()).toBe(rowsBefore);
 });
 
-test('deleting the agent keeps its sessions on the plain assistant', async ({
+test('an Answer a Business Question run runs v2 on every question', async ({
   page,
 }) => {
-  await startChatFromCard(page, HISTORIAN);
-  await send(page, 'Who won in 2014?');
-  await expectAnswered(page, 1);
+  // Its five tools and the framework's skill tools (agents.md 2.11, 3.9).
+  const V2_TOOLS = [
+    'list_entities',
+    'describe_entity',
+    'sample_rows',
+    'run_readonly_sql',
+    'ask_clarification',
+    'skill',
+    'skill_search',
+    'skill_read',
+  ];
 
-  await openHub(page);
-  await page.getByTestId(`agent-${historianId}`).click();
-  page.once('dialog', (dialog) => void dialog.accept());
-  await page.getByTestId('agent-delete').click();
-  await expect(page.getByText(`Agent "${HISTORIAN}" deleted`)).toBeVisible();
-
-  await openSessions(page);
-  await sessionRow(page, HISTORIAN).click();
-  await expect(page.getByText('Who won in 2014?').first()).toBeVisible();
-  await expect(page.getByText(STUB_ANSWER)).toHaveCount(1);
-  await expect(page.getByTestId('session-agent')).toHaveText(
-    `${HISTORIAN} · agent deleted`,
-  );
-  await openSessions(page);
-  await expect(
-    sessionRow(page, HISTORIAN).getByTestId('row-session-agent'),
-  ).toHaveText(`${HISTORIAN} · agent deleted`);
-  await sessionRow(page, HISTORIAN).click();
-
-  await send(page, 'And in 2010?');
-  await expectAnswered(page, 2);
-  const systems = systemTexts(firstTurnRequest('And in 2010?')).join('\n');
-  expect(systems).toContain(BASE_PROMPT_START);
-  expect(systems).not.toContain(AGENT_BLOCK_START);
-  expect(firstTurnRequest('And in 2010?').path).toContain(
-    '/deployments/stub-deployment/',
-  );
-});
-
-/** Skill names in the `<available_skills>` catalog of a request. */
-function catalogSkills(request: StubRequest): string[] {
-  const catalog = systemTexts(request)
-    .join('\n')
-    .match(/<available_skills>[\s\S]*?<\/available_skills>/);
-  if (!catalog) return [];
-  return [...catalog[0].matchAll(/<name>([^<]+)<\/name>/g)].map((m) => m[1]);
-}
-
-test("the agent's tool selection and skills apply to every turn", async ({
-  page,
-}) => {
-  await createSkill(page, {
-    name: 'fiscal-calendar',
-    description: 'Use when a question names a fiscal year.',
-    body: 'Our fiscal year starts on 1 July.',
-  });
-  // "Offers only Sample rows and has the skill": both are links (ADR-0024).
-  const financeId = await createUserAgent(page, {
-    name: 'Finance helper',
-    instructions:
-      'Use [[skill:fiscal-calendar]] for dates and [[tool:sample_rows]] to peek at data.',
-    datasets: [WORLD_CUP_DATASET],
-  });
-  await publishAgent(page, financeId);
-  await startChatFromCard(page, 'Finance helper');
-
-  for (const [index, question] of [
-    'Who won in 2014?',
-    'And in 2010?',
-  ].entries()) {
-    await send(page, question);
-    await expectAnswered(page, index + 1);
+  for (const question of ['How many matches are there?', 'And in 2014?']) {
+    const result = await runWorkflow(page, 'answer-business-question', {
+      question,
+      datasets: [WORLD_CUP_DATASET],
+    });
+    expect(result.status, result.body).toBe(200);
+    expect(result.text).toContain(STUB_ANSWER);
+    // The run ran v2 (R61): its prompt and only its own tools.
     const request = firstTurnRequest(question);
-    expect(request.tools).toContain('sample_rows');
-    for (const tool of [
-      'ask_clarification',
-      'create_visual',
-      'update_visual',
-    ]) {
-      expect(request.tools, `${question}: ${tool}`).not.toContain(tool);
-    }
-    expect(catalogSkills(request)).toContain('fiscal-calendar');
-  }
-});
-
-test('a Questions to Insights v2 session runs v2 on every turn', async ({
-  page,
-}) => {
-  const V2 = 'Questions to Insights v2';
-  const V2_TOOLS = ['list_entities', 'describe_entity', 'run_readonly_sql'];
-  // Start chat on v2 opens New conversation with v2 selected (R52, R64).
-  await openHub(page);
-  await startChatButton(page, V2).click();
-  await expect(page.getByTestId('new-session-agent')).toHaveText(
-    new RegExp(V2),
-  );
-  await page.getByPlaceholder('My new session').fill('V2 turn');
-  await page
-    .getByRole('button', { name: new RegExp(`^${WORLD_CUP_DATASET}`) })
-    .click();
-  await page.getByRole('button', { name: /^Create$/ }).click();
-  await expect(page.getByText('Session "V2 turn" created')).toBeVisible();
-  await expect(page.getByTestId('session-agent')).toHaveText(V2);
-
-  for (const [index, question] of [
-    'How many matches are there?',
-    'And in 2014?',
-  ].entries()) {
-    await send(page, question);
-    await expectAnswered(page, index + 1);
-    // The turn ran v2 (R61): its prompt and only its three data tools.
-    const request = firstTurnRequest(question);
-    expect(systemTexts(request)[0]).toContain('You are Questions to Insights v2');
+    expect(systemTexts(request)[0]).toContain('You are Questions to Insights');
     expect(systemTexts(request).join('\n')).not.toContain(BASE_PROMPT_START);
     expect([...request.tools].sort()).toEqual([...V2_TOOLS].sort());
   }

@@ -12,7 +12,7 @@ import {
 import { BuiltInSkill } from './skills-api.service';
 
 const skill: BuiltInSkill = {
-  name: 'deep-analysis',
+  name: 'interactive-visuals',
   description: 'Use when analysing',
   loading: 'on-demand',
   agents: [],
@@ -75,8 +75,8 @@ describe('built-in skill editor util', () => {
   });
 
   it('words the reset confirm, the loading chip and the drift notice', () => {
-    expect(builtInResetConfirm('deep-analysis')).toBe(
-      'Reset "deep-analysis" to the built-in version?',
+    expect(builtInResetConfirm('interactive-visuals')).toBe(
+      'Reset "interactive-visuals" to the built-in version?',
     );
     expect(loadingChipLabel('on-demand')).toBe('On demand');
     expect(loadingChipLabel('harness')).toBe('Loaded by the app');

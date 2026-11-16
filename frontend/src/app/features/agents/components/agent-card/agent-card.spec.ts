@@ -15,56 +15,114 @@ const historian: Agent = {
   missingDatasets: [],
 };
 
-describe('AgentCard Start chat', () => {
+const assistant: Agent = {
+  key: 'assistant',
+  id: 'assistant',
+  name: 'Questions to Insights Assistant',
+  description: 'Answers questions',
+  tools: [],
+  kind: 'official',
+  owner: 'Official',
+  datasets: [],
+};
+
+/** A card is a building block: it opens the agent, never a chat (R1, R53). */
+describe('AgentCard', () => {
   let fixture: ComponentFixture<AgentCard>;
 
-  async function render(agent: Agent, starting = false): Promise<HTMLElement> {
+  beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AgentCard],
     }).compileComponents();
+  });
+
+  function render(agent: Agent): HTMLElement {
     fixture = TestBed.createComponent(AgentCard);
     fixture.componentRef.setInput('agent', agent);
-    fixture.componentRef.setInput('starting', starting);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
 
-  function startChat(el: HTMLElement): HTMLButtonElement | null {
-    return el.querySelector('[aria-label="Start chat with Cup historian"]');
-  }
+  it('offers no Start chat on an Official or a Live user agent', () => {
+    for (const agent of [historian, assistant]) {
+      const el = render(agent);
+      expect(el.textContent).not.toContain('Start chat');
+      expect(el.querySelector('[data-testid^="agent-start-chat"]')).toBeNull();
+    }
+  });
 
-  it('emits startChat without opening the detail', async () => {
-    const el = await render(historian);
+  it('opens the agent from its open control', () => {
+    const el = render(historian);
     const opened = jasmine.createSpy('open');
-    const started = jasmine.createSpy('startChat');
     fixture.componentInstance.open.subscribe(opened);
-    fixture.componentInstance.startChat.subscribe(started);
-
-    startChat(el)!.click();
-
-    expect(started).toHaveBeenCalledTimes(1);
-    expect(opened).not.toHaveBeenCalled();
+    el.querySelector<HTMLButtonElement>(
+      '[data-testid="agent-u-historian"]',
+    )!.click();
+    expect(opened).toHaveBeenCalledTimes(1);
   });
 
-  it('is not offered on a draft', async () => {
-    const el = await render({ ...historian, status: 'draft' });
-    expect(startChat(el)).toBeNull();
+  it('shows the persona: the human name with the job title under it', () => {
+    const el = render({ ...assistant, name: 'Emily', role: 'Data Analyst' });
+    expect(el.textContent).toContain('Emily');
+    expect(
+      el.querySelector('[data-testid="agent-role-assistant"]')?.textContent,
+    ).toBe('Data Analyst');
+    // No job title, no empty line.
+    expect(
+      render(historian).querySelector('[data-testid^="agent-role-"]'),
+    ).toBeNull();
   });
 
-  it("is disabled, with a title, when none of the agent's datasets exist", async () => {
-    const el = await render({
-      ...historian,
-      missingDatasets: ['World Cup Core'],
+  it("marks the tile with the agent's domain, General when it has none", () => {
+    const sql = render({ ...assistant, domain: 'sql' }).querySelector(
+      '[data-testid="agent-domain-assistant"]',
+    );
+    expect(sql?.getAttribute('data-domain')).toBe('sql');
+    expect(sql?.getAttribute('title')).toBe('SQL Engineering');
+    const general = render(historian).querySelector(
+      '[data-testid="agent-domain-u-historian"]',
+    );
+    expect(general?.getAttribute('data-domain')).toBe('general');
+    expect(general?.getAttribute('title')).toBe('General');
+  });
+
+  it('shows a portrait, and the initial until it is drawn', () => {
+    const avatar = render(historian).querySelector(
+      '[data-testid="agent-avatar"]',
+    );
+    expect(avatar).not.toBeNull();
+    expect(avatar?.getAttribute('aria-hidden')).toBe('true');
+    expect(['initial', 'portrait']).toContain(
+      avatar?.getAttribute('data-state') ?? '',
+    );
+  });
+
+  it('lets a built-in agent introduce itself instead of its description', () => {
+    const el = render({
+      ...assistant,
+      intro: "Ask me a business question and I'll answer it.",
     });
-    const button = startChat(el)!;
-    expect(button.disabled).toBeTrue();
-    expect(button.title).toBe("None of this agent's datasets exist");
+    expect(
+      el.querySelector('[data-testid="agent-intro-assistant"]')?.textContent,
+    ).toBe("“Ask me a business question and I'll answer it.”");
+    expect(el.textContent).not.toContain('Answers questions');
+    // A user agent has no intro: its description shows.
+    expect(render(historian).textContent).toContain(
+      'Answers questions about World Cup history',
+    );
   });
 
-  it('is disabled while the session is being created', async () => {
-    const el = await render(historian, true);
-    const button = startChat(el)!;
-    expect(button.disabled).toBeTrue();
-    expect(button.hasAttribute('title')).toBeFalse();
+  it('shows what the agent is doing once the run history is known', () => {
+    const el = render(assistant);
+    expect(el.querySelector('[data-testid^="agent-activity-"]')).toBeNull();
+    fixture.componentRef.setInput('activity', {
+      state: 'working',
+      label: 'Working on “Top scorers”',
+      runId: 'r1',
+    });
+    fixture.detectChanges();
+    const status = el.querySelector('[data-testid="agent-activity-assistant"]');
+    expect(status?.getAttribute('data-state')).toBe('working');
+    expect(status?.textContent?.trim()).toBe('Working on “Top scorers”');
   });
 });

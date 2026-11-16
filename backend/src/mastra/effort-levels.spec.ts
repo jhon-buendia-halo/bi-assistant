@@ -1,4 +1,9 @@
-import { defaultEffort, effortLevelsFor, nearestEffort } from './effort-levels';
+import {
+  defaultEffort,
+  effortLevelsFor,
+  effortLevelsForProvider,
+  nearestEffort,
+} from './effort-levels';
 
 describe('effortLevelsFor', () => {
   it.each([
@@ -97,4 +102,32 @@ describe('effortLevelsFor on custom endpoint ids (R52)', () => {
       expect(effortLevelsFor(model)).toEqual([]);
     },
   );
+});
+
+describe('effortLevelsForProvider (R60)', () => {
+  it('gives auto no levels on Copilot, whatever the casing', () => {
+    expect(effortLevelsForProvider('copilot', 'auto')).toEqual([]);
+    expect(effortLevelsForProvider('copilot', ' AUTO ')).toEqual([]);
+    expect(effortLevelsForProvider('copilot', '')).toEqual([]);
+  });
+
+  it('keeps only the levels Copilot accepts', () => {
+    expect(effortLevelsForProvider('copilot', 'gpt-5.2')).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+    expect(effortLevelsForProvider('copilot', 'gpt-5-pro')).toEqual(['high']);
+    expect(effortLevelsForProvider('copilot', 'claude-opus-4-1')).toEqual([]);
+  });
+
+  it('is the model table for every other provider', () => {
+    expect(effortLevelsForProvider('openai', 'gpt-5.2')).toEqual(
+      effortLevelsFor('gpt-5.2'),
+    );
+    expect(effortLevelsForProvider(undefined, 'auto')).toEqual(
+      effortLevelsFor('auto'),
+    );
+  });
 });

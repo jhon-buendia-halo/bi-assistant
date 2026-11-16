@@ -7,29 +7,39 @@ import {
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  Observable,
+  concatMap,
+  filter,
+  of,
+  startWith,
+  switchMap,
+  takeWhile,
+  timer,
+} from 'rxjs';
 import {
   LucideAngularModule,
   ArrowLeft,
   BookOpen,
-  Bot,
   Brain,
   CircleCheck,
   CircleX,
   Cpu,
-  Network,
   Trash2,
   Gauge,
   Loader2,
   ListChecks,
   MessageSquare,
-  MessageSquarePlus,
   Pencil,
   ChevronRight,
   Download,
   Play,
   ScrollText,
   Upload,
+  Workflow,
   Wrench,
 } from 'lucide-angular';
 import {
@@ -42,23 +52,27 @@ import {
   EvalRunView,
 } from '../../services/agents-api.service';
 import { EvalSelectionService } from '../../services/eval-selection.service';
-import {
-  canStartChat,
-  startChatBlockedReason,
-} from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
+import {
+  BackgroundTaskOutcome,
+  BackgroundTasksService,
+} from '../../../../core/background-tasks/background-tasks.service';
+import { AgentsNavState } from '../../services/agents-nav-state';
 import {
   Datasource,
   kindLabel,
 } from '../../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { AgentSkills } from '../agent-skills/agent-skills';
-import { AgentGraph } from '../agent-graph/agent-graph';
 import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
 import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
-import { AgentChatBox } from '../agent-chat-box/agent-chat-box';
+import { AgentTryIt } from '../agent-try-it/agent-try-it';
 import { AgentSkillsInline } from '../agent-skills-inline/agent-skills-inline';
 import { AgentSystemPrompt } from '../agent-system-prompt/agent-system-prompt';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
+import { agentActivity } from '../../services/agent-activity';
+import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
+import { WorkflowRunSummary } from '../../../workflows/models/workflow.model';
 import { AgentPageState } from '../../services/agent-page-state.service';
 import {
   AGENT_TAB_ORDER,
@@ -67,15 +81,36 @@ import {
   hasChatTab,
   includedInEveryAgent,
   skillsCount,
+  usedInEmptyText,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
-import { officialGraphInput } from '../../services/official-links';
 import { knownLinks, linkableBuiltInSkills } from '../../services/prompt-links';
 import {
   BuiltInSkillSummary,
   SkillSummary,
   SkillsApiService,
 } from '../../services/skills-api.service';
+
+/** One answer of an eval run: the start refusal or a poll of the job. */
+type EvalRunTick = { ok: boolean; message: string } & Partial<EvalRunView>;
+
+/** A finished run with failing questions is still a finished task. */
+function evalRunOutcome(
+  last: EvalRunTick | undefined,
+  agentName: string,
+): BackgroundTaskOutcome {
+  if (!last) return { ok: false, message: 'The evals did not run' };
+  if (!last.ok) return { ok: false, message: last.message };
+  if (last.status === 'failed') {
+    return { ok: false, message: last.error ?? last.message };
+  }
+  const results = last.results ?? [];
+  const passed = results.filter((r) => r.passed).length;
+  return {
+    ok: true,
+    message: `Evals for ${agentName}: ${passed} of ${results.length} passed`,
+  };
+}
 
 type AgentTab = AgentTabId;
 /** Sub-tabs inside the evals tab. */
@@ -86,12 +121,12 @@ type EvalTab = 'questions' | 'runs';
   imports: [
     LucideAngularModule,
     AgentSkills,
-    AgentGraph,
     AgentLlmConfig,
     AgentToolLinks,
-    AgentChatBox,
+    AgentTryIt,
     AgentSkillsInline,
     AgentSystemPrompt,
+    AgentAvatar,
   ],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
@@ -99,17 +134,14 @@ type EvalTab = 'questions' | 'runs';
 export class AgentDetail implements OnDestroy {
   readonly ArrowLeft = ArrowLeft;
   readonly BookOpen = BookOpen;
-  readonly Bot = Bot;
   readonly Brain = Brain;
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
   readonly Cpu = Cpu;
-  readonly Network = Network;
   readonly Gauge = Gauge;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
   readonly MessageSquare = MessageSquare;
-  readonly MessageSquarePlus = MessageSquarePlus;
   readonly Pencil = Pencil;
   readonly ChevronRight = ChevronRight;
   readonly Download = Download;
@@ -117,6 +149,7 @@ export class AgentDetail implements OnDestroy {
   readonly Trash2 = Trash2;
   readonly ScrollText = ScrollText;
   readonly Upload = Upload;
+  readonly WorkflowIcon = Workflow;
   readonly Wrench = Wrench;
 
   private readonly api = inject(AgentsApiService);
@@ -125,6 +158,10 @@ export class AgentDetail implements OnDestroy {
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
   private readonly pageState = inject(AgentPageState);
+  private readonly runsApi = inject(WorkflowRunsApiService);
+  private readonly tasks = inject(BackgroundTasksService);
+  private readonly nav = inject(AgentsNavState);
+  private alive = true;
 
   readonly selectedEvalCaseId = computed(
     () => this.evalSelection.selection()?.evalCase.id ?? null,
@@ -145,20 +182,27 @@ export class AgentDetail implements OnDestroy {
   readonly back = output<void>();
   /** Emitted after a user agent is deleted; the app returns to the hub. */
   readonly deleted = output<void>();
-  /** Start chat; the shell creates or composes the session (R53). */
-  readonly startChat = output<AgentDetailModel>();
+  /** A Used in chip; the shell opens the workflow's page (R109). */
+  readonly openWorkflow = output<string>();
   /** Edit a user agent; the shell opens the agent editor on its draft (R54). */
   readonly edit = output<AgentDetailModel>();
   /** An admin's Edit on a built-in skill; the shell opens its editor. */
   readonly openBuiltInSkill = output<string>();
-  /** True while a session is being created from this agent. */
-  readonly starting = input(false);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly agent = signal<AgentDetailModel | null>(null);
+  /** The run history, for the header's status; null until it loads. */
+  private readonly runs = signal<WorkflowRunSummary[] | null>(null);
+
+  /** What the agent is doing now (ui.md 4.5); null while unknown. */
+  readonly activity = computed(() => {
+    const agent = this.agent();
+    const runs = this.runs();
+    return agent && runs ? agentActivity(agent, runs) : null;
+  });
   readonly activeTab = signal<AgentTab>('prompt');
-  /** The Chat Box mounts the first time it is shown, then stays. */
+  /** Try it mounts the first time it is shown, then stays. */
   readonly chatMounted = signal(false);
 
   /** The skills tab's content, loaded with the agent (R63). */
@@ -175,7 +219,6 @@ export class AgentDetail implements OnDestroy {
       prompt: this.ScrollText,
       skills: this.BookOpen,
       tools: this.Wrench,
-      graph: this.Network,
       memory: this.Brain,
       evals: this.Gauge,
       model: this.Cpu,
@@ -187,7 +230,7 @@ export class AgentDetail implements OnDestroy {
       skills: `Skills${this.skillsCountLabel(kind, skills)}`,
     };
     return AGENT_TAB_ORDER.filter(
-      (tab) => tab.id !== 'chat' || hasChatTab(kind, !!agent?.showcase),
+      (tab) => tab.id !== 'chat' || hasChatTab(kind),
     ).map((tab) => ({
       id: tab.id,
       label: labels[tab.id] ?? tab.label,
@@ -220,7 +263,34 @@ export class AgentDetail implements OnDestroy {
       this.loadDatasources();
     });
 
-    // The Chat Box mounts when first shown.
+    // A running task's Open asks for the Evals tab once the agent has loaded.
+    effect(() => {
+      const tab = this.pageState.requestedTab();
+      if (!tab || this.loading() || this.agent()?.key !== this.agentKey())
+        return;
+      this.pageState.requestedTab.set(null);
+      this.activeTab.set(tab);
+    });
+
+    // Keep the open question pointing at its latest result as polls land.
+    effect(() => {
+      this.runResults();
+      untracked(() => this.syncSelection());
+    });
+
+    // The finished run belongs in the history list.
+    this.tasks.finished$
+      .pipe(
+        filter(
+          (t) => t.kind === 'eval-run' && t.key === untracked(this.agentKey),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        if (this.evalTab() === 'runs') this.loadEvalRuns();
+      });
+
+    // Try it mounts when first shown.
     effect(() => {
       if (this.activeTab() === 'chat') this.chatMounted.set(true);
     });
@@ -267,7 +337,7 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /** The owner's skills, for the Graph tab and the instruction chips. */
+  /** The owner's skills, for the Skills tab and the instruction chips. */
   readonly librarySkills = signal<SkillSummary[] | null>(null);
   readonly librarySkillsError = signal<string | null>(null);
   /** The names that exist, so a link to anything else shows as not found. */
@@ -321,16 +391,6 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /**
-   * The Graph tab of an Official agent (R105): the skills it gets and every
-   * one of its tools, always on. Null while the built-in skills load.
-   */
-  readonly officialGraph = computed(() => {
-    const agent = this.agent();
-    const skills = this.builtInSkills();
-    return agent && skills ? officialGraphInput(agent, skills) : null;
-  });
-
   /** Reload the owner's skills after the Skills tab changed one. */
   reloadLibrary(): void {
     this.loadLibrarySkills(this.agentKey());
@@ -343,15 +403,19 @@ export class AgentDetail implements OnDestroy {
   }
 
   private loadAgent(key: string, initial = false): void {
+    if (initial) {
+      this.runsApi.list().subscribe({
+        next: (res) => this.runs.set(res.runs),
+        error: () => this.runs.set(null),
+      });
+    }
     this.api.getAgent(key).subscribe({
       next: (agent) => {
         if (this.agentKey() !== key) return;
         this.agent.set(agent);
         this.loading.set(false);
         if (initial) {
-          this.activeTab.set(
-            defaultAgentTab(agentKind(agent), !!agent.showcase),
-          );
+          this.activeTab.set(defaultAgentTab(agentKind(agent)));
         }
         if (agent.kind === 'user') {
           this.loadLibrarySkills(key);
@@ -368,6 +432,18 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
+  /**
+   * Why Try it can't run a user agent's draft: none of its draft's datasets
+   * exists (R90). The backend refuses the same way.
+   */
+  protected tryBlocked(agent: AgentDetailModel): string | null {
+    const missing = agent.missingDatasets ?? [];
+    const datasets = agent.draft?.datasets ?? agent.datasets ?? [];
+    return datasets.some((name) => !missing.includes(name))
+      ? null
+      : 'Add a dataset to this agent to try it.';
+  }
+
   /** User agents only; built-in agents offer neither Publish nor Delete (R5). */
   readonly isUserAgent = computed(() => this.agent()?.kind === 'user');
 
@@ -382,15 +458,14 @@ export class AgentDetail implements OnDestroy {
     () => this.isUserAgent() && this.canCreateAgents(),
   );
 
-  /** The Official agent and Live user agents offer Start chat (R53). */
-  readonly showStartChat = computed(() => {
+  /** The workflows that use the agent, for the Used in line (R109). */
+  readonly usedInWorkflows = computed(
+    () => this.agent()?.usedInWorkflows ?? [],
+  );
+  /** The Used in line's text when no workflow uses the agent (R109). */
+  readonly usedInEmpty = computed(() => {
     const agent = this.agent();
-    return !!agent && canStartChat(agent);
-  });
-  /** Set when none of the agent's datasets exist; disables Start chat. */
-  readonly startChatBlockedReason = computed(() => {
-    const agent = this.agent();
-    return agent ? startChatBlockedReason(agent) : null;
+    return usedInEmptyText(agent ? agentKind(agent) : 'system');
   });
 
   /** Publish shows when there is no Live version or it has unpublished changes. */
@@ -638,16 +713,46 @@ export class AgentDetail implements OnDestroy {
   readonly datasources = signal<Datasource[]>([]);
   readonly selectedDatasourceId = signal<string>('');
 
-  /** Live state of the current run. */
-  readonly runStarting = signal(false);
-  readonly runError = signal<string | null>(null);
-  readonly runStatus = signal<'idle' | 'running' | 'completed' | 'failed'>(
-    'idle',
+  /**
+   * Live state of the current run, read from the `eval-run` background task of
+   * this agent: the run goes on when the page is left and shows again when it
+   * is opened (ADR-0047). The task's last value is the latest poll.
+   */
+  private readonly runTask = computed(() =>
+    this.tasks.latest('eval-run', this.agentKey()),
   );
-  readonly runResults = signal<AgentEvalCaseResult[]>([]);
-  readonly runCurrentQuestion = signal<string | null>(null);
-  readonly runDatasets = signal<string[]>([]);
-  private pollTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly runView = computed(
+    () => this.runTask()?.result as EvalRunTick | undefined,
+  );
+  /** The run was asked for and its first answer has not come yet. */
+  readonly runStarting = computed(() => {
+    const task = this.runTask();
+    return task?.status === 'running' && task.result === undefined;
+  });
+  readonly runError = computed<string | null>(() => {
+    const task = this.runTask();
+    if (!task) return null;
+    if (task.status === 'failed') return task.detail;
+    return this.runView()?.error ?? null;
+  });
+  readonly runStatus = computed<'idle' | 'running' | 'completed' | 'failed'>(
+    () => {
+      const task = this.runTask();
+      if (!task || task.status === 'stopped') return 'idle';
+      if (task.status === 'running') {
+        return task.result === undefined ? 'idle' : 'running';
+      }
+      if (task.status === 'failed') return 'failed';
+      return this.runView()?.status ?? 'completed';
+    },
+  );
+  readonly runResults = computed<AgentEvalCaseResult[]>(
+    () => this.runView()?.results ?? [],
+  );
+  readonly runCurrentQuestion = computed(
+    () => this.runView()?.currentQuestion ?? null,
+  );
+  readonly runDatasets = computed(() => this.runView()?.datasets ?? []);
 
   readonly running = computed(() => this.runStatus() === 'running');
   readonly passedCount = computed(
@@ -681,58 +786,70 @@ export class AgentDetail implements OnDestroy {
     if (!datasourceId || caseIds.length === 0) return;
     if (this.running() || this.runStarting()) return;
 
-    this.runStarting.set(true);
-    this.runError.set(null);
-    this.runResults.set([]);
-    this.runCurrentQuestion.set(null);
-    this.syncSelection();
-
-    this.api.startEvalRun(this.agentKey(), datasourceId, caseIds).subscribe({
-      next: (res) => {
-        this.runStarting.set(false);
-        if (!res.ok || !res.jobId) {
-          this.runError.set(res.message);
-          this.runStatus.set('idle');
-          return;
-        }
-        this.runStatus.set('running');
-        this.pollRun(res.jobId);
+    const key = this.agentKey();
+    const name = this.agent()?.name ?? key;
+    // The task is subscribed at the root, so leaving this page neither stops
+    // the run nor its polling; `tasks.latest` shows it again on return.
+    this.tasks.start<EvalRunTick>({
+      kind: 'eval-run',
+      key,
+      title: `Running evals · ${name}`,
+      work: () => this.evalRunWork(key, datasourceId, caseIds),
+      onValue: (view, task) => {
+        const total = view.totalCases || caseIds.length;
+        const done = view.results?.length ?? 0;
+        if (!view.ok || !total) return;
+        this.tasks.update(task.id, {
+          progress: { done, total },
+          detail: `${done} of ${total} questions`,
+        });
       },
-      error: (err) => {
-        this.runStarting.set(false);
-        this.runStatus.set('idle');
-        this.runError.set(err?.error?.message ?? 'Backend unreachable');
-      },
+      outcome: (last) => evalRunOutcome(last, name),
+      open: () => this.openEvals(key),
+      // The page shows its own run state and errors; toast only when away.
+      toast: () => !(this.alive && this.agentKey() === key),
     });
   }
 
-  /** Poll until the job leaves `running`; each question lands as it finishes. */
-  private pollRun(jobId: string): void {
-    this.api.getEvalRun(this.agentKey(), jobId).subscribe({
-      next: (view) => {
-        if (!view.ok) {
-          this.runStatus.set('failed');
-          this.runError.set(view.message);
-          return;
+  /**
+   * Start the job, then poll it every 1.5 s until it leaves `running`; every
+   * poll is emitted, so each question lands as it finishes.
+   */
+  private evalRunWork(
+    key: string,
+    datasourceId: string,
+    caseIds: string[],
+  ): Observable<EvalRunTick> {
+    return this.api.startEvalRun(key, datasourceId, caseIds).pipe(
+      switchMap((res): Observable<EvalRunTick> => {
+        if (!res.ok || !res.jobId) {
+          return of({ ok: false, message: res.message });
         }
-        this.runResults.set(view.results ?? []);
-        this.syncSelection();
-        this.runCurrentQuestion.set(view.currentQuestion ?? null);
-        this.runDatasets.set(view.datasets ?? []);
-        if (view.status === 'running') {
-          this.pollTimer = setTimeout(() => this.pollRun(jobId), 1500);
-          return;
-        }
-        this.runStatus.set(view.status ?? 'completed');
-        if (view.error) this.runError.set(view.error);
-        // The finished run belongs in the history list.
-        if (this.evalTab() === 'runs') this.loadEvalRuns();
-      },
-      error: (err) => {
-        this.runStatus.set('failed');
-        this.runError.set(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
+        const jobId = res.jobId;
+        // The run is under way as soon as it starts: show it with no result
+        // yet, then read it back every 1.5 s until it ends.
+        return timer(1500, 1500).pipe(
+          concatMap(() => this.api.getEvalRun(key, jobId)),
+          takeWhile((view) => view.ok && view.status === 'running', true),
+          startWith<EvalRunTick>({
+            ok: true,
+            message: res.message,
+            status: 'running',
+            results: [],
+            totalCases: caseIds.length,
+          }),
+        );
+      }),
+    );
+  }
+
+  /** The task's Open: this agent's page on its Evals tab. */
+  private openEvals(key: string): void {
+    this.pageState.requestedTab.set('evals');
+    this.nav.openAgentByKey(key);
+    // The shell refused (unsaved edits): don't leave the request for later.
+    if (this.nav.activeAgentKey() !== key)
+      this.pageState.requestedTab.set(null);
   }
 
   /** Re-point the panel at the selected question's latest result. */
@@ -746,8 +863,8 @@ export class AgentDetail implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.alive = false;
     this.pageState.reset();
-    clearTimeout(this.pollTimer);
     this.evalSelection.clear();
   }
 

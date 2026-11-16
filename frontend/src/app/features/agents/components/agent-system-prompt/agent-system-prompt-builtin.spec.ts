@@ -63,12 +63,19 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     fixture.componentRef.setInput('agent', agent);
     fixture.detectChanges();
   }
+  /** The CV view loads on its own (`@defer`): let it render. */
+  async function settle(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
   const el = () => fixture.nativeElement as HTMLElement;
   const byId = (id: string) =>
     el().querySelector<HTMLButtonElement>(`[data-testid="${id}"]`);
 
-  it('shows the prompt as served with a Built-in chip and Edit', () => {
+  it('shows the prompt as served with a Built-in chip and Edit', async () => {
     render(builtIn('sql-fixer'));
+    await settle();
     expect(el().textContent).toContain('Built-in');
     expect(byId('agent-prompt-view')?.textContent).toContain('SERVED PROMPT');
     expect(byId('agent-prompt-edit')).not.toBeNull();
@@ -109,14 +116,14 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     expect(byId('agent-prompt-save')).toBeNull();
   });
 
-  it('disables Save for an empty prompt and Cancel discards', () => {
+  it('disables Save for an empty prompt and Cancel discards', async () => {
     render(builtIn('sql-fixer'));
     byId('agent-prompt-edit')!.click();
     component.draft.set('   ');
     fixture.detectChanges();
     expect(byId('agent-prompt-save')!.disabled).toBeTrue();
     byId('agent-prompt-cancel')!.click();
-    fixture.detectChanges();
+    await settle();
     expect(byId('agent-prompt-editing')).toBeNull();
     expect(byId('agent-prompt-view')).not.toBeNull();
   });
@@ -134,14 +141,14 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     );
   });
 
-  it("shows the RFP Builder's links as chips, known against its own tools and skills", () => {
-    const rfp = {
-      ...builtIn('rfp', {
+  it("shows the Report Builder's links as chips, known against its own tools and skills", async () => {
+    const report = {
+      ...builtIn('report', {
         editable:
-          'You are the RFP Builder. Load [[skill:rfp-client-renewal]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
+          'You are the Report Builder. Load [[skill:report-outline]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
         linksAllowed: true,
       }),
-      name: 'RFP Builder',
+      name: 'Report Builder',
       kind: 'official',
       toolDetails: [
         {
@@ -153,13 +160,13 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     } as AgentDetail;
     fixture = TestBed.createComponent(AgentSystemPrompt);
     component = fixture.componentInstance;
-    fixture.componentRef.setInput('agent', rfp);
+    fixture.componentRef.setInput('agent', report);
     fixture.componentRef.setInput('builtInSkills', [
       {
-        name: 'rfp-client-renewal',
+        name: 'report-outline',
         description: 'Stage 1.',
         loading: 'on-demand',
-        agents: ['rfp'],
+        agents: ['report'],
         modified: false,
         builtInChanged: false,
         updatedAt: null,
@@ -174,25 +181,25 @@ describe('AgentSystemPrompt (built-in agents)', () => {
         updatedAt: null,
       },
     ]);
-    fixture.detectChanges();
+    await settle();
     const view = byId('agent-prompt-view')!;
     expect(view.textContent).not.toContain('[[');
     const chip = (name: string) =>
       [...view.querySelectorAll('span')].find(
         (span) => span.textContent?.trim() === name,
       );
-    expect(chip('rfp-client-renewal')?.className).toContain('chip-info');
+    expect(chip('report-outline')?.className).toContain('chip-info');
     expect(chip('list_clients')?.className).toContain('chip-neutral');
-    // An assistant-only tool is not one of the RFP Builder's.
+    // An assistant-only tool is not one of the Report Builder's.
     expect(chip('run_readonly_sql')?.className).toContain('chip-danger');
     expect(byId('agent-prompt-tools-note')?.textContent).toContain(
-      '## Tools — generated from the tools the RFP Builder gets',
+      '## Tools — generated from the tools Report Builder gets',
     );
     expect(component.officialTools().map((tool) => tool.name)).toEqual([
       'list_clients',
     ]);
     expect(component.officialSkills().map((skill) => skill.name)).toEqual([
-      'rfp-client-renewal',
+      'report-outline',
     ]);
   });
 
@@ -221,7 +228,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     confirm.and.returnValue(true);
     byId('agent-prompt-reset')!.click();
     expect(confirm).toHaveBeenCalledWith(
-      'Reset the system prompt of "SQL fixer" to the built-in version?',
+      'Reset the job description of "SQL fixer" to the built-in version?',
     );
     const del = http.expectOne(`${API_BASE_URL}/agents/sql-fixer/prompt`);
     expect(del.request.method).toBe('DELETE');

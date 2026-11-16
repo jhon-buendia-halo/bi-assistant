@@ -123,7 +123,10 @@ export interface ReadinessReport extends EngineResult {
   datasourceKind: 'postgres' | 'databricks';
   /** ISO time the assessment ran (the engine's `now`). */
   generatedAt: string;
+  /** The chat session it was run from, when it came from a chat. */
   sessionId?: string;
+  /** The workflow run it was run from, when it came from a run (1.23.16). */
+  runId?: string;
   /**
    * BA-323 / ADR-0033: entities whose columns were not profiled, in profile
    * order. Built by the service from `EntityProfile.notProfiled` (the engine
@@ -153,6 +156,7 @@ export type ReadinessReportSummary = Pick<
   | 'maturity'
   | 'entityCount'
   | 'sessionId'
+  | 'runId'
 >;
 
 /** What the readiness tools return to the model (agents.md 3.13). */

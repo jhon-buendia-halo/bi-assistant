@@ -11,13 +11,13 @@ import {
   builtInOnDemandSkillNames,
 } from '../../mastra/app-skills';
 import { readinessTools } from '../../mastra/tools/readiness.tools';
-import { rfpTools } from '../../mastra/tools/rfp.tools';
 import {
-  ASSISTANT_V2_AGENT_KEY,
-  ASSISTANT_V2_IDENTITY_START,
-  ASSISTANT_V2_TOOL_NAMES,
-} from '../../mastra/agents/assistant-v2-catalog';
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_IDENTITY_START,
+  INSIGHTS_ANALYST_TOOL_NAMES,
+} from '../../mastra/agents/insights-analyst-catalog';
 import { MastraService } from '../../mastra/mastra.service';
+import { builtinAgentPersona } from '../../mastra/agent-personas';
 import {
   agentPromptHash,
   shippedAgentPrompt,
@@ -37,23 +37,6 @@ export const PROMPT_MAX_CHARS = 20000;
 const ASSISTANT_IDENTITY_START = 'You are the Questions to Insights assistant';
 
 const ASSISTANT_KEY = 'assistant';
-
-/** Where the RFP Builder's prompt must start (agents.md 2.8, rfp R1). */
-const RFP_IDENTITY_START = 'You are the RFP Builder';
-
-const RFP_KEY = 'rfp';
-
-/**
- * What the RFP Builder's prompt may link (agents.md 2.8, BA-228): its own
- * tools and its own on-demand skills, one per stage. Links are mentions; it
- * keeps every tool.
- */
-function rfpLinkTargets(): { tools: string[]; skills: string[] } {
-  return {
-    tools: Object.keys(rfpTools),
-    skills: [...(AGENT_SKILLS[RFP_KEY] ?? [])],
-  };
-}
 
 /** Where the Data Readiness Agent's prompt must start (agents.md 2.10, D1). */
 const DATA_READINESS_IDENTITY_START = 'You are the Data Readiness Agent';
@@ -131,7 +114,11 @@ export class AgentPromptsService implements OnModuleInit {
   }
 
   private nameOf(key: string): string {
-    return this.mastra.listAgents()[key]?.name ?? key;
+    return (
+      builtinAgentPersona(key)?.name ??
+      this.mastra.listAgents()[key]?.name ??
+      key
+    );
   }
 
   /** The shipped prompt of built-in `key`; refuses a user agent or a stranger. */
@@ -159,8 +146,7 @@ export class AgentPromptsService implements OnModuleInit {
         !!override && override.baseHash !== agentPromptHash(shipped),
       linksAllowed:
         key === ASSISTANT_KEY ||
-        key === ASSISTANT_V2_AGENT_KEY ||
-        key === RFP_KEY ||
+        key === INSIGHTS_ANALYST_AGENT_KEY ||
         key === DATA_READINESS_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
@@ -189,21 +175,6 @@ function validatePrompt(key: string, value: unknown): string {
     }
     const unknown = links.tools.find((name) => !isLibraryTool(name));
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
-  } else if (key === RFP_KEY) {
-    if (!prompt.startsWith(RFP_IDENTITY_START)) {
-      throw new BadRequestException(
-        `The RFP Builder's prompt must start with "${RFP_IDENTITY_START}"`,
-      );
-    }
-    const links = parseLinks(prompt);
-    const allowed = rfpLinkTargets();
-    if (links.skills.some((name) => !allowed.skills.includes(name))) {
-      throw new BadRequestException(
-        "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
-      );
-    }
-    const unknown = links.tools.find((name) => !allowed.tools.includes(name));
-    if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (key === DATA_READINESS_KEY) {
     if (!prompt.startsWith(DATA_READINESS_IDENTITY_START)) {
       throw new BadRequestException(
@@ -219,20 +190,22 @@ function validatePrompt(key: string, value: unknown): string {
     }
     const unknown = links.tools.find((name) => !allowed.tools.includes(name));
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
-  } else if (key === ASSISTANT_V2_AGENT_KEY) {
-    if (!prompt.startsWith(ASSISTANT_V2_IDENTITY_START)) {
+  } else if (key === INSIGHTS_ANALYST_AGENT_KEY) {
+    if (!prompt.startsWith(INSIGHTS_ANALYST_IDENTITY_START)) {
       throw new BadRequestException(
-        `The Questions to Insights v2 prompt must start with "${ASSISTANT_V2_IDENTITY_START}"`,
+        `The Insights Analyst prompt must start with "${INSIGHTS_ANALYST_IDENTITY_START}"`,
       );
     }
+    // Its own skills and tools only (agents.md 2.11); links are mentions.
     const links = parseLinks(prompt);
-    if (links.skills.length) {
+    const skills = AGENT_SKILLS[INSIGHTS_ANALYST_AGENT_KEY] ?? [];
+    if (links.skills.some((name) => !skills.includes(name))) {
       throw new BadRequestException(
-        "Skills can't be linked here: Questions to Insights v2 has no skills",
+        "Only Insights Analyst's own skills can be linked here: this prompt is shared by every user",
       );
     }
     const unknown = links.tools.find(
-      (name) => !ASSISTANT_V2_TOOL_NAMES.includes(name),
+      (name) => !INSIGHTS_ANALYST_TOOL_NAMES.includes(name),
     );
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (ANY_LINK.test(prompt)) {

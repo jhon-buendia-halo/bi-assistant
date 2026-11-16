@@ -16,6 +16,7 @@ import {
   mapWithConcurrency,
   MASKED,
   splitEntity,
+  SQL_ROWS_MAX,
 } from './connector';
 import { discoverFromOpenApi } from './openapi-discovery';
 
@@ -154,9 +155,10 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     config: RestApiConfig,
     sql: string,
     rowLimit: number,
+    maxRows = SQL_ROWS_MAX,
   ): Promise<QueryResult> {
     const safeSql = assertReadOnlySql(sql);
-    const lim = clampRows(rowLimit, 100, 500);
+    const lim = clampRows(rowLimit, 100, maxRows);
     const endpoints = this.endpoints(config);
     const { sql: rewritten, refs } = rewriteReferences(safeSql);
     const referenced = endpoints.filter((e) => refs.has(e.key));
@@ -189,6 +191,7 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
       return {
         columns: statement.columns().map((c) => c.name),
         rows: rows.slice(0, lim),
+        totalRows: rows.length,
       };
     } finally {
       db.close();

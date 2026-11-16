@@ -1,0 +1,68 @@
+<div class="flex flex-col" data-testid="workflows-page">
+  <h2
+    class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+  >
+    Workflows
+  </h2>
+  <p class="mt-1 text-[13px] text-fg-muted">
+    Each workflow runs on an input. Its steps call agents, and agents use skills
+    and tools.
+  </p>
+
+  <!-- Search: a full-width row under the header -->
+  <div class="relative mt-5">
+    <lucide-angular
+      [img]="Search"
+      [size]="15"
+      class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-muted"
+    />
+    <input
+      type="search"
+      data-testid="workflow-search"
+      placeholder="Search workflows by name or description"
+      aria-label="Search workflows by name or description"
+      [value]="query()"
+      (input)="onSearch($event)"
+      class="field pl-10"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading workflows…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else if (emptyMessage(); as message) {
+    <p class="mt-10 text-[13px] text-fg-muted">{{ message }}</p>
+  } @else {
+    <div class="mt-6 flex flex-col gap-6">
+      @for (section of sections(); track section.id) {
+        <section
+          [attr.data-testid]="'workflow-section-' + section.id"
+          [attr.aria-labelledby]="'workflow-section-heading-' + section.id"
+        >
+          <h3
+            [id]="'workflow-section-heading-' + section.id"
+            class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+          >
+            {{ section.label }}
+          </h3>
+          <div class="mt-3 grid grid-cols-3 gap-3">
+            @for (workflow of section.workflows; track workflow.id) {
+              <app-workflow-card
+                [workflow]="workflow"
+                (open)="openWorkflow.emit(workflow.id)"
+              />
+            }
+          </div>
+        </section>
+      }
+    </div>
+  }
+</div>

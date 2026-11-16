@@ -1,0 +1,33 @@
+Demo — 1.23.3 The workflow catalogue: list, detail, and sessions bound to a workflow
+
+No UI scenario carries this story's tag, so the demo is this transcript of the checks scripts/qa.mjs ran.
+
+$ npm --prefix backend run build:all
+  exit 0 (passed)
+  5 │ @import 'src/styles.scss';
+  ╵         ~~~~~~~~~~~~~~~~~
+  ▲ [WARNING] bundle initial exceeded maximum budget. Budget 500.00 kB was not met by 437.85 kB with a total of 937.85 kB.
+
+$ npx jest --findRelatedTests src/app.module.ts src/mastra/agent-constants.ts src/mastra/agents/assistant-v2-catalog.ts src/mastra/agents/assistant-v2.agent.ts src/mastra/agents/data-readiness.agent.ts src/mastra/agents/rfp.agent.ts src/mastra/agents/showcase-catalog.ts src/mastra/agents/showcase.agents.ts src/mastra/index.ts src/mastra/shipped-agent-prompts.ts src/mastra/workflows/agent-turn.steps.ts src/mastra/workflows/agent-workflows.spec.ts src/mastra/workflows/agent-workflows.ts src/mastra/workflows/qti-v2-turn.steps.spec.ts src/mastra/workflows/qti-v2-turn.steps.ts src/mastra/workflows/qti-v2-turn.workflow.spec.ts src/mastra/workflows/workflow-catalog.spec.ts src/mastra/workflows/workflow-catalog.ts src/modules/agents/agent-prompts.service.spec.ts src/modules/agents/agents.module.ts src/modules/agents/agents.service.spec.ts src/modules/agents/agents.service.ts src/modules/sessions/builtin-agent-sessions.spec.ts src/modules/sessions/entities/session.entity.ts src/modules/sessions/sessions.controller.ts src/modules/sessions/sessions.service.spec.ts src/modules/sessions/sessions.service.ts src/modules/sessions/workflow-sessions.spec.ts src/modules/workflows/workflows.controller.ts src/modules/workflows/workflows.module.ts src/modules/workflows/workflows.service.spec.ts src/modules/workflows/workflows.service.ts --passWithNoTests
+  exit 0 (passed)
+  Snapshots:   0 total
+  Time:        1.453 s
+  Ran all test suites related to files matching src/app.module.ts|src/mastra/agent-constants.ts|src/mastra/agents/assistant-v2-catalog.ts|src/mastra/agents/assistant-v2.agent.ts|src/mastra/agents/data-readiness.agent.ts|src/mastra/agents/rfp.agent.ts|src/mastra/agents/showcase-catalog.ts|src/mastra/agents/showcase.agents.ts|src/mastra/index.ts|src/mastra/shipped-agent-prompts.ts|src/mastra/workflows/agent-turn.steps.ts|src/mastra/workflows/agent-workflows.spec.ts|src/mastra/workflows/agent-workflows.ts|src/mastra/workflows/qti-v2-turn.steps.spec.ts|src/mastra/workflows/qti-v2-turn.steps.ts|src/mastra/workflows/qti-v2-turn.workflow.spec.ts|src/mastra/workflows/workflow-catalog.spec.ts|src/mastra/workflows/workflow-catalog.ts|src/modules/agents/agent-prompts.service.spec.ts|src/modules/agents/agents.module.ts|src/modules/agents/agents.service.spec.ts|src/modules/agents/agents.service.ts|src/modules/sessions/builtin-agent-sessions.spec.ts|src/modules/sessions/entities/session.entity.ts|src/modules/sessions/sessions.controller.ts|src/modules/sessions/sessions.service.spec.ts|src/modules/sessions/sessions.service.ts|src/modules/sessions/workflow-sessions.spec.ts|src/modules/workflows/workflows.controller.ts|src/modules/workflows/workflows.module.ts|src/modules/workflows/workflows.service.spec.ts|src/modules/workflows/workflows.service.ts.
+
+$ npx ng test --watch=false --browsers=ChromeHeadless --include=src/app/features/agents/components/agent-card/agent-card.spec.ts --include=src/app/features/agents/components/agent-graph/agent-graph.spec.ts --include=src/app/features/agents/components/agent-workflow/agent-workflow.spec.ts --include=src/app/features/agents/services/agent-hub.util.spec.ts --include=src/app/features/agents/services/agent-page.util.spec.ts --include=src/app/features/agents/services/workflow-flow.spec.ts
+  exit 0 (passed)
+  angular:styles/global:styles:5:8:
+  5 │ @import 'src/styles.scss';
+  ╵         ~~~~~~~~~~~~~~~~~
+
+$ python3 scripts/check-specs.py
+  exit 0 (passed)
+  PASS 27 roadmap milestone epics have a spec in specs/epics/
+  PASS every epic spec has a Status of Draft or Confirmed
+  ALL CHECKS PASSED
+
+$ npx playwright test --project=web e2e/agent-hub.spec.ts e2e/builtin-agent-prompts.spec.ts e2e/session-management.spec.ts
+  exit 0 (passed)
+  ✓  35 [web] › e2e/session-management.spec.ts:435:5 › Start chat on Questions to Insights v2 opens New conversation with v2 selected (913ms)
+  ✓  36 [web] › e2e/session-management.spec.ts:463:5 › the Agent field lists Questions to Insights v2 right after Assistant (985ms)
+  36 passed (1.0m)

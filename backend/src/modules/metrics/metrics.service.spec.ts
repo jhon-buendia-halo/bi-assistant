@@ -252,6 +252,24 @@ describe('MetricsService.candidates', () => {
     { id: 'vq-3', question: 'No provenance', sql: 'SELECT 3', entities: [] },
   ];
 
+  it('offers a pair that came from a workflow run', async () => {
+    const { service } = build(
+      [],
+      [
+        {
+          id: 'vq-run',
+          question: 'Goals by team',
+          sql: 'SELECT 9',
+          entities: ['main.wc.goals'],
+        },
+      ],
+    );
+
+    const candidates = await service.candidates();
+
+    expect(candidates.map((c) => c.verifiedQueryId)).toEqual(['vq-run']);
+  });
+
   it('prefills drafts from verified queries with entity provenance', async () => {
     const { service } = build([], pairs);
 

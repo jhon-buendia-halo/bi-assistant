@@ -1,9 +1,13 @@
-import { Agent, AgentKind } from './agents-api.service';
+import { Agent, AgentDomain, AgentKind } from './agents-api.service';
+import { AGENT_DOMAINS, agentDomain } from './agent-domains';
 
-/** The hub's filter pills (agents-evals R2). */
-export type HubFilter = 'all' | 'pinned' | 'official' | 'mine';
+/** The hub's filter pills: All, Pinned or one domain (agents-evals R2). */
+export type HubFilter = 'all' | 'pinned' | AgentDomain;
 
-export type HubSectionId = 'official' | 'mine' | 'system' | 'pinned';
+/** The owner menu next to the pills (agents-evals R2). */
+export type OwnerFilter = 'any' | 'official' | 'mine' | 'system';
+
+export type HubSectionId = AgentDomain | 'pinned';
 
 export interface HubSection {
   id: HubSectionId;
@@ -11,22 +15,36 @@ export interface HubSection {
   agents: Agent[];
 }
 
-/** Cards per grid row; a section shows one row until expanded (R3). */
-export const HUB_ROW_SIZE = 3;
-
-export const HUB_FILTERS: { id: HubFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'pinned', label: 'Pinned' },
+export const OWNER_FILTERS: { id: OwnerFilter; label: string }[] = [
+  { id: 'any', label: 'Any owner' },
   { id: 'official', label: 'Official' },
   { id: 'mine', label: 'Mine' },
+  { id: 'system', label: 'System' },
 ];
 
-/** The section of each kind of agent, in the order sections show (R1). */
-const KIND_SECTIONS: { kind: AgentKind; id: HubSectionId; label: string }[] = [
-  { kind: 'official', id: 'official', label: 'Official' },
-  { kind: 'user', id: 'mine', label: 'Mine' },
-  { kind: 'system', id: 'system', label: 'System' },
-];
+const OWNER_KIND: Record<Exclude<OwnerFilter, 'any'>, AgentKind> = {
+  official: 'official',
+  mine: 'user',
+  system: 'system',
+};
+
+/**
+ * The pills: All, Pinned, then one per domain that has at least one agent,
+ * in domain order (R1, R2). Built from every agent, so the pills do not move
+ * as the user types a search or changes the owner.
+ */
+export function hubFilters(
+  agents: Agent[],
+): { id: HubFilter; label: string }[] {
+  const present = new Set(agents.map(agentDomain));
+  return [
+    { id: 'all', label: 'All' },
+    { id: 'pinned', label: 'Pinned' },
+    ...AGENT_DOMAINS.filter((domain) => present.has(domain.id)).map(
+      (domain) => ({ id: domain.id, label: domain.label }),
+    ),
+  ];
+}
 
 /** The agent's kind, falling back for a catalogue entry that predates kinds. */
 export function agentKind(agent: Agent): AgentKind {
@@ -34,30 +52,20 @@ export function agentKind(agent: Agent): AgentKind {
   return agent.key === 'assistant' ? 'official' : 'system';
 }
 
-/** Search matches the trimmed query in the name or description, any case (R2). */
+/**
+ * Search matches the trimmed query in the name, the description or a
+ * built-in agent's intro (the text its card shows), any case (R2).
+ */
 export function matchesQuery(agent: Agent, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  return (
-    agent.name.toLowerCase().includes(needle) ||
-    (agent.description ?? '').toLowerCase().includes(needle)
+  return [agent.name, agent.description, agent.intro].some((text) =>
+    (text ?? '').toLowerCase().includes(needle),
   );
 }
 
-function byName(a: Agent, b: Agent): number {
-  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-}
-
-/** Pinned cards first, then the others, each group alphabetical (R1). */
-/** Showcase agents after the agents that can chat (R106), then by name. */
-function showcaseLast(a: Agent, b: Agent): number {
-  if (!!a.showcase !== !!b.showcase) return a.showcase ? 1 : -1;
-  return byName(a, b);
-}
-
-function pinnedFirst(a: Agent, b: Agent): number {
-  if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-  return showcaseLast(a, b);
+function matchesOwner(agent: Agent, owner: OwnerFilter): boolean {
+  return owner === 'any' || agentKind(agent) === OWNER_KIND[owner];
 }
 
 const KIND_ORDER: Record<AgentKind, number> = {
@@ -66,62 +74,61 @@ const KIND_ORDER: Record<AgentKind, number> = {
   system: 2,
 };
 
+function byName(a: Agent, b: Agent): number {
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+}
+
+function byKindThenName(a: Agent, b: Agent): number {
+  return KIND_ORDER[agentKind(a)] - KIND_ORDER[agentKind(b)] || byName(a, b);
+}
+
+/** Pinned cards first, then Official, Mine and System, each by name (R1). */
+function pinnedFirst(a: Agent, b: Agent): number {
+  if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+  return byKindThenName(a, b);
+}
+
 /**
- * The sections the hub shows for a filter and search (R1, R2). Each agent
- * appears at most once; empty sections are omitted.
+ * The sections the hub shows for a filter, owner and search (R1, R2): one per
+ * domain under All, the chosen domain's alone, or a single Pinned section.
+ * Each agent appears at most once; empty sections are omitted.
  */
 export function buildHubSections(
   agents: Agent[],
   filter: HubFilter,
+  owner: OwnerFilter,
   query: string,
 ): HubSection[] {
-  const matching = agents.filter((agent) => matchesQuery(agent, query));
+  const matching = agents.filter(
+    (agent) => matchesQuery(agent, query) && matchesOwner(agent, owner),
+  );
 
   if (filter === 'pinned') {
     const pinned = matching
       .filter((agent) => agent.pinned)
-      .sort(
-        (a, b) =>
-          KIND_ORDER[agentKind(a)] - KIND_ORDER[agentKind(b)] || byName(a, b),
-      );
+      .sort(byKindThenName);
     return pinned.length
       ? [{ id: 'pinned', label: 'Pinned', agents: pinned }]
       : [];
   }
 
-  const kinds: AgentKind[] =
-    filter === 'official'
-      ? ['official']
-      : filter === 'mine'
-        ? ['user']
-        : ['official', 'user', 'system'];
-
-  return KIND_SECTIONS.filter(({ kind }) => kinds.includes(kind))
-    .map(({ kind, id, label }) => ({
-      id,
-      label,
+  return AGENT_DOMAINS.filter(
+    (domain) => filter === 'all' || domain.id === filter,
+  )
+    .map((domain) => ({
+      id: domain.id,
+      label: domain.label,
       agents: matching
-        .filter((agent) => agentKind(agent) === kind)
+        .filter((agent) => agentDomain(agent) === domain.id)
         .sort(pinnedFirst),
     }))
     .filter((section) => section.agents.length > 0);
 }
 
-/** The cards a section shows, and how many its first row hides (R3). */
-export function visibleCards(
-  agents: Agent[],
-  expanded: boolean,
-): { shown: Agent[]; hidden: number } {
-  const hidden = Math.max(agents.length - HUB_ROW_SIZE, 0);
-  return {
-    shown: expanded ? agents : agents.slice(0, HUB_ROW_SIZE),
-    hidden,
-  };
-}
-
 /** The message shown instead of sections, or null when sections show (R2). */
 export function hubEmptyMessage(
   filter: HubFilter,
+  owner: OwnerFilter,
   query: string,
   sections: HubSection[],
 ): string | null {
@@ -129,115 +136,6 @@ export function hubEmptyMessage(
   const trimmed = query.trim();
   if (trimmed) return `No agents match "${trimmed}"`;
   if (filter === 'pinned') return 'No pinned agents yet.';
-  if (filter === 'mine') return 'No agents of yours yet.';
-  return null;
-}
-
-/**
- * Start chat is offered for the Official agent and Live user agents, never
- * for drafts or System agents (agents-evals R53). A Live agent with
- * unpublished changes still offers it; the session uses the Live version.
- */
-export function canStartChat(agent: Agent): boolean {
-  const kind = agentKind(agent);
-  return kind === 'official' || (kind === 'user' && agent.status === 'live');
-}
-
-/** Title of a disabled Start chat (R53, sessions-chat R52). */
-export const NO_DATASETS_LEFT = "None of this agent's datasets exist";
-
-/**
- * Why Start chat is disabled for an agent that offers it, or null when it can
- * run: a user agent none of whose datasets still exist (R53).
- */
-export function startChatBlockedReason(agent: Agent): string | null {
-  const kind = agentKind(agent);
-  if (kind === 'official') {
-    // A showcase agent never chats (R106).
-    if (agent.showcase) return agent.chatRequirement ?? null;
-    // An Official agent with a requirement waits for its datasets: the RFP
-    // Builder while its dataset is missing, the Data Readiness Agent while no
-    // PostgreSQL or Databricks dataset exists (data-readiness R2), which the
-    // catalogue shows as no datasets at all.
-    if (!agent.chatRequirement) return null;
-    const missing = agent.missingDatasets ?? [];
-    const datasets = agent.datasets ?? [];
-    return missing.length > 0 || datasets.length === 0
-      ? agent.chatRequirement
-      : null;
-  }
-  if (kind !== 'user') return null;
-  const datasets = agent.datasets ?? [];
-  const missing = agent.missingDatasets ?? [];
-  return datasets.length > 0 && missing.length >= datasets.length
-    ? NO_DATASETS_LEFT
-    : null;
-}
-
-/**
- * Whether Start chat opens the New-session composer (the Official agent with
- * no dataset of its own) rather than creating the session from the agent.
- */
-export function startsInComposer(agent: Agent): boolean {
-  return (
-    agentKind(agent) === 'official' &&
-    !agent.showcase &&
-    (agent.datasets ?? []).length === 0
-  );
-}
-
-/** The assistant's entry in the New conversation screen's Agent picker. */
-export const ASSISTANT_PICKER_KEY = 'assistant';
-export const ASSISTANT_PICKER_DESCRIPTION =
-  'Answers questions over the datasets you pick.';
-
-export interface NewSessionAgentOption {
-  agent: Agent;
-  /** Why it cannot start a chat now, or null when it can. */
-  disabledReason: string | null;
-}
-
-/**
- * Built-in agents that, like the assistant, answer over the datasets the user
- * picks (sessions-chat R64): today Questions to Insights v2 (BA-320). In the
- * New conversation screen they keep the dataset picker and a required name,
- * and Create sends `{ name, datasets, agentId }`; their Start chat opens that
- * screen with them preselected.
- */
-export const DATASET_PICKER_AGENTS: ReadonlySet<string> = new Set([
-  'assistant-v2',
-]);
-
-/** Whether the agent runs on picked datasets, like the assistant (R64). */
-export function picksDatasets(
-  agent: Pick<Agent, 'key'> | null | undefined,
-): boolean {
-  return !!agent && DATASET_PICKER_AGENTS.has(agent.key);
-}
-
-/**
- * The agents the New conversation screen offers besides the assistant
- * (sessions-chat R64): the built-in agents that pick datasets like it (today
- * Questions to Insights v2), then Official agents that bring their own dataset
- * (the RFP Builder, the Data Readiness Agent) with showcase agents last, then
- * Live user agents, each group alphabetical. System agents, drafts and the
- * assistant itself are left out; one that cannot start a chat now stays
- * listed with its reason.
- */
-export function newSessionAgentOptions(
-  agents: Agent[],
-): NewSessionAgentOption[] {
-  const pickers = agents
-    .filter((agent) => picksDatasets(agent) && canStartChat(agent))
-    .sort(byName);
-  const startable = agents.filter(
-    (agent) =>
-      canStartChat(agent) && !startsInComposer(agent) && !picksDatasets(agent),
-  );
-  const group = (kind: AgentKind) =>
-    startable.filter((agent) => agentKind(agent) === kind).sort(showcaseLast);
-  return [...pickers, ...group('official'), ...group('user')].map((agent) => ({
-    agent,
-    disabledReason: startChatBlockedReason(agent),
-  }));
+  if (owner === 'mine' && filter === 'all') return 'No agents of yours yet.';
+  return 'No agents match these filters.';
 }

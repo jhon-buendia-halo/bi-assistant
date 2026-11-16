@@ -38,10 +38,10 @@ describe('PanelFileView', () => {
   const url = `${API_BASE_URL}/sessions/s1/panel-items/i1/file`;
 
   it('shows Loading file… then a Markdown file as HTML', () => {
-    const fixture = create('rfp/1/rfp.md');
+    const fixture = create('report/1/report.md');
     expect(fixture.nativeElement.textContent).toContain('Loading file…');
     http.expectOne(url).flush({
-      item: item('rfp/1/rfp.md'),
+      item: item('report/1/report.md'),
       contentType: 'text/markdown',
       text: '# Title',
     });

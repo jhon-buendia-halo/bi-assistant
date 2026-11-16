@@ -1,20 +1,22 @@
 import { test, expect } from './fixtures/app.fixture';
-import { createWorldCupSession } from './helpers/app-actions';
+import { apiJson } from './helpers/api';
+import { runQuestionOk } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import {
   LlmStub,
   StubReply,
   StubRequest,
-  messageText,
   startLlmStub,
   systemTexts,
 } from './helpers/llm-stub';
 
 /**
  * Mirrors the Feature "Skills the designer is given" in
- * specs/capabilities/visuals/spec.md. The model is the recording
- * OpenAI-compatible stub, so the scenario checks what the backend sent to
- * the visual designer (agents.md sections 6.4 and 7.2).
+ * specs/capabilities/visuals/spec.md, through "Generate interactive visuals"
+ * on the answer of an Answer a Business Question run
+ * (`POST /workflow-runs/:id/visualizations`, api.md 130). The model is the
+ * recording OpenAI-compatible stub, so the scenario checks what the backend
+ * sent to the visual designer (agents.md sections 6.4 and 7.2).
  */
 
 const QUESTION = 'How many matches were played at each stage?';
@@ -61,22 +63,19 @@ function isDesignerCall(request: StubRequest): boolean {
   return systemTexts(request).some((text) => text.includes(SKILL_TAG));
 }
 
-/** Whether the model already received a tool result in this request. */
-function hasToolResult(request: StubRequest): boolean {
-  return request.messages.some((message) => message.role === 'tool');
-}
-
+/** Queries once, then answers; the designer gets the spec. */
 function scriptedReply(request: StubRequest): StubReply {
   if (isDesignerCall(request)) return { text: JSON.stringify(SPEC_REPLY) };
-  if (request.stream && !hasToolResult(request)) {
-    return {
-      toolCall: {
-        name: 'run_readonly_sql',
-        arguments: { sql: SQL, rationale: 'Count the matches per stage.' },
-      },
-    };
-  }
-  return { text: ANSWER };
+  if (!request.stream) return { text: ANSWER };
+  if (request.messages.at(-1)?.role === 'tool') return { text: ANSWER };
+  return {
+    toolCall: {
+      name:
+        request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ??
+        'run_readonly_sql',
+      arguments: { sql: SQL, rationale: 'Count the matches per stage.' },
+    },
+  };
 }
 
 test.beforeEach(async ({ page }) => {
@@ -94,21 +93,22 @@ test.afterEach(async () => {
 test('a spec-mode designer call carries only the spec-mode reference', async ({
   page,
 }) => {
-  await createWorldCupSession(page);
-  await page.getByPlaceholder('Ask a follow-up question…').fill(QUESTION);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(ANSWER)).toBeVisible();
-  await expect(page.getByText(/Data used \(1 query\)/)).toBeVisible();
+  // Given an Answer a Business Question run with an answer.
+  const run = await runQuestionOk(page, QUESTION);
+  expect(run.text).toContain(ANSWER);
+  // When I generate an interactive visual from its answer.
+  const generated = await apiJson<{
+    visualization: { title?: string };
+    run: { visualizations?: unknown[] };
+  }>(page, 'POST', `/workflow-runs/${run.runId}/visualizations`, {});
+  // Then the run holds the visual.
+  expect(
+    generated.run.visualizations ?? [],
+    'the run holds the visual',
+  ).toHaveLength(1);
+  expect(JSON.stringify(generated.visualization)).toContain(VISUAL_TITLE);
 
-  await page
-    .getByRole('button', { name: 'Generate interactive visuals' })
-    .click();
-  await expect(page.getByText('Interactive visual generated')).toBeVisible();
-  await expect(
-    page.locator('iframe[title="Interactive visualization"]'),
-  ).toBeVisible();
-  await expect(page.getByText(VISUAL_TITLE).first()).toBeVisible();
-
+  // And the designer was called once, with only the spec-mode reference.
   const designerCalls = stub.requests.filter(isDesignerCall);
   expect(designerCalls, 'one designer call: the spec validated').toHaveLength(
     1,
@@ -125,45 +125,4 @@ test('a spec-mode designer call carries only the spec-mode reference', async ({
   expect.soft(skill).not.toContain('name: interactive-visuals');
   for (const line of SPEC_MODE_TEXT) expect.soft(skill).toContain(line);
   for (const line of FREEFORM_TEXT) expect.soft(skill).not.toContain(line);
-});
-
-test('a chart asked for in the chat is designed from my request when the model gives no instruction', async ({
-  page,
-}) => {
-  const CHART_REQUEST = 'Chart the matches per stage as bars.';
-  const isChartTurn = (request: StubRequest) =>
-    request.messages.some(
-      (message) =>
-        message.role === 'user' && messageText(message).includes(CHART_REQUEST),
-    );
-  stub.reply = (request) => {
-    if (isDesignerCall(request)) return { text: JSON.stringify(SPEC_REPLY) };
-    if (request.stream && isChartTurn(request)) {
-      // The model asks for a visual without saying what to chart.
-      return hasToolResult(request) && request.messages.at(-1)?.role === 'tool'
-        ? { text: 'Here is the chart.' }
-        : { toolCall: { name: 'create_visual', arguments: {} } };
-    }
-    return scriptedReply(request);
-  };
-  await createWorldCupSession(page);
-  const composer = page.getByPlaceholder('Ask a follow-up question…');
-  await composer.fill(QUESTION);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(ANSWER)).toBeVisible();
-
-  await composer.fill(CHART_REQUEST);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText('Here is the chart.')).toBeVisible();
-  await expect(
-    page.locator('iframe[title="Interactive visualization"]'),
-  ).toBeVisible();
-  await expect(page.getByText(VISUAL_TITLE).first()).toBeVisible();
-
-  const designer = stub.requests.filter(isDesignerCall).at(-1)!;
-  const prompt = designer.messages
-    .filter((message) => message.role === 'user')
-    .map(messageText)
-    .join('\n');
-  expect(prompt).toContain(`<instruction>\n${CHART_REQUEST}\n</instruction>`);
 });

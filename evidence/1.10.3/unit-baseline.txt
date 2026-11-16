@@ -1,0 +1,33 @@
+1.10.3 — unit suites, branch vs main (2026-11-10, Windows 11, Node 26.13.0)
+
+Branch: feat/BA-159-github-copilot-provider on main 40fde67, uncommitted work as committed in this PR.
+Main:   a detached checkout of origin/main 40fde67, same node_modules (junction), same machine.
+
+Backend (npx jest, full suite)
+  main:   10 suites failed, 43 tests failed, 2250 passed
+  branch: 10 suites failed, 43 tests failed, 2317 passed (+67, the Copilot tests);
+          final gate after R66: the same 10 suites and 43 tests, 2321 passed (+4)
+  The failing suites are identical on both, with the same counts (CRLF fixtures and
+  file-mode checks of this Windows checkout, see retrospective 2026-11-10 0.4.5):
+    src/mastra/app-skills.spec.ts                         8
+    src/mastra/agents/system-agents.spec.ts              15
+    src/mastra/agents/data-readiness.agent.spec.ts        5
+    src/mastra/agents/assistant.agent.spec.ts             5
+    src/mastra/agents/rfp.agent.spec.ts                   4
+    src/modules/sessions/panel-items.spec.ts              2
+    src/mastra/rfp-skill.spec.ts                          1
+    src/modules/deep-analysis/deep-analysis.phases.spec.ts 1
+    src/infrastructure/crypto/crypto.service.spec.ts      1
+    src/intellify-api/package/document.spec.ts            1
+
+Frontend (npx ng test --watch=false --browsers=ChromeHeadless)
+  main:   490 passed
+  branch: gate run 504 passed, 1 failed ("PromptEditor inserts the chosen link as
+          [[kind:name]]": "Failed to execute 'collapseToEnd' on 'Selection': there is no
+          selection", a focus race; the component is not touched by this change);
+          two re-runs right after: 505 passed, 0 failed, each.
+  final gate after R66: 502 passed, 3 failed, all in UiPreferencesService ("moves a
+          browser-only theme choice…", "remembers drawer clicks…", "writes nothing…"),
+          a service under src/app/core that this branch does not change; re-runs right
+          after: 504 passed + 1 of those 3 failed, then 505 passed. Flaky timing tests,
+          not seen failing in the single main run above.

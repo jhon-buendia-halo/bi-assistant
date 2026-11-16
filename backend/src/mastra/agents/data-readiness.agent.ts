@@ -14,8 +14,8 @@ import { DATA_READINESS_PROMPT } from './system-prompts';
 /** The Data Readiness Agent's registry key (agents.md 1.2). */
 export const DATA_READINESS_AGENT_KEY = 'data-readiness';
 
-/** Its tool-loop budget per turn (agents.md 2.10). */
-export const DATA_READINESS_MAX_STEPS = 10;
+// Its tool-loop budget per turn (agents.md 2.10), kept framework-free.
+export { DATA_READINESS_MAX_STEPS } from '../agent-constants';
 
 // Links become plain mentions before the model reads them (agents.md 2.10, 4.1).
 const shippedInstructions = withToolSection(
@@ -72,4 +72,20 @@ export const dataReadinessAgent = new Agent({
     },
   }),
   tools: readinessTools,
+});
+
+/**
+ * Sarah for one model call inside a workflow step (Answer a Business
+ * Question's Check data quality, agents.md 5.11): the same instructions as
+ * served (overrides included) and the same model, with no tools, skills or
+ * memory, as the Plan and Write answer agents are. Not registered: it is
+ * the Data Readiness Agent, not another agent. A call to the registered one
+ * needs a memory thread.
+ */
+export const dataReadinessStepAgent = new Agent({
+  id: DATA_READINESS_AGENT_KEY,
+  name: 'Data Readiness Agent',
+  description: 'The Data Readiness Agent, for one model call with no tools.',
+  instructions: () => dataReadinessInstructions(),
+  model: async () => resolveAgentModel(),
 });

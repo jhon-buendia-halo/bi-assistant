@@ -33,14 +33,10 @@
       >
         <lucide-angular [img]="LayoutGrid" [size]="16" />
       </button>
-              <button
-          (click)="newDataset.emit()"
-          class="btn btn-primary"
-        >
-          <lucide-angular [img]="Plus" [size]="14" />
-          <span>New dataset</span>
-        </button>
-      
+      <button (click)="newDataset.emit()" class="btn btn-primary">
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New dataset</span>
+      </button>
     </div>
   </div>
 
@@ -55,11 +51,76 @@
     >
       {{ err }}
     </p>
-  } @else if (sections().length === 0) {
+  } @else if (
+    sections().length === 0 && pending().length === 0 && failed().length === 0
+  ) {
     <p class="mt-10 text-[13px] text-fg-muted">
       No datasets yet — create one with “New dataset”.
     </p>
   } @else {
+    @if (pending().length > 0 || failed().length > 0) {
+      <div class="mt-7 flex flex-col">
+        @for (task of pending(); track task.id) {
+          <div
+            data-testid="dataset-row-pending"
+            [attr.data-name]="task.key"
+            class="flex items-center gap-3.5 rounded-xl px-2 py-2.5"
+          >
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
+            >
+              <lucide-angular
+                [img]="Loader2"
+                [size]="17"
+                class="animate-spin"
+              />
+            </span>
+            <span class="truncate text-[14px] text-fg">{{ task.key }}</span>
+            <span
+              class="ml-auto flex shrink-0 items-center gap-2 text-[12px] text-fg-muted"
+            >
+              <span>{{ pendingInfo(task.key) }}</span>
+              <span class="chip chip-info" data-testid="dataset-saving-chip">{{
+                savingChip(task)
+              }}</span>
+            </span>
+          </div>
+        }
+        @for (task of failed(); track task.id) {
+          <div
+            data-testid="dataset-row-failed"
+            [attr.data-name]="task.key"
+            class="flex items-center gap-3.5 rounded-xl px-2 py-2.5"
+          >
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-danger-soft text-on-danger-soft"
+            >
+              <lucide-angular [img]="Workflow" [size]="17" />
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate text-[14px] text-fg">{{ task.key }}</span>
+              <span class="truncate text-[12px] text-on-danger-soft">{{
+                task.detail
+              }}</span>
+            </span>
+            <button
+              type="button"
+              class="btn btn-outline"
+              (click)="retry(task.id)"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline"
+              (click)="dismiss(task.id)"
+            >
+              Dismiss
+            </button>
+          </div>
+        }
+      </div>
+    }
     @for (section of sections(); track section.label) {
       <p class="mt-7 text-[12px] text-fg-muted">{{ section.label }}</p>
       <div class="mt-2 flex flex-col">
@@ -77,47 +138,49 @@
               >
                 <lucide-angular [img]="Workflow" [size]="17" />
               </span>
-              <span class="truncate text-[14px] text-fg">{{
-                item.name
-              }}</span>
+              <span class="truncate text-[14px] text-fg">{{ item.name }}</span>
               <span
                 class="ml-auto flex shrink-0 items-center gap-1.5 text-[12px] text-fg-muted"
               >
                 <lucide-angular [img]="Lock" [size]="13" />
                 <span>·</span>
                 <span>{{ editedLabel(item) }}</span>
+                @if (resaving().has(item.name)) {
+                  <span
+                    class="chip chip-info"
+                    data-testid="dataset-saving-chip"
+                    >{{ resavingChip(item.name) }}</span
+                  >
+                }
               </span>
             </button>
-                          <div class="relative">
-                <button
-                  type="button"
-                  (click)="toggleMenu(item.name)"
-                  title="Dataset options"
-                  [attr.aria-label]="'Options for ' + item.name"
-                  class="btn-icon"
-                >
-                  <lucide-angular [img]="EllipsisVertical" [size]="15" />
-                </button>
-                @if (menuOpen() === item.name) {
-                  <!-- Backdrop closes the menu on outside click -->
-                  <div
-                    class="fixed inset-0 z-10"
-                    (click)="menuOpen.set(null)"
-                  ></div>
-                  <div
-                    class="absolute top-full right-0 z-20 mt-1 w-44 menu"
+            <div class="relative">
+              <button
+                type="button"
+                (click)="toggleMenu(item.name)"
+                title="Dataset options"
+                [attr.aria-label]="'Options for ' + item.name"
+                class="btn-icon"
+              >
+                <lucide-angular [img]="EllipsisVertical" [size]="15" />
+              </button>
+              @if (menuOpen() === item.name) {
+                <!-- Backdrop closes the menu on outside click -->
+                <div
+                  class="fixed inset-0 z-10"
+                  (click)="menuOpen.set(null)"
+                ></div>
+                <div class="absolute top-full right-0 z-20 mt-1 w-44 menu">
+                  <button
+                    (click)="deleteDataset(item)"
+                    class="menu-item text-on-danger-soft"
                   >
-                    <button
-                      (click)="deleteDataset(item)"
-                      class="menu-item text-on-danger-soft"
-                    >
-                      <lucide-angular [img]="Trash2" [size]="14" />
-                      <span>Delete dataset</span>
-                    </button>
-                  </div>
-                }
-              </div>
-            
+                    <lucide-angular [img]="Trash2" [size]="14" />
+                    <span>Delete dataset</span>
+                  </button>
+                </div>
+              }
+            </div>
           </div>
         }
       </div>

@@ -26,7 +26,10 @@ import {
   optionalToolOf,
   parseLinks,
 } from '../../mastra/agent-links';
-import { effortLevelsFor, nearestEffort } from '../../mastra/effort-levels';
+import {
+  effortLevelsForProvider,
+  nearestEffort,
+} from '../../mastra/effort-levels';
 import { LlmService } from '../llm/llm.service';
 import { AgentPromptsService } from './agent-prompts.service';
 import type { AgentPromptView } from './entities/agent-prompt-override.entity';
@@ -34,14 +37,8 @@ import { evalSetsFor } from '../../mastra/evals/eval-sets';
 import {
   builtinAgentSession,
   builtinSessionDatasets,
-  canStartBuiltinSession,
   existingDatasetsFor,
 } from './builtin-sessions';
-import {
-  SHOWCASE_AGENT_KEYS,
-  SHOWCASE_REASON,
-  isShowcaseAgent,
-} from '../../mastra/agents/showcase-catalog';
 import {
   effectiveConfig,
   hasUnpublishedChanges,
@@ -57,29 +54,37 @@ import type {
   UserAgentDoc,
 } from '../user-agents/entities/user-agent.entity';
 
-import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
+import { OFFICIAL_AGENT_KEYS } from '../../mastra/agent-constants';
+import {
+  DEFAULT_AGENT_DOMAIN,
+  builtinAgentPersona,
+  type AgentDomain,
+} from '../../mastra/agent-personas';
+import {
+  agentWorkflow,
+  type AgentWorkflow,
+} from '../../mastra/workflows/agent-workflows';
+import { workflowsUsingAgent } from '../../mastra/workflows/workflow-catalog';
 
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
-/**
- * The built-in agents shown as Official (api.md 2.6 #33): the assistant,
- * Questions to Insights v2, the RFP Builder, the Data Readiness Agent and the
- * showcase agents.
- */
-const OFFICIAL_AGENT_KEYS: readonly string[] = [
-  OFFICIAL_AGENT_KEY,
-  ASSISTANT_V2_AGENT_KEY,
-  'rfp',
-  'data-readiness',
-  ...SHOWCASE_AGENT_KEYS,
-];
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
   key: string;
   /** The agent's own id, which may differ from the registry key. */
   id: string;
+  /** The persona's human name: a built-in's from its persona, a user
+   * agent's as its owner typed it (api.md 33). */
   name: string;
+  /** The persona's job title; empty when a user agent has none. */
+  role: string;
+  /** A built-in persona's first-person intro (agents.md 1.1); '' for a
+   * user agent, whose card shows its description instead. */
+  intro: string;
+  /** The specialty the hub groups the agent under (agents.md 1.2): a
+   * built-in's from its persona, a user agent's as chosen, else `general`. */
+  domain: AgentDomain;
   description: string;
   /** Tool names the agent can call, sorted alphabetically. A user agent
    * runs on the assistant, so it lists the assistant's tools its effective
@@ -97,12 +102,11 @@ export interface AgentSummary {
   datasets: string[];
   starterQuestions: string[];
   /**
-   * A built-in agent that declares a dataset (ADR-0028): why Start chat is
-   * blocked while that dataset is missing. Absent otherwise.
+   * The catalogue workflows whose steps call this agent (api.md 33-34):
+   * `answer-business-question` for `insights-analyst`, none for a user agent.
+   * The hub reads it to say when an agent is busy in a run.
    */
-  chatRequirement?: string;
-  /** A showcase agent: an Official card that cannot chat (agents-evals R106). */
-  showcase?: boolean;
+  usedInWorkflows: { id: string; name: string }[];
 }
 
 export interface AgentToolDetail {
@@ -169,6 +173,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   lenai: 'LenAI',
   custom: 'Custom endpoint',
+  copilot: 'GitHub Copilot',
 };
 
 export interface AgentDetail extends AgentSummary {
@@ -188,6 +193,8 @@ export interface AgentDetail extends AgentSummary {
   llm: AgentLlmDetail;
   /** Built-in agents only: the editable system prompt (api.md 34, ADR-0026). */
   prompt?: AgentPromptView;
+  /** Workflow-backed built-in agents only: their turn's steps (api.md 34). */
+  workflow?: AgentWorkflow;
 }
 
 @Injectable()
@@ -235,10 +242,13 @@ export class AgentsService {
       const detail = await this.builtinDetail(key);
       if (!detail) return null;
       const prompt = await this.prompts?.view(key);
+      // A workflow-backed agent's turn, for its Graph tab (R108).
+      const workflow = agentWorkflow(key);
       return {
         ...detail,
         llm: await this.llmDetail(),
         ...(prompt ? { prompt } : {}),
+        ...(workflow ? { workflow } : {}),
       };
     }
     const doc = await this.userAgents.get(key);
@@ -289,7 +299,7 @@ export class AgentsService {
     }
     const model = config?.model || view.model;
     const wanted = config?.reasoningEffort ?? view.reasoningEffort;
-    const levels = effortLevelsFor(model);
+    const levels = effortLevelsForProvider(view.provider, model);
     return {
       provider: view.provider,
       providerName: PROVIDER_NAMES[view.provider] ?? view.provider,
@@ -510,9 +520,9 @@ export class AgentsService {
     pins: string[],
   ): Promise<AgentSummary> {
     const official = OFFICIAL_AGENT_KEYS.includes(key);
-    // A built-in agent with datasets of its own (the RFP Builder's named
-    // one, the Data Readiness Agent's kind) shows them, and while none
-    // qualifies, why Start chat is blocked (api.md 2.6 #33).
+    const persona = builtinAgentPersona(key);
+    // A built-in agent with datasets of its own (a named one, or the Data
+    // Readiness Agent's kind) shows them (api.md 2.6 #33).
     const builtinSession = builtinAgentSession(key);
     const declared = builtinSession
       ? builtinSessionDatasets(
@@ -523,7 +533,10 @@ export class AgentsService {
     return {
       key,
       id: agent.id ?? key,
-      name: agent.name ?? key,
+      name: persona?.name ?? agent.name ?? key,
+      role: persona?.role ?? '',
+      intro: persona?.intro ?? '',
+      domain: persona?.domain ?? DEFAULT_AGENT_DOMAIN,
       description: (await safe(() => agent.getDescription())) ?? '',
       tools: Object.keys((await safe(() => agent.listTools())) ?? {}).sort(),
       kind: official ? 'official' : 'system',
@@ -538,13 +551,7 @@ export class AgentsService {
         builtinSession && 'datasourceKinds' in builtinSession
           ? [...builtinSession.starterQuestions]
           : [],
-      ...(builtinSession && declared && !canStartBuiltinSession(declared)
-        ? { chatRequirement: builtinSession.requirement }
-        : {}),
-      // A showcase agent never chats; the hub shows why (R106).
-      ...(isShowcaseAgent(key)
-        ? { showcase: true, chatRequirement: SHOWCASE_REASON }
-        : {}),
+      usedInWorkflows: workflowsUsingAgent(key),
     };
   }
 }
@@ -561,6 +568,9 @@ function summarizeUserAgent(
     key: doc.id,
     id: doc.id,
     name: config.name,
+    role: config.role ?? '',
+    intro: '',
+    domain: config.domain ?? DEFAULT_AGENT_DOMAIN,
     description: config.description,
     tools: [...assistantTools],
     kind: 'user',
@@ -571,6 +581,8 @@ function summarizeUserAgent(
     missingDatasets: missingDatasets(config, datasetNames),
     datasets: [...config.datasets],
     starterQuestions: [...config.starterQuestions],
+    // A user agent is a library entry: no workflow runs it (1.23.35).
+    usedInWorkflows: [],
   };
 }
 

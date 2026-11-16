@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { WORLD_CUP_DATASET, openSessions } from './helpers/app-actions';
+import { runQuestionOk } from './helpers/runs-api';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
 import {
@@ -20,8 +20,10 @@ import {
  * is no permission to gate the edit on.
  */
 
-const ASSISTANT = 'Questions to Insights Assistant';
-const RFP_BUILDER = 'RFP Builder';
+/** The built-in agents' persona names, which the hub and their page show. */
+const ASSISTANT = 'Emily';
+const V2_KEY = 'insights-analyst';
+const V2 = 'Michael';
 const QUESTION = 'Who won in 2022?';
 const DONE_LINE = 'Always end an answer with the word Done.';
 const BANNER =
@@ -40,6 +42,9 @@ test.afterEach(async () => {
 
 /** Opens a built-in agent's page from the hub (System agents sit behind "Show more"). */
 async function openAgent(page: Page, key: string, name: string) {
+  // A run sent through the API leaves the page where it was: go back to the hub first.
+  const back = page.getByRole('button', { name: 'All agents' });
+  if (await back.isVisible()) await back.click();
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
     .getByRole('button', { name: 'Agents', exact: true })
@@ -47,9 +52,6 @@ async function openAgent(page: Page, key: string, name: string) {
   await expect(
     page.getByRole('heading', { name: 'Agents', exact: true }),
   ).toBeVisible();
-  if (!['assistant', 'rfp'].includes(key)) {
-    await page.getByTestId('agent-show-more-system').click();
-  }
   await page.getByTestId(`agent-${key}`).click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 }
@@ -72,7 +74,7 @@ const saveButton = (page: Page) => page.getByTestId('agent-prompt-save');
 
 /** The Tiptap editor of an Official agent's prompt. */
 function promptEditor(page: Page): Locator {
-  return page.getByRole('textbox', { name: 'System prompt', exact: true });
+  return page.getByRole('textbox', { name: 'Job description', exact: true });
 }
 
 async function startEditing(page: Page): Promise<void> {
@@ -115,33 +117,18 @@ async function promptView(page: Page, key: string) {
   return agent.prompt!;
 }
 
-/** Creates a World Cup session named `name` from "Start New Conversation". */
-async function newSession(page: Page, name: string): Promise<void> {
-  await openSessions(page);
-  await page
-    .locator('header')
-    .getByRole('button', { name: 'Start New Conversation' })
-    .click();
-  await page.getByPlaceholder('My new session').fill(name);
-  await page
-    .getByRole('button', { name: new RegExp(WORLD_CUP_DATASET) })
-    .click();
-  await page.getByRole('button', { name: /^Create$/ }).click();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-}
-
-/** Asks `question` in a new session; returns the turn's first model request. */
-async function askInNewSession(
-  page: Page,
-  sessionName: string,
-  question: string,
-): Promise<StubRequest> {
-  await newSession(page, sessionName);
+/**
+ * Runs Insights Analyst on `question`; returns the turn's first model
+ * request.
+ */
+async function askInRun(page: Page, question: string): Promise<StubRequest> {
   const from = stub.requests.length;
-  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
-  await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.getByText(STUB_ANSWER)).toBeVisible();
-  const request = stub.requests.slice(from).find((r) => r.stream);
+  const result = await runQuestionOk(page, question);
+  expect(result.text).toContain(STUB_ANSWER);
+  // The analysis turn's call, not v2's structured Plan or Write answer call.
+  const request = stub.requests
+    .slice(from)
+    .find((r) => r.stream && r.step === undefined);
   expect(request, `a streamed call for "${question}"`).toBeDefined();
   return request!;
 }
@@ -154,7 +141,6 @@ async function seedChat(page: Page): Promise<void> {
 test("I edit the assistant's prompt, and Reset restores it", async ({
   page,
 }) => {
-  await seedChat(page);
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
   await expect(
@@ -169,12 +155,12 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
       .getByTestId('agent-prompt-editing')
       .getByTestId('agent-prompt-tools-note'),
   ).toHaveText(
-    'The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules.',
+    `The ## Tools list is generated from the tools ${ASSISTANT} gets and is inserted before ## Working rules.`,
   );
   await appendToEditor(page, DONE_LINE, true);
   await saveButton(page).click();
   await expect(
-    page.getByText(`System prompt of "${ASSISTANT}" saved`),
+    page.getByText(`Job description of "${ASSISTANT}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
   await page
@@ -184,34 +170,76 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
     path: path.join(EVIDENCE, 'assistant-system-prompt-modified.png'),
   });
 
-  const edited = systemTexts(
-    await askInNewSession(page, 'Prompt override', QUESTION),
-  )[0];
-  expect(edited).toContain(DONE_LINE);
+  // The assistant can no longer be run: the saved override is read back.
   expect(
     (await promptView(page, 'assistant')).editable.endsWith(`\n${DONE_LINE}`),
   ).toBe(true);
-  expect(edited).toContain('\n## Tools\n');
 
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByTestId('agent-prompt-reset').click();
   await expect(
-    page.getByText(`System prompt of "${ASSISTANT}" reset`),
+    page.getByText(`Job description of "${ASSISTANT}" reset`),
+  ).toBeVisible();
+  await expect(modifiedChip(page)).toHaveCount(0);
+  expect((await promptView(page, 'assistant')).modified).toBe(false);
+});
+
+test("I edit Insights Analyst's prompt, its runs read it, and Reset restores it", async ({
+  page,
+}) => {
+  // Given the World Cup dataset and the stub model.
+  await seedChat(page);
+  // When I add a line to v2's prompt on its page and save.
+  await openAgent(page, V2_KEY, V2);
+  await openPromptTab(page);
+  await expect(modifiedChip(page)).toHaveCount(0);
+  await startEditing(page);
+  await expect(page.getByTestId('agent-prompt-banner')).toHaveText(BANNER);
+  await expect(
+    page
+      .getByTestId('agent-prompt-editing')
+      .getByTestId('agent-prompt-tools-note'),
+  ).toHaveText(
+    `The ## Tools list is generated from the tools ${V2} gets and is inserted before ## Working rules.`,
+  );
+  await appendToEditor(page, DONE_LINE, true);
+  await saveButton(page).click();
+  await expect(
+    page.getByText(`Job description of "${V2}" saved`),
+  ).toBeVisible();
+  await expect(modifiedChip(page)).toBeVisible();
+
+  // Then a run of Answer a Business Question sends the edited prompt.
+  const edited = systemTexts(await askInRun(page, QUESTION))[0];
+  expect(edited.startsWith('You are Questions to Insights')).toBe(true);
+  expect(edited).toContain(DONE_LINE);
+  expect(edited).toContain('\n## Tools\n');
+  expect(
+    (await promptView(page, V2_KEY)).editable.endsWith(`\n${DONE_LINE}`),
+  ).toBe(true);
+
+  // When I reset it, Then the next run sends the shipped prompt again.
+  await openAgent(page, V2_KEY, V2);
+  await openPromptTab(page);
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByTestId('agent-prompt-reset').click();
+  await expect(
+    page.getByText(`Job description of "${V2}" reset`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toHaveCount(0);
 
-  const reset = systemTexts(
-    await askInNewSession(page, 'Prompt reset', QUESTION),
-  )[0];
-  expect(reset).not.toContain(DONE_LINE);
+  const reset = systemTexts(await askInRun(page, QUESTION));
+  expect(reset[0]).not.toContain(DONE_LINE);
+  // The model reads plain text: no link syntax reaches it.
+  for (const text of reset) expect(text).not.toContain('[[');
 });
 
 test("a System agent's prompt is edited in a text area, with no link menu", async ({
   page,
 }) => {
-  await openAgent(page, 'sql-fixer', 'SQL Fixer');
+  await openAgent(page, 'sql-fixer', 'David');
   await openPromptTab(page);
   await startEditing(page);
 
@@ -249,10 +277,9 @@ test("a skill link in the assistant's prompt is refused", async ({ page }) => {
   expect((await promptView(page, 'assistant')).modified).toBe(false);
 });
 
-test('the shipped assistant prompt shows its tools and skill as chips and the model reads plain mentions', async ({
+test('the shipped assistant prompt shows its tools and skill as chips', async ({
   page,
 }) => {
-  await seedChat(page);
   await openAgent(page, 'assistant', ASSISTANT);
   await openPromptTab(page);
 
@@ -269,7 +296,7 @@ test('the shipped assistant prompt shows its tools and skill as chips and the mo
   await expect(skill).toHaveText('curated-knowledge');
   await expect(skill).toHaveClass(/chip-info/);
   await expect(page.getByTestId('agent-prompt-tools-note')).toHaveText(
-    '## Tools — generated from the tools the assistant gets',
+    `## Tools — generated from the tools ${ASSISTANT} gets`,
   );
   await expect(view).not.toContainText('[[');
   // The end of the prompt, with its chips and the generated-Tools note.
@@ -277,11 +304,6 @@ test('the shipped assistant prompt shows its tools and skill as chips and the mo
   await page.screenshot({
     path: path.join(EVIDENCE, 'assistant-system-prompt-chips.png'),
   });
-
-  const request = await askInNewSession(page, 'Plain mentions', QUESTION);
-  const prompt = systemTexts(request)[0];
-  expect(prompt).toContain('Call the "ask_clarification" tool only when');
-  for (const text of systemTexts(request)) expect(text).not.toContain('[[');
 });
 
 test("a built-in skill link in the assistant's prompt is accepted", async ({
@@ -294,111 +316,7 @@ test("a built-in skill link in the assistant's prompt is accepted", async ({
   await appendToEditor(page, ' [[skill:curated-knowledge]]');
   await saveButton(page).click();
   await expect(
-    page.getByText(`System prompt of "${ASSISTANT}" saved`),
+    page.getByText(`Job description of "${ASSISTANT}" saved`),
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
-});
-
-test('the shipped RFP Builder prompt shows its tools and skill as chips and in the Graph tab', async ({
-  page,
-}) => {
-  await openAgent(page, 'rfp', RFP_BUILDER);
-  await openPromptTab(page);
-
-  const view = page.getByTestId('agent-prompt-view');
-  for (const tool of ['get_rfp', 'update_rfp']) {
-    await expect(
-      view.locator(`[data-link="tool:${tool}"]`).first(),
-    ).toHaveClass(/chip-neutral/);
-  }
-  await expect(
-    view.locator('[data-link="skill:rfp-client-renewal"]').first(),
-  ).toHaveClass(/chip-info/);
-  await expect(page.getByTestId('agent-prompt-tools-note')).toHaveText(
-    '## Tools — generated from the tools the RFP Builder gets',
-  );
-  await expect(view).not.toContainText('[[');
-
-  await page.getByTestId('agent-tab-graph').click();
-  const graph = page.getByTestId('agent-graph');
-  await expect(graph).toBeVisible();
-  const edges = graph.locator('desc');
-  await expect(edges).toContainText(
-    'The instructions link the rfp-client-renewal skill.',
-  );
-  await expect(edges).toContainText('The instructions link the get_rfp tool.');
-  await expect(edges).toContainText(
-    'The rfp-client-renewal skill links the list_clients tool.',
-  );
-  const detail = await apiJson<{ toolDetails: { name: string }[] }>(
-    page,
-    'GET',
-    '/agents/rfp',
-  );
-  const tools = detail.toolDetails.map((tool) => tool.name);
-  expect(tools.length).toBeGreaterThan(0);
-  for (const tool of tools) {
-    await expect(page.getByTestId(`graph-node-tool:${tool}`)).toHaveAttribute(
-      'aria-label',
-      `${tool}, Tool · always on`,
-    );
-  }
-  await expect(
-    page.getByText('This agent has no links: it gets all of its tools.'),
-  ).toHaveCount(0);
-});
-
-test("the RFP Builder's prompt links only its own tools and skill", async ({
-  page,
-}) => {
-  await openAgent(page, 'rfp', RFP_BUILDER);
-  await openPromptTab(page);
-  await startEditing(page);
-
-  await caretAtEnd(page);
-  await page.keyboard.type(' /');
-  const menu = page.getByRole('listbox');
-  await expect(menu).toBeVisible();
-  // The menu lists up to 6 entries of each kind and narrows as you type
-  // (ui.md 4.5.5), so each name is looked up by what follows the "/".
-  await expect(
-    menu.getByRole('option', { name: /^rfp-carriers/ }),
-  ).toBeVisible();
-  await expect(
-    menu.getByRole('option', { name: /run_readonly_sql/ }),
-  ).toHaveCount(0);
-  await page.keyboard.type('list_cl');
-  await expect(
-    menu.getByRole('option', { name: /^list_clients/ }),
-  ).toBeVisible();
-  for (let i = 0; i < 'list_cl'.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-  await page.keyboard.type('run_readonly');
-  await expect(
-    page.getByRole('option', { name: /run_readonly_sql/ }),
-  ).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  for (let i = 0; i < ' /run_readonly'.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-
-  const toolLink = '[[tool:run_readonly_sql]]';
-  await page.keyboard.type(toolLink);
-  await saveButton(page).click();
-  await expect(page.getByText('Unknown tool "run_readonly_sql"')).toBeVisible();
-
-  await caretAtEnd(page);
-  for (let i = 0; i < toolLink.length; i++) {
-    await page.keyboard.press('Backspace');
-  }
-  await page.keyboard.type('[[skill:curated-knowledge]]');
-  await saveButton(page).click();
-  await expect(
-    page.getByText(
-      "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
-    ),
-  ).toBeVisible();
-  await expect(modifiedChip(page)).toHaveCount(0);
-  expect((await promptView(page, 'rfp')).modified).toBe(false);
 });

@@ -1,0 +1,147 @@
+/**
+ * The code-defined workflow of each workflow-backed agent, as the agent
+ * detail returns it (`workflow`, api.md 34; agents-evals R108). Built from
+ * the workflow's step catalogue and the agent's catalogue, never written
+ * twice. Plain data, no framework import, so the agents service and Jest
+ * can read it without loading Mastra.
+ */
+import {
+  INSIGHTS_ANALYST_AGENT_KEY,
+  INSIGHTS_ANALYST_MAX_STEPS,
+  INSIGHTS_ANALYST_NAME,
+  INSIGHTS_ANALYST_TOOL_NAMES,
+} from '../agents/insights-analyst-catalog';
+import {
+  DASHBOARD_READER_AGENT_KEY,
+  DASHBOARD_READER_AGENT_NAME,
+  DATA_MAPPER_AGENT_KEY,
+  DATA_MAPPER_AGENT_NAME,
+  DATA_READINESS_AGENT_KEY,
+  DATA_READINESS_AGENT_NAME,
+  DATA_READINESS_MAX_STEPS,
+} from '../agent-constants';
+import { builtinAgentPersona } from '../agent-personas';
+import type { WorkflowStepExit } from './answer-business-question.steps';
+import { CODE_WORKFLOWS, stepAgentKey } from './workflow-catalog';
+
+export interface AgentWorkflowStep {
+  id: string;
+  title: string;
+  kind: 'code' | 'agent';
+  summary: string;
+  input: string[];
+  output: string[];
+  /**
+   * The agent step only: the agent it runs, by its registry key and its
+   * persona's name and job title (agents.md 1.1), its tools and its step
+   * limit.
+   */
+  agent?: {
+    key: string;
+    name: string;
+    role: string;
+    tools: string[];
+    maxSteps: number;
+  };
+  exits: WorkflowStepExit[];
+}
+
+export interface AgentWorkflow {
+  id: string;
+  steps: AgentWorkflowStep[];
+}
+
+/** The agent each code workflow's agent step runs, by its registry key. */
+const STEP_AGENTS: Record<
+  string,
+  { name: string; tools: readonly string[]; maxSteps: number }
+> = {
+  [INSIGHTS_ANALYST_AGENT_KEY]: {
+    name: INSIGHTS_ANALYST_NAME,
+    tools: INSIGHTS_ANALYST_TOOL_NAMES,
+    maxSteps: INSIGHTS_ANALYST_MAX_STEPS,
+  },
+  // Assess Data Readiness's Explain report step (agents.md 5.13): the
+  // agent's tools as agents.md 2.10 lists them; `assess_data_readiness`
+  // refuses there, the run has assessed already.
+  [DATA_READINESS_AGENT_KEY]: {
+    name: DATA_READINESS_AGENT_NAME,
+    tools: [
+      'assess_data_readiness',
+      'get_readiness_report',
+      'list_readiness_reports',
+      'profile_data_sample',
+      'generate_synthetic_data',
+      'describe_entity',
+      'run_readonly_sql',
+      'show_in_panel',
+      'ask_clarification',
+    ],
+    maxSteps: DATA_READINESS_MAX_STEPS,
+  },
+  // Dashboard Image to Artifact (agents.md 5.17) and Map a Dashboard to Data
+  // (5.18): the agent step of each is one model call without tools.
+  [DASHBOARD_READER_AGENT_KEY]: {
+    name: DASHBOARD_READER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+  [DATA_MAPPER_AGENT_KEY]: {
+    name: DATA_MAPPER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+};
+
+/**
+ * The agent's workflow, or undefined when it is not workflow-backed: the
+ * code workflow whose `primaryFor` it is (workflow-catalog.ts, ADR-0040).
+ */
+export function agentWorkflow(agentKey: string): AgentWorkflow | undefined {
+  const workflow = CODE_WORKFLOWS.find((w) => w.primaryFor === agentKey);
+  const agent =
+    workflow && Object.hasOwn(STEP_AGENTS, agentKey)
+      ? STEP_AGENTS[agentKey]
+      : undefined;
+  if (!workflow || !agent) return undefined;
+  const source = { id: workflow.id, steps: workflow.steps, agent };
+  return {
+    id: source.id,
+    steps: source.steps.map((step) => ({
+      id: step.id,
+      title: step.title,
+      kind: step.kind,
+      summary: step.summary,
+      input: [...step.input],
+      output: [...step.output],
+      // A model-only step (Plan, Write answer) runs its own agent (Olivia,
+      // Jessica) in one model call without tools (agents.md 5.11).
+      ...(step.kind === 'agent'
+        ? {
+            agent: stepAgent(
+              stepAgentKey(workflow, step.id),
+              step,
+              source.agent,
+            ),
+          }
+        : {}),
+      exits: step.exits.map((exit) => ({ ...exit })),
+    })),
+  };
+}
+
+/** An agent step's agent: its key, its persona, its tools and step limit. */
+function stepAgent(
+  key: string,
+  step: { modelOnly?: true },
+  primary: { name: string; tools: readonly string[]; maxSteps: number },
+): NonNullable<AgentWorkflowStep['agent']> {
+  const persona = builtinAgentPersona(key);
+  return {
+    key,
+    name: persona?.name ?? primary.name,
+    role: persona?.role ?? '',
+    tools: step.modelOnly ? [] : [...primary.tools],
+    maxSteps: step.modelOnly ? 1 : primary.maxSteps,
+  };
+}

@@ -1,4 +1,7 @@
-import type { CustomAnthropicModelConfig } from './model-resolver';
+import type {
+  CopilotModelConfig,
+  CustomAnthropicModelConfig,
+} from './model-resolver';
 import {
   isOpenAiCompatible,
   modelCallTuning,
@@ -317,5 +320,49 @@ describe('custom endpoint, Anthropic style (R52)', () => {
     expect(
       modelCallTuning(customAnthropic('gpt-5.2'), { maxOutputTokens: 100 }),
     ).toEqual({ modelSettings: { maxOutputTokens: 100 }, providerOptions: {} });
+  });
+});
+
+describe('GitHub Copilot (R60)', () => {
+  const copilot = (model: string): CopilotModelConfig => ({
+    kind: 'copilot',
+    id: `copilot/${model}`,
+  });
+
+  it('is not OpenAI-compatible and files under the copilot bucket', () => {
+    expect(isOpenAiCompatible(copilot('gpt-5'))).toBe(false);
+    expect(modelIdOf(copilot('gpt-5'))).toBe('copilot/gpt-5');
+  });
+
+  it('fits the effort to the model Copilot levels', () => {
+    expect(
+      providerOptionsFor(copilot('claude-sonnet-5'), {
+        reasoningEffort: 'minimal',
+      }),
+    ).toEqual({ copilot: { reasoningEffort: 'low' } });
+    expect(
+      providerOptionsFor(copilot('gpt-5.2'), { reasoningEffort: 'none' }),
+    ).toEqual({ copilot: { reasoningEffort: 'low' } });
+  });
+
+  it('drops the effort for auto', () => {
+    expect(
+      providerOptionsFor(copilot('auto'), { reasoningEffort: 'high' }),
+    ).toEqual({});
+  });
+
+  it('sends no output-token cap', () => {
+    expect(
+      modelCallTuning(copilot('claude-sonnet-5'), {
+        maxOutputTokens: 4000,
+        reasoningEffort: 'high',
+      }),
+    ).toEqual({
+      modelSettings: {},
+      providerOptions: { copilot: { reasoningEffort: 'high' } },
+    });
+    expect(modelCallTuning(copilot('auto'), { maxOutputTokens: 4000 })).toEqual(
+      { modelSettings: {}, providerOptions: {} },
+    );
   });
 });

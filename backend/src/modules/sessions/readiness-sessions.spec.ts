@@ -5,7 +5,7 @@ jest.mock('../data-readiness/data-readiness.service', () => ({
 }));
 
 // Sessions bound to the Data Readiness Agent (BA-261; data-readiness R2, R5;
-// sessions-chat R52, R61): creation, the derived agent, the turn's context
+// agent-answers R52, R61): creation, the derived agent, the turn's context
 // and the readiness-report event.
 jest.mock('@mastra/core/request-context', () => ({
   RequestContext: class {
@@ -17,6 +17,12 @@ jest.mock('@mastra/core/request-context', () => ({
   },
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
+// Every streamed turn runs its workflow (agents.md 5.1): the engine stand-in.
+jest.mock('@mastra/core/workflows', () =>
+  jest.requireActual<typeof import('../../mastra/testing/workflows.stub')>(
+    '../../mastra/testing/workflows.stub',
+  ),
+);
 jest.mock('../../mastra/model-resolver', () => ({
   isCustomAnthropicConfig: (c: unknown) =>
     typeof c === 'object' && c !== null && 'kind' in c,
@@ -43,9 +49,6 @@ jest.mock('../datasets/repositories/datasets.repository', () => ({
 }));
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
-}));
-jest.mock('../rfp-packages/rfp-packages.service', () => ({
-  RfpPackagesService: class {},
 }));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
@@ -76,17 +79,18 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { BadRequestException } from '@nestjs/common';
-import { isoToday } from '../../mastra/rfp-context';
+import { isoToday } from './readiness-bridge';
 import { getReadinessToolServices } from '../../mastra/readiness-tool-services';
+import { getSyntheticDataToolServices } from '../../mastra/synthetic-data-tool-services';
 import type {
   ReadinessReport,
   ReadinessSummary,
 } from '../data-readiness/engine/types';
 import { SessionsService, type StreamEvent } from './sessions.service';
+import { streamStored } from './testing/stream-stored';
+import { streamTurnWorkflow } from '../../mastra/testing/turn-workflow.stub';
 import type { SessionDoc } from './entities/session.entity';
 
-const REQUIREMENT = 'Add a PostgreSQL or Databricks dataset first';
 const DESCRIPTION =
   'Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings.';
 
@@ -123,14 +127,16 @@ const DATASETS = [
     tables: ['main.sales.orders'],
   },
   {
-    name: 'Intellify RFP API',
+    name: 'Orders API',
     datasourceId: 'ds-rest',
     datasourceKind: 'rest',
-    tables: ['api.intellify.clients'],
+    tables: ['api.orders.orders'],
   },
 ];
 
 interface BuildOptions {
+  /** The synthetic-data service the tools' bridge calls (agents.md 3.14). */
+  synthetic?: unknown;
   session?: Partial<SessionDoc>;
   /** The datasets that exist (default: all of DATASETS). */
   existing?: typeof DATASETS;
@@ -204,6 +210,7 @@ function build(options: BuildOptions = {}) {
   const mastra = {
     getAgent: jest.fn((key: string) => registry[key]),
     listAgents: () => registry,
+    streamWorkflow: streamTurnWorkflow,
     ensureSessionWorkspace: jest
       .fn()
       .mockImplementation((id: string) =>
@@ -261,8 +268,8 @@ function build(options: BuildOptions = {}) {
     metrics as never,
     knowledge as never,
     userAgents as never,
-    undefined,
     readiness as never,
+    options.synthetic as never,
   );
   return {
     service,
@@ -284,7 +291,7 @@ async function turn(
   content: string,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
-  await ctx.service.streamMessage('s-1', content, (event) =>
+  await streamStored(ctx.service, 's-1', content, (event) =>
     events.push(event),
   );
   return events;
@@ -318,37 +325,6 @@ function readinessToolTurn(
 }
 
 describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', () => {
-  describe('createFromAgent (api.md 2.1 #3, data-readiness R2)', () => {
-    it('creates "Data Readiness" over every PostgreSQL or Databricks dataset, by name', async () => {
-      const ctx = build();
-      const session = await ctx.service.createFromAgent('data-readiness');
-      expect(session).toMatchObject({
-        name: 'Data Readiness',
-        datasets: ['Sales', 'World Cup'],
-        agentKey: 'data-readiness',
-        agentName: 'Data Readiness Agent',
-        messages: [],
-      });
-      expect(session).not.toHaveProperty('agentId');
-    });
-
-    it('uses a typed name instead', async () => {
-      const session = await build().service.createFromAgent(
-        'data-readiness',
-        '  Q4 data check ',
-      );
-      expect(session.name).toBe('Q4 data check');
-    });
-
-    it('refuses with the requirement when no dataset qualifies, creating nothing', async () => {
-      const ctx = build({ existing: [DATASETS[2]] });
-      await expect(
-        ctx.service.createFromAgent('data-readiness'),
-      ).rejects.toThrow(new BadRequestException(REQUIREMENT));
-      expect(ctx.repository.insert).not.toHaveBeenCalled();
-    });
-  });
-
   it('derives the agent with its starters (api.md 2.1)', async () => {
     const ctx = build();
     expect((await ctx.service.toView(ctx.session)).agent).toEqual({
@@ -392,8 +368,6 @@ describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', 
     expect(context.get('session-workspace-id')).toBe('session-s-1');
     expect(context.get('turn-data-records')).toEqual([]);
     expect(context.get('knowledge-used')).toBeUndefined();
-    expect(context.get('rfp-created-by')).toBeUndefined();
-    expect(context.get('turn-rfp')).toBeUndefined();
     expect(ctx.metrics.definitionBlock).not.toHaveBeenCalled();
     expect(ctx.knowledge.contextFor).not.toHaveBeenCalled();
     expect(ctx.verifiedQueries.referenceBlock).not.toHaveBeenCalled();
@@ -693,6 +667,109 @@ describe('SessionsService sessions bound to the Data Readiness Agent (BA-261)', 
         { tool: 'list_readiness_reports' },
       ]);
       expect(ctx.session.messages.at(-1)).not.toHaveProperty('readinessReport');
+    });
+  });
+
+  describe('a synthetic script reaches the panel (agents.md 3.14, story 1.22.4)', () => {
+    const ITEM = {
+      id: 'item-1',
+      kind: 'file' as const,
+      title: 'Synthetic data — World Cup (seed 1)',
+      shownAt: '2026-11-11T10:00:00.000Z',
+      path: 'synthetic-data/world-cup-synthetic-postgresql-seed1.sql',
+      bytes: 42,
+    };
+
+    it('installs the bridge, which resolves the session dataset', async () => {
+      const synthetic = {
+        profile: jest.fn().mockRejectedValue(new Error('stop here')),
+        getProfile: jest.fn(),
+        scriptText: jest.fn(),
+      };
+      const ctx = build({ synthetic });
+      await ctx.service.onModuleInit();
+      await expect(
+        getSyntheticDataToolServices().profileSample({ sessionId: 's-1' }),
+      ).rejects.toThrow('stop here');
+      expect(synthetic.profile).toHaveBeenCalledWith(
+        {
+          datasetName: 'World Cup',
+          tables: ['wc.public.matches', 'wc.public.teams'],
+        },
+        { signal: undefined },
+      );
+    });
+
+    it('emits the stored file item as panel-item just before its tool-result', async () => {
+      const ctx = build({
+        session: { panelItems: [ITEM] },
+        chunks: [
+          () =>
+            Promise.resolve({
+              type: 'tool-call',
+              payload: {
+                toolCallId: 't1',
+                toolName: 'generate_synthetic_data',
+                args: { dataset: 'World Cup', rowsPerTable: 50 },
+              },
+            }),
+          () =>
+            Promise.resolve({
+              type: 'tool-result',
+              payload: {
+                toolCallId: 't1',
+                toolName: 'generate_synthetic_data',
+                result: {
+                  fileName: 'world-cup-synthetic-postgresql-seed1.sql',
+                  path: ITEM.path,
+                  panelItemId: 'item-1',
+                },
+              },
+            }),
+          () =>
+            Promise.resolve({
+              type: 'text-delta',
+              payload: { text: 'The script is in the panel.' },
+            }),
+        ],
+      });
+      const events = await turn(ctx, 'Give me 50 synthetic rows per table');
+      const types = events.map((e) => e.type);
+      const at = types.indexOf('panel-item');
+      expect(at).toBeGreaterThan(-1);
+      expect(JSON.parse(events[at].content!)).toEqual({ item: ITEM });
+      expect(types[at + 1]).toBe('tool-result');
+      expect(JSON.parse(events[at + 1].content!)).toEqual({
+        tool: 'generate_synthetic_data',
+        input: 'World Cup',
+      });
+    });
+
+    it('shows a refusal as the step error, with no panel-item', async () => {
+      const ctx = build({
+        chunks: [
+          () =>
+            Promise.resolve({
+              type: 'tool-result',
+              payload: {
+                toolCallId: 't1',
+                toolName: 'profile_data_sample',
+                result: {
+                  error:
+                    'Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more',
+                },
+              },
+            }),
+        ],
+      });
+      const events = await turn(ctx, 'Profile a sample');
+      expect(events.map((e) => e.type)).not.toContain('panel-item');
+      const result = events.find((e) => e.type === 'tool-result')!;
+      expect(JSON.parse(result.content!)).toEqual({
+        tool: 'profile_data_sample',
+        error:
+          'Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more',
+      });
     });
   });
 });

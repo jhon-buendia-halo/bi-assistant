@@ -1,21 +1,13 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
 import {
-  ComponentFixture,
-  TestBed,
-  fakeAsync,
-  flush,
-  tick,
-} from '@angular/core/testing';
-import { of } from 'rxjs';
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ChatMessage, Session } from '../../models/session.model';
-import { SessionsApiService } from '../../services/sessions-api.service';
-import {
-  GENERIC_STARTER_PROMPTS,
-  GENERIC_WELCOME_DESCRIPTION,
-  SessionChat,
-  skillStepLabel,
-} from './session-chat';
+import { By } from '@angular/platform-browser';
+import { AnswerView } from '../answer-view/answer-view';
+import { SessionChat } from './session-chat';
 
 function sessionWith(message: ChatMessage): Session {
   return {
@@ -29,7 +21,7 @@ function sessionWith(message: ChatMessage): Session {
   };
 }
 
-describe('SessionChat trust UX', () => {
+describe('SessionChat past chat (past-chats R66)', () => {
   let fixture: ComponentFixture<SessionChat>;
 
   async function render(message: ChatMessage): Promise<HTMLElement> {
@@ -47,6 +39,7 @@ describe('SessionChat trust UX', () => {
     role: 'assistant',
     content: 'Answer',
     at: '2026-01-01T00:00:01.000Z',
+    verified: true,
     data: [
       {
         tool: 'run_readonly_sql',
@@ -56,913 +49,216 @@ describe('SessionChat trust UX', () => {
     ],
   };
 
-  it('renders the server-built interpretation caption verbatim', async () => {
-    const line =
-      'Computed from 1 query over main.health.claims — 500 rows analyzed.';
-    const el = await render({ ...answer, interpretation: line });
-    const caption = el.querySelector(`[title="${line}"]`);
-    expect(caption?.textContent?.trim()).toBe(line);
-  });
+  // How one answer renders (badges, provenance, reasoning, clarification
+  // card) is covered by answer-view.spec.ts; these specs cover the chat.
 
-  it('shows the Verified chip only on verified answers', async () => {
-    const plain = await render(answer);
+  it('reads the transcript through the answer view, with no composer, rating, visual generation or welcome', async () => {
+    const el = await render(answer);
+    expect(el.querySelectorAll('app-answer-view').length).toBe(1);
     expect(
-      plain.querySelector('[title="Matches an approved query"]'),
-    ).toBeNull();
-
-    TestBed.resetTestingModule();
-    const verified = await render({ ...answer, verified: true });
-    expect(
-      verified
+      el
         .querySelector('[title="Matches an approved query"]')
         ?.textContent?.trim(),
     ).toBe('Verified');
-  });
-
-  it('marks truncated records and offers a copy-SQL button', async () => {
-    const el = await render({
-      ...answer,
-      data: [{ ...answer.data![0], truncated: true }],
-    });
-    expect(
-      el
-        .querySelector('[title="Row cap reached — counts may be incomplete"]')
-        ?.textContent?.trim(),
-    ).toBe('(truncated)');
-    expect(el.querySelector('[aria-label="Copy SQL"]')).toBeTruthy();
-  });
-
-  it('offers follow-up chips for a clicked data mark without sending', async () => {
-    await TestBed.configureTestingModule({
-      imports: [SessionChat],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-    fixture = TestBed.createComponent(SessionChat);
-    fixture.componentRef.setInput('session', sessionWith(answer));
-    fixture.componentRef.setInput('activeVisualizationId', 'visual-1');
-    fixture.componentRef.setInput('dataPointSelection', {
-      value: 'Cardiology',
-      label: 'Cardiology (312 claims)',
-    });
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    const chips = Array.from(
-      el.querySelectorAll<HTMLButtonElement>(
-        '[aria-label="Follow-up suggestions"] button',
-      ),
-    );
-
-    expect(chips.length).toBe(3);
-    expect(chips[0].textContent).toContain(
-      'Drill into "Cardiology (312 claims)"',
-    );
-    expect(chips[1].textContent).toContain('Why "Cardiology (312 claims)"?');
-
-    chips[0].click();
-    fixture.detectChanges();
-    expect(fixture.componentInstance.draft()).toBe(
-      'Drill into "Cardiology": break it down further.',
-    );
-    // Filling the composer must not start a turn.
-    expect(fixture.componentInstance.sending()).toBeFalse();
-
-    // Dismiss clears the row.
-    chips[2].click();
-    fixture.detectChanges();
-    expect(el.querySelector('[aria-label="Follow-up suggestions"]')).toBeNull();
-  });
-
-  it('hides follow-up chips when no visual is open', async () => {
-    await TestBed.configureTestingModule({
-      imports: [SessionChat],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-    fixture = TestBed.createComponent(SessionChat);
-    fixture.componentRef.setInput('session', sessionWith(answer));
-    fixture.componentRef.setInput('dataPointSelection', {
-      value: 'Cardiology',
-    });
-    fixture.detectChanges();
-
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector(
-        '[aria-label="Follow-up suggestions"]',
-      ),
-    ).toBeNull();
-  });
-
-  it('renders the cross-check verdict next to the Verified badge', async () => {
-    const agreed = await render({
-      ...answer,
-      verified: true,
-      crossCheck: {
-        status: 'agree',
-        note: 'independent re-derivation returned the same results',
-      },
-    });
-    const chip = agreed.querySelector(
-      '[title="independent re-derivation returned the same results"]',
-    );
-    expect(chip?.textContent?.trim()).toBe('Cross-checked');
-    expect(chip?.className).toContain('text-on-success-soft');
-    expect(
-      agreed.querySelector('[title="Matches an approved query"]'),
-    ).toBeTruthy();
-
-    TestBed.resetTestingModule();
-    const differs = await render({
-      ...answer,
-      crossCheck: {
-        status: 'disagree',
-        note: 'results differ — treat with care',
-      },
-    });
-    const amber = differs.querySelector(
-      '[title="results differ — treat with care"]',
-    );
-    expect(amber?.textContent?.trim()).toBe('Cross-check differs');
-    expect(amber?.className).toContain('text-on-warning-soft');
-
-    TestBed.resetTestingModule();
-    const failed = await render({ ...answer, crossCheck: { status: 'error' } });
-    const muted = failed.querySelector('[title="Cross-check failed"]');
-    expect(muted?.textContent?.trim()).toBe('Cross-check failed');
-    expect(muted?.className).toContain('text-fg-muted');
-  });
-
-  it('shows no cross-check chip on an ordinary answer', async () => {
-    const el = await render(answer);
-    expect(el.textContent).not.toContain('Cross-check');
-  });
-
-  it('sends careful mode only while the Careful chip is on', async () => {
-    const el = await render(answer);
-    const api = TestBed.inject(SessionsApiService);
-    const stream = spyOn(api, 'streamMessage').and.resolveTo();
-    const chip = el.querySelector<HTMLButtonElement>(
-      '[aria-label="Careful mode"]',
-    )!;
-    expect(chip.getAttribute('aria-pressed')).toBe('false');
-
-    fixture.componentInstance.draft.set('How many claims?');
-    fixture.componentInstance.send();
-    expect(stream.calls.mostRecent().args[5]).toBeFalse();
-
-    chip.click();
-    fixture.detectChanges();
-    expect(chip.getAttribute('aria-pressed')).toBe('true');
-    expect(chip.className).toContain('text-on-primary-soft');
-
-    fixture.componentInstance.stop();
-    fixture.componentInstance.draft.set('And denied ones?');
-    fixture.componentInstance.send();
-    expect(stream.calls.mostRecent().args[5]).toBeTrue();
-  });
-
-  it('narrates how the answer was worked out, step by step', async () => {
-    const el = await render({
-      ...answer,
-      reasoning: [
-        {
-          step: 1,
-          rationale:
-            'There is no direct cost-per-member column, so I first checked how claims are keyed to members.',
-          tool: 'describe_table',
-          rowCount: 12,
-        },
-        {
-          step: 2,
-          rationale: 'Then I summed paid amounts per member for the plan year.',
-          tool: 'run_readonly_sql',
-          rowCount: 1240,
-        },
-        {
-          step: 3,
-          rationale:
-            'I tried splitting by plan tier, but that column is absent.',
-          tool: 'run_readonly_sql',
-          error: 'column plan_tier not found',
-        },
-      ],
-    });
-
-    expect(el.textContent).toContain('How I worked this out (3 steps)');
-    expect(el.textContent).toContain(
-      'There is no direct cost-per-member column, so I first checked how claims are keyed to members.',
-    );
-    expect(el.textContent).toContain('12 rows');
-    expect(el.textContent).toContain('1,240 rows');
-    expect(el.textContent).toContain('failed — column plan_tier not found');
-  });
-
-  it('shows no reasoning block when the answer carries none', async () => {
-    const el = await render(answer);
-    expect(el.textContent).not.toContain('How I worked this out');
-  });
-
-  it('explains each query in the data provenance list', async () => {
-    const el = await render({
-      ...answer,
-      data: [
-        {
-          ...answer.data![0],
-          rationale: 'Counting the claims keyed to a member first.',
-        },
-      ],
-    });
-    expect(el.textContent).toContain(
-      'Counting the claims keyed to a member first.',
-    );
-  });
-
-  it('shows the rationale under the tool while the turn streams', async () => {
-    const el = await render(answer);
-    const api = TestBed.inject(SessionsApiService);
-    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
-      handlers.onTool?.({
-        name: 'run_readonly_sql',
-        rationale: 'Checking how claims are keyed to members.',
-      });
-      return Promise.resolve();
-    });
-
-    fixture.componentInstance.draft.set('What is the cost per member?');
-    fixture.componentInstance.send();
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('run_readonly_sql');
-    expect(el.textContent).toContain(
-      'Checking how claims are keyed to members.',
-    );
-
-    fixture.componentInstance.stop();
-  });
-
-  it('shows the work collected before a clarification', async () => {
-    const el = await render({
-      role: 'assistant',
-      content: '',
-      at: '2026-01-01T00:00:01.000Z',
-      clarification: {
-        question: 'Which plan year?',
-        options: [{ label: '2025' }, { label: '2026' }],
-      },
-      entities: ['main.health.claims'],
-      data: [{ ...answer.data![0], truncated: true }],
-    });
-
-    expect(el.textContent).toContain('Which plan year?');
-    expect(el.textContent).toContain('Data entities');
-    expect(el.textContent).toContain('main.health.claims');
-    expect(el.textContent).toContain('Data used (1 query)');
-    expect(
-      el.querySelector('[title="Row cap reached — counts may be incomplete"]'),
-    ).toBeTruthy();
-    expect(el.querySelector('[aria-label="Copy SQL"]')).toBeTruthy();
-  });
-});
-
-describe('SessionChat deep analysis', () => {
-  let fixture: ComponentFixture<SessionChat>;
-
-  const reportMessage: ChatMessage = {
-    role: 'assistant',
-    content: 'Denials rose to **12.4%**, driven by payer A.',
-    at: '2026-01-01T00:00:02.000Z',
-    report: {
-      jobId: 'job-1',
-      title: 'Denial drivers deep dive',
-      path: 'reports/job-1.md',
-      angles: 4,
-    },
-  };
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [SessionChat],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-  });
-
-  /** Mount the chat over a transcript and return its root element. */
-  function mount(messages: ChatMessage[] = []): HTMLElement {
-    fixture = TestBed.createComponent(SessionChat);
-    fixture.componentRef.setInput('session', {
-      id: 'session-1',
-      name: 'Session 1',
-      datasets: [],
-      messages,
-    } satisfies Session);
-    fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
-  }
-
-  it('renders a report message with its summary and a download button', () => {
-    const el = mount([reportMessage]);
-
-    expect(el.textContent).toContain('Denial drivers deep dive');
-    expect(el.textContent).toContain('4 angles investigated');
-    // Executive summary goes through the markdown pipe.
-    expect(el.querySelector('.prose-dark')?.innerHTML).toContain(
-      '<strong>12.4%</strong>',
-    );
-    expect(el.querySelector('[aria-label="Download report"]')).toBeTruthy();
-  });
-
-  it('downloads the report markdown', () => {
-    const el = mount([reportMessage]);
-    const api = TestBed.inject(SessionsApiService);
-    const download = spyOn(api, 'downloadDeepAnalysis').and.returnValue(
-      of(new Blob(['# report'], { type: 'text/markdown' })),
-    );
-
-    el.querySelector<HTMLButtonElement>(
-      '[aria-label="Download report"]',
-    )!.click();
-
-    expect(download).toHaveBeenCalledWith('session-1', 'job-1');
-  });
-
-  it('renders the RFP package card and downloads the zip and one file', () => {
-    const el = mount([
-      {
-        role: 'assistant',
-        content: 'Package ready.',
-        at: '2026-01-01T00:00:02.000Z',
-        rfpPackage: {
-          rfpId: 'rfp-1',
-          title: 'Acme RFP',
-          files: [
-            { name: 'rfp.md', bytes: 10 },
-            { name: 'rfp.pdf', bytes: 20 },
-          ],
-          exportedAt: '2026-01-01T00:00:02.000Z',
-        },
-      },
-    ]);
-    const card = el.querySelector('[data-testid="rfp-package-card"]')!;
-    expect(card.textContent).toContain('Acme RFP');
-    expect(card.textContent).toContain('RFP package · 2 files');
-    expect(card.textContent).toContain('Download package (.zip)');
-    expect(card.textContent).toContain('Download RFP (PDF)');
-    expect(
-      card.querySelector('[data-testid="rfp-package-download"]')!.classList,
-    ).toContain('btn-secondary');
-
-    const api = TestBed.inject(SessionsApiService);
-    const download = spyOn(api, 'downloadRfpPackage').and.returnValue(
-      of(new Blob(['x'])),
-    );
-    card
-      .querySelector<HTMLButtonElement>('[data-testid="rfp-package-download"]')!
-      .click();
-    expect(download).toHaveBeenCalledWith(
-      'session-1',
-      'rfp-1',
-      undefined,
-      undefined,
-    );
-    card
-      .querySelector<HTMLButtonElement>(
-        '[data-testid="rfp-package-download-pdf"]',
-      )!
-      .click();
-    expect(download).toHaveBeenCalledWith(
-      'session-1',
-      'rfp-1',
-      'rfp.pdf',
-      undefined,
-    );
-    card
-      .querySelectorAll<HTMLButtonElement>(
-        '[data-testid="rfp-package-file"]',
-      )[1]
-      .click();
-    expect(download).toHaveBeenCalledWith(
-      'session-1',
-      'rfp-1',
-      'rfp.pdf',
-      undefined,
-    );
-    expect(
-      card.querySelector('[data-testid="rfp-package-draft-chip"]'),
-    ).toBeNull();
-  });
-
-  it('renders a draft RFP package card with the Draft chip and downloads the draft (BA-229)', () => {
-    const el = mount([
-      {
-        role: 'assistant',
-        content: 'Draft ready.',
-        at: '2026-01-01T00:00:02.000Z',
-        rfpPackage: {
-          rfpId: 'rfp-1',
-          title: 'DRAFT — Acme RFP',
-          files: [
-            { name: 'rfp.md', bytes: 10 },
-            { name: 'rfp.pdf', bytes: 20 },
-          ],
-          exportedAt: '2026-01-01T00:00:02.000Z',
-          draft: true,
-        },
-      },
-    ]);
-    const card = el.querySelector('[data-testid="rfp-package-card"]')!;
-    expect(
-      card.querySelector('[data-testid="rfp-package-label"]')!.textContent,
-    ).toContain('RFP package (draft) · 2 files');
-    const chip = card.querySelector('[data-testid="rfp-package-draft-chip"]')!;
-    expect(chip.textContent?.trim()).toBe('Draft');
-    expect(chip.classList).toContain('chip-warning');
-    expect(card.textContent).toContain('Download draft (.zip)');
-    expect(card.textContent).not.toContain('Download package (.zip)');
-    expect(card.textContent).toContain('Download draft (PDF)');
-    expect(
-      card.querySelector('[data-testid="rfp-package-download-pdf"]')!.classList,
-    ).toContain('btn-primary');
-
-    const api = TestBed.inject(SessionsApiService);
-    const download = spyOn(api, 'downloadRfpPackage').and.returnValue(
-      of(new Blob(['x'])),
-    );
-    card
-      .querySelector<HTMLButtonElement>('[data-testid="rfp-package-download"]')!
-      .click();
-    expect(download).toHaveBeenCalledWith(
-      'session-1',
-      'rfp-1',
-      undefined,
-      true,
-    );
-    card
-      .querySelectorAll<HTMLButtonElement>(
-        '[data-testid="rfp-package-file"]',
-      )[1]
-      .click();
-    expect(download).toHaveBeenCalledWith(
-      'session-1',
-      'rfp-1',
-      'rfp.pdf',
-      true,
-    );
-  });
-
-  it('hides Careful, Deep analysis and visuals in a session bound to a built-in agent', () => {
-    const answer: ChatMessage = {
-      role: 'assistant',
-      content: 'Orchard Manufacturing renews on 1 January 2027.',
-      at: '2026-01-01T00:00:02.000Z',
-    };
-    const assistantEl = mount([answer]);
-    expect(
-      assistantEl.querySelector('[aria-label="Careful mode"]'),
-    ).toBeTruthy();
-    expect(assistantEl.textContent).toContain('Generate interactive visuals');
-
-    fixture.componentRef.setInput('session', {
-      id: 'session-2',
-      name: 'RFP Builder',
-      datasets: ['Intellify RFP API'],
-      agentKey: 'rfp',
-      messages: [answer],
-    } satisfies Session);
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('textarea')).toBeNull();
+    expect(el.querySelector('[aria-label="Send message"]')).toBeNull();
     expect(el.querySelector('[aria-label="Careful mode"]')).toBeNull();
     expect(el.querySelector('[aria-label="Deep analysis"]')).toBeNull();
+    expect(
+      el.querySelector('[aria-label="Save as verified query"]'),
+    ).toBeNull();
+    expect(el.querySelector('[aria-label="Mark answer as wrong"]')).toBeNull();
     expect(el.textContent).not.toContain('Generate interactive visuals');
-  });
-
-  it('sends the draft as a job, polls it, and refreshes on completion', fakeAsync(() => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    const start = spyOn(api, 'startDeepAnalysis').and.returnValue(
-      of({ ok: true, message: 'Deep analysis started', jobId: 'job-1' }),
-    );
-    const stream = spyOn(api, 'streamMessage').and.resolveTo();
-    const status = spyOn(api, 'deepAnalysisStatus').and.returnValues(
-      of({
-        ok: true,
-        message: '',
-        status: 'investigating' as const,
-        progress: 'Investigating angle 2 of 4: By payer',
-        step: 2,
-        steps: 4,
-      }),
-      of({ ok: true, message: '', status: 'done' as const }),
-    );
-    const get = spyOn(api, 'get').and.returnValue(
-      of({
-        id: 'session-1',
-        name: 'Session 1',
-        datasets: [],
-        messages: [reportMessage],
-      } satisfies Session),
-    );
-
-    fixture.componentInstance.draft.set('Why are denials rising?');
-    fixture.detectChanges();
-    el.querySelector<HTMLButtonElement>(
-      '[aria-label="Deep analysis"]',
-    )!.click();
-    fixture.detectChanges();
-
-    // A job, not a chat turn — and the composer is free again.
-    expect(start).toHaveBeenCalledWith('session-1', 'Why are denials rising?');
-    expect(stream).not.toHaveBeenCalled();
-    expect(fixture.componentInstance.draft()).toBe('');
-    expect(fixture.componentInstance.sending()).toBeFalse();
-    expect(el.textContent).toContain('Deep analysis running');
-
-    tick(3000);
-    fixture.detectChanges();
-    expect(el.textContent).toContain('Investigating angle 2 of 4: By payer');
-
-    tick(3000);
-    fixture.detectChanges();
-    expect(status).toHaveBeenCalledTimes(2);
-    expect(get).toHaveBeenCalledWith('session-1');
-    // Card cleared, report message rendered from the refreshed session.
-    expect(el.querySelector('[aria-label="Deep analysis status"]')).toBeNull();
-    expect(el.textContent).toContain('Denial drivers deep dive');
-
-    tick(6000);
-    expect(status).toHaveBeenCalledTimes(2);
-    flush();
-  }));
-
-  it('stops polling on a job error and shows the message', fakeAsync(() => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    spyOn(api, 'startDeepAnalysis').and.returnValue(
-      of({ ok: true, message: 'Deep analysis started', jobId: 'job-1' }),
-    );
-    const status = spyOn(api, 'deepAnalysisStatus').and.returnValue(
-      of({
-        ok: true,
-        message: '',
-        status: 'error' as const,
-        error: 'warehouse unavailable',
-      }),
-    );
-
-    fixture.componentInstance.draft.set('Why are denials rising?');
-    fixture.componentInstance.runDeepAnalysis();
-    tick(3000);
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('Deep analysis failed');
-    expect(el.textContent).toContain('warehouse unavailable');
-
-    tick(9000);
-    expect(status).toHaveBeenCalledTimes(1);
-
-    // Dismissing clears the card and frees the action again.
-    el.querySelector<HTMLButtonElement>(
-      '[aria-label="Dismiss deep analysis"]',
-    )!.click();
-    fixture.detectChanges();
-    expect(el.querySelector('[aria-label="Deep analysis status"]')).toBeNull();
-    flush();
-  }));
-
-  it('gives the question back when the job is refused', () => {
-    mount();
-    const api = TestBed.inject(SessionsApiService);
-    spyOn(api, 'startDeepAnalysis').and.returnValue(
-      of({
-        ok: false,
-        message: 'A deep analysis is already running for this session',
-      }),
-    );
-
-    fixture.componentInstance.draft.set('Why are denials rising?');
-    fixture.componentInstance.runDeepAnalysis();
-
-    expect(fixture.componentInstance.deepAnalysisJob()).toBeNull();
-    expect(fixture.componentInstance.draft()).toBe('Why are denials rising?');
-  });
-});
-
-describe('SessionChat stream errors', () => {
-  let fixture: ComponentFixture<SessionChat>;
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [SessionChat],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-  });
-
-  /** Mount the chat over a transcript and return its root element. */
-  function mount(messages: ChatMessage[] = []): HTMLElement {
-    fixture = TestBed.createComponent(SessionChat);
-    fixture.componentRef.setInput('session', {
-      id: 'session-1',
-      name: 'Session 1',
-      datasets: [],
-      messages,
-    } satisfies Session);
-    fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
-  }
-
-  it('renders a provider failure as an error bubble and clears the typing indicator', () => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
-      handlers.onError?.('Provider request failed (404) — Resource not found');
-      return Promise.resolve();
-    });
-
-    fixture.componentInstance.draft.set('How many claims last quarter?');
-    fixture.componentInstance.send();
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('Something went wrong');
-    expect(el.textContent).toContain(
-      'Provider request failed (404) — Resource not found',
-    );
-    expect(fixture.componentInstance.sending()).toBeFalse();
-    // The "Thinking" block must be gone, not stuck spinning.
-    expect(el.textContent).not.toContain('Thinking');
-  });
-
-  it('keeps the question and the error when a workflow-only refresh lands with the failure (1.21.3)', () => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
-      handlers.onError?.('Cannot connect to API: other side closed');
-      return Promise.resolve();
-    });
-
-    fixture.componentInstance.draft.set('Which team scored most?');
-    fixture.componentInstance.send();
-    fixture.detectChanges();
-
-    // The shell patches only the status bar: same id, same messages array.
-    const current = fixture.componentInstance.session();
-    fixture.componentRef.setInput('session', {
-      ...current,
-      workflow: { steps: [], current: 3, failed: 3 },
-    } as unknown as Session);
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('Which team scored most?');
-    expect(el.textContent).toContain('Cannot connect to API: other side closed');
-  });
-
-  it('still re-syncs a same-id refresh that brings a new transcript', () => {
-    const el = mount([]);
-    fixture.componentRef.setInput('session', {
-      id: 'session-1',
-      name: 'Session 1',
-      datasets: [],
-      messages: [
-        { role: 'assistant', content: 'A refreshed answer', createdAt: '2026-11-10T00:00:00Z' },
-      ],
-    } as unknown as Session);
-    fixture.detectChanges();
-    expect(el.textContent).toContain('A refreshed answer');
-  });
-
-  it('shows live tool progress on the running row and clears it on the result', () => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    let handlers!: Parameters<SessionsApiService['streamMessage']>[2];
-    spyOn(api, 'streamMessage').and.callFake((_id, _content, h) => {
-      handlers = h;
-      return new Promise<void>(() => undefined);
-    });
-
-    fixture.componentInstance.draft.set('Assess readiness');
-    fixture.componentInstance.send();
-    handlers.onTool?.({ name: 'assess_data_readiness' });
-    handlers.onTool?.({ name: 'other_tool' });
-    handlers.onToolProgress?.({
-      tool: 'assess_data_readiness',
-      phase: 'profiling',
-      message: 'Profiling claims (2 of 5)',
-      done: 2,
-      total: 5,
-    });
-    fixture.detectChanges();
-
-    const progress = el.querySelectorAll('[data-testid="tool-progress"]');
-    expect(progress.length).toBe(1);
-    expect(progress[0].textContent).toContain('Profiling claims (2 of 5)');
-    expect(progress[0].getAttribute('title')).toBe('Profiling claims (2 of 5)');
-
-    handlers.onToolResult?.({
-      tool: 'assess_data_readiness',
-      rowCount: 3,
-    } as never);
-    fixture.detectChanges();
-
-    expect(el.querySelector('[data-testid="tool-progress"]')).toBeNull();
-  });
-
-  it('keeps any text that had already streamed in before the error', () => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
-      handlers.onText?.('Partial answer so far.');
-      handlers.onError?.('Stream disconnected');
-      return Promise.resolve();
-    });
-
-    fixture.componentInstance.draft.set('How many claims last quarter?');
-    fixture.componentInstance.send();
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('Partial answer so far.');
-    expect(el.textContent).toContain('Something went wrong');
-  });
-
-  it('retries by resending the question the error bubble followed', () => {
-    const el = mount();
-    const api = TestBed.inject(SessionsApiService);
-    const stream = spyOn(api, 'streamMessage').and.callFake(
-      (_id, _content, handlers) => {
-        handlers.onError?.('Stream ended before completion');
-        return Promise.resolve();
-      },
-    );
-
-    fixture.componentInstance.draft.set('How many claims last quarter?');
-    fixture.componentInstance.send();
-    fixture.detectChanges();
-
-    el.querySelector<HTMLButtonElement>('[aria-label="Retry"]')!.click();
-    fixture.detectChanges();
-
-    expect(stream.calls.count()).toBe(2);
-    expect(stream.calls.mostRecent().args[1]).toBe(
-      'How many claims last quarter?',
-    );
-  });
-});
-
-describe('SessionChat welcome message', () => {
-  let fixture: ComponentFixture<SessionChat>;
-
-  async function render(session: Session): Promise<HTMLElement> {
-    await TestBed.configureTestingModule({
-      imports: [SessionChat],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-    fixture = TestBed.createComponent(SessionChat);
-    fixture.componentRef.setInput('session', session);
-    fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
-  }
-
-  const emptySession: Session = {
-    id: 'session-empty',
-    name: 'Claims review',
-    datasets: ['Claims 2025'],
-    messages: [],
-  };
-
-  it('greets the user and names the session datasets when the transcript is empty', async () => {
-    const el = await render(emptySession);
-    const welcome = el.querySelector('[data-testid="session-welcome"]');
-    expect(welcome).toBeTruthy();
-    expect(welcome?.textContent).toContain('Claims review');
-    expect(welcome?.textContent).toContain('Claims 2025');
-  });
-
-  it('hides the welcome once the session has messages', async () => {
-    const el = await render({
-      ...emptySession,
-      messages: [
-        { role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' },
-      ],
-    });
     expect(el.querySelector('[data-testid="session-welcome"]')).toBeNull();
   });
 
-  it('puts a starter question in the composer without sending it', fakeAsync(async () => {
-    const el = await render(emptySession);
-    const starter = el.querySelector(
-      '[data-testid="session-welcome"] button',
-    ) as HTMLButtonElement;
-    starter.click();
-    tick();
-    fixture.detectChanges();
-    expect(fixture.componentInstance.draft()).toBe(starter.textContent!.trim());
-    expect(fixture.componentInstance.sending()).toBeFalse();
-    flush();
-  }));
-
-  const agent = {
-    id: 'u-historian',
-    name: 'Cup historian',
-    deleted: false,
-    description: 'Answers questions about World Cup history',
-    starterQuestions: ['Who won in 2014?', 'Which country hosted in 2002?'],
-  };
-
-  function starterTexts(el: HTMLElement): string[] {
-    return Array.from(
-      el.querySelectorAll('[data-testid="session-welcome"] button'),
-    ).map((button) => button.textContent!.trim());
-  }
-
-  it("uses the agent's description and starter questions (R58)", async () => {
-    const el = await render({ ...emptySession, agentId: agent.id, agent });
-    const welcome = el.querySelector('[data-testid="session-welcome"]');
-    expect(welcome?.textContent).toContain(`${agent.description}.`);
-    expect(welcome?.textContent).not.toContain(GENERIC_WELCOME_DESCRIPTION);
-    expect(welcome?.textContent).toContain('Claims 2025');
-    expect(starterTexts(el)).toEqual(agent.starterQuestions);
+  it('lists the questions in the history navigator and copies one', async () => {
+    const el = await render(answer);
+    expect(el.querySelectorAll('.h-0\\.5').length).toBe(1);
+    const clipboard = spyOn(navigator.clipboard, 'writeText').and.resolveTo();
+    el.querySelector<HTMLButtonElement>('[title="Copy message"]')!.click();
+    expect(clipboard).toHaveBeenCalledWith('Ask');
   });
 
-  it("shows at most five of the agent's starter questions", async () => {
-    const starterQuestions = ['1?', '2?', '3?', '4?', '5?', '6?'];
-    const el = await render({
-      ...emptySession,
-      agentId: agent.id,
-      agent: { ...agent, starterQuestions },
+  it('asks the host to view a visual the chat created', async () => {
+    const visual = {
+      visualId: 'v1',
+      version: 1,
+      title: 'Claims',
+      action: 'created' as const,
+    };
+    const card = await render({
+      role: 'assistant',
+      content: 'Created interactive visual "Claims".',
+      at: '2026-01-01T00:00:01.000Z',
+      visual,
     });
-    expect(starterTexts(el)).toEqual(starterQuestions.slice(0, 5));
-  });
-
-  it('falls back to the generic text and prompts when the agent has none', async () => {
-    const el = await render({
-      ...emptySession,
-      agentId: agent.id,
-      agent: { ...agent, description: '', starterQuestions: [] },
-    });
-    const welcome = el.querySelector('[data-testid="session-welcome"]');
-    expect(welcome?.textContent).toContain(GENERIC_WELCOME_DESCRIPTION);
-    expect(starterTexts(el)).toEqual([...GENERIC_STARTER_PROMPTS]);
-  });
-
-  it('falls back to the generic welcome once the agent is deleted (R59)', async () => {
-    const el = await render({
-      ...emptySession,
-      agentId: agent.id,
-      agent: { ...agent, deleted: true },
-    });
-    const welcome = el.querySelector('[data-testid="session-welcome"]');
-    expect(welcome?.textContent).toContain(GENERIC_WELCOME_DESCRIPTION);
-    expect(welcome?.textContent).not.toContain(agent.description);
-    expect(starterTexts(el)).toEqual([...GENERIC_STARTER_PROMPTS]);
+    const viewed: unknown[] = [];
+    fixture.componentInstance.viewVisual.subscribe((v) => viewed.push(v));
+    Array.from(card.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'View')!
+      .click();
+    expect(viewed).toEqual([visual]);
   });
 });
 
-describe('SessionChat beforeSend', () => {
+describe('SessionChat query inspector (past-chats R70; plan 1.25.10)', () => {
+  const sqlRecord = (rationale: string) => ({
+    tool: 'run_readonly_sql',
+    input: 'select count(*) as n from matches',
+    columns: ['n'],
+    rows: [{ n: 964 }],
+    rowCount: 1,
+    rationale,
+  });
+  const answerAt = (at: string, rationale: string): ChatMessage => ({
+    role: 'assistant',
+    content: 'The data holds 964 matches.',
+    at,
+    data: [sqlRecord(rationale)],
+    evidence: [{ index: 0, coverage: 'whole-table' }],
+  });
+  const plain: ChatMessage = {
+    role: 'assistant',
+    content: 'Hello there',
+    at: '2026-01-01T00:00:09.000Z',
+  };
+  const session = (id = 's1'): Session => ({
+    id,
+    name: 'S',
+    datasets: [],
+    messages: [
+      { role: 'user', content: 'How many matches?', at: '2026-01-01T00:00:00Z' },
+      answerAt('2026-01-01T00:00:01Z', 'First count.'),
+      { role: 'user', content: 'And again?', at: '2026-01-01T00:00:02Z' },
+      answerAt('2026-01-01T00:00:03Z', 'Second count.'),
+      { role: 'user', content: 'Hi', at: '2026-01-01T00:00:04Z' },
+      plain,
+    ],
+  });
+
   let fixture: ComponentFixture<SessionChat>;
+  let http: HttpTestingController;
+  let el: HTMLElement;
+  const evidenceUrl = (id: string, message: number) =>
+    (r: { url: string; method: string }) =>
+      r.method === 'POST' &&
+      r.url.endsWith(`/sessions/${id}/messages/${message}/answer/evidence`);
 
   beforeEach(async () => {
+    (window.document.activeElement as HTMLElement | null)?.blur();
     await TestBed.configureTestingModule({
       imports: [SessionChat],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(SessionChat);
-    fixture.componentRef.setInput('session', {
-      id: 'preview-1',
-      name: 'Preview: Cup historian',
-      datasets: [],
-      messages: [],
-    } satisfies Session);
-  });
-
-  it('sends only after the hook agrees, and keeps the draft on a refusal', async () => {
-    let answer = false;
-    const hook = jasmine
-      .createSpy('beforeSend')
-      .and.callFake(() => Promise.resolve(answer));
-    fixture.componentRef.setInput('beforeSend', hook);
+    fixture.componentRef.setInput('session', session());
     fixture.detectChanges();
-    const api = TestBed.inject(SessionsApiService);
-    const stream = spyOn(api, 'streamMessage').and.resolveTo();
-    const chat = fixture.componentInstance;
-
-    chat.draft.set('Who won in 2014?');
-    chat.send();
-    expect(chat.preparing()).toBeTrue();
-    await new Promise((resolve) => setTimeout(resolve));
-    expect(hook).toHaveBeenCalledTimes(1);
-    expect(stream).not.toHaveBeenCalled();
-    expect(chat.draft()).toBe('Who won in 2014?');
-    expect(chat.preparing()).toBeFalse();
-
-    answer = true;
-    chat.send();
-    await new Promise((resolve) => setTimeout(resolve));
-    expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.calls.mostRecent().args[1]).toBe('Who won in 2014?');
-    expect(chat.draft()).toBe('');
+    el = fixture.nativeElement as HTMLElement;
   });
-});
 
-describe('skillStepLabel', () => {
-  it('labels the skill tools by what they do and nothing else', () => {
-    expect(skillStepLabel('skill')).toBe('Using skill');
-    expect(skillStepLabel('skill_read')).toBe('Reading skill file');
-    expect(skillStepLabel('skill_search')).toBe('Searching skills');
-    expect(skillStepLabel('get_rfp')).toBeNull();
+  it('shows chips and query rows on an answer with data, and a message without data as before', () => {
+    http.expectOne(evidenceUrl('s1', 3)).flush({ ok: true, message: answerAt('2026-01-01T00:00:03Z', 'Second count.') });
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-testid="query-row-0"]').length).toBe(2);
+    expect(el.querySelectorAll('[data-testid="figure-ref"]').length).toBeGreaterThan(0);
+    expect(el.textContent).not.toContain('Data used');
+    const views = el.querySelectorAll('app-answer-view');
+    expect(views[2].querySelector('[data-testid="query-row-0"]')).toBeNull();
+    expect(views[2].textContent).toContain('Hello there');
+  });
+
+  it('passes the user message before an answer as its question', () => {
+    http.expectOne(evidenceUrl('s1', 3)).flush({ ok: true, message: answerAt('2026-01-01T00:00:03Z', 'Second count.') });
+    const views = fixture.debugElement.queryAll(By.directive(AnswerView));
+    const questions = views.map((v) => (v.componentInstance as AnswerView).question());
+    expect(questions).toEqual(['How many matches?', 'And again?', 'Hi']);
+    const inspector = views.map((v) => (v.componentInstance as AnswerView).queryInspector());
+    expect(inspector).toEqual([true, true, false]);
+  });
+
+  it('opens the inspector from a row on that message and query; Escape closes it and gives the focus back', async () => {
+    http.expectOne(evidenceUrl('s1', 3)).flush({ ok: true, message: answerAt('2026-01-01T00:00:03Z', 'Second count.') });
+    fixture.detectChanges();
+    const row = el.querySelectorAll<HTMLElement>('[data-testid="query-row-0"]')[0];
+    row.focus();
+    row.click();
+    fixture.detectChanges();
+    // The inspector is a deferred block: it renders once its chunk has loaded.
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const sheet = el.querySelector('[data-testid="query-inspector-sheet"]')!;
+    expect(sheet.querySelector('[data-testid="query-inspector-title"]')?.textContent).toContain('First count.');
+    expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain('Query 1 of 1');
+
+    sheet
+      .querySelector('[data-testid="query-inspector"]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="query-inspector-sheet"]')).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(window.document.activeElement).toBe(row);
+    // The first message's evidence was built when its query was first opened.
+    http.expectOne(evidenceUrl('s1', 1)).flush({ ok: true, message: answerAt('2026-01-01T00:00:01Z', 'First count.') });
+    http.match(() => true);
+  });
+
+  it('builds the evidence of the last answer once on opening and of another when its query is first opened', () => {
+    http.expectOne(evidenceUrl('s1', 3)).flush({ ok: true, message: answerAt('2026-01-01T00:00:03Z', 'Second count.') });
+    fixture.detectChanges();
+    http.expectNone(evidenceUrl('s1', 1));
+    const rows = el.querySelectorAll<HTMLElement>('[data-testid="query-row-0"]');
+    rows[1].click();
+    fixture.detectChanges();
+    http.expectNone(evidenceUrl('s1', 3));
+    rows[0].click();
+    fixture.detectChanges();
+    const other = http.expectOne(evidenceUrl('s1', 1));
+    other.flush({ ok: true, message: answerAt('2026-01-01T00:00:01Z', 'First count.') });
+    fixture.detectChanges();
+    rows[0].click();
+    http.expectNone(evidenceUrl('s1', 1));
+    http.match(() => true);
+  });
+
+  it('shows the message a call answered in place, without changing the session input', () => {
+    const input = fixture.componentInstance.session();
+    const filled: ChatMessage = {
+      ...answerAt('2026-01-01T00:00:03Z', 'Second count.'),
+      evidence: [{ index: 0, coverage: 'partial', datasourceKind: 'postgres' }],
+    };
+    http.expectOne(evidenceUrl('s1', 3)).flush({ ok: true, message: filled });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.messages()[3]).toBe(filled);
+    expect(input.messages[3].evidence?.[0].coverage).toBe('whole-table');
+    // The same session, refreshed: the update stays.
+    fixture.componentRef.setInput('session', { ...session() });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.messages()[3]).toBe(filled);
+    http.expectNone(evidenceUrl('s1', 3));
+  });
+
+  it('resets the open query and the prepared answers when the session id changes', () => {
+    http.expectOne(evidenceUrl('s1', 3)).flush({ ok: true, message: answerAt('2026-01-01T00:00:03Z', 'Second count.') });
+    fixture.detectChanges();
+    el.querySelectorAll<HTMLElement>('[data-testid="query-row-0"]')[1].click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="query-inspector-sheet"]')).not.toBeNull();
+
+    fixture.componentRef.setInput('session', session('s2'));
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="query-inspector-sheet"]')).toBeNull();
+    http.expectOne(evidenceUrl('s2', 3));
+    http.match(() => true);
+  });
+
+  it('stays silent when preparing fails', () => {
+    http
+      .expectOne(evidenceUrl('s1', 3))
+      .flush({ message: 'boom' }, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-testid="query-row-0"]').length).toBe(2);
+    http.match(() => true);
   });
 });
