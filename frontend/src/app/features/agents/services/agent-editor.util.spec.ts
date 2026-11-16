@@ -4,7 +4,6 @@ import {
   agentFormFromConfig,
   agentSaveInput,
   canSaveAgent,
-  datasetOptions,
   emptyAgentForm,
   hasExistingDataset,
   legacyInstructions,
@@ -190,27 +189,6 @@ describe('agent editor: Publish visibility (R57)', () => {
 });
 
 describe('agent editor: datasets', () => {
-  it('lists existing datasets, then the saved ones that are missing', () => {
-    expect(
-      datasetOptions(
-        ['World Cup Core', 'Claims'],
-        ['World Cup Core', 'Gone'],
-        ['World Cup Core', 'Gone'],
-      ),
-    ).toEqual([
-      { name: 'World Cup Core', missing: false, checked: true },
-      { name: 'Claims', missing: false, checked: false },
-      { name: 'Gone', missing: true, checked: true },
-    ]);
-  });
-
-  it('keeps an unticked missing dataset listed until a save drops it', () => {
-    expect(datasetOptions([], ['Gone'], [])).toEqual([
-      { name: 'Gone', missing: true, checked: false },
-    ]);
-    expect(datasetOptions([], [], [])).toEqual([]);
-  });
-
   it('a preview needs one dataset that exists', () => {
     expect(hasExistingDataset(['Gone'], ['World Cup Core'])).toBeFalse();
     expect(
