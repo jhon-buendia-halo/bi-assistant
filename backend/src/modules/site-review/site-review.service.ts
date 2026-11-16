@@ -26,6 +26,7 @@ import {
   type Capture,
   type DiscoveredPage,
   type DiscoveredSite,
+  type ContextShot,
   type GroupedSite,
   type ReviewMark,
   type ReviewShot,
@@ -87,6 +88,9 @@ const SIGN_IN_WINDOW_TTL_MS = 30 * 60 * 1000;
 const CAPTURE_CONCURRENCY = 2;
 /** The most elements the collector hands the rules per page. */
 const MAX_SNAPSHOT_ELEMENTS = 400;
+/** The band of page a finding's context image shows: its height and widest width. */
+const CONTEXT_HEIGHT = 720;
+const CONTEXT_MAX_WIDTH = 1920;
 /** The most nodes kept per axe violation. */
 const MAX_AXE_NODES = 10;
 /** The workspace folder of a run's screenshots, crops and report. */
@@ -463,7 +467,10 @@ export class SiteReviewService implements OnApplicationShutdown {
       `Checking ${targets.length} page${targets.length === 1 ? '' : 's'} on ${site.screens.map(screenLabel).join(' and ')}`,
     );
     const captures: Capture[] = [];
-    const raw: (RawFinding & { crop: string | null })[] = [];
+    const raw: (RawFinding & {
+      crop: string | null;
+      context: ContextShot | null;
+    })[] = [];
     // Phase 2: the representative of each template Iris reviews, on the
     // narrowest and the widest screen, gets its review shots.
     const reviewed = new Map(
@@ -641,6 +648,7 @@ export class SiteReviewService implements OnApplicationShutdown {
       screen: shot.screen,
       clean,
       marked,
+      clip,
       marks,
     };
   }
@@ -697,7 +705,10 @@ export class SiteReviewService implements OnApplicationShutdown {
     },
   ): Promise<{
     capture: Capture;
-    findings: (RawFinding & { crop: string | null })[];
+    findings: (RawFinding & {
+      crop: string | null;
+      context: ContextShot | null;
+    })[];
   }> {
     const consoleErrors: string[] = [];
     page.on('pageerror', (error) => consoleErrors.push(error.message));
@@ -764,7 +775,43 @@ export class SiteReviewService implements OnApplicationShutdown {
         width: Math.max(snapshot.scrollWidth, viewport.width),
         height: snapshot.scrollHeight,
       };
-      const withCrops: (RawFinding & { crop: string | null })[] = [];
+      const withCrops: (RawFinding & {
+        crop: string | null;
+        context: ContextShot | null;
+      })[] = [];
+      // A band of the page, so the report can frame the element in place.
+      const band = (rect: Rect | null): Rect => {
+        const width = Math.min(size.width, CONTEXT_MAX_WIDTH);
+        const height = Math.min(size.height, CONTEXT_HEIGHT);
+        const centre = rect ? rect.y + rect.height / 2 : 0;
+        const y = Math.max(
+          0,
+          Math.min(size.height - height, Math.round(centre - height / 2)),
+        );
+        return { x: 0, y, width, height: Math.max(1, height) };
+      };
+      let pageTop: ContextShot | null | undefined;
+      const takeContext = async (
+        rect: Rect | null,
+        path: string,
+      ): Promise<ContextShot | null> => {
+        const clip = band(rect);
+        try {
+          await writeWorkspaceFile(
+            options.sessionId,
+            path,
+            await page.screenshot({
+              fullPage: true,
+              clip,
+              type: 'jpeg',
+              quality: 55,
+            }),
+          );
+          return { image: path, clip };
+        } catch {
+          return null;
+        }
+      };
       for (const finding of findings) {
         // One crop per rule, group and element on a screen: the merge keeps it.
         const key = `${finding.rule}|${urlGroup(finding.url)}|${finding.selector ?? ''}`;
@@ -792,7 +839,19 @@ export class SiteReviewService implements OnApplicationShutdown {
             // The finding stays, without its crop.
           }
         }
-        withCrops.push({ ...finding, crop });
+        // The element's band when its crop was taken; a page-wide finding
+        // shows the top of its page (one image per page and screen).
+        let context: ContextShot | null = null;
+        if (crop && finding.rect) {
+          context = await takeContext(
+            finding.rect,
+            `${base}.${withCrops.length}.context.jpg`,
+          );
+        } else if (!finding.rect) {
+          pageTop ??= await takeContext(null, `${base}.top.jpg`);
+          context = pageTop;
+        }
+        withCrops.push({ ...finding, crop, context });
       }
       return { capture, findings: withCrops };
     } catch (error) {
@@ -800,7 +859,11 @@ export class SiteReviewService implements OnApplicationShutdown {
         error instanceof Error ? error.message.split('\n')[0] : String(error);
       return {
         capture,
-        findings: findings.map((finding) => ({ ...finding, crop: null })),
+        findings: findings.map((finding) => ({
+          ...finding,
+          crop: null,
+          context: null,
+        })),
       };
     }
   }

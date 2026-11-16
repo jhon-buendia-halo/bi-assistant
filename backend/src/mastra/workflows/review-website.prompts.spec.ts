@@ -33,6 +33,7 @@ const finding = (i: number, selector: string | null): Finding => ({
   pages: [],
   crop: null,
   source: 'measured',
+  context: null,
 });
 
 const TEMPLATE = {

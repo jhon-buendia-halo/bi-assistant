@@ -333,6 +333,7 @@ const FIXTURES: Record<string, ContractFixture> = {
                 pages: ['https://shop.example.com/items/12'],
                 crop: null,
                 source: 'measured',
+                context: null,
               },
             ],
             // The item template's page, marked for Iris.
@@ -343,6 +344,7 @@ const FIXTURES: Record<string, ContractFixture> = {
                 screen: 'mobile',
                 clean: 'site-review/review/mobile/items-12.clean.jpg',
                 marked: 'site-review/review/mobile/items-12.marked.jpg',
+                clip: { x: 0, y: 0, width: 390, height: 1688 },
                 marks: [
                   {
                     n: 1,

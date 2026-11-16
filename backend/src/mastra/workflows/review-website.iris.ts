@@ -148,6 +148,8 @@ export function irisFindings(
       selector: mark?.selector ?? null,
       rect: mark?.rect ?? null,
       crop: mark?.crop ?? null,
+      // Iris saw the top of the page: frame her element (or the page) there.
+      context: shot ? { image: shot.clean, clip: shot.clip } : null,
       measured: finding.observed,
       expected: finding.suggestion,
       helpUrl: null,

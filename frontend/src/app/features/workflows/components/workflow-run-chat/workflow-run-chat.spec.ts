@@ -672,6 +672,46 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(text('workflow-run-requirement')).toBe("None of this agent's datasets exist");
     });
 
+    it('folds a long input away while a finished run is shown, and unfolds it on demand (agents.md 5.19)', () => {
+      const FIELDS: WorkflowDetail['input'] = [
+        { name: 'url', label: 'Entry URL', type: 'text', required: true },
+        { name: 'maxPages', label: 'Max pages', type: 'number', required: false, default: 50 },
+        { name: 'mobile', label: 'Mobile (390 px)', type: 'boolean', required: false, default: true },
+        { name: 'laptop', label: 'Laptop (1440 px)', type: 'boolean', required: false, default: true },
+      ];
+      const REVIEW: WorkflowDetail = { ...ASSISTANT, id: 'review-website', name: 'Review a Website', input: FIELDS };
+      openAssistant(REVIEW);
+      // No run shown: the fields are there and nothing folds them.
+      expect(q('workflow-input-url')).not.toBeNull();
+      expect(q('workflow-run-input-toggle')).toBeNull();
+      const url = q('workflow-input-url') as HTMLInputElement;
+      url.value = 'https://shop.example.com/';
+      url.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      click('workflow-run');
+      const h = runs.last.handlers;
+      h.onRun!({ runId: 'run-1', workflowId: 'review-website' });
+      fixture.detectChanges();
+      // Running: the fields fold only once the run has ended.
+      expect(q('workflow-run-input-toggle')).toBeNull();
+      h.onDone!(
+        assistantRun({
+          workflowId: 'review-website',
+          workflowName: 'Review a Website',
+          input: { url: 'https://shop.example.com/' },
+        }),
+      );
+      fixture.detectChanges();
+      const toggle = q('workflow-run-input-toggle') as HTMLButtonElement;
+      expect(toggle.textContent?.trim()).toBe('Show input (4 fields)');
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(q('workflow-input-url')).toBeNull();
+      expect(q('workflow-run')).not.toBeNull();
+      click('workflow-run-input-toggle');
+      expect(q('workflow-input-url')).not.toBeNull();
+      expect((q('workflow-run-input-toggle') as HTMLButtonElement).textContent?.trim()).toBe('Hide input');
+    });
+
     it("shows a code step's own progress live, newest line first, and nothing once the run ends (agents.md 5.19)", () => {
       const REVIEW: WorkflowDetail = {
         ...ASSISTANT,

@@ -1372,12 +1372,12 @@ specs/capabilities/visuals/spec.md:196-204  R39 Each version's files SHALL live 
 specs/capabilities/visuals/spec.md:206-227  ## Edge cases and errors
 specs/capabilities/visuals/spec.md:229-242  ## Contracts
 specs/capabilities/visuals/spec.md:244-271  ## UI
-specs/capabilities/visuals/spec.md:273-430  ## Flows
+specs/capabilities/visuals/spec.md:273-431  ## Flows
 specs/capabilities/visuals/spec.md:275-277  ### Covered: Chat and visuals
-specs/capabilities/visuals/spec.md:279-288  ### Visual actions on a run
-specs/capabilities/visuals/spec.md:290-406  ### Feature: Visual tailoring
-specs/capabilities/visuals/spec.md:408-430  ### Feature: Skills the designer is given
-specs/capabilities/visuals/spec.md:432-444  ## Acceptance
+specs/capabilities/visuals/spec.md:279-289  ### Visual actions on a run
+specs/capabilities/visuals/spec.md:291-407  ### Feature: Visual tailoring
+specs/capabilities/visuals/spec.md:409-431  ### Feature: Skills the designer is given
+specs/capabilities/visuals/spec.md:433-445  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-96  ## Rules

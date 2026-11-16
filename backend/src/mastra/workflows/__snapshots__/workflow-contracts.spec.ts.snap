@@ -7637,7 +7637,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) review-website's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "9f262ab88c4c",
+  "contractHash": "065a42e928f6",
   "edges": [
     {
       "from": "start",
@@ -8891,6 +8891,50 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "items": {
               "additionalProperties": false,
               "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "clip": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
                 "crop": {
                   "type": [
                     "string",
@@ -9003,6 +9047,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "group",
                 "pages",
                 "crop",
+                "context",
                 "source",
               ],
               "type": "object",
@@ -9094,6 +9139,30 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "clean": {
                   "type": "string",
                 },
+                "clip": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
                 "marked": {
                   "type": "string",
                 },
@@ -9178,6 +9247,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "screen",
                 "clean",
                 "marked",
+                "clip",
                 "marks",
               ],
               "type": "object",
@@ -9358,6 +9428,48 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "findings": {
             "items": {
               "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "clip": {
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
                 "crop": {
                   "type": [
                     "string",
@@ -9469,6 +9581,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "group",
                 "pages",
                 "crop",
+                "context",
                 "source",
               ],
               "type": "object",
@@ -9558,6 +9671,29 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "clean": {
                   "type": "string",
                 },
+                "clip": {
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
                 "marked": {
                   "type": "string",
                 },
@@ -9640,6 +9776,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "screen",
                 "clean",
                 "marked",
+                "clip",
                 "marks",
               ],
               "type": "object",
@@ -9819,6 +9956,50 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "items": {
               "additionalProperties": false,
               "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "clip": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
                 "crop": {
                   "type": [
                     "string",
@@ -9931,6 +10112,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "group",
                 "pages",
                 "crop",
+                "context",
                 "source",
               ],
               "type": "object",
@@ -10022,6 +10204,30 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "clean": {
                   "type": "string",
                 },
+                "clip": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
                 "marked": {
                   "type": "string",
                 },
@@ -10106,6 +10312,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "screen",
                 "clean",
                 "marked",
+                "clip",
                 "marks",
               ],
               "type": "object",
@@ -10311,6 +10518,48 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "findings": {
             "items": {
               "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "properties": {
+                        "clip": {
+                          "properties": {
+                            "height": {
+                              "type": "number",
+                            },
+                            "width": {
+                              "type": "number",
+                            },
+                            "x": {
+                              "type": "number",
+                            },
+                            "y": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "x",
+                            "y",
+                            "width",
+                            "height",
+                          ],
+                          "type": "object",
+                        },
+                        "image": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "image",
+                        "clip",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "type": "null",
+                    },
+                  ],
+                },
                 "crop": {
                   "type": [
                     "string",
@@ -10422,6 +10671,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "group",
                 "pages",
                 "crop",
+                "context",
                 "source",
               ],
               "type": "object",
@@ -10511,6 +10761,29 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "clean": {
                   "type": "string",
                 },
+                "clip": {
+                  "properties": {
+                    "height": {
+                      "type": "number",
+                    },
+                    "width": {
+                      "type": "number",
+                    },
+                    "x": {
+                      "type": "number",
+                    },
+                    "y": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                  ],
+                  "type": "object",
+                },
                 "marked": {
                   "type": "string",
                 },
@@ -10593,6 +10866,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                 "screen",
                 "clean",
                 "marked",
+                "clip",
                 "marks",
               ],
               "type": "object",

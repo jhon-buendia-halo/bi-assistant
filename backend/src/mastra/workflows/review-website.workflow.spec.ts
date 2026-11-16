@@ -106,6 +106,7 @@ const FINDING: Finding = {
   pages: ['https://shop.example.com/'],
   crop: 'site-review/mobile/home.0.crop.jpg',
   source: 'measured',
+  context: null,
 };
 
 type MockedRuntime = { [K in keyof ReviewWebsiteRuntime]: jest.Mock };
@@ -429,6 +430,7 @@ describe('review-website workflow (agents.md 5.19)', () => {
               screen: 'mobile',
               clean: `site-review/review/mobile/${template.slice(1)}.clean.jpg`,
               marked: `site-review/review/mobile/${template.slice(1)}.marked.jpg`,
+              clip: { x: 0, y: 0, width: 390, height: 1688 },
               marks: [
                 {
                   n: 1,
@@ -500,7 +502,9 @@ describe('review-website workflow (agents.md 5.19)', () => {
         '/section-1',
         '/section-2',
       ]);
-      expect(saved.answer).toContain('Iris reviewed 3 page templates');
+      expect(saved.answer).toContain(
+        'Iris reviewed 3 templates and found 3 visual issues.',
+      );
       expect(given.progress).toHaveBeenCalledWith(
         expect.stringContaining('Reviewed 3 of 3 templates'),
       );

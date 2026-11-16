@@ -342,6 +342,7 @@ const saveReportStep = createStep({
       const site = params.inputData;
       const paths = [
         ...site.findings.map((finding) => finding.crop),
+        ...site.findings.map((finding) => finding.context?.image ?? null),
         ...site.captures.map((capture) => capture.thumbnail),
       ].filter((path): path is string => typeof path === 'string');
       const images = await runtime.loadReportImages([...new Set(paths)]);

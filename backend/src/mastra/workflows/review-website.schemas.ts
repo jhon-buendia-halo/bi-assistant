@@ -170,6 +170,13 @@ export const rawFindingSchema = z.object({
 });
 export type RawFinding = z.output<typeof rawFindingSchema>;
 
+/** An image of part of a page and the area of the page it shows. */
+export const contextShotSchema = z.object({
+  image: z.string(),
+  clip: rectSchema,
+});
+export type ContextShot = z.output<typeof contextShotSchema>;
+
 /** Who found a finding: a measured rule (phase 1) or Iris's vision review (phase 2). */
 export const FINDING_SOURCES = ['measured', 'iris'] as const;
 export type FindingSource = (typeof FINDING_SOURCES)[number];
@@ -184,6 +191,12 @@ export const findingSchema = rawFindingSchema.omit({ url: true }).extend({
   pages: z.array(z.string()),
   /** The crop's path in the run's workspace, else null. */
   crop: z.string().nullable(),
+  /**
+   * A band of the page around the element, so the report can frame the
+   * element where it sits: the image in the run's workspace and the area of
+   * the page it shows (document coordinates); null when none was taken.
+   */
+  context: contextShotSchema.nullable(),
   /** A measured rule, else Iris's review (rule `visual:<category>`). */
   source: z.enum(FINDING_SOURCES),
 });
@@ -242,6 +255,8 @@ export const reviewShotSchema = z.object({
   clean: z.string(),
   /** The same, with the numbered marks drawn on it. */
   marked: z.string(),
+  /** The area of the page both images show (document coordinates). */
+  clip: rectSchema,
   marks: z.array(reviewMarkSchema),
 });
 export type ReviewShot = z.output<typeof reviewShotSchema>;

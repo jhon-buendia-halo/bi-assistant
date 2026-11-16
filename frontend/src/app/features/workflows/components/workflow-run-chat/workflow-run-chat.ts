@@ -10,6 +10,8 @@ import {
 } from '@angular/core';
 import {
   Brain,
+  ChevronDown,
+  ChevronRight,
   CircleCheck,
   Database,
   Loader2,
@@ -174,6 +176,8 @@ const FORM_CONTROLS =
 })
 export class WorkflowRunChat {
   protected readonly Brain = Brain;
+  protected readonly ChevronDown = ChevronDown;
+  protected readonly ChevronRight = ChevronRight;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Database = Database;
   protected readonly Loader2 = Loader2;
@@ -420,6 +424,23 @@ export class WorkflowRunChat {
       recent: lines.slice(-6, -1).reverse(),
     };
   });
+
+  /**
+   * The input form folds away while a run is shown that is neither running
+   * nor waiting (a workflow with many fields, Review a Website, would hide
+   * the result); `inputOpen` unfolds it. Running again starts unfolded.
+   */
+  protected readonly inputOpen = signal(false);
+  protected readonly inputFoldable = computed(
+    () =>
+      this.designer.runResult() !== null &&
+      !this.designer.running() &&
+      this.designer.waitingFor() === null &&
+      this.composerFields().length > 3,
+  );
+  protected readonly inputFolded = computed(
+    () => this.inputFoldable() && !this.inputOpen(),
+  );
 
   /** Under a stored answer that asks nothing: the composer follows up on it. */
   protected readonly followUpMode = computed(

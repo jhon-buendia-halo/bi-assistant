@@ -204,6 +204,7 @@ function measuredFinding(
     pages: EVAL_TEMPLATE.pages,
     crop: null,
     source: 'measured',
+    context: null,
   };
 }
 

@@ -327,11 +327,11 @@ Feature: Review a Website
     When I open "Review a Website" from Workflows, enter the site's URL, untick "Visual review with Iris" and click Execute
     Then I see the running step and its progress, page by page
     And the run succeeds with no model call
-    And the answer names the covered "Buy now" button as critical, then the broken image on the 2 pages of "/items/:id"
-    And the answer's coverage says 1 link was not followed and 1 page failed to load
+    And the short answer puts the covered "Buy now" button first, as critical
+    And the answer's coverage says 1 link was skipped and 1 page failed
     And the sign-out link was never opened
-    When I open the report
-    Then I see the page groups with their severities, and picking "/items/:id" shows "Image does not load" found on 2 pages with its crop
+    When I open the report in full screen
+    Then the problems come first, worst first; "Tap target too small" groups its elements, each framed in its page, with Previous and Next
 
   @story-1.27.2
   Scenario: Iris reviews one page per template and her findings join the report

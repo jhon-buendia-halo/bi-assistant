@@ -1,9 +1,11 @@
 import {
   discoveredSiteSchema,
+  findingSchema,
   reviewedSiteSchema,
   type ReviewedSite,
 } from './review-website.schemas';
 import {
+  problemGroups,
   renderReportBundle,
   reviewAnswer,
   sessionLostAnswer,
@@ -28,6 +30,21 @@ function page(
     group,
     fingerprint: 'abc123',
     error: null,
+    ...extra,
+  };
+}
+
+/** A measured finding on the mobile screen of `/claims/:id`; override what differs. */
+function finding(extra: Record<string, unknown>) {
+  return {
+    screen: 'mobile',
+    selector: null,
+    rect: null,
+    helpUrl: null,
+    group: '/claims/:id',
+    crop: null,
+    context: null,
+    source: 'measured',
     ...extra,
   };
 }
@@ -103,86 +120,108 @@ function fixture(): ReviewedSite {
       },
     ],
     findings: [
-      {
+      finding({
         id: 'covered-element:mobile:/claims/:id:button#submit',
         rule: 'covered-element',
         severity: 'critical',
         title: 'Submit button covered by the cookie banner',
-        screen: 'mobile',
         selector: 'button#submit',
         measured: 'Element is 100% under div.cookie-bar',
         expected: 'Every control can be reached',
-        rect: null,
-        helpUrl: null,
-        group: '/claims/:id',
+        rect: { x: 100, y: 500, width: 200, height: 48 },
         pages: [`${BASE}/claims/1`, `${BASE}/claims/2`, `${BASE}/claims/3`],
         crop: 'crops/submit.jpg',
-        source: 'measured',
-      },
-      {
+        context: {
+          image: 'context/submit.jpg',
+          clip: { x: 0, y: 300, width: 390, height: 600 },
+        },
+      }),
+      finding({
+        id: 'axe:color-contrast:mobile:/claims/:id:p.lead',
+        rule: 'axe:color-contrast',
+        severity: 'major',
+        title: 'Elements must meet minimum color contrast ratios',
+        selector: 'p.lead',
+        measured: 'Contrast ratio 2.1:1',
+        expected: 'At least 4.5:1',
+        helpUrl: 'https://dequeuniversity.com/rules/axe/color-contrast',
+        pages: [`${BASE}/claims/1`, `${BASE}/claims/2`],
+        crop: 'crops/contrast.jpg',
+      }),
+      finding({
+        id: 'axe:color-contrast:laptop:/claims/:id:.nav a',
+        rule: 'axe:color-contrast',
+        severity: 'major',
+        title: 'Elements must meet minimum color contrast ratios',
+        screen: 'laptop',
+        selector: '.nav a',
+        measured: 'Contrast ratio 3.0:1',
+        expected: 'At least 4.5:1',
+        rect: { x: 40, y: 20, width: 80, height: 20 },
+        pages: [`${BASE}/claims/1`],
+        context: {
+          image: 'context/nav.jpg',
+          clip: { x: 0, y: 0, width: 1440, height: 400 },
+        },
+      }),
+      finding({
+        id: 'axe:color-contrast:laptop:/claims/new:label.hint',
+        rule: 'axe:color-contrast',
+        severity: 'major',
+        title: 'Elements must meet minimum color contrast ratios',
+        screen: 'laptop',
+        group: '/claims/new',
+        selector: 'label.hint',
+        measured: 'Contrast ratio 2.8:1',
+        expected: 'At least 4.5:1',
+        pages: [`${BASE}/claims/new`],
+        crop: 'crops/missing.jpg',
+      }),
+      finding({
         id: 'visual:hierarchy:mobile:/claims/:id:3',
         rule: 'visual:hierarchy',
         severity: 'major',
         title: 'Two competing headlines',
-        screen: 'mobile',
         selector: 'h1.hero',
         measured: 'The banner and the page title have the same weight',
         expected: 'Make the page title larger than the banner',
-        rect: null,
-        helpUrl: null,
-        group: '/claims/:id',
         pages: [`${BASE}/claims/1`],
-        crop: null,
         source: 'iris',
-      },
-      {
+      }),
+      finding({
         id: 'overflow-x:mobile:/claims/:id:',
         rule: 'overflow-x',
         severity: 'major',
         title: 'Page scrolls sideways',
-        screen: 'mobile',
-        selector: null,
         measured: 'Content is 512 px wide in a 390 px screen',
         expected: 'No sideways scrolling (WCAG 1.4.10)',
-        rect: null,
         helpUrl: 'https://www.w3.org/WAI/WCAG22/Understanding/reflow.html',
-        group: '/claims/:id',
         pages: [`${BASE}/claims/1`, `${BASE}/claims/2`],
         crop: 'crops/overflow.jpg',
-        source: 'measured',
-      },
-      {
+      }),
+      finding({
         id: 'tap-target:laptop:/claims/new:a.x',
         rule: 'tap-target',
         severity: 'major',
         title: 'Tap target too small',
         screen: 'laptop',
+        group: '/claims/new',
         selector: 'a.x',
         measured: '20 x 20 px',
         expected: 'At least 24 x 24 px',
-        rect: null,
-        helpUrl: null,
-        group: '/claims/new',
         pages: [`${BASE}/claims/new`],
-        crop: 'crops/missing.jpg',
-        source: 'measured',
-      },
-      {
+      }),
+      finding({
         id: 'placeholder-text:laptop:/:',
         rule: 'placeholder-text',
         severity: 'minor',
         title: 'Placeholder text left on the page',
         screen: 'laptop',
-        selector: null,
+        group: '/',
         measured: 'Found "Lorem ipsum"',
         expected: 'No placeholder text',
-        rect: null,
-        helpUrl: null,
-        group: '/',
         pages: [`${BASE}/`],
-        crop: null,
-        source: 'measured',
-      },
+      }),
     ],
   });
 }
@@ -191,7 +230,10 @@ const IMAGES = {
   'crops/submit.jpg': 'data:image/jpeg;base64,AAAA',
   'crops/overflow.jpg': 'data:image/jpeg;base64,BBBB',
   'thumbs/home-mobile.jpg': 'data:image/jpeg;base64,CCCC',
+  'context/submit.jpg': 'data:image/jpeg;base64,DDDD',
+  'context/nav.jpg': 'data:image/jpeg;base64,EEEE',
   'crops/unused.jpg': 'data:image/jpeg;base64,UNUSED',
+  'context/unused.jpg': 'data:image/jpeg;base64,UNUSEDCTX',
 };
 
 describe('severityLine', () => {
@@ -209,6 +251,79 @@ describe('severityLine', () => {
   });
 });
 
+describe('problemGroups', () => {
+  const groups = problemGroups(fixture().findings);
+
+  it('counts one element per selector, whatever its template or screen (a site-wide header link is one element)', () => {
+    const shared = (group: string, screen: string, page: string) =>
+      findingSchema.parse({
+        ...finding({ group, screen, selector: 'header a.logo' }),
+        id: `f-${group}-${screen}`,
+        rule: 'axe:link-name',
+        severity: 'major',
+        title: 'Links must have discernible text',
+        measured: 'No text',
+        expected: 'Links have text',
+        pages: [page],
+      });
+    const [group] = problemGroups([
+      shared('/', 'mobile', `${BASE}/`),
+      shared('/', 'laptop', `${BASE}/`),
+      shared('/about', 'mobile', `${BASE}/about`),
+    ]);
+    expect(group.elementCount).toBe(1);
+    expect(group.pageCount).toBe(2);
+    expect(group.templateCount).toBe(2);
+  });
+
+  it('groups a measured rule across elements, templates and screens', () => {
+    const contrast = groups.find(
+      (g) => g.key === 'measured|axe:color-contrast',
+    );
+    expect(contrast).toMatchObject({
+      title: 'Elements must meet minimum color contrast ratios',
+      severity: 'major',
+      source: 'measured',
+      elementCount: 3,
+      pageCount: 3,
+      templateCount: 2,
+    });
+    expect(contrast?.findings).toHaveLength(3);
+  });
+
+  it('keeps each Iris finding as its own problem', () => {
+    const iris = groups.filter((g) => g.source === 'iris');
+    expect(iris).toHaveLength(1);
+    expect(iris[0].key).toBe('iris|visual:hierarchy|Two competing headlines');
+    expect(iris[0]).toMatchObject({ elementCount: 1, pageCount: 1 });
+  });
+
+  it('sorts by severity, then element count, then title', () => {
+    expect(groups.map((g) => g.title)).toEqual([
+      'Submit button covered by the cookie banner',
+      'Elements must meet minimum color contrast ratios',
+      'Page scrolls sideways',
+      'Tap target too small',
+      'Two competing headlines',
+      'Placeholder text left on the page',
+    ]);
+  });
+
+  it('takes the worst severity of the findings and the first title', () => {
+    const [a, b] = fixture().findings;
+    const merged = problemGroups([
+      { ...a, rule: 'r', title: 'First', severity: 'minor' },
+      { ...b, rule: 'r', title: 'Second', severity: 'critical' },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ title: 'First', severity: 'critical' });
+  });
+
+  it('is empty for no findings', () => {
+    expect(problemGroups([])).toEqual([]);
+  });
+});
+
 describe('renderReportBundle', () => {
   const site = fixture();
   const bundle = renderReportBundle({
@@ -220,7 +335,7 @@ describe('renderReportBundle', () => {
   it('titles the report and describes it in one sentence', () => {
     expect(bundle.title).toBe('Site review: example.com');
     expect(bundle.description).toBe(
-      'Reviewed 5 pages on Mobile and Laptop: 1 critical, 3 major and 1 minor.',
+      'Reviewed 5 pages on Mobile and Laptop: 6 problems: 1 critical, 4 major and 1 minor.',
     );
   });
 
@@ -234,12 +349,35 @@ describe('renderReportBundle', () => {
     expect(bundle.css).toContain('--qti-focus');
   });
 
+  it('is issue-first: tabs, a problem list and an occurrence viewer', () => {
+    const js = bundle.javascript;
+    expect(js).toContain("role: 'tablist'");
+    expect(js).toContain("role: 'tab'");
+    expect(js).toContain("'Problems'");
+    expect(js).toContain("'Pages & coverage'");
+    expect(js).toContain("'sr-plist'");
+    expect(js).toContain("(state.occ + 1) + ' of ' + n");
+    // The report takes the whole frame (the visual document's column gives way).
+    expect(js).toContain('function useWholeFrame()');
+    expect(js).toContain("text: 'Previous'");
+    expect(js).toContain("text: 'Next'");
+    expect(js).toContain('No problems match these filters');
+    expect(js).toContain('Clear filters');
+    expect(js).toContain("'All page templates'");
+    expect(js).toContain("type: 'search'");
+    expect(js).toContain("'aria-pressed'");
+    expect(js).toContain('function problemGroups(');
+    expect(js).toContain('ArrowLeft');
+    expect(js).not.toContain('URL groups');
+    expect(bundle.css).toContain('.sr-mark');
+    expect(bundle.css).toContain('@container');
+  });
+
   it('names the templates, the sources and Iris in the data and the runtime', () => {
     expect(bundle.javascript).toContain("text: 'Page templates'");
-    expect(bundle.javascript).not.toContain('URL groups');
     expect(bundle.javascript).toContain("'Measured'");
     expect(bundle.javascript).toContain("'Iris'");
-    expect(bundle.javascript).toContain("'Observed: '");
+    expect(bundle.javascript).toContain("'Observed'");
     expect(bundle.javascript).toContain("'Suggestion: '");
     expect(bundle.javascript).toContain('"source":"iris"');
     expect(bundle.javascript).toContain('"source":"measured"');
@@ -269,7 +407,29 @@ describe('renderReportBundle', () => {
     expect(bundle.javascript).toContain('AAAA');
     expect(bundle.javascript).toContain('BBBB');
     expect(bundle.javascript).toContain('CCCC');
+    expect(bundle.javascript).toContain('DDDD');
+    expect(bundle.javascript).toContain('EEEE');
     expect(bundle.javascript).not.toContain('UNUSED');
+  });
+
+  it('embeds only data:image URIs', () => {
+    const hostile = renderReportBundle({
+      site,
+      images: {
+        'context/submit.jpg': 'https://evil.example/x.jpg',
+        'crops/submit.jpg': 'javascript:alert(1)',
+      },
+      generatedAt: 'now',
+    });
+    expect(hostile.javascript).not.toContain('evil.example');
+    expect(hostile.javascript).not.toContain('javascript:alert');
+  });
+
+  it('frames the element from its rect inside the context clip', () => {
+    expect(bundle.javascript).toContain('(r.x - c.x) / c.width');
+    expect(bundle.javascript).toContain(
+      '"clip":{"x":0,"y":300,"width":390,"height":600}',
+    );
   });
 
   it('survives a missing image', () => {
@@ -282,18 +442,57 @@ describe('reviewAnswer', () => {
   it('summarises the findings and the coverage', () => {
     expect(reviewAnswer(fixture())).toBe(
       [
-        '**example.com**: 5 pages on Mobile and Laptop — 1 critical, 3 major and 1 minor.',
+        '**example.com**: 5 pages, 3 page templates on Mobile and Laptop — 6 problems: 1 critical, 4 major and 1 minor.',
         '',
-        'Iris reviewed 1 page template and found 1 visual issue.',
+        'Iris reviewed 1 template and found 1 visual issue.',
         '',
         'Fix first:',
-        '- **Submit button covered by the cookie banner** (critical, Mobile) on 3 pages of `/claims/:id`: Element is 100% under div.cookie-bar',
-        '- **Two competing headlines** (major, Mobile) (Iris) on 1 page of `/claims/:id`: The banner and the page title have the same weight',
-        '- **Page scrolls sideways** (major, Mobile) on 2 pages of `/claims/:id`: Content is 512 px wide in a 390 px screen',
+        '- **Submit button covered by the cookie banner** — 1 element on 3 pages (critical, Measured)',
+        '- **Elements must meet minimum color contrast ratios** — 3 elements on 3 pages (major, Measured)',
+        '- **Page scrolls sideways** — on 2 pages (major, Measured)',
         '',
-        'Coverage: 5 pages reached out of a limit of 5; the crawl stopped at the page limit, so the site may have more. 3 page templates. 1 link was not followed because of the exclusion rule. 1 page failed to load. 1 capture failed.',
+        'Coverage: 5 of 5 pages; stopped at the limit; 1 link skipped; 1 page failed.',
         '',
-        'The full report is the visual above: every finding shows the element, what was measured and a crop of the screenshot.',
+        'Open the report in full screen to see each element framed in its page.',
+      ].join('\n'),
+    );
+  });
+
+  it('names an Iris problem and carries no measured text or selectors', () => {
+    const onlyIris = reviewedSiteSchema.parse({
+      ...fixture(),
+      findings: fixture().findings.filter((f) => f.source === 'iris'),
+    });
+    const answer = reviewAnswer(onlyIris);
+    expect(answer).toContain(
+      '- **Two competing headlines** — 1 element on 1 page (major, Iris)',
+    );
+    expect(answer).not.toContain('h1.hero');
+    expect(answer).not.toContain('same weight');
+  });
+
+  it('pluralises one page and one template', () => {
+    const single = reviewedSiteSchema.parse({
+      ...fixture(),
+      maxPages: 1,
+      pages: [page('/', '/')],
+      captures: [],
+      findings: [],
+      skippedLinks: [],
+      capped: false,
+      screens: ['mobile'],
+      visualReview: false,
+      reviewTemplates: [],
+      reviewed: [],
+      templates: [{ id: '/', pages: [`${BASE}/`], representative: `${BASE}/` }],
+    });
+    expect(reviewAnswer(single)).toBe(
+      [
+        '**example.com**: 1 page, 1 page template on Mobile — no problems found.',
+        '',
+        'Coverage: 1 of 1 page.',
+        '',
+        'Open the report in full screen to see each element framed in its page.',
       ].join('\n'),
     );
   });
@@ -321,11 +520,11 @@ describe('reviewAnswer', () => {
     });
     expect(reviewAnswer(clean)).toBe(
       [
-        '**example.com**: 2 pages on Mobile, Tablet and Laptop — no measured issues.',
+        '**example.com**: 2 pages, 2 page templates on Mobile, Tablet and Laptop — no problems found.',
         '',
-        'Coverage: 2 pages reached out of a limit of 5. 2 page templates.',
+        'Coverage: 2 of 5 pages.',
         '',
-        'The full report is the visual above: every finding shows the element, what was measured and a crop of the screenshot.',
+        'Open the report in full screen to see each element framed in its page.',
       ].join('\n'),
     );
   });

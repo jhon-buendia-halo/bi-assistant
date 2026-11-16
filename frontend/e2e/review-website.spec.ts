@@ -93,29 +93,29 @@ test.describe('Feature: Review a Website', () => {
             timeout: 150_000,
           });
           await expect(answer).toContainText(`127.0.0.1:${SITE_PORT}`);
-          await expect(answer).toContainText('6 pages on Mobile and Laptop');
-        },
-      );
-      await scenarioStep(
-        page,
-        'And the answer names the covered "Buy now" button as critical, then the broken image on the 2 pages of "/items/:id"',
-        async () => {
           await expect(answer).toContainText(
-            'Button covered by a fixed element (critical, Mobile) on 1 page of /about',
-          );
-          await expect(answer).toContainText(
-            'Image does not load (major, Mobile) on 2 pages of /items/:id',
+            /6 pages, 5 page templates on Mobile and Laptop/,
           );
         },
       );
       await scenarioStep(
         page,
-        "And the answer's coverage says 1 link was not followed and 1 page failed to load",
+        'And the short answer puts the covered "Buy now" button first, as critical',
+        async () => {
+          await expect(answer).toContainText('Fix first:');
+          await expect(answer.locator('li').first()).toContainText(
+            /Button covered by a fixed element — \d+ elements? on 1 page \(critical, Measured\)/,
+          );
+          await expect(answer.locator('li')).toHaveCount(3);
+        },
+      );
+      await scenarioStep(
+        page,
+        "And the answer's coverage says 1 link was skipped and 1 page failed",
         async () => {
           await expect(answer).toContainText(
-            '1 link was not followed because of the exclusion rule',
+            'Coverage: 6 of 20 pages; 1 link skipped; 1 page failed.',
           );
-          await expect(answer).toContainText('1 page failed to load');
         },
       );
       await scenarioStep(
@@ -129,29 +129,40 @@ test.describe('Feature: Review a Website', () => {
           expect(visits).toContain('/items/2');
         },
       );
-      await scenarioStep(page, 'When I open the report', async () => {
-        await page.getByTestId('workflow-run-dock-maximize').click();
-        await page.getByRole('button', { name: /^View/ }).first().click();
-      });
       await scenarioStep(
         page,
-        'Then I see the page groups with their severities, and picking "/items/:id" shows "Image does not load" found on 2 pages with its crop',
+        'When I open the report in full screen',
+        async () => {
+          await page.getByRole('button', { name: /^View/ }).first().click();
+          await page.getByTestId('run-visual-full-screen').click();
+          await expect(page.getByTestId('run-visual')).toHaveAttribute(
+            'data-full-screen',
+            'true',
+          );
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then the problems come first, worst first; "Tap target too small" groups its elements, each framed in its page, with Previous and Next',
         async () => {
           const report = page.frameLocator('iframe').first();
+          const problems = report.getByRole('list', { name: 'Problems' });
+          await expect(problems.getByRole('button').first()).toContainText(
+            'Button covered by a fixed element',
+          );
+          await problems
+            .getByRole('button', { name: /Tap target too small/ })
+            .click();
+          await expect(report.getByText(/^1 of [2-9]$/)).toBeVisible();
+          // The element's page band, framed.
           await expect(
-            report.getByRole('button', { name: /\/about/ }),
-          ).toContainText('1 critical');
-          await report.getByRole('button', { name: /\/items\/:id/ }).click();
-          const card = report
-            .getByRole('listitem')
-            .filter({ hasText: 'Image does not load' })
-            .filter({ hasText: 'Found on 2 pages' });
-          await expect(card).toHaveCount(1);
+            report.locator('img[src^="data:image/jpeg"]').first(),
+          ).toBeVisible();
+          await report.getByRole('button', { name: 'Next element' }).click();
+          await expect(report.getByText(/^2 of [2-9]$/)).toBeVisible();
           await expect(
-            card.getByRole('img', {
-              name: 'Crop of the screenshot for: Image does not load',
-            }),
-          ).toHaveAttribute('src', /^data:image\/jpeg;base64,/);
+            report.getByRole('button', { name: 'Previous element' }),
+          ).toBeEnabled();
         },
       );
     },
@@ -209,7 +220,7 @@ test.describe('Feature: Review a Website', () => {
               timeout: 150_000,
             });
             await expect(answer).toContainText(
-              'Iris reviewed 4 page templates and found 4 visual issues.',
+              'Iris reviewed 4 templates and found 4 visual issues.',
             );
             expect(reviewed).toHaveLength(4);
             const parts = reviewed[0].messages.flatMap((message) =>
@@ -226,16 +237,30 @@ test.describe('Feature: Review a Website', () => {
           page,
           'And the report tags her finding "Iris", with what she observed and her suggestion',
           async () => {
-            await page.getByTestId('workflow-run-dock-maximize').click();
             await page.getByRole('button', { name: /^View/ }).first().click();
+            await page.getByTestId('run-visual-full-screen').click();
             const report = page.frameLocator('iframe').first();
-            const card = report
-              .getByRole('listitem')
-              .filter({ hasText: 'Navigation links look unlike the buttons' })
-              .first();
-            await expect(card).toContainText('Iris');
-            await expect(card).toContainText('Observed:');
-            await expect(card).toContainText('Suggestion:');
+            await report
+              .getByRole('list', { name: 'Problems' })
+              .getByRole('button', {
+                name: /Navigation links look unlike the buttons/,
+              })
+              .first()
+              .click();
+            // Her finding: tagged Iris, what she observed and her suggestion.
+            await expect(
+              report.getByText('Observed', { exact: true }).first(),
+            ).toBeVisible();
+            await expect(
+              report
+                .getByText(
+                  'The links are plain blue text while buttons are dark.',
+                )
+                .first(),
+            ).toBeVisible();
+            await expect(
+              report.getByText(/^Suggestion:/).first(),
+            ).toBeVisible();
           },
         );
       } finally {

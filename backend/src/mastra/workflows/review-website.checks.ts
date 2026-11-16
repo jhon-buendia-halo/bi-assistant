@@ -14,6 +14,7 @@ import {
   type SiteScreenName,
   type DomSnapshot,
   type SnapElement,
+  type ContextShot,
 } from './review-website.schemas';
 
 const SEVERITY_ORDER: Record<FindingSeverity, number> = {
@@ -284,11 +285,16 @@ function fnv1a(text: string): string {
  * pages of the group into one, worst first.
  */
 export function mergeFindings(
-  raw: Array<RawFinding & { crop: string | null }>,
+  raw: Array<
+    RawFinding & { crop: string | null; context?: ContextShot | null }
+  >,
   /** A page's template (Group templates); its URL pattern by default. */
   groupOf: (url: string) => string = urlGroup,
 ): Finding[] {
-  const groups = new Map<string, Array<RawFinding & { crop: string | null }>>();
+  const groups = new Map<
+    string,
+    Array<RawFinding & { crop: string | null; context?: ContextShot | null }>
+  >();
   for (const finding of raw) {
     const group = groupOf(finding.url);
     const key = `${finding.rule}|${finding.screen}|${group}|${finding.selector ?? ''}`;
@@ -323,6 +329,7 @@ export function mergeFindings(
       group: groupOf(rep.url),
       pages,
       crop: rep.crop,
+      context: rep.context ?? null,
       source: 'measured',
     });
   }

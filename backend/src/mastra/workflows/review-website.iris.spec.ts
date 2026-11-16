@@ -161,6 +161,7 @@ const SHOTS: ReviewShot[] = [
     screen: 'mobile',
     clean: 'a.png',
     marked: 'b.png',
+    clip: { x: 0, y: 0, width: 390, height: 1688 },
     marks: [MARK],
   },
   {
@@ -169,6 +170,7 @@ const SHOTS: ReviewShot[] = [
     screen: 'desktop',
     clean: 'c.png',
     marked: 'd.png',
+    clip: { x: 0, y: 0, width: 390, height: 1688 },
     marks: [{ ...MARK, selector: '#other', crop: null }],
   },
 ];
@@ -216,6 +218,11 @@ describe('irisFindings', () => {
       expected: 'Add a gap.',
       helpUrl: null,
       source: 'iris',
+      // Framed on the clean shot Iris saw.
+      context: {
+        image: 'a.png',
+        clip: { x: 0, y: 0, width: 390, height: 1688 },
+      },
     });
     expect(finding.id).toMatch(/^f-[0-9a-f]{8}$/);
   });
