@@ -298,9 +298,12 @@ test.describe('Feature: Workflow runs', () => {
         await expect(runAnswer(page).getByText(/Data used/)).toHaveCount(0);
       });
       const chip = runAnswer(page).getByTestId('figure-ref').first();
-      await scenarioStep(page, 'And a figure of the answer carries a chip to its query', async () => {
-        await expect(chip).toHaveText('Q1');
+      await scenarioStep(page, 'And a figure of the answer carries a numbered source', async () => {
+        await expect(chip).toHaveText('1');
         await expect(chip).toHaveAttribute('data-query-index', '0');
+        await chip.hover();
+        await expect(page.getByTestId('figure-ref-card')).toContainText('Counting all the matches.');
+        await expect(page.getByTestId('figure-ref-card')).toContainText('Click to see how it was computed');
       });
       await scenarioStep(page, 'When I open the query from the chip', async () => {
         await chip.click();
@@ -309,7 +312,7 @@ test.describe('Feature: Workflow runs', () => {
         await expect(sheet).toBeVisible();
         await expect(sheet).toHaveAttribute('aria-modal', 'false');
         await expect(page.getByTestId('query-inspector-close')).toBeFocused();
-        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Source 1 of 1');
         await expect(page.getByTestId('query-inspector-title')).toHaveText('Counting all the matches.');
         await expect(page.getByTestId('query-inspector-meta')).toContainText('PostgreSQL');
         await expect(page.getByTestId('query-inspector-tab-steps')).toHaveAttribute('aria-selected', 'true');
@@ -389,7 +392,7 @@ test.describe('Feature: Workflow runs', () => {
         await page.getByTestId('query-row-0').click();
       });
       await scenarioStep(page, 'Then the inspector shows its steps and the focus is on its close button', async () => {
-        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Source 1 of 1');
         await expect(page.getByTestId('query-funnel-step').last()).toHaveAttribute('data-verb', 'show');
         await expect(page.getByTestId('query-inspector-close')).toBeFocused();
         const sheet = (await page.getByTestId('query-inspector-sheet').boundingBox())!;

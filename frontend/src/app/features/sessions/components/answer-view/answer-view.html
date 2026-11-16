@@ -160,11 +160,44 @@
     <div class="flex min-w-0 flex-1 flex-col gap-4">
       @if (queryInspector()) {
         <!-- Sanitized markdown plus a chip after each figure (figure-refs.ts) -->
-        <div
-          class="prose-dark"
-          [innerHTML]="inspectorBody()"
-          (click)="onProseClick($event)"
-        ></div>
+        <div class="relative" data-testid="answer-prose">
+          <div
+            class="prose-dark"
+            [innerHTML]="inspectorBody()"
+            (click)="onProseClick($event)"
+            (mouseover)="onProseOver($event)"
+            (mouseout)="onProseOut($event)"
+            (focusin)="onProseOver($event)"
+            (focusout)="onProseOut($event)"
+            (keydown)="onProseKeydown($event)"
+          ></div>
+          @if (card(); as c) {
+            <div
+              role="tooltip"
+              data-testid="figure-ref-card"
+              [id]="cardId"
+              class="pointer-events-none absolute z-20 flex w-72 max-w-full flex-col gap-1 rounded-lg border border-border bg-surface p-3 text-[12px] leading-4 text-fg shadow-card"
+              [style.left.px]="c.left"
+              [style.top.px]="c.top"
+            >
+              <span
+                ><strong class="text-fg-strong">{{ c.label }}</strong> · {{ c.purpose }}</span
+              >
+              @if (c.detail) {
+                <span class="text-fg-muted">{{ c.detail }}</span>
+              }
+              @if (c.sample) {
+                <span class="rounded bg-warning-soft px-1.5 py-0.5 text-on-warning-soft"
+                  >From a sample: not a reliable figure</span
+                >
+              }
+              @if (c.also) {
+                <span class="text-fg-muted">{{ c.also }}</span>
+              }
+              <span class="text-fg-muted">Click to see how it was computed</span>
+            </div>
+          }
+        </div>
       } @else {
         <div class="prose-dark" [innerHTML]="msg.content | markdown"></div>
       }

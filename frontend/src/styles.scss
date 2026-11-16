@@ -156,6 +156,19 @@ body {
     &:hover { border-color: var(--qti-border-strong); }
     &:focus-visible { outline: 2px solid var(--qti-border-selected); outline-offset: 1px; }
   }
+  .table-source-line { margin: 0.25em 0 0.75em; font-size: 12px; color: var(--qti-fg-muted); }
+  .table-source {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--qti-fg-muted);
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    &:hover { color: var(--qti-fg-strong); }
+    &:focus-visible { outline: 2px solid var(--qti-border-selected); outline-offset: 1px; }
+  }
   .figure-ref--sample {
     background: var(--qti-warning-soft);
     color: var(--qti-on-warning-soft);

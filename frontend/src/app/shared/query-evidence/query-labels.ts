@@ -8,8 +8,10 @@ export type CoverageTone = 'success' | 'info' | 'warning' | 'danger';
 export interface QueryRow {
   /** Index into the message's `data`. */
   index: number;
-  /** `Q1`, `Q2`. */
+  /** `Source 1`, `Source 2`. */
   label: string;
+  /** `1`, `2`: what the chip shows. */
+  number: string;
   /** The rationale, or `Query <n>`. */
   title: string;
   /** Absent for an answer stored before the feature (coverage unknown). */
@@ -22,14 +24,48 @@ export interface CoverageLine {
   /** May be empty while the table sizes are unknown. */
   text: string;
   tone: 'success' | 'warning';
-  /** `Inspect the 2 queries` or `Inspect the query`. */
+  /** `Inspect the 2 sources` or `Inspect the source`. */
   linkLabel: string;
   /** The first query. */
   linkIndex: number;
 }
 
-export function queryLabel(index: number): string {
-  return `Q${index + 1}`;
+/** The one place a source's number is built: `Source 1`. */
+export function sourceLabel(index: number): string {
+  return `Source ${index + 1}`;
+}
+
+/** What a chip card and a table's source line say about one query. */
+export interface SourceInfo {
+  index: number;
+  /** `Source 1`. */
+  label: string;
+  /** The rationale, or `Query 1`. */
+  purpose: string;
+  /** `1,204 rows`, `100+ rows`; null when unknown. */
+  rows: string | null;
+  /** `Whole table`, `Sample`...; null without evidence. */
+  coverage: string | null;
+}
+
+export function rowsText(count: number | undefined, truncated: boolean | undefined): string | null {
+  if (count === undefined) return null;
+  return `${formatCount(count)}${truncated ? '+' : ''} ${count === 1 && !truncated ? 'row' : 'rows'}`;
+}
+
+/** One entry per data record, in order. */
+export function sourceInfos(message: Pick<ChatMessage, 'data' | 'evidence'>): SourceInfo[] {
+  return (message.data ?? []).map((record, index) => {
+    const evidence = message.evidence?.find((e) => e.index === index);
+    const coverage = record.error ? 'failed' : evidence?.coverage;
+    return {
+      index,
+      label: sourceLabel(index),
+      purpose: record.rationale?.trim() || `Query ${index + 1}`,
+      rows: rowsText(record.rowCount ?? record.rows?.length, record.truncated),
+      coverage: coverage ? coverageChip(coverage, evidence).label : null,
+    };
+  });
 }
 
 export function formatCount(value: number): string {
@@ -87,7 +123,8 @@ export function queryRows(message: ChatMessage): QueryRow[] {
   return (message.data ?? []).map((record, index) => {
     const row: QueryRow = {
       index,
-      label: queryLabel(index),
+      label: sourceLabel(index),
+      number: String(index + 1),
       title: record.rationale?.trim() || `Query ${index + 1}`,
     };
     const evidence = evidenceOf(message, index);
@@ -167,7 +204,7 @@ export function coverageLine(message: ChatMessage): CoverageLine | null {
   return {
     text: sentences.join(' '),
     tone,
-    linkLabel: rows.length === 1 ? 'Inspect the query' : `Inspect the ${rows.length} queries`,
+    linkLabel: rows.length === 1 ? 'Inspect the source' : `Inspect the ${rows.length} sources`,
     linkIndex: rows[0].index,
   };
 }
