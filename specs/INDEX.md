@@ -1929,19 +1929,19 @@ specs/system/api.md:1480-1488  ### 3.3 Eval runs
 specs/system/api.md:1490-1502  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
 specs/system/api.md:1504-1513  ### 3.5 Other long-running calls (no progress channel)
 specs/system/api.md:1515-1603  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1605-1670  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1605-1671  ## 4. Desktop bridge (IPC)
 specs/system/api.md:1609-1626  ### 4.1 Globals exposed on `window`
 specs/system/api.md:1628-1644  ### 4.2 IPC channels
-specs/system/api.md:1646-1662  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1664-1670  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1672-1715  ## 5. CLI contract
-specs/system/api.md:1717-1763  ## 6. Environment variables
-specs/system/api.md:1719-1736  ### 6.1 Backend (server process)
-specs/system/api.md:1738-1742  ### 6.2 CLI-only
-specs/system/api.md:1744-1753  ### 6.3 Electron main process
-specs/system/api.md:1755-1757  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1759-1763  ### 6.5 Frontend build/runtime
-specs/system/api.md:1765-1781  ## 7. Gaps and open questions
+specs/system/api.md:1646-1663  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1665-1671  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1673-1716  ## 5. CLI contract
+specs/system/api.md:1718-1764  ## 6. Environment variables
+specs/system/api.md:1720-1737  ### 6.1 Backend (server process)
+specs/system/api.md:1739-1743  ### 6.2 CLI-only
+specs/system/api.md:1745-1754  ### 6.3 Electron main process
+specs/system/api.md:1756-1758  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1760-1764  ### 6.5 Frontend build/runtime
+specs/system/api.md:1766-1782  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-256  ## Level 2 — Containers

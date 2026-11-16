@@ -16,6 +16,7 @@ const {
   stopStaleBackend,
 } = require("./stale-backend.cjs");
 const { createLineGrouper } = require("./log-lines.cjs");
+const { classifyBackendExit, portInUseMessage } = require("./backend-exit.cjs");
 
 // The brand is chosen at build time (ADR-0045): `scripts/brand.mjs
 // electron-prepare` copies brands/<id>/brand.json next to this file. Dev runs
@@ -629,6 +630,15 @@ function startBackend() {
       backendRestartRequested = false;
       startBackend();
       void pollUntilReadyThenNotify();
+      return;
+    }
+    if (classifyBackendExit(code) === "port-in-use") {
+      // Every retry would fail the same way: no back-off, `down` at once.
+      setBackendStatus("down");
+      recordDiagnostic("error", "electron", portInUseMessage(BACKEND_PORT), {
+        port: BACKEND_PORT,
+        exitCode: code,
+      });
       return;
     }
     scheduleBackendRestart(code);
