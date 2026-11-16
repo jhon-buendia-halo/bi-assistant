@@ -85,8 +85,8 @@ const NO_RUN_SUMMARY: WorkflowStateSummary = {
 
 /**
  * The state of the workflow designer, shared by the page in the content area
- * (header, canvas, node dialog) and the Run panel under the canvas (Chat,
- * Logs, node data) (workflows R7, R12, R13, R21): the open workflow, the selected
+ * (header, canvas, node dialog) and the Run panel beside the canvas (the
+ * Chat, How it ran) (workflows R7, R12, R13, R21): the open workflow, the selected
  * and the open node, the run form, and the run shown, streamed live (api.md
  * 119, 3.6) and then as stored. Leaving the page discards the form and the
  * run shown (the run itself stays stored). A run runs on the server whatever

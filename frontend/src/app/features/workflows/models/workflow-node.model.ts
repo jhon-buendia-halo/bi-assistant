@@ -68,7 +68,7 @@ export interface NodeRunView {
   toolCalls: NodeToolCallView[];
   /** Which run of a repeated step this is (1, 2, …); absent for a step that ran once. */
   attempt?: number;
-  /** What the step did, in business words (Logs *Story*); absent while it runs. */
+  /** What the step did, in business words (the node dialog's *Story*); absent while it runs. */
   story?: StepStory;
 }
 

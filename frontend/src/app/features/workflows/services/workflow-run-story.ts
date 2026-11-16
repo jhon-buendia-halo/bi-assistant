@@ -5,7 +5,7 @@ import { ProgressState, nodeProgressState } from './workflow-run-progress';
 
 /**
  * A run told from its steps' stories (ui.md 4.4b): a code step's line on the
- * canvas, the run's figures and one line per step (How it ran, the Logs'
+ * canvas, the run's figures and one line per step (How it ran
  * All nodes). Built only from the run data (api.md 3.6 `step.story`). Pure.
  */
 
@@ -57,7 +57,7 @@ export function stepRunLine(run: NodeRunView | null): RunLine | null {
   }
 }
 
-/** One step of a run told in one line (How it ran, the Logs' All nodes). */
+/** One step of a run told in one line (How it ran). */
 export interface RunTimelineEntry {
   node: NodeInspection;
   state: ProgressState;

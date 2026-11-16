@@ -19,7 +19,6 @@ import { workflowKindLabel } from '../../services/workflows.util';
 import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
 import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog';
 import { StoryQueryOpen } from '../workflow-step-story/workflow-step-story';
-import { WorkflowLogsDock } from '../workflow-logs-dock/workflow-logs-dock';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 
 /**
@@ -27,7 +26,7 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
  * R12; ui.md 4.4b): a one-line header (the breadcrumb ending in the name, the
  * kind and the id); the
  * canvas, left to right, with Execute workflow at its top-right; the Run
- * panel under it (Chat, Logs and the selected node's data); and a node's
+ * panel on its right (the Chat, then How it ran); and a node's
  * dialog over the page. The app's right panel is not used on this page.
  * Read-only (R3).
  */
@@ -38,7 +37,6 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
     QueryInspector,
     WorkflowCanvas,
     WorkflowNodeDialog,
-    WorkflowLogsDock,
     WorkflowRunDock,
   ],
   templateUrl: './workflow-detail.html',

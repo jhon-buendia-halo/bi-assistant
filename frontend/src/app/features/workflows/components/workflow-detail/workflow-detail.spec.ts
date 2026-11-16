@@ -86,11 +86,6 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   const q = (testId: string) =>
     el.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
   const text = (testId: string) => q(testId)?.textContent?.trim() ?? '';
-  /** The Logs start folded; unfold them to reach their rows. */
-  function unfoldLogs(): void {
-    q('workflow-logs-toggle')!.click();
-    fixture.detectChanges();
-  }
 
   it('shows the breadcrumb, the name as h1, the id and kind, and the canvas', () => {
     open(THREE_STEPS);
@@ -150,15 +145,13 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(events).toEqual([]);
   });
 
-  it('a node selects it on the canvas and in the Logs; the background clears it', () => {
+  it('a node selects it on the canvas; the background clears it', () => {
     open(THREE_STEPS);
-    unfoldLogs();
     q('workflow-node-count-words')!.click();
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBe('count-words');
     expect(events).toEqual([]);
     expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('true');
-    expect(q('workflow-state-node-count-words')?.getAttribute('aria-pressed')).toBe('true');
     expect(q('workflow-ndv')).toBeNull();
 
     const canvas = q('workflow-canvas')!;
@@ -167,20 +160,11 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     fixture.detectChanges();
     expect(designer.selectedStepId()).toBeNull();
     expect(q('workflow-node-count-words')?.getAttribute('aria-pressed')).toBe('false');
-    expect(q('workflow-state-node-all')?.getAttribute('aria-pressed')).toBe('true');
     expect(events).toEqual([]);
   });
 
-  it('a Logs row selects its node; the Run toggle folds the Chat, the Logs toggle the Logs', () => {
+  it('the Run toggle folds the Chat', () => {
     open(THREE_STEPS);
-    // The Logs start folded to their header.
-    expect(q('workflow-logs-toggle')?.getAttribute('aria-expanded')).toBe('false');
-    expect(q('workflow-state-node-all')).toBeNull();
-    unfoldLogs();
-    q('workflow-state-node-clean-text')!.click();
-    fixture.detectChanges();
-    expect(designer.selectedStepId()).toBe('clean-text');
-    expect(q('workflow-node-clean-text')?.getAttribute('aria-pressed')).toBe('true');
     expect(text('workflow-state-toggle')).toBe('Run');
     expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('true');
     q('workflow-state-toggle')!.click();
@@ -188,12 +172,6 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.stateOpen()).toBe(false);
     expect(q('workflow-state-toggle')?.getAttribute('aria-expanded')).toBe('false');
     expect(q('workflow-run-chat')).toBeNull();
-    // The Logs are under the canvas: folding the Run panel keeps them.
-    expect(q('workflow-state-node-all')).not.toBeNull();
-    q('workflow-logs-toggle')!.click();
-    fixture.detectChanges();
-    expect(q('workflow-logs-toggle')?.getAttribute('aria-expanded')).toBe('false');
-    expect(q('workflow-state-node-all')).toBeNull();
     designer.stateOpen.set(true);
   });
 
@@ -281,21 +259,14 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.inputValues()).toEqual({});
   });
 
-  it('has three zones: the canvas, the Logs under it and the Run panel (Chat) on the right, and no app right panel', () => {
+  it('has two zones: the canvas and the Run panel (Chat) on the right, and no Logs or app right panel', () => {
     open(THREE_STEPS);
     const dock = q('workflow-run-dock')!;
     expect(dock.tagName.toLowerCase()).toBe('app-workflow-run-dock');
     expect(dock.querySelector('app-workflow-run-chat')).not.toBeNull();
-    expect(dock.querySelector('app-workflow-state-panel')).toBeNull();
-    unfoldLogs();
-    const logs = q('workflow-logs-dock')!;
-    expect(logs.querySelector('app-workflow-state-panel')).not.toBeNull();
+    // No Logs panel: the canvas has its column to itself.
+    expect(q('workflow-logs-dock')).toBeNull();
     const canvas = el.querySelector('app-workflow-canvas') as HTMLElement;
-    // The canvas and the Logs share one column; the Run panel follows it.
-    expect(logs.parentElement).toBe(canvas.parentElement);
-    expect(canvas.compareDocumentPosition(logs)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
     expect(dock.parentElement).toBe(canvas.parentElement!.parentElement);
     expect(canvas.compareDocumentPosition(dock)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,

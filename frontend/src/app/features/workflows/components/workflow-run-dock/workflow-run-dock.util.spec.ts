@@ -1,5 +1,5 @@
 import {
-  LOGS_DOCK,
+  DockSize,
   NODE_CHAT_PANE,
   RUN_DOCK,
   dockBounds,
@@ -12,10 +12,19 @@ import {
   writeNodeChatWidth,
 } from './workflow-run-dock.util';
 
+/** A panel sized by its height, as the removed Logs panel was: the generic sizing on a second shape. */
+const HEIGHT_DOCK: DockSize = {
+  min: 160,
+  minOther: 200,
+  defaultRatio: 0.4,
+  fallback: 320,
+  storageKey: 'qti.test-height-dock.ratio',
+};
+
 describe('workflow-run-dock.util', () => {
   const keys = [
     RUN_DOCK.storageKey,
-    LOGS_DOCK.storageKey,
+    HEIGHT_DOCK.storageKey,
     NODE_CHAT_PANE.storageKey,
   ];
   beforeEach(() => keys.forEach((k) => localStorage.removeItem(k)));
@@ -27,9 +36,9 @@ describe('workflow-run-dock.util', () => {
         min: RUN_DOCK.min,
         max: 1200 - RUN_DOCK.minOther,
       });
-      expect(dockBounds(800, LOGS_DOCK)).toEqual({
-        min: LOGS_DOCK.min,
-        max: 800 - LOGS_DOCK.minOther,
+      expect(dockBounds(800, HEIGHT_DOCK)).toEqual({
+        min: HEIGHT_DOCK.min,
+        max: 800 - HEIGHT_DOCK.minOther,
       });
     });
 
@@ -44,12 +53,12 @@ describe('workflow-run-dock.util', () => {
   describe('dockSize', () => {
     it('falls back before the room is measured', () => {
       expect(dockSize(0, 0.5, false, RUN_DOCK)).toBe(RUN_DOCK.fallback);
-      expect(dockSize(0, 0.5, true, LOGS_DOCK)).toBe(LOGS_DOCK.fallback);
+      expect(dockSize(0, 0.5, true, HEIGHT_DOCK)).toBe(HEIGHT_DOCK.fallback);
     });
 
     it('is the share of the room', () => {
       expect(dockSize(1200, 0.4, false, RUN_DOCK)).toBe(480);
-      expect(dockSize(800, 0.5, false, LOGS_DOCK)).toBe(400);
+      expect(dockSize(800, 0.5, false, HEIGHT_DOCK)).toBe(400);
     });
 
     it('clamps to the minimum and the maximum', () => {
@@ -69,7 +78,7 @@ describe('workflow-run-dock.util', () => {
   describe('readDockRatio / writeDockRatio', () => {
     it('defaults without a kept value', () => {
       expect(readDockRatio(RUN_DOCK)).toBe(RUN_DOCK.defaultRatio);
-      expect(readDockRatio(LOGS_DOCK)).toBe(LOGS_DOCK.defaultRatio);
+      expect(readDockRatio(HEIGHT_DOCK)).toBe(HEIGHT_DOCK.defaultRatio);
     });
 
     it('ignores out-of-range and broken values', () => {
@@ -81,9 +90,9 @@ describe('workflow-run-dock.util', () => {
 
     it('round-trips a share per panel, rounded to three decimals', () => {
       writeDockRatio(RUN_DOCK, 0.4);
-      writeDockRatio(LOGS_DOCK, 0.33333);
+      writeDockRatio(HEIGHT_DOCK, 0.33333);
       expect(readDockRatio(RUN_DOCK)).toBe(0.4);
-      expect(readDockRatio(LOGS_DOCK)).toBe(0.333);
+      expect(readDockRatio(HEIGHT_DOCK)).toBe(0.333);
     });
   });
 

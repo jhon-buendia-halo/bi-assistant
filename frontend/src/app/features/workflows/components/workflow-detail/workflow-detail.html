@@ -67,9 +67,8 @@
       {{ err }}
     </p>
   } @else if (designer.workflow(); as w) {
-    <!-- Three zones (ui.md 4.4b): the canvas, wide and short, with the Logs
-         under it at its full width, and the Run panel (the Chat) on the
-         right at full height. The Logs resize and fold; the Run panel
+    <!-- Two zones (ui.md 4.4b): the canvas at the column's full height, and
+         the Run panel (the Chat) on the right at full height. The Run panel
          resizes, maximizes and folds to a strip. -->
     <div class="flex min-h-0 flex-1 flex-row overflow-hidden">
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -86,10 +85,9 @@
           (openNode)="designer.openNode($event)"
           (execute)="execute()"
         />
-        <app-workflow-logs-dock />
         @if (openQuery(); as open) {
-          <!-- The query inspector sheet (ui.md 4.4b): over the canvas and the
-               Logs, flush with the Run panel's left edge, never over it. -->
+          <!-- The query inspector sheet (ui.md 4.4b): over the canvas, flush
+               with the Run panel's left edge, never over it. -->
           <div
             data-testid="query-inspector-sheet"
             class="absolute inset-y-0 right-0 z-20 w-full max-w-[720px] border-l border-border shadow-lg"

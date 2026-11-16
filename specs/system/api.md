@@ -1597,14 +1597,14 @@ type WorkflowRunStep = {
   startedAt?: string;                // ISO; absent for a skipped step
   endedAt?: string;                  // ISO; absent while running and for a skipped step
   toolCalls?: WorkflowRunToolCall[]; // agent steps fed by an agent turn: their calls in order, at most 50; absent when none
-  story?: StepStory;                 // what the step did, in business words (ui.md 4.4b Logs Story); absent while running or suspended
+  story?: StepStory;                 // what the step did, in business words (ui.md 4.4b, Story in the node dialog; How it ran); absent while running or suspended
 };
 
 type StepStory = {
   headline: string;     // one sentence: what the step did, or why it did not run
   facts?: { label: string; values: string[]; code?: true; verdict?: 'passed' | 'failed'; sql?: string }[];   // `sql`: a query fact's statement (at most 4 000 characters), to open it among the answer's queries
   next?: string;        // what came next because of it (a branch taken, a retry)
-  stats?: { value: string; label: string }[];   // the run's figures this step accounts for (How it ran, the Logs' All nodes)
+  stats?: { value: string; label: string }[];   // the run's figures this step accounts for (How it ran)
   brief?: string;       // a few words for the canvas node: `9 tables`, `3 queries · 1 failed`, `1 of 5 checks failed`, `Off for this run`, `Not reached`
   concern?: true;       // it finished but left something to look at: a failed check, quality issues, an analysis without a query
   source: 'step' | 'generic';  // `step`: the workflow's own storyteller; `generic`: its output fields labelled by their schema descriptions

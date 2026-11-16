@@ -281,7 +281,7 @@ export interface StoryStat {
 }
 
 /**
- * What one step did, in business words (ui.md 4.4b, Logs *Story*; api.md
+ * What one step did, in business words (ui.md 4.4b, the node dialog's *Story*; api.md
  * 3.6 `step.story`): told by the server when the step ends or is skipped.
  * `generic` when built from the step's output and schema descriptions.
  */
