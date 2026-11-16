@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NodeInspection } from '../../models/workflow-node.model';
+import { StepStory } from '../../models/workflow.model';
 import {
   FIXTURE_NODES,
   FIXTURE_NODES_NOT_RUN,
@@ -56,6 +57,19 @@ describe('WorkflowStatePanel', () => {
         ...(r.attempts ? { attempts: Array.from({ length: r.attempts }, () => run) } : {}),
       };
     });
+  }
+
+  /** FIXTURE_NODES with one node's run carrying `story`. */
+  function withStory(nodeId: string, story: StepStory): NodeInspection[] {
+    return FIXTURE_NODES.map((n) =>
+      n.nodeId === nodeId && n.run ? { ...n, run: { ...n.run, story } } : n,
+    );
+  }
+
+  /** Switch the selected step's detail to Data. */
+  function showData() {
+    byId('workflow-state-view-data')?.click();
+    fixture.detectChanges();
   }
 
   it('has no header of its own and is labelled Logs', () => {
@@ -169,18 +183,37 @@ describe('WorkflowStatePanel', () => {
     );
   });
 
-  it('shows the table for All nodes and selects from a row', () => {
-    make();
-    const table = byId('workflow-state-table')!;
-    expect(table.textContent).toContain('Node');
-    expect(table.textContent).toContain('Duration');
-    expect(table.textContent).toContain('LLM');
-    expect(table.textContent).toContain('Done');
+  it('shows All nodes as a timeline of the steps, each told in one line, and selects from it', () => {
+    make({
+      nodes: withStory('analyse', {
+        headline: 'Ran 3 queries on the data.',
+        stats: [{ value: '3', label: 'queries' }],
+        source: 'step',
+      }),
+    });
+    expect(byId('workflow-state-table')).toBeNull();
+    const timeline = byId('workflow-state-timeline')!;
+    // Steps only: Start and End are not told.
+    expect(
+      Array.from(timeline.querySelectorAll('li')).map((li) =>
+        li.getAttribute('data-testid'),
+      ),
+    ).toEqual(['workflow-state-timeline-receive', 'workflow-state-timeline-analyse']);
+    expect(text('workflow-state-timeline-analyse')).toContain(
+      'Ran 3 queries on the data.',
+    );
+    // A step without a story says its state.
+    expect(text('workflow-state-timeline-receive')).toContain('Done.');
+    // The run's figures: how long it took, then those the stories give.
+    const stats = Array.from(
+      byId('workflow-state-stats')!.querySelectorAll('li'),
+    ).map((li) =>
+      Array.from(li.querySelectorAll('span')).map((s) => s.textContent?.trim()),
+    );
+    expect(stats).toContain(['3', 'queries']);
     const selected: (string | null)[] = [];
     fixture.componentInstance.selectNode.subscribe((id) => selected.push(id));
-    Array.from(table.querySelectorAll('button'))
-      .find((b) => b.textContent?.trim() === 'Analyse')
-      ?.click();
+    byId('workflow-state-timeline-analyse')?.querySelector('button')?.click();
     expect(selected).toEqual(['analyse']);
   });
 
@@ -203,12 +236,72 @@ describe('WorkflowStatePanel', () => {
     expect(opened).toEqual(['analyse']);
   });
 
+  it("shows a selected step's story first, with its facts and what came next", () => {
+    make({
+      nodes: withStory('analyse', {
+        headline: 'Ran 3 queries on the data (1 failed).',
+        facts: [
+          { label: 'Tables', values: ['goals', 'players'], code: true },
+          { label: 'Query 1', values: ['Goals — failed: x'], verdict: 'failed' },
+        ],
+        next: 'Validate checked the results.',
+        source: 'step',
+      }),
+      selectedId: 'analyse',
+    });
+    expect(
+      byId('workflow-state-view-story')?.getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(byId('workflow-state-input')).toBeNull();
+    expect(text('workflow-step-story-headline')).toBe(
+      'Ran 3 queries on the data (1 failed).',
+    );
+    const facts = byId('workflow-step-story-facts')!;
+    expect(
+      Array.from(facts.querySelectorAll('code')).map((c) => c.textContent),
+    ).toEqual(['goals', 'players']);
+    expect(facts.textContent).toContain('Failed:');
+    expect(text('workflow-step-story-next')).toBe(
+      'Validate checked the results.',
+    );
+    showData();
+    expect(byId('workflow-state-story')).toBeNull();
+    expect(byId('workflow-state-input')).not.toBeNull();
+  });
+
+  it('says why a step without a story has none, and shows no Story for Start', () => {
+    make({ selectedId: 'analyse' });
+    expect(text('workflow-state-story')).toContain(
+      'No story was kept for this step.',
+    );
+    fixture.componentRef.setInput('selectedId', 'start');
+    fixture.detectChanges();
+    expect(byId('workflow-state-view-story')).toBeNull();
+    expect(byId('workflow-state-output')).not.toBeNull();
+  });
+
+  it("shows why a skipped node did not run under its row, from its story", () => {
+    const nodes = withStory('analyse', {
+      headline: 'Skipped: the data quality check was off for this run.',
+      source: 'step',
+    }).map((n) =>
+      n.nodeId === 'analyse' && n.run
+        ? { ...n, run: { ...n.run, status: 'skipped' as const } }
+        : n,
+    );
+    make({ nodes });
+    expect(text('workflow-state-why-analyse')).toBe(
+      'The data quality check was off for this run.',
+    );
+  });
+
   it('shows the selected node: input, output and context', () => {
     make({ selectedId: 'analyse' });
+    showData();
     expect(
       byId('workflow-state-node-analyse')?.getAttribute('aria-pressed'),
     ).toBe('true');
-    expect(byId('workflow-state-table')).toBeNull();
+    expect(byId('workflow-state-timeline')).toBeNull();
     expect(byId('workflow-state-detail')?.textContent).toContain('Analyse');
     expect(byId('workflow-state-input')?.textContent).toContain(
       'Top 5 states?',
@@ -242,6 +335,10 @@ describe('WorkflowStatePanel', () => {
       nodes: FIXTURE_NODES_NOT_RUN,
       selectedId: 'analyse',
     });
+    expect(text('workflow-state-story')).toContain(
+      'This node has not run yet. Execute the workflow to see its data.',
+    );
+    showData();
     expect(byId('workflow-state-input')?.textContent).toContain(
       'This node has not run yet. Execute the workflow to see its data.',
     );
@@ -255,6 +352,7 @@ describe('WorkflowStatePanel', () => {
       running: false,
     });
     make({ nodes, selectedId: 'analyse' });
+    showData();
     const one = byId('workflow-attempt-1')!;
     expect(byId('workflow-attempt-2')?.getAttribute('aria-pressed')).toBe('true');
     expect(byId('workflow-state-input')?.textContent).toContain('second');

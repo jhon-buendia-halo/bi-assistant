@@ -1956,26 +1956,26 @@ specs/system/api.md:1389-1397  #### 113. `POST /synthetic-data/profile-exports`
 specs/system/api.md:1399-1408  #### 114. `POST /synthetic-data/sample-exports`
 specs/system/api.md:1410-1420  ### 2.19 Health
 specs/system/api.md:1418-1420  #### 135. `GET /health`
-specs/system/api.md:1422-1619  ## 3. Streaming and long-running work
+specs/system/api.md:1422-1630  ## 3. Streaming and long-running work
 specs/system/api.md:1426-1490  ### 3.1 Chat stream (removed in 1.23.27)
 specs/system/api.md:1492-1494  ### 3.2 Deep analysis (removed 2026-11-12)
 specs/system/api.md:1496-1504  ### 3.3 Eval runs
 specs/system/api.md:1506-1518  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
 specs/system/api.md:1520-1529  ### 3.5 Other long-running calls (no progress channel)
-specs/system/api.md:1531-1619  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1621-1687  ## 4. Desktop bridge (IPC)
-specs/system/api.md:1625-1642  ### 4.1 Globals exposed on `window`
-specs/system/api.md:1644-1660  ### 4.2 IPC channels
-specs/system/api.md:1662-1679  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1681-1687  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1689-1732  ## 5. CLI contract
-specs/system/api.md:1734-1780  ## 6. Environment variables
-specs/system/api.md:1736-1753  ### 6.1 Backend (server process)
-specs/system/api.md:1755-1759  ### 6.2 CLI-only
-specs/system/api.md:1761-1770  ### 6.3 Electron main process
-specs/system/api.md:1772-1774  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1776-1780  ### 6.5 Frontend build/runtime
-specs/system/api.md:1782-1798  ## 7. Gaps and open questions
+specs/system/api.md:1531-1630  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
+specs/system/api.md:1632-1698  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1636-1653  ### 4.1 Globals exposed on `window`
+specs/system/api.md:1655-1671  ### 4.2 IPC channels
+specs/system/api.md:1673-1690  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1692-1698  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1700-1743  ## 5. CLI contract
+specs/system/api.md:1745-1791  ## 6. Environment variables
+specs/system/api.md:1747-1764  ### 6.1 Backend (server process)
+specs/system/api.md:1766-1770  ### 6.2 CLI-only
+specs/system/api.md:1772-1781  ### 6.3 Electron main process
+specs/system/api.md:1783-1785  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1787-1791  ### 6.5 Frontend build/runtime
+specs/system/api.md:1793-1809  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-256  ## Level 2 — Containers

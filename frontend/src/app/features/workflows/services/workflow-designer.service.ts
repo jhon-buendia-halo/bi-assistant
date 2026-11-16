@@ -316,6 +316,7 @@ export class WorkflowDesigner {
               ? { toolCalls: event.toolCalls }
               : {}),
             ...(event?.attempt !== undefined ? { attempt: event.attempt } : {}),
+            ...(event?.story !== undefined ? { story: event.story } : {}),
           };
         });
       }),

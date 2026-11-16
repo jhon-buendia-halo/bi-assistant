@@ -162,8 +162,13 @@ export interface JsonSchema {
 }
 
 /** One step of a workflow detail: an agent step also names its agent's key (api.md 117). */
-export type WorkflowDetailStep = Omit<AgentWorkflow['steps'][number], 'agent'> & {
-  agent?: NonNullable<AgentWorkflow['steps'][number]['agent']> & { key?: string };
+export type WorkflowDetailStep = Omit<
+  AgentWorkflow['steps'][number],
+  'agent'
+> & {
+  agent?: NonNullable<AgentWorkflow['steps'][number]['agent']> & {
+    key?: string;
+  };
   /** The step's declared input contract; absent from an older backend. */
   inputSchema?: JsonSchema;
   /** The step's declared output contract; absent from an older backend. */
@@ -256,6 +261,37 @@ export interface WorkflowRunToolCall {
   durationMs?: number;
 }
 
+/** One labelled fact under a step story's headline (api.md 3.6 `step.story`). */
+export interface StoryFact {
+  label: string;
+  /** One value reads as text; more read as a list. */
+  values: string[];
+  /** Names from the data (tables, columns): shown as code. */
+  code?: true;
+  /** A check's verdict, when the fact is one. */
+  verdict?: 'passed' | 'failed';
+}
+
+/** One figure of the run, shown above the All nodes timeline. */
+export interface StoryStat {
+  value: string;
+  label: string;
+}
+
+/**
+ * What one step did, in business words (ui.md 4.4b, Logs *Story*; api.md
+ * 3.6 `step.story`): told by the server when the step ends or is skipped.
+ * `generic` when built from the step's output and schema descriptions.
+ */
+export interface StepStory {
+  headline: string;
+  facts?: StoryFact[];
+  /** What came next because of it (a branch taken, a retry). */
+  next?: string;
+  stats?: StoryStat[];
+  source: 'step' | 'generic';
+}
+
 /**
  * One message of a chat with an agent step about its run data (api.md 136,
  * 137), stored with the run, per step.
@@ -310,6 +346,8 @@ export interface WorkflowRunStep {
    * run keeps one entry per attempt, in order. Absent means the first.
    */
   attempt?: number;
+  /** What it did, once it ended or was skipped (absent while it runs). */
+  story?: StepStory;
 }
 
 /** What a suspended run waits for (api.md 3.6 `waitingFor`). */
@@ -409,6 +447,7 @@ export interface RunStepView {
   toolCalls?: WorkflowRunToolCall[];
   /** Which run of a repeated step this entry is; absent means the first. */
   attempt?: number;
+  story?: StepStory;
 }
 
 /** The run shown on the workflow page: live while it streams, then as stored. */
