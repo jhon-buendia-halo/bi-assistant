@@ -34,7 +34,7 @@ export const V2_QUALITY_LINE =
  * reader's words into a view of a query result. Keep it equal to that file.
  */
 export const RESULT_EXPLORER_LINE =
-  'You turn a reader\'s words into a view of a query result for Questions to Insights.';
+  "You turn a user's words about a query's result into a view of that same result: filters, a sort and a page. You never write SQL.";
 
 /** Whether one of these system texts starts `result-explorer`'s instructions. */
 export function isResultExplorerCall(systemTexts: string[]): boolean {
