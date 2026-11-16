@@ -88,3 +88,18 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   'assistant-eval-judge',
   'knowledge-bootstrap',
 ];
+
+/**
+ * The agents of the three model steps of `consumption-gap-analysis`
+ * (agents.md 2.18 to 2.20, 5.20): Derive (and Confirm) requirements, Map
+ * requirements and Recommend fixes. System agents: the workflow calls them.
+ */
+export const REQUIREMENTS_ANALYST_AGENT_KEY = 'requirements-analyst';
+/** Its name: the Derive requirements step's agent. */
+export const REQUIREMENTS_ANALYST_AGENT_NAME = 'Requirements Analyst';
+export const LAYER_MAPPER_AGENT_KEY = 'layer-mapper';
+/** Its name: the Map requirements step's agent. */
+export const LAYER_MAPPER_AGENT_NAME = 'Layer Mapper';
+export const GAP_ADVISOR_AGENT_KEY = 'gap-advisor';
+/** Its name: the Recommend fixes step's agent. */
+export const GAP_ADVISOR_AGENT_NAME = 'Gap Advisor';

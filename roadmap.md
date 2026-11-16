@@ -765,6 +765,37 @@ Each agent of Answer a Business Question and Assess Data Readiness gets its own 
 - **Out of scope:** changing an agent before the baseline shows a failure (1.29.8 owns fixes).
 - **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
 
+### Milestone 1.30 — Consumption Gap Analysis: does the medallion's Consumption layer support the business? (M1-30)
+
+A workflow that takes a medallion model (schemas tagged Landing, Normalized, Consumption in the dataset's schema notes), the business questions and reference dashboards (images and/or a saved dashboard), and tells which requirements the Consumption layer supports, traces every gap through lineage inferred without declared lineage (names, types, value overlap), probes the data with bounded read-only queries, and recommends fixes by the layer they start in. Requested on 2026-11-16; the user picked approach C (deterministic lineage, bounded probes, a confirmation step) and approved the prototype (`.context/prototype/gap-analysis.html`). ADR-0051.
+
+#### 1.30.1 — World Cup Medallion sample  `🚧 In progress`
+- **Intent:** a Testing Data sample with three schemas (`wc_landing`, `wc_normalized`, `wc_consumption`) tagged by layer, with known gaps (a year missing from Consumption, columns only in Normalized, raw text only in Landing, a subject in no layer).
+- **Scope:** seed SQL, multi-schema fixtures in the registry and loader, schema notes saved with the dataset, `setup-local` loads it.
+- **Out of scope:** any other sample.
+- **Acceptance:** the sample loads from the Testing Data panel and `setup-local`; its dataset shows the three layer chips.
+
+#### 1.30.2 — Lineage inference and gap tracing  `🚧 In progress`
+- **Intent:** pure code that infers column lineage between layers, checks it with value-overlap queries, classifies each requirement (supported, derivable, grain, in Normalized only, in Landing only, missing) and probes the data.
+- **Scope:** `consumption-gap.lineage.ts`, `consumption-gap.gaps.ts`, unit tests on the medallion sample's shapes.
+- **Acceptance:** unit tests cover every status, the grain rule, a coverage probe that downgrades a supported requirement, and both SQL dialects.
+
+#### 1.30.3 — Requirements Analyst, Layer Mapper and Gap Advisor  `🚧 In progress`
+- **Intent:** the three model steps, each one call with no tools, read leniently and checked in code.
+- **Scope:** agents, prompts (editable in the app), personas, registration, agents.md 2.18 to 2.20.
+- **Acceptance:** unit tests on the readers with real-shaped replies; agents listed in the hub.
+
+#### 1.30.4 — The gap report  `🚧 In progress`
+- **Intent:** the interactive report of the prototype (summary, matrix, lineage graph that traces a requirement, dashboards with badges, fixes by layer) drawn by a fixed runtime, and the run's answer in Markdown.
+- **Scope:** `consumption-gap.report.ts`, `consumption-gap.report-runtime.ts`.
+- **Acceptance:** unit tests on the bundle and the answer; the report reads in Light and Dark.
+
+#### 1.30.5 — The Consumption Gap Analysis workflow  `🚧 In progress`
+- **Intent:** the eleven steps in Mastra, the Confirm requirements wait, the run's runtime, the catalogue entry, the probes as sources of the answer (query inspector).
+- **Scope:** workflow, catalogue, turn engine, workflow and contract specs, agents.md 5.20, workflows spec R37, ADR-0051.
+- **Out of scope:** a `gap-analysis` artifact kind (the report lives in the run); several saved dashboards in one run (one artifact field); declared lineage hints.
+- **Acceptance:** a run on the World Cup Medallion sample waits at Confirm requirements, goes on after the answer, and ends with the report and an answer whose probes open in the query inspector.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
