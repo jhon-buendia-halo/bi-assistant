@@ -1835,24 +1835,24 @@ specs/system/agents.md:1846-1887  ### 7.2 The `interactive-visuals` skill
 specs/system/agents.md:1889-1915  ### 7.3 Skills: source, layout, loading and validation
 specs/system/agents.md:1917-2001  ### 7.4 Skills per agent
 specs/system/agents.md:2003-2007  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2009-2165  ## 8. Evals
-specs/system/agents.md:2013-2122  ### 8.1 Case and set format
-specs/system/agents.md:2124-2131  ### 8.2 Data preflight
-specs/system/agents.md:2133-2144  ### 8.3 Executing a case
-specs/system/agents.md:2146-2151  ### 8.4 Runs, regression and report
-specs/system/agents.md:2153-2165  ### 8.5 Other entry points
-specs/system/agents.md:2167-2171  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2173-2186  ## Open questions and gaps
-specs/system/agents.md:2188-2327  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2329-2365  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2367-2369  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2371-2454  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2456-2560  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2562-2610  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2568-2585  ### Plan
-specs/system/agents.md:2587-2610  ### Write answer
-specs/system/agents.md:2612-2628  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2630-2649  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:2009-2166  ## 8. Evals
+specs/system/agents.md:2013-2123  ### 8.1 Case and set format
+specs/system/agents.md:2125-2132  ### 8.2 Data preflight
+specs/system/agents.md:2134-2145  ### 8.3 Executing a case
+specs/system/agents.md:2147-2152  ### 8.4 Runs, regression and report
+specs/system/agents.md:2154-2166  ### 8.5 Other entry points
+specs/system/agents.md:2168-2172  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2174-2187  ## Open questions and gaps
+specs/system/agents.md:2189-2328  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2330-2366  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2368-2370  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2372-2455  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2457-2561  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2563-2611  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2569-2586  ### Plan
+specs/system/agents.md:2588-2611  ### Write answer
+specs/system/agents.md:2613-2629  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2631-2650  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
