@@ -120,6 +120,11 @@ export interface ExplorerCandidate {
     /** At most `EXPLORER_SAMPLE_VALUES` distinct stored values. */
     values: FilterValue[];
   }[];
+  /**
+   * Its own current view when several queries are candidates (a chat's
+   * earlier results); absent = the request's current view applies to it.
+   */
+  view?: ResultView | null;
 }
 
 /** What `specOf` made of a reply. */
@@ -249,6 +254,13 @@ export function explorerRequest(
         ? `${candidate.ref} — ${candidate.rationale}`
         : candidate.ref,
     );
+    if (candidate.view !== undefined) {
+      lines.push(
+        ...currentViewLines(candidate.view, pageCountOf(candidate.view)).map(
+          (line) => `  ${line}`,
+        ),
+      );
+    }
     for (const column of candidate.columns) {
       const values = column.values.length
         ? column.values.map((v) => JSON.stringify(v)).join(', ')
@@ -447,6 +459,11 @@ export function specOf(
   const q = typeof object.query === 'number' ? Math.round(object.query) : 1;
   const query = q >= 1 && q <= candidates.length ? q - 1 : 0;
   const candidate = candidates[query] ?? { ref: 'Q1', columns: [] };
+  // "Next page" moves from the picked query's own view when it has one.
+  if (candidate.view !== undefined) {
+    current = candidate.view;
+    pageCount = pageCountOf(candidate.view);
+  }
   const names = candidate.columns.map((c) => c.name);
   const rejected: string[] = [];
 

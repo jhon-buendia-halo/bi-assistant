@@ -182,5 +182,6 @@ export function explorerCandidateOfQuery(
       kind: query.kinds[name] ?? 'unknown',
       values: query.sampleValues[name] ?? [],
     })),
+    view: query.view ?? null,
   };
 }

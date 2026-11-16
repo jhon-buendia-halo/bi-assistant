@@ -316,6 +316,46 @@ describe('specOf', () => {
     expect(move('next', null, 2)).toBe(2);
   });
 
+  it("moves from the picked candidate's own view when it has one", () => {
+    const own: ExplorerCandidate = {
+      ...candidate,
+      ref: 'Q2',
+      view: { filters: [], sort: [], page: 5, pageSize: 20, matchedRows: 200 },
+    };
+    const spec = specOf(
+      reply({ query: 2, page: { move: 'next', to: null } }),
+      [{ ...candidate, view: VIEW }, own],
+      VIEW,
+      9,
+    );
+    expect(spec.query).toBe(1);
+    expect(spec.interpretation.request.page).toBe(6);
+    expect(spec.interpretation.request.pageSize).toBe(20);
+    const last = specOf(
+      reply({ query: 2, page: { move: 'last', to: null } }),
+      [candidate, own],
+      VIEW,
+      9,
+    );
+    expect(last.interpretation.request.page).toBe(10);
+  });
+
+  it("lists each candidate's own view in the request", () => {
+    const text = explorerRequest(
+      'next page',
+      [
+        { ...candidate, view: VIEW },
+        { ...candidate, ref: 'Q2', view: null },
+      ],
+      VIEW,
+      9,
+    );
+    expect(text).toContain('  Current view: page 2 of 9, 50 rows a page');
+    expect(text).toContain(
+      "  Current view: none yet; the user sees the answer's stored rows.",
+    );
+  });
+
   it('keeps the page size of the current view', () => {
     const spec = specOf(reply(), [candidate], { ...VIEW, pageSize: 20 }, 21);
     expect(spec.interpretation.request.pageSize).toBe(20);
