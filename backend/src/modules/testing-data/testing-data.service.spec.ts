@@ -18,10 +18,6 @@ import {
   requiredEntityKeys,
   type SampleFixture,
 } from './fixtures/registry';
-import {
-  setIntellifyApiInfo,
-  type IntellifyApiInfo,
-} from '../../intellify-api/api-info';
 import type { CatalogInfo } from '../datasources/entities/datasource.entity';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 
@@ -556,7 +552,6 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'intellify',
       'us-health',
       'world-cup-rest',
-      'intellify-api',
       'register-only',
     ]);
     expect(viewOf(status, 'world-cup').seedable).toBe(true);
@@ -631,7 +626,6 @@ describe('TestingDataService.status', () => {
       description: WORLD_CUP.description,
       seedable: true,
       schema: 'world_cup',
-      selfRegistering: false,
       defaults,
       status: { loaded: false, requiredCount: 9 },
     });
@@ -726,7 +720,6 @@ describe('TestingDataService.describe', () => {
         description: fixture.description,
         seedable: Boolean(fixture.seedFile),
         schema: fixture.schema,
-        selfRegistering: Boolean(fixture.selfRegistering),
         defaults: fixture.defaults,
         status: {
           loaded: false,
@@ -739,191 +732,21 @@ describe('TestingDataService.describe', () => {
   });
 });
 
-describe('TestingDataService.load — self-registering intellify-api (R21)', () => {
-  const API = findFixture('intellify-api') as SampleFixture;
-  const INFO: IntellifyApiInfo = {
-    url: 'http://127.0.0.1:3100',
-    apiKey: 'k-1',
-  };
-  const PATHS = API.requiredTables.map((t) => `/v1/${t.replace(/_/g, '-')}`);
-  const realFetch = global.fetch;
-  let fetchMock: jest.Mock;
+describe('the removed Intellify RFP API sample', () => {
+  it('is not listed, and loading it answers the unknown-fixture error', async () => {
+    const { service, datasources, datasets } = build({});
 
-  function health(body: unknown, status = 200) {
-    fetchMock.mockResolvedValue({
-      ok: status < 400,
-      status,
-      json: () => Promise.resolve(body),
-    });
-  }
-
-  function discovery(paths: string[]) {
-    return {
-      specUrl: `${INFO.url}/openapi.json`,
-      baseUrl: INFO.url,
-      skipped: [],
-      endpoints: paths.map((path) => ({
-        method: 'GET',
-        listResponse: true,
-        endpoint: {
-          name: path.split('/').pop() as string,
-          group: 'v1',
-          path,
-          rowsPointer: '/data',
-          pagination: {
-            style: 'page',
-            pageParam: 'page',
-            sizeParam: 'per_page',
-          },
-        },
-      })),
-    };
-  }
-
-  function buildApi(paths: string[] | Error) {
-    const made = build({
-      catalogs: inventory(API.requiredTables, 'api', 'intellify'),
-    });
-    (made.datasources as Record<string, jest.Mock>).discoverRestEndpoints =
-      paths instanceof Error
-        ? jest.fn().mockRejectedValue(paths)
-        : jest.fn().mockResolvedValue(discovery(paths));
-    return made as typeof made & {
-      datasources: { discoverRestEndpoints: jest.Mock };
-    };
-  }
-
-  beforeEach(() => {
-    fetchMock = jest.fn();
-    global.fetch = fetchMock;
-    setIntellifyApiInfo(INFO);
-  });
-  afterEach(() => {
-    global.fetch = realFetch;
-    setIntellifyApiInfo(null);
-  });
-
-  it('says so when the API is not running, touching nothing', async () => {
-    setIntellifyApiInfo(null);
-    const { service, datasources } = buildApi(PATHS);
-
-    const result = await service.load('intellify-api', {});
-
-    expect(result).toEqual({
+    expect(findFixture('intellify-api')).toBeUndefined();
+    expect(service.describe().fixtures.map((f) => f.id)).not.toContain(
+      'intellify-api',
+    );
+    expect(await service.load('intellify-api', {})).toEqual({
       ok: false,
-      message:
-        'The Intellify API is not running in this app (INTELLIFY_API=off or it failed to start) — see the system logs.',
+      message: 'Unknown sample fixture "intellify-api"',
     });
-    expect(fetchMock).not.toHaveBeenCalled();
     expect(datasources.save).not.toHaveBeenCalled();
-  });
-
-  it('names the database when the API reports it down', async () => {
-    health({ ok: false, database: 'down' }, 503);
-    const { service, datasources } = buildApi(PATHS);
-
-    const result = await service.load('intellify-api', {});
-
-    expect(result.ok).toBe(false);
-    expect(result.message).toMatch(
-      /^The Intellify API cannot reach its database at .+:\d+\/.+\. Load the "Intellify" sample into that database first\.$/,
-    );
-    expect(datasources.save).not.toHaveBeenCalled();
-  });
-
-  it('registers the datasource and dataset from discovery', async () => {
-    health({ ok: true, database: 'up' });
-    const { service, datasources, datasets } = buildApi(PATHS);
-
-    const result = await service.load('intellify-api', {});
-
-    expect(result).toMatchObject({
-      ok: true,
-      message:
-        'Registered the Intellify RFP API at http://127.0.0.1:3100 and loaded 10 entities into dataset "Intellify RFP API"',
-      entityCount: 10,
-      datasetName: 'Intellify RFP API',
-    });
-    const saved = (datasources.save.mock.calls as unknown[][])[0][0] as {
-      name: string;
-      kind: string;
-      config: {
-        baseUrl: string;
-        auth: unknown;
-        endpoints: { name: string; group: string }[];
-      };
-    };
-    expect(saved.name).toBe('Intellify RFP API');
-    expect(saved.kind).toBe('rest');
-    expect(saved.config.baseUrl).toBe(INFO.url);
-    expect(saved.config.auth).toEqual({
-      type: 'api-key-header',
-      headerName: 'X-API-Key',
-      token: 'k-1',
-    });
-    expect(saved.config.endpoints.map((e) => e.name)).toEqual(
-      API.requiredTables,
-    );
-    expect(saved.config.endpoints.every((e) => e.group === 'intellify')).toBe(
-      true,
-    );
-    expect(datasources.inventory).toHaveBeenCalledWith('ds-1', true);
-    const dataset = (datasets.save.mock.calls as unknown[][])[0][0] as {
-      tables: string[];
-    };
-    expect(dataset.tables).toContain('api.intellify.funding_types');
-    expect(dataset.tables).toHaveLength(10);
-  });
-
-  it('saves the REST dataset without a schemas key, so reloading keeps the notes (BA-319)', async () => {
-    health({ ok: true, database: 'up' });
-    const { service, datasets } = buildApi(PATHS);
-
-    const result = await service.load('intellify-api', {});
-
-    expect(result.ok).toBe(true);
-    const dataset = (datasets.save.mock.calls as unknown[][])[0][0] as object;
-    expect(dataset).not.toHaveProperty('schemas');
-  });
-
-  it('falls back to explicit endpoint definitions and reuses the record', async () => {
-    health({ ok: true, database: 'up' });
-    const { service, datasources } = buildApi(new Error('no spec'));
-    datasources.list.mockResolvedValue([
-      { id: 'ds-9', name: 'Intellify RFP API' },
-    ]);
-
-    const result = await service.load('intellify-api', {});
-
-    expect(result.ok).toBe(true);
-    const saved = (datasources.save.mock.calls as unknown[][])[0][0] as {
-      id: string;
-      config: { endpoints: Record<string, unknown>[] };
-    };
-    expect(saved.id).toBe('ds-9');
-    expect(saved.config.endpoints).toHaveLength(10);
-    expect(saved.config.endpoints[2]).toMatchObject({
-      name: 'funding_types',
-      path: '/v1/funding-types',
-      rowsPointer: '/data',
-      pagination: {
-        style: 'page',
-        pageParam: 'page',
-        sizeParam: 'per_page',
-        pageSize: 100,
-      },
-    });
-  });
-
-  it('exposes the API URL on the catalogue entry', () => {
-    const { service } = buildApi(PATHS);
-    const view = service
-      .describe()
-      .fixtures.find((f) => f.id === 'intellify-api');
-    expect(view).toMatchObject({
-      selfRegistering: true,
-      apiUrl: INFO.url,
-      seedable: false,
-    });
+    expect(datasets.save).not.toHaveBeenCalled();
+    // The Postgres Intellify sample stays.
+    expect(findFixture('intellify')?.datasourceKind).toBeUndefined();
   });
 });

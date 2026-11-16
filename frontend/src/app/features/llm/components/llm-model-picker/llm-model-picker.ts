@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { LucideAngularModule, List, Loader2 } from 'lucide-angular';
 import { ToastService } from '../../../../core/toast/toast.service';
-import { ApiStyle } from '../../models/llm.model';
+import { ApiStyle, ListModelsRequest } from '../../models/llm.model';
 import { LlmModelsApiService } from '../../services/llm-models-api.service';
 
 /**
@@ -33,9 +33,12 @@ export class LlmModelPicker {
   private readonly toast = inject(ToastService);
 
   /** The form's current values; a blank key means "use the stored one". */
-  readonly apiStyle = input.required<ApiStyle>();
+  readonly provider = input<'custom' | 'copilot'>('custom');
+  readonly apiStyle = input<ApiStyle>('openai');
   readonly baseUrl = input('');
   readonly apiKey = input('');
+  /** Copilot only: the machine is signed in to GitHub (llm-settings R59). */
+  readonly signedIn = input(false);
 
   readonly modelChosen = output<string>();
 
@@ -49,6 +52,8 @@ export class LlmModelPicker {
     // Editing API style, base URL or key discards a loaded list and any
     // answer still on its way (ui.md).
     effect(() => {
+      this.provider();
+      this.signedIn();
       this.apiStyle();
       this.baseUrl();
       this.apiKey();
@@ -60,7 +65,10 @@ export class LlmModelPicker {
   }
 
   get canLoad(): boolean {
-    return !this.loading() && this.baseUrl().trim() !== '';
+    if (this.loading()) return false;
+    return this.provider() === 'copilot'
+      ? this.signedIn()
+      : this.baseUrl().trim() !== '';
   }
 
   load(): void {
@@ -69,14 +77,18 @@ export class LlmModelPicker {
     this.loading.set(true);
     this.open.set(false);
     const apiKey = this.apiKey().trim();
+    const body: ListModelsRequest =
+      this.provider() === 'copilot'
+        ? { provider: 'copilot' }
+        : {
+            provider: 'custom',
+            apiStyle: this.apiStyle(),
+            baseUrl: this.baseUrl().trim(),
+            // Blank key = the backend uses the stored one.
+            ...(apiKey ? { apiKey } : {}),
+          };
     this.api
-      .listModels({
-        provider: 'custom',
-        apiStyle: this.apiStyle(),
-        baseUrl: this.baseUrl().trim(),
-        // Blank key = the backend uses the stored one.
-        ...(apiKey ? { apiKey } : {}),
-      })
+      .listModels(body)
       .subscribe({
         next: (res) => {
           if (request !== this.request) return;

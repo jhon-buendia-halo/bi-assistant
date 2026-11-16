@@ -40,11 +40,16 @@ export interface DatasourceConnector<
     limit: number,
     concurrency: number,
   ): Promise<Map<string, QueryResult | Error>>;
-  /** Guarded read-only SQL in the datasource's dialect. */
+  /**
+   * Guarded read-only SQL in the datasource's dialect. `rowLimit` is clamped
+   * to `maxRows` (default `SQL_ROWS_MAX`, 500); a CSV export passes 50,001.
+   * The result's `totalRows` is the row count before that slice.
+   */
   runReadOnlySql(
     config: TConfig,
     sql: string,
     rowLimit: number,
+    maxRows?: number,
   ): Promise<QueryResult>;
   /**
    * Declared foreign keys among the given `catalog.schema.table` entities.
@@ -86,6 +91,9 @@ export async function mapWithConcurrency<T>(
   );
   await Promise.all(runners);
 }
+
+/** The default ceiling of `runReadOnlySql`'s row limit. */
+export const SQL_ROWS_MAX = 500;
 
 export function clampRows(
   limit: number,

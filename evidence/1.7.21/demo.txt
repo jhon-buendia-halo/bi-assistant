@@ -1,0 +1,21 @@
+Demo — 1.7.21 No orphaned backend survives the desktop app or an upgrade
+
+No UI scenario carries this story's tag, so the demo is this transcript of the checks scripts/qa.mjs ran.
+
+$ npm --prefix backend run build:all
+  exit 0 (passed)
+  5 │ @import 'src/styles.scss';
+  ╵         ~~~~~~~~~~~~~~~~~
+  ▲ [WARNING] bundle initial exceeded maximum budget. Budget 500.00 kB was not met by 430.12 kB with a total of 930.12 kB.
+
+$ npx jest --findRelatedTests src/app-bootstrap.ts src/main.ts src/infrastructure/process/parent-watchdog.spec.ts src/infrastructure/process/parent-watchdog.ts --passWithNoTests
+  exit 0 (passed)
+  Snapshots:   0 total
+  Time:        0.067 s, estimated 1 s
+  Ran all test suites related to files matching src/app-bootstrap.ts|src/main.ts|src/infrastructure/process/parent-watchdog.spec.ts|src/infrastructure/process/parent-watchdog.ts.
+
+$ python3 scripts/check-specs.py
+  exit 0 (passed)
+  PASS 26 roadmap milestone epics have a spec in specs/epics/
+  PASS every epic spec has a Status of Draft or Confirmed
+  ALL CHECKS PASSED

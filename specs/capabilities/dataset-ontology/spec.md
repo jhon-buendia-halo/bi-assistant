@@ -47,7 +47,7 @@ Reaching the assistant
 - R24. The block SHALL be limited to 2,000 characters of item lines (the header line `Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):` is not counted). The system SHALL stop at the first item that does not fit and SHALL NOT skip ahead to try smaller ones.
 - R25. The block SHALL be sent as its own system message after the metric definitions and before the verified reference queries.
 - R26. The instructions SHALL be the on-demand `curated-knowledge` skill, which keeps its name: listed in the assistant's skill catalog, loaded by the model with the skill tool when a call carries the block, and never sent with the block or written into the assistant's base prompt. They SHALL tell the assistant to: read the block before planning; treat it as outranking schema inference while never inventing rows the data does not hold; apply every default filter to every query unless the question explicitly asks for the excluded rows, naming the applied filters in one short business sentence; follow every instruction as a standing rule and trust stated coverage facts instead of re-querying them; read `[relation]` lines as how concepts connect (is-a, part-of, has-many, related-to, or measured-by a governed metric) and use them to choose joins and the governed metric, never as rows of data; never list or quote the block unless asked; and fall back to schema and sample values, without inventing definitions, when nothing applies. (Full prompt requirements: [../../system/agents.md](../../system/agents.md).)
-- R27. The same block SHALL also be used for background deep-analysis calls and for eval runs, so those see the same ontology as a chat turn.
+- R27. The same block SHALL also be used for eval runs, so those see the same ontology as a chat turn.
 - R28. The system SHALL record, on each assistant answer, the list of items that were actually included in the block (id, kind, name as `title`, body exactly as shown, and dataset when the item belongs to one). It SHALL be recorded when the block is built, not inferred afterwards, and SHALL contain only items that fit the budget. The stored name of this record stays `knowledge` and its kinds are `term` (a concept), `default_filter` (a constraint), `instruction` and `relation`; the body is the description of a concept or instruction, the predicate of a constraint, and `<from> <type> <to>` of a relation.
 
 Bootstrap (drafting from data)
@@ -69,8 +69,10 @@ Graph view
 - R38. The Ontology tab's filter row SHALL end with a **Graph** option. Choosing it SHALL replace the item list with a graph of the dataset's ontology (its own and shared items); choosing another option SHALL return to the list. The graph SHALL draw one node per concept, one node per metric that a measured-by relation targets (in a distinct style), and one labelled arrow per relation from its source to its target; a relation whose endpoint no longer exists SHALL be left out. Disabled and pending items SHALL be drawn faded and dashed; shared items SHALL carry an "All datasets" marker. With **Pending suggestions** on, the graph SHALL show only the pending items and the nodes they connect.
 - R39. The graph SHALL support pan, zoom (with +, − and Fit controls) and dragging nodes. Selecting a node or arrow (click, or Enter on a focused node) SHALL highlight its neighbours and dim the rest, and SHALL show its details (kind, name, description, mappings or relation, and its Mined, Disabled and All datasets states) with an **Edit** button that opens the item's editor; a metric node shows details only. Clicking empty space or pressing Escape SHALL clear the selection. With no concepts, the graph SHALL show "No concepts to draw yet". The graph is drawn by the app itself, with no graph library.
 
-On the Context page
-- R40. The Context page SHALL offer an **Ontologies** card (app-shell R3a) opening a list of every dataset, sorted by name, each with the size of its own ontology ("<n> concepts · <n> relations · …", only the kinds present, or "No ontology yet"), a "<n> pending" chip when it has pending suggestions, and "Could not read this ontology" when its list fails. Shared items are counted once, in a line above the list ("<n> shared item(s) apply to every dataset"), not per dataset. Choosing a dataset SHALL open the same Ontology panel as that dataset's Ontology tab (rules R1-R39 apply unchanged), under an **Ontologies** back control that returns to the list with fresh counts. With no datasets the page SHALL show "No datasets yet".
+- R40. (Removed 2026-11-15.) The Context page and its Ontologies overview are gone. A dataset's ontology is edited only in its **Ontology** tab (R1-R39 apply unchanged).
+
+Background task
+- R41. Generating suggestions SHALL run as a background task of kind `ontology-bootstrap`, keyed by the dataset name and titled `Suggesting ontology for "<dataset>"` ([app-shell](../app-shell/spec.md) R58–R63). The stream is read at the root, so leaving the Ontology tab SHALL NOT stop the run; its stages SHALL be the task's steps, and stopping the task SHALL abort the stream request. A re-created Ontology tab SHALL show the live steps and, when the run ends while it is shown, reload the items and switch to Pending suggestions. The outcome toast comes from the service, with **Open** (the dataset in the editor, on its Ontology tab) on success and **Retry** on failure.
 
 ## Edge cases and errors
 
@@ -78,7 +80,7 @@ On the Context page
 - Filters that match nothing: "No items match these filters."; with Pending suggestions active and none pending: "No pending suggestions right now — generate some or check back later."
 - Backend unreachable on load: the tab shows the error text (`Backend unreachable` when no message is available). On toggle, delete or save failures a toast shows the server message or `Backend unreachable`.
 - Bootstrap request fails to start: `Could not generate suggestions (<status>)`; connection failure: `Backend unreachable`; stream closes without a terminal event: `Stream interrupted` or `Stream ended unexpectedly`; empty error: `Could not generate suggestions — try again shortly`.
-- Bootstrap yields zero new drafts: toast `No new suggestions this time`.
+- Bootstrap yields zero new drafts: toast `No new suggestions this time` (from the Background tasks service, R41).
 - A relation that points at a concept that is later deleted is deleted with it (R19), so a relation never dangles. A `measured-by` relation whose metric is deleted stays stored but is skipped in the block and the per-answer record (R22), and shown without its metric label in the tab.
 - A shared item with a mapping to an entity that is not in the dataset being viewed is shown as usual; the entity check (R10) is made only against a dataset's own items.
 - An item whose line alone exceeds the remaining budget stops the block, so a very long newest item can hide older ones. (Known limitation of newest-first selection; roadmap 1.3.3 replaces it.)
@@ -90,12 +92,12 @@ On the Context page
 - Collection and document shape (ontology item, per-answer knowledge record), the reference rules and migration M15: see [../../system/data-model.md](../../system/data-model.md) 3.9, 3.13 and 6.
 - Agents: the Ontology Bootstrap agent (prompt requirements, output schema, draft cap, post-processing) and the assistant's curated-knowledge instructions (the `curated-knowledge` skill) and block format: see [../../system/agents.md](../../system/agents.md) 2.5, 4.1 and Appendix B.
 - Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0036.
-- Per-answer provenance is stored on the assistant message and read by [../sessions-chat/spec.md](../sessions-chat/spec.md).
-- Related: [../datasets/spec.md](../datasets/spec.md) (the editor that hosts the tab, the delete cascade), [../metrics/spec.md](../metrics/spec.md) (the governed metrics a relation can point at; a sibling context block), [../verified-queries/spec.md](../verified-queries/spec.md) (a sibling context block), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../app-shell/spec.md](../app-shell/spec.md) (Context page).
+- Per-answer provenance is stored on the assistant message and read by [../agent-answers/spec.md](../agent-answers/spec.md).
+- Related: [../datasets/spec.md](../datasets/spec.md) (the editor that hosts the tab, the delete cascade), [../metrics/spec.md](../metrics/spec.md) (the governed metrics a relation can point at; a sibling context block), [../verified-queries/spec.md](../verified-queries/spec.md) (a sibling context block), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../app-shell/spec.md](../app-shell/spec.md) (the shell).
 
 ## UI
 
-Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset from the Datasets list shows the editor with two tabs, **Schema** (the catalog browser as before) and **Ontology**; a dataset being created shows no tabs (Schema only) until it is saved and opened again ([datasets](../datasets/spec.md) R48, [../../system/ui.md](../../system/ui.md) 4.3 and 4.8). Before 2026-11-09 (roadmap 1.21.7–1.21.9) this was a Knowledge screen under Context.
+Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset from the Datasets list shows the editor with three tabs, **Schema** (the catalog browser as before), **Ontology** and **Profile & synthesize** ([synthetic-data](../synthetic-data/spec.md)); a dataset being created shows no tabs (Schema only) until it is saved and opened again ([datasets](../datasets/spec.md) R48, [../../system/ui.md](../../system/ui.md) 4.3 and 4.8). Before 2026-11-09 (roadmap 1.21.7–1.21.9) this was a Knowledge screen under Context.
 
 - Header: title "Ontology", subtitle "Concepts, relations, constraints and instructions the assistant uses for this dataset. Only enabled items are applied.", and two buttons, "Generate suggestions" and "New item".
 - Filter row: kind pills "All", "Concepts", "Relations", "Constraints", "Instructions" (each with a tooltip describing the kind), and a toggle "Pending suggestions" with a count badge of mined, still-disabled items. Choosing a kind leaves the pending view.
@@ -110,7 +112,7 @@ Placement: the **Ontology** tab of the dataset editor. Opening a saved dataset f
   - Constraint: Name, Predicate, When to apply (optional), Concept (optional) and Entities (optional).
   - Instruction: Name, Text and Entities (optional).
   - A "Share with all datasets" checkbox, only when creating. Buttons "Cancel" and "Create item" / "Save changes" (disabled until the required fields of the kind are filled; shows "Saving…"). A server message (for example an unresolved concept) is shown inline. The panel does not edit the enabled flag; new items are enabled.
-- Generate suggestions panel: explanation ("The assistant reviews this dataset and drafts concepts, relations, constraints and instructions as pending suggestions — nothing is applied until you approve it. This can take up to a minute."), "Cancel" and "Generate" (shows "Generating…"; cancel is blocked while running). There is no dataset picker: it runs on the open dataset. A live progress list shows finished stages with a check mark and the current stage with a spinner. On success the panel closes, a toast reads "<n> suggestion(s) generated — review in Pending suggestions", and the tab switches to the Pending suggestions view.
+- Generate suggestions panel: explanation ("The assistant reviews this dataset and drafts concepts, relations, constraints and instructions as pending suggestions — nothing is applied until you approve it. This can take up to a minute."), "Cancel" and "Generate" (shows "Generating…"; cancel is blocked while running). There is no dataset picker: it runs on the open dataset. A live progress list shows finished stages with a check mark and the current stage with a spinner. The run is a background task (R41): leaving the tab does not stop it, and reopening the tab shows the live steps again. On success the panel closes, a toast (from the Background tasks service, with **Open**) reads "<n> suggestion(s) generated — review in Pending suggestions", and the tab, when shown, switches to the Pending suggestions view.
 - In chat: each assistant answer that carried ontology items shows a collapsed "Ontology in context (<n>)" disclosure listing, per item, its kind label (Concept, Constraint, Instruction or Relation), name, dataset (or "all datasets" for a shared item) and body, plus the note "The dataset ontology the assistant was given before answering. Edit it in the dataset's Ontology tab; disabled items are never included." Clarification cards show it too.
 
 ## Flows
@@ -254,14 +256,6 @@ Feature: Dataset ontology
     Then its neighbours are highlighted and its details are shown
     And clicking "Edit" opens the concept editor for "Match"
 
-  Scenario: Review every dataset's ontology from Context
-    Given "World Cup" has 10 concepts and 5 relations, all pending, and "Formula 1" has none
-    When I open "Context" and click the "Ontologies" card
-    Then I see "World Cup" with "10 concepts · 5 relations" and "15 pending", and "Formula 1" with "No ontology yet"
-    When I click "World Cup"
-    Then I see its Ontology panel under an "Ontologies" back control
-    And it is the same as the Ontology tab of the "World Cup" dataset
-
 ```
 
 ## Acceptance
@@ -281,4 +275,4 @@ Feature: Dataset ontology
 - Open question: the "Pending suggestions" view hides the Edit action; a mined suggestion can only be edited after it is accepted. Intended?
 - Open question: the non-streaming bootstrap endpoint exists but nothing in the UI calls it. Keep it as part of the public contract?
 
-<!-- sources: backend/src/modules/ontology/**, backend/src/mastra/agents/knowledge-bootstrap.agent.ts, backend/src/mastra/skills/curated-knowledge/SKILL.md, backend/src/mastra/context-blocks.ts (knowledgeContext), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, backend/src/infrastructure/database/database.module.ts (M15), frontend/src/app/features/ontology/**, frontend/src/app/features/datasets/components/catalog-browser, frontend/src/app/features/sessions/components/session-chat/session-chat.html (knowledgeApplied) -->
+<!-- sources: backend/src/modules/ontology/**, backend/src/mastra/agents/knowledge-bootstrap.agent.ts, backend/src/mastra/skills/curated-knowledge/SKILL.md, backend/src/mastra/context-blocks.ts (knowledgeContext), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, backend/src/infrastructure/database/database.module.ts (M15), frontend/src/app/features/ontology/**, frontend/src/app/features/datasets/components/catalog-browser, frontend/src/app/features/sessions/components/answer-view/answer-view.html (knowledgeApplied) -->

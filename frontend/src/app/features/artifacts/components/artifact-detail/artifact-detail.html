@@ -1,0 +1,165 @@
+<div class="flex min-h-0 flex-1 flex-col gap-3" data-testid="artifact-detail-page">
+  <button
+    type="button"
+    data-testid="artifact-back"
+    (click)="back.emit()"
+    class="btn btn-ghost w-fit px-2 py-1 text-[12px]"
+  >
+    <lucide-angular [img]="ArrowLeft" [size]="14" />
+    <span>Artifacts</span>
+  </button>
+
+  @if (loading()) {
+    <div class="mt-6 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading artifact…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else if (artifact(); as a) {
+    <div class="flex flex-wrap items-start gap-3">
+      <div class="min-w-0 flex-1">
+        @if (renaming()) {
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              data-testid="artifact-name-input"
+              aria-label="Artifact name"
+              [value]="draftName()"
+              (input)="onNameInput($event)"
+              (keydown.enter)="saveRename()"
+              (keydown.escape)="cancelRename()"
+              [attr.aria-invalid]="nameError() !== null ? 'true' : null"
+              class="field max-w-md"
+            />
+            <button
+              type="button"
+              data-testid="artifact-rename-save"
+              [disabled]="saving()"
+              (click)="saveRename()"
+              class="btn btn-primary px-3 py-1 text-[12px]"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              (click)="cancelRename()"
+              class="btn btn-ghost px-3 py-1 text-[12px]"
+            >
+              Cancel
+            </button>
+          </div>
+          @if (nameError(); as message) {
+            <p
+              data-testid="artifact-name-error"
+              class="m-0 mt-1 text-[12px] text-on-danger-soft"
+            >
+              {{ message }}
+            </p>
+          }
+        } @else {
+          <h2
+            data-testid="artifact-detail-name"
+            class="truncate text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
+          >
+            {{ a.name }}
+          </h2>
+        }
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <span class="chip chip-info" data-testid="artifact-detail-kind">{{
+            kind()
+          }}</span>
+          <span class="text-[12px] text-fg-muted">{{ counts() }}</span>
+        </div>
+        @if (a.description) {
+          <p class="m-0 mt-2 text-[13px] text-fg-muted">{{ a.description }}</p>
+        }
+      </div>
+
+      <div class="flex shrink-0 items-center gap-2">
+        @if (!renaming()) {
+          <button
+            type="button"
+            data-testid="artifact-rename"
+            (click)="startRename()"
+            class="btn btn-ghost px-2.5 py-1"
+          >
+            <lucide-angular [img]="Pencil" [size]="13" />
+            <span>Rename</span>
+          </button>
+        }
+        <button
+          type="button"
+          data-testid="artifact-delete"
+          (click)="confirmingDelete.set(true)"
+          class="btn btn-ghost px-2.5 py-1"
+        >
+          <lucide-angular [img]="Trash2" [size]="13" />
+          <span>Delete</span>
+        </button>
+        <button
+          type="button"
+          data-testid="artifact-use"
+          (click)="useInWorkflow()"
+          class="btn btn-secondary px-3 py-1"
+        >
+          <lucide-angular [img]="Play" [size]="13" />
+          <span>Map to data</span>
+        </button>
+      </div>
+    </div>
+
+    @if (confirmingDelete()) {
+      <div
+        role="alertdialog"
+        aria-label="Delete artifact"
+        class="flex flex-wrap items-center gap-3 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+      >
+        <span class="min-w-0 flex-1"
+          >Delete "{{ a.name }}"? Runs that used it keep their results.</span
+        >
+        <button
+          type="button"
+          data-testid="artifact-delete-confirm"
+          [disabled]="deleting()"
+          (click)="confirmDelete()"
+          class="btn btn-danger px-3 py-1 text-[12px]"
+        >
+          Delete
+        </button>
+        <button
+          type="button"
+          (click)="confirmingDelete.set(false)"
+          class="btn btn-ghost px-3 py-1 text-[12px]"
+        >
+          Cancel
+        </button>
+      </div>
+      @if (deleteError(); as message) {
+        <p class="m-0 text-[12px] text-on-danger-soft">{{ message }}</p>
+      }
+    }
+
+    @if (a.hasImage) {
+      <img
+        [src]="imageUrl()"
+        alt="The original dashboard image"
+        data-testid="artifact-detail-image"
+        class="max-h-48 w-auto self-start rounded-md border border-border object-contain"
+      />
+    }
+
+    <iframe
+      data-testid="artifact-detail-frame"
+      class="min-h-[420px] w-full flex-1 rounded-xl border border-border bg-surface"
+      sandbox="allow-scripts"
+      referrerpolicy="no-referrer"
+      [title]="a.name"
+      [srcdoc]="safeDocument()"
+    ></iframe>
+  }
+</div>

@@ -6,6 +6,7 @@ import type {
   KeyConstraint,
   ProfiledTable,
   ProfilingConnector,
+  ProfilingReach,
   ScopedProfiler,
 } from '../../datasources/connectors/profiling';
 import {
@@ -146,136 +147,173 @@ export async function buildSourceProfile<TConfig>(
   };
   const width = PROFILE_CONCURRENCY_BY_DIALECT[dialect.sourceType];
 
-  return profiler.withSessions(config, width, signal, async (scoped) => {
-    throwIfAborted(signal);
-    emit({ phase: 'inventory', message: 'Listing tables…' });
-    // Every table stays a join target; the scope narrows the child tables only,
-    // and only children are profiled. The inferred-join cap below is applied
-    // once, to the narrowed children's candidates (R11).
-    // Only the inventory call may reject; the other three never do (`attempt`).
-    const [allTables, keyConstraints, foreignKeys, privileges] =
-      await Promise.all([
-        scoped.tables(config),
-        attempt(() => scoped.keys(config), signal),
-        attempt(() => scoped.foreignKeys(config), signal),
-        attempt(() => scoped.tablePrivileges(config), signal),
-      ]);
-    const children = allTables.filter(scopeFilter(scope));
-    const childKeys = new Set(children.map((t) => tableKey(t.schema, t.table)));
-    const selectable = privileges
-      ? new Set(
-          privileges
-            .filter((p) => p.selectable)
-            .map((p) => tableKey(p.schema, p.table)),
-        )
-      : undefined;
+  return profiler.withSessions(
+    config,
+    width,
+    signal,
+    async (scoped) => {
+      throwIfAborted(signal);
+      emit({ phase: 'inventory', message: 'Listing tables…' });
+      // Every table the inventory holds stays a join target; the scope narrows
+      // the child tables only, and only children are profiled. On Databricks a
+      // scoped inventory holds the scope's schemas, not the whole workspace
+      // (R28). The inferred-join cap below is applied once, to the narrowed
+      // children's candidates (R11).
+      // Only the inventory call may reject; the other three never do (`attempt`).
+      const [allTables, keyConstraints, foreignKeys, privileges] =
+        await Promise.all([
+          scoped.tables(config),
+          attempt(() => scoped.keys(config), signal),
+          attempt(() => scoped.foreignKeys(config), signal),
+          attempt(() => scoped.tablePrivileges(config), signal),
+        ]);
+      const children = allTables.filter(scopeFilter(scope));
+      const childKeys = new Set(
+        children.map((t) => tableKey(t.schema, t.table)),
+      );
+      const selectable = privileges
+        ? new Set(
+            privileges
+              .filter((p) => p.selectable)
+              .map((p) => tableKey(p.schema, p.table)),
+          )
+        : undefined;
 
-    const entities: EntityProfile[] = new Array<EntityProfile>(children.length);
-    let profiled = 0;
-    await mapWithConcurrency(
-      children.map((table, index) => ({ table, index })),
-      width,
-      async ({ table, index }) => {
-        throwIfAborted(signal);
-        entities[index] = await profileEntity(
-          scoped,
-          config,
-          dialect,
-          table,
-          keyConstraints ?? [],
-          selectable,
-          signal,
-        );
-        profiled += 1;
-        const entity = `${table.schema}.${table.table}`;
-        emit({
-          phase: 'profiling',
-          done: profiled,
-          total: children.length,
-          entity,
-          message: `Profiling ${entity} (${profiled}/${children.length})…`,
-        });
-      },
-    );
+      const entities: EntityProfile[] = new Array<EntityProfile>(
+        children.length,
+      );
+      let profiled = 0;
+      await mapWithConcurrency(
+        children.map((table, index) => ({ table, index })),
+        width,
+        async ({ table, index }) => {
+          throwIfAborted(signal);
+          entities[index] = await profileEntity(
+            scoped,
+            config,
+            dialect,
+            table,
+            keyConstraints ?? [],
+            selectable,
+            signal,
+          );
+          profiled += 1;
+          const entity = `${table.schema}.${table.table}`;
+          emit({
+            phase: 'profiling',
+            done: profiled,
+            total: children.length,
+            entity,
+            message: `Profiling ${entity} (${profiled}/${children.length})…`,
+          });
+        },
+      );
 
-    const declared = (foreignKeys ?? []).filter((e) =>
-      childKeys.has(tableKey(e.schema, e.table)),
-    );
-    const relationships: RelationshipProfile[] = new Array<RelationshipProfile>(
-      declared.length,
-    );
-    emit({
-      phase: 'relationships',
-      message: 'Checking relationships…',
-      done: 0,
-      total: declared.length,
-    });
-    await mapWithConcurrency(
-      declared.map((edge, index) => ({ edge, index })),
-      width,
-      async ({ edge, index }) => {
-        throwIfAborted(signal);
-        const orphanCount = await attempt(
-          () => scoped.orphanCount(config, edge),
-          signal,
-        );
-        relationships[index] = toRelationship(edge, 'declared', orphanCount);
-      },
-    );
-
-    const declaredColumns = new Set(
-      (foreignKeys ?? []).map((e) => `${e.schema} ${e.table} ${e.column}`),
-    );
-    const candidates = inferJoinCandidates(
-      entities
-        .filter((e) => e.readable !== false)
-        .map((e) => ({
-          namespace: e.namespace,
-          name: e.name,
-          columns: e.fields.map((f) => f.name),
-        })),
-      allTables.map((t) => ({
-        namespace: t.schema,
-        name: t.table,
-        columns: t.columns.map((c) => c.name),
-      })),
-      declaredColumns,
-    ).slice(0, MAX_INFERRED_JOIN_CANDIDATES);
-    const inferred: (RelationshipProfile | undefined)[] = new Array<
-      RelationshipProfile | undefined
-    >(candidates.length);
-    if (candidates.length > 0) {
+      const declared = (foreignKeys ?? []).filter((e) =>
+        childKeys.has(tableKey(e.schema, e.table)),
+      );
+      const relationships: RelationshipProfile[] =
+        new Array<RelationshipProfile>(declared.length);
       emit({
         phase: 'relationships',
         message: 'Checking relationships…',
-        done: declared.length,
-        total: declared.length + candidates.length,
+        done: 0,
+        total: declared.length,
       });
-    }
-    await mapWithConcurrency(
-      candidates.map((edge, index) => ({ edge, index })),
-      width,
-      async ({ edge, index }) => {
-        throwIfAborted(signal);
-        // An inferred candidate is kept only once its orphan probe verifies it.
-        const orphanCount = await attempt(
-          () => scoped.orphanCount(config, edge),
-          signal,
-        );
-        if (orphanCount !== undefined) {
-          inferred[index] = toRelationship(edge, 'inferred', orphanCount);
-        }
-      },
-    );
-    for (const r of inferred) if (r) relationships.push(r);
+      await mapWithConcurrency(
+        declared.map((edge, index) => ({ edge, index })),
+        width,
+        async ({ edge, index }) => {
+          throwIfAborted(signal);
+          const orphanCount = await attempt(
+            () => scoped.orphanCount(config, edge),
+            signal,
+          );
+          relationships[index] = toRelationship(edge, 'declared', orphanCount);
+        },
+      );
 
+      const declaredColumns = new Set(
+        (foreignKeys ?? []).map((e) => `${e.schema} ${e.table} ${e.column}`),
+      );
+      const candidates = inferJoinCandidates(
+        entities
+          .filter((e) => e.readable !== false)
+          .map((e) => ({
+            namespace: e.namespace,
+            name: e.name,
+            columns: e.fields.map((f) => f.name),
+          })),
+        allTables.map((t) => ({
+          namespace: t.schema,
+          name: t.table,
+          columns: t.columns.map((c) => c.name),
+        })),
+        declaredColumns,
+      ).slice(0, MAX_INFERRED_JOIN_CANDIDATES);
+      const inferred: (RelationshipProfile | undefined)[] = new Array<
+        RelationshipProfile | undefined
+      >(candidates.length);
+      if (candidates.length > 0) {
+        emit({
+          phase: 'relationships',
+          message: 'Checking relationships…',
+          done: declared.length,
+          total: declared.length + candidates.length,
+        });
+      }
+      await mapWithConcurrency(
+        candidates.map((edge, index) => ({ edge, index })),
+        width,
+        async ({ edge, index }) => {
+          throwIfAborted(signal);
+          // An inferred candidate is kept only once its orphan probe verifies it.
+          const orphanCount = await attempt(
+            () => scoped.orphanCount(config, edge),
+            signal,
+          );
+          if (orphanCount !== undefined) {
+            inferred[index] = toRelationship(edge, 'inferred', orphanCount);
+          }
+        },
+      );
+      for (const r of inferred) if (r) relationships.push(r);
+
+      return {
+        sourceId,
+        sourceType: dialect.sourceType,
+        entities,
+        relationships,
+      };
+    },
+    reachOf(scope),
+  );
+}
+
+/**
+ * What the profiler's catalogue reads must cover for this scope (R28): its
+ * namespaces and, when known, its exact tables. No reach for a
+ * whole-datasource assessment.
+ */
+export function reachOf(scope?: AssessScope): ProfilingReach | undefined {
+  if (scope?.entities?.length) {
     return {
-      sourceId,
-      sourceType: dialect.sourceType,
-      entities,
-      relationships,
+      namespaces: [...new Set(scope.entities.map((e) => e.namespace))],
+      entities: scope.entities.map(({ namespace, name }) => ({
+        namespace,
+        name,
+      })),
     };
-  });
+  }
+  if (scope?.namespace) {
+    return {
+      namespaces: [scope.namespace],
+      ...(scope.entity
+        ? { entities: [{ namespace: scope.namespace, name: scope.entity }] }
+        : {}),
+    };
+  }
+  return undefined;
 }
 
 async function profileEntity<TConfig>(

@@ -17,7 +17,7 @@ What is captured
 - R1. The system SHALL record every uncaught interface error (message, file, line, column and stack when known) as an `error` entry with source `renderer`.
 - R2. The system SHALL record every unhandled promise rejection as an `error` entry with source `renderer`: the error's message when the reason is an error (with its stack as details), otherwise "Unhandled promise rejection: <reason>".
 - R3. The system SHALL record every error toast shown to the user as an `error` entry with source `user-visible` and the toast text as the message. This is how failed operations, including failed connection tests, reach the log from the interface.
-- R4. The desktop shell SHALL capture everything the backend process writes to standard output and standard error, line by line, with terminal colour codes removed and blank lines dropped.
+- R4. The desktop shell SHALL capture everything the backend process writes to standard output and standard error, with terminal colour codes removed and blank lines dropped. A multi-line message (an error with its stack trace, a Node crash block) SHALL be one entry, not one entry per line: the entry's message is the line that started it and the remaining lines are its details.
 - R5. A backend line that is a JSON object with a `message` SHALL be recorded with source `backend:mastra`, its own `level` when it is a string (otherwise the stream's default), and every other JSON field as the entry's details.
 - R6. Any other backend line SHALL be recorded with source `backend`. Its level SHALL be `error` if it contains the word ERROR or FATAL, else `warn` if it contains WARN, WARNING or a word ending in "Warning", else `debug` if it contains DEBUG, else the stream's default: `info` for standard output, `error` for standard error.
 - R7. The desktop shell SHALL record its own events with source `electron`: diagnostics initialised (version, platform, architecture), backend process exits and failures, restart attempts, the restart budget being exhausted, a missing backend entry file, a backend not ready before the timeout, data-directory migration outcomes, secret-file problems, and report exports. It SHALL record page-level events with source `electron:renderer`: the page failing to load, recovery from a missing-file load (at most 3 attempts), the page process stopping, the window becoming unresponsive.
@@ -93,7 +93,7 @@ The panel is a modal overlay above the whole app, reached from the bottom of the
 
 ## Flows
 
-E2E: `frontend/e2e/diagnostics.spec.ts` for the Feature below (moved verbatim from the repository `gherkin.md`). Scenarios tagged `@desktop-only` rely on the desktop shell (shell-side redaction, the native save dialog) and run only in the Playwright `desktop` project. The `web` project skips them (see *Test target convention* in the [`workflow-e2e`](../../../.claude/skills/workflow-e2e/SKILL.md) project skill).
+E2E: `frontend/e2e/diagnostics.spec.ts` for the Feature below (moved verbatim from the repository `gherkin.md`). Scenarios tagged `@desktop-only` rely on the desktop shell (shell-side redaction, the native save dialog) and run only in the Playwright `desktop` project. The `web` project skips them (see *Test target convention* in the [`workflow-gate`](../../../.claude/skills/workflow-gate/SKILL.md) project skill).
 
 ```gherkin
 Feature: Diagnostics

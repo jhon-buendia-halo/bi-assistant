@@ -12,13 +12,13 @@ Creation and removal
 - R1. When the user gives an assistant answer a thumbs-up, the system SHALL record that answer's rating and mark the answer "verified".
 - R2. On a thumbs-up the system SHALL save a verified query holding: the user question (the closest user message before the answer, trimmed), the SQL (the answer's last successful read-only SQL statement, trimmed), the session's datasource when exactly one datasource is involved, the answer's source entities (empty when none), and the source session and answer timestamp.
 - R3. The system SHALL NOT save a verified query when the answer ran no successful SQL, or when no preceding user question with text exists. The rating itself SHALL still be recorded and the answer still marked verified.
-- R4. A verified query SHALL be unique per source answer (session id plus answer timestamp). Saving again for the same answer SHALL replace the stored pair, not create a second one.
+- R4. A verified query SHALL be unique per source answer (session id plus answer timestamp, or, for a workflow run's answer, the run id). Saving again for the same answer SHALL replace the stored pair, not create a second one.
 - R5. On a thumbs-down the system SHALL delete the verified query that came from that answer (if any), record the rating, and remove the "verified" mark from the answer, even if its SQL is still stored in the library from elsewhere.
 - R6. The system SHALL reject a rating other than up or down (`rating must be 'up' or 'down'`), a missing answer timestamp (`messageAt is required`), and an answer that does not exist (`No assistant message at <timestamp>`).
 - R7. Deleting a session SHALL NOT delete the verified queries that came from it (see Open questions).
 
 Retrieval
-- R8. For every chat turn, deep-analysis call and SQL-verifier pass the system SHALL look up stored pairs similar to the user's question. Similarity SHALL be lexical: lowercase the text, split on non-alphanumeric characters, drop one-character tokens and common stopwords, and score the overlap of the two token sets (shared tokens divided by distinct tokens in either). Pairs with a zero score SHALL be ignored.
+- R8. For every chat turn and SQL-verifier pass the system SHALL look up stored pairs similar to the user's question. Similarity SHALL be lexical: lowercase the text, split on non-alphanumeric characters, drop one-character tokens and common stopwords, and score the overlap of the two token sets (shared tokens divided by distinct tokens in either). Pairs with a zero score SHALL be ignored.
 - R9. The system SHALL return the top three pairs by score and render them as one block "Verified reference queries (user-approved earlier — reuse their tables, joins and filters when the question is similar)", each as `Q: <question>` and `SQL: <sql>`. The block SHALL be limited to 3,000 characters, stopping at the first pair that does not fit. When nothing matches, no block SHALL be added.
 - R10. The block SHALL be sent as a system message after the metric definitions and the knowledge block. Retrieval is across all sessions and datasources; it SHALL NOT be restricted to the current session's datasets.
 - R11. A failure to read the library while preparing the SQL verifier SHALL be treated as "no references", not as an error.
@@ -36,6 +36,7 @@ Migration
 
 Ownership
 - R17. Verified queries SHALL be kept for the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): every verified query SHALL be retrieved into turns, mark answers as Verified and be offered as metric drafts.
+- R18. A workflow run's answer SHALL be rated as a chat answer is (R1-R7): the question is the run's question, the datasource is the one its datasets share, and the pair is stored with `sourceRunId` and no `sourceSessionId`, unique per run (R4). A run is never a session, so deleting a run, like deleting a session, SHALL NOT delete its verified queries (R7). Retrieval (R8-R10) and the metrics candidates (R15) SHALL include these pairs.
 
 ## Edge cases and errors
 
@@ -50,10 +51,10 @@ Ownership
 
 ## Contracts
 
-- Rating endpoint on a session's messages (feedback): see [../../system/api.md](../../system/api.md). There is no list/delete endpoint for verified queries; they are internal to the backend. The metrics candidates endpoint exposes them indirectly.
+- Rating endpoint on a session's messages (feedback) and on a run's answer (api.md 128): see [../../system/api.md](../../system/api.md). There is no list/delete endpoint for verified queries; they are internal to the backend. The metrics candidates endpoint exposes them indirectly.
 - Collection `verified_queries` and the answer's `verified` / `feedback` fields: see [../../system/data-model.md](../../system/data-model.md).
-- Agents using the reference block: the assistant (chat and deep analysis) and the SQL verifier: see [../../system/agents.md](../../system/agents.md).
-- Related capabilities: [../sessions-chat/spec.md](../sessions-chat/spec.md) (rating UI and verification), [../metrics/spec.md](../metrics/spec.md), [../dataset-ontology/spec.md](../dataset-ontology/spec.md), [../deep-analysis/spec.md](../deep-analysis/spec.md).
+- Agents using the reference block: the assistant (chat turns) and the SQL verifier: see [../../system/agents.md](../../system/agents.md).
+- Related capabilities: [../agent-answers/spec.md](../agent-answers/spec.md) (rating UI and verification), [../metrics/spec.md](../metrics/spec.md), [../dataset-ontology/spec.md](../dataset-ontology/spec.md).
 
 ## UI
 
@@ -120,4 +121,4 @@ Feature: Verified queries (E2E: none yet)
 - Open question: saving a pair for an already-stored answer replaces the document including its id, so a metric promoted from the old id is orphaned. Should the id be preserved on upsert?
 - Open question: there is no way to browse, edit or delete verified queries directly. Roadmap Milestone 1.3 (Knowledge Store) plans to link verified queries to concepts; is a management screen planned?
 
-<!-- sources: backend/src/modules/verified-queries/**, backend/src/modules/sessions/sessions.service.ts (recordFeedback, matchesVerifiedQuery, agentContext, deriveIndependentSql), backend/src/modules/sessions/sessions.controller.ts (messages/feedback), backend/src/modules/sessions/entities/session.entity.ts, backend/src/modules/metrics/metrics.service.ts (candidates), frontend/src/app/features/sessions/components/session-chat/session-chat.html + .ts (rateMessage) -->
+<!-- sources: backend/src/modules/verified-queries/**, backend/src/modules/sessions/sessions.service.ts (recordFeedback, matchesVerifiedQuery, agentContext, deriveIndependentSql), backend/src/modules/sessions/sessions.controller.ts (messages/feedback), backend/src/modules/sessions/entities/session.entity.ts, backend/src/modules/metrics/metrics.service.ts (candidates), frontend/src/app/features/sessions/components/session-chat/session-chat.ts (rateMessage), answer-view/answer-view.html (thumbs, Verified badge) -->

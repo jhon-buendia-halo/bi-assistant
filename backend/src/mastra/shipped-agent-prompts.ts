@@ -1,42 +1,46 @@
 import { createHash } from 'node:crypto';
 import { assistantShippedPrompt } from './agents/assistant-prompt';
 import {
-  ASSISTANT_V2_PROMPT,
+  PLAN_INSTRUCTIONS,
+  WRITE_ANSWER_INSTRUCTIONS,
+} from './workflows/answer-business-question.prompts';
+import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
+import {
+  MAP_DATA_INSTRUCTIONS,
+  READ_DASHBOARD_INSTRUCTIONS,
+} from './workflows/recreate-dashboard.prompts';
+import { READ_IMAGES_INSTRUCTIONS } from './workflows/read-images.prompts';
+import {
+  INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
   EVAL_JUDGE_PROMPT,
   KNOWLEDGE_BOOTSTRAP_PROMPT,
-  RFP_PROMPT,
   SQL_FIXER_PROMPT,
   SQL_VERIFIER_PROMPT,
   VISUALIZATION_PROMPT,
 } from './agents/system-prompts';
-import {
-  BENCHMARKING_PROMPT,
-  LAD_COE_PROMPT,
-  STRATEGY_PROMPT,
-  SURVEY_PROMPT,
-} from './agents/showcase-catalog';
 
 /**
  * The shipped, editable system prompt of each built-in agent, by registry
- * key (ADR-0026, data-model 3.10.3): the assistant's, Questions to Insights v2's,
- * the RFP Builder's and the Data Readiness Agent's without their generated `## Tools` section, a System agent's whole static
+ * key (ADR-0026, data-model 3.10.3): the assistant's, Insights Analyst's,
+ * and the Data Readiness Agent's without their generated `## Tools` section, a System agent's whole static
  * instructions.
  */
 const SHIPPED: Readonly<Record<string, string>> = {
   assistant: assistantShippedPrompt(),
-  'assistant-v2': ASSISTANT_V2_PROMPT,
+  'insights-analyst': INSIGHTS_ANALYST_PROMPT,
   visualization: VISUALIZATION_PROMPT,
   'sql-fixer': SQL_FIXER_PROMPT,
   'sql-verifier': SQL_VERIFIER_PROMPT,
   'knowledge-bootstrap': KNOWLEDGE_BOOTSTRAP_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
-  rfp: RFP_PROMPT,
   'data-readiness': DATA_READINESS_PROMPT,
-  benchmarking: BENCHMARKING_PROMPT,
-  survey: SURVEY_PROMPT,
-  'lad-coe': LAD_COE_PROMPT,
-  strategy: STRATEGY_PROMPT,
+  'analysis-planner': PLAN_INSTRUCTIONS,
+  'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
+  'dashboard-reader': READ_DASHBOARD_INSTRUCTIONS,
+  'data-mapper': MAP_DATA_INSTRUCTIONS,
+  'image-reader': READ_IMAGES_INSTRUCTIONS,
+  'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

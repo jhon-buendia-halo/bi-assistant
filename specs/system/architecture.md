@@ -36,6 +36,7 @@ flowchart LR
     anthropic["Anthropic API"]
     openai["OpenAI API<br/>(configured, or OPENAI_API_KEY fallback)"]
     custom["Custom model endpoint<br/>(self-hosted or gateway; OpenAI- or Anthropic-compatible; ADR-0032)"]
+    copilot["GitHub Copilot<br/>(user's seat via the local Copilot runtime; ADR-0037)"]
   end
 
   subgraph gh["GitHub (distribution)"]
@@ -53,12 +54,13 @@ flowchart LR
   system -->|"messages API (HTTPS, API key)"| anthropic
   system -->|"chat completions (HTTPS)"| openai
   system -->|"chat completions or messages API (HTTP or HTTPS, optional key)"| custom
+  system -->|"Copilot SDK over a local runtime (machine's GitHub login)"| copilot
 ```
 
 *System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider (a public API, LenAI or a custom model endpoint the user points it at), and is distributed through GitHub Releases and GitHub Packages.*
 
 
-The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI, or a custom endpoint that speaks the OpenAI or Anthropic API, such as Ollama, LM Studio, vLLM, LiteLLM or a relay; ADR-0032), GitHub (releases, GitHub Packages). There is one user, a built-in super admin who is always the caller and never signs in (ADR-0030).
+The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI, or a custom endpoint that speaks the OpenAI or Anthropic API, such as Ollama, LM Studio, vLLM, LiteLLM or a relay; ADR-0032, or the user's GitHub Copilot seat through the official Copilot SDK; ADR-0037), GitHub (releases, GitHub Packages). There is one user, a built-in super admin who is always the caller and never signs in (ADR-0030).
 
 ## Level 2 — Containers
 
@@ -78,7 +80,6 @@ flowchart TB
   end
 
   backend["NestJS backend<br/>(backend/src, createApp)<br/>API + Mastra agents"]
-  intellifyapi["Intellify RFP API<br/>(backend/src/intellify-api, second Nest app, :3100)"]
 
   subgraph data["APP_DATA_DIR (userData, or ~/.questions-to-insights for the CLI)"]
     appdb[("app.sqlite<br/>(better-sqlite3 DocStore)")]
@@ -107,8 +108,6 @@ flowchart TB
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
   backend -->|"fs read/write (Mastra workspace)"| ws
   backend -->|"pg / @databricks/sql / HTTPS"| ext
-  backend -->|"HTTP + X-API-Key (RFP tools, REST datasource)"| intellifyapi
-  intellifyapi -->|"pg: READ ONLY over intellify.*, writes to rfp.*"| intellifydb[("intellify_mercer_demo<br/>(PostgreSQL)")]
   backend -.->|"OTLP traces, metrics + logs,<br/>only when developer observability is on"| devtools
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
@@ -120,7 +119,6 @@ flowchart TB
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
 - **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. It binds `127.0.0.1` by default (ADR-0030). How to run it: [delivery.md](delivery.md) section 4.1.
-- **Intellify RFP API** (`backend/src/intellify-api/`) — a second NestJS application in the backend package, started in-process by `createApp()` on its own port (default 3100) or alone; the app reaches it only over HTTP with an API key (ADR-0027).
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
 - **Status:** Accepted
@@ -240,7 +238,7 @@ flowchart TB
   - A data folder used in local mode and then opened by an org server shows none of its private items there: they belong to `local`, which is no org user.
 
 #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-- **Status:** Accepted
+- **Status:** Superseded (2026-11-12): the RFP Builder and the Intellify RFP API were removed from the product (roadmap "Remove the RFP Builder and the Intellify RFP API"). The text below is kept as history; the `rfp` schema in an existing Intellify database and any stored RFP data are left in place and unused.
 - **Date:** 2026-10-14
 - **Context:**
   - The RFP Builder agent (ADR-0028) must reach the Intellify data model (the `intellify` fixture, BA-212) only through a REST API that we build, and must save the state of an RFP so a consultant can resume it.
@@ -272,6 +270,7 @@ flowchart LR
     datasets["DatasetsModule"]
     datasources["DatasourcesModule<br/>(postgres, databricks, rest connectors)"]
     testing["TestingDataModule"]
+    synthdata["SyntheticDataModule<br/>(sampled profile, generator, dialect writers, CSV and Excel exports; ADR-0039)"]
     metrics["MetricsModule"]
     verified["VerifiedQueriesModule"]
     llm["LlmModule<br/>(LlmService)"]
@@ -283,16 +282,15 @@ flowchart LR
   end
 
   subgraph mastra["mastra/"]
-    mastrasvc["MastraService<br/>(getAgent, ensureSessionWorkspace)"]
+    mastrasvc["MastraService<br/>(getAgent, streamWorkflow, ensureSessionWorkspace)"]
+    turnwf["workflows/<br/>(qti-v2-turn, data-readiness-assessment; ADR-0034, ADR-0040, ADR-0042)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
     assistant["assistant agent"]
     designer["visualization agent"]
     sqlagents["sql-fixer, sql-verifier agents"]
     bootstrap["knowledge-bootstrap agent<br/>(Ontology Bootstrap)"]
-    rfpagent["rfp agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
-    rfptools["tools/rfp.tools.ts (HTTP)"]
     skills["skills/<br/>(built-in only; declared per agent; ADR-0018, ADR-0021)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
   end
@@ -305,6 +303,7 @@ flowchart LR
   sessions --> metrics
   sessions --> ontology
   sessions -->|"assistant, sql-fixer, sql-verifier"| mastrasvc
+  sessions -->|"every streamed turn: one workflow run"| mastrasvc
   sessions -->|"installs on init"| toolsvc
   visualization -->|"visualization agent, workspace fs"| mastrasvc
   agentsmod --> sessions
@@ -321,6 +320,8 @@ flowchart LR
   datasets --> datasources
   testing --> datasources
   testing --> datasets
+  synthdata -->|"RowSampler on the profilers"| datasources
+  synthdata --> datasets
   metrics --> verified
   llm --> crypto
   llm -->|"installs on init"| resolver
@@ -330,10 +331,8 @@ flowchart LR
   mastrasvc --> designer
   mastrasvc --> sqlagents
   mastrasvc --> bootstrap
-  mastrasvc --> rfpagent
-  rfpagent --> rfptools
-  rfpagent -.->|"its seven stage skills (catalog + skill tool)"| skills
-  rfptools -->|"restTarget(), exportRfpPackage()"| toolsvc
+  mastrasvc --> turnwf
+  turnwf -.->|"agent step calls back into the session turn"| sessions
   assistant --> tools
   assistant -.->|"its skills (catalog + skill tools)"| skills
   designer -.->|"interactive-visuals (pipeline-loaded)"| skills
@@ -342,7 +341,7 @@ flowchart LR
   assistant -.->|"model: async resolveAgentModel()"| resolver
 ```
 
-*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init.*
+*Backend components: NestJS feature modules and their constructor-level dependencies, the `DocStore` behind every repository, and the `mastra/` harness reached only through `MastraService` plus the two DI bridges (`tool-services`, `model-resolver`) installed on module init. Every streamed chat turn is one run of a registered turn workflow ([agents.md](agents.md) 5.1): `qti-v2-turn` for a Answer a Business Question session, `agent-turn` (one `answer` step) for every other session. `SessionsService` starts the run through `MastraService.streamWorkflow` and hands it the turn's agent call on the run's `RequestContext`; the agent step calls back into it, so the agent, its context and its tools are chosen by the session code, never per registered workflow (ADR-0040).*
 
 **Frontend**
 
@@ -360,6 +359,7 @@ flowchart LR
     llm["llm<br/>(llm-config, llm-api)"]
     agents["agents<br/>(agent-hub, agent-card, agent-detail, eval-trace)"]
     testing["testing-data<br/>(testing-data-config)"]
+    synthdata["synthetic-data<br/>(synthetic-data-panel, sampled-table-card, synthetic-data-api)"]
   end
 
   subgraph core["core/"]
@@ -386,6 +386,7 @@ flowchart LR
   app --> diagnostics
   datasets --> datasources
   datasets --> ontology
+  datasets --> synthdata
   ontology --> datasets
   agents --> datasources
   testing --> datasources
@@ -411,25 +412,25 @@ flowchart LR
 - **Consequences:** Renaming collections or persisted fields needs explicit migrations (`LEGACY_TABLE_NAMES`, `LEGACY_DOC_FIELDS`).
 
 #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0040 (the instance registers the `agent-turn` workflow too, and since its 1.23.9 amendment the `seq-text-demo` run workflow); amended by ADR-0042 (only `qti-v2-turn` remains a workflow; `seq-text-demo` is removed); amended by ADR-0041 (one workspace per run; runs keep no lasting memory)
 - **Date:** 2026-10-01
 - **Context:** Agents need tools, memory, and a provider-agnostic model layer.
 - **Decision:** Standalone Mastra instance wrapped by `MastraService`; models resolved at call time from persisted LLM settings; LibSQL memory; one filesystem workspace per session.
 - **Consequences:** The rest of the backend stays Mastra-agnostic; provider quirks are handled in `model-compat.ts`.
 
 #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0041 (visuals are created by runs)
 - **Date:** 2026-10-01
 - **Context:** Users tailor visuals iteratively from the chat.
 - **Decision:** `create_visual` / `update_visual` tools drive a designer sub-agent; each edit writes a new `v<N>` directory; revert moves a pointer; a fixed, transcript-derived frame provides readable context.
 - **Consequences:** Readability does not depend on designer-model output; storage grows per version.
 
 #### ADR-0007 — Themeable renderer: semantic design tokens, a bundled webfont and a System / Light / Dark preference
-- **Status:** Accepted; its *Preference* storage and default superseded by ADR-0009
+- **Status:** Accepted; its *Preference* storage and default superseded by ADR-0009; its token values and Noto Sans superseded by ADR-0044
 - **Date:** 2026-10-09
 - **Context:**
   - The renderer is dark-only. Its colours are hardcoded per component as Tailwind arbitrary values (`bg-[#232323]`, `zinc-*`), and it has no theme file and no CSS variables ([ui.md](ui.md) §6).
-  - The Agentic Hub look and feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) needs a light theme and a navy dark theme derived from it, switchable at runtime. With hardcoded values, each theme would need a second class on every element.
+  - The Agentic Hub look and feel of the time (since replaced by Halo Powered, ADR-0044) ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) needs a light theme and a navy dark theme derived from it, switchable at runtime. With hardcoded values, each theme would need a second class on every element.
   - The renderer loads over `file://` in the desktop app and must work offline, so it can't fetch fonts from a CDN.
 - **Decision:**
   - **Semantic tokens.** Colours, radii and shadows become CSS custom properties named by role (surface, card, text, border, primary, status), not by value. A `data-theme="light" | "dark"` attribute on the root element selects one of two token sets. The tokens are mapped into Tailwind v4 through `@theme`, so components use role utilities (`bg-surface`, `text-muted`), never hex values or palette shades.
@@ -443,7 +444,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent)
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent); amended by ADR-0040 (a user agent's sessions run its one-step workflow, removed by ADR-0042); amended by ADR-0041 (user agents run as one-step run workflows; the preview becomes a draft run)
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -456,7 +457,7 @@ flowchart LR
     - its instructions as an extra, labelled per-turn system context block after the base prompt and the knowledge block;
     - its datasets as the session's datasets;
     - its model or reasoning-effort override through the turn's request context, read by `resolveAgentModel()`.
-  - A preview chat applies the **draft** the same way, against a thread that is not stored as a session.
+  - Try it (since 1.23.23, ADR-0041) applies the **draft** the same way, as a draft run (api.md 129) on a host and workspace that are discarded when the run ends; the preview chat it replaced was a thread that was not stored as a session.
   - The built-in agents stay in the code registry. The hub merges them (Official: `assistant`; System: the helpers) with the user agents from the collection.
 - **Consequences:**
   - User agents inherit every assistant tool, guard and fix automatically. They can't add tools or relax the guard.
@@ -665,10 +666,10 @@ flowchart LR
   - A System agent's prompt edit can degrade a structured-output pipeline (designer, fixer, verifier, bootstrap, judge); their callers' existing fallbacks for unusable output still apply.
 
 #### ADR-0028 — A built-in RFP Builder agent with dedicated HTTP tools, resolved through a REST datasource; sessions can bind to a built-in agent
-- **Status:** Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR)
+- **Status:** Superseded (2026-11-12): the RFP Builder agent was removed from the product together with the Intellify RFP API (ADR-0027); the sessions-bind-to-a-built-in-agent mechanism it introduced stays for the Data Readiness Agent and Questions to Insights v2. Kept as history. Earlier status: Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
 - **Date:** 2026-10-14
 - **Context:**
-  - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
+  - The user asked for an agent that walks a benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
   - Sessions bind to user agents only (ADR-0008); every turn runs the `assistant`, with its SQL repair, grounding guard and careful mode. Start chat is offered to the Official assistant (which opens the composer) and to Live user agents.
   - The BA-213 epic listed new tools as out of scope; the user amended it on 2026-10-14.
 - **Decision:**
@@ -685,7 +686,7 @@ flowchart LR
 - **Amendment, 2026-11-09 (BA-320):** a bound built-in agent may also take **user-picked datasets**. Questions to Insights v2 (`assistant-v2`, [agents.md](agents.md) 2.11) is bound like `rfp` and `data-readiness` (`agentKey`, every turn runs it, the assistant-only passes do not apply), but it declares no dataset of its own: Start chat opens the New conversation screen with it preselected, and `POST /sessions` with `agentId: "assistant-v2"` takes `name` and `datasets` from the body like a plain session ([api.md](api.md) 3). The decision above is otherwise unchanged. The rule "the assistant keeps the composer" now reads "an agent that declares no dataset keeps the composer". The session code's per-agent branches grow by one.
 
 #### ADR-0029 — One built-in panel tool for every agent; panel items persisted on the session; a `## Workflow` prompt convention; a workflow status bar with its own tool
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0040 (a one-step workflow never writes the bar); amended by ADR-0041 (the bar and the panel belong to a run)
 - **Date:** 2026-10-14
 - **Context:**
   - Only `create_visual` and `update_visual` reach the right panel (the `visual-updated` event). The RFP Builder writes the RFP document into the session workspace, but the consultant has to download it to read it; no agent can put a document, a file, a table or its progress beside the chat.
@@ -728,7 +729,7 @@ flowchart LR
   - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 #### ADR-0031 — A deterministic DMBOK readiness engine owns every score; the Data Readiness Agent only presents stored reports; profiling is a connector capability
-- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only
+- **Status:** Accepted; "the agent has no SQL" amended by ADR-0035 (2026-11-09): it may run read-only SQL to drill into findings, and scores stay engine-only. Note (ADR-0039, 2026-11-11): "profiling reads no row values" holds for readiness profiling; row samples are read only by the separate sampler of ADR-0039, and no sampled statistic feeds a score.
 - **Date:** 2026-11-03
 - **Context:**
   - The user asked on 2026-11-03 for a Data Readiness Agent that uses only the deterministic DMBOK metrics of the separate `data-readiness-agent` project ([BA-251](https://halo-powered.atlassian.net/browse/BA-251)).
@@ -821,7 +822,7 @@ flowchart LR
   - The `data-readiness` eval set re-runs once: no prompt or tool description changes, but the tool's behaviour does.
   - Stack-neutral: a rebuild needs a way for a tool to push progress to the client during a call, and connection reuse in its profiling layer.
 #### ADR-0034 — Questions to Insights v2 runs each turn as a code-defined Mastra workflow; the workflow bar shows the run's steps
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0040 (its second turn path becomes the only one); amended by ADR-0041 (v2 runs on an input). Renamed 2026-11-15: the agent `assistant-v2` is `insights-analyst` (Insights Analyst) and the workflow `qti-v2-turn` is `answer-business-question` (Answer a Business Question), with their files; stored ids are rewritten by data-model M16. This ADR keeps the names of its time.
 - **Date:** 2026-11-09
 - **Context:**
   - Every agent today runs a turn as one agent call; the order of the work lives in the prompt (the assistant's method rules), and the workflow bar is driven by the model calling `update_workflow` under the prompt's `## Workflow` convention (ADR-0029). The model can skip, reorder or misreport steps.
@@ -887,9 +888,418 @@ flowchart LR
   - Retrieval by question relevance and SQL checks against the ontology (roadmap 1.3.3) and provenance and feedback (1.3.4) can build on stored concepts and relations.
   - Stack-neutral: a rebuild needs a per-dataset item store with four item kinds, a shared flag, per-kind validation, concept-delete cascades and a block renderer with the line formats in [agents.md](agents.md) 4.1.
 
-#### ADR-0038 — Cross-session memory: Mastra's own memory first, behind a `LearningStore` port; Hindsight only if a three-arm eval shows it is better
+#### ADR-0037 — GitHub Copilot as an LLM provider through the official Copilot SDK, wrapped as an AI SDK model that leaves the tool loop to Mastra
+- **Status:** Accepted
+- **Date:** 2026-11-09
+- **Context:**
+  - The user asked that developers with a GitHub Copilot seat run the app on that seat, picked in Settings → LLM Configuration, with no API key and no spend beyond the seat (BA-159, story 1.10.3, [epic spec](../epics/BA-159/spec.md)).
+  - Copilot has no public chat-completions API. The ways in are reverse-engineered proxies over an undocumented API (terms-of-service and account risk), and GitHub's official **Copilot SDK** (`@github/copilot-sdk`, generally available June 2026). GitHub Models, the official OpenAI-compatible API, was retired on 2026-07-30.
+  - The SDK is not a model API. It drives a local **Copilot runtime** process over JSON-RPC, which runs its own agent loop with its own built-in tools (shell, files, a `skill` tool, sub-agents) and authenticates with the GitHub login already on the machine (gh CLI, Copilot CLI or Copilot app) or a token.
+  - The app's agents are Mastra agents (ADR-0004): Mastra runs the tool loop, calls a model per step through the AI SDK model interface (`LanguageModelV3`), executes the app's tools itself, and asks for JSON-schema structured output. ADR-0032 already lets the resolver return plain data that a factory builds into a model instance at call time.
+  - A spike on 2026-11-09 (SDK 1.0.30, Mastra 1.66, a Copilot Free seat) showed the SDK can: switch off every built-in tool and replace the system prompt; declare tools **without handlers**, so a tool request surfaces as an `external_tool.requested` event and is answered later with `session.rpc.tools.handlePendingToolCall`; return schema-valid structured output (`responseFormat`); stream text deltas. With that, the real assistant answered 6 of 7 World Cup eval cases (the seventh was a wrong answer) and a streamed chat turn.
+- **Decision:**
+  - **A fifth provider, `copilot` ("GitHub Copilot"),** in the same LLM settings document: provider, model (default `auto`) and reasoning effort; no API key, no base URL, no API style ([llm-settings](../capabilities/llm-settings/spec.md), [data-model.md](data-model.md)). New provider value only, so no migration.
+  - **Plain data, built at call time.** The resolver returns `{ kind: "copilot", id: "copilot/<model>" }`; the model factory (ADR-0032) builds it into a **Copilot model**: an app-owned `LanguageModelV3` over the SDK. Tuning and the visual designer read the plain config as before; the visual designer never swaps a Copilot config to another provider.
+  - **Mastra keeps the tool loop.** Each model step the Copilot model receives becomes a turn on a Copilot session created with: the step's system messages as a replaced system prompt; the step's tools declared without handlers, permission-free and allowed to override a built-in of the same name; only those tools enabled (every built-in off); the step's JSON schema as the response format. A tool request ends the step with finish reason `tool-calls`; the Copilot session stays open, keyed by tool-call id. When Mastra's next step carries those tool results, they are handed back with `handlePendingToolCall` and the same session continues. A step that starts without a live session renders the earlier messages into one prompt.
+  - **One Copilot runtime per backend process,** started on first use and stopped when the backend shuts down. Sessions are short-lived: closed when a step ends with text, after 10 minutes waiting for tool results, or when the turn's abort signal fires.
+  - **Sign-in is the machine's GitHub login.** The backend reports the runtime's auth status (signed in, login, how) to the settings form; with no login, Test connection fails with how to sign in. The app stores no GitHub credential.
+  - **Model `auto` lets Copilot choose** from the seat's plan; a named model is passed through. **Load models** asks the runtime for the seat's models.
+  - **Streaming:** the Copilot model emits text deltas as the runtime streams them.
+  - **New dependency `@github/copilot-sdk`, pinned exactly,** with its platform runtime package; bundled in the desktop installers and the npm package (story 1.10.4; [delivery.md](delivery.md)).
+- **Alternatives considered:**
+  - A local proxy (`copilot-api` and similar) behind the existing Custom endpoint: no app change, but reverse-engineered, outside GitHub's terms, and an account-suspension risk for every user; rejected for a shipped feature (fine for personal experiments).
+  - Calling Copilot's internal chat API directly with the user's GitHub token: same terms-of-service risk, undocumented and liable to change.
+  - Letting the Copilot runtime run the whole agent (its own loop, the app's tools registered with handlers): rejected, it would bypass Mastra's memory, tool-call records, `turn-data-records`, skills, step limits and the session stream that the app is built on, and would need a second agent path.
+  - GitHub Models: retired 2026-07-30.
+- **Consequences:**
+  - The LLM settings, the connection test, the model list, the agent catalogue and the composer chip learn a fifth provider; a GET reports the Copilot sign-in status ([api.md](api.md)).
+  - Each prompt counts against the user's Copilot allowance; a Copilot Free seat cannot choose its model and has about 200 chat credits a month (about 0.4 per assistant question in the spike).
+  - Steps without a live session send earlier turns as one rendered prompt, not as separate messages, so provider-side prompt caching and role structure are lost on those steps.
+  - `handlePendingToolCall` is marked experimental in SDK 1.0.30; an SDK upgrade re-runs the adapter's tests and the assistant evals.
+  - The runtime is a native binary of about 180 MB per platform, which grows each installer.
+  - Stack-neutral: a rebuild needs a model adapter over an agent runtime that can disable its own tools, hand tool calls back to the caller and accept a response schema.
+
+#### ADR-0038 — Monitoring reads Mastra's trace store in-process; the app records no LLM calls of its own
+- **Status:** Accepted; amended by ADR-0041 (a run's agent call is grouped by its run host id)
+- **Date:** 2026-11-10
+- **Context:**
+  - On 2026-11-10 the user asked for a Monitoring area that lists every LLM call the agents make, with its tokens, duration, cost and status, and shows what filled each call's context window (roadmap 1.21.13–1.21.15).
+  - Mastra already records this. `MastraStorageExporter` writes every span of every agent run to `<APP_DATA_DIR>/observability.duckdb`, table `span_events`, event-sourced: one `start` row and one `end` row per span. A `model_generation` span holds the model, the provider, the usage, the tool definitions and the exact messages sent; its `tool_call` spans hold the tool arguments and results (ADR-0006).
+  - The backend process keeps that file open, so another process cannot read it while the app runs.
+- **Decision:**
+  - **A `MonitoringModule` reads the trace store in-process**, through the same `DuckDBStore` the exporter writes to (`observabilityStorage` in `backend/src/mastra/storage.ts`), with parameterised SQL. Filters and paging run in SQL. A fresh data dir, where the table does not exist yet, gives an empty page.
+  - **One table row is one `model_generation` span**, the model call of one agent run. Its `model_step` children give the steps and the real input tokens of the largest request. Its `tool_call` spans give the tool results.
+  - **The context window is rebuilt from the recorded messages** into seven boxes, with token counts estimated from characters and scaled to the real input tokens ([monitoring](../capabilities/monitoring/spec.md) R17–R22).
+  - **Cost is computed on read** from a price table shipped as code (`model-prices.ts`, USD per million tokens, dated 2026-11-03). A model not in the table has no cost.
+  - **Read-only endpoints:** `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, and for the session flow (roadmap 1.21.16) `GET /monitoring/sessions`, `GET /monitoring/sessions/:id` and `GET /monitoring/traces/:traceId` ([api.md](api.md) 2.8c). No new collection and no migration.
+- **Rejected:**
+  - **A new `llm_calls` collection written by the app on every call:** it would duplicate what Mastra already stores, add a write on the hot path of every turn, and need hooks into every place a model is called (agents, sub-calls, evals). Calls from before the feature would be missing.
+  - **Reading Phoenix or the OTLP stack:** both are developer-only, run from an opt-in Docker profile and are off by default (ADR-0006). End-user installs must not need them.
+  - **Opening `observability.duckdb` from a second process or a script:** the running backend holds the file.
+- **Consequences:**
+  - Monitoring is coupled to Mastra's `span_events` shape (event-sourced rows, the JSON columns `attributes`, `input`, `output`, `error`). A unit test pins the reader to a fixture of that real shape, so a Mastra upgrade that changes it fails the test instead of the page.
+  - Only what Mastra traces is shown. Model calls that bypass it are not listed. The same reader also serves the session flow (sessions, a turn's trajectory and the waterfall, [monitoring](../capabilities/monitoring/spec.md) R26–R44) from the same table, with no new store.
+  - Calls recorded before this feature show too, because the data was already there.
+  - Prices are code, not settings: a change of price needs a release. The table says "as of 2026-11-03", and a model without a price shows a dash for cost and no context limit.
+  - Token counts per box are estimates ("≈" in the UI). Only the total is real.
+  - Stack-neutral: a rebuild needs a trace store that records, per model call, its usage, its tool definitions, its input messages and its tool calls, a read path inside the process that owns the store, and a price table.
+#### ADR-0039 — Sampled profiling and synthetic data: a separate, approximate profile read from row samples, and a deterministic generator that writes a SQL script; the app stays read-only on datasources
+- **Status:** Accepted (2026-11-11, with the M1-22 epic spec)
+- **Date:** 2026-11-11
+- **Context:**
+  - The user asked on 2026-11-11 to profile data by sampling and to generate synthetic data exported in the datasource's dialect.
+  - Readiness profiling (ADR-0031, ADR-0033) is aggregate-only and exact, and data-readiness R29 forbids sampling there. Its interface "reads no row values".
+  - Synthesis needs value-level information that aggregates do not give: shapes of text, quantiles, categorical frequencies.
+  - The app is read-only on datasources.
+- **Decision:**
+  - **A second, separate profile.** A new `RowSampler` interface is implemented additively by the PostgreSQL and Databricks profilers.
+    - It reads up to 1,000 rows per table with the engine's native `TABLESAMPLE … REPEATABLE`. Small tables are read whole, and tables where TABLESAMPLE is refused fall back to `LIMIT`.
+    - It reuses the profilers' pooled read-only sessions, statement timeout and abort.
+    - Readiness profiling, the engine and its scores are unchanged, and a sampled statistic never feeds a readiness score.
+  - **Raw rows stay in the request.** A pure builder turns them into a `SampledProfile`.
+    - The profile holds statistics, character-class shapes and only the categorical values seen at least 3 times in columns of at most 20 distinct values.
+    - The rows are never logged, cached, persisted or sent to a model.
+    - The profile is kept in memory for 60 minutes (20 at most) so a script can be generated from exactly what the user saw. It is never persisted.
+  - **A deterministic generator with no model.** Seeded per column, keys generated first so FKs always resolve, constraints added after the inserts so FK cycles load.
+  - **One dialect writer per platform** emits a UTF-8, LF-only script: `CREATE SCHEMA`, `CREATE TABLE`, batched `INSERT`, FK constraints. It is downloaded by the user.
+    - The app never executes it. The datasource connections keep their read-only guard, and no write path is added.
+  - **Agents reach the same service through a tool bridge.** The Data Readiness Agent gets two tools. The script reaches the user as a session file in the panel.
+- **Rejected:**
+  - Sampling inside readiness profiling: it would make readiness scores approximate and unrepeatable, contrary to R29.
+  - Exposing sampled rows to the LLM or letting an LLM generate the data: unrepeatable, it leaks values, and it is costly.
+  - Loading synthetic data into a datasource: it breaks the read-only guarantee and needs write credentials.
+  - A third-party fake-data library (faker): it adds a dependency and locale-dependent output, and it has no notion of the observed shapes. A small built-in word list is enough.
+  - Round-tripping the profile in the generate request: it exceeds the default JSON body limit (api.md G9) on wide datasets.
+  - Persisting profiles: not needed, and it would store more data about the user's tables.
+- **Consequences:**
+  - Sampled statistics are approximate, and the UI says so next to every profile.
+  - `TABLESAMPLE` cost and behaviour differ per engine and per table kind, and must be timed live (Databricks especially).
+  - Databricks PK and FK constraints are informational and need Unity Catalog. The script header says so, and the constraints can be switched off.
+  - The Data Readiness Agent's prompt and tools change, so its eval set must pass at 100 % over 3 runs.
+  - Stack-neutral: a rebuild needs a sampler per dialect, the pure profile builder, the generator, a writer per dialect, two endpoints, one UI tab and two tools.
+  - Capability: [synthetic-data](../capabilities/synthetic-data/spec.md).
+- **Amendment (2026-11-11, stories 1.22.2, 1.22.5 and 1.22.6): exports, raw sample rows and unique integers.** The user asked to export the profile, the synthetic data and the sample in `.sql`, CSV and Excel.
+  - **(a) Raw rows may leave the server only through one explicit, confirmed download.**
+    - The endpoint `POST /synthetic-data/sample-exports` re-reads the profile's tables (same keys, sample size and `REPEATABLE (7)`) and streams the real rows to the response, after the UI's confirm dialog and a request carrying `confirmRealData: true`. The rows are dropped when the response ends.
+    - They are never logged, cached, written to a session file or sent to a model. The cache still holds statistics only, and the agent tools have no raw export.
+    - The statement "raw rows never leave the service" of the decision above holds for everything except this download.
+    - Rejected: keeping the raw rows in the cache for 60 minutes so an export would not re-read. It would put up to 1,000 real rows per table in process memory for an hour, a much larger exposure than a user-requested download, and the cache is the thing a log or a crash dump might reach.
+  - **(b) Two new backend dependencies** for the CSV and Excel formats, `exceljs` (the streaming `WorkbookWriter`, for `.xlsx`) and `fflate` (a dependency-free streamed zip, for the CSV files). The browser only receives a blob, so the frontend gains none. CSV needs no library (RFC 4180 by hand).
+    - Rejected: SheetJS (the `xlsx` package on npm is frozen at 0.18.5 with open advisories, and newer builds ship only from the vendor's CDN); hand-written OOXML (styles, shared strings and date serials are easy to get wrong); `archiver` (heavier and Node-streams only, where fflate is dependency-free).
+    - All formats consume the same generator stream, so the values are identical across `.sql`, CSV and Excel for the same seed.
+  - **(c) `unique-range`.** An integer column that is only unique (not a primary or foreign key) is generated as distinct integers drawn without replacement within its observed range, so `tournament_year` gives years, not 1, 2, 3. When the range is smaller than the rows asked for, it falls back to a sequence from the observed minimum, and the script header says so. Only key integers stay a `sequence`.
+  - Consequences: the privacy rules of the capability gain the raw-export rule; the new endpoints are 112 (with `format`), 113 and 114 ([api.md](api.md) 2.18); the stack gains the two packages ([tech-stack.md](tech-stack.md)).
+
+#### ADR-0040 — Workflow-first: a session runs a workflow defined in code; agents are the steps' building blocks; an agent without a workflow gets a one-step workflow, never registered per agent
+- **Status:** Accepted (2026-11-11, with the widened M1-23 epic spec); partly superseded by ADR-0041 (sessions no longer bind to workflows; workflows run on an input) and by ADR-0042 (2026-11-12: agents are no longer workflows; the one-step workflow is gone and the catalogue is `qti-v2-turn` only). Plan: [docs/plans/m1-23-workflow-first.md](../../docs/plans/m1-23-workflow-first.md)
+- **Date:** 2026-11-11
+- **Context:**
+  - A session is bound to an agent. A user agent is bound by `agentId` and runs the `assistant` with its configuration (ADR-0008). A built-in agent is bound by `agentKey` and runs that agent (ADR-0028).
+  - Questions to Insights v2 runs each streamed turn as a Mastra workflow defined in code (ADR-0034). That gave the session service a second turn path, used for v2 only.
+  - The workflow bar is fed in one of two ways:
+    - from the agent's prompt (`## Workflow`, `update_workflow`, the RFP stage auto-drive; ADR-0029);
+    - from the code-defined workflow's step events (v2, ADR-0034).
+  - On 2026-11-11 the user decided that the app becomes **workflow-first**, with the hierarchy workflows → agents → skills → tools:
+    - workflows are defined only in code and are never edited in the app;
+    - every agent without a workflow is wrapped in an automatic one-step workflow, so every session runs a workflow and there is one turn path;
+    - a chat starts from a workflow (a Workflows rail item, Start chat on the workflow's page, a Workflow field on the new-session screen);
+    - agents stay as a library and show which workflows use them.
+  - ADR-0008 explains why agents are not registered per user definition: it would mean re-registering on every edit, and it would bypass the assistant's tools, memory and guards.
+- **Decision:**
+  - **A session is bound to a workflow.** A workflow is a fixed sequence of steps defined in code. Each step is deterministic code or one bounded call to an agent.
+  - **Workflow ids:**
+    - a code-defined workflow keeps its own id (`qti-v2-turn`);
+    - the one-step workflow of a built-in agent is `agent:<registry key>` (`agent:assistant`, `agent:rfp`, `agent:data-readiness`);
+    - the one-step workflow of a user agent is `agent:<user-agent id>`.
+  - **Which agents get a one-step workflow:** the agents a session can run that have no code-defined workflow of their own (the assistant, the RFP Builder, the Data Readiness Agent and every Live user agent). System agents have none.
+  - **One registered engine for every one-step workflow.** The Mastra instance registers a single workflow, `agent-turn`, with one agent step, `answer`. The orchestrator picks the agent for each run and passes it through the run's request context. A one-step workflow is a descriptor, computed at read time from the agent registry and the `agents` collection. Nothing is registered per agent or per user agent, so publishing, editing or deleting a user agent needs no re-registration.
+  - **One turn path.** Every streamed turn is one run of the session's workflow. Its agent step runs today's agent turn unchanged: the context blocks, request context, tools, memory thread, clarification interception, tool-only synthesis, the assistant-only grounding guard and careful mode, the RFP stage tracking, visuals and panel items. Which of these apply still depends on the agent the step runs, never on the workflow.
+  - **The workflow bar keeps its two sources.**
+    - A code-defined workflow's steps drive the bar from its step events (ADR-0034).
+    - A one-step workflow never writes the bar. The agent's prompt-defined phases, `update_workflow` and the RFP stage auto-drive keep driving it, exactly as before (ADR-0029).
+  - **Storage.** A new session stores `workflowId`, plus the agent fields it stores today (`agentKey`, or `agentId` and `agentName`) for the workflow's agent. A session without `workflowId` derives it at read time from those fields. There is no migration.
+  - **Read-only catalogue.** The app lists workflows, shows each one's steps and agents, and starts chats from them. It never creates, edits, reorders or deletes a workflow.
+- **Rejected:**
+  - **One registered Mastra workflow per agent** (built-in agents at startup, user agents at runtime). User agents would be registered and re-registered on every publish and delete, for the same reason ADR-0008 rejects registering agents, and there would be two kinds of wrapper.
+  - **No Mastra run for one-step workflows** (the orchestrator treats "one agent step" as a workflow by itself). That keeps two engines: step events and run results would exist only for code-defined workflows, and each turn feature would still need its own branch per engine.
+  - **Showing the one-step workflow's single step in the workflow bar.** A lone `Answer` step would replace the assistant's and the RFP Builder's phases and fight the RFP stage auto-drive.
+  - **Persisted or user-edited workflows.** Out of this version, by the user's choice.
+  - **A migration that writes `workflowId` into existing sessions.** Deriving the id is deterministic and cheap, and a migration adds risk for no gain.
+- **Consequences:**
+  - **Amends ADR-0008.** A user agent's session runs its one-step workflow `agent:<id>`. The agent still runs on the `assistant` and is still not registered. Deleting the agent removes its workflow, and its sessions continue with the plain assistant, as before.
+  - **Amends ADR-0028.** Sessions bind to a workflow, and `agentKey` records the workflow's agent. Start chat moves from the agent to the workflow.
+  - **Amends ADR-0029.** The bar's sources gain the rule above. No behaviour changes.
+  - **Amends ADR-0034.** Its "second turn path" becomes the only path, and `qti-v2-turn` becomes one entry of the workflow catalogue.
+  - **Amends ADR-0004:** the Mastra instance registers two workflows.
+  - **Cost per turn.** Every turn runs one more Mastra workflow, with snapshot persistence off. The trace store may record workflow spans around the agent run, and Monitoring must keep showing one turn per question.
+  - **Adding a code-defined workflow** takes its Mastra workflow, its step catalogue and one catalogue entry. It then appears in the Workflows list and the new-session picker with no UI change.
+  - **Evals keep calling agents directly.** The legacy non-streamed turn stayed a direct agent call until 1.23.27 removed it.
+  - **Stack-neutral:** any rebuild needs an engine that runs typed steps in a fixed order and reports each step's start and end, a catalogue of workflows built from code and from stored agents, and the rule that derives a session's workflow from its stored agent binding.
+- **Amendment (2026-11-11, 1.23.9):** the user decided the same day that workflows trigger **runs**, not chats ([plan](../../docs/plans/m1-23-workflow-first.md) section 9).
+  - **Every workflow has a trigger, `chat` or `run`.** A `chat` workflow runs on every message of a chat, as above. A `run` workflow runs once on a typed input and returns a result. Every one-step workflow and `qti-v2-turn` are `chat` workflows.
+  - **A run workflow's input is defined in code** with its catalogue entry: a list of typed fields (`text`, `textarea` or `number`, with a label, whether it is required and a placeholder). The inputs will grow over time.
+  - **A run is never stored.** `POST /workflows/:id/runs` ([api.md](api.md) 118) checks the input against the fields, runs the registered workflow once through `MastraService.runWorkflow` (snapshot persistence off) and answers each step's result and the final output. A failing step fails the run, and the steps after it are skipped. The workflow's page shows the result until the user leaves it. A run is not a session, writes no workflow bar and is not listed anywhere.
+  - **The two triggers never cross.** A chat workflow can't be run (`Workflow "<id>" runs in a chat`), and a run workflow can't start a chat (`Workflow "<id>" can't start a chat`). The New conversation screen lists chat workflows only.
+  - **A run workflow may call no agent**, so `primaryFor` becomes optional. The first one is `seq-text-demo` ([agents.md](agents.md) 5.13), three code steps and no LLM. Converting the four chat workflows to run workflows, and how chats start afterwards, is story 1.23.10.
+  - **Amends ADR-0004:** the Mastra instance registers three workflows (`agent-turn`, `qti-v2-turn`, `seq-text-demo`).
+  - **Stack-neutral:** a rebuild needs the same engine to run a workflow once, synchronously, on an input validated against fields declared in code, and to report each step's status, output and error.
+
+#### ADR-0041 — Chats retired: every workflow runs once on a typed input; runs are stored; existing sessions become read-only past chats
+- **Status:** Accepted (2026-11-11, with the M1-23 amendment that keeps every phase in this epic). Plan: [docs/plans/m1-23-retire-chats.md](../../docs/plans/m1-23-retire-chats.md)
+- **Date:** 2026-11-11
+- **Context:**
+  - ADR-0040 bound every session to a workflow and started chats from workflows. Its amendment (1.23.9) added run workflows: a workflow with typed input fields defined in code runs once and shows each step's result.
+  - On 2026-11-11 the user decided that workflows trigger runs, not chats, that all workflows become run workflows (the Assistant, Questions to Insights v2, the RFP Builder, the Data Readiness Agent and every user agent's one-step workflow), and that chats are retired.
+  - Users' machines hold sessions with transcripts, memory threads, visuals, reports, RFP packages, readiness reports and verified queries sourced from answers.
+  - The turn path (agents.md 5.1) holds every reliability feature: grounding guard, SQL repair, result guards, careful mode, tool-only synthesis, clarification interception, visuals, panel items and the RFP stage drive. It operates on a session document.
+- **Decision:**
+  - **No chat can start.** The app has no composer, no New conversation screen and no Start chat. A workflow is used by running it on its input.
+  - **Every workflow runs on a typed input defined in code**, with field types text, textarea, number, boolean, datasets and dataset. A run streams its step events and its agent's events, and ends with a stored result.
+  - **Runs are stored** in a `workflow_runs` collection, with their files in a run workspace. The Runs area lists them; a run is deleted only by the user.
+  - **A run of an agent workflow is one agent turn.** In this version it executes on an in-memory run host with the session shape, through the unchanged turn path, and is then projected into the run document. So every turn feature applies to a run exactly as it applied to a chat turn, and no agent's input changes. Runs keep no memory thread after they end.
+  - **Context from one earlier run** (a follow-up, an answer to a clarifying question, the RFP Builder's Continue) is given as that run's question and answer before the new message, through the existing transcript bootstrap. Nothing else carries over between runs.
+  - **The RFP Builder runs one exchange per run.** The RFP record in the Intellify RFP API carries the state between runs; the run stores the RFP id it worked on.
+  - **Existing sessions are kept, read-only.** No migration, no deletion, no new writes. Past chats open read-only with their visuals and downloads. The user may delete one, which removes its transcript, memory thread and workspace as before.
+- **Rejected:**
+  - **Keeping one chat workflow** (e.g. the Assistant as a chat): contradicts the user's decision.
+  - **Unstored runs for agent workflows** (as 1.23.9's test workflow): an answer, its visuals and its RFP package would be lost when the page is left, which is worse than the chats they replace.
+  - **Migrating sessions into runs:** a multi-turn transcript is not one run, and a migration risks data for no gain.
+  - **Deleting existing sessions:** silent data loss.
+  - **A new turn engine for runs from day one:** it would duplicate every reliability feature and make parity unprovable. It is extracted later, behind the same tests (Phase C).
+  - **Runs with lasting memory** (a thread per workflow, or chained runs): that is a chat by another name.
+- **Consequences:**
+  - **Partly supersedes ADR-0040:** "a session is bound to a workflow" and "a chat starts from a workflow" no longer describe new work. The catalogue, the ids, `agent-turn`, code-defined workflows and the derivation rule (kept for past chats) stand.
+  - **Amends ADR-0028:** the RFP Builder's runs replace its sessions, `rfpId` lives on the run, and packages are stored in the run workspace.
+  - **Amends ADR-0029:** panel items and workflow state belong to the run. The workflow bar's place is taken by the run's step list, and a one-step workflow's agent phases show inside its agent step. The tools are unchanged.
+  - **Amends ADR-0034:** v2's step events drive the run's step list.
+  - **Amends ADR-0005:** visuals belong to the run that made them. Tailoring in a chat is gone; tailoring a run's visual returns in Phase B.
+  - **Amends ADR-0008:** a user agent runs as its one-step run workflow. The preview becomes a run of the draft (Phase B).
+  - **Amends ADR-0004:** one workspace per run; memory is used only within a run.
+  - **Amends ADR-0038:** a run's agent call is grouped under its run host id, and Monitoring names it from the run.
+  - Unchanged: ADR-0031 (readiness reports gain `runId`), ADR-0033 (`tool-progress` is forwarded in the run stream; Stop cancels the assessment), ADR-0035.
+  - Deep analysis becomes a code-defined run workflow (Phase B); it is unavailable until then.
+  - The desktop readiness probe moves from `GET /sessions` to `GET /health`.
+  - Evals keep calling agents directly with a throwaway run host (1.23.26b); the dev scripts (`run-eval`, `check-answers`, `custom-endpoint-smoke`) run on run hosts too.
+  - **Chat write paths removed (1.23.27):** `POST /sessions`, the chat message routes, the session visual actions, preview sessions, the non-streamed turn and the deep-analysis start and poll routes are gone; a stored session is only read, downloaded from and deleted. The `sessions` collection and every stored shape are unchanged, and the turn engine still reads a stored session in the sessions unit suites (a test seam), never at runtime.
+  - **Stack-neutral:** a rebuild needs typed inputs per workflow, a streamed run that reports step starts and ends and the agent's events, a stored run with its files, and a read-only view of the conversations stored before.
+
+#### ADR-0042 — Workflows and agents are separate; only Questions to Insights v2 is a workflow
+- **Status:** Accepted (2026-11-12). Partly supersedes ADR-0040 (the one-step workflow of every agent) and amends ADR-0041. Amended 2026-11-13: the catalogue gains a second code workflow, **Assess Data Readiness** (`data-readiness-assessment`, agents.md 5.13), with real steps (four code steps run the deterministic engine, one step runs the Data Readiness Agent); agents stay a library and no one-step workflow comes back. The Data Readiness Agent's sessions and evals keep its agent turn.
+- **Date:** 2026-11-12
+- **Context:**
+  - ADR-0040 gave every agent without a workflow of its own an automatic one-step workflow (`agent:<key or id>`), so the Workflows area listed the assistant, the Data Readiness Agent and every Live user agent next to Questions to Insights v2. The agent page also ran that workflow (**Run**).
+  - Only Questions to Insights v2 has real steps. The other entries were an agent in a workflow's clothes, and the Sequential test workflow (`seq-text-demo`) and Deep analysis were a test fixture and an early code workflow.
+  - On 2026-11-12 the user asked to separate agents from workflows, keep only the Questions to Insights v2 workflow for now, and delete the others.
+- **Decision:**
+  - **The workflow catalogue is `[qti-v2-turn]`.** An agent is not a workflow. The one-step workflow, its `agent:<key or id>` ids, the Sequential test workflow and Deep analysis are removed from the code, the API and the UI.
+  - **Agents are a library.** The Agents area configures them (prompt, tools, skills, evals, versions). A user agent keeps **Try it** (a draft run, not a workflow run); no agent has a **Run** on its page. The `assistant-v2` agent keeps being called by the `analyse` step of `qti-v2-turn`; `GET /agents/:key` `usedInWorkflows` lists `qti-v2-turn` for it and is empty for every other agent.
+  - **The agent turn engine stays.** `qti-v2-turn`'s analyse step, Try it and the eval runner (`assistant`, `data-readiness`, through `createRunHost({ agentKey })`) use it. The internal `agent-turn` Mastra workflow stays for Try it, evals and stored sessions, with `agent:<key>` ids that never reach the catalogue.
+  - **Stored data stays.** Runs of removed workflows list and open read-only as legacy runs (no Run again, no follow-up). Sessions bound to a removed workflow id read as plain past chats (`workflowRef.deleted: true`). Stored readiness reports stay viewable; the Data Readiness Agent stays in the library but the UI generates no new report.
+- **Rejected:**
+  - **Keeping the one-step workflows hidden:** dead code with a public API for nothing.
+  - **Migrating or deleting stored runs:** silent data loss, and the runs are still readable.
+  - **Removing the agents themselves:** the user asked to separate them from workflows, not to remove them.
+- **Consequences:**
+  - **Partly supersedes ADR-0040:** "an agent without a workflow gets a one-step workflow" no longer holds; its catalogue, ids and code-defined workflow remain only as `qti-v2-turn`; the agent turn engine stays as that workflow's analyse step and behind Try it and the eval runner (the internal `agent-turn` workflow). Marked in ADR-0040's status.
+  - **Amends ADR-0041:** a run of an agent workflow is no longer a thing; a run is a run of `qti-v2-turn` (or a legacy run). Deep analysis, deferred by ADR-0041 to a code-defined run workflow, is dropped.
+  - **Amends ADR-0008:** a user agent no longer runs as a one-step workflow; Try it is its only run.
+  - **Stack-neutral:** a rebuild needs one stored, streamed run workflow, an agent library with a draft preview, and read-only legacy runs.
+
+#### ADR-0043 — Human in the loop: a run that needs the user is suspended with Mastra's suspend/resume and continued in place; its runtime stays in memory, with a snapshot only while it waits
+- **Status:** Accepted (2026-11-13); amended by ADR-0048 (a running run's runtime is held in memory too, detached from its connection).
+- **Date:** 2026-11-13
+- **Context:**
+  - Questions to Insights v2 asks the user in two places: Clarify (Plan decided the question is ambiguous) and Analyse (the agent called `ask_clarification` because the data was). Until now both **ended** the run with the question, and the user's pick started a **new** run with the old one as context: two runs, the steps run twice, and the run page lost the thread.
+  - Mastra workflows can pause a step and continue the same run (`suspend()` in a step, `run.resume()` / `run.resumeStream()` with the suspended path, `suspendSchema` / `resumeSchema`; https://mastra.ai/docs/workflows/suspend-and-resume, https://mastra.ai/docs/workflows/human-in-the-loop). The user chose this (approach B) on 2026-11-13 over a persisted, restart-proof design (C, later).
+  - Probed on the installed `@mastra/core` 1.66 (2026-11-12): a suspend inside a nested workflow inside `.dountil()` reports the run `suspended` with `result.suspended = [[<top step>, …, <step>]]`; `run.resumeStream({ step: that path, resumeData, requestContext })` re-runs the step with `resumeData` and `suspendData` and goes on where the run stopped, re-reporting each enclosing nested workflow as a started step. **Resume reads the run's persisted snapshot**: with `shouldPersistSnapshot: () => false` it throws `No snapshot found for this workflow run`. A predicate that persists only the `suspended` status works; the snapshot then stays `suspended` in storage after the resumed run ends (only `suspended` is written), until deleted. The snapshot includes the run's `RequestContext`, serialized (functions drop out).
+- **Decision:**
+  - **The step suspends, the same run continues.** Clarify suspends with the plan's question and options and, resumed with `{ answer }`, hands Plan its input back with the answer; the plan loop (`.dountil()` over a nested `plan-round`: Plan, then Clarify when needed, then a `.map()` that passes on Clarify's output or Plan's) runs Plan again, which never asks twice. Analyse suspends when the agent asks, and resumed runs the agent again in the same attempt with the question and the answer. The run's status gains `suspended` and the stored run `waitingFor` (data-model 3.16); `POST /workflow-runs/:id/resume/stream` (api.md 138) answers it and streams the same run.
+  - **The runtime stays in server memory.** The turn's closures (the run host, its agent options and records, the step tracker, the Mastra run) are held in an in-memory registry keyed by run id for 30 minutes (`SuspendedRuns`); the runtime object on the RequestContext is handed in again on resume. Nothing of it needs to be serializable.
+  - **A snapshot only while suspended.** Every `qti-v2-turn` workflow (and its nested ones) persists its snapshot only on the `suspended` status, because Mastra resumes from it; the backend deletes it when the resumed run ends, when the run expires or is deleted, and, at start-up, every suspended `qti-v2-turn` snapshot left over.
+  - **Expiry and restarts stop the run.** A run not answered in 30 minutes, and any run still `suspended` when the app starts, is stored `stopped` with `waitingFor.expired`; a resume answers 410, and the client offers **Run again with my answer** (a new run whose context is the expired run's question and clarifying question).
+  - **Past chats keep the card.** A session's (past chat's) turn is not suspendable: a suspended workflow run ends the turn on the clarification card, as before, and the run's snapshot is deleted at once.
+- **Rejected:**
+  - **Persisted, restart-proof suspension (approach C):** needs every runtime object rebuilt from storage (the run host, the agent options, the step tracker); deferred.
+  - **Keeping a run that ends on the question plus a follow-up run (the old behaviour):** two runs per answer, every step re-run.
+  - **A loop in our own code around Mastra:** duplicates the engine's control flow and its step events.
+- **Consequences:**
+  - The contract hash of `qti-v2-turn` changes (Plan's input gains the optional `clarification`, its output `stopped`, Clarify's output becomes Plan's input; edges gain `clarify → plan` `loop` `Answered` and lose `clarify → end`).
+  - The run stream gains the `step` status `suspended` and the `input-required` event (api.md 3.6); a node chat on a waiting run answers 409; a waiting run can't be visualized.
+  - **Amends ADR-0034 / ADR-0041:** Clarify no longer ends a v2 run, and the eval target scores a suspended run on its question and options.
+  - **Stack-neutral:** a rebuild needs a workflow engine that pauses a step on a typed payload and continues the same run with a typed answer, and a store of the paused run (in memory, with an expiry, or persisted).
+
+#### ADR-0044 — Halo Powered rebrand: n8n-style flat shell, halopowered.com palette and type, HALO wordmark
+- **Status:** Accepted; supersedes the token values and the Noto Sans choice of ADR-0007 (the token mechanism and the System / Light / Dark preference stay); its *Name* superseded by ADR-0046
+- **Date:** 2026-11-15
+- **Context:**
+  - Ownership of the app moved from Mercer to Halo. Mercer branding (the "US Health Agentic Hub" name, the teal textured frame and photo banner, the LenAI badge, the Figma-exported brand assets) must not ship.
+  - The product needs the look of halopowered.com ("Editorial" direction) in a shell that stays out of the way of dense work screens, the way n8n's does.
+- **Decision:**
+  - **Name.** The UI product name is "Halo Powered": window and document title, the header's level-one heading, the rail brand, the Settings build identity ("Halo Powered v<version>") and the welcome heading ("Welcome to Halo Powered", with "Halo Powered" as a serif accent). The operating-system app name, installers and data directory stay "Halo BI Assistant".
+  - **Flat shell.** No gradient frame, photo banner, gaps, rounded panels or page card. A full-height rail with a right border; beside it a 48 px header (`role="banner"`) holding "Halo Powered" and, when an area is open, "/" and the area name; below it the main area (the canvas colour with an 18 px dot texture) and, when open, the details panel flush on the right with a left border.
+  - **Brand.** The HALO wordmark is an inline SVG filled with `currentColor` (`app-logo`; the notched "O" alone on the collapsed rail), followed by "Powered" in the expanded rail. The LenAI mark and "Powered by LenAI" are removed from the rail; LenAI stays an LLM provider. The app icon and favicon are the notched O in white on a rounded square filled with the Halo gradient (`brand/halo-mark.svg`, full-bleed `brand/halo-favicon.svg`), replacing the "HALO BI" ring. `public/brand/agentic-hub/` is deleted; icons are lucide (Runs header `folder-kanban`, answer mark `sparkles`, Data used `database`).
+  - **Palette.** From halopowered.com: ink `#181818`, warm greys, ember `#ed3e13` (darkened to `#d4380f` in Light so white text meets AA; Dark uses `#ff7a3d` with `#141414` text) and plum `#63254e` (agent spans, informational chips). Light and Dark both exist; values in `tokens.css` and [ui.md](ui.md) 6.0. Radii: cards 10 px, frame 0; hairline shadows; buttons stay pill-shaped. The Electron window background follows the theme (`#f2f2f0` / `#1c1c1c`).
+  - **Type.** Bundled Inter Tight 300 to 700 replaces Noto Sans; bundled Fraunces 800 is the display serif for the accent word of a display title (`.display-title`, `.display-accent`).
+- **Consequences:**
+  - ADR-0007's token values and Noto Sans are superseded; the semantic-token mechanism, `data-theme` and the preference are unchanged, so no component moves off tokens.
+  - Mercer assets are deleted, the LenAI badge is gone, and the Testing Data fixtures no longer mention Mercer.
+  - Specs, E2E selectors and screenshots that named the old heading, frame or banner change with this ADR (app-shell R1, R4, R7, R32, R33, R51).
+  - The Mercer look survives as the `mercer` brand, chosen at build time ([ADR-0045](#adr-0045--brands-chosen-at-build-time-white-label-halo-powered-and-agentic-hub)); this ADR describes the `halo` brand.
+  - **Stack-neutral:** a rebuild needs a themeable token set, a bundled sans and a display serif, and an inline-vector wordmark; nothing else in the shell is specific to the framework.
+- **Alternatives considered:**
+  - **Halo Noir, Halo Daylight and Halo Contrast single themes:** drop either the light or the dark preference that ADR-0007 and ADR-0009 give users.
+  - **n8n's own light and dark palette with Inter:** familiar, but carries none of the Halo identity.
+  - **Plum Studio:** plum as the primary colour; ember reads better as the action colour and keeps plum for agents.
+  - **Gradient Band:** a Halo-gradient header band; heavier than the flat header and competes with the work area.
+
+#### ADR-0045 — Brands chosen at build time (white-label): Halo Powered and Agentic Hub
+- **Status:** Accepted; refines ADR-0044 (the Halo look is the `halo` brand; the pre-rebrand look is restored as `mercer`)
+- **Date:** 2026-11-15
+- **Context:**
+  - The previous Mercer look (the "Agentic Hub" framed shell) must stay available alongside the Halo rebrand, for example for delivery to that client, without either brand leaking into the other's product: no names, images or assets of one in the other's bundle, installer or npm package.
+- **Decision:**
+  - **One build, one brand.** `BRAND=halo|mercer` (default `halo`) picks the brand for every build: web bundle, Electron app and installer. The brand is not a runtime setting.
+  - **One folder per brand:** `frontend/brands/<id>/` holds `brand.json` (`id`, `osName`, `legacyOsName` (since ADR-0046 `legacyOsNames`, a list), `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}`, `publishNpm`), `tokens.css` (the brand's Light and Dark values, including `--qti-font-sans`, `--qti-font-display`, `--qti-radius-card`, `--qti-radius-frame`, and for mercer the frame, banner and logo gradient tokens), `public/` (`favicon.ico`, `brand/favicon.svg`, `brand/icon.png`, and for mercer `brand/agentic-hub/`) and `art/app-icon.svg` (the source of `icon.png`). `frontend/public/` no longer exists; `src/styles/tokens.css` keeps only the shared `@theme inline` mapping.
+  - **Halo** ("Halo Powered"): the flat n8n-style shell of ADR-0044; OS name "Halo BI Assistant" (product renamed "Halo Workbench" by ADR-0046).
+  - **Mercer** ("Agentic Hub"): the pre-rebrand look restored exactly: framed shell (textured teal gradient frame, photo banner titled "US Health Agentic Hub", rounded panels), gradient logo circle and "Agentic Hub" in the rail, the "Powered by LenAI" badge, Noto Sans and the ADR-0007 token values. OS name "Agentic Hub", appId `com.halopowered.agentic-hub`, installer `Agentic-Hub-<version>-<os>-<arch>.<ext>`, its own userData folder so both apps install side by side, no legacy data migration. In both brands the Runs header icon, answer mark and Data used icon are lucide.
+  - **Renderer:** `src/app/core/brand/` holds the `Brand` model (`id`, `productName`, `headerTitle`, `welcomeLead`, `welcomeName`, `shell` `flat|framed`, `poweredByLenai`, `art`), `brand.ts` (Halo, default) and `brand.mercer.ts`. The `mercer` Angular build configuration swaps `brand.ts` by `fileReplacements`, the styles (fonts and `brands/mercer/tokens.css`) and the assets (`brands/mercer/public`); `ng build -c production,mercer`. The shell template draws the flat or framed shell from `brand.shell`; `main.ts` sets the document title from the brand.
+  - **Electron:** `scripts/brand.mjs` builds the web bundle (also writing `dist/frontend/browser/brand.json`) and copies the brand's `brand.json` to `frontend/electron/brand.json` (gitignored); `main.cjs` reads it for the app name, window title, legacy migration, per-theme window background and icon. `scripts/electron-dist.mjs` passes appId, product name, artifact name and icons to electron-builder.
+  - **Delivery:** the desktop workflow takes a `brand` input (tag pushes build halo). The npm package ships only brands with `publishNpm: true`; `backend/scripts/assert-publishable-brand.js` checks `backend/public/brand.json` in `prepack` and as its own CI step. Mercer is distributed as the desktop installer only (plus local web builds).
+- **Consequences:**
+  - Each brand's names and images never reach the other's bundle (verified on both builds).
+  - The E2E suite runs on the Halo build; `e2e/brand-mercer.spec.ts` runs only on a `BRAND=mercer` web build and skips otherwise.
+  - A new brand is a new folder plus a `brand.<id>.ts` and a build configuration; no runtime switch exists to test.
+  - **Stack-neutral:** a rebuild needs a build-time brand input that selects a token set, assets, names and packaging identity, and a guard keeping unpublishable brands out of the public package.
+- **Alternatives considered:**
+  - **Brand chosen at runtime in Appearance:** rejected; every build would ship both brands' assets and four brand and theme combinations would need testing.
+  - **The old palette as an extra colour theme only:** rejected; it does not restore the old look (framed shell, banner, names, badge, installer identity).
+
+#### ADR-0046 — The product is "Halo Workbench" in the app and the operating system
+- **Status:** Accepted; supersedes the *Name* of ADR-0044 and the halo OS name of ADR-0045
+- **Date:** 2026-11-15
+- **Context:**
+  - "Halo BI Assistant" described the first product: a chat that answers questions about data. The product has become a place to design and run agent workflows on one's own data (workflow designer, runs, agents as building blocks, data readiness, dashboard recreation), with every figure linked to its query. "BI" ties it to dashboards, which the product deliberately is not, and "Assistant" to the chat, which is retired.
+  - The UI said "Halo Powered" (the company) while the operating system said "Halo BI Assistant", so the product had two names.
+- **Decision:**
+  - **One name.** The `halo` brand's product is "Halo Workbench" everywhere: window and document title, header heading, rail brand (HALO wordmark, divider, "Workbench"), Settings build identity, welcome heading, OS app name (`osName`, electron-builder `productName`), executable, installer (`Halo-Workbench-<version>-<os>-<arch>.<ext>`) and data directory. "Halo Powered" stays the company and brand name (`BRAND=halo`, the Labs site).
+  - **Same identity.** The `appId` stays `com.halopowered.questions-to-insights`, so the one-click installer replaces an existing install instead of adding a second app.
+  - **Data stays where it is.** `brand.json` `legacyOsName` becomes `legacyOsNames`, newest first (`Halo BI Assistant`, `Questions to Insights`). When the profile (`userData`) or the Windows local data directory of the current name does not exist, the app uses the first earlier-named one that exists, in place; nothing is moved or copied.
+  - **Old backends still stop.** At startup the stale-backend check accepts the current executable name and each legacy name, so a backend orphaned by the previous release (`Halo BI Assistant.exe`) is stopped after the upgrade.
+  - **Unchanged:** the npm package (`@jhon-buendia-halo/questions-to-insights`), the web data directory (`~/.questions-to-insights`), the internal name "Questions to Insights", the Labs page's copy and subdomain.
+- **Consequences:**
+  - Specs, unit tests, E2E selectors and the application-shell screenshot that named "Halo Powered" or "Halo BI Assistant" as the product change with this ADR (app-shell R1, R7, R32, R33, R51, R57).
+  - An upgraded install keeps a data directory named after an earlier product name; it is invisible to the user and avoids a move that could fail half-way.
+  - The Start menu shortcut and install folder follow the new name; the previous release's uninstaller, which the installer runs first, removes the old ones.
+  - **Stack-neutral:** a rebuild needs a packaging identity that survives renames and a data-directory lookup that falls back to earlier names.
+- **Alternatives considered:**
+  - **Move the data to a folder of the new name:** rejected; a cross-device or locked-file failure half-way would split or lose data for no visible gain.
+  - **Rename only the UI and keep "Halo BI Assistant" in the OS:** rejected by the user; the product would keep two names.
+  - **New `appId`:** rejected; the new app would install beside the old one and start with an empty profile.
+
+#### ADR-0047 — Long work the user starts runs as a background task owned by the shell, not by the screen that started it
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Context:**
+  - The renderer has no router: changing area, view, tab or opening Settings destroys the screen. Twenty slow operations kept their in-progress state in the component, so leaving made the work invisible (a dataset save, a Testing Data load, ontology suggestions), cancelled it (an inventory load, a synthetic profile) or left it untracked (an eval run, whose poll timer even outlived the page). The user saw a dataset appear only when its save ended and asked for the process to stay visible.
+- **Decision:**
+  - **One root service, `BackgroundTasksService`** (`frontend/src/app/core/background-tasks/`): a task is `{ kind, key, title, work }`, where `work` is a factory of an Observable that the service subscribes at the root. The component that starts it never subscribes; it reads its busy state and result back from the task (`active(kind, key)`, `latest(kind, key)`, `finished$`), so a screen shown again is right. The same kind and key never runs twice.
+  - **One place to see it:** a Background tasks button in the rail above System logs, with the count of running tasks, and its panel (ui.md 3.7). The rail exists in both brands; the header crumb does not exist in `mercer`.
+  - **One outcome message:** the service toasts the end once, with **Open** (back to the result) or **Retry** (the same work again); `ToastService` gains one optional action per toast.
+  - **No backend change for these tasks:** a root subscription keeps the HTTP request open, so the backend sees no closed connection. Kept in memory only; nothing is stored.
+  - **Workflow runs are a separate decision:** their stream is closed by the page and the backend stopped a run when its connection closed (api.md 3.6); keeping them alive needed the backend change of roadmap 1.26.5, ADR-0048.
+- **Consequences:**
+  - Each long operation is wired to the service once (roadmap 1.26.2–1.26.4); new long work starts there instead of in a component.
+  - Components lose their own toasts for that work, and the E2E specs that waited for a component toast keep working because the copy is the server's message.
+  - Tasks do not survive a window reload; work the backend finishes anyway (a dataset save) still lands, only its row in the panel is lost.
+  - **Stack-neutral:** a rebuild needs an app-level job registry that outlives screens, a single indicator, and screens that read their state from it.
+- **Alternatives considered:**
+  - **Keep each component's state in its own feature service:** rejected; twenty ad-hoc stores and no single place to see what runs.
+  - **Header indicator:** rejected by the user in favour of the rail; the `mercer` banner has no crumb.
+  - **Backend job queue for every operation:** rejected for now; the requests already complete if the client keeps the connection, so a queue would add endpoints and storage for no visible gain.
+
+#### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Context:**
+  - A run's stream (api.md 119, 138) was its lifetime: the backend aborted the run when the connection closed, and the workflow page closed it when it was left (the renderer has no router, ADR-0047). Leaving the page, reloading or closing the window stopped the run; the user asked for runs to keep going and show in Background tasks (roadmap 1.26.5).
+  - ADR-0043 keeps a suspended run's runtime in server memory (`SuspendedRuns`); the same pattern holds a running one. The installed Mastra 1.66 exposes `watch`/`cancel` only as internal run API, and our agent steps run through the session turn path, not Mastra's stream.
+  - Chromium allows 6 connections per origin, so one SSE connection per background run would starve the app.
+- **Decision:**
+  - **The run is detached.** 119 and 138 start (or resume) the run on the signal of an in-memory registry, `LiveRuns` (`backend/src/modules/workflows/live-runs.ts`, no framework import), keyed by run id: its `AbortController`, a numbered log of its events (consecutive `text` and `reasoning` deltas merged, at most 5,000 entries), its followers and its end; an ended run's log is dropped 10 minutes after its end. The HTTP response is one follower: it replays the log from the start, then goes on live; closing it only unsubscribes. Each frame carries its `seq`.
+  - **Two new routes.** `GET /workflow-runs/:id/events/stream?after=<seq>` (149) follows a held run again from any client; `POST /workflow-runs/:id/stop` (150) aborts it (stored `stopped` as before, the log ending with `done`), is idempotent, and drops a waiting run as expired.
+  - **The page follows; it never owns the run.** Leaving the workflow page drops the stream only; opening the workflow again, or the run from Runs or its task, follows it with 149 from `seq` 0, rebuilding the live view (steps, Thinking, tool calls, the answer forming). Stop calls 150.
+  - **Background tasks poll.** Each run is a `workflow-run` task (ADR-0047) whose work reads the run (121) every 3 s until it ends, so background runs hold no SSE connection; at start-up the runs the server reports `running` or `suspended` (120) get their task back.
+  - **Unchanged:** Try it (129) and a step's chat (137) stay tied to their connection; 118 runs inline.
+  - **Amends ADR-0043:** a run's runtime stays in server memory, now while it runs too, not only while it waits.
+- **Consequences:**
+  - A backend restart still ends a running run: it is stored `failed` at start-up (workflows R20), and a waiting one `stopped`, as before; nothing of the registry is persisted.
+  - The stream's frames gain `seq` (api.md 3.6); a stopped run's stream ends with `done` rather than nothing; a client must call 150 to stop.
+  - Memory: one log per live run and per run ended in the last 10 minutes, bounded by the cap.
+  - **Stack-neutral:** a rebuild needs a server-side run that outlives its request, a replayable event log per run, a follow endpoint and a stop endpoint.
+- **Alternatives considered:**
+  - **B — Mastra's `watch`/`cancel` on the workflow run:** rejected; internal API, every agent step would be rewritten off the session turn path, and the evals would change.
+  - **C — Keep the stream open from a root frontend service:** rejected; a reload or closed window still stops the run, and each background run holds one of 6 connections per origin.
+
+## Level 4 — Code
+
+```mermaid
+flowchart TB
+  subgraph fe["Frontend (features/sessions)"]
+    chat["SessionChat<br/>(session-chat.ts)"]
+    api["SessionsApiService<br/>(fetch stream reader)"]
+    shell["App shell<br/>(app.ts onVisualUpdated)"]
+    panel["InteractiveVisualPanel<br/>(interactive-visual-panel.ts)"]
+    iframe["sandboxed iframe<br/>(srcdoc, sandbox=allow-scripts)"]
+  end
+
+  subgraph be["Backend (modules/sessions)"]
+    ctrl["WorkflowsController<br/>POST /workflows/:id/runs/stream<br/>(text/event-stream)"]
+    svc["SessionsService.streamRunTurn<br/>(requestContext: session-id, active-visual-id, turn-data-records)"]
+    bridge["tool-services bridge<br/>(createVisual / updateVisual)"]
+    vis["VisualizationService<br/>(create, update, revert, load)"]
+    validate["validation<br/>(spec check, or new Function parse + 1 retry)"]
+    frame["visualization-document.ts<br/>(qti- frame from transcript: contextFor)"]
+  end
+
+  subgraph ma["mastra/"]
+    assistant["assistant agent"]
+    tool["create_visual / update_visual<br/>(tools/visual.tools.ts)"]
+    designer["visualization agent<br/>(designer sub-call)"]
+  end
+
+  files[("session workspace<br/>visuals/id/vN/: index.html, body.html,<br/>styles.css, script.js, manifest.json, data.json")]
+
+  chat -->|"user message + activeVisualizationId"| api
+  api -->|"HTTP POST, SSE response"| ctrl
+  ctrl --> svc
+  svc -->|"agent.stream()"| assistant
+  assistant -->|"tool call"| tool
+  tool -->|"getDatasetToolServices()"| bridge
+  bridge --> vis
+  vis -->|"bundle + captured rows + instruction"| designer
+  designer -->|"spec or HTML/CSS/JS"| validate
+  validate --> vis
+  vis --> frame
+  vis -->|"writeVersion, currentVersion = N"| files
+  tool -->|"visualId, version, title"| svc
+  svc -->|"SSE event: visual-updated"| api
+  api --> chat
+  chat -->|"visualUpdated output"| shell
+  shell -->|"open visual id + version"| panel
+  panel -->|"GET /sessions/:id/visualizations/:vid?version=N"| api
+  ctrl -->|"load(version)"| vis
+  panel -->|"framed index.html as srcdoc"| iframe
+  iframe -.->|"postMessage visual-error (panel shows banner)"| panel
+```
+
+*Visual tailoring loop: a chat turn's `create_visual`/`update_visual` tool call runs the designer agent through `VisualizationService`, writes a new `visuals/<id>/v<N>/` version in the session workspace, and the `visual-updated` SSE event makes the panel reload it into a sandboxed iframe that reports runtime errors back via `postMessage`.*
+
+
+<!-- Code-level decisions (patterns, conventions with architectural weight) go here. -->
+
+#### ADR-0050 — Cross-session memory: Mastra's own memory first, behind a `LearningStore` port; Hindsight only if a three-arm eval shows it is better
 - **Status:** Proposed
-- **Date:** 2026-10-29 (numbered ADR-0031 until 2026-11-04, when `main` took ADR-0031 for BA-251 and ADR-0032 for BA-281, and ADR-0033 until 2026-11-10, when `main` took ADR-0033 for BA-323 and ADR-0034 to ADR-0036 for BA-320 and PR #91 claimed ADR-0037 for BA-159)
+- **Date:** 2026-10-29 (numbered ADR-0031 until 2026-11-04, when `main` took ADR-0031 for BA-251 and ADR-0032 for BA-281, ADR-0033 until 2026-11-10 and ADR-0038 until 2026-11-16 (when `main` took ADR-0038 to ADR-0048 and open PR #126 claimed ADR-0049), when `main` took ADR-0033 for BA-323 and ADR-0034 to ADR-0036 for BA-320 and PR #91 claimed ADR-0037 for BA-159)
 - **Context:**
   - The assistant's only memory today is Mastra's message history: the last 40 messages of a thread, with `thread = resource = session id` on every call, stored in `mastra.sqlite` ([agents.md](agents.md) 2.1). Nothing crosses sessions. An approval or a correction made in one session is lost in the next, and verified queries are matched by word overlap, so a paraphrase or a question in another language finds nothing.
   - The research ([docs/research/BA-4.md](../../docs/research/BA-4.md) section 3.5) and the branch `feat/hindsight-memory` (its ADR-0013, never merged) chose Hindsight behind a `LearningStore` port. Its smoke test of 2026-10-05 reused an English approval for a Spanish question in a new session and applied a reviewer's correction. It also stored the corrected SQL as a plain fact, and later consolidated an observation that mixed it with the correction.

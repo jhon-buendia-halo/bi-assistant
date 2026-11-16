@@ -1,6 +1,6 @@
 {
   "name": "bi-assistant",
-  "description": "Claude Code mods for developers of Questions to Insights (Halo BI Assistant)",
+  "description": "Claude Code mods for developers of Questions to Insights (Halo Workbench)",
   "owner": { "name": "Jhon Buendia" },
   "plugins": [
     {

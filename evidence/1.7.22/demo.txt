@@ -1,0 +1,19 @@
+Demo — 1.7.22 Windows install takes over 5 minutes
+
+Run with --no-demo (a small change), so the demo is this transcript of the checks scripts/qa.mjs ran.
+
+$ npm --prefix backend run build:all (up to date, skipped)
+  exit 0 (passed)
+  build: up to date, skipped (pass --rebuild to force)
+
+$ npx jest --findRelatedTests src/app-bootstrap.ts src/infrastructure/process/parent-watchdog.spec.ts src/infrastructure/process/parent-watchdog.ts src/main.ts --passWithNoTests
+  exit 0 (passed)
+  Snapshots:   0 total
+  Time:        0.07 s, estimated 1 s
+  Ran all test suites related to files matching src/app-bootstrap.ts|src/infrastructure/process/parent-watchdog.spec.ts|src/infrastructure/process/parent-watchdog.ts|src/main.ts.
+
+$ python3 scripts/check-specs.py
+  exit 0 (passed)
+  PASS 26 roadmap milestone epics have a spec in specs/epics/
+  PASS every epic spec has a Status of Draft or Confirmed
+  ALL CHECKS PASSED

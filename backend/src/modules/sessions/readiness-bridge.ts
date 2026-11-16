@@ -17,7 +17,9 @@ import type {
   ReadinessReportSummary,
   ReadinessSummary,
   Severity,
+  SourceProfile,
 } from '../data-readiness/engine/types';
+import type { PreparedAssessment } from '../data-readiness/data-readiness.service';
 import type { ReadinessProgressListener } from '../data-readiness/progress';
 import type {
   ReadinessPanelItem,
@@ -74,6 +76,7 @@ export interface ReadinessReports {
       datasourceId: string;
       entities?: string[];
       sessionId?: string;
+      runId?: string;
     },
     now?: Date,
     options?: {
@@ -83,6 +86,53 @@ export interface ReadinessReports {
   ): Promise<ReadinessReport>;
   list(datasourceId: string): Promise<{ reports: ReadinessReportSummary[] }>;
   get(id: string): Promise<ReadinessReport>;
+  /** The phases of `assess`, for the Assess Data Readiness workflow. */
+  prepare(input: {
+    datasourceId: string;
+    entities?: string[];
+    sessionId?: string;
+    runId?: string;
+  }): Promise<PreparedAssessment>;
+  profileSource(
+    prepared: PreparedAssessment,
+    options?: {
+      signal?: AbortSignal;
+      onProgress?: ReadinessProgressListener;
+    },
+  ): Promise<SourceProfile>;
+  scoreProfile(
+    prepared: PreparedAssessment,
+    profile: SourceProfile,
+    now?: Date,
+  ): ReadinessReport;
+  saveReport(report: ReadinessReport): Promise<ReadinessReport>;
+}
+
+/**
+ * One assessment of a run's dataset, phase by phase (the Assess Data
+ * Readiness workflow, agents.md 5.13): each phase reads what the one before
+ * it left, so they run once each, in order. Every failure throws the text
+ * the run shows.
+ */
+export interface ReadinessAssessment {
+  dataset: string;
+  datasourceName: string;
+  datasourceKind: 'postgres' | 'databricks';
+  /** The dataset's tables: the assessment's scope. */
+  tableCount: number;
+  /** Profile the scope (R6-R11). */
+  profile(options?: {
+    signal?: AbortSignal;
+    onProgress?: ReadinessProgressListener;
+  }): Promise<{
+    entityCount: number;
+    relationshipCount: number;
+    notProfiledCount: number;
+  }>;
+  /** Run the deterministic engine over the profile (R12-R23). */
+  score(now?: Date): ReadinessSummary;
+  /** Store the scored report (R24): the tool-shaped report and summary. */
+  save(): Promise<ReadinessToolReport>;
 }
 
 export interface ReadinessBridgeDeps {
@@ -239,6 +289,11 @@ export function readinessOrientationLine(row: {
   return `- ${row.name} — ${row.kindLabel} datasource "${row.datasourceName}"${id}, ${row.entityCount} entities${example}`;
 }
 
+/** Today as `YYYY-MM-DD` (UTC), for Block D1. */
+export function isoToday(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
 /** Block D1 (agents.md 4.1): the session's datasets and today; no score. */
 export function readinessOrientationBlock(
   rows: readonly ReadinessOrientationRow[],
@@ -254,6 +309,22 @@ export function readinessOrientationBlock(
     ),
     `Today is ${today}.`,
   ].join('\n');
+}
+
+/**
+ * Id prefix of a run host (`run-<run id>`, agents.md 5.14), as
+ * `RUN_HOST_ID_PREFIX` in sessions.service.ts, which imports this file.
+ */
+const RUN_HOST_PREFIX = 'run-';
+
+/**
+ * Where an assessment came from, as the report records it (data-readiness
+ * R24): a run host's `runId`, else the chat's `sessionId`, never both.
+ */
+function origin(sessionId: string): { sessionId: string } | { runId: string } {
+  return sessionId.startsWith(RUN_HOST_PREFIX)
+    ? { runId: sessionId.slice(RUN_HOST_PREFIX.length) }
+    : { sessionId };
 }
 
 function kindLabel(kind: DatasourceKind | undefined): string {
@@ -287,7 +358,7 @@ export class ReadinessBridge implements ReadinessToolServices {
       const request = {
         datasourceId: dataset.datasourceId,
         entities: dataset.tables,
-        sessionId: input.sessionId,
+        ...origin(input.sessionId),
       };
       report =
         input.signal || input.onProgress
@@ -304,6 +375,75 @@ export class ReadinessBridge implements ReadinessToolServices {
       throw error;
     }
     return this.toolReport(report);
+  }
+
+  /**
+   * Start an assessment of a session dataset (as `assessReadiness`
+   * resolves it) to run phase by phase: the Assess Data Readiness
+   * workflow's Profile source, Score readiness and Save report steps.
+   */
+  async startAssessment(input: {
+    sessionId: string;
+    datasetName?: string;
+    /**
+     * Only these of the dataset's tables (Answer a Business Question's
+     * Check data quality: the tables its queries read), ignoring case;
+     * all of them when absent.
+     */
+    tables?: readonly string[];
+  }): Promise<ReadinessAssessment> {
+    const dataset = await this.resolveDataset(
+      input.sessionId,
+      input.datasetName,
+    );
+    const wanted = input.tables?.map((table) => table.toLowerCase());
+    const tables = wanted
+      ? dataset.tables.filter((table) => wanted.includes(table.toLowerCase()))
+      : dataset.tables;
+    if (wanted && tables.length === 0) {
+      throw new Error(`None of those tables is in dataset "${dataset.name}".`);
+    }
+    const prepared = await this.deps.readiness.prepare({
+      datasourceId: dataset.datasourceId,
+      entities: tables,
+      ...origin(input.sessionId),
+    });
+    const readiness = this.deps.readiness;
+    let profile: SourceProfile | undefined;
+    let scored: ReadinessReport | undefined;
+    return {
+      dataset: dataset.name,
+      datasourceName: prepared.datasource.name,
+      datasourceKind: prepared.kind,
+      tableCount: tables.length,
+      profile: async (options = {}) => {
+        try {
+          profile = await readiness.profileSource(prepared, options);
+        } catch (error) {
+          if (statusOf(error) === 502) {
+            throw new Error(
+              `Could not reach "${prepared.datasource.name}": ${messageOf(error)}`,
+            );
+          }
+          throw error;
+        }
+        const notProfiled = profile.entities.filter((e) => e.notProfiled);
+        return {
+          entityCount: profile.entities.length,
+          relationshipCount: profile.relationships.length,
+          notProfiledCount: notProfiled.length,
+        };
+      },
+      score: (now) => {
+        if (!profile) throw new Error('The source has not been profiled');
+        scored = readiness.scoreProfile(prepared, profile, now);
+        return readinessSummary(scored);
+      },
+      save: async () => {
+        if (!scored) throw new Error('The assessment has not been scored');
+        return this.toolReport(await readiness.saveReport(scored));
+      },
+    };
   }
 
   async getReadinessReport(input: {
@@ -386,45 +526,63 @@ export class ReadinessBridge implements ReadinessToolServices {
   }
 
   /** Dataset resolution shared by the three tools (agents.md 3.13). */
-  private async resolveDataset(
+  private resolveDataset(
     sessionId: string,
     datasetName?: string,
   ): Promise<ReadinessDataset & { datasourceId: string }> {
-    const names = await this.deps.sessionDatasetNames(sessionId);
-    const list = names.join(', ');
-    const wanted = datasetName?.trim();
-    let name: string | undefined;
-    if (!wanted) {
-      if (names.length > 1) {
-        throw new Error(
-          `This session has several datasets: ${list}. Name the one to assess.`,
-        );
-      }
-      name = names[0];
-    } else {
-      name =
-        names.find((n) => n === wanted) ??
-        names.find((n) => n.toLowerCase() === wanted.toLowerCase());
-      if (!name) {
-        throw new Error(
-          `Dataset "${wanted}" is not in this session. Choose one of: ${list}.`,
-        );
-      }
-    }
-    if (!name) throw new Error('This session has no dataset to assess.');
-    const dataset = (await this.deps.datasets([name])).find(
-      (d) => d.name === name,
+    return resolveSessionDataset(
+      this.deps,
+      sessionId,
+      datasetName,
+      UNSUPPORTED_KIND,
     );
-    if (!dataset) throw new Error(`Dataset "${name}" no longer exists.`);
-    if (
-      !dataset.datasourceId ||
-      !dataset.datasourceKind ||
-      !READINESS_KINDS.includes(dataset.datasourceKind)
-    ) {
-      throw new Error(UNSUPPORTED_KIND);
-    }
-    return { ...dataset, datasourceId: dataset.datasourceId };
   }
+}
+
+/**
+ * Dataset resolution (agents.md 3.13), shared by the readiness and the
+ * synthetic-data tools (3.14): the named session dataset, or the only one.
+ * Throws the text the model sees; `unsupported` when the dataset is not bound
+ * to a PostgreSQL or Databricks datasource.
+ */
+export async function resolveSessionDataset(
+  deps: Pick<ReadinessBridgeDeps, 'sessionDatasetNames' | 'datasets'>,
+  sessionId: string,
+  datasetName: string | undefined,
+  unsupported: string,
+): Promise<ReadinessDataset & { datasourceId: string }> {
+  const names = await deps.sessionDatasetNames(sessionId);
+  const list = names.join(', ');
+  const wanted = datasetName?.trim();
+  let name: string | undefined;
+  if (!wanted) {
+    if (names.length > 1) {
+      throw new Error(
+        `This session has several datasets: ${list}. Name the one to assess.`,
+      );
+    }
+    name = names[0];
+  } else {
+    name =
+      names.find((n) => n === wanted) ??
+      names.find((n) => n.toLowerCase() === wanted.toLowerCase());
+    if (!name) {
+      throw new Error(
+        `Dataset "${wanted}" is not in this session. Choose one of: ${list}.`,
+      );
+    }
+  }
+  if (!name) throw new Error('This session has no dataset to assess.');
+  const dataset = (await deps.datasets([name])).find((d) => d.name === name);
+  if (!dataset) throw new Error(`Dataset "${name}" no longer exists.`);
+  if (
+    !dataset.datasourceId ||
+    !dataset.datasourceKind ||
+    !READINESS_KINDS.includes(dataset.datasourceKind)
+  ) {
+    throw new Error(unsupported);
+  }
+  return { ...dataset, datasourceId: dataset.datasourceId };
 }
 
 function statusOf(error: unknown): number | undefined {

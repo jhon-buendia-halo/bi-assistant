@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { OntologyService } from '../../modules/ontology/ontology.service';
-import { randomUUID } from 'crypto';
 import { writeFileSync } from 'fs';
 import { runAssistantEvals } from './assistant.evals';
 import { selectCliEvalCases } from './eval-cli-selection';
@@ -23,7 +22,7 @@ import { setAgentModelResolver } from '../model-resolver';
  * the app has, without opening an HTTP port.
  *
  * Outside a request nobody is signed in (ADR-0012), so the run is explicitly
- * Demo User's: its throwaway sessions and knowledge are Demo User's own.
+ * Demo User's: its throwaway run hosts and knowledge are Demo User's own.
  */
 async function main(): Promise<void> {
   const datasets = (process.env['EVAL_DATASETS'] ?? '')
@@ -47,8 +46,8 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  // The agent the questions run on: the assistant, or the RFP Builder for
-  // EVAL_SET=rfp (agents.md 8.1).
+  // The agent the questions run on: the assistant, or the agent of the set,
+  // e.g. the Query Explainer for EVAL_SET=query-explainer (agents.md 8.1).
   const agent = agentForCases(selection.caseIds);
   if ('error' in agent) {
     console.error(agent.error);
@@ -89,11 +88,11 @@ async function runEvals(
   agentKey: string,
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
-  // session for create_visual/update_visual works here too — no CLI-only
+  // run host for create_visual/update_visual works here too — no CLI-only
   // degrade needed.
   const sessions = app.get(SessionsService);
   // Same curated-knowledge block a real chat turn gets from
-  // SessionsService.agentContext.
+  // TurnOptions.agentContext.
   const knowledgeBlock = await app
     .get(OntologyService)
     .definitionBlock(datasets);
@@ -115,7 +114,7 @@ async function runEvals(
     caseIds,
     sessions,
     knowledgeBlock,
-    evalTargetFor(agentKey, randomUUID()),
+    evalTargetFor(agentKey),
   );
   // The whole run (answers and tool calls included) for reading failures.
   const resultsFile = process.env['EVAL_RESULTS_FILE'];

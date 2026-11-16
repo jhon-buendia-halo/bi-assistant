@@ -58,8 +58,11 @@ export function fakeProfiler<C>(
   const fake: FakeProfiler<C> = {
     kind,
     calls,
-    withSessions: (_c, size, _signal, fn) => {
-      calls.push({ method: 'withSessions', args: [size] });
+    withSessions: (_c, size, _signal, fn, reach) => {
+      calls.push({
+        method: 'withSessions',
+        args: reach ? [size, reach] : [size],
+      });
       return fn(fake);
     },
     rowCount: (_c, schema, table) => {

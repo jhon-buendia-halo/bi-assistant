@@ -37,6 +37,17 @@ export class SessionsRepository {
     return this.store.update({ id }, patch);
   }
 
+  /**
+   * Write a session's messages back without touching its recency: the
+   * query evidence a past chat caches (api.md 144-146).
+   */
+  updateMessages(
+    id: string,
+    messages: SessionDoc['messages'],
+  ): Promise<SessionDoc | null> {
+    return this.store.update({ id }, { messages }, { keepUpdatedAt: true });
+  }
+
   delete(id: string): Promise<number> {
     return this.store.deleteOne({ id });
   }

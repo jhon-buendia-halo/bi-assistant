@@ -1,5 +1,5 @@
-import { lstat, readFile } from 'fs/promises';
-import { join, posix } from 'path';
+import { lstat, mkdir, readFile, writeFile } from 'fs/promises';
+import { dirname, join, posix } from 'path';
 import { sessionWorkspacePath } from '../../mastra/session-workspaces';
 
 /** Largest text file the panel shows or downloads (api.md #106). */
@@ -50,6 +50,72 @@ export function safeRelativePath(name: string): string | undefined {
 /** The content type a text file of the allow-list is served with. */
 export function textContentType(path: string): string | undefined {
   return TEXT_CONTENT_TYPES[posix.extname(path).toLowerCase()];
+}
+
+/**
+ * Write a file into the session workspace (agents.md 3.14: the
+ * synthetic-data script, as text; 5.17: a run's input image, as bytes),
+ * creating its folders; an existing file of the same name is overwritten.
+ * The path must be a safe relative path.
+ */
+export async function writeWorkspaceFile(
+  sessionId: string,
+  path: string,
+  text: string | Buffer,
+): Promise<void> {
+  const safe = safeRelativePath(path ?? '');
+  if (!safe) {
+    throw new WorkspaceFileError('invalid', `Invalid file path "${path}"`);
+  }
+  const target = join(sessionWorkspacePath(sessionId), ...safe.split('/'));
+  await mkdir(dirname(target), { recursive: true });
+  if (typeof text === 'string') await writeFile(target, text, 'utf8');
+  else await writeFile(target, text);
+}
+
+/** The image types a run's input image is stored as, by extension. */
+const IMAGE_CONTENT_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
+};
+
+/**
+ * An image of the session workspace (agents.md 5.17: a run's input image):
+ * a safe relative path with no symlink on the way and a `.png`, `.jpg` or
+ * `.webp` extension. `missing` when there is no such file.
+ */
+export async function readWorkspaceImage(
+  sessionId: string,
+  path: string,
+): Promise<{ path: string; data: Buffer; mediaType: string }> {
+  const safe = safeRelativePath(path ?? '');
+  const mediaType = safe
+    ? IMAGE_CONTENT_TYPES[posix.extname(safe).toLowerCase()]
+    : undefined;
+  if (!safe || !mediaType) {
+    throw new WorkspaceFileError('invalid', `Invalid image path "${path}"`);
+  }
+  const missing = () =>
+    new WorkspaceFileError(
+      'missing',
+      `Image "${safe}" not found in the run's workspace`,
+    );
+  let current = sessionWorkspacePath(sessionId);
+  let info: Awaited<ReturnType<typeof lstat>> | undefined;
+  for (const segment of safe.split('/')) {
+    current = join(current, segment);
+    try {
+      info = await lstat(current);
+    } catch {
+      throw missing();
+    }
+    if (info.isSymbolicLink()) {
+      throw new WorkspaceFileError('invalid', `Invalid image path "${path}"`);
+    }
+  }
+  if (!info?.isFile()) throw missing();
+  return { path: safe, data: await readFile(current), mediaType };
 }
 
 /**

@@ -75,6 +75,18 @@ export interface ProfiledTable {
   lastModifiedAt?: string;
 }
 
+/**
+ * The part of a source one assessment needs (data-readiness R28): its
+ * namespaces (Databricks `catalog.schema`) and, when known, its exact tables.
+ * Databricks reads the inventory, keys and foreign keys of these schemas only,
+ * instead of every catalog of the workspace; PostgreSQL ignores it (one
+ * database).
+ */
+export interface ProfilingReach {
+  namespaces: string[];
+  entities?: { namespace: string; name: string }[];
+}
+
 export interface ProfilingConnector<TConfig = unknown> {
   readonly kind: 'postgres' | 'databricks';
   /**
@@ -84,13 +96,15 @@ export interface ProfilingConnector<TConfig = unknown> {
    * aborts, in-flight statements are cancelled (best effort) and further
    * statements reject with an AbortError. The 15 s per-statement timeout and
    * the read-only guard are unchanged; a statement that times out is
-   * cancelled on the server, not left running.
+   * cancelled on the server, not left running. `reach`, when given, bounds
+   * what the scoped profiler's catalogue reads cover (`ProfilingReach`).
    */
   withSessions<T>(
     config: TConfig,
     size: number,
     signal: AbortSignal | undefined,
     fn: (scoped: ScopedProfiler<TConfig>) => Promise<T>,
+    reach?: ProfilingReach,
   ): Promise<T>;
   /** BA-323: `SELECT COUNT(*)` (cheap from table metadata on Delta). */
   rowCount(config: TConfig, schema: string, table: string): Promise<number>;

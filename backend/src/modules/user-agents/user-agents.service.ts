@@ -14,6 +14,10 @@ import {
   parseLinks,
 } from '../../mastra/agent-links';
 import { REASONING_EFFORTS, type ReasoningEffort } from '../llm/llm.types';
+import {
+  DEFAULT_AGENT_DOMAIN,
+  isAgentDomain,
+} from '../../mastra/agent-personas';
 import { builtInOnDemandSkillNames } from '../../mastra/app-skills';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
 import {
@@ -36,6 +40,8 @@ import { UserAgentsRepository } from './repositories/user-agents.repository';
 /** The untyped create / save-draft payload, already coerced to strings. */
 export interface AgentConfigInput {
   name?: string;
+  role?: string;
+  domain?: string;
   description?: string;
   instructions?: string;
   datasets?: string[];
@@ -252,6 +258,12 @@ export function normalizeAgentConfig(input: AgentConfigInput): AgentConfig {
       AGENT_LIMITS.starterQuestion,
     ).slice(0, AGENT_LIMITS.starterQuestions),
   };
+  const role = clip(input.role, AGENT_LIMITS.role);
+  if (role) config.role = role;
+  // An unknown domain, or `general`, is stored as no domain (R43).
+  if (isAgentDomain(input.domain) && input.domain !== DEFAULT_AGENT_DOMAIN) {
+    config.domain = input.domain;
+  }
   const model = clip(input.model, Number.POSITIVE_INFINITY);
   if (model) config.model = model;
   if (
@@ -309,6 +321,8 @@ export function missingDatasets(
 function sameConfig(a: AgentConfig, b: AgentConfig): boolean {
   return (
     a.name === b.name &&
+    (a.role ?? '') === (b.role ?? '') &&
+    (a.domain ?? '') === (b.domain ?? '') &&
     a.description === b.description &&
     a.instructions === b.instructions &&
     sameList(a.datasets, b.datasets) &&

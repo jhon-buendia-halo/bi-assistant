@@ -1,4 +1,5 @@
 import type { ReadinessMaturity } from './readiness.model';
+import type { QueryEvidence } from '../../../shared/query-evidence/query-evidence.model';
 
 export interface ClarificationOption {
   label: string;
@@ -83,15 +84,10 @@ export interface ChatMessage {
   crossCheck?: CrossCheck;
   /** How the assistant worked its way from the question to this answer. */
   reasoning?: ReasoningStep[];
+  /** The query inspector's facts about each data-gathering call of `data`, in `data` order. */
+  evidence?: QueryEvidence[];
   /** Curated knowledge snippets this answer's context carried. */
   knowledge?: KnowledgeUse[];
-  /**
-   * Present when a deep-analysis job produced a report. The content is the
-   * report's executive summary; the full markdown is downloadable.
-   */
-  report?: AnalysisReport;
-  /** Present when the RFP Builder exported an RFP package this turn. */
-  rfpPackage?: RfpPackage;
   /**
    * The last readiness report this turn produced (Data Readiness Agent
    * sessions; data-model 3.4.1). Drives the readiness card.
@@ -107,16 +103,6 @@ export interface ChatMessage {
   error?: boolean;
 }
 
-/** A stored RFP package (data-model 3.4.1); `rfp-package` stream payload. */
-export interface RfpPackage {
-  rfpId: string;
-  title: string;
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** True for a draft exported by `export_rfp_draft` (stored under `rfp/<rfpId>/draft/`). */
-  draft?: true;
-}
-
 /** `ChatMessage.readinessReport` (data-model 3.4.1): a reference, not the report. */
 export interface ReadinessReportRef {
   reportId: string;
@@ -124,31 +110,6 @@ export interface ReadinessReportRef {
   overallScore: number;
   maturity: ReadinessMaturity;
   generatedAt: string;
-}
-
-export interface AnalysisReport {
-  jobId: string;
-  title: string;
-  /** Workspace-relative path of the stored markdown report. */
-  path: string;
-  angles: number;
-}
-
-/** Deep-analysis job lifecycle, as reported by polling. */
-export type DeepAnalysisStatus =
-  'planning' | 'investigating' | 'writing' | 'done' | 'error';
-
-export interface DeepAnalysisResult {
-  ok: boolean;
-  message: string;
-  jobId?: string;
-  status?: DeepAnalysisStatus;
-  /** Human-readable line for the pending card. */
-  progress?: string;
-  step?: number;
-  steps?: number;
-  title?: string;
-  error?: string;
 }
 
 export type MessageFeedback = 'up' | 'down';
@@ -291,7 +252,7 @@ export interface InteractiveVisualization extends SessionVisualization {
 }
 
 /**
- * The agent a session was started from (sessions-chat R52-R59), derived by
+ * The agent a session was started from (agent-answers R52-R59), derived by
  * the backend from the agent's current Live version. `deleted` sessions keep
  * the name the agent last had and run on the plain assistant.
  */
@@ -303,6 +264,18 @@ export interface SessionAgent {
   starterQuestions: string[];
 }
 
+/**
+ * The workflow a session runs, as the API sends it (api.md 2.1): the
+ * catalogue name; for a user agent's workflow its Live name (a preview's,
+ * the draft's), or the name it last had with `deleted` once it is gone.
+ */
+export interface SessionWorkflowRef {
+  id: string;
+  name: string;
+  kind: 'code' | 'agent';
+  deleted: boolean;
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -312,7 +285,7 @@ export interface Session {
   agentId?: string;
   /** The agent's name as last seen for this session. */
   agentName?: string;
-  /** Set when the session is bound to a built-in agent (e.g. `rfp`). */
+  /** Set when the session is bound to a built-in agent (e.g. `assistant`). */
   agentKey?: string;
   /** Present when `agentId` or `agentKey` is. */
   agent?: SessionAgent;
@@ -325,6 +298,11 @@ export interface Session {
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first. */
   panelItems?: PanelItem[];
+  /**
+   * The workflow the session runs (api.md 2.1; past-chats R65), derived
+   * by the backend on every read; always sent from M1-23 on.
+   */
+  workflowRef?: SessionWorkflowRef;
   /** Present when the agent's prompt has a `## Workflow` section. */
   workflow?: WorkflowView;
   createdAt?: string;
@@ -332,7 +310,7 @@ export interface Session {
 }
 
 /**
- * The agent's name as the page header chip shows it (sessions-chat R57),
+ * The agent's name as the page header chip shows it (past-chats R57),
  * marked once the agent is gone (R59).
  */
 export function sessionAgentLabel(agent: SessionAgent): string {
@@ -344,17 +322,25 @@ export function sessionListSubtitle(session: Session): string {
   return session.datasets.join(' · ');
 }
 
-/** Name of the agent a session runs when it is bound to none (R63). */
-export const DEFAULT_SESSION_AGENT = 'Assistant';
+/**
+ * The workflow's name as the page header chip and the Sessions list chip
+ * show it (past-chats R57, R63), marked once its agent is gone (R59).
+ */
+export function sessionWorkflowLabel(ref: SessionWorkflowRef): string {
+  return ref.deleted ? `${ref.name} · agent deleted` : ref.name;
+}
+
+/** The assistant's workflow name, for a session the backend sent no ref for. */
+export const DEFAULT_SESSION_WORKFLOW = 'Assistant';
 
 /**
- * The agent chip of a session-list row: the bound agent's name, or
- * `<name> · agent deleted` once it is gone (R57, R59), else the assistant.
+ * The workflow chip of a session-list row (R63): the session's workflow,
+ * `<name> · agent deleted` once its agent is gone (R59).
  */
-export function sessionListAgent(session: Session): string {
-  return session.agent
-    ? sessionAgentLabel(session.agent)
-    : DEFAULT_SESSION_AGENT;
+export function sessionListWorkflow(session: Session): string {
+  return session.workflowRef
+    ? sessionWorkflowLabel(session.workflowRef)
+    : DEFAULT_SESSION_WORKFLOW;
 }
 
 export interface SessionActionResult {

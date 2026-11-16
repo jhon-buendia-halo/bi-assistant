@@ -8,6 +8,7 @@ import type { Completion, ToolArgs } from './rules'
 const PANE = 'workflow'
 const TITLE = 'Workflow'
 const CLAUDE_MD = 'CLAUDE.md'
+const STRICT_SKILL = '.claude/skills/workflow-strict/SKILL.md'
 const PROMOTE_AT = 3
 const DROP_AT = 3
 const FOLD_AFTER = 12
@@ -35,7 +36,7 @@ const FALLBACK: Step[] = [
   { number: 10, title: 'Update changelog with evidence', summary: 'Dated changelog entry, evidence folder, roadmap entry ✅ Done.' },
   { number: 11, title: 'Retrospective', summary: 'What went well, what went wrong, what to do differently.' },
 ]
-const FALLBACK_FIRST_ACTION = 'Read retrospective.md before doing anything else.'
+const FALLBACK_FIRST_ACTION = 'Read lessons.md before doing anything else.'
 
 // Markdown to plain text: links to their text, no emphasis or code marks.
 const plain = (text: string): string =>
@@ -82,18 +83,36 @@ export const parseWorkflow = (markdown: string): { steps: Step[]; firstAction: s
   return { steps: found, firstAction: action }
 }
 
-// Reads CLAUDE.md in the working directory into $.state, or the fallback.
-async function loadSteps($: EngineInterface): Promise<void> {
-  let parsed = { steps: [] as Step[], firstAction: '' }
-  try {
-    parsed = parseWorkflow(await $.fs.read(CLAUDE_MD))
-  } catch {
-    parsed = { steps: [], firstAction: '' }
+// The MANDATORY FIRST ACTION line anywhere in a file (CLAUDE.md keeps it
+// outside any Workflow section since roadmap 0.6.1).
+export const parseFirstAction = (markdown: string): string => {
+  for (const line of markdown.split(/\r?\n/)) {
+    const mandatory = /MANDATORY FIRST ACTION\s*[—–-]+\s*(.*?)(\*\*|$)/.exec(line)
+    if (mandatory) return sentence(plain(mandatory[1] ?? ''))
   }
-  const ok = parsed.steps.length > 0
-  const from: StepsSource = ok ? 'claude-md' : 'fallback'
-  await update($, steps, () => (ok ? parsed.steps : FALLBACK))
-  await update($, firstAction, () => (ok ? parsed.firstAction : FALLBACK_FIRST_ACTION))
+  return ''
+}
+
+const readOrEmpty = async ($: EngineInterface, file: string): Promise<string> => {
+  try {
+    return await $.fs.read(file)
+  } catch {
+    return ''
+  }
+}
+
+// Reads the steps from the workflow-strict skill, then CLAUDE.md, into
+// $.state, or the fallback; the first action always comes from CLAUDE.md.
+async function loadSteps($: EngineInterface): Promise<void> {
+  const claudeMd = await readOrEmpty($, CLAUDE_MD)
+  const fromSkill = parseWorkflow(await readOrEmpty($, STRICT_SKILL))
+  const fromClaudeMd = parseWorkflow(claudeMd)
+  const from: StepsSource =
+    fromSkill.steps.length > 0 ? 'strict-skill' : fromClaudeMd.steps.length > 0 ? 'claude-md' : 'fallback'
+  const parsed = from === 'strict-skill' ? fromSkill : fromClaudeMd
+  const action = parseFirstAction(claudeMd) || parsed.firstAction || FALLBACK_FIRST_ACTION
+  await update($, steps, () => (from === 'fallback' ? FALLBACK : parsed.steps))
+  await update($, firstAction, () => action)
   await update($, source, () => from)
 }
 
@@ -305,7 +324,7 @@ export const layoutFor = (width: number): RowLayout => {
 const titleOf = (list: Step[], step: number): string => list.find(s => s.number === step)?.title ?? `Step ${step}`
 const summaryOf = (task: Task): string => summarize(task.evidence, { subagents: task.agents.length, result: task.result })
 // Step 1's two checks are the session's: the first action, and any read before the first write,
-// whichever task the calls were counted for (a shell read of retrospective.md is a step-11 signal).
+// whichever task the calls were counted for (a shell read of lessons.md is a step-11 signal).
 const progressOf = (task: Task, q: Queue): Completion => {
   const facts = [...(task.facts ?? [])]
   if (task.step === 1 && q.firstActionDone) facts.push('retro-read')
@@ -321,7 +340,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'workflow',
-      description: 'Show the CLAUDE.md workflow as a task queue in a side pane; "reset" starts it over',
+      description: 'Show the strict workflow as a task queue in a side pane; "reset" starts it over',
     })
     await loadSteps($)
     const current = await read($, queue)
@@ -568,8 +587,8 @@ export const register: Register = on => {
           {`   overall ${percent(overall)}   ${tokens(totalTokens)} · ${dollars(q.usd)}`}
         </Text>
         <Text dimColor wrap="truncate">
-          {from === 'claude-md' ? 'From CLAUDE.md' : 'CLAUDE.md not readable here: built-in copy'}
-          {` · retrospective read ${q.firstActionDone ? '✓' : '–'} · ${duration(now - q.startedAt)}`}
+          {from === 'strict-skill' ? 'From workflow-strict' : from === 'claude-md' ? 'From CLAUDE.md' : 'Workflow not readable here: built-in copy'}
+          {` · lessons read ${q.firstActionDone ? '✓' : '–'} · ${duration(now - q.startedAt)}`}
           {silent.length > 0 ? ` · ${silent.length} step${silent.length === 1 ? '' : 's'} without a signal yet` : ''}
           {' · inferred from tool calls'}
         </Text>

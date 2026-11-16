@@ -130,33 +130,12 @@ test('has no automatically detectable accessibility violations on any screen in 
       },
     ],
     [
-      'User personas',
+      'Runs',
       async () => {
-        await rail('Context').click();
-        await page.getByTestId('context-section-personas').click();
+        await rail('Runs').click();
         await expect(
-          page.getByRole('heading', { name: 'User personas' }),
+          page.getByRole('tablist', { name: 'Runs views' }),
         ).toBeVisible();
-      },
-    ],
-    [
-      'Sessions',
-      async () => {
-        await rail('Sessions').click();
-        await expect(
-          page.getByRole('navigation', { name: 'Sessions', exact: true }),
-        ).toBeVisible();
-      },
-    ],
-    [
-      'New-session composer',
-      async () => {
-        await rail('Sessions').click();
-        await page
-          .locator('header')
-          .getByRole('button', { name: 'Start New Conversation' })
-          .click();
-        await expect(page.getByPlaceholder('My new session')).toBeVisible();
       },
     ],
     [
@@ -193,11 +172,11 @@ test('has no automatically detectable accessibility violations on any screen in 
 });
 
 test('text in the app can be selected', async ({ page }) => {
-  const heading = page.getByRole('heading', { name: 'Welcome to Agentic Hub' });
+  const heading = page.getByRole('heading', { name: 'Welcome to Halo Workbench' });
   await heading.click({ clickCount: 3 });
   expect(
     await page.evaluate(() => window.getSelection()?.toString()),
-  ).toContain('Welcome to Agentic Hub');
+  ).toContain('Welcome to Halo Workbench');
   await evidence(page, '1.20.5', 'text-selected.png');
   expect(
     await heading.evaluate((el) => getComputedStyle(el).userSelect),

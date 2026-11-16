@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   HostListener,
   computed,
@@ -12,6 +13,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
 import {
   BarChart3,
   ChevronDown,
@@ -29,21 +32,37 @@ import {
   InteractiveVisualization,
   SessionActionResult,
 } from '../../models/session.model';
-import { SessionsApiService } from '../../services/sessions-api.service';
+import {
+  RunVisualResult,
+  WorkflowRunsApiService,
+} from '../../../workflows/services/workflow-runs-api.service';
 import {
   ResolvedTheme,
   ThemeService,
 } from '../../../../core/theme/theme.service';
+import {
+  BackgroundTask,
+  BackgroundTaskKind,
+  BackgroundTasksService,
+} from '../../../../core/background-tasks/background-tasks.service';
+import { RunsState } from '../../../runs/services/runs-state';
+import { BRAND } from '../../../../core/brand/brand';
+import type { Brand } from '../../../../core/brand/brand.model';
 
 /**
- * Starts the visual's document in the app's theme: the frame picks its Light
- * or Dark tokens from the root's `data-theme` (visuals R40).
+ * Starts the visual's document in the app's theme and brand: the frame picks
+ * its Light or Dark tokens from the root's `data-theme` (visuals R40) and the
+ * brand's palette from `data-brand` (ADR-0045).
  */
 export function withVisualTheme(
   document: string,
   theme: ResolvedTheme,
+  brand: Brand['id'] = BRAND.id,
 ): string {
-  return document.replace(/<html\b/i, `<html data-theme="${theme}"`);
+  return document.replace(
+    /<html\b/i,
+    `<html data-theme="${theme}" data-brand="${brand}"`,
+  );
 }
 
 export type TailorChartType =
@@ -124,6 +143,12 @@ export function buildTailorInstruction(options: TailorOptions): string {
   return parts.join(' ');
 }
 
+/**
+ * Finished tailor and refresh tasks whose result a panel already applied, so a
+ * panel shown again later does not apply the same result twice.
+ */
+const appliedTasks = new WeakMap<BackgroundTasksService, Set<number>>();
+
 @Component({
   selector: 'app-interactive-visual-panel',
   imports: [LucideAngularModule],
@@ -146,8 +171,14 @@ export class InteractiveVisualPanel {
   readonly minTopN = TAILOR_MIN_TOP_N;
   readonly maxTopN = TAILOR_MAX_TOP_N;
 
-  readonly sessionId = input<string | null>(null);
+  /**
+   * The stored run whose visual this is (api.md 130-134): the tailor, refresh
+   * and repair actions go to its routes; a past chat has none (read-only).
+   */
+  readonly runId = input<string | null>(null);
   readonly visualization = input<InteractiveVisualization | null>(null);
+  /** Read-only (a past chat): no Tailor, no Refresh, no revert, no repair. */
+  readonly readOnly = input(false);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
@@ -155,7 +186,7 @@ export class InteractiveVisualPanel {
   readonly selectVersion = output<number>();
   readonly revertVersion = output<number>();
   /** A repair or tailoring call returned a fresh session + visualization. */
-  readonly visualRefreshed = output<SessionActionResult>();
+  readonly visualRefreshed = output<SessionActionResult & RunVisualResult>();
   /** The user clicked a data mark inside the sandboxed visual. */
   readonly dataPointSelected = output<DataPointSelection>();
   readonly versionMenuOpen = signal(false);
@@ -164,16 +195,48 @@ export class InteractiveVisualPanel {
   readonly runtimeError = signal<string | null>(null);
   /** An auto-repair round trip is in flight. */
   readonly repairing = signal(false);
-  readonly tailoring = signal(false);
-  readonly tailorError = signal<string | null>(null);
   readonly tailorChartType = signal<TailorChartType>('auto');
   readonly tailorSort = signal<TailorSort>('none');
   readonly tailorTopN = signal<number | null>(null);
 
-  /** A data-refresh call for the single open visual is in flight. */
-  readonly refreshingData = signal(false);
+  private readonly runsApi = inject(WorkflowRunsApiService);
+  private readonly tasks = inject(BackgroundTasksService);
+  private readonly runs = inject(RunsState);
+  private readonly destroyRef = inject(DestroyRef);
+  private alive = true;
 
-  private readonly api = inject(SessionsApiService);
+  /**
+   * Tailor and Refresh data run as background tasks keyed `<runId>/<visualId>`
+   * (ADR-0047): they go on when the run is closed and read busy again when it
+   * is reopened.
+   */
+  private readonly taskKey = computed(() => {
+    const visual = this.visualization();
+    const runId = this.runId();
+    return visual && runId ? `${runId}/${visual.id}` : null;
+  });
+  private readonly tailorTask = computed(() => {
+    const key = this.taskKey();
+    return key ? this.tasks.latest('visual-tailor', key) : undefined;
+  });
+  private readonly refreshTask = computed(() => {
+    const key = this.taskKey();
+    return key ? this.tasks.latest('visual-refresh', key) : undefined;
+  });
+  /** A tailoring call for the open visual is in flight. */
+  readonly tailoring = computed(() => this.tailorTask()?.status === 'running');
+  /** A data-refresh call for the open visual is in flight. */
+  readonly refreshingData = computed(
+    () => this.refreshTask()?.status === 'running',
+  );
+  /** The failed task whose error the user closed the form on. */
+  private readonly seenTailorFailure = signal<number | null>(null);
+  readonly tailorError = computed(() => {
+    const task = this.tailorTask();
+    return task?.status === 'failed' && task.id !== this.seenTailorFailure()
+      ? task.detail
+      : null;
+  });
   /** `visualId:version` pairs already given their one auto-repair attempt. */
   private readonly repairAttempts = new Set<string>();
 
@@ -209,6 +272,20 @@ export class InteractiveVisualPanel {
   });
 
   constructor() {
+    this.destroyRef.onDestroy(() => (this.alive = false));
+
+    // A result is applied when the task ends and this panel shows that visual.
+    this.tasks.finished$
+      .pipe(takeUntilDestroyed())
+      .subscribe((task) => this.applyFinished(task, true));
+    // A panel shown again after the task ended applies the result it missed.
+    effect(() => {
+      const tasks = [this.tailorTask(), this.refreshTask()];
+      untracked(() => {
+        for (const task of tasks) if (task) this.applyFinished(task, false);
+      });
+    });
+
     // A new document means a fresh chance to run cleanly.
     effect(() => {
       this.visualization();
@@ -241,20 +318,101 @@ export class InteractiveVisualPanel {
     }
   }
 
+  private callRefresh(
+    runId: string,
+    visualId: string,
+  ): Observable<RunVisualResult> {
+    return this.runsApi.refreshVisualization(runId, visualId);
+  }
+
+  private callRepair(
+    runId: string,
+    visualId: string,
+    error: string,
+    version: number,
+  ): Observable<RunVisualResult> {
+    return this.runsApi.repairVisualization(runId, visualId, error, version);
+  }
+
+  private callTailor(
+    runId: string,
+    visualId: string,
+    instruction: string,
+  ): Observable<RunVisualResult> {
+    return this.runsApi.tailorVisualization(runId, visualId, instruction);
+  }
+
   /** Re-run the open visual's stored SQL and adopt the fresh document. */
   refreshData(): void {
     const visual = this.visualization();
-    const sessionId = this.sessionId();
-    if (!visual || !sessionId || this.refreshingData()) return;
-    this.refreshingData.set(true);
-    this.api.refreshVisualizationData(sessionId, visual.id).subscribe({
-      next: (result) => {
-        this.refreshingData.set(false);
-        if (!result.ok || !result.visualization) return;
-        this.visualRefreshed.emit(result);
-      },
-      error: () => this.refreshingData.set(false),
+    const runId = this.runId();
+    if (!visual || !runId || this.refreshingData()) return;
+    this.startVisualTask('visual-refresh', runId, visual, 'Refreshing', () =>
+      this.callRefresh(runId, visual.id),
+    );
+  }
+
+  private startVisualTask(
+    kind: Extract<BackgroundTaskKind, 'visual-tailor' | 'visual-refresh'>,
+    runId: string,
+    visual: InteractiveVisualization,
+    verb: string,
+    work: () => Observable<RunVisualResult>,
+  ): void {
+    const key = `${runId}/${visual.id}`;
+    this.tasks.start<RunVisualResult>({
+      kind,
+      key,
+      title: `${verb} visual "${visual.title}"`,
+      work,
+      outcome: (last) => ({
+        ok: !!last?.ok && !!last.visualization,
+        message:
+          last?.ok && last.visualization
+            ? undefined
+            : last?.message ||
+              (kind === 'visual-tailor'
+                ? 'Tailoring failed'
+                : 'Refresh failed'),
+      }),
+      open: () => this.runs.openRun(runId),
+      // A panel that still shows the visual reports the end itself.
+      toast: () => !(this.alive && this.taskKey() === key),
     });
+  }
+
+  private applied(): Set<number> {
+    let set = appliedTasks.get(this.tasks);
+    if (!set) appliedTasks.set(this.tasks, (set = new Set<number>()));
+    return set;
+  }
+
+  /** Adopts a finished tailor or refresh result the panel has not applied. */
+  private applyFinished(task: BackgroundTask, justEnded: boolean): void {
+    if (
+      (task.kind !== 'visual-tailor' && task.kind !== 'visual-refresh') ||
+      task.status !== 'done' ||
+      task.key !== this.taskKey() ||
+      this.applied().has(task.id)
+    ) {
+      return;
+    }
+    const result = task.result as RunVisualResult | undefined;
+    const open = this.visualization();
+    if (!result?.ok || !result.visualization || !open) return;
+    this.applied().add(task.id);
+    if (
+      !justEnded &&
+      result.visualization.version === open.version &&
+      result.visualization.currentVersion === open.currentVersion
+    ) {
+      return; // The host already shows this version.
+    }
+    if (task.kind === 'visual-tailor') {
+      this.resetTailorForm();
+      this.tailorMenuOpen.set(false);
+    }
+    this.visualRefreshed.emit(result);
   }
 
   /**
@@ -264,10 +422,11 @@ export class InteractiveVisualPanel {
    */
   private handleRuntimeError(message: string): void {
     const visual = this.visualization();
-    const sessionId = this.sessionId();
+    const sessionId = this.runId();
     if (
       !visual ||
       !sessionId ||
+      this.readOnly() ||
       this.viewingOldVersion() ||
       this.repairing() ||
       this.isAutoRepairVersion() ||
@@ -280,22 +439,20 @@ export class InteractiveVisualPanel {
     this.repairAttempts.add(this.repairKey(visual.id, visual.version));
     this.runtimeError.set(null);
     this.repairing.set(true);
-    this.api
-      .repairVisualization(sessionId, visual.id, message, visual.version)
-      .subscribe({
-        next: (result) => {
-          this.repairing.set(false);
-          if (!result.ok || !result.visualization) {
-            this.runtimeError.set(message);
-            return;
-          }
-          this.visualRefreshed.emit(result);
-        },
-        error: () => {
-          this.repairing.set(false);
+    this.callRepair(sessionId, visual.id, message, visual.version).subscribe({
+      next: (result) => {
+        this.repairing.set(false);
+        if (!result.ok || !result.visualization) {
           this.runtimeError.set(message);
-        },
-      });
+          return;
+        }
+        this.visualRefreshed.emit(result);
+      },
+      error: () => {
+        this.repairing.set(false);
+        this.runtimeError.set(message);
+      },
+    });
   }
 
   private repairKey(visualId: string, version: number): string {
@@ -313,7 +470,7 @@ export class InteractiveVisualPanel {
   toggleTailorMenu(): void {
     const open = !this.tailorMenuOpen();
     this.tailorMenuOpen.set(open);
-    if (open) this.tailorError.set(null);
+    if (open) this.seenTailorFailure.set(this.tailorTask()?.id ?? null);
   }
 
   setTopN(raw: string): void {
@@ -326,34 +483,18 @@ export class InteractiveVisualPanel {
   applyTailoring(): void {
     const instruction = this.tailorInstruction();
     const visual = this.visualization();
-    const sessionId = this.sessionId();
-    if (!instruction || !visual || !sessionId || this.tailoring()) return;
-
-    this.tailorError.set(null);
-    this.tailoring.set(true);
-    this.api.tailorVisualization(sessionId, visual.id, instruction).subscribe({
-      next: (result) => {
-        this.tailoring.set(false);
-        if (!result.ok || !result.visualization) {
-          this.tailorError.set(result.message || 'Tailoring failed');
-          return;
-        }
-        this.resetTailorForm();
-        this.tailorMenuOpen.set(false);
-        this.visualRefreshed.emit(result);
-      },
-      error: (err) => {
-        this.tailoring.set(false);
-        this.tailorError.set(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
+    const runId = this.runId();
+    if (!instruction || !visual || !runId || this.tailoring()) return;
+    this.startVisualTask('visual-tailor', runId, visual, 'Tailoring', () =>
+      this.callTailor(runId, visual.id, instruction),
+    );
   }
 
   private resetTailorForm(): void {
     this.tailorChartType.set('auto');
     this.tailorSort.set('none');
     this.tailorTopN.set(null);
-    this.tailorError.set(null);
+    this.seenTailorFailure.set(this.tailorTask()?.id ?? null);
   }
 
   pickVersion(version: number): void {

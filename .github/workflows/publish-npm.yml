@@ -13,9 +13,10 @@ name: Publish npm package
 # which is what lets this workflow's GITHUB_TOKEN (packages: write) publish it
 # without a personal token.
 #
-# The build is explicit (`npm run build:all`) and publish runs with
+# The build is explicit (`BRAND=halo npm run build:all`) and publish runs with
 # --ignore-scripts, so `prepack` does not rebuild a second time and the tarball
-# is exactly what the logged build step produced. GitHub Packages refuses to
+# is exactly what the logged build step produced; a separate step then refuses
+# any web UI whose brand is not "publishNpm": true. GitHub Packages refuses to
 # re-publish an existing version (HTTP 409); a guard checks the registry first
 # and fails with a readable message instead. dry_run packs and prints the
 # tarball without uploading it.
@@ -106,9 +107,18 @@ jobs:
         working-directory: backend
         run: npm ci --legacy-peer-deps
 
+      # Only brands with "publishNpm": true ship as the npm package (ADR-0045);
+      # the package is always the Halo build.
       - name: Build backend and web UI
         working-directory: backend
+        env:
+          BRAND: halo
         run: npm run build:all
+
+      # Publish runs with --ignore-scripts, so prepack's own check does not run.
+      - name: Refuse a brand that may not be published
+        working-directory: backend
+        run: node scripts/assert-publishable-brand.js
 
       - name: Publish
         working-directory: backend

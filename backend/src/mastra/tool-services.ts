@@ -1,5 +1,13 @@
 import type { DatasourceKind } from '../modules/datasources/entities/datasource.entity';
 
+// The query facts' side channel (plan m1-25 1.25.1): the data tools write
+// `QueryFacts` beside their result under this requestContext key.
+export {
+  QUERY_FACTS_CONTEXT_KEY,
+  queryFactsKey,
+  type QueryFactsMap,
+} from '../modules/sessions/query-evidence/query-facts';
+
 // DI bridge for Mastra tools, same pattern as model-resolver: tools are
 // constructed at module load with no Nest DI, so SessionsService installs the
 // real implementations at boot.
@@ -46,6 +54,11 @@ export interface SqlRunResult {
   /** The run filled its row limit — the result set is probably incomplete. */
   truncated?: boolean;
   /**
+   * Rows the statement produced before the row limit. The tool takes it off
+   * the result before the model sees it (passed as `QueryFacts` instead).
+   */
+  totalRows?: number;
+  /**
    * Guidance for the agent (repair happened, zero rows came back, or the row
    * limit was reached).
    */
@@ -73,24 +86,6 @@ export interface DatasetToolTurnRecord {
   truncated?: boolean;
   error?: string;
   rationale?: string;
-}
-
-/** Where the RFP tools send their requests (agents.md 3.10). */
-export interface RestTarget {
-  /** The REST datasource's base URL. */
-  baseUrl: string;
-  /** Headers built as the REST connector builds them (the key in `X-API-Key`). */
-  headers: Record<string, string>;
-}
-
-/** What `export_rfp_package` returns (agents.md 3.10; data-model 3.4.1). */
-export interface RfpPackageResult {
-  rfpId: string;
-  title: string;
-  files: { name: string; bytes: number }[];
-  exportedAt: string;
-  /** Set by `export_rfp_draft`: the package is marked DRAFT. */
-  draft?: true;
 }
 
 /**
@@ -197,23 +192,6 @@ export interface DatasetToolServices {
     limit: number,
     datasets: string[],
   ): Promise<SqlRunResult>;
-  /**
-   * The base URL and headers of a REST datasource, secrets resolved on the
-   * server: the target of the RFP tools (agents.md 3.10).
-   */
-  restTarget(datasourceId: string): Promise<RestTarget>;
-  /**
-   * Download the RFP package (`GET /v1/rfps/{id}/package.zip`) from the
-   * datasource's API and unzip it into the session workspace `rfp/<rfpId>/`,
-   * overwriting an earlier export. With `draft`, `?draft=true` into
-   * `rfp/<rfpId>/draft/` instead (never touching the final package).
-   */
-  exportRfpPackage(
-    sessionId: string,
-    datasourceId: string,
-    rfpId: string,
-    options?: { draft?: boolean },
-  ): Promise<RfpPackageResult>;
 }
 
 let services: DatasetToolServices | null = null;

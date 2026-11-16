@@ -1,0 +1,154 @@
+<title>1.23.6 New conversation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --fg: #1d1f23;
+  --muted: #5b616b;
+  --border: #dcdde0;
+  --accent: #2f5bd3;
+  --code-bg: #eef0f3;
+  --focus: #2f5bd3;
+  --ok-bg: #e3f4e8;
+  --ok-fg: #17663a;
+  --warn-bg: #fdf0d8;
+  --warn-fg: #7a4d00;
+  --bad-bg: #fbe4e2;
+  --bad-fg: #a3261b;
+  --neutral-bg: #eceef1;
+  --neutral-fg: #444a53;
+  --video-bg: #e9eaed;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518;
+    --surface: #1c1e22;
+    --fg: #e7e8ea;
+    --muted: #a0a6b0;
+    --border: #33363d;
+    --accent: #8aa8ff;
+    --code-bg: #262930;
+    --focus: #8aa8ff;
+    --ok-bg: #173523;
+    --ok-fg: #8fdcaa;
+    --warn-bg: #3a2c10;
+    --warn-fg: #f2c46b;
+    --bad-bg: #42201d;
+    --bad-fg: #ff9d92;
+    --neutral-bg: #2a2d33;
+    --neutral-fg: #c3c7ce;
+    --video-bg: #0e0f11;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518;
+  --surface: #1c1e22;
+  --fg: #e7e8ea;
+  --muted: #a0a6b0;
+  --border: #33363d;
+  --accent: #8aa8ff;
+  --code-bg: #262930;
+  --focus: #8aa8ff;
+  --ok-bg: #173523;
+  --ok-fg: #8fdcaa;
+  --warn-bg: #3a2c10;
+  --warn-fg: #f2c46b;
+  --bad-bg: #42201d;
+  --bad-fg: #ff9d92;
+  --neutral-bg: #2a2d33;
+  --neutral-fg: #c3c7ce;
+  --video-bg: #0e0f11;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 48px;
+}
+header { margin-bottom: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 0.8125rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem); line-height: 1.2; letter-spacing: -0.01em; }
+h2 { margin: 36px 0 10px; font-size: 1.125rem; line-height: 1.3; }
+p, li { max-width: 65ch; }
+p { margin: 0 0 10px; }
+.intent { color: var(--muted); font-size: 1.0625rem; margin-bottom: 12px; }
+ul, ol { margin: 0 0 10px; padding-left: 1.4em; }
+li { margin: 3px 0; }
+li > ul, li > ol { margin: 4px 0 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, video:focus-visible, .scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace; font-size: 0.875em; }
+code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+.chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600; line-height: 1.6; }
+.chip.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.chip.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.chip.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.chip.neutral { background: var(--neutral-bg); color: var(--neutral-fg); }
+.demo { margin: 0; }
+.demo video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; background: var(--video-bg); border: 1px solid var(--border); border-radius: 8px; }
+.demo pre { margin: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; white-space: pre; line-height: 1.45; }
+.demo figcaption { margin-top: 8px; color: var(--muted); font-size: 0.8125rem; max-width: 65ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.card > :last-child { margin-bottom: 0; }
+.shipped { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.shipped > li { max-width: none; margin: 0; }
+.date { color: var(--muted); font-size: 0.8125rem; margin: 0 0 4px; }
+.aside { color: var(--muted); font-size: 0.9375rem; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { font-size: 0.8125em; color: var(--muted); }
+td:first-child { min-width: 16ch; }
+.result-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.8125rem; }
+footer p { margin: 0 0 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<main>
+<header>
+<p class="eyebrow">Workflow-first: chats run workflows, agents are building blocks (M1-23) · roadmap 1.23.6</p>
+<h1>The New conversation screen picks a workflow; chats name their workflow</h1>
+<p class="intent">a chat is started by choosing a <strong>Workflow</strong>, and every chat names its workflow in its header and in the Sessions list.</p>
+<span class="chip ok">Done</span>
+</header>
+<section aria-label="Demo">
+<figure class="demo">
+<video src="demo.webm" controls playsinline muted preload="metadata" aria-label="Demo of 1.23.6 The New conversation screen picks a workflow; chats name their workflow"></video>
+<figcaption>Recorded by <code>scripts/qa.mjs 1.23.6 --fast</code> with <code>DEMO=1</code>; captions are the scenario's Gherkin lines.</figcaption>
+</figure>
+</section>
+<section aria-labelledby="h-scope">
+<h2 id="h-scope">Scope</h2>
+<ul><li>the composer&#39;s Agent field becomes Workflow (same listbox behaviour, Assistant preselected)</li><li>Create sends the workflow id</li><li>the <code>Workflow</code> header chip on every chat and the Sessions list chip</li><li>sessions-chat, ui.md.</li></ul>
+<p class="aside"><strong>Out of scope:</strong> the agent pages (1.23.7).</p>
+</section>
+<section aria-labelledby="h-acceptance">
+<h2 id="h-acceptance">Acceptance</h2>
+<ul><li><code>session-management.spec.ts</code> with <code>@demo @story-1.23.6</code> (pick v2, create, header and Sessions chip, the bar&#39;s four steps)</li><li>a deleted agent&#39;s session and a pre-epic session name their workflow</li><li>the axe scan on the composer in both themes</li><li>every spec using the old composer test ids updated.</li></ul>
+</section>
+<section aria-labelledby="h-gate">
+<h2 id="h-gate">Gate results</h2>
+<p class="result-line"><span class="chip neutral">Not run yet</span><span class="aside">Gate results: not run yet (<code>scripts/qa.mjs 1.23.6 --gate</code> writes <code>evidence/1.23.6/tests.md</code>).</span></p>
+</section>
+<footer>
+<p>branch <code>feat/M1-23-workflow-first</code> · commit <code>ac5a0124</code> · generated 2026-11-12</p>
+<p>Generated by scripts/demo-page.mjs from roadmap.md, changelog.md and evidence/1.23.6/</p>
+</footer>
+</main>

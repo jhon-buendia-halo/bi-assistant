@@ -21,10 +21,7 @@ async function openAgent(page: Page, key: string): Promise<void> {
     .getByRole('complementary', { name: 'Navigation rail' })
     .getByRole('button', { name: 'Agents' })
     .click();
-  // The System section shows its first row until "Show more" (agents-evals R3).
-  if (key !== 'assistant') {
-    await page.getByTestId('agent-show-more-system').click();
-  }
+  // Every card shows in its domain section (agents-evals R3).
   await page.getByTestId(`agent-${key}`).click();
 }
 
@@ -104,10 +101,11 @@ test('the assistant gets only its built-in skills, and an old skills folder is i
   await openAgent(page, 'assistant');
   const tab = await openSkillsTab(page);
 
-  await expect(tab).toHaveText('Skills (2)');
+  await expect(tab).toHaveText('Skills (1)');
   // On demand since ADR-0020: the model reads it from the catalog.
   await expect(skill(page, 'curated-knowledge')).toContainText('On demand');
-  await expect(skill(page, 'deep-analysis')).toContainText('Loaded by the app');
+  // Deep analysis is removed: its skill is gone.
+  await expect(skill(page, 'deep-analysis')).toHaveCount(0);
   await expect(skill(page, 'sql-style')).toHaveCount(0);
   await expect(page.getByText('sql-style')).toHaveCount(0);
 });

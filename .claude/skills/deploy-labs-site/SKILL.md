@@ -1,6 +1,6 @@
 ---
 name: deploy-labs-site
-description: Publish or update a Halo Powered Labs product page on Cloudflare Pages — the static page styled from the Labs design system, its `<name>.halo-powered-labs.com` subdomain, and download buttons that resolve installers from this private repo's GitHub releases. Use when asked to add a Labs subdomain, ship or redeploy the BI Assistant landing page, wire release downloads to a page, or when a download button or that subdomain is broken.
+description: Publish or update a Halo Powered Labs product page on Cloudflare Pages — the static page styled from the Labs design system, its `<name>.halo-powered-labs.com` subdomain, and download buttons that resolve installers from this private repo's GitHub releases. Use when asked to add a Labs subdomain, ship or redeploy the Halo Workbench (formerly BI Assistant) landing page, wire release downloads to a page, or when a download button or that subdomain is broken.
 user-invocable: true
 disable-model-invocation: false
 ---

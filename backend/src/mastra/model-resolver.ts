@@ -24,7 +24,8 @@ export type AgentModelConfig =
       url?: string;
       headers?: Record<string, string>;
     }
-  | CustomAnthropicModelConfig;
+  | CustomAnthropicModelConfig
+  | CopilotModelConfig;
 
 /**
  * An Anthropic-compatible custom endpoint (BA-281, ADR-0032): plain data,
@@ -39,10 +40,32 @@ export interface CustomAnthropicModelConfig {
   apiKey?: string;
 }
 
+/**
+ * GitHub Copilot (BA-159, ADR-0037): plain data, built into a language model
+ * by `buildModel`. The credential is the machine's GitHub login, so the
+ * config carries no key and no URL.
+ */
+export interface CopilotModelConfig {
+  kind: 'copilot';
+  id: `copilot/${string}`;
+}
+
 export function isCustomAnthropicConfig(
   config: AgentModelConfig,
 ): config is CustomAnthropicModelConfig {
-  return typeof config === 'object' && 'kind' in config;
+  return (
+    typeof config === 'object' &&
+    'kind' in config &&
+    config.kind === 'custom-anthropic'
+  );
+}
+
+export function isCopilotConfig(
+  config: AgentModelConfig,
+): config is CopilotModelConfig {
+  return (
+    typeof config === 'object' && 'kind' in config && config.kind === 'copilot'
+  );
 }
 
 /**

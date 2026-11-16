@@ -1,4 +1,11 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider';
+
+const mockCreateCopilotModel = jest.fn();
+jest.mock('./copilot', () => ({
+  createCopilotModel: (...args: unknown[]) =>
+    mockCreateCopilotModel(...args) as unknown,
+}));
+
 import { buildModel } from './model-factory';
 import type {
   AgentModelConfig,
@@ -72,6 +79,17 @@ describe('buildModel', () => {
     { id: 'custom/llama3', apiKey: '', url: 'http://127.0.0.1:8317/v1' },
   ])('passes router config %j through untouched', async (config) => {
     await expect(buildModel(config)).resolves.toBe(config);
+  });
+
+  it('builds a Copilot config into the Copilot model, passing the model name', async () => {
+    const built = { modelId: 'gpt-5' };
+    mockCreateCopilotModel.mockReturnValue(built);
+    await expect(
+      buildModel({ kind: 'copilot', id: 'copilot/gpt-5' }),
+    ).resolves.toBe(built);
+    expect(mockCreateCopilotModel).toHaveBeenCalledWith({ model: 'gpt-5' });
+    await buildModel({ kind: 'copilot', id: 'copilot/auto' });
+    expect(mockCreateCopilotModel).toHaveBeenLastCalledWith({ model: 'auto' });
   });
 
   it('builds a keyed Anthropic-style model aimed at <root>/v1/messages', async () => {

@@ -4,7 +4,7 @@ import { WORKFLOW_BAR_COLLAPSED_KEY, WorkflowBar } from './workflow-bar';
 
 const base: WorkflowView = {
   phases: [
-    { number: 1, title: 'Client', skill: 'rfp-client' },
+    { number: 1, title: 'Client', skill: 'report-client' },
     { number: 2, title: 'Scope' },
     { number: 3, title: 'Pricing' },
     { number: 4, title: 'Review' },
@@ -125,7 +125,7 @@ describe('WorkflowBar', () => {
       current: 2,
       done: [1, 2],
       skipped: [],
-      note: 'RFP v2 is final.',
+      note: 'report v2 is final.',
     });
     const el: HTMLElement = fixture.nativeElement;
     expect(
@@ -157,7 +157,7 @@ describe('WorkflowBar', () => {
           number: 1,
           title: 'Client',
           action: 'Done action',
-          skill: 'rfp-client',
+          skill: 'report-client',
         },
         { number: 2, title: 'Scope', action: 'Skipped action' },
         { number: 3, title: 'Pricing', action: 'Decide which lines go out.' },
@@ -241,7 +241,7 @@ describe('WorkflowBar', () => {
       ]);
       expect(rows[0].querySelector('.chip-success')?.textContent).toBe('Done');
       expect(rows[0].textContent).not.toContain('To do');
-      expect(rows[0].textContent).toContain('rfp-client');
+      expect(rows[0].textContent).toContain('report-client');
       expect(rows[1].querySelector('.chip-neutral')?.textContent).toBe(
         'Skipped',
       );
@@ -392,7 +392,7 @@ describe('WorkflowBar', () => {
     expect(pop.textContent).toContain('Step 1');
     expect(pop.textContent).toContain('Client');
     expect(pop.querySelector('.chip-success')?.textContent).toBe('Done');
-    expect(pop.textContent).toContain('rfp-client');
+    expect(pop.textContent).toContain('report-client');
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     fixture.detectChanges();

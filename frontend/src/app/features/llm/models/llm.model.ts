@@ -1,4 +1,4 @@
-export type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom';
+export type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'custom' | 'copilot';
 
 /** Which API a custom endpoint speaks (BA-281). */
 export type ApiStyle = 'openai' | 'anthropic';
@@ -44,11 +44,21 @@ export interface LlmSettingsView {
 }
 
 /** `POST /llm/models` body (api.md 32b). */
-export interface ListModelsRequest {
-  provider: 'custom';
-  apiStyle: ApiStyle;
-  baseUrl: string;
-  apiKey?: string;
+export type ListModelsRequest =
+  | {
+      provider: 'custom';
+      apiStyle: ApiStyle;
+      baseUrl: string;
+      apiKey?: string;
+    }
+  | { provider: 'copilot' };
+
+/** `GET /llm/copilot/status` (api.md 32c). */
+export interface CopilotStatusView {
+  signedIn: boolean;
+  login: string | null;
+  method: string | null;
+  message: string;
 }
 
 /** `POST /llm/models` answer (Style A). */

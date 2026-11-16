@@ -2,8 +2,8 @@
 
 A Claude Code mod that opens a **Workflow** pane beside the transcript (the right-hand
 sidebar in a wide fullscreen terminal or the desktop app, a framed region above the
-prompt otherwise) showing the eleven-step development workflow from this repository's
-[CLAUDE.md](../../../CLAUDE.md) as a **task queue inferred from tool calls**.
+prompt otherwise) showing the eleven-step strict workflow from this repository's
+[`workflow-strict`](../../skills/workflow-strict/SKILL.md) skill as a **task queue inferred from tool calls**.
 
 - Executed tasks are numbered in the order they ran (`#1`, `#2`, …) with the step they
   correspond to, the agent (`main`, `main +2` with subagents), duration, tokens, cost, a
@@ -23,10 +23,11 @@ prompt otherwise) showing the eleven-step development workflow from this reposit
   Claude and no prompt is changed.
 - The remaining steps are queued with the numbers they will get; steps that never gave a
   signal are listed apart.
-- `/workflow` re-reads `CLAUDE.md` and opens (or focuses) the pane; Esc closes it.
+- `/workflow` re-reads the steps and opens (or focuses) the pane; Esc closes it.
   `/workflow reset` clears the queue for a new change.
-- When `CLAUDE.md` can't be read or has no `## Workflow` section, a built-in copy of the
-  steps is used and the pane says so.
+- The steps come from the `## Workflow` section of `.claude/skills/workflow-strict/SKILL.md`,
+  or of `CLAUDE.md` when the skill has none; the first action comes from `CLAUDE.md`. When
+  neither has the section, a built-in copy of the steps is used and the pane says so.
 - A pane the mod opens by itself only appears in a terminal at least 144 columns wide
   (110 once you opened it yourself); otherwise a toast says to run `/workflow`.
 

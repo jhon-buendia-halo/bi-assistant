@@ -1,0 +1,11 @@
+{
+  "id": "mercer",
+  "osName": "Agentic Hub",
+  "legacyOsNames": [],
+  "windowTitle": "Agentic Hub",
+  "appId": "com.halopowered.agentic-hub",
+  "artifactName": "Agentic-Hub-${version}-${os}-${arch}.${ext}",
+  "icon": "brands/mercer/public/brand/icon.png",
+  "canvas": { "light": "#0077a0", "dark": "#003a52" },
+  "publishNpm": false
+}

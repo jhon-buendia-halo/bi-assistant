@@ -23,7 +23,8 @@ import {
 } from './demo-page-lib.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const roadmap = fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8');
+const roadmap =
+  fs.readFileSync(path.join(root, 'roadmap.md'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'roadmap-archive.md'), 'utf8');
 
 const FIXTURE = `# Roadmap
 

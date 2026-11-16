@@ -8,7 +8,7 @@ export type Signal = {
   strong: boolean
   /** One readable line for the evidence column. */
   label: string
-  /** The call was the mandatory first action: reading retrospective.md. */
+  /** The call was the mandatory first action: reading lessons.md (retrospective.md before 2026-11-11). */
   firstAction: boolean
 }
 
@@ -24,6 +24,9 @@ const str = (args: ToolArgs, key: string): string => (typeof args[key] === 'stri
 const base = (path: string): string => path.split('/').pop() ?? path
 const clip = (text: string, max = 40): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
+/** Reading one of these is the mandatory first action. */
+const FIRST_ACTION_FILES = new Set(['lessons.md', 'retrospective.md'])
+
 /** The step that owns a path, by the CLAUDE.md workflow's file conventions. */
 export const stepForPath = (path: string): number | null => {
   // A worktree checkout lives under .claude/worktrees/<name>/: match inside it, not the prefix.
@@ -36,7 +39,7 @@ export const stepForPath = (path: string): number | null => {
   if (/(^|\/)frontend\/e2e(\/|$)/.test(p) || /(^|\/)backend\/test\/.*\.e2e-spec\.ts$/.test(p)) return 7
   if (/(^|\/)(frontend\/src|backend\/src|\.claude)(\/|$)/.test(p)) return 8
   if (/(^|\/)changelog\.md$/.test(p) || /(^|\/)evidence(\/|$)/.test(p)) return 10
-  if (/(^|\/)retrospective\.md$/.test(p)) return 11
+  if (/(^|\/)(retrospective|lessons)\.md$/.test(p)) return 11
   return null
 }
 
@@ -63,7 +66,7 @@ export const classify = (args: ToolArgs, hasWritten: boolean): Signal => {
   }
   if (READ_TOOLS.has(tool)) {
     const path = str(args, 'file_path') || str(args, 'path') || str(args, 'pattern')
-    const firstAction = tool === 'Read' && base(path) === 'retrospective.md'
+    const firstAction = tool === 'Read' && FIRST_ACTION_FILES.has(base(path))
     let step = stepForPath(path)
     if (step === null && !hasWritten) step = 1
     if (firstAction && !hasWritten) step = 1
@@ -79,7 +82,7 @@ export const classify = (args: ToolArgs, hasWritten: boolean): Signal => {
     // The file a redirect writes to names the step best; otherwise the first owned path.
     const target = /(?:>>?|\btee)\s*"?([^\s"']+)/.exec(command)?.[1]
     const owned = [target ?? '', ...paths].find(path => path !== '' && stepForPath(path) !== null)
-    const firstAction = !writes && paths.some(path => base(path) === 'retrospective.md')
+    const firstAction = !writes && paths.some(path => FIRST_ACTION_FILES.has(base(path)))
     if (owned !== undefined) {
       return { step: stepForPath(owned), strong: writes, label: `Bash ${base(owned)}`, firstAction }
     }
@@ -106,7 +109,7 @@ export type Check = { id: string; label: string }
 
 /** Each step's checklist, in the order the detail lists it (delivery.md §9). */
 export const CHECKLISTS: Record<number, Check[]> = {
-  1: [{ id: 'retro-read', label: 'retrospective.md read' }, { id: 'explored', label: 'files read before the first edit' }],
+  1: [{ id: 'retro-read', label: 'lessons.md read' }, { id: 'explored', label: 'files read before the first edit' }],
   2: [{ id: 'asked', label: 'questions asked' }, { id: 'answered', label: 'answers received' }],
   3: [
     { id: 'roadmap-edited', label: 'roadmap.md edited' },
@@ -120,7 +123,7 @@ export const CHECKLISTS: Record<number, Check[]> = {
   8: [{ id: 'source-edited', label: 'source files edited' }, { id: 'agents-finished', label: 'no subagent still running' }],
   9: [{ id: 'tests-run', label: 'tests run' }, { id: 'tests-passed', label: 'last run passed' }],
   10: [{ id: 'changelog-written', label: 'changelog entry written' }, { id: 'evidence-written', label: 'evidence added' }],
-  11: [{ id: 'retro-written', label: 'retrospective entry written' }],
+  11: [{ id: 'retro-written', label: 'retrospective entry or lesson written' }],
 }
 
 /** The text a write call puts in the file; a shell write's whole command. */
@@ -177,7 +180,7 @@ export const factsFor = (args: ToolArgs, signal: Signal, beforeFirstWrite: boole
     facts.push('changelog-written')
   } else if (/(^|\/)evidence\//.test(p)) {
     facts.push('evidence-written')
-  } else if (/(^|\/)retrospective\.md$/.test(p) || /(^|\/)retrospective\.d\//.test(p)) {
+  } else if (/(^|\/)(retrospective|lessons)\.md$/.test(p) || /(^|\/)retrospective\.d\//.test(p)) {
     facts.push('retro-written')
   }
   return facts

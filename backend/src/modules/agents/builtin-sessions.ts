@@ -1,14 +1,14 @@
 import type { DatasourceKind } from '../datasources/entities/datasource.entity';
-import { ASSISTANT_V2_AGENT_KEY } from '../../mastra/agents/assistant-v2-catalog';
+import { INSIGHTS_ANALYST_AGENT_KEY } from '../../mastra/agents/insights-analyst-catalog';
 
 /**
  * Built-in agents a session can be bound to (ADR-0028): each declares the
  * datasets its sessions run over, the text shown while there is none, and the
  * starter questions of its welcome block. Read by the hub (`AgentsService`:
- * datasets, missingDatasets, chatRequirement) and by `SessionsService`
+ * datasets, missingDatasets) and by `SessionsService`
  * (createFromAgent, the derived `agent` of a session).
  *
- * An agent declares either one dataset by name (the RFP Builder) or a dataset
+ * An agent declares either one dataset by name or a dataset
  * *kind*: every dataset bound to a datasource of one of `datasourceKinds`
  * (the Data Readiness Agent, agents.md 2.10).
  */
@@ -32,16 +32,6 @@ export type BuiltinAgentSession = {
 export const BUILTIN_AGENT_SESSIONS: Readonly<
   Record<string, BuiltinAgentSession>
 > = {
-  rfp: {
-    datasetName: 'Intellify RFP API',
-    requirement:
-      'Load the "Intellify RFP API" sample in Settings → Testing Data first',
-    starterQuestions: [
-      'Start an RFP for a client',
-      'Which of my clients renew on 1 January 2027?',
-      'Resume my draft RFPs',
-    ],
-  },
   'data-readiness': {
     datasourceKinds: ['postgres', 'databricks'],
     sessionName: 'Data Readiness',
@@ -56,14 +46,14 @@ export const BUILTIN_AGENT_SESSIONS: Readonly<
 
 /**
  * Built-in agents whose sessions run over the datasets the user picks, as a
- * plain session's do (BA-320): Questions to Insights v2. They declare no
+ * plain session's do (BA-320): Insights Analyst. They declare no
  * dataset, so the hub shows no datasets and no requirement for them, and
  * `POST /sessions` with their key validates the name and datasets of the
  * request as for a session without an agent, then binds the session to the
  * agent by its registry key (ADR-0028).
  */
 export const PICKED_DATASETS_AGENT_KEYS: readonly string[] = [
-  ASSISTANT_V2_AGENT_KEY,
+  INSIGHTS_ANALYST_AGENT_KEY,
 ];
 
 /** Whether a session bound to built-in `key` runs over picked datasets. */
@@ -139,7 +129,7 @@ export async function existingDatasetsFor(
   return [...(await catalog.datasetNames())].map((name) => ({ name }));
 }
 
-/** Whether Start chat can create a session now (sessions-chat R52). */
+/** Whether Start chat can create a session now (agent-answers R52). */
 export function canStartBuiltinSession({
   datasets,
   missing,

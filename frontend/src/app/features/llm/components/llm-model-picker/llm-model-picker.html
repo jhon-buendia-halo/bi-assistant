@@ -35,7 +35,11 @@
       </button>
     } @empty {
       <p class="px-2.5 py-1.5 text-[13px] text-fg-muted">
-        The endpoint listed no models — type the model name.
+        @if (provider() === 'copilot') {
+          Your Copilot plan lists no models to choose — leave the model as auto.
+        } @else {
+          The endpoint listed no models — type the model name.
+        }
       </p>
     }
   </div>

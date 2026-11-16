@@ -10,13 +10,38 @@ const crypto = require("crypto");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const {
+  writeBackendPid,
+  clearBackendPid,
+  stopStaleBackend,
+} = require("./stale-backend.cjs");
+const { createLineGrouper } = require("./log-lines.cjs");
+const { classifyBackendExit, portInUseMessage } = require("./backend-exit.cjs");
 
-const APP_DISPLAY_NAME = "Halo BI Assistant";
-// The window shows the Agentic Hub product name; the OS app name, installers
-// and data directory keep APP_DISPLAY_NAME (app-shell R33).
-const WINDOW_TITLE = "Agentic Hub";
-// The productName every release before the rename shipped with.
-const LEGACY_APP_NAME = "Questions to Insights";
+// The brand is chosen at build time (ADR-0045): `scripts/brand.mjs
+// electron-prepare` copies brands/<id>/brand.json next to this file. Dev runs
+// straight from the repo without that step fall back to the Halo brand.
+function loadBrand() {
+  const candidates = [
+    path.join(__dirname, "brand.json"),
+    path.join(__dirname, "../brands/halo/brand.json"),
+  ];
+  const file = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!file) throw new Error("No brand.json found next to the Electron main process.");
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+const BRAND = loadBrand();
+
+const APP_DISPLAY_NAME = BRAND.osName;
+// The window shows the brand's product name; the OS app name, installers and
+// data directory keep APP_DISPLAY_NAME (app-shell R33).
+const WINDOW_TITLE = BRAND.windowTitle;
+// The productNames earlier releases shipped with, newest first (empty when the
+// brand never had another name, so there is nothing to migrate). Halo:
+// "Halo BI Assistant", then "Questions to Insights" (ADR-0046).
+const LEGACY_APP_NAMES = Array.isArray(BRAND.legacyOsNames)
+  ? BRAND.legacyOsNames.filter((name) => typeof name === "string" && name.trim() !== "")
+  : [];
 const DEV_URL = process.env.ELECTRON_DEV_URL;
 const BACKEND_PORT = process.env.BACKEND_PORT || "3000";
 const BACKEND_READY_TIMEOUT_MS = 30_000;
@@ -43,15 +68,41 @@ if (process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR) {
   app.setPath("userData", process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR);
 } else {
   // Renaming the app moves `userData`, which is where the profile lives
-  // (app.sqlite, workspaces, diagnostics). Installs made under the old name
-  // keep theirs: prefer the current directory, fall back to the legacy one
-  // when only that exists.
+  // (app.sqlite, workspaces, diagnostics). Installs made under an old name
+  // keep theirs in place: prefer the current directory, else the newest
+  // legacy one that exists.
   const current = app.getPath("userData");
   if (!fs.existsSync(current)) {
-    const legacy = path.join(path.dirname(current), LEGACY_APP_NAME);
-    if (fs.existsSync(legacy)) app.setPath("userData", legacy);
+    const legacy = existingLegacyDir(path.dirname(current));
+    if (legacy) app.setPath("userData", legacy);
   }
 }
+
+/** `<parent>/<legacy name>` for the newest legacy name that exists there, or null. */
+function existingLegacyDir(parent) {
+  for (const name of LEGACY_APP_NAMES) {
+    const candidate = path.join(parent, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Executable names a backend left by an earlier release may run as: the
+ * current one, then one per legacy name (".exe" on Windows). After an upgrade
+ * that renamed the app, the recorded PID belongs to the old executable.
+ */
+function ownImageNames() {
+  const current = path.basename(process.execPath);
+  const ext = path.extname(current);
+  return [current, ...LEGACY_APP_NAMES.map((name) => `${name}${ext}`)];
+}
+
+// One instance per profile (app-shell R54): the lock is keyed by `userData`,
+// so it is taken after the path above is settled. A second launch exits here
+// and the first instance focuses its window ("second-instance" below).
+const isPrimaryInstance = app.requestSingleInstanceLock();
+if (!isPrimaryInstance) app.exit(0);
 
 // Window title and About panel. The macOS menu bar ignores this — it reads the
 // running bundle's CFBundleName (build.productName when packaged, and the
@@ -73,6 +124,14 @@ let stableTimer = null;
 let readinessPollGeneration = 0;
 let resolvedAppDataDir = null;
 let resolvedAppSecret = null;
+// Per spawn: the readiness probe only accepts a response carrying it, so a
+// server it did not start never counts as ready (api.md 4.3, app-shell R55).
+let backendInstanceId = null;
+let foreignPortReported = false;
+
+function backendPidDir() {
+  return resolvedAppDataDir || app.getPath("userData");
+}
 
 function setBackendStatus(status) {
   backendStatus = status;
@@ -165,49 +224,40 @@ function recordDiagnostic(level, source, message, details) {
   return entry;
 }
 
-function diagnosticLevelFromLine(line, fallbackLevel) {
-  if (/\b(ERROR|FATAL)\b/i.test(line)) return "error";
-  if (/\bWARN(?:ING)?\b|[A-Za-z]+Warning\b/i.test(line)) return "warn";
-  if (/\bDEBUG\b/i.test(line)) return "debug";
-  return fallbackLevel;
-}
-
-function recordBackendLine(rawLine, fallbackLevel) {
-  const line = rawLine.replace(ANSI_ESCAPE, "").trim();
-  if (!line) return;
-  try {
-    const parsed = JSON.parse(line);
-    if (parsed && typeof parsed === "object" && parsed.message) {
-      const { message, level, ...details } = parsed;
-      recordDiagnostic(
-        typeof level === "string" ? level : fallbackLevel,
-        "backend:mastra",
-        message,
-        details,
-      );
-      return;
-    }
-  } catch {
-    // Most Nest output is human-readable rather than JSON.
+// One entry per log event, not per line: a stack trace stays with the line
+// that started it, as the entry's `details` string (log-lines.cjs).
+function recordBackendEntry(fallbackLevel, entry) {
+  if (entry.kind === "json") {
+    const { message, level, ...details } = entry.parsed;
+    recordDiagnostic(
+      typeof level === "string" ? level : fallbackLevel,
+      "backend:mastra",
+      message,
+      details,
+    );
+    return;
   }
-  recordDiagnostic(
-    diagnosticLevelFromLine(line, fallbackLevel),
-    "backend",
-    line,
-  );
+  recordDiagnostic(entry.level, "backend", entry.message, entry.details);
 }
 
 function captureBackendStream(stream, output, fallbackLevel) {
   let pending = "";
+  const grouper = createLineGrouper({
+    fallbackLevel,
+    onEntry: (entry) => recordBackendEntry(fallbackLevel, entry),
+  });
+  const pushLine = (rawLine) => grouper.push(rawLine.replace(ANSI_ESCAPE, ""));
   stream.on("data", (chunk) => {
     output.write(chunk);
     pending += chunk.toString("utf8");
     const lines = pending.split(/\r?\n/);
     pending = lines.pop() ?? "";
-    for (const line of lines) recordBackendLine(line, fallbackLevel);
+    for (const line of lines) pushLine(line);
   });
   stream.on("end", () => {
-    if (pending.trim()) recordBackendLine(pending, fallbackLevel);
+    if (pending.trim()) pushLine(pending);
+    pending = "";
+    grouper.end();
   });
 }
 
@@ -415,6 +465,9 @@ function computeAppDataDir() {
 
   const localDir = path.join(process.env.LOCALAPPDATA, APP_DISPLAY_NAME);
   if (fs.existsSync(localDir)) return localDir;
+  // An install made under an old name keeps its local data where it is.
+  const legacyLocalDir = existingLegacyDir(process.env.LOCALAPPDATA);
+  if (legacyLocalDir) return legacyLocalDir;
 
   const hasLegacyData = LEGACY_DATA_MARKERS.some((name) =>
     fs.existsSync(path.join(roamingDir, name)),
@@ -530,12 +583,17 @@ function startBackend() {
     });
     return;
   }
+  backendInstanceId = crypto.randomUUID();
+  foreignPortReported = false;
   // Reuse Electron's binary as plain Node so packaged apps don't need a system Node.
   backendProcess = spawn(process.execPath, [entry], {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       PORT: BACKEND_PORT,
+      // The backend exits once this process is gone (api.md 4.3 Orphan exit).
+      DESKTOP_PARENT_PID: String(process.pid),
+      BACKEND_INSTANCE_ID: backendInstanceId,
       // SQLite app database lives in the OS-standard per-user app folder
       // (redirected off Windows roaming profiles — see computeAppDataDir).
       APP_DATA_DIR: resolvedAppDataDir || app.getPath("userData"),
@@ -544,6 +602,9 @@ function startBackend() {
     cwd: path.dirname(entry),
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const childPid = backendProcess.pid;
+  // Recorded so the next launch can stop this backend if it outlives us.
+  if (childPid) writeBackendPid(backendPidDir(), childPid);
   captureBackendStream(backendProcess.stdout, process.stdout, "info");
   captureBackendStream(backendProcess.stderr, process.stderr, "error");
   backendProcess.on("error", (error) => {
@@ -553,6 +614,7 @@ function startBackend() {
     });
   });
   backendProcess.on("exit", (code) => {
+    if (childPid) clearBackendPid(backendPidDir(), childPid);
     console.log(`[backend] exited (code ${code})`);
     recordDiagnostic(
       code === 0 || code === null ? "info" : "error",
@@ -568,6 +630,15 @@ function startBackend() {
       backendRestartRequested = false;
       startBackend();
       void pollUntilReadyThenNotify();
+      return;
+    }
+    if (classifyBackendExit(code) === "port-in-use") {
+      // Every retry would fail the same way: no back-off, `down` at once.
+      setBackendStatus("down");
+      recordDiagnostic("error", "electron", portInUseMessage(BACKEND_PORT), {
+        port: BACKEND_PORT,
+        exitCode: code,
+      });
       return;
     }
     scheduleBackendRestart(code);
@@ -664,25 +735,46 @@ function stopBackend() {
   clearTimeout(stableTimer);
   stableTimer = null;
   if (backendProcess) {
-    backendProcess.kill();
+    const pid = backendProcess.pid;
+    // The app may be gone before the child's 'exit' fires; clear the PID file
+    // now unless the kill failed (then the next launch still stops it).
+    if (backendProcess.kill() && pid) clearBackendPid(backendPidDir(), pid);
     backendProcess = null;
   }
 }
 
-// Readiness probe (api.md 4.3): `GET /sessions` answers 200 once the backend
-// is up; there is no sign-in (ADR-0030).
+// A 200 without this spawn's instance header comes from another process on
+// the port (an older backend or an unrelated server): never treat it as ready.
+function reportForeignPortOnce() {
+  if (foreignPortReported) return;
+  foreignPortReported = true;
+  recordDiagnostic(
+    "error",
+    "electron",
+    `Port ${BACKEND_PORT} is answered by another process, not this app's backend`,
+    { port: BACKEND_PORT },
+  );
+}
+
+// Readiness probe (api.md 4.3): `GET /health` answers 200 once the backend
+// is up; there is no sign-in (ADR-0030). Only the backend this shell spawned
+// counts (`X-Backend-Instance`, app-shell R55).
 function backendIsReady() {
   return new Promise((resolve) => {
     const request = http.get(
       {
         hostname: "127.0.0.1",
         port: BACKEND_PORT,
-        path: "/sessions",
+        path: "/health",
         timeout: 500,
       },
       (response) => {
         response.resume();
-        resolve(response.statusCode === 200);
+        if (response.statusCode !== 200) return resolve(false);
+        const ours =
+          response.headers["x-backend-instance"] === backendInstanceId;
+        if (!ours) reportForeignPortOnce();
+        resolve(ours);
       },
     );
     request.on("timeout", () => request.destroy());
@@ -699,19 +791,19 @@ async function waitForBackend() {
   return false;
 }
 
-// The Halo BI mark lives in build resources (electron-builder turns it into the
+// The brand's mark lives in brands/<id>/ (electron-builder turns it into the
 // .icns/.ico) and is copied into the renderer bundle, which is the copy that
 // survives packaging.
 function resolveAppIcon() {
   const candidates = [
-    path.join(__dirname, "../build/icon.png"),
+    BRAND.icon ? path.join(__dirname, "..", BRAND.icon) : null,
     path.join(__dirname, "../dist/frontend/browser/brand/icon.png"),
-  ];
+  ].filter(Boolean);
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
-// Frame colour per theme, under the gradient (specs/system/ui.md §6.0).
-const THEME_CANVAS = { light: "#0077a0", dark: "#003a52" };
+// Canvas colour per theme (specs/system/ui.md §6.0), from the brand.
+const THEME_CANVAS = BRAND.canvas;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -806,9 +898,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // A second instance is already exiting; never start a backend from it.
+  if (!isPrimaryInstance) return;
   initializeDiagnostics();
   // Unpackaged macOS runs keep Electron's own dock icon unless we set it; the
-  // packaged bundle already carries the Halo BI icon.
+  // packaged bundle already carries the brand's icon.
   if (process.platform === "darwin" && !app.isPackaged) {
     const icon = resolveAppIcon();
     if (icon) app.dock?.setIcon(icon);
@@ -817,6 +911,19 @@ app.whenReady().then(async () => {
   resolvedAppSecret = resolveAppSecret(resolvedAppDataDir);
 
   setBackendStatus("starting");
+  // A backend left running by an earlier launch (crash, End task) would keep
+  // the port and answer for this one (api.md 4.3 Stale backend).
+  const stale = await stopStaleBackend(resolvedAppDataDir, {
+    expectedImage: ownImageNames(),
+  });
+  if (stale.stopped) {
+    recordDiagnostic(
+      "warn",
+      "electron",
+      "Stopped a backend left running by an earlier launch",
+      { pid: stale.pid },
+    );
+  }
   startBackend();
   if (await waitForBackend()) {
     setBackendStatus("ready");
@@ -842,6 +949,18 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// A second launch (app-shell R54): bring this instance's window forward.
+app.on("second-instance", () => {
+  const [win] = BrowserWindow.getAllWindows();
+  if (!win) {
+    if (app.isReady()) createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
 });
 
 app.on("before-quit", stopBackend);

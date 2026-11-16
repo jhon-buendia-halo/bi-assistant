@@ -16,12 +16,15 @@ import { existsSync } from 'node:fs';
 import { AddressInfo } from 'node:net';
 import { extname, join, resolve } from 'node:path';
 import { AppModule } from './app.module';
-import { DATA_DIR } from './infrastructure/database/database.module';
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
+import {
+  isAddressInUse,
+  PortInUseError,
+} from './infrastructure/process/exit-codes';
 import { installNestLogRedaction } from './infrastructure/logging/redacting-nest-logger';
-import { setIntellifyApiInfo } from './intellify-api/api-info';
-import { createIntellifyApi } from './intellify-api/bootstrap';
-import { intellifyApiConfig, readOrCreateApiKey } from './intellify-api/config';
+
+/** The largest JSON request body the API reads. */
+export const JSON_BODY_LIMIT = '8mb';
 
 export interface CreateAppOptions {
   port: number;
@@ -31,6 +34,11 @@ export interface CreateAppOptions {
   webRoot?: string;
   /** Allow cross-origin requests (Electron renderer runs from file://). */
   cors?: boolean;
+  /**
+   * Echoed on every response as `X-Backend-Instance`, so the desktop shell's
+   * readiness probe can tell its own backend from another server (api.md 4.3).
+   */
+  instanceId?: string;
 }
 
 export interface CreatedApp {
@@ -39,8 +47,6 @@ export interface CreatedApp {
   port: number;
   /** Web root actually served, or null when only the API is available. */
   webRoot: string | null;
-  /** Where the embedded Intellify RFP API listens; null when it is off or failed. */
-  intellifyApiUrl: string | null;
 }
 
 /** `WEB_ROOT` env, else `<package>/public` (next to `dist/`). */
@@ -101,44 +107,6 @@ function installDeveloperLogExport(): void {
   installNestLogExport();
 }
 
-/**
- * Starts the Intellify RFP API (ADR-0027) next to the app, unless
- * `INTELLIFY_API=off`. Never throws: a failure is logged and the app runs on
- * without it (`getIntellifyApiInfo()` stays null).
- */
-async function startEmbeddedIntellifyApi(
-  app: INestApplication,
-  logger: Logger,
-): Promise<string | null> {
-  try {
-    const config = intellifyApiConfig();
-    if (!config.enabled) return null;
-    const apiKeys = config.apiKeys.length
-      ? config.apiKeys
-      : [readOrCreateApiKey(DATA_DIR)];
-    const api = await createIntellifyApi({
-      port: config.port,
-      host: config.host,
-      db: config.db,
-      apiKeys,
-    });
-    setIntellifyApiInfo({ url: api.url, apiKey: apiKeys[0] });
-    logger.log(`Intellify API listening on ${api.url}`);
-    // Closing the app closes the API with it.
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- called with `this` below
-    const originalClose = app.close;
-    app.close = async () => {
-      setIntellifyApiInfo(null);
-      await api.close().catch(() => undefined);
-      return originalClose.call(app) as Promise<void>;
-    };
-    return api.url;
-  } catch (error) {
-    logger.warn(`Intellify API not started: ${(error as Error).message}`);
-    return null;
-  }
-}
-
 export async function createApp(
   options: CreateAppOptions,
 ): Promise<CreatedApp> {
@@ -148,6 +116,17 @@ export async function createApp(
   installNestLogRedaction();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   if (options.cors) app.enableCors();
+  // A run's input can carry one image of up to 5 MB as a base64 `data:` URL
+  // (api.md 118, 119), which is about 6.7 MB of JSON; Express stops at
+  // 100 KB by default.
+  app.useBodyParser('json', { limit: JSON_BODY_LIMIT });
+  const instanceId = options.instanceId;
+  if (instanceId) {
+    app.use((_req: Request, res: Response, next: () => void) => {
+      res.setHeader('X-Backend-Instance', instanceId);
+      next();
+    });
+  }
 
   const webRoot = options.webRoot ? resolve(options.webRoot) : resolveWebRoot();
   const serveWeb = hasWebUi(webRoot);
@@ -167,13 +146,17 @@ export async function createApp(
   }
 
   await app.init();
-  if (options.host) {
-    await app.listen(options.port, options.host);
-  } else {
-    await app.listen(options.port);
+  try {
+    if (options.host) {
+      await app.listen(options.port, options.host);
+    } else {
+      await app.listen(options.port);
+    }
+  } catch (error) {
+    // A taken port is not a crash: the desktop shell must not retry it.
+    if (isAddressInUse(error)) throw new PortInUseError(options.port);
+    throw error;
   }
-
-  const intellifyApiUrl = await startEmbeddedIntellifyApi(app, logger);
 
   const address = app.getHttpServer().address() as AddressInfo;
   const port = address.port;
@@ -188,6 +171,5 @@ export async function createApp(
     url: `http://${displayHost}:${port}`,
     port,
     webRoot: serveWeb ? webRoot : null,
-    intellifyApiUrl,
   };
 }

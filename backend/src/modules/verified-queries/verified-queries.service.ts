@@ -72,7 +72,10 @@ export interface VerifiedQueryInput {
   sql: string;
   datasourceId?: string;
   entities?: string[];
-  sourceSessionId: string;
+  /** The chat the answer is in; omitted for a workflow run's answer. */
+  sourceSessionId?: string;
+  /** The workflow run the answer is of; omitted for a chat answer. */
+  sourceRunId?: string;
   sourceMessageAt: string;
 }
 
@@ -96,7 +99,10 @@ export class VerifiedQueriesService {
       sql: input.sql.trim(),
       ...(input.datasourceId ? { datasourceId: input.datasourceId } : {}),
       entities: input.entities ?? [],
-      sourceSessionId: input.sourceSessionId,
+      ...(input.sourceSessionId
+        ? { sourceSessionId: input.sourceSessionId }
+        : {}),
+      ...(input.sourceRunId ? { sourceRunId: input.sourceRunId } : {}),
       sourceMessageAt: input.sourceMessageAt,
     });
   }
@@ -104,6 +110,11 @@ export class VerifiedQueriesService {
   /** Drop the pair for an answer — used when the user flips to thumbs-down. */
   removeForMessage(sessionId: string, messageAt: string): Promise<number> {
     return this.repository.deleteForMessage(sessionId, messageAt);
+  }
+
+  /** Drop the pair for a run's answer — used on a thumbs-down in a run. */
+  removeForRun(runId: string): Promise<number> {
+    return this.repository.deleteForRun(runId);
   }
 
   /**

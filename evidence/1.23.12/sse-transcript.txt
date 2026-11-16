@@ -1,0 +1,51 @@
+# POST /workflows/agent%3Aassistant/runs/stream  {"input":{"question":"Who won the 2002 World Cup?","datasets":["World Cup Core"]}}
+data: {"type":"run","runId":"bffc12c4-9d5a-4f91-84b7-47801b349239","workflowId":"agent:assistant"}
+
+data: {"type":"step","id":"answer","title":"Answer","status":"running"}
+
+data: {"type":"text","content":"The stub model answered this question."}
+
+data: {"type":"step","id":"answer","title":"Answer","status":"success","output":{"calls":[],"stopped":false}}
+
+data: {"type":"done","run":{"id":"bffc12c4-9d5a-4f91-84b7-47801b349239","workflowId":"agent:assistant","workflowName":"Assistant","input":{"question":"Who won the 2002 World Cup?","datasets":["World Cup Core"],"careful":false},"status":"success","steps":[{"id":"answer","title":"Answer","status":"success","output":{"calls":[],"stopped":false}}],"datasets":["World Cup Core"],"startedAt":"2026-11-12T00:02:57.765Z","output":{"calls":[],"stopped":false},"answer":{"role":"assistant","content":"The stub model answered this question.","at":"2026-11-12T00:02:57.850Z"},"question":"Who won the 2002 World Cup?","panelItems":[],"visualizations":[],"finishedAt":"2026-11-12T00:02:57.851Z"}}
+
+
+# POST /workflows/qti-v2-turn/runs/stream  {"input":{"question":"How many matches were played?","datasets":["World Cup Core"]}}
+data: {"type":"run","runId":"4b72812d-1612-4975-babe-35f1695ed6b4","workflowId":"qti-v2-turn"}
+
+data: {"type":"step","id":"receive-question","title":"Receive question","status":"running"}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":1,\"done\":[],\"skipped\":[]}"}
+
+data: {"type":"step","id":"receive-question","title":"Receive question","status":"success","output":{"question":"How many matches were played?","datasets":["World Cup Core"]}}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":1,\"done\":[1],\"skipped\":[]}"}
+
+data: {"type":"step","id":"load-catalog","title":"Load catalog","status":"running"}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":2,\"done\":[1],\"skipped\":[]}"}
+
+data: {"type":"step","id":"load-catalog","title":"Load catalog","status":"success","output":{"question":"How many matches were played?","catalog":[{"entity":"world_cup.world_cup.matches","dataset":"World Cup Core","datasourceId":"fbfda579-4233-4cee-820d-5ade4ff4fd50","datasourceKind":"postgres","columnCount":1}]}}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":2,\"done\":[1,2],\"skipped\":[]}"}
+
+data: {"type":"step","id":"analyse","title":"Analyse","status":"running"}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":3,\"done\":[1,2],\"skipped\":[]}"}
+
+data: {"type":"text","content":"The stub model answered this question."}
+
+data: {"type":"step","id":"analyse","title":"Analyse","status":"success","output":{"calls":[],"stopped":false}}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":3,\"done\":[1,2,3],\"skipped\":[]}"}
+
+data: {"type":"step","id":"wrap-up","title":"Wrap up","status":"running"}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":4,\"done\":[1,2,3],\"skipped\":[]}"}
+
+data: {"type":"step","id":"wrap-up","title":"Wrap up","status":"success","output":{"sqlQueries":0,"failedQueries":0,"rows":0}}
+
+data: {"type":"workflow","content":"{\"phases\":[{\"number\":1,\"title\":\"Receive question\"},{\"number\":2,\"title\":\"Load catalog\"},{\"number\":3,\"title\":\"Analyse\"},{\"number\":4,\"title\":\"Wrap up\"}],\"source\":\"workflow\",\"current\":4,\"done\":[1,2,3,4],\"skipped\":[]}"}
+
+data: {"type":"done","run":{"id":"4b72812d-1612-4975-babe-35f1695ed6b4","workflowId":"qti-v2-turn","workflowName":"Questions to Insights v2","input":{"question":"How many matches were played?","datasets":["World Cup Core"]},"status":"success","steps":[{"id":"receive-question","title":"Receive question","status":"success","output":{"question":"How many matches were played?","datasets":["World Cup Core"]}},{"id":"load-catalog","title":"Load catalog","status":"success","output":{"question":"How many matches were played?","catalog":[{"entity":"world_cup.world_cup.matches","dataset":"World Cup Core","datasourceId":"fbfda579-4233-4cee-820d-5ade4ff4fd50","datasourceKind":"postgres","columnCount":1}]}},{"id":"analyse","title":"Analyse","status":"success","output":{"calls":[],"stopped":false}},{"id":"wrap-up","title":"Wrap up","status":"success","output":{"sqlQueries":0,"failedQueries":0,"rows":0}}],"datasets":["World Cup Core"],"startedAt":"2026-11-12T00:02:57.857Z","output":{"sqlQueries":0,"failedQueries":0,"rows":0},"answer":{"role":"assistant","content":"The stub model answered this question.","at":"2026-11-12T00:02:57.876Z"},"question":"How many matches were played?","agentKey":"assistant-v2","agentName":"Questions to Insights v2","agent":{"id":"assistant-v2","name":"Questions to Insights v2","deleted":false,"description":"A slimmed-down data analyst under construction: answers questions over the datasets you pick using only the core data tools.","starterQuestions":[]},"panelItems":[],"visualizations":[],"workflowState":{"current":4,"done":[1,2,3,4],"updatedAt":"2026-11-12T00:02:57.875Z"},"workflow":{"phases":[{"number":1,"title":"Receive question"},{"number":2,"title":"Load catalog"},{"number":3,"title":"Analyse"},{"number":4,"title":"Wrap up"}],"source":"workflow","current":4,"done":[1,2,3,4],"skipped":[]},"finishedAt":"2026-11-12T00:02:57.876Z"}}
+

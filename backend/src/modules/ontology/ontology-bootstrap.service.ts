@@ -441,7 +441,7 @@ function planItems(
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it —
  * duplicated (not imported) so this module stays usable without pulling in
- * `SessionsService`/`DeepAnalysisService`; same reasoning as the identical
+ * `SessionsService`; same reasoning as the identical
  * helper in `assistant.evals.ts`. */
 function parseJsonObject(text: string | undefined): unknown {
   const trimmed = (text ?? '').trim();

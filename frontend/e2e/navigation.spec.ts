@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
 import { apiFetch } from './helpers/api';
+import { scenarioStep } from './support/demo-captions';
 
 /** Evidence screenshots of the claimed state (CLAUDE.md Evidence convention). */
 const evidence = (feature: string, name: string) =>
@@ -10,9 +11,9 @@ const evidence = (feature: string, name: string) =>
 const rail = (page: Page) =>
   page.getByRole('complementary', { name: 'Navigation rail' });
 
-/** The session list in the middle of the Sessions page. */
+/** The Runs page: its tabs, Runs and Past chats. */
 const sessionsList = (page: Page) =>
-  page.getByRole('navigation', { name: 'Sessions', exact: true });
+  page.getByRole('tablist', { name: 'Runs views' });
 
 const railItem = (page: Page, name: string) =>
   rail(page).getByRole('button', { name, exact: true });
@@ -26,6 +27,12 @@ test('moves between areas from the rail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await expectCurrent(page, 'Datasets');
 
+  await railItem(page, 'Workflows').click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+  await expectCurrent(page, 'Workflows');
+
   await railItem(page, 'Agents').click();
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
@@ -35,47 +42,92 @@ test('moves between areas from the rail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
 
-  await railItem(page, 'Context').click();
-  await expectCurrent(page, 'Context');
-  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
-  await expect(page.getByTestId('context-section-knowledge')).toHaveCount(0);
-  await expect(page.getByTestId('context-section-ontologies')).toBeVisible();
-  await expect(page.getByTestId('context-section-personas')).toBeVisible();
-  await page.getByTestId('context-section-visuals').click();
-  await expect(
-    page.getByRole('heading', { name: 'Visuals', exact: true }),
-  ).toBeVisible();
-  await expectCurrent(page, 'Context');
-  await page.getByTestId('context-back').click();
-  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
-  await page.getByTestId('context-section-personas').click();
-  await expect(
-    page.getByRole('heading', { name: 'User personas' }),
-  ).toBeVisible();
-  await expectCurrent(page, 'Context');
+  // The Context area is gone; ontologies live in the dataset editor (app-shell R3).
+  await expect(railItem(page, 'Context')).toHaveCount(0);
 
-  await railItem(page, 'Sessions').click();
-  await expectCurrent(page, 'Sessions');
+  await railItem(page, 'Runs').click();
+  await expectCurrent(page, 'Runs');
   await expect(sessionsList(page)).toBeVisible();
   await expect(
-    page
-      .locator('header')
-      .getByRole('button', { name: 'Start New Conversation' }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Start New Conversation' }),
+  ).toHaveCount(0);
   // The drawer does not list sessions.
   await expect(
     page.getByRole('navigation', { name: 'Sessions navigation' }),
   ).toHaveCount(0);
 });
 
+test('Opens the empty Monitoring page from the rail', async ({ page }) => {
+  await scenarioStep(
+    page,
+    'When I click "Monitoring" on the rail',
+    async () => {
+      await railItem(page, 'Monitoring').click();
+    },
+  );
+  await scenarioStep(
+    page,
+    'Then I see the "Monitoring" page with "No LLM calls yet." and "Monitoring" is the current rail item',
+    async () => {
+      await expect(
+        page.getByRole('heading', { name: 'Monitoring', exact: true }),
+      ).toBeVisible();
+      await expect(page.getByTestId('monitoring-note')).toHaveText(
+        "LLM calls made by the app's agents, newest first.",
+      );
+      await expect(page.getByTestId('llm-calls-empty')).toHaveText(
+        'No LLM calls yet.',
+      );
+      await expectCurrent(page, 'Monitoring');
+    },
+  );
+  await scenarioStep(page, 'When I click "Runs" on the rail', async () => {
+    await railItem(page, 'Runs').click();
+  });
+  await scenarioStep(
+    page,
+    'Then I see the Runs page and "Monitoring" is no longer the current rail item',
+    async () => {
+      await expect(sessionsList(page)).toBeVisible();
+      await expect(railItem(page, 'Monitoring')).not.toHaveAttribute(
+        'aria-current',
+      );
+      await expect(page.getByTestId('monitoring-page')).toHaveCount(0);
+    },
+  );
+});
+
+test('Opens the empty Costs page from the rail', async ({ page }) => {
+  await scenarioStep(page, 'When I click "Costs" on the rail', async () => {
+    await railItem(page, 'Costs').click();
+  });
+  await scenarioStep(
+    page,
+    'Then I see the "Costs" page with $0.00 today and this month, the monthly chart and "No LLM calls in this period."',
+    async () => {
+      await expect(
+        page.getByRole('heading', { name: 'Costs', exact: true }),
+      ).toBeVisible();
+      await expectCurrent(page, 'Costs');
+      await expect(page.getByTestId('kpi-today')).toContainText('$0.00');
+      await expect(page.getByTestId('kpi-month')).toContainText('$0.00');
+      await expect(page.getByTestId('costs-empty')).toHaveText(
+        'No LLM calls in this period.',
+      );
+      await expect(page.getByTestId('costs-monthly-chart')).toBeVisible();
+      await expect(page.getByTestId('costs-period')).toHaveValue('30d');
+    },
+  );
+});
+
 test('the start page explains how the product works', async ({ page }) => {
   await expect(
-    page.getByRole('heading', { name: 'Welcome to Agentic Hub' }),
+    page.getByRole('heading', { name: 'Welcome to Halo Workbench' }),
   ).toBeVisible();
   const steps = [
     'Pick your data',
-    'Ask a question',
-    'Work with an agent',
+    'Run a workflow',
+    'Agents are the building blocks',
     'Read, refine, download',
   ];
   for (const [index, step] of steps.entries()) {
@@ -96,9 +148,11 @@ test('the start page explains how the product works', async ({ page }) => {
   await expectCurrent(page, 'Datasets');
 
   await page.goto(page.url());
-  await step(2).getByRole('button', { name: 'Start a conversation' }).click();
-  await expect(page.getByPlaceholder('My new session')).toBeVisible();
-  await expectCurrent(page, 'Sessions');
+  await step(2).getByRole('button', { name: 'Workflows' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
+  await expectCurrent(page, 'Workflows');
 
   await page.goto(page.url());
   await step(3).getByRole('button', { name: 'Agents' }).click();
@@ -109,6 +163,89 @@ test('the start page explains how the product works', async ({ page }) => {
   await page.getByRole('button', { name: 'Explore agents' }).click();
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
+});
+
+test(
+  'Chats can no longer be started: home points to workflows, and nothing offers a chat',
+  { tag: ['@demo', '@story-1.23.22'] },
+  async ({ page }) => {
+    await scenarioStep(
+      page,
+      'Given I open the app on its home page',
+      async () => {
+        await expect(page.getByTestId('welcome')).toBeVisible();
+      },
+    );
+    await scenarioStep(page, 'Then home shows "Run a workflow"', async () => {
+      await expect(page.getByTestId('welcome-step-2')).toContainText(
+        'Run a workflow',
+      );
+    });
+    await scenarioStep(page, 'When I open Workflows', async () => {
+      await railItem(page, 'Workflows').click();
+      await expect(
+        page.getByRole('heading', { name: 'Workflows', exact: true }),
+      ).toBeVisible();
+    });
+    await scenarioStep(
+      page,
+      'Then every workflow has "Run" and none has "Start chat"',
+      async () => {
+        const cards = page.locator('[data-testid^="workflow-card-"]');
+        await expect(cards.first()).toBeVisible();
+        const count = await cards.count();
+        expect(count).toBeGreaterThan(0);
+        await expect(
+          page.locator('[data-testid^="workflow-run-open-"]'),
+        ).toHaveCount(count);
+        await expect(
+          page.getByRole('button', { name: /Start chat/ }),
+        ).toHaveCount(0);
+      },
+    );
+    await scenarioStep(
+      page,
+      'When I open Runs, then there is no "Start New Conversation"',
+      async () => {
+        await railItem(page, 'Runs').click();
+        await expect(sessionsList(page)).toBeVisible();
+        await expect(
+          page.getByRole('button', { name: 'Start New Conversation' }),
+        ).toHaveCount(0);
+      },
+    );
+  },
+);
+
+test('no Start chat, New conversation or Send message control exists outside the agent editor', async ({
+  page,
+}) => {
+  const chatControls = page.getByRole('button', {
+    name: /Start chat|New conversation|Start New Conversation|Send message/,
+  });
+  const chatHeadings = page.getByRole('heading', {
+    name: 'New conversation',
+  });
+  const noChatControl = async () => {
+    await expect(chatControls).toHaveCount(0);
+    await expect(chatHeadings).toHaveCount(0);
+  };
+
+  await noChatControl(); // home
+  await railItem(page, 'Workflows').click();
+  await expect(page.getByTestId('workflows-page')).toBeVisible();
+  await noChatControl();
+  await page.locator('[data-testid^="workflow-card-"]').first().click();
+  await expect(page.getByTestId('workflow-detail-name')).toBeVisible();
+  await noChatControl();
+  await railItem(page, 'Agents').click();
+  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+  await noChatControl();
+  await railItem(page, 'Runs').click();
+  await expect(sessionsList(page)).toBeVisible();
+  await noChatControl();
+  await page.getByRole('tab', { name: 'Past chats', exact: true }).click();
+  await noChatControl();
 });
 
 test('opens with the navigation drawer expanded', async ({ page }) => {
@@ -157,7 +294,14 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   const workspace = page.getByRole('navigation', {
     name: 'Workspace navigation',
   });
-  for (const label of ['Datasets', 'Agents', 'Context', 'Sessions']) {
+  for (const label of [
+    'Datasets',
+    'Agents',
+    'Artifacts',
+    'Runs',
+    'Costs',
+    'Monitoring',
+  ]) {
     await expect(workspace.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(
@@ -172,7 +316,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
     page.getByRole('button', { name: 'Expand navigation' }),
   ).toHaveAttribute('aria-expanded', 'false');
 
-  await railItem(page, 'Sessions').click();
+  await railItem(page, 'Runs').click();
   await expect(sessionsList(page)).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Expand navigation' }),
@@ -217,15 +361,20 @@ test('opens Settings as an area with a section list', async ({ page }) => {
 });
 
 test('shows the product name', async ({ page }) => {
-  // Only the banner names US Health (app-shell R7, BA-234).
+  // The header names the product, then the open area (app-shell R7, ADR-0044).
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'US Health Agentic Hub',
+    'Halo Workbench',
   );
-  await expect(page).toHaveTitle('Agentic Hub');
+  await expect(page.getByTestId('header-area')).toHaveCount(0);
+  await expect(page).toHaveTitle('Halo Workbench');
+  await expect(
+    rail(page).getByRole('img', { name: 'Halo Workbench' }),
+  ).toBeVisible();
 
   await railItem(page, 'Settings').click();
+  await expect(page.getByTestId('header-area')).toHaveText('Settings');
   await expect(page.getByTestId('app-version')).toHaveText(
-    /^Agentic Hub v\d+\.\d+\.\d+$/,
+    /^Halo Workbench v\d+\.\d+\.\d+$/,
   );
 });
 
@@ -234,7 +383,7 @@ test('the app opens straight into the shell', async ({ page }) => {
   await expect(rail(page)).toBeVisible();
   await expect(page.getByLabel('Open system logs')).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Welcome to Agentic Hub' }),
+    page.getByRole('heading', { name: 'Welcome to Halo Workbench' }),
   ).toBeVisible();
   // No sign-in page.
   await expect(page.getByRole('button', { name: /sign in/i })).toHaveCount(0);
@@ -250,7 +399,14 @@ test('the app opens straight into the shell', async ({ page }) => {
   });
 
   // The identity and admin routes are gone (api.md; ADR-0030).
-  for (const route of ['/me', '/admin/overview', '/auth/local/personas']) {
+  // So are the user personas and the visuals library (removed 2026-11-15).
+  for (const route of [
+    '/me',
+    '/admin/overview',
+    '/auth/local/personas',
+    '/personas',
+    '/visuals',
+  ]) {
     expect((await apiFetch(page, 'GET', route)).status(), route).toBe(404);
   }
 
@@ -258,13 +414,12 @@ test('the app opens straight into the shell', async ({ page }) => {
   for (const [area, heading] of [
     ['Datasets', 'Datasets'],
     ['Agents', 'Agents'],
-    ['Context', 'Context'],
   ]) {
     await railItem(page, area).click();
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     await expectCurrent(page, area);
   }
-  await railItem(page, 'Sessions').click();
+  await railItem(page, 'Runs').click();
   await expect(sessionsList(page)).toBeVisible();
 
   // Every Settings section is reachable, LLM Configuration with its

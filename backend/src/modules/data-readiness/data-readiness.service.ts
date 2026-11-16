@@ -49,6 +49,19 @@ export interface AssessOptions {
   onProgress?: ReadinessProgressListener;
 }
 
+/**
+ * A checked assessment request (`DataReadinessService.prepare`): its
+ * datasource and kind, the entities to profile (the whole datasource when
+ * absent) and where it came from (R24).
+ */
+export interface PreparedAssessment {
+  datasource: Datasource;
+  kind: ReadinessKind;
+  scope?: AssessScope;
+  sessionId?: string;
+  runId?: string;
+}
+
 function abortError(): Error {
   const err = new Error('The assessment was aborted');
   err.name = 'AbortError';
@@ -125,6 +138,7 @@ function summarise(report: ReadinessReport): ReadinessReportSummary {
     entityCount: report.entityCount,
   };
   if (report.sessionId) summary.sessionId = report.sessionId;
+  if (report.runId) summary.runId = report.runId;
   return summary;
 }
 
@@ -142,13 +156,32 @@ export class DataReadinessService {
     private readonly repository: DataReadinessRepository,
   ) {}
 
-  /** `now` is injectable for tests; defaults to the current time. */
+  /**
+   * One whole assessment: `prepare`, `profileSource`, `scoreProfile` and
+   * `saveReport` in turn (the Assess Data Readiness workflow runs them as
+   * its steps). `now` is injectable for tests; defaults to the current time.
+   */
   async assess(
     input: AssessDto,
     now: Date = new Date(),
     options: AssessOptions = {},
   ): Promise<ReadinessReport> {
     const { signal, onProgress } = options;
+    const prepared = await this.prepare(input);
+    const profile = await this.profileSource(prepared, options);
+    onProgress?.({ phase: 'scoring', message: 'Running checks…' });
+    const report = this.scoreProfile(prepared, profile, now);
+    onProgress?.({ phase: 'storing', message: 'Writing the report…' });
+    if (signal?.aborted) throw abortError();
+    return this.saveReport(report);
+  }
+
+  /**
+   * Check an assessment request and resolve its datasource and scope: 400
+   * for a missing id, a bad entity list, an unsupported kind or a scope
+   * none of whose keys can name a table; 404 for an unknown datasource.
+   */
+  async prepare(input: AssessDto): Promise<PreparedAssessment> {
     const datasourceId = requireId(input?.datasourceId);
     // Omitted (or empty) `entities` means the whole datasource.
     const keys = requireKeys(input.entities);
@@ -169,20 +202,50 @@ export class DataReadinessService {
         .filter((r): r is EntityRef => r !== null);
       if (refs.length === 0) throw new BadRequestException(NONE_EXIST);
     }
-
-    // Keys that no longer exist are dropped (api.md 108); a scope left with
-    // no entity, or a datasource with none, is refused (Edge cases).
-    const profile = await this.profile(
-      ds,
+    const sessionId =
+      typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
+    const runId = typeof input.runId === 'string' ? input.runId.trim() : '';
+    return {
+      datasource: ds,
       kind,
-      refs ? scopeFor(refs) : undefined,
+      ...(refs ? { scope: scopeFor(refs) } : {}),
+      ...(sessionId ? { sessionId } : {}),
+      ...(runId ? { runId } : {}),
+    };
+  }
+
+  /**
+   * Profile a prepared assessment's scope (R6-R11). Keys that no longer
+   * exist are dropped (api.md 108); a scope left with no entity, or a
+   * datasource with none, is refused (Edge cases). 502 when the datasource
+   * cannot be reached; an abort rejects with AbortError.
+   */
+  async profileSource(
+    prepared: PreparedAssessment,
+    options: AssessOptions = {},
+  ): Promise<SourceProfile> {
+    const profile = await this.profile(
+      prepared.datasource,
+      prepared.kind,
+      prepared.scope,
       options,
     );
     if (profile.entities.length === 0) {
       throw new BadRequestException(NONE_EXIST);
     }
+    return profile;
+  }
 
-    onProgress?.({ phase: 'scoring', message: 'Running checks…' });
+  /**
+   * Run the deterministic engine over a profile (R12-R23): the report,
+   * with a new id, not stored yet.
+   */
+  scoreProfile(
+    prepared: PreparedAssessment,
+    profile: SourceProfile,
+    now: Date = new Date(),
+  ): ReadinessReport {
+    const ds = prepared.datasource;
     const result = runAssessment(profile, {
       thresholds: DEFAULT_THRESHOLDS,
       now,
@@ -191,17 +254,19 @@ export class DataReadinessService {
       id: randomUUID(),
       datasourceId: ds.id,
       datasourceName: ds.name,
-      datasourceKind: kind,
+      datasourceKind: prepared.kind,
       generatedAt: now.toISOString(),
       ...result,
     };
-    const sessionId =
-      typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
-    if (sessionId) report.sessionId = sessionId;
+    if (prepared.sessionId) report.sessionId = prepared.sessionId;
+    if (prepared.runId) report.runId = prepared.runId;
     const notProfiled = notProfiledOf(profile);
     if (notProfiled.length > 0) report.notProfiled = notProfiled;
-    onProgress?.({ phase: 'storing', message: 'Writing the report…' });
-    if (signal?.aborted) throw abortError();
+    return report;
+  }
+
+  /** Store a scored report (R24). */
+  saveReport(report: ReadinessReport): Promise<ReadinessReport> {
     return this.repository.insert(report);
   }
 

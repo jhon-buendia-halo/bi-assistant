@@ -7,41 +7,51 @@ import {
 import { LinkKind, promptSegments } from './prompt-links';
 
 export type AgentTabId =
-  | 'chat'
-  | 'prompt'
-  | 'skills'
-  | 'tools'
-  | 'graph'
-  | 'memory'
-  | 'evals'
-  | 'model';
+  'chat' | 'prompt' | 'skills' | 'tools' | 'memory' | 'evals' | 'model';
 
 /** The tabs of the agent page, in order (agents-evals R86). */
 export const AGENT_TAB_ORDER: { id: AgentTabId; label: string }[] = [
-  { id: 'chat', label: 'Chat Box' },
-  { id: 'prompt', label: 'System Prompt' },
+  { id: 'chat', label: 'Try it' },
+  { id: 'prompt', label: 'Job Description' },
   { id: 'skills', label: 'Skills' },
   { id: 'tools', label: 'Tools' },
-  { id: 'graph', label: 'Graph' },
   { id: 'memory', label: 'Memory' },
   { id: 'evals', label: 'Evals' },
   { id: 'model', label: 'LLM Config' },
 ];
 
-/** The tab an agent's page opens on: the chat, or the prompt for System agents. */
-export function defaultAgentTab(kind: AgentKind, showcase = false): AgentTabId {
-  return hasChatTab(kind, showcase) ? 'chat' : 'prompt';
+/**
+ * The tab an agent's page opens on: a user agent's Try it, else System
+ * Prompt (agents-evals R5, R91).
+ */
+export function defaultAgentTab(kind: AgentKind): AgentTabId {
+  return hasChatTab(kind) ? 'chat' : 'prompt';
 }
 
-/** System agents and showcase agents (R106) have no Chat Box. */
-export function hasChatTab(kind: AgentKind, showcase = false): boolean {
-  return kind !== 'system' && !showcase;
+/**
+ * Only a user agent has Try it, a run of its draft (R90; the tab id stays
+ * `chat`). Agents are a library: none runs from its page otherwise.
+ */
+export function hasChatTab(kind: AgentKind): boolean {
+  return kind === 'user';
+}
+
+/**
+ * The Used in line's text when no workflow uses the agent (R109, plan 5.8):
+ * every agent but Insights Analyst. A System agent is called by the
+ * app itself.
+ */
+export function usedInEmptyText(kind: AgentKind): string {
+  if (kind === 'system') {
+    return 'Not used in any workflow. The app calls this agent itself.';
+  }
+  return 'Not used in any workflow.';
 }
 
 /** The tab ids shown for an agent kind, in order. */
-export function agentTabIds(kind: AgentKind, showcase = false): AgentTabId[] {
+export function agentTabIds(kind: AgentKind): AgentTabId[] {
   return AGENT_TAB_ORDER.filter(
-    (tab) => tab.id !== 'chat' || hasChatTab(kind, showcase),
+    (tab) => tab.id !== 'chat' || hasChatTab(kind),
   ).map((tab) => tab.id);
 }
 
@@ -104,7 +114,7 @@ export function skillLinked(instructions: string, name: string): boolean {
 /**
  * The agents every user agent builds on: their built-in skills are the ones
  * "included in every agent" (agents-evals R75). An Official agent's own
- * skills, such as the RFP Builder's stages, are not.
+ * skills are not.
  */
 const EVERY_AGENT_SKILL_OWNERS = new Set(['assistant', 'visualization']);
 
