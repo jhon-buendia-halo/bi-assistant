@@ -1351,6 +1351,51 @@ test.describe('Feature: Workflows (the designer)', () => {
           await closeNode(page);
         },
       );
+      await scenarioStep(
+        page,
+        'And I widen its chat by dragging its edge, and it keeps that width when I reopen it',
+        async () => {
+          const viewport = page.viewportSize()!;
+          let dialog = await openNode(page, 'analyse', 'Analyse');
+          const dialogBox = (await dialog.boundingBox())!;
+          expect(dialogBox.width).toBe(viewport.width - 48);
+          const pane = dialog.getByTestId('workflow-ndv-chat-pane');
+          const handle = dialog.getByRole('separator', { name: 'Resize chat' });
+          await expect(handle).toHaveAttribute('aria-valuenow', '400');
+
+          const box = (await handle.boundingBox())!;
+          const x = box.x + box.width / 2;
+          const y = box.y + box.height / 2;
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x + 100, y, { steps: 4 });
+          await page.mouse.move(x + 200, y, { steps: 4 });
+          await page.mouse.up();
+          await expect(handle).toHaveAttribute('aria-valuenow', '600');
+          expect((await pane.boundingBox())!.width).toBeCloseTo(600, 0);
+
+          await closeNode(page);
+          dialog = await openNode(page, 'analyse', 'Analyse');
+          await expect(dialog.getByTestId('workflow-ndv-chat-resize')).toHaveAttribute(
+            'aria-valuenow',
+            '600',
+          );
+
+          // Home goes to the least width; a double-click resets it.
+          await dialog.getByTestId('workflow-ndv-chat-resize').focus();
+          await page.keyboard.press('Home');
+          await expect(dialog.getByTestId('workflow-ndv-chat-resize')).toHaveAttribute(
+            'aria-valuenow',
+            '320',
+          );
+          await dialog.getByTestId('workflow-ndv-chat-resize').dblclick();
+          await expect(dialog.getByTestId('workflow-ndv-chat-resize')).toHaveAttribute(
+            'aria-valuenow',
+            '400',
+          );
+          await closeNode(page);
+        },
+      );
       await scenarioStep(page, `When I run it on "${QUESTION}"`, async () => {
         await page.getByTestId('workflow-execute').click();
         await runOnQuestion(page, QUESTION);

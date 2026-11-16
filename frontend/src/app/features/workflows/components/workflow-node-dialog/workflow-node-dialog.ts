@@ -252,14 +252,16 @@ export class WorkflowNodeDialog {
 
   /** Dragging the chat pane's right edge sets its width (kept on release). */
   startChatResize(event: PointerEvent): void {
-    const layout = this.artifactLayout()?.nativeElement;
-    if (!layout || event.button !== 0) return;
+    if (!this.artifactLayout() || event.button !== 0) return;
     event.preventDefault();
     const handle = event.target as HTMLElement;
     handle.setPointerCapture?.(event.pointerId);
     this.chatResizing.set(true);
+    // Relative to where it was grabbed, so the edge never jumps under the pointer.
+    const startX = event.clientX;
+    const startWidth = this.chatWidth();
     const move = (e: PointerEvent) =>
-      this.setChatWidth(e.clientX - layout.getBoundingClientRect().left);
+      this.setChatWidth(startWidth + e.clientX - startX);
     const up = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', up);
