@@ -276,8 +276,8 @@
                   @case ("agents") {
                     <app-agents-area />
                   }
-                  @case ("context") {
-                    <app-context-area />
+                  @case ("artifacts") {
+                    <app-artifacts-area />
                   }
                   @case ("runs") {
                     <app-sessions-area />
@@ -300,6 +300,11 @@
               }
             </div>
           </div>
+          <!-- Try it's query inspector: over the main column, flush with the Details panel.
+               Deferred: the inspector stays out of the initial bundle. -->
+          @defer (on immediate) {
+            <app-agent-try-it-sheet />
+          }
         </main>
 
         <!-- Right panel -->

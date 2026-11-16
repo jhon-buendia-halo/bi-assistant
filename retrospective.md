@@ -14,6 +14,37 @@ Entry template:
 
 ---
 
+## 2026-11-15 — M1-25 Query inspector: every figure links to its query (1.25.1–1.25.7)
+
+### What went well
+- **Three wireframed proposals, one pick, four decisions in one picker.** Nothing was re-planned after the builders started.
+- **The contract came first** (types, endpoints, copy, test ids, the hard parts decided). Two waves of builders worked in parallel against it, the frontend before its backend existed, and only one integration slip reached the merge (the Show step read its verb twice).
+- **Facts beside the tool result, never in it.** No model's input changed in the first delivery, so no evals were owed.
+- **Looking at the real app after each wave paid three times**: two chips per figure crowded an answer's table, a rank cell linked unrelated numbers, and the explainer wrote two-sentence steps. All were fixed before hand-over.
+- **The inspector found a real defect on its first real question**: Write answer read 50 rows of each query, so a list of 100 stopped at 50.
+- **More runs separated an effect from noise.** With 3 runs a judged case read 2 of 3; with 12 against 9 it showed the new rule putting an unchecked assumption into 7 of 12 answers against 1 of 9, and the rule was narrowed.
+
+### What went wrong
+- **`main` moved under the epic and was merged only when the PR was due.** PR #108 changed where a stored run opens; story 1.25.5 had been built for the page it left, its scenario had to be rewritten, and two spec files conflicted.
+- **The plan listed two hosts of the answer view; the app has four.** The run detail page was found by clicking through the real app, the other two by a grep that the plan should have started with.
+- **The base build was overwritten before the eval comparison was over.** A second worktree had to be built to measure the base rate of the one case in doubt.
+- **A new rule in the middle of an agent's instructions changed answers it was not about.** "More than 10 rows" also fired on results the writer saw whole.
+- **Fifteen eval processes at once made the local model endpoint time out** (and answer a 520), which cost two runs and a re-run.
+- **`npx playwright test` with no project ran the desktop project too**, which failed to launch, and a command chained after it hid the exit code.
+- **The story packs carried another plan's text.** "plan section 2" in a roadmap entry matched section 2 of every plan file.
+- **After `main` was merged, `qa.mjs --free` selected 37 Playwright tests instead of 69**: the specs `main` had changed were no longer in the selection and were run by hand.
+- **A test edited through a script failed prettier**, seen only at the lint step of the full run.
+
+### What to do differently
+- Fetch and merge `origin/main` before each wave, not only before the PR; in a Conductor workspace the ref moves without a fetch of your own.
+- Before planning a change to a shared component, list its hosts (`grep -rn "<app-<name>" frontend/src`) and open the real app on each entry point.
+- Before an eval comparison, build the base in its own worktree and keep it until the comparison is closed; run a judged case that differs by one run 6 times or more on both builds before naming it noise or a regression; keep the eval processes at 6 or fewer.
+- Put a new instruction rule last, make it fire on a cue the request itself carries, and measure before widening it.
+- Run Playwright by hand with `--project=web`, and never chain a command after a test run whose exit code you read.
+- In a roadmap entry cite the plan by story id (`plan 1.25.3`) or by link, never `plan section 2`.
+- After merging `main` late, run by hand the E2E specs `main` changed.
+- Run `npx prettier --check` on any file edited through a script.
+
 ## 2026-11-12 — M0-6 Workflow modes: Strict and Free style (0.6.1–0.6.5)
 
 ### What went well

@@ -9,8 +9,6 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { VerifiedQueriesModule } from './modules/verified-queries/verified-queries.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { OntologyModule } from './modules/ontology/ontology.module';
-import { PersonasModule } from './modules/personas/personas.module';
-import { VisualsModule } from './modules/visuals/visuals.module';
 import { TestingDataModule } from './modules/testing-data/testing-data.module';
 import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
@@ -34,8 +32,6 @@ import { HealthController } from './modules/health/health.controller';
     VerifiedQueriesModule,
     MetricsModule,
     OntologyModule,
-    PersonasModule,
-    VisualsModule,
     SessionsModule,
     TestingDataModule,
     DeveloperSettingsModule,

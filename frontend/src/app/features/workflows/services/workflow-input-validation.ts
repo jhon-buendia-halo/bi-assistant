@@ -10,7 +10,9 @@ export interface RunFormDataset {
   datasourceKind?: string;
 }
 
-type DatasourceKind = NonNullable<WorkflowInputField['datasourceKinds']>[number];
+type DatasourceKind = NonNullable<
+  WorkflowInputField['datasourceKinds']
+>[number];
 
 /** How a message names a datasource kind (as the backend does). */
 const KIND_LABELS: Record<DatasourceKind, string> = {
@@ -31,6 +33,27 @@ function missing(field: WorkflowInputField): string | null {
   return field.type === 'datasets'
     ? 'Select at least one dataset'
     : `${field.label} is required`;
+}
+
+/** The largest image an `image` field takes, in bytes (as the backend). */
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/** The file types an `image` field's picker offers. */
+export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp';
+
+/** A base64 `data:` URL of an image type an `image` field takes. */
+const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,/;
+
+/** Whether a field's value is an image the form can preview. */
+export function isImageDataUrl(value: unknown): value is string {
+  return typeof value === 'string' && IMAGE_DATA_URL.test(value);
+}
+
+/** The size in bytes of the file a base64 `data:` URL holds. */
+function imageBytes(dataUrl: string): number {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
 }
 
 function datasetError(
@@ -75,6 +98,14 @@ function fieldError(
         ? String(value)
         : '';
   if (!text) return missing(field);
+  if (field.type === 'image') {
+    if (!IMAGE_DATA_URL.test(text)) {
+      return `${field.label} must be a PNG, JPEG or WebP image`;
+    }
+    return imageBytes(text) > IMAGE_MAX_BYTES
+      ? `${field.label} must be at most ${IMAGE_MAX_BYTES / (1024 * 1024)} MB`
+      : null;
+  }
   if (field.type === 'dataset') {
     return datasets === null ? null : datasetError(field, text, datasets);
   }
@@ -95,13 +126,42 @@ function fieldError(
   return null;
 }
 
+/** Whether a form value holds anything (a non-blank text, a number, a non-empty list). */
+function hasValue(value: RunFormValues[string] | undefined): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim() !== '';
+  return typeof value === 'number';
+}
+
+/**
+ * `requiredWithout`: a field with no value, whose partner has none either, is
+ * `<label> or <partner label> is required`, reported once, on the first of
+ * the two in form order. Null when the field is not the one to report.
+ */
+function pairError(
+  fields: readonly WorkflowInputField[],
+  values: RunFormValues,
+  field: WorkflowInputField,
+): string | null {
+  const other = fields.find((f) => f.name === field.requiredWithout);
+  if (other === undefined) return null;
+  if (Object.hasOwn(values, other.name) && hasValue(values[other.name])) {
+    return null;
+  }
+  const otherFirst =
+    fields.indexOf(other) < fields.indexOf(field) &&
+    other.requiredWithout === field.name &&
+    !other.hidden;
+  return otherFirst ? null : `${field.label} or ${other.label} is required`;
+}
+
 /**
  * The run form's input checked before Execute sends it, with the backend's
  * rules and messages (api.md 118, 119; ui.md 4.4b): every error of the
  * visible fields, in field order. A required field that is missing, empty
  * or whitespace-only and has no default is `<label> is required`
  * (`Select at least one dataset`); then `maxLength`, number type, `min` and
- * `max`, and, when `datasets` is the known list (null while it is not), each
+ * `max`, an image's type and size, and, when `datasets` is the known list (null while it is not), each
  * picked dataset's existence and kind. A pure function.
  */
 export function validateRunForm(
@@ -115,7 +175,10 @@ export function validateRunForm(
     const value = Object.hasOwn(values, field.name)
       ? values[field.name]
       : undefined;
-    const message = fieldError(field, value, datasets);
+    const message =
+      hasValue(value) || field.requiredWithout === undefined
+        ? fieldError(field, value, datasets)
+        : (pairError(fields, values, field) ?? fieldError(field, value, datasets));
     if (message !== null) errors.push({ field: field.name, message });
   }
   return errors;

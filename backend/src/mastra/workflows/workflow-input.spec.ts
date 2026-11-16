@@ -1,7 +1,9 @@
 import { CODE_WORKFLOWS } from './workflow-catalog';
 import {
+  IMAGE_MAX_BYTES,
   inputFieldsWithUsage,
   validateWorkflowInput,
+  withStoredImages,
   type InputWorkflowShape,
   type WorkflowInputField,
 } from './workflow-input';
@@ -400,6 +402,187 @@ describe("answer-business-question's input rules", () => {
         {
           field: 'question',
           message: 'Question must be at most 4000 characters',
+        },
+      ],
+    });
+  });
+});
+
+describe('an image field (agents.md 5.17)', () => {
+  const workflow = {
+    input: [
+      {
+        name: 'image',
+        label: 'Dashboard image',
+        type: 'image',
+        required: true,
+      },
+    ] satisfies WorkflowInputField[],
+  };
+  const PNG = Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('rest of the file'),
+  ]);
+  const url = (mediaType: string, data: Buffer) =>
+    `data:${mediaType};base64,${data.toString('base64')}`;
+  const refusal = (message: string) => ({
+    ok: false,
+    errors: [{ field: 'image', message }],
+  });
+
+  it('takes a PNG, JPEG or WebP data URL and keeps it as sent', () => {
+    const jpeg = Buffer.from('ffd8ffe000104a464946', 'hex');
+    const webp = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.alloc(4),
+      Buffer.from('WEBPVP8 '),
+    ]);
+    for (const value of [
+      url('image/png', PNG),
+      url('image/jpeg', jpeg),
+      url('image/webp', webp),
+    ]) {
+      expect(validateWorkflowInput(workflow, { image: value })).toEqual({
+        ok: true,
+        input: { image: value },
+      });
+    }
+  });
+
+  it('refuses a missing image, another type, and bytes that are not the type', () => {
+    expect(validateWorkflowInput(workflow, {})).toEqual(
+      refusal('Dashboard image is required'),
+    );
+    const wrong = refusal('Dashboard image must be a PNG, JPEG or WebP image');
+    expect(
+      validateWorkflowInput(workflow, { image: 'inputs/image.png' }),
+    ).toEqual(wrong);
+    expect(
+      validateWorkflowInput(workflow, { image: url('image/gif', PNG) }),
+    ).toEqual(wrong);
+    expect(
+      validateWorkflowInput(workflow, {
+        image: url('image/png', Buffer.from('<svg onload=alert(1)>')),
+      }),
+    ).toEqual(wrong);
+  });
+
+  it('refuses an image over 5 MB', () => {
+    const large = Buffer.concat([PNG, Buffer.alloc(IMAGE_MAX_BYTES)]);
+    expect(
+      validateWorkflowInput(workflow, { image: url('image/png', large) }),
+    ).toEqual(refusal('Dashboard image must be at most 5 MB'));
+  });
+
+  it('takes the image out of the input a run stores', () => {
+    const value = url('image/png', PNG);
+    const stored = withStoredImages(workflow, { image: value, question: 'q' });
+    expect(stored.input).toEqual({ image: 'inputs/image.png', question: 'q' });
+    expect(stored.images).toEqual([
+      {
+        field: 'image',
+        path: 'inputs/image.png',
+        mediaType: 'image/png',
+        data: PNG,
+      },
+    ]);
+    // An input with no image field is kept as it is.
+    expect(withStoredImages({ input: [] }, { question: 'q' })).toEqual({
+      input: { question: 'q' },
+      images: [],
+    });
+  });
+});
+
+describe('one of an image or an artifact (agents.md 5.17)', () => {
+  const workflow = {
+    input: [
+      {
+        name: 'image',
+        label: 'Dashboard image',
+        type: 'image',
+        required: false,
+        requiredWithout: 'artifact',
+      },
+      {
+        name: 'artifact',
+        label: 'Saved dashboard',
+        type: 'artifact',
+        required: false,
+        requiredWithout: 'image',
+        artifactKinds: ['dashboard'],
+      },
+      { name: 'question', label: 'Question', type: 'textarea', required: true },
+    ] satisfies WorkflowInputField[],
+  };
+  const artifacts = [
+    { id: 'a-1', kind: 'dashboard' },
+    { id: 'a-2', kind: 'report' },
+  ];
+  const image = `data:image/png;base64,${Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    Buffer.from('file'),
+  ]).toString('base64')}`;
+  const check = (input: Record<string, unknown>) =>
+    validateWorkflowInput(workflow, { question: 'q', ...input }, { artifacts });
+
+  it('takes either one', () => {
+    expect(check({ image })).toEqual({
+      ok: true,
+      input: { image, question: 'q' },
+    });
+    expect(check({ artifact: ' a-1 ' })).toEqual({
+      ok: true,
+      input: { artifact: 'a-1', question: 'q' },
+    });
+  });
+
+  it('refuses neither, once, on the first of the two', () => {
+    expect(check({ image: '', artifact: '  ' })).toEqual({
+      ok: false,
+      errors: [
+        {
+          field: 'image',
+          message: 'Dashboard image or Saved dashboard is required',
+        },
+      ],
+    });
+    // In field order with the other fields' errors.
+    expect(validateWorkflowInput(workflow, {}, { artifacts })).toEqual({
+      ok: false,
+      errors: [
+        {
+          field: 'image',
+          message: 'Dashboard image or Saved dashboard is required',
+        },
+        { field: 'question', message: 'Question is required' },
+      ],
+    });
+  });
+
+  it('keeps the artifact and drops the image when both are given', () => {
+    expect(check({ image, artifact: 'a-1' })).toEqual({
+      ok: true,
+      input: { artifact: 'a-1', question: 'q' },
+    });
+  });
+
+  it('refuses an unknown artifact and one of another kind, as its own error', () => {
+    expect(check({ artifact: 'gone' })).toEqual({
+      ok: false,
+      errors: [{ field: 'artifact', message: 'Artifact "gone" not found' }],
+    });
+    expect(check({ artifact: 'a-2' })).toEqual({
+      ok: false,
+      errors: [{ field: 'artifact', message: 'Artifact "a-2" not found' }],
+    });
+    // A refused image is not also "missing".
+    expect(check({ image: 'inputs/image.png' })).toEqual({
+      ok: false,
+      errors: [
+        {
+          field: 'image',
+          message: 'Dashboard image must be a PNG, JPEG or WebP image',
         },
       ],
     });

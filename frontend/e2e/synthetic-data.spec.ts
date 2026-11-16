@@ -95,7 +95,7 @@ function rail(page: Page, name: string): Locator {
 /** Opens the dataset's Profile & synthesize tab and profiles the sample. */
 async function openAndProfile(page: Page): Promise<void> {
   // Leave the area first so the rail lands on the dataset list.
-  await rail(page, 'Context').click();
+  await rail(page, 'Agents').click();
   await rail(page, 'Datasets').click();
   await page.getByTestId(`dataset-${WORLD_CUP_DATASET}`).click();
   await page.getByTestId('dataset-tab-synthesize').click();
@@ -158,7 +158,7 @@ test.describe('Feature: Synthetic data', () => {
         'Given I open the "World Cup Core" dataset',
         async () => {
           // Leave the area first so the rail lands on the dataset list.
-          await rail(page, 'Context').click();
+          await rail(page, 'Agents').click();
           await rail(page, 'Datasets').click();
           await page.getByTestId(`dataset-${WORLD_CUP_DATASET}`).click();
         },

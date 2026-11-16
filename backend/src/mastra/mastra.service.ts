@@ -17,6 +17,10 @@ import {
   writeAnswerWithModel,
 } from './workflows/answer-business-question.agents';
 import {
+  mapDataWithModel,
+  readDashboardWithModel,
+} from './workflows/recreate-dashboard.agents';
+import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
   initializeSessionWorkspace,
@@ -120,6 +124,28 @@ export class MastraService {
     ...args: Parameters<typeof checkDataQualityWithModel>
   ): ReturnType<typeof checkDataQualityWithModel> {
     return checkDataQualityWithModel(...args);
+  }
+
+  /**
+   * Dashboard Image to Artifact's Read dashboard step model call (agents.md
+   * 5.17): the Dashboard Reader over the image, the blueprint read from
+   * its reply.
+   */
+  readDashboard(
+    ...args: Parameters<typeof readDashboardWithModel>
+  ): ReturnType<typeof readDashboardWithModel> {
+    return readDashboardWithModel(...args);
+  }
+
+  /**
+   * Dashboard Image to Artifact's Map data step model call (agents.md 5.17): the
+   * Data Mapper over the blueprint and the catalog, the mapping read from
+   * its reply and checked against the catalog.
+   */
+  mapData(
+    ...args: Parameters<typeof mapDataWithModel>
+  ): ReturnType<typeof mapDataWithModel> {
+    return mapDataWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

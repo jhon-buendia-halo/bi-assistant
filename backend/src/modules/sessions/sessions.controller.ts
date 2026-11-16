@@ -4,25 +4,54 @@ import {
   Delete,
   Get,
   Param,
+  Post,
   Query,
   Res,
 } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
-import type { SessionDoc } from './entities/session.entity';
+import { SessionEvidenceService } from './session-evidence.service';
+import type { ChatMessage, SessionDoc } from './entities/session.entity';
 import type {
   FilePanelItem,
   InteractiveVisualization,
 } from './entities/session.entity';
+import { EXPORT_ROWS } from './query-evidence/query-coverage';
+import { csvOf, withDerivedEvidence } from './query-evidence/query-evidence';
+import type { QueryRerunResult } from './query-evidence/query-evidence.service';
 import type { Response } from 'express';
+
+/** The `:message` of 144-148: a whole number, else the 400 of a message with no answer. */
+function parseMessageIndex(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException(
+      `Message ${value} has no answer with queries`,
+    );
+  }
+  return Number(value);
+}
+
+/** The `:index` of 145-148: a whole number, else the 400 of an unknown query. */
+function parseQueryIndex(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException(
+      `Query ${value} not found in the message's answer`,
+    );
+  }
+  return Number(value);
+}
 
 /**
  * The stored sessions' read routes (api.md 2.1): since 1.23.22 nothing starts
  * or continues a chat, so a past chat is listed, opened, downloaded from and
- * deleted, and nothing writes to it.
+ * deleted. Only the query inspector (144-148) writes to it: the evidence and
+ * explanations it caches in a message, never the conversation.
  */
 @Controller('sessions')
 export class SessionsController {
-  constructor(private readonly sessionsService: SessionsService) {}
+  constructor(
+    private readonly sessionsService: SessionsService,
+    private readonly evidence: SessionEvidenceService,
+  ) {}
 
   @Get()
   async list(): Promise<{ sessions: SessionDoc[] }> {
@@ -33,9 +62,95 @@ export class SessionsController {
     };
   }
 
+  /**
+   * One session (api.md 2). An assistant message with `data` and no stored
+   * `evidence` reads with the evidence derived from its data: no query,
+   * nothing stored.
+   */
   @Get(':id')
   async get(@Param('id') id: string): Promise<SessionDoc> {
-    return this.sessionsService.toView(await this.sessionsService.get(id));
+    const view = await this.sessionsService.toView(
+      await this.sessionsService.get(id),
+    );
+    return { ...view, messages: view.messages.map(withDerivedEvidence) };
+  }
+
+  /** Build a message's evidence and size its tables (api.md 144). */
+  @Post(':id/messages/:message/answer/evidence')
+  async prepareEvidence(
+    @Param('id') id: string,
+    @Param('message') message: string,
+  ): Promise<{ ok: true; message: ChatMessage }> {
+    return {
+      ok: true,
+      message: await this.evidence.prepare(id, parseMessageIndex(message)),
+    };
+  }
+
+  /** Explain one query of a message step by step (api.md 145). */
+  @Post(':id/messages/:message/answer/queries/:index/explanation')
+  async explainQuery(
+    @Param('id') id: string,
+    @Param('message') message: string,
+    @Param('index') index: string,
+  ): Promise<{ ok: true; message: ChatMessage }> {
+    const at = parseMessageIndex(message);
+    return {
+      ok: true,
+      message: await this.evidence.explain(id, at, parseQueryIndex(index)),
+    };
+  }
+
+  /** Count the rows after each step of an explained query (api.md 146). */
+  @Post(':id/messages/:message/answer/queries/:index/stage-counts')
+  async countQuerySteps(
+    @Param('id') id: string,
+    @Param('message') message: string,
+    @Param('index') index: string,
+  ): Promise<{ ok: true; message: ChatMessage }> {
+    const at = parseMessageIndex(message);
+    return {
+      ok: true,
+      message: await this.evidence.countSteps(id, at, parseQueryIndex(index)),
+    };
+  }
+
+  /** Run one of a message's queries again; nothing is stored (api.md 147). */
+  @Post(':id/messages/:message/answer/queries/:index/rerun')
+  async rerunQuery(
+    @Param('id') id: string,
+    @Param('message') message: string,
+    @Param('index') index: string,
+  ): Promise<{ ok: true; result: QueryRerunResult }> {
+    const at = parseMessageIndex(message);
+    return {
+      ok: true,
+      result: await this.evidence.rerun(id, at, parseQueryIndex(index)),
+    };
+  }
+
+  /**
+   * One query's rows as CSV, up to 50,000 (api.md 148); `X-Rows-Cut:
+   * 50000` when more existed. Checks answer before any header is written.
+   */
+  @Get(':id/messages/:message/answer/queries/:index/csv')
+  async queryCsv(
+    @Param('id') id: string,
+    @Param('message') message: string,
+    @Param('index') index: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const at = parseMessageIndex(message);
+    const file = await this.evidence.queryCsv(id, at, parseQueryIndex(index));
+    const body = Buffer.from(csvOf(file.columns, file.rows), 'utf8');
+    if (file.cut) res.setHeader('X-Rows-Cut', String(EXPORT_ROWS));
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Length', body.length);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.filename.replace(/["\\\r\n]/g, '_')}"`,
+    );
+    res.send(body);
   }
 
   @Get(':id/visualizations/:visualizationId')

@@ -88,9 +88,16 @@ export class SqlChecks {
           limit,
         );
         const repaired = statement !== sql;
-        // A full page of rows means the connector clipped the result set —
-        // the model must aggregate or caveat rather than treat it as total.
-        const truncated = result.rows.length >= limit;
+        // The connector says how many rows the statement produced before
+        // its cap: the result is cut only when some were dropped, and the
+        // model must then aggregate or caveat rather than treat it as total.
+        // A result that lands exactly on the limit is whole (a `LIMIT 100`
+        // under a limit of 100). Without that count, a full page still
+        // reads as cut.
+        const truncated =
+          typeof result.totalRows === 'number'
+            ? result.totalRows > result.rows.length
+            : result.rows.length >= limit;
         const notes = [
           ...(repaired ? [SQL_REPAIRED_NOTE] : []),
           ...(result.rows.length ? [] : [EMPTY_ROWS_NOTE]),

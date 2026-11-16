@@ -24,6 +24,12 @@ export interface UpdateOptions {
   upsert?: boolean;
   /** `$setOnInsert` semantics — when a document already matches, leave it untouched. */
   setOnInsertOnly?: boolean;
+  /**
+   * Leave `updatedAt` as it is: a write of what the app caches about a
+   * document (a past chat's query evidence, api.md 144-146), which must not
+   * move it in a list sorted by recency.
+   */
+  keepUpdatedAt?: boolean;
 }
 
 /**
@@ -67,8 +73,6 @@ export const VERIFIED_QUERIES_STORE = 'DOC_STORE_verified_queries';
 export const METRICS_STORE = 'DOC_STORE_metrics';
 export const EVAL_RUNS_STORE = 'DOC_STORE_eval_runs';
 export const ONTOLOGY_STORE = 'DOC_STORE_ontology';
-export const PERSONAS_STORE = 'DOC_STORE_personas';
-export const VISUALS_STORE = 'DOC_STORE_visuals';
 export const AGENTS_STORE = 'DOC_STORE_agents';
 export const SKILLS_STORE = 'DOC_STORE_skills';
 export const SKILL_OVERRIDES_STORE = 'DOC_STORE_skill_overrides';
@@ -77,6 +81,8 @@ export const READINESS_REPORTS_STORE = 'DOC_STORE_readiness_reports';
 export const WORKFLOW_RUNS_STORE = 'DOC_STORE_workflow_runs';
 export const WORKFLOW_RUN_NODE_CHATS_STORE =
   'DOC_STORE_workflow_run_node_chats';
+/** The stored artifacts (data-model 3.18). */
+export const ARTIFACTS_STORE = 'DOC_STORE_artifacts';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;
