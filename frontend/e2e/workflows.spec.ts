@@ -22,12 +22,15 @@ import { worldCupKey } from './helpers/world-cup-db';
 const V2 = 'Answer a Business Question';
 const V2_ID = 'answer-business-question';
 /**
- * Its steps in catalogue order: Plan, then a branch (Clarify waits for the answer),
- * then Analyse and Validate (retried once), Write answer and Wrap up.
+ * Its steps in catalogue order: Interpret follow-up, Plan, then a branch
+ * (Clarify waits for the answer), then Analyse and Validate (retried once),
+ * Write answer and Wrap up; last the follow-up branch (Page result, Page
+ * answer, roadmap 1.27.8).
  */
 const V2_STEP_IDS = [
   ['receive-question', 'Receive question'],
   ['load-catalog', 'Load catalog'],
+  ['interpret-follow-up', 'Interpret follow-up'],
   ['plan', 'Plan'],
   ['clarify', 'Clarify'],
   ['analyse', 'Analyse'],
@@ -35,20 +38,31 @@ const V2_STEP_IDS = [
   ['check-data-quality', 'Check data quality'],
   ['write-answer', 'Write answer'],
   ['wrap-up', 'Wrap up'],
+  ['page-result', 'Page result'],
+  ['page-answer', 'Page answer'],
 ] as const;
+/** The branches off the main path, drawn after it: Clarify, then the follow-up branch. */
+const V2_OFF_PATH = ['clarify', 'page-result', 'page-answer'] as const;
 /**
  * The steps a clear question runs: the canvas's main path, left to right.
- * Clarify and Check data quality (ticked only) are branches off it.
+ * Clarify, Check data quality (ticked only) and the follow-up branch are
+ * branches off it.
  */
 const V2_MAIN_STEP_IDS = V2_STEP_IDS.filter(
-  ([id]) => id !== 'clarify' && id !== 'check-data-quality',
+  ([id]) =>
+    id !== 'check-data-quality' &&
+    !(V2_OFF_PATH as readonly string[]).includes(id),
 );
 /** The steps a question that needs clarification skips. */
 const V2_ANALYSIS_STEP_IDS = ['analyse', 'validate', 'write-answer'] as const;
-/** The step titles as the canvas lists them: the main path, then Clarify below it. */
+/** The step titles as the canvas lists them: the main path, then Clarify and the follow-up branch. */
 const V2_STEPS = [
-  ...V2_STEP_IDS.filter(([id]) => id !== 'clarify').map(([, title]) => title),
+  ...V2_STEP_IDS.filter(([id]) => !(V2_OFF_PATH as readonly string[]).includes(id)).map(
+    ([, title]) => title,
+  ),
   'Clarify',
+  'Page result',
+  'Page answer',
 ];
 const V2_STEP_COUNT = `${V2_STEP_IDS.length} steps`;
 const READINESS_ID = 'data-readiness-assessment';
@@ -323,7 +337,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its nine steps on the canvas and the agent "Michael" under Agents in its Start node',
+        'Then I see its twelve steps on the canvas and the agent "Michael" under Agents in its Start node',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
@@ -445,7 +459,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question" with "9 steps" and no Start chat',
+        'Then I see "Answer a Business Question" with "12 steps" and no Start chat',
         async () => {
           const card = page.getByTestId(`workflow-card-${V2_ID}`);
           await expect(card).toBeVisible();
@@ -465,7 +479,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its nine steps on the canvas, Execute and no Start chat',
+        'Then I see its twelve steps on the canvas, Execute and no Start chat',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
@@ -980,9 +994,12 @@ test.describe('Feature: Workflows (the designer)', () => {
             'CODE',
             'LLM',
             'LLM',
+            'LLM',
             'CODE',
             'LLM',
             'LLM',
+            'CODE',
+            'CODE',
             'CODE',
             'CODE',
           ]);
@@ -1196,11 +1213,11 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       });
       await test.step(
-        'Then every connector of the main path is done, the branch to "Clarify" is muted, and the Run panel reads "9 of 11 nodes ran"',
+        'Then every connector of the main path is done, the branch to "Clarify" is muted, and the Run panel reads "10 of 14 nodes ran"',
         async () => {
           const canvas = page.getByTestId('workflow-canvas');
           const connectors = canvas.locator('path[data-testid^="workflow-connector-"]');
-          await expect(connectors).toHaveCount(13);
+          await expect(connectors).toHaveCount(17);
           const main = ['start', ...V2_MAIN_STEP_IDS.map(([id]) => id), 'end'];
           for (const [i, from] of main.slice(0, -1).entries()) {
             await expect(canvas.getByTestId(`workflow-connector-${from}-${main[i + 1]}`)).toHaveAttribute(
@@ -1218,7 +1235,7 @@ test.describe('Feature: Workflows (the designer)', () => {
             'false',
           );
           await expect(page.getByTestId('workflow-state-progress')).toHaveText(
-            '9 of 11 nodes ran',
+            '10 of 14 nodes ran',
           );
           await expect(page.getByTestId('workflow-state-status')).toHaveText('success');
         },

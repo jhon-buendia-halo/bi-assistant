@@ -104,7 +104,11 @@ export interface LlmStub {
   hold?: (request: StubRequest) => Promise<void> | undefined;
   /** Plan's output for a v2 run; the default is `clearPlan` of the question. */
   plan: (request: StubRequest) => V2Plan;
-  /** `result-explorer`'s reply to a filter-in-words call; the default keeps the view. */
+  /**
+   * `result-explorer`'s reply (a filter in words, or Answer a Business
+   * Question's Interpret follow-up, roadmap 1.27.8). The default reads a new
+   * question, so a follow-up run plans as before; a test that explores sets it.
+   */
   explore: (request: StubRequest) => ExplorerReply;
   /** Write answer's output; the default is `answerFrom` the last text `reply` gave. */
   answer: (request: StubRequest) => V2Answer;
@@ -257,12 +261,12 @@ export async function startLlmStub(
     plan: (request) => clearPlan(lastUserText(request)),
     answer: () => answerFrom(stub.lastText),
     explore: () => ({
-      action: 'explore',
+      action: 'new-question',
       query: null,
       filters: [],
       sort: [],
       page: { move: 'keep', to: null },
-      understood: 'No change',
+      understood: 'A new question',
     }),
     lastText: STUB_ANSWER,
     close: async () => undefined,

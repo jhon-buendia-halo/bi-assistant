@@ -1,5 +1,6 @@
 // The turn engine (agents.md 5.1): one turn of a session or run host, from
 // the user's question to the persisted answer and the `done` event.
+import { randomUUID } from 'crypto';
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
 import {
@@ -13,9 +14,11 @@ import {
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
+import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
   READINESS_REPORT_EVENT,
@@ -290,6 +293,9 @@ export class TurnEngine {
       session.messages,
     );
     options.requestContext.set(EXPLORABLE_QUERIES_CONTEXT_KEY, explorable);
+    // What v2's Interpret follow-up may page (roadmap 1.27.8): the earlier
+    // queries as the turn starts, before it runs any of its own.
+    const followUp: readonly ExplorableQuery[] = [...explorable];
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
@@ -318,6 +324,29 @@ export class TurnEngine {
     const workflow = turnWorkflowOf(session);
     // v2's answer is its Write answer step's only (agents.md 5.11).
     const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
+    // A query record of the turn: kept for the answer with its facts,
+    // explorable from then on, and shown as its call's result.
+    const captureRecord = (record: ToolDataRecord, callId?: string) => {
+      data.push(record);
+      const facts = callId ? queryFacts.get(callId) : undefined;
+      if (facts) recordFacts.set(record, facts);
+      const known = factsOf(record);
+      const query = explorableQueryOf(record, `Q${explorable.length + 1}`, {
+        datasourceId: known?.datasourceId,
+        view: known?.view,
+      });
+      if (query) explorable.push(query);
+      emit({
+        type: 'tool-result',
+        content: JSON.stringify({
+          tool: record.tool,
+          input: record.input,
+          rowCount: record.rowCount,
+          error: record.error,
+          rationale: record.rationale,
+        }),
+      });
+    };
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -512,30 +541,7 @@ export class TurnEngine {
               continue;
             }
             const record = toolDataRecord(toolName, args, payload.result);
-            if (record) {
-              data.push(record);
-              const facts = payload.toolCallId
-                ? queryFacts.get(payload.toolCallId)
-                : undefined;
-              if (facts) recordFacts.set(record, facts);
-              const known = factsOf(record);
-              const query = explorableQueryOf(
-                record,
-                `Q${explorable.length + 1}`,
-                { datasourceId: known?.datasourceId, view: known?.view },
-              );
-              if (query) explorable.push(query);
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: record.tool,
-                  input: record.input,
-                  rowCount: record.rowCount,
-                  error: record.error,
-                  rationale: record.rationale,
-                }),
-              });
-            }
+            if (record) captureRecord(record, payload.toolCallId);
           }
         }
       } catch (error) {
@@ -804,6 +810,73 @@ export class TurnEngine {
                 stopped: false,
               };
             }
+          },
+          // v2's follow-up branch (roadmap 1.27.8): the earlier queries,
+          // Nathan's reading of the words, the page and the answer.
+          followUp,
+          interpretFollowUp: async (request) => {
+            try {
+              const spec = await this.deps.mastra.interpretResult(request, {
+                abortSignal: turn.signal,
+                onExchange: stepModelOf(RESULT_EXPLORER_AGENT_KEY).onExchange,
+              });
+              return { spec, stopped: turn.signal.aborted };
+            } catch (error) {
+              if (turn.signal.aborted) return { spec: null, stopped: true };
+              // The step plans the question instead; the reason is logged.
+              this.deps.logger.warn(
+                `Could not read the follow-up of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+              throw error;
+            }
+          },
+          // The page is an `explore_result` call of the turn: its record
+          // (the source SQL, the page's rows) and its view as evidence, so
+          // the answer's query opens the inspector on that view.
+          pageResult: async ({ query, request, understood }) => {
+            const target = followUp[query];
+            if (!target)
+              throw new Error('The earlier query is no longer known');
+            const args = {
+              query: target.sql,
+              rationale: `I read ${understood.toLowerCase() === 'all rows' ? 'the rows' : understood} of the earlier result ${target.ref}.`,
+            };
+            calledTools.add('explore_result');
+            emit({
+              type: 'tool',
+              content: JSON.stringify({
+                name: 'explore_result',
+                rationale: args.rationale,
+                input: toolCallInput('explore_result', args),
+              }),
+            });
+            const callId = `follow-up-${randomUUID()}`;
+            const result = await pageExplorableQuery(
+              target,
+              request,
+              understood,
+              options.requestContext,
+              callId,
+            );
+            const record = toolDataRecord('explore_result', args, result);
+            if (record) captureRecord(record, callId);
+            if ('error' in result) throw new Error(result.error);
+            return {
+              title: target.rationale ?? target.ref,
+              columns: result.columns,
+              rows: result.rows,
+              page: result.page,
+              pageCount: result.pageCount,
+              matchedRows: result.matchedRows,
+              capped: result.capped,
+              view: result.view,
+              understood: result.understood,
+            };
+          },
+          deliverAnswer: (answer) => {
+            text = answer;
+            emit({ type: 'text', content: answer });
+            return Promise.resolve();
           },
           writeAnswer: async (written) => {
             try {
@@ -1174,7 +1247,15 @@ export class TurnEngine {
     question: string,
     emit: (event: StreamEvent) => void,
     runtime: AnswerBusinessQuestionRuntime &
-      Required<Pick<AnswerBusinessQuestionRuntime, 'checkDataQuality'>> &
+      Required<
+        Pick<
+          AnswerBusinessQuestionRuntime,
+          | 'checkDataQuality'
+          | 'interpretFollowUp'
+          | 'pageResult'
+          | 'deliverAnswer'
+        >
+      > &
       AgentTurnRuntime &
       DataReadinessAssessmentRuntime &
       RecreateDashboardRuntime &
@@ -1238,6 +1319,12 @@ export class TurnEngine {
         checkDataQuality: (input) =>
           captured(() => runtime.checkDataQuality(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
+        // A follow-up over an earlier result (roadmap 1.27.8). Nathan's
+        // failure is no step's: the run plans the question instead.
+        ...(runtime.followUp ? { followUp: runtime.followUp } : {}),
+        interpretFollowUp: (input) => runtime.interpretFollowUp(input),
+        pageResult: (input) => captured(() => runtime.pageResult(input)),
+        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Assess Data Readiness runs on the run's one dataset (agents.md 5.13).

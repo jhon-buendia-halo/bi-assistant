@@ -107,15 +107,17 @@ describe('The workflow catalogue (API)', () => {
         description: expect.any(String) as string,
         kind: 'code',
         owner: 'Official',
-        // Michael analyses; Olivia plans, Sarah checks data quality when
-        // asked and Jessica writes (agents.md 5.11).
+        // Michael analyses; Nathan reads a follow-up over an earlier
+        // result, Olivia plans, Sarah checks data quality when asked and
+        // Jessica writes (agents.md 5.11).
         agents: [
           { key: 'insights-analyst', name: 'Michael' },
+          { key: 'result-explorer', name: 'Nathan' },
           { key: 'analysis-planner', name: 'Olivia' },
           { key: 'data-readiness', name: 'Sarah' },
           { key: 'answer-writer', name: 'Jessica' },
         ],
-        stepCount: 9,
+        stepCount: 12,
         bar: 'steps',
         trigger: 'run',
         input: [
@@ -305,6 +307,7 @@ describe('The workflow catalogue (API)', () => {
       expect(v2.steps.map((step) => step.id)).toEqual([
         'receive-question',
         'load-catalog',
+        'interpret-follow-up',
         'plan',
         'clarify',
         'analyse',
@@ -312,6 +315,8 @@ describe('The workflow catalogue (API)', () => {
         'check-data-quality',
         'write-answer',
         'wrap-up',
+        'page-result',
+        'page-answer',
       ]);
       // The Start node: each field with its rules and the steps reading it.
       expect(
@@ -354,6 +359,7 @@ describe('The workflow catalogue (API)', () => {
           .filter((step) => step.agent)
           .map((step) => [step.id, step.agent?.key, step.agent?.tools.length]),
       ).toEqual([
+        ['interpret-follow-up', 'result-explorer', 0],
         ['plan', 'analysis-planner', 0],
         ['analyse', 'insights-analyst', 5],
         ['check-data-quality', 'data-readiness', 0],
@@ -367,7 +373,16 @@ describe('The workflow catalogue (API)', () => {
           systemPrompt: expect.any(String) as string,
           toolDetails: expect.any(Array) as unknown[],
         },
-        // Olivia and Jessica: their job descriptions, no tools.
+        // Nathan, Olivia and Jessica: their job descriptions, no tools.
+        {
+          key: 'result-explorer',
+          name: 'Nathan',
+          model: null,
+          systemPrompt: expect.stringMatching(
+            /^You turn a user's words about a query's result into a view/,
+          ) as string,
+          toolDetails: [],
+        },
         {
           key: 'analysis-planner',
           name: 'Olivia',
@@ -464,9 +479,10 @@ describe('The workflow catalogue (API)', () => {
       // Write answer's output is the answer (AnswerOutput) and the calls.
       const written = v2.steps.find((step) => step.id === 'write-answer')!;
       expect(written.output).toEqual(['headline', 'answer', 'calls']);
-      // The flow is its edges (117): a branch after Plan, a loop back from
-      // Clarify to Plan once answered, a loop back from Validate to
-      // Analyse, End after Wrap up.
+      // The flow is its edges (117): a branch after Interpret follow-up (a
+      // new question, or the earlier result paged), a branch after Plan, a
+      // loop back from Clarify to Plan once answered, a loop back from
+      // Validate to Analyse, End after Wrap up or Page answer.
       const { edges } = (
         await http().get('/workflows/answer-business-question').expect(200)
       ).body as {
@@ -475,7 +491,19 @@ describe('The workflow catalogue (API)', () => {
       expect(edges).toEqual([
         { from: 'start', to: 'receive-question', kind: 'next' },
         { from: 'receive-question', to: 'load-catalog', kind: 'next' },
-        { from: 'load-catalog', to: 'plan', kind: 'next' },
+        { from: 'load-catalog', to: 'interpret-follow-up', kind: 'next' },
+        {
+          from: 'interpret-follow-up',
+          to: 'plan',
+          kind: 'branch',
+          label: 'New question',
+        },
+        {
+          from: 'interpret-follow-up',
+          to: 'page-result',
+          kind: 'branch',
+          label: 'Explore the earlier result',
+        },
         {
           from: 'plan',
           to: 'clarify',
@@ -502,6 +530,8 @@ describe('The workflow catalogue (API)', () => {
         { from: 'check-data-quality', to: 'write-answer', kind: 'next' },
         { from: 'write-answer', to: 'wrap-up', kind: 'next' },
         { from: 'wrap-up', to: 'end', kind: 'next' },
+        { from: 'page-result', to: 'page-answer', kind: 'next' },
+        { from: 'page-answer', to: 'end', kind: 'next' },
       ]);
       // 116 is unchanged: the summary carries neither.
       const [summary] = await workflows();

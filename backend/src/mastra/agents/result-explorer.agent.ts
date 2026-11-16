@@ -1,5 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import type { ResultView } from '../../modules/datasources/connectors/paged-sql.types';
+import type { AgentExchange } from '../agent-threads';
 import { runErrorMessage } from '../workflows/workflow-run';
 import { agentInstructions } from '../agent-prompt-overrides';
 import { RESULT_EXPLORER_AGENT_KEY } from '../agent-constants';
@@ -43,36 +44,53 @@ export interface InterpretResultInput {
 }
 
 /**
- * The model call (api.md 152, 154): the request holds no SQL and no whole
- * rows. A model error, or a reply that is no JSON object, throws; the
- * reply is read by `specOf`.
+ * The model call (api.md 152, 154; Answer a Business Question's Interpret
+ * follow-up step): the request holds no SQL and no whole rows. A model
+ * error, or a reply that is no JSON object, throws; the reply is read by
+ * `specOf`. `onExchange` gets the request and the reply once the agent
+ * replied (a run records it in Nathan's thread, agents.md 5.14).
  */
 export async function interpretResultWithModel(
   input: InterpretResultInput,
-  options: { abortSignal?: AbortSignal } = {},
+  options: {
+    abortSignal?: AbortSignal;
+    onExchange?: (exchange: AgentExchange) => void | Promise<void>;
+  } = {},
 ): Promise<ExplorerSpec> {
-  const result = (await resultExplorerAgent.generate(
-    explorerRequest(input.text, input.candidates, input.view, input.pageCount),
-    {
-      maxSteps: 1,
-      toolChoice: 'none',
-      ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
-      structuredOutput: {
-        schema: RESULT_EXPLORER_REPLY_SCHEMA,
-        jsonPromptInjection: 'inline',
-        errorStrategy: 'warn',
-      },
+  const request = explorerRequest(
+    input.text,
+    input.candidates,
+    input.view,
+    input.pageCount,
+  );
+  const result = (await resultExplorerAgent.generate(request, {
+    maxSteps: 1,
+    toolChoice: 'none',
+    ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
+    structuredOutput: {
+      schema: RESULT_EXPLORER_REPLY_SCHEMA,
+      jsonPromptInjection: 'inline',
+      errorStrategy: 'warn',
     },
-  )) as { object?: unknown; text?: string; error?: unknown };
+  })) as { object?: unknown; text?: string; error?: unknown };
   if (result.error !== undefined) {
     throw result.error instanceof Error
       ? result.error
       : new Error(runErrorMessage(result.error));
   }
-  return specOf(
+  const spec = specOf(
     result.object ?? result.text,
     input.candidates,
     input.view,
     input.pageCount,
   );
+  if (options.onExchange && !options.abortSignal?.aborted) {
+    await options.onExchange({
+      request,
+      reply: result.text?.trim()
+        ? result.text
+        : JSON.stringify(result.object ?? null),
+    });
+  }
+  return spec;
 }

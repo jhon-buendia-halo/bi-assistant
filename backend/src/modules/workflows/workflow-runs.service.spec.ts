@@ -102,6 +102,8 @@ const V2_STEPS_BEFORE: StepEvent[] = [
   stepResult('receive-question', { question: 'Who won in 2002?' }),
   stepStart('load-catalog', { question: 'Who won in 2002?' }),
   stepResult('load-catalog', { entities: 1 }),
+  stepStart('interpret-follow-up', { question: 'Who won in 2002?' }),
+  stepResult('interpret-follow-up', { followUp: null }),
   stepStart('plan', { question: 'Who won in 2002?' }),
   stepResult('plan', PLAN_OUTPUT),
   stepStart('analyse', { question: 'Who won in 2002?' }),
@@ -601,6 +603,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -616,6 +620,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       // The steps the run never took end skipped: the Clarify branch.
       'clarify:skipped',
       'check-data-quality:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
       'done',
     ]);
     expect(events[0]).toEqual({
@@ -632,7 +638,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       input: { question: 'Who won in 2002?', datasets: ['World Cup Core'] },
       startedAt: expect.any(String) as string,
     });
-    expect(events[10]).toEqual({
+    expect(events[12]).toEqual({
       type: 'step',
       id: 'analyse',
       title: 'Analyse',
@@ -658,6 +664,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success', output: { entities: 1 } },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success', output: PLAN_OUTPUT },
         { id: 'clarify', title: 'Clarify', status: 'skipped' },
         {
@@ -671,6 +678,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
         { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -790,6 +799,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         {
@@ -802,15 +812,19 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
-    expect(stepTrail(events).slice(-6)).toEqual([
+    expect(stepTrail(events).slice(-8)).toEqual([
       'clarify:skipped',
       'analyse:failed',
       'validate:skipped',
       'check-data-quality:skipped',
       'write-answer:skipped',
       'wrap-up:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(run.answer).toBeUndefined();
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -839,13 +853,15 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
       'text',
     ]);
     expect(run.status).toBe('stopped');
-    expect(run.steps.slice(3)).toEqual([
+    expect(run.steps.slice(4)).toEqual([
       { id: 'clarify', title: 'Clarify', status: 'skipped' },
       {
         id: 'analyse',
@@ -864,6 +880,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       },
       { id: 'write-answer', title: 'Write answer', status: 'skipped' },
       { id: 'wrap-up', title: 'Wrap up', status: 'skipped' },
+      { id: 'page-result', title: 'Page result', status: 'skipped' },
+      { id: 'page-answer', title: 'Page answer', status: 'skipped' },
     ]);
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
@@ -1215,6 +1233,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: message },
@@ -1222,6 +1241,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });
@@ -1275,6 +1296,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'success' },
@@ -1282,6 +1304,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'success' },
         { id: 'wrap-up', status: 'success' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
       output: WRAP_UP_OUTPUT,
       question: 'Who won in 2002?',
@@ -1322,6 +1346,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: 'Model error' },
@@ -1329,6 +1354,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
     ctx.db.close();
@@ -1345,6 +1372,7 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
       steps: [
         { id: 'receive-question', status: 'success' },
         { id: 'load-catalog', status: 'success' },
+        { id: 'interpret-follow-up', status: 'success' },
         { id: 'plan', status: 'success' },
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'stopped' },
@@ -1352,6 +1380,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
+        { id: 'page-result', status: 'skipped' },
+        { id: 'page-answer', status: 'skipped' },
       ],
     });
   });

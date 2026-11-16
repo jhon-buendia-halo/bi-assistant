@@ -181,7 +181,7 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
     { key: 'data-readiness', name: 'Sarah' },
     { key: 'answer-writer', name: 'Jessica' },
   ],
-  stepCount: 9,
+  stepCount: 12,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -277,6 +277,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
       ).toEqual([
+        'result-explorer',
         'analysis-planner',
         'insights-analyst',
         'data-readiness',
@@ -292,13 +293,13 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'answer-business-question',
-        stepCount: 9,
+        stepCount: 12,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
       // Plan receives the question (a string) and the catalog.
-      expect(detail.steps[2]).toMatchObject({ id: 'plan' });
-      expect(detail.steps[2].inputSchema).toMatchObject({
+      expect(detail.steps[3]).toMatchObject({ id: 'plan' });
+      expect(detail.steps[3].inputSchema).toMatchObject({
         type: 'object',
         properties: {
           question: { type: 'string' },

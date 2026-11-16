@@ -10,12 +10,13 @@ const V2_TOOLS = [
 ];
 
 describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
-  it("returns v2's turn workflow with its nine steps in catalogue order", () => {
+  it("returns v2's turn workflow with its twelve steps in catalogue order", () => {
     const workflow = agentWorkflow('insights-analyst');
     expect(workflow?.id).toBe('answer-business-question');
     expect(workflow?.steps.map((step) => [step.title, step.kind])).toEqual([
       ['Receive question', 'code'],
       ['Load catalog', 'code'],
+      ['Interpret follow-up', 'agent'],
       ['Plan', 'agent'],
       ['Clarify', 'code'],
       ['Analyse', 'agent'],
@@ -23,6 +24,8 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       ['Check data quality', 'agent'],
       ['Write answer', 'agent'],
       ['Wrap up', 'code'],
+      ['Page result', 'code'],
+      ['Page answer', 'code'],
     ]);
   });
 
@@ -64,9 +67,25 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       tools: [],
       maxSteps: 1,
     });
+    // Nathan reads a follow-up over an earlier result (roadmap 1.27.8).
+    expect(agentOf('interpret-follow-up')).toEqual({
+      key: 'result-explorer',
+      name: 'Nathan',
+      role: 'Result Explorer',
+      tools: [],
+      maxSteps: 1,
+    });
     expect(
       steps.filter((step) => step.kind === 'code').map((step) => step.agent),
-    ).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    ).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
     // The catalogue's own flag stays out of the API's step.
     expect(steps.every((step) => !('modelOnly' in step))).toBe(true);
   });
@@ -118,9 +137,9 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
   it('returns a copy the caller can change safely', () => {
     const first = agentWorkflow('insights-analyst')!;
     first.steps[0].input.push('x');
-    first.steps[4].agent!.tools.push('y');
+    first.steps[5].agent!.tools.push('y');
     const second = agentWorkflow('insights-analyst')!;
     expect(second.steps[0].input).toEqual(['question', 'datasets']);
-    expect(second.steps[4].agent!.tools).toHaveLength(6);
+    expect(second.steps[5].agent!.tools).toHaveLength(6);
   });
 });

@@ -26,6 +26,8 @@ jest.mock('../../mastra/model-resolver', () => ({
     typeof c === 'object' && c !== null && 'kind' in c,
   resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
+// The query inspector's page path a follow-up pages through (roadmap 1.27.8).
+const mockPageQuery = jest.fn();
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
   // v2's Load catalog step reads the datasets as the dataset tools do.
@@ -41,6 +43,7 @@ jest.mock('../../mastra/tool-services', () => ({
           },
         ].filter((d) => names.includes(d.name)),
       ),
+    pageQuery: (...args: unknown[]) => mockPageQuery(...args) as unknown,
   }),
 }));
 jest.mock('../../mastra/tools/dataset.tools', () => ({
@@ -162,6 +165,7 @@ const V2_WORKFLOW = {
   agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
   steps: ANSWER_BUSINESS_QUESTION_STEPS,
   edges: CODE_WORKFLOWS[0].edges,
+  contractHash: CODE_WORKFLOWS[0].contractHash,
 };
 
 /** The workflow detail the fake catalogue answers for Assess Data Readiness. */
@@ -394,6 +398,20 @@ function build(options: BuildOptions = {}) {
         return Promise.resolve({ plan: planOf({}, question), stopped: false });
       },
     ),
+    // Nathan's reading of a follow-up (roadmap 1.27.8): a new question
+    // unless a test says otherwise.
+    interpretResult: jest.fn((input: unknown, opts?: unknown) => {
+      void input;
+      void opts;
+      return Promise.resolve({
+        action: 'new-question',
+        query: 0,
+        interpretation: {
+          request: {},
+          understood: '',
+        },
+      });
+    }),
     writeAnswer: jest.fn(
       (_input: unknown, opts: { onText?: (delta: string) => void }) => {
         opts.onText?.('Brazil won.');
@@ -949,6 +967,8 @@ describe('the run host (agents.md 5.14)', () => {
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -962,10 +982,13 @@ describe('the run host (agents.md 5.14)', () => {
       'clarify:skipped',
       // Not asked for (agents.md 5.11).
       'check-data-quality:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success',
       'clarify:skipped',
       'analyse:success',
@@ -973,6 +996,8 @@ describe('the run host (agents.md 5.14)', () => {
       'check-data-quality:skipped',
       'write-answer:success',
       'wrap-up:success',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // The loops' steps carry their attempt (api.md 3.6): Plan (Clarify
     // loops back to it) and the analysis's.
@@ -1353,6 +1378,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'clarify:suspended#1',
     ]);
@@ -1404,6 +1430,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:running',
       'wrap-up:success',
       'check-data-quality:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'done' });
     expect(events.some((e) => e.type === 'input-required')).toBe(false);
@@ -1414,6 +1442,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'plan:success#2',
       'clarify:success#1',
@@ -1422,6 +1451,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'check-data-quality:skipped',
       'write-answer:success',
       'wrap-up:success',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // Plan planned again with its question and the trimmed answer.
     expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
@@ -1466,6 +1497,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(started.run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'analyse:suspended#1',
     ]);
@@ -1495,6 +1527,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:success',
       'clarify:skipped',
       'check-data-quality:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // The agent runs again (no memory thread) with the conversation so far:
     // the question, its clarifying question and the user's answer.
@@ -1599,6 +1633,35 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     }
   });
 
+  it('answers 410 to a run stored under another contract (the Clarify path moved, roadmap 1.27.8): stopped with waitingFor expired, its turn dropped', async () => {
+    const ctx = build();
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const waiting = await runOf(ctx, V2_INPUT);
+    await ctx.runsRepository.update(waiting.run.id, {
+      contractHash: 'before-1278',
+    });
+    await expect(
+      ctx.runs.prepareResume(waiting.run.id, {
+        stepId: 'clarify',
+        answer: 'Matches won',
+      }),
+    ).rejects.toMatchObject({
+      status: 410,
+      message:
+        'This run can no longer continue — run it again with your answer',
+    });
+    const stored = await ctx.runs.get(waiting.run.id);
+    expect(stored.status).toBe('stopped');
+    expect(stored.waitingFor).toMatchObject({
+      stepId: 'clarify',
+      expired: true,
+    });
+    expect(ctx.discards.count).toBe(1);
+  });
+
   it('"Run again with my answer": a run whose context is the expired run plans with its question and clarifying question', async () => {
     const ctx = build();
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
@@ -1684,6 +1747,110 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       },
     });
     expect(ctx.discards.count).toBe(1);
+  });
+});
+
+describe('a follow-up run over an earlier result (roadmap 1.27.8; workflows R36)', () => {
+  const PAGE_2 = {
+    columns: ['winner'],
+    columnKinds: { winner: 'text' },
+    rows: [{ winner: 'Italy' }],
+    page: 2,
+    pageSize: 1,
+    pageCount: 3,
+    matchedRows: 3,
+    capped: false,
+    view: { filters: [], sort: [], page: 2, pageSize: 1, matchedRows: 3 },
+    ranAt: '2026-11-16T10:00:00.000Z',
+    datasourceId: 'ds-pg',
+  };
+
+  beforeEach(() => mockPageQuery.mockReset());
+
+  it("pages the earlier answer's query instead of planning: one result-explorer call, the page recorded as explore_result with its view, the answer written by code", async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    // A first run has no earlier result: no extra model call.
+    expect(ctx.mastra.interpretResult).not.toHaveBeenCalled();
+    ctx.mastra.interpretResult.mockResolvedValueOnce({
+      action: 'explore',
+      query: 0,
+      interpretation: { request: { page: 2 }, understood: 'page 2' },
+    });
+    mockPageQuery.mockResolvedValueOnce(PAGE_2);
+    const { events, run } = await runOf(
+      ctx,
+      { question: 'next page', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.interpretResult.mock.calls[0][0]).toMatchObject({
+      text: 'next page',
+      candidates: [
+        { ref: 'Q1', columns: [{ name: 'winner', values: ['Brazil'] }] },
+      ],
+      view: null,
+    });
+    expect(mockPageQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: 'SELECT winner FROM matches',
+        columns: ['winner'],
+      }),
+      ['World Cup'],
+      { page: 2 },
+    );
+    // No planning, no analysis, no Write answer on the follow-up.
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(1);
+    expect(ctx.calls['insights-analyst']).toHaveLength(1);
+    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+    expect(run.status).toBe('success');
+    expect(
+      run.steps
+        .filter((step) => step.status !== 'skipped')
+        .map((step) => step.id),
+    ).toEqual([
+      'receive-question',
+      'load-catalog',
+      'interpret-follow-up',
+      'page-result',
+      'page-answer',
+    ]);
+    expect(run.answer?.content.split('\n')[0]).toBe('Rows 2–2 of 3');
+    expect(run.answer?.content).toContain('| Italy |');
+    // The page is the answer's query: its source SQL and the page's rows,
+    // its view as evidence, so the inspector opens on page 2.
+    expect(run.answer?.data).toEqual([
+      expect.objectContaining({
+        tool: 'explore_result',
+        input: 'SELECT winner FROM matches',
+        rows: [{ winner: 'Italy' }],
+        truncated: true,
+      }),
+    ]);
+    expect(run.answer?.evidence?.[0]).toMatchObject({
+      index: 0,
+      view: PAGE_2.view,
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'tool',
+        content: expect.stringContaining('"name":"explore_result"') as string,
+      }),
+    );
+  });
+
+  it('plans the follow-up as a new question when result-explorer reads one', async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    const { run } = await runOf(
+      ctx,
+      { question: 'And in 2014?', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
+    expect(mockPageQuery).not.toHaveBeenCalled();
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
+    expect(run.answer?.content).toBe('Brazil won.');
   });
 });
 

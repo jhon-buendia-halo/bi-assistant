@@ -268,8 +268,11 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
         }
       }
       expect((await output.result).status).toBe('success');
-      // The clear path: every step but Clarify, whose branch is not taken.
-      const ran = source.steps.filter((step) => step.id !== 'clarify');
+      // The clear path: every step but Clarify, whose branch is not taken,
+      // and the follow-up branch (a first run has no earlier result).
+      const ran = source.steps.filter(
+        (step) => !['clarify', 'page-result', 'page-answer'].includes(step.id),
+      );
       expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
       for (const step of ran) {
         const parsed = fixture.schemas[step.id].output.safeParse(

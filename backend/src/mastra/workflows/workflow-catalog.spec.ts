@@ -73,6 +73,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     expect(CODE_WORKFLOWS[0].steps.map((step) => step.id)).toEqual([
       'receive-question',
       'load-catalog',
+      'interpret-follow-up',
       'plan',
       'clarify',
       'analyse',
@@ -80,14 +81,30 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'check-data-quality',
       'write-answer',
       'wrap-up',
+      'page-result',
+      'page-answer',
     ]);
-    // The flow is its edges (api.md 117): a branch after Plan, a loop back
-    // from Clarify to Plan once answered, a loop back from Validate to
-    // Analyse, and the optional branch to Check data quality.
-    expect(CODE_WORKFLOWS[0].edges).toHaveLength(13);
+    // The flow is its edges (api.md 117): a branch after Interpret
+    // follow-up (a new question, or the earlier result paged), a branch
+    // after Plan, a loop back from Clarify to Plan once answered, a loop
+    // back from Validate to Analyse, and the optional branch to Check data
+    // quality.
+    expect(CODE_WORKFLOWS[0].edges).toHaveLength(17);
     expect(
       CODE_WORKFLOWS[0].edges.filter((edge) => edge.kind !== 'next'),
     ).toEqual([
+      {
+        from: 'interpret-follow-up',
+        to: 'plan',
+        kind: 'branch',
+        label: 'New question',
+      },
+      {
+        from: 'interpret-follow-up',
+        to: 'page-result',
+        kind: 'branch',
+        label: 'Explore the earlier result',
+      },
       {
         from: 'plan',
         to: 'clarify',
