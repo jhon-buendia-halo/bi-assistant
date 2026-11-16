@@ -373,8 +373,13 @@ const probeEvidenceStep = createStep({
     SCHEMAS['probe-evidence'],
     async (params: StepParams<(typeof SCHEMAS)['probe-evidence']>) => {
       const runtime = runtimeOf(params, STEP['probe-evidence'].title);
-      const { requirements, assessments, tables } = params.inputData;
-      const probes = probeQueries({ requirements, assessments, tables });
+      const { requirements, assessments, tables, lineage } = params.inputData;
+      const probes = probeQueries({
+        requirements,
+        assessments,
+        tables,
+        lineage,
+      });
       // Each probe is a source of the answer; a failed one is a result.
       const ran = await runQueries(runtime, probes);
       const results = [...ran.results.values()];

@@ -72,7 +72,8 @@ Rules:
 - "change" is concrete: SQL or numbered steps, with the real entity and column names from the catalogs (a view or table in Consumption, a typed column in Normalized, a new Landing source).
 - A fix is a proposal. It is never run: say what to build, do not claim it exists.
 - Close only the requirement ids you were given.
-- Write in the language of the business questions.`;
+- Write in the language of the business questions.
+- When the evidence reads "Upstream in Normalized" or "Upstream in Landing" with rows for a period Consumption lacks, the data exists in that layer: the fix rebuilds or backfills from it and starts there, never in a new source.`;
 
 /** The questions as numbered lines. */
 function numbered(questions: readonly string[]): string {

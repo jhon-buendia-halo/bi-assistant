@@ -857,8 +857,55 @@ export function traceGaps(input: {
 /** A probe query and the requirement it is about. */
 export type GapProbe = GapQuery & {
   requirementId: string;
-  purpose: 'coverage' | 'periods';
+  /**
+   * `upstream-periods`: the same period count on the lower-layer column the
+   * lineage says feeds the Consumption one, so a coverage gap says whether
+   * the data exists below (evidence only, never a status change).
+   */
+  purpose: 'coverage' | 'periods' | 'upstream-periods';
+  /** For `upstream-periods`: the layer of the column it counts. */
+  layer?: Layer;
 };
+
+/**
+ * The lower-layer column the lineage says feeds a Consumption column: the
+ * edge into it from the highest layer below (Normalized before Landing),
+ * then the best method and confidence.
+ */
+function upstreamOf(
+  source: FieldSource,
+  lineage: Lineage | undefined,
+  tables: readonly LayerTable[],
+): FieldSource | undefined {
+  if (!lineage || source.layer !== 'consumption') return undefined;
+  const rank = { values: 0, mapped: 1, name: 2, 'similar-name': 3 } as const;
+  const into = lineage.edges
+    .filter(
+      (e) =>
+        same(e.to.entity, source.entity) && same(e.to.column, source.column),
+    )
+    .map((e) => ({ edge: e, table: findTable(tables, e.from.entity) }))
+    .filter(
+      (x): x is { edge: (typeof lineage.edges)[number]; table: LayerTable } =>
+        x.table !== undefined && x.table.layer !== 'consumption',
+    )
+    .sort(
+      (a, b) =>
+        (a.table.layer === 'normalized' ? 0 : 1) -
+          (b.table.layer === 'normalized' ? 0 : 1) ||
+        rank[a.edge.method] - rank[b.edge.method] ||
+        b.edge.confidence - a.edge.confidence,
+    );
+  const best = into[0];
+  return best
+    ? {
+        layer: best.table.layer,
+        entity: best.table.entity,
+        column: best.edge.from.column,
+        expression: '',
+      }
+    : undefined;
+}
 
 /**
  * The entity a requirement's probes read: the one most of its fields'
@@ -956,8 +1003,10 @@ export function probeQueries(input: {
   requirements: readonly Requirement[];
   assessments: readonly RequirementAssessment[];
   tables: readonly LayerTable[];
+  /** With it, a period probe on Consumption gets its upstream twin. */
+  lineage?: Lineage;
 }): GapProbe[] {
-  const { requirements, assessments, tables } = input;
+  const { requirements, assessments, tables, lineage } = input;
   const out: GapProbe[] = [];
   const queryable = (entity: string) => {
     const table = findTable(tables, entity);
@@ -998,8 +1047,24 @@ export function probeQueries(input: {
         sql: periodsSql(period, periods, at.dialect),
         rationale: `Counts the rows of ${shortEntity(period.entity)} for each period ${requirement.id} names (${list(periods)}) by ${period.column}`,
       });
+      const below = upstreamOf(period, lineage, tables);
+      const there = below && queryable(below.entity);
+      if (below && there) {
+        mine.push({
+          id: '',
+          requirementId: requirement.id,
+          purpose: 'upstream-periods',
+          layer: below.layer,
+          datasourceId: there.datasourceId,
+          sql: periodsSql(below, periods, there.dialect),
+          rationale: `Counts the rows of ${shortEntity(below.entity)}, which feeds ${shortEntity(period.entity)}.${period.column}, for each period ${requirement.id} names (${list(periods)})`,
+        });
+      }
     }
-    for (const probe of mine.slice(0, PROBES_PER_REQUIREMENT)) {
+    const cap = mine.some((p) => p.purpose === 'upstream-periods')
+      ? PROBES_PER_REQUIREMENT + 1
+      : PROBES_PER_REQUIREMENT;
+    for (const probe of mine.slice(0, cap)) {
       if (out.length >= PROBES_MAX) break;
       out.push({ ...probe, id: `probe-${out.length + 1}` });
     }
@@ -1070,9 +1135,14 @@ export function applyProbes(
         const column = /CAST\((?:"|`)(.+?)(?:"|`) AS/.exec(probe.sql)?.[1];
         const table = /FROM (.+)$/.exec(probe.sql)?.[1] ?? '';
         const name = table.split('.').pop()?.replace(/["`]/g, '') ?? '';
-        sentences.push(
-          `${name}: rows by ${column ?? 'period'}: ${counts.map((c) => `${c.period} → ${c.count}`).join(', ')}.`,
-        );
+        const by = `rows by ${column ?? 'period'}: ${counts.map((c) => `${c.period} → ${c.count}`).join(', ')}`;
+        if (probe.purpose === 'upstream-periods') {
+          // Evidence of where the data is, never a status change.
+          const layer = probe.layer === 'landing' ? 'Landing' : 'Normalized';
+          sentences.push(`Upstream in ${layer}, ${name}: ${by}.`);
+          continue;
+        }
+        sentences.push(`${name}: ${by}.`);
         const empty = counts.filter((c) => c.count === 0).map((c) => c.period);
         if (empty.length) problems.push(`no rows for ${list(empty)}`);
       }

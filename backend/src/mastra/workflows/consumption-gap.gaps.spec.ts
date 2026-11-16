@@ -804,6 +804,61 @@ describe('probeQueries and applyProbes', () => {
     });
   });
 
+  it('counts the named periods upstream too, as evidence only', () => {
+    const lineage = {
+      edges: [
+        {
+          from: {
+            entity: 'world_cup.wc_normalized.matches',
+            column: 'tournament_year',
+          },
+          to: {
+            entity: 'world_cup.wc_consumption.agg_team_tournament',
+            column: 'tournament_year',
+          },
+          method: 'values' as const,
+          confidence: 0.95,
+          overlap: 1,
+          expression: '',
+        },
+      ],
+      checkedPairs: 1,
+      failedChecks: 0,
+    };
+    const withUpstream = probeQueries({
+      requirements: GAP_SAMPLE_REQUIREMENTS,
+      assessments,
+      tables: GAP_SAMPLE_TABLES,
+      lineage,
+    });
+    const q1 = withUpstream.filter((p) => p.requirementId === 'Q1');
+    expect(q1.map((p) => [p.id, p.purpose, p.layer])).toEqual([
+      ['probe-1', 'coverage', undefined],
+      ['probe-2', 'periods', undefined],
+      ['probe-3', 'upstream-periods', 'normalized'],
+    ]);
+    expect(q1[2].sql).toBe(
+      `SELECT COUNT(CASE WHEN CAST("tournament_year" AS TEXT) LIKE '2018%' THEN 1 END) AS "2018", COUNT(CASE WHEN CAST("tournament_year" AS TEXT) LIKE '2022%' THEN 1 END) AS "2022" FROM "wc_normalized"."matches"`,
+    );
+    const upstream = applyProbes(assessments, withUpstream, [
+      results[0],
+      results[1],
+      {
+        id: 'probe-3',
+        columns: ['2018', '2022'],
+        rows: [{ '2018': 28, '2022': 28 }],
+        error: null,
+      },
+    ]).find((a) => a.requirementId === 'Q1');
+    expect(upstream?.status).toBe('grain');
+    expect(upstream?.evidence).toContain(
+      'Upstream in Normalized, matches: rows by tournament_year: 2018 → 28, 2022 → 28.',
+    );
+    expect(upstream?.reason).toBe(
+      'The fields are in Consumption, but the data does not answer it: no rows for 2018.',
+    );
+  });
+
   it('downgrades a requirement whose column is under half filled', () => {
     expect(of('Q2')?.status).toBe('grain');
     expect(of('Q2')?.reason).toContain(
