@@ -1,4 +1,4 @@
-# Halo BI Assistant — public page
+# Halo Workbench — public page
 
 The product page for this app, styled to match
 [halo-powered-labs.pages.dev](https://halo-powered-labs.pages.dev/) (same tokens, same
@@ -11,8 +11,10 @@ public/
   index.html          the page
   styles.css          Labs design tokens + the Labs component CSS + page-specific additions
   halo-logo.svg       the Halo wordmark, lifted from the Labs site
-  app-icon.png        the app's own icon (copied from frontend/build/icon.png)
+  app-icon.png        the Halo Workbench icon (from frontend/brands/halo/public/brand/icon.png)
+  agentic-hub-icon.png  the Agentic Hub icon (from frontend/brands/mercer/public/brand/icon.png)
   favicon.png, apple-touch-icon.png
+  shots/              the screenshots (see Screenshots below)
 functions/          Pages Functions — the download routes (see Downloads below)
 lib/                shared Function code
 scripts/
@@ -48,13 +50,20 @@ Override the project or hostname with `CF_PAGES_PROJECT` / `CUSTOM_DOMAIN`.
 
 ## Downloads
 
-The page offers one download, Windows x64 (BA-304): only the Windows installer
-is built since BA-302. Its button links to this site's own route,
-`/download/win-x64`, not to a versioned GitHub URL. `/download/mac-arm64` and
-`/download/mac-x64` still exist, unlinked, so old links keep resolving to the
-last macOS installers (v0.13.1). **A new
-release needs no edit here**: the route resolves the newest published installer
-and redirects to it.
+The page offers two downloads, both Windows x64 (only the Windows installer is
+built since BA-302), one per edition (ADR-0045):
+
+| Button | Route | Installer |
+|---|---|---|
+| Halo Workbench | `/download/win-x64` | `Halo-Workbench-*-win-x64.exe` (or an older `Questions-to-Insights-*-win-x64.exe`) |
+| Agentic Hub | `/download/agentic-hub-win-x64` | `Agentic-Hub-*-win-x64.exe` |
+
+The buttons link to this site's own routes, not to a versioned GitHub URL.
+`/download/mac-arm64` and `/download/mac-x64` still exist, unlinked, so old
+links keep resolving to the last macOS installers (v0.13.1). **A new release
+needs no edit here**: each route resolves the newest release that carries its
+edition's installer and redirects to it. The desktop workflow builds both
+editions onto the same release by default (`brand: both`).
 
 ```
 functions/download/[target].js   resolve a platform → 302 to the installer
@@ -106,58 +115,49 @@ Omit the token to exercise the unconfigured path.
 running against the **World Cup demo fixture that ships with it** — never a
 customer's data, and never a mockup. The hero caption says as much on the page.
 
-Re-shoot them whenever the interface moves:
+Re-shoot them whenever the interface moves. Everything below runs on a scratch
+data directory, so nothing touches your own app data:
 
 ```bash
-# 1. a demo database (docker compose at the repo root) and a backend pointed at
-#    a scratch data directory, so nothing touches your own app data
+# 1. the demo Postgres (docker compose at the repo root, port 55432) and a web
+#    build of the app on a free port with a scratch data directory
 docker compose up -d postgres
-(cd backend && npm run build)
-APP_DATA_DIR="$PWD/.context/demo-data" node backend/dist/main.js &
+npm --prefix backend run build:all
+node backend/dist/cli.js --port 3210 --data-dir "$PWD/.context/shots-data" --no-open &
 
-# 2. load the fixture: creates the connection and a dataset of 9 entities
-curl -sX POST localhost:3000/testing-data/world-cup/load -H 'content-type: application/json' \
-  -d '{"host":"127.0.0.1","port":55432,"database":"world_cup","user":"world_cup","password":"world_cup_dev","ssl":false}'
-curl -sX POST localhost:3000/sessions -H 'content-type: application/json' \
-  -d '{"name":"Finishing quality at the World Cup","datasets":["World Cup"]}'
+# 2. the local LLM and every Testing Data fixture, including the "World Cup" dataset
+node scripts/setup-local.mjs http://127.0.0.1:3210
 
-# 3. write the demo transcript, its two visual versions and the sibling sessions
-node site/scripts/screenshots/seed-demo.cjs
+# 3. two real runs for the shots to show (each takes under a minute)
+curl -sX POST http://127.0.0.1:3210/workflows/answer-business-question/runs \
+  -H 'content-type: application/json' \
+  -d '{"input":{"question":"Which teams finished their chances best across the 2018 and 2022 World Cups? Compare goals scored with expected goals.","datasets":["World Cup"]}}'
+curl -sX POST http://127.0.0.1:3210/workflows/data-readiness-assessment/runs \
+  -H 'content-type: application/json' -d '{"input":{"dataset":"World Cup"}}'
 
-# 4. drive the running app and capture (`npm start` in frontend/ first)
-node site/scripts/screenshots/capture.mjs            # every shot
-node site/scripts/screenshots/capture.mjs hero sql   # or just these
+# 4. drive the running app and capture (2x, into .context/shots/)
+APP_URL=http://127.0.0.1:3210/ node site/scripts/screenshots/capture.mjs
+APP_URL=http://127.0.0.1:3210/ node site/scripts/screenshots/capture.mjs hero inspector   # or just these
 
 # 5. downscale into the page — the hero at 2360px, the rest at 1800px
-sips --resampleWidth 2360 .context/shots/01-hero.png --out site/public/shots/app.png
+sips -s format png --resampleWidth 2360 .context/shots/hero.png --out site/public/shots/app.png
+for n in inspector evidence workflows agents readiness; do
+  sips --resampleWidth 1800 .context/shots/$n.png --out site/public/shots/$n.png
+done
 ```
 
-`seed-demo.cjs` writes the session document straight into the scratch
-`app.sqlite` and the visual versions through the app's own spec renderer
-(`backend/dist/modules/sessions/…`), so the panel renders them exactly as it
-renders a generated one. **The SQL and every row in it were run against the
-demo database** — only the assistant's prose is authored, because seeding needs
-no model provider key. If you re-word an answer, re-run the query too.
-
-`export.png` is the odd one out: it is not a screen but the artefact the app
-produces. Serve any stored version directory over http and shoot it whole —
-`file://` will not do, because the exported document's CSP is `script-src 'self'`
-and the chart runtime ships as a sibling file:
-
-```bash
-(cd .context/demo-data/workspaces/session-*/visuals/*/v2 && python3 -m http.server 4610) &
-# then screenshot http://localhost:4610/index.html with fullPage: true
-```
-
-`capture.mjs` takes an optional list of shot names (`hero`, `clarify`,
-`provenance`, `sql`, `visual`, `versions`, `knowledge`, `datasets`, `settings`,
-`llm`, `agents`); with none it captures all of them. Output goes to
-`.context/shots/` unless `SHOTS_OUT` says otherwise.
+`capture.mjs` takes an optional list of shot names (`hero`, `inspector`,
+`evidence`, `workflows`, `agents`, `readiness`); with none it captures all of
+them. It opens the two runs from **Runs** by their titles, so keep the
+question above (or change `QUESTION_START` in the script). The answers are the
+model's own, so the copy that quotes them (the hero and readiness captions) may
+need a touch after a re-shoot.
 
 ## Filename note
 
-Since the rename (ADR-0046) the desktop app is *Halo Workbench* and installers are named
-`Halo-Workbench-<version>-<os>-<arch>.<ext>` (earlier releases:
-`Questions-to-Insights-…`). The download resolver matches only the
-`-<os>-<arch>.<ext>` suffix, so both names resolve. This page's copy still
-says *Halo BI Assistant* until it is rewritten for the new name.
+Since the rename (ADR-0046) the desktop app is *Halo Workbench* and its
+installers are named `Halo-Workbench-<version>-<os>-<arch>.<ext>` (earlier
+releases: `Questions-to-Insights-…`); the Agentic Hub edition's are
+`Agentic-Hub-<version>-<os>-<arch>.<ext>`. The resolver matches a prefix per
+edition plus the platform suffix (`lib/github-release.js`), so the old Halo
+names still resolve and the two editions never pick each other's file.

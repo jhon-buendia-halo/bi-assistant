@@ -254,19 +254,19 @@ Conventional Commit subjects therefore drive the bump, Because the bump reads ev
 
 ### `build-desktop.yml` — Build desktop installers
 
-Manual: Actions → Build desktop installers → Run workflow. A hand-pushed `v*` tag also triggers it. It builds and publishes **only the Windows x64 installer** (BA-302); macOS `.dmg` files can still be built locally with `electron:dist` (section 2) but CI no longer builds them.
+Manual: Actions → Build desktop installers → Run workflow. A hand-pushed `v*` tag also triggers it. It builds and publishes **only Windows x64 installers** (BA-302), by default one per brand (Halo Workbench and Agentic Hub); macOS `.dmg` files can still be built locally with `electron:dist` (section 2) but CI no longer builds them.
 
 | Input | Default | Meaning |
 |---|---|---|
 | `ref` | empty | Tag, branch or SHA to build; empty = the branch the run was started from |
-| `publish` | false | Attach the Windows installer to the GitHub release for the resolved tag |
-| `brand` | `halo` | The brand to build (`halo` or `mercer`, ADR-0045); a `v*` tag push has no inputs and builds halo |
+| `publish` | false | Attach the Windows installers to the GitHub release for the resolved tag |
+| `brand` | `both` | The brands to build: `both` (halo and mercer, one build job each, both installers on the same release), `halo` or `mercer` (ADR-0045); a `v*` tag push has no inputs and builds both |
 
-`prepare` fails on a brand without `frontend/brands/<brand>/brand.json`, exposes it as an output, and appends it to the artifact and job names (`questions-to-insights-windows-x64-<brand>`); the `build` job sets it as `BRAND` for `electron:dist`, so the installer is `Halo-Workbench-*.exe` or `Agentic-Hub-*.exe`.
+`prepare` fails on a brand without `frontend/brands/<brand>/brand.json` and emits one matrix entry per brand, carrying the brand and appending it to the artifact and job names (`questions-to-insights-windows-x64-<brand>`); each `build` job sets its entry's brand as `BRAND` for `electron:dist`, so the installer is `Halo-Workbench-*.exe` or `Agentic-Hub-*.exe`.
 
 Jobs:
 
-1. **`prepare`** checks out the ref with full history and tags, emits the build matrix (`{"include":[…]}`) with its one entry, Windows x64 (runner `windows-2022`, NSIS `.exe`), and resolves the tag:
+1. **`prepare`** checks out the ref with full history and tags, emits the build matrix (`{"include":[…]}`): Windows x64 (runner `windows-2022`, NSIS `.exe`) once per selected brand, and resolves the tag:
    - a `v*` ref publishes to exactly that tag;
    - anything else (branch, SHA, empty) takes the version committed at that ref (`frontend/package.json`) and **walks the patch level up** until it finds a tag that either does not exist or already points at this commit, so building `main` twice gives `v0.13.0` then `v0.13.1` instead of clobbering a shipped release.
 2. **`build`** (one runner per matrix entry, so one Windows runner; 45 min timeout, `fail-fast: false`): checks out the resolved SHA, **stamps the resolved version** into both `package.json`s (so the installer filename and the tag never disagree), `npm ci --legacy-peer-deps` in `backend/` and `frontend/`, then `npm run electron:dist -- --<target> <format> --<arch>`, and uploads the installer as an Actions artifact (retention 14 days). Artifacts are unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`).
@@ -395,13 +395,13 @@ A separate, static deliverable: the public page for the app, a section of the Ha
 | Content | Plain static HTML/CSS in `site/public/` (no build step, no framework), styled with the Labs design tokens; screenshots in `public/shots/` |
 | Hosting | Cloudflare Pages project `halo-bi-assistant` (`halo-bi-assistant.pages.dev`), custom domain `bi-assistant.halo-powered-labs.com` |
 | Scripts | `scripts/dev.sh` (local on :4500 via `wrangler pages dev`), `deploy.sh` (publish; needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, optional `CF_PAGES_PROJECT`), `domain.sh` (attach the domain), `protect.sh` (optional Cloudflare Access lock) |
-| Download routes | Pages Functions: `/download/mac-arm64`, `/download/mac-x64`, `/download/win-x64` redirect to the newest published installer for that platform. The page links only `/download/win-x64` (BA-304); the macOS routes stay, unlinked, for old links and serve v0.13.1, the last release with macOS installers; `/api/latest` returns JSON (version, file sizes) for the page. A new release needs no site edit. |
+| Download routes | Pages Functions: `/download/win-x64` (Halo Workbench: `Halo-Workbench-*` or the older `Questions-to-Insights-*`), `/download/agentic-hub-win-x64` (Agentic Hub: `Agentic-Hub-*`), `/download/mac-arm64` and `/download/mac-x64` (Halo, older releases) redirect to the newest published installer of that edition and platform, matched by file-name prefix and platform suffix. The page links the two Windows routes, one button per edition (ADR-0045, ADR-0046); the macOS routes stay, unlinked, for old links and serve v0.13.1, the last release with macOS installers; `/api/latest` returns JSON (version, file sizes) for the page. A new release needs no site edit. |
 | Private-repo trick | The repo is private, so `releases/download/…` 404s publicly. The Function asks the GitHub API for the asset with `Accept: application/octet-stream`, takes the credential-free short-lived `Location`, and redirects the browser to it; the token never leaves the edge. Per platform it picks the newest release that carries that installer, so a Windows-only release leaves the macOS routes on the last release that had them. |
 | Secret | `GITHUB_TOKEN` (fine-grained PAT, Contents: read-only, scoped to this repo; expires within a year) set with `wrangler pages secret put`. Without it both routes answer 503 and the page shows static copy with buttons marked unavailable. |
-| Screenshots | Re-shot from the real app against the World Cup demo fixture with `site/scripts/screenshots/seed-demo.cjs` and `capture.mjs` (see `site/README.md` for the full procedure). |
+| Screenshots | Re-shot from the real app (web mode, scratch data directory) against the World Cup demo fixture after two real runs (Answer a Business Question, Assess Data Readiness), with `site/scripts/screenshots/capture.mjs` (see `site/README.md` for the full procedure). |
 | Skill | The project skill `deploy-labs-site` covers publishing or redeploying it. |
 
-Installers are named `Halo-Workbench-<version>-<os>-<arch>.<ext>` (before ADR-0046, `Questions-to-Insights-…`); the download resolver matches only the `-<os>-<arch>.<ext>` suffix, so both resolve. The page's copy still says Halo BI Assistant until it is rewritten.
+The page presents the product as Halo Workbench (ADR-0046). Installers are named `Halo-Workbench-<version>-<os>-<arch>.<ext>` (before ADR-0046, `Questions-to-Insights-…`) and `Agentic-Hub-<version>-<os>-<arch>.<ext>`; the resolver matches each edition's prefixes plus the platform suffix, so the old Halo names still resolve and the editions never pick each other's file.
 
 ## 9. Claude Code mods (`.claude/mods/`)
 

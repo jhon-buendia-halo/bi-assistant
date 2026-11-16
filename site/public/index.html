@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Halo BI Assistant — Halo Powered Labs</title>
+  <title>Halo Workbench — Halo Powered Labs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Halo BI Assistant is a desktop app that answers business questions over your Databricks and PostgreSQL data — grounded in SQL it actually runs, with interactive visuals you can tailor by conversation.">
-  <meta property="og:title" content="Halo BI Assistant — Halo Powered Labs">
-  <meta property="og:description" content="Ask a business question. Get an answer grounded in SQL that was actually run, plus a visual you can tailor by conversation.">
+  <meta name="description" content="Halo Workbench is a desktop app where agent workflows answer business questions, assess data readiness and rebuild dashboards over your own Databricks and PostgreSQL data — and every figure links to the query that produced it.">
+  <meta property="og:title" content="Halo Workbench — Halo Powered Labs">
+  <meta property="og:description" content="Agent workflows on your own data. Every figure links to the query behind it, explained step by step.">
   <meta property="og:type" content="website">
   <!-- Link previews show the app itself; absolute URL so scrapers resolve it. -->
   <meta property="og:image" content="https://bi-assistant.halo-powered-labs.com/shots/app.png">
@@ -48,12 +48,12 @@
     <div class="halo-glow" aria-hidden="true"></div>
     <div class="wrap hero-inner">
       <p class="eyebrow">An experiment from Halo Powered Labs</p>
-      <img class="app-mark" src="app-icon.png" alt="Halo BI Assistant icon">
-      <h1 class="hero-title">Halo BI Assistant<br><span class="grad-text">Questions in. Insights out.</span></h1>
+      <img class="app-mark" src="app-icon.png" alt="Halo Workbench icon">
+      <h1 class="hero-title">Halo Workbench<br><span class="grad-text">Agent workflows on your own data.</span></h1>
       <p class="hero-sub">
-        A desktop app that answers business questions over your own warehouse — by
-        planning the analysis, writing the SQL, running it, and explaining what came back.
-        Every number traces to a query you can read.
+        A desktop workbench where teams of agents answer business questions, assess whether
+        your data is ready, and rebuild dashboards — as workflows you can see, run and inspect.
+        Every figure links to the query that produced it.
       </p>
       <div class="hero-badges">
         <span class="badge">Databricks SQL</span>
@@ -74,11 +74,12 @@
     <figure class="hero-shot">
       <div class="shot-frame">
         <img src="shots/app.png" width="2360" height="1475"
-             alt="The Halo BI Assistant window: a question about which teams got the most out of their chances, the assistant's answer with a ranked table, and the chart it built from that answer in the right-hand panel.">
+             alt="The Halo Workbench window: the Answer a Business Question workflow drawn as a graph of steps, each done, and beside it the run's answer — France finished their chances best — with a table in which every figure carries a link to the query behind it.">
       </div>
       <figcaption>
-        One window: the conversation on the left, the visual it produced on the right.
-        Shown against the World Cup demo database that ships with the app.
+        One window: the workflow that ran on the left, its answer on the right — each figure
+        tagged with the query it came from. Shown against the World Cup demo database that
+        ships with the app.
       </figcaption>
     </figure>
   </section>
@@ -87,22 +88,21 @@
   <section id="overview" class="section">
     <div class="wrap value">
       <h2 class="value-lead">
-        The question takes ten seconds to ask.
-        <span class="grad-text">Getting the answer takes three days.</span>
+        A number you can't check is a guess.
+        <span class="grad-text">Halo Workbench shows its work.</span>
       </h2>
       <p class="value-body">
-        Your dashboard answers the questions someone anticipated last quarter — not the one
-        you have in the meeting you are sitting in. So the question joins a queue, and what
-        comes back two days later is a number in a message thread with no way to check it.
-        By then the decision has already been made without it.
+        The question that matters in the meeting is rarely the one the dashboard anticipated.
+        So it joins an analyst's queue, and what comes back days later is a number in a message
+        thread with no way to check it. A chat assistant is faster, but it answers from memory
+        and guesses at your schema — the figures look right and cannot be verified.
       </p>
       <p class="value-body">
-        Halo BI Assistant closes that loop to minutes without giving up the part that made
-        the analyst's answer worth having. You ask in plain language; it maps the question
-        onto the real entities and columns in your data, runs read-only SQL until it has the
-        answer, and replies with the numbers, the comparison and a short takeaway — citing
-        the tables it used. When the data doesn't cover what you asked, it says so instead
-        of filling the gap.
+        Halo Workbench does the analyst's work as a workflow of specialised agents. One plans
+        the analysis, one writes and runs read-only SQL against your data, one checks the result,
+        one writes the answer. You can watch each step run, and every number in the answer opens
+        the query behind it, explained in business words. When the data doesn't cover the
+        question, the answer says so.
       </p>
     </div>
   </section>
@@ -110,16 +110,16 @@
   <section class="section section-tight">
     <div class="wrap stats">
       <div class="stat">
-        <div class="stat-value grad-text">Grounded</div>
-        <p class="stat-label">Every factual claim comes from SQL executed in the conversation — never from what the model already believes.</p>
+        <div class="stat-value grad-text">Inspectable</div>
+        <p class="stat-label">Every figure links to the query that produced it, with the rows at each step and how much of the data it covered.</p>
       </div>
       <div class="stat">
-        <div class="stat-value grad-text">Tailorable</div>
-        <p class="stat-label">Visuals are conversation participants. Ask for a change; the chart updates, versioned, revertible.</p>
+        <div class="stat-value grad-text">Composable</div>
+        <p class="stat-label">Workflows are steps; steps call agents; agents use skills and tools. Build your own agents from the same parts.</p>
       </div>
       <div class="stat">
         <div class="stat-value grad-text">Local</div>
-        <p class="stat-label">One installer. The app, its API and its database all run on your machine — no service to stand up.</p>
+        <p class="stat-label">One installer. The app, its API and its storage run on your machine — read-only on your data, no service to stand up.</p>
       </div>
     </div>
   </section>
@@ -131,9 +131,9 @@
         <p class="eyebrow">How it works</p>
         <h2 class="section-title">From a question to an answer you can defend.</h2>
         <p class="section-intro">
-          Five steps from a sentence to something you can put in front of your board. Each one
-          is visible in the app, so a reviewer can follow the reasoning from the words you typed
-          down to the rows that produced the number.
+          Pick a workflow, give it an input, and watch it run. Nothing happens off-screen: each
+          step, each agent and each query is there to open, so a reviewer can follow the work from
+          the words you typed down to the rows that produced the number.
         </p>
       </div>
 
@@ -142,126 +142,93 @@
         <article class="walk-step">
           <div class="walk-head">
             <span class="walk-num grad-text">Step 01</span>
-            <h3 class="walk-title">Point it at your data — and only the part that matters.</h3>
+            <h3 class="walk-title">Pick a workflow and the data it may read.</h3>
             <p class="walk-body">
-              Connect a Databricks SQL warehouse or a PostgreSQL database and browse the
-              catalog as it really is: schemas, tables, column types, sample values. Tick the
-              entities that belong in a dataset, and a session works over those — nothing wider.
-            </p>
-            <p class="walk-body">
-              You can define a metric here too. Write <em>finishing quality</em> once as a SQL
-              expression and every answer that needs it reuses that expression instead of
-              re-deriving the number and drifting.
+              A workflow is a job with a defined input: answer a business question, assess a
+              dataset's readiness, turn a dashboard screenshot into a working artifact, or map a
+              saved dashboard onto your columns. Point it at a dataset — the tables you chose
+              from a Databricks SQL warehouse or a PostgreSQL database — and it works over those,
+              nothing wider.
             </p>
           </div>
           <figure class="shot">
             <div class="shot-frame">
-              <img src="shots/catalog.png" width="1800" height="1125" loading="lazy"
-                   alt="The dataset editor: a catalog tree of World Cup tables on the left, and the selected table's eleven columns with their SQL types on the right.">
+              <img src="shots/workflows.png" width="1800" height="1125" loading="lazy"
+                   alt="The Workflows catalogue: Answer a Business Question, Assess Data Readiness, Dashboard Image to Artifact and Map a Dashboard to Data, each with its step count, the agents it uses and a Run button.">
             </div>
-            <figcaption>The catalog as the assistant sees it — every column, every type, nothing inferred.</figcaption>
+            <figcaption>Four workflows ship with the app; each card names the agents it uses.</figcaption>
           </figure>
         </article>
 
         <article class="walk-step">
           <div class="walk-head">
             <span class="walk-num grad-text">Step 02</span>
-            <h3 class="walk-title">Ask in business language. It asks back when the question is ambiguous.</h3>
+            <h3 class="walk-title">Watch the steps run — and see what the answer rests on.</h3>
             <p class="walk-body">
-              "Which teams got the most out of their chances?" has three defensible answers in
-              this data, and they do not rank the same. So the assistant does what a good analyst
-              does: it puts the options in front of you — each one described in terms of the
-              columns it would actually use — and waits.
+              The workflow is drawn as a graph and lights up as it runs: receive the question,
+              load the catalog, plan, analyse, validate, write. When it asks you something, it
+              waits for your answer and carries on.
             </p>
             <p class="walk-body">
-              This is the difference between a tool that produces a number and a tool you can
-              quote. It will not pick a definition of "best" on your behalf.
+              The answer ends with a plain coverage line — which tables were read, and whether
+              each query saw the whole table, a ranked top, a sample or a partial result. A
+              number built on a sample cannot pass as a whole-table figure.
             </p>
           </div>
           <figure class="shot">
             <div class="shot-frame">
-              <img src="shots/clarify.png" width="1800" height="1125" loading="lazy"
-                   alt="The assistant asking how finishing quality should be measured, offering three options drawn from the data, and then the answer once one is chosen.">
+              <img src="shots/evidence.png" width="1800" height="1125" loading="lazy"
+                   alt="The end of a run's answer: a coverage line saying the whole tournaments, matches, match_team_statistics and teams tables were read, the three queries Q1 to Q3 each marked Whole table, the data entities used, and the visuals generated from the answer.">
             </div>
-            <figcaption>One short question, three concrete options, each tied to real columns.</figcaption>
+            <figcaption>Three queries, each labelled with how much of the data it covered.</figcaption>
           </figure>
         </article>
 
         <article class="walk-step">
           <div class="walk-head">
             <span class="walk-num grad-text">Step 03</span>
-            <h3 class="walk-title">It writes the SQL, runs it, and shows you both.</h3>
+            <h3 class="walk-title">Click any figure. Read the query behind it in business words.</h3>
             <p class="walk-body">
-              Read-only queries, chained as far as the analysis needs. The first one here checks
-              what the dataset actually covers before anything gets ranked; the second computes
-              the answer. Each carries the reason it was run, the statement itself, the row count
-              and the rows.
+              Every number in an answer carries a tag naming its query. Open it and the query is
+              explained step by step — start from every match, add each team's expected goals,
+              group by team, sort — with the row count at each stage. The SQL and the full result
+              are one tab away, and the whole result downloads as CSV.
             </p>
             <p class="walk-body">
-              Nothing in the answer comes from what the model already believed. If you want to
-              check a number, the query that produced it is two clicks away — and it is the query
-              that ran, not a reconstruction.
+              It is the query that ran, not a reconstruction. Re-run it against today's data
+              with one click.
             </p>
           </div>
           <figure class="shot">
             <div class="shot-frame">
-              <img src="shots/sql.png" width="1800" height="1125" loading="lazy"
-                   alt="The expanded data provenance panel showing two executed SQL statements, their stated rationale and their row counts.">
+              <img src="shots/inspector.png" width="1800" height="1125" loading="lazy"
+                   alt="The query inspector open over a run: query 2 of 3, marked Whole table, explained in nine numbered steps with row counts, tabs for the result and the SQL, and buttons to download all rows as CSV, re-run and copy the SQL.">
             </div>
-            <figcaption>Every answer opens up into the SQL behind it, with the reasoning that led to each query.</figcaption>
+            <figcaption>The query inspector: nine plain steps from the raw tables to the twelve rows in the answer.</figcaption>
           </figure>
         </article>
 
         <article class="walk-step">
           <div class="walk-head">
             <span class="walk-num grad-text">Step 04</span>
-            <h3 class="walk-title">The chart is part of the conversation, not the end of it.</h3>
+            <h3 class="walk-title">Know whether the data deserves your trust before you ask.</h3>
             <p class="walk-body">
-              Ask for a visual and it is built from that answer's own rows. Then keep talking:
-              <em>drop the one- and two-match teams, they're noise.</em> The chart changes, and the
-              old one is still there — every version kept, every version labelled with the
-              instruction that produced it, any of them one click from being restored.
+              Assess Data Readiness profiles a dataset and scores it on the DMBOK data-quality
+              dimensions — completeness, timeliness, consistency, uniqueness and more — then
+              names the weakest dimensions and the most severe findings, table by table and
+              column by column.
             </p>
             <p class="walk-body">
-              Export it and you get a self-contained page: the question, the chart, the written
-              analysis, the SQL and the data. The kind of thing you can send to someone who was
-              not in the room.
-            </p>
-          </div>
-          <figure class="shot">
-            <div class="shot-frame">
-              <img src="shots/versions.png" width="1800" height="1125" loading="lazy"
-                   alt="The visual panel's version history open, listing version 2 as current and version 1 with the instruction that created it.">
-            </div>
-            <figcaption>Tailoring is versioned: every instruction is a version you can go back to.</figcaption>
-          </figure>
-        </article>
-
-      </div>
-
-        <article class="walk-step is-split">
-          <div class="walk-head">
-            <span class="walk-num grad-text">Step 05</span>
-            <h3 class="walk-title">You leave with the whole argument, not a screenshot of a chart.</h3>
-            <p class="walk-body">
-              Export the visual and you get one self-contained page. The question as it was
-              asked. The chart. The numbers behind it. The written analysis — including the
-              caveats, because a finding that hides its sample size is not a finding. The
-              plain-language account of how it was worked out. The queries and the rows they
-              returned. And a footer naming the tables, the session and the version.
-            </p>
-            <p class="walk-body">
-              Send it to the person who was not in the room and they can check it without you.
-              That is the difference between an answer that travels and one you have to be
-              present to defend.
+              Run it once on a new source and you know which answers to lean on and which
+              tables to fix first.
             </p>
           </div>
           <figure class="shot">
             <div class="shot-frame">
-              <img src="shots/export.png" width="1400" height="2473" loading="lazy"
-                   alt="An exported analysis page: title, the original question, the source tables, four headline figures, the bar chart, the detail table, a takeaway, the full written analysis with its caveats, the reasoning steps, a collapsible data section and a source footer.">
+              <img src="shots/readiness.png" width="1800" height="1125" loading="lazy"
+                   alt="A data readiness run: the six-step workflow graph, and the report — World Cup PostgreSQL scored 93 overall, the Managed band, with timeliness and completeness as the weakest dimensions and a table of the most severe findings.">
             </div>
-            <figcaption>The exported page, in full — one file, no dependencies, nothing that needs the app to open it.</figcaption>
+            <figcaption>A readiness score, the weakest dimensions, and the findings behind them.</figcaption>
           </figure>
         </article>
 
@@ -274,10 +241,11 @@
     <div class="wrap">
       <div class="section-head">
         <p class="eyebrow">What's inside</p>
-        <h2 class="section-title">The parts that make the answers trustworthy.</h2>
+        <h2 class="section-title">Agents are the building blocks.</h2>
         <p class="section-intro">
-          Most of the app is not the chat box. It's the machinery that keeps an answer honest
-          when the schema is messy and the business vocabulary is not in the column names.
+          Most of the app is not a prompt. It's a library of agents with one job each, and the
+          machinery that keeps their answers honest when the schema is messy and the business
+          vocabulary is not in the column names.
         </p>
       </div>
 
@@ -285,51 +253,25 @@
 
         <article class="walk-step">
           <div class="walk-head">
-            <span class="walk-num grad-text">Your rules</span>
-            <h3 class="walk-title">Teach it your vocabulary once. It applies it every time.</h3>
+            <span class="walk-num grad-text">The library</span>
+            <h3 class="walk-title">Not one prompt. A team, each with one job.</h3>
             <p class="walk-body">
-              Your business words are not in your column names. Write down what
-              <em>finishing quality</em> means, which filter should apply unless someone says
-              otherwise, and the standing instruction that a ranking must always state its
-              sample size — and the assistant follows them, ahead of whatever it would have
-              guessed from a column name.
+              Olivia plans the analysis. Michael writes and runs the SQL. Sarah assesses data
+              quality. Jessica writes the answer. Hannah explains each query in business words.
+              David repairs a statement the engine rejected; Rachel re-derives the SQL to
+              corroborate a careful answer.
             </p>
             <p class="walk-body">
-              When a rule shapes an answer, the answer says which one. Turn a snippet off and
-              the next answer changes accordingly.
-            </p>
-          </div>
-          <figure class="shot">
-            <div class="shot-frame">
-              <img src="shots/knowledge.png" width="1800" height="1125" loading="lazy"
-                   alt="The Knowledge screen listing curated instructions, glossary terms and default filters, each individually enabled.">
-            </div>
-            <figcaption>Glossary terms, standing instructions and default filters — authored once, enforced per answer.</figcaption>
-          </figure>
-        </article>
-
-        <article class="walk-step">
-          <div class="walk-head">
-            <span class="walk-num grad-text">Under the hood</span>
-            <h3 class="walk-title">Not one prompt. A crew, each with one job.</h3>
-            <p class="walk-body">
-              The assistant plans and runs the analysis. A separate verifier re-derives the SQL
-              independently to corroborate the answer. A fixer repairs a statement the engine
-              rejected. A designer turns a finished answer into a visual and tailors it. A judge
-              grades eval runs so a prompt change that quietly breaks an answer shows up as a
-              regression rather than a surprise.
-            </p>
-            <p class="walk-body">
-              You never have to think about any of this. It is here because it is why the answers
-              hold up.
+              Each agent shows its instructions, skills and tools, and which workflows use it.
+              Build your own from the same parts and try it on your data before you save it.
             </p>
           </div>
           <figure class="shot">
             <div class="shot-frame">
               <img src="shots/agents.png" width="1800" height="1125" loading="lazy"
-                   alt="The Agents screen listing the six registered agents — assistant, SQL verifier, SQL fixer, visual designer, knowledge bootstrap and eval judge — with a one-line description each.">
+                   alt="The Agents library grouped by area — Data Foundations, Analysis, SQL Engineering — with cards for Sarah, Daniel, Kevin, Emily, Michael, Olivia, David, Hannah and Rachel, each with a role and a one-line description.">
             </div>
-            <figcaption>Six specialised agents, each doing one thing the others are not trusted to do.</figcaption>
+            <figcaption>The agent library, grouped by what each agent is trusted to do.</figcaption>
           </figure>
         </article>
 
@@ -337,45 +279,45 @@
 
       <div class="focus-grid">
         <article class="focus-card">
-          <h3 class="focus-title">Deep analysis</h3>
+          <h3 class="focus-title">Dashboards, rebuilt</h3>
           <p class="focus-body">
-            For the bigger questions: the assistant plans several angles of attack, investigates
-            each one, and synthesises the findings into a written report saved to the session.
+            Drop in a dashboard screenshot and get an interactive artifact back. Then map its
+            widgets and filters onto the columns of your own datasets — and see what is missing.
+          </p>
+        </article>
+        <article class="focus-card">
+          <h3 class="focus-title">Your vocabulary, once</h3>
+          <p class="focus-body">
+            Glossary terms, standing instructions, default filters and governed metrics are
+            written once and followed by every answer, ahead of what a model would guess.
           </p>
         </article>
         <article class="focus-card">
           <h3 class="focus-title">Verified queries</h3>
           <p class="focus-body">
-            Promote SQL you trust into a reusable, known-good answer, so the next person asking
-            the same question gets the same numbers.
+            A thumbs-up keeps the question and its SQL as a known-good answer that guides the
+            next similar question, so accuracy compounds without a curation project.
           </p>
         </article>
         <article class="focus-card">
-          <h3 class="focus-title">Evaluations</h3>
+          <h3 class="focus-title">Visuals from answers</h3>
           <p class="focus-body">
-            Run a question set against the agent, grade the results, and compare runs over time —
-            so a prompt change that quietly breaks an answer shows up as a regression.
+            Turn an answer into an interactive chart built from its own rows, tailor it in plain
+            English, keep every version, and export it with the SQL and data behind it.
           </p>
         </article>
         <article class="focus-card">
-          <h3 class="focus-title">Sessions with memory</h3>
+          <h3 class="focus-title">Measured, not assumed</h3>
           <p class="focus-body">
-            Each session keeps its own transcript, memory thread and workspace, so follow-up
-            questions build on the analysis instead of restarting it.
+            Every run is kept with its steps, inputs and output, and eval sets grade answers
+            against known-correct ones — so a change that breaks an answer shows up as a regression.
           </p>
         </article>
         <article class="focus-card">
           <h3 class="focus-title">Bring your own model</h3>
           <p class="focus-body">
-            Point it at OpenAI or at LenAI, Halo's internal OpenAI-compatible gateway. The key is
-            stored encrypted on your machine and tested from the settings screen.
-          </p>
-        </article>
-        <article class="focus-card">
-          <h3 class="focus-title">Single-app delivery</h3>
-          <p class="focus-body">
-            The installer ships the interface and its API together. Launch the app and everything
-            it needs starts with it — no runtime to install, no server to operate.
+            OpenAI, Anthropic, LenAI, GitHub Copilot, or any endpoint that speaks the OpenAI or
+            Anthropic API. Keys are stored encrypted on your machine.
           </p>
         </article>
       </div>
@@ -388,9 +330,10 @@
     <div class="wrap download-inner">
       <div class="section-head">
         <p class="eyebrow">Get the app</p>
-        <h2 class="section-title">Download Halo BI Assistant.</h2>
+        <h2 class="section-title">Download Halo Workbench.</h2>
         <p class="section-intro">
-          One installer for Windows x64. Download it, run it, and the app sets itself up.
+          One Windows x64 installer per edition. Download it, run it, and the app sets itself up.
+          Both editions are the same workbench; they differ in name and look, and install side by side.
         </p>
         <p class="dl-version" id="dl-version" hidden></p>
       </div>
@@ -398,14 +341,23 @@
       <!--
         The buttons below point at this site's own /download/<target> route, not
         at a versioned GitHub URL. That route resolves the newest published
-        installer and redirects to it, so a new release needs no edit here.
-        /api/latest fills in the version and file sizes on load.
+        installer of that edition and redirects to it, so a new release needs no
+        edit here. /api/latest fills in the version and file sizes on load.
       -->
-      <div class="dl-grid dl-grid-single">
+      <div class="dl-grid dl-grid-pair">
         <div class="dl-card" data-target="win-x64">
-          <div class="dl-os">Windows</div>
-          <p class="dl-meta">.exe installer — x64</p>
+          <img class="dl-icon" src="app-icon.png" alt="" width="48" height="48">
+          <div class="dl-os">Halo Workbench</div>
+          <p class="dl-desc">The Halo edition: the Halo Powered look, light and dark.</p>
+          <p class="dl-meta">Windows · .exe installer — x64</p>
           <a class="btn btn-grad" href="/download/win-x64">Download</a>
+        </div>
+        <div class="dl-card" data-target="agentic-hub-win-x64">
+          <img class="dl-icon" src="agentic-hub-icon.png" alt="" width="48" height="48">
+          <div class="dl-os">Agentic Hub</div>
+          <p class="dl-desc">The Agentic Hub edition: the same workbench in the Agentic Hub look.</p>
+          <p class="dl-meta">Windows · .exe installer — x64</p>
+          <a class="btn btn-grad" href="/download/agentic-hub-win-x64">Download</a>
         </div>
       </div>
 
@@ -423,23 +375,23 @@
         <p class="eyebrow">Where your data goes</p>
         <h2 class="section-title">It runs where you run it.</h2>
         <p class="section-intro">
-          The assistant is a desktop app, not a hosted service. Your warehouse credentials, your
-          sessions and your answers stay on the machine that installed it.
+          Halo Workbench is a desktop app, not a hosted service. Your warehouse credentials, your
+          runs and your answers stay on the machine that installed it.
         </p>
       </div>
 
       <div class="spec">
         <div class="spec-row">
           <div class="spec-key">Data sources</div>
-          <p class="spec-val">Databricks SQL warehouses and PostgreSQL databases, queried read-only.</p>
+          <p class="spec-val">Databricks SQL warehouses, PostgreSQL databases and REST APIs, queried read-only. A statement that would write is rejected before it reaches the database.</p>
         </div>
         <div class="spec-row">
           <div class="spec-key">Storage</div>
-          <p class="spec-val">Sessions, datasets, knowledge and settings live in a local database in the app's own user-data directory.</p>
+          <p class="spec-val">Datasets, runs, agents, knowledge and settings live in a local database in the app's own data directory.</p>
         </div>
         <div class="spec-row">
           <div class="spec-key">Leaves the machine</div>
-          <p class="spec-val">Queries go to the warehouse you connected; prompts go to the model provider you configured. Nothing else.</p>
+          <p class="spec-val">Queries go to the sources you connected; prompts go to the model provider you configured. No telemetry, nothing else.</p>
         </div>
         <div class="spec-row">
           <div class="spec-key">Credentials</div>
@@ -447,7 +399,7 @@
         </div>
         <div class="spec-row">
           <div class="spec-key">Platforms</div>
-          <p class="spec-val">Windows x64.</p>
+          <p class="spec-val">Windows x64, in two editions: Halo Workbench and Agentic Hub.</p>
         </div>
         <div class="spec-row">
           <div class="spec-key">Status</div>
@@ -466,7 +418,7 @@
         That's the one we want. Bring it to the bench and we'll come back with a working answer —
         and the evidence behind it.
       </p>
-      <a class="btn btn-grad btn-lg" href="mailto:info@halopowered.com?subject=Halo%20BI%20Assistant">Talk to the Labs</a>
+      <a class="btn btn-grad btn-lg" href="mailto:info@halopowered.com?subject=Halo%20Workbench">Talk to the Labs</a>
     </div>
   </section>
 
@@ -511,13 +463,12 @@
         day: 'numeric',
       });
 
-    const markUnavailable = (why) => {
-      for (const card of cards) {
-        card.querySelector('.dl-meta').textContent = why;
-        const btn = card.querySelector('.btn');
-        btn.textContent = 'Unavailable';
-        btn.setAttribute('aria-disabled', 'true');
-      }
+    const disable = (card, why) => {
+      card.querySelector('.dl-meta').textContent = why;
+      const btn = card.querySelector('.btn');
+      btn.textContent = 'Unavailable';
+      btn.setAttribute('aria-disabled', 'true');
+      btn.removeAttribute('href');
     };
 
     let data;
@@ -528,11 +479,11 @@
       // links cannot work either — say so rather than leave live-looking
       // buttons that hand back an error page.
       if (!res.ok || data?.error) {
-        markUnavailable(
+        const why =
           data?.error === 'not-configured'
             ? 'Downloads not configured yet'
-            : 'Temporarily unavailable',
-        );
+            : 'Temporarily unavailable';
+        for (const card of cards) disable(card, why);
         return;
       }
     } catch {
@@ -549,22 +500,17 @@
 
     for (const card of cards) {
       const asset = data.targets?.[card.dataset.target];
-      const meta = card.querySelector('.dl-meta');
-      const btn = card.querySelector('.btn');
-
       if (!asset) {
-        meta.textContent = 'Not published yet';
-        btn.textContent = 'Unavailable';
-        btn.setAttribute('aria-disabled', 'true');
+        disable(card, 'Not published yet');
         continue;
       }
-
       const ext = asset.name.endsWith('.exe') ? '.exe' : '.dmg';
-      // Name the version per card when a platform lags the headline release.
+      // Name the version per card when an edition lags the headline release.
       const lagging =
         data.latest && asset.tag !== data.latest.tag ? ' · ' + asset.tag : '';
-      meta.textContent = ext + ' · ' + mb(asset.size) + lagging;
-      btn.textContent = 'Download ' + asset.version;
+      card.querySelector('.dl-meta').textContent =
+        'Windows · ' + ext + ' · ' + mb(asset.size) + lagging;
+      card.querySelector('.btn').textContent = 'Download ' + asset.version;
     }
   })();
 </script>
