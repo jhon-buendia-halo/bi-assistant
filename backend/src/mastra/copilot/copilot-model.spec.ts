@@ -7,6 +7,7 @@ import type { CopilotClient } from '@github/copilot-sdk';
 import {
   COPILOT_NOT_SIGNED_IN,
   COPILOT_PENDING_TOOL_TIMEOUT_MS,
+  copilotModelCannotReadImagesMessage,
   copilotRequestFailedMessage,
   copilotToolAsTextNudge,
   type CopilotRuntimeApi,
@@ -22,6 +23,7 @@ type Handler = (event: {
 interface SendOptions {
   prompt: string;
   responseSchema?: Record<string, unknown>;
+  attachments?: Array<Record<string, unknown>>;
 }
 
 class FakeSession {
@@ -89,6 +91,14 @@ function setup(
 ) {
   const sessions: FakeSession[] = [];
   const client = {
+    listModels: jest.fn(
+      (): Promise<
+        Array<{
+          id: string;
+          capabilities?: { supports?: { vision?: boolean } };
+        }>
+      > => Promise.resolve([]),
+    ),
     createSession: jest.fn((config: Record<string, unknown>) => {
       const s = new FakeSession(config);
       script(s);
@@ -638,6 +648,73 @@ describe('createCopilotModel', () => {
       );
       expect(sessions[0].sent).toHaveLength(1);
       expect(result.content).toEqual([{ type: 'text', text: argsText }]);
+    });
+  });
+
+  describe('images in the prompt (R67)', () => {
+    const PNG = 'iVBORw0KGgo=';
+    const withImage = (
+      data: string | Uint8Array,
+    ): LanguageModelV3Prompt[number] => ({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Read this dashboard.' },
+        { type: 'file', data, mediaType: 'image/png' },
+      ],
+    });
+
+    it('sends an image of the prompt as a blob attachment beside the text', async () => {
+      const { runtime, sessions } = setup();
+      await createCopilotModel({ model: 'auto', runtime }).doGenerate(
+        call([withImage(PNG)]),
+      );
+      expect(sessions[0].sent[0]).toEqual({
+        prompt: 'Read this dashboard.',
+        attachments: [
+          {
+            type: 'blob',
+            data: PNG,
+            mimeType: 'image/png',
+            displayName: 'image-1.png',
+          },
+        ],
+      });
+    });
+
+    it('sends bytes as base64, and nothing extra for a prompt without images', async () => {
+      const { runtime, sessions } = setup();
+      const model = createCopilotModel({ model: 'auto', runtime });
+      await model.doGenerate(call([withImage(Buffer.from(PNG, 'base64'))]));
+      expect(sessions[0].sent[0].attachments?.[0]?.data).toBe(PNG);
+      await model.doGenerate(call([user('hi')]));
+      expect(sessions[1].sent[0]).toEqual({ prompt: 'hi' });
+    });
+
+    it('refuses an image for a chosen model that cannot read images, before any session', async () => {
+      const { runtime, client } = setup();
+      client.listModels.mockResolvedValueOnce([
+        { id: 'gpt-text', capabilities: { supports: { vision: false } } },
+      ]);
+      await expect(
+        createCopilotModel({ model: 'gpt-text', runtime }).doGenerate(
+          call([withImage(PNG)]),
+        ),
+      ).rejects.toThrow(copilotModelCannotReadImagesMessage('gpt-text'));
+      expect(client.createSession).not.toHaveBeenCalled();
+    });
+
+    it('sends the image when the model reads images or its capabilities are unknown', async () => {
+      const { runtime, client, sessions } = setup();
+      client.listModels.mockResolvedValueOnce([
+        { id: 'claude-opus-5.5', capabilities: { supports: { vision: true } } },
+      ]);
+      const model = createCopilotModel({ model: 'claude-opus-5.5', runtime });
+      await model.doGenerate(call([withImage(PNG)]));
+      client.listModels.mockRejectedValueOnce(new Error('offline'));
+      await model.doGenerate(call([withImage(PNG)]));
+      expect(sessions.map((s) => s.sent[0].attachments?.length)).toEqual([
+        1, 1,
+      ]);
     });
   });
 
