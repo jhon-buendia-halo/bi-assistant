@@ -29,6 +29,8 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
       engineId: 'answer-business-question',
       bar: 'steps',
       stepIds: [
+        // Optional: taken only when the run has reference images (R35).
+        'read-images',
         'receive-question',
         'load-catalog',
         'plan',

@@ -411,3 +411,60 @@ describe('runInput and runAgainValues with an artifact field', () => {
     ).toEqual({ artifact: 'a-1' });
   });
 });
+
+describe('reference images (an images field)', () => {
+  const fields: WorkflowInputField[] = [
+    { name: 'question', label: 'Question', type: 'textarea', required: true },
+    {
+      name: 'images',
+      label: 'Reference images',
+      type: 'images',
+      required: false,
+      max: 4,
+    },
+  ];
+
+  it('sends the images as a list, and nothing when there are none', () => {
+    expect(
+      runInput(fields, {
+        question: 'Why?',
+        images: ['data:image/png;base64,AAAA'],
+      }),
+    ).toEqual({ question: 'Why?', images: ['data:image/png;base64,AAAA'] });
+    expect(runInput(fields, { question: 'Why?', images: [] })).toEqual({
+      question: 'Why?',
+    });
+  });
+
+  it('Run again leaves the images out: a stored run holds paths, not images', () => {
+    expect(
+      runAgainValues(fields, {
+        question: 'Why?',
+        images: ['inputs/images/1.png'],
+      }),
+    ).toEqual({ question: 'Why?' });
+  });
+
+  it('a follow-up carries the kept paths and the new images, or drops them', () => {
+    const run = {
+      id: 'r-1',
+      input: { question: 'Why?', images: ['inputs/images/1.png'] },
+    };
+    expect(followUpRequest(run, 'question', ' And now? ')).toEqual({
+      input: { question: 'And now?', images: ['inputs/images/1.png'] },
+      context: { fromRunId: 'r-1' },
+    });
+    expect(
+      followUpRequest(run, 'question', 'And now?', [
+        'inputs/images/1.png',
+        'data:image/png;base64,AAAA',
+      ]).input,
+    ).toEqual({
+      question: 'And now?',
+      images: ['inputs/images/1.png', 'data:image/png;base64,AAAA'],
+    });
+    expect(followUpRequest(run, 'question', 'And now?', []).input).toEqual({
+      question: 'And now?',
+    });
+  });
+});

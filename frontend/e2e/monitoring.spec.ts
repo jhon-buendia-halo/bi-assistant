@@ -151,13 +151,24 @@ test.describe('Feature: LLM calls', () => {
           await expect(
             rows(page).filter({ hasText: `${AGENT}: ` }),
           ).toHaveCount(0);
-          const count = await rows(page).count();
-          expect(count).toBeGreaterThan(0);
-          for (let i = 0; i < count; i += 1) {
-            const cells = rows(page).nth(i).locator('td');
-            await expect(cells.nth(1)).toHaveText(AGENT);
-            await expect(cells.nth(7)).toHaveText('Succeeded');
-          }
+          // Retry until the table settles: the status filter refetches, and a
+          // row of the previous list can still be present for a moment.
+          await expect
+            .poll(async () => {
+              const count = await rows(page).count();
+              if (count === 0) return false;
+              const agents = await rows(page)
+                .locator('td:nth-child(2)')
+                .allInnerTexts();
+              const statuses = await rows(page)
+                .locator('td:nth-child(8)')
+                .allInnerTexts();
+              return (
+                agents.every((text) => text.trim() === AGENT) &&
+                statuses.every((text) => text.trim() === 'Succeeded')
+              );
+            })
+            .toBe(true);
         },
       );
       await scenarioStep(page, 'When I open the call', async () => {

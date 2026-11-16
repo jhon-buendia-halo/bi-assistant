@@ -34,6 +34,12 @@ jest.mock('../tool-services', () => ({
 import { RequestContext } from '@mastra/core/request-context';
 import { mapDashboardDataWorkflow } from './map-dashboard-data.workflow';
 import {
+  READ_IMAGES_OUTCOME_ID,
+  READ_IMAGES_RUNTIME_KEY,
+  READ_IMAGES_STEP_ID,
+  type ReadImagesRuntime,
+} from './read-images.steps';
+import {
   MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
   MAP_DASHBOARD_DATA_EDGES,
   MAP_DASHBOARD_DATA_RUNTIME_KEY,
@@ -122,11 +128,21 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
   };
 }
 
-async function run(given: MockedRuntime | undefined, question = '') {
+async function run(
+  given: MockedRuntime | undefined,
+  question = '',
+  images?: { paths: string[]; reader: ReadImagesRuntime },
+) {
   const requestContext = new RequestContext();
   if (given) requestContext.set(MAP_DASHBOARD_DATA_RUNTIME_KEY, given);
+  if (images) requestContext.set(READ_IMAGES_RUNTIME_KEY, images.reader);
   const output = (await workflow.createRun()).stream({
-    inputData: { question, artifact: 'a-1', datasets: ['Shop'] },
+    inputData: {
+      question,
+      artifact: 'a-1',
+      datasets: ['Shop'],
+      ...(images ? { images: images.paths } : {}),
+    },
     requestContext,
   });
   const events: string[] = [];
@@ -141,8 +157,11 @@ async function run(given: MockedRuntime | undefined, question = '') {
 describe('mapDashboardDataWorkflow', () => {
   it('is built from the step catalogue and never snapshots', () => {
     expect(workflow.id).toBe(MAP_DASHBOARD_DATA_WORKFLOW_ID);
+    // Read images is the branch's step, not a `.then()` one.
     expect(workflow.steps.map((step) => [step.id, step.description])).toEqual(
-      MAP_DASHBOARD_DATA_STEPS.map((step) => [step.id, step.title]),
+      MAP_DASHBOARD_DATA_STEPS.filter(
+        (step) => step.id !== READ_IMAGES_STEP_ID,
+      ).map((step) => [step.id, step.title]),
     );
     expect(workflow.options?.shouldPersistSnapshot?.()).toBe(false);
   });
@@ -150,24 +169,33 @@ describe('mapDashboardDataWorkflow', () => {
   it('connects every step from Start to End, with one agent step', () => {
     const ids = MAP_DASHBOARD_DATA_STEPS.map((step) => step.id);
     expect(ids).toEqual([
+      'read-images',
       'load-dashboard',
       'load-dashboard-catalog',
       'map-data',
       'render-dashboard',
     ]);
-    expect(MAP_DASHBOARD_DATA_EDGES.map((edge) => edge.from)).toEqual([
-      'start',
-      ...ids,
-    ]);
-    expect(MAP_DASHBOARD_DATA_EDGES.map((edge) => edge.to)).toEqual([
-      ...ids,
-      'end',
+    // Read images is optional: Start goes to Load dashboard (no images) or
+    // branches to it, which goes on to Load dashboard (agents.md 5.18).
+    expect(
+      MAP_DASHBOARD_DATA_EDGES.map((edge) => [edge.from, edge.to, edge.kind]),
+    ).toEqual([
+      ['start', 'load-dashboard', 'next'],
+      ['start', 'read-images', 'branch'],
+      ['read-images', 'load-dashboard', 'next'],
+      ['load-dashboard', 'load-dashboard-catalog', 'next'],
+      ['load-dashboard-catalog', 'map-data', 'next'],
+      ['map-data', 'render-dashboard', 'next'],
+      ['render-dashboard', 'end', 'next'],
     ]);
     expect(
       MAP_DASHBOARD_DATA_STEPS.filter((step) => step.kind === 'agent').map(
         (step) => [step.id, step.modelOnly],
       ),
-    ).toEqual([['map-data', true]]);
+    ).toEqual([
+      ['read-images', true],
+      ['map-data', true],
+    ]);
   });
 
   it('loads the saved dashboard, maps it to the catalog, draws it and explains the mapping', async () => {
@@ -179,7 +207,20 @@ describe('mapDashboardDataWorkflow', () => {
       'mapData:shop.orders:4',
       'saveMappedDashboard:Sales Performance 2025',
     ]);
-    expect(events.filter((event) => event.endsWith(':success'))).toEqual([
+    // No images: Read images is skipped and the notes are ''.
+    expect(events.filter((event) => event.startsWith('read-images:'))).toEqual(
+      [],
+    );
+    expect(given.mapData).toHaveBeenCalledWith(
+      expect.objectContaining({ imageNotes: '' }),
+    );
+    expect(
+      events.filter(
+        (event) =>
+          event.endsWith(':success') &&
+          !event.startsWith(`${READ_IMAGES_OUTCOME_ID}:`),
+      ),
+    ).toEqual([
       'load-dashboard:success',
       'load-dashboard-catalog:success',
       'map-data:success',
@@ -224,6 +265,34 @@ describe('mapDashboardDataWorkflow', () => {
     expect(mapDashboardQuestion('  ')).toBe(
       MAP_DASHBOARD_DATA_DEFAULT_QUESTION,
     );
+  });
+
+  it("reads the reference images first and hands Zoe's notes to Map data", async () => {
+    const given = runtime();
+    const readImages = jest.fn(() =>
+      Promise.resolve({
+        imageNotes: '## Reference images\nA bar chart of sales.',
+        imageCount: 1,
+        stopped: false,
+      }),
+    );
+    const { events, result } = await run(given, '', {
+      paths: ['inputs/images/1.png'],
+      reader: { readImages },
+    });
+    expect(readImages).toHaveBeenCalledWith({
+      question: '',
+      images: ['inputs/images/1.png'],
+    });
+    expect(
+      events.filter((event) => event.endsWith(':success')).slice(0, 2),
+    ).toEqual(['read-images:success', `${READ_IMAGES_OUTCOME_ID}:success`]);
+    expect(given.mapData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageNotes: '## Reference images\nA bar chart of sales.',
+      }),
+    );
+    expect(result.status).toBe('success');
   });
 
   it('ends at Map data when the run is stopped there: nothing is stored', async () => {

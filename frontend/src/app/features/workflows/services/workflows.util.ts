@@ -183,6 +183,11 @@ export function runInput(
       input[field.name] = value === true;
     } else if (field.type === 'datasets') {
       if (Array.isArray(value)) input[field.name] = [...value];
+    } else if (field.type === 'images') {
+      // No image attached sends nothing.
+      if (Array.isArray(value) && value.length > 0) {
+        input[field.name] = [...value];
+      }
     } else if (field.type === 'artifact' || field.type === 'image') {
       // Picking one of the pair clears the other: an empty one sends nothing.
       if (typeof value === 'string' && value !== '') input[field.name] = value;
@@ -192,6 +197,9 @@ export function runInput(
   }
   return input;
 }
+
+/** The input field that holds a run's reference images (api.md 116). */
+export const IMAGES_FIELD = 'images';
 
 /** The field a follow-up's question goes into: the first visible text area. */
 export function questionFieldName(fields: WorkflowInputField[]): string | null {
@@ -207,11 +215,16 @@ export function followUpRequest(
   run: Pick<WorkflowRun, 'id' | 'input'>,
   questionField: string,
   question: string,
+  images?: readonly string[],
 ): WorkflowRunRequest {
-  return {
-    input: { ...run.input, [questionField]: question.trim() },
-    context: { fromRunId: run.id },
-  };
+  const input = { ...run.input, [questionField]: question.trim() };
+  // The composer's attachments (the run's kept paths and the new `data:`
+  // URLs) replace the earlier run's; without them the stored ones carry over.
+  if (images !== undefined) {
+    if (images.length > 0) input[IMAGES_FIELD] = [...images];
+    else delete input[IMAGES_FIELD];
+  }
+  return { input, context: { fromRunId: run.id } };
 }
 
 /**
@@ -226,7 +239,7 @@ export function runAgainValues(
   for (const field of fields) {
     if (field.hidden || !Object.hasOwn(input, field.name)) continue;
     // A stored run holds the image's path, not the image: it is picked again.
-    if (field.type === 'image') continue;
+    if (field.type === 'image' || field.type === 'images') continue;
     const value = input[field.name];
     values[field.name] = Array.isArray(value)
       ? [...value]

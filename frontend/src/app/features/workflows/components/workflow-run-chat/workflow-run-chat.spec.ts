@@ -96,6 +96,10 @@ class FakeRunsApi {
     signal?: AbortSignal;
   }[] = [];
   getRun = jasmine.createSpy('getRun');
+
+  inputImageUrl(id: string, path: string): string {
+    return `/workflow-runs/${id}/input-image?path=${encodeURIComponent(path)}`;
+  }
   stopRun = jasmine.createSpy('stopRun').and.returnValue(EMPTY);
   prepareEvidence = jasmine.createSpy('prepareEvidence').and.returnValue(EMPTY);
 
@@ -993,6 +997,223 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(el.querySelector('[data-testid^="workflow-run-step-"]')).toBeNull();
       expect(el.querySelector('[data-testid^="workflow-run-progress"]')).toBeNull();
       expect(q('workflow-run-result')).toBeNull();
+    });
+  });
+
+  describe('reference images: paste, drop and attach (workflows R35; ui.md 4.4b)', () => {
+    const IMAGES_FIELD: WorkflowDetail['input'][number] = {
+      name: 'images',
+      label: 'Reference images',
+      type: 'images',
+      required: false,
+      max: 4,
+      help: 'Paste, drop or attach up to 4 PNG, JPEG or WebP images, 5 MB each.',
+    };
+    const WITH_IMAGES: WorkflowDetail = {
+      ...ASSISTANT,
+      input: [
+        ASSISTANT.input[0],
+        IMAGES_FIELD,
+        ...ASSISTANT.input.filter((f) => f.name !== 'question' && f.type !== 'datasets'),
+      ],
+    };
+    const RECREATE: WorkflowDetail = {
+      ...ASSISTANT,
+      input: [
+        { name: 'image', label: 'Dashboard image', type: 'image', required: true },
+        ASSISTANT.input[0],
+      ],
+    };
+
+    function openWith(workflow: WorkflowDetail, run?: WorkflowRun): void {
+      if (run) designer.showRunOnLoad(run);
+      open(workflow);
+    }
+
+    const file = (name: string, type = 'image/png', bytes = 4) =>
+      new File([new Uint8Array(bytes)], name, { type });
+
+    function transfer(...files: File[]): DataTransfer {
+      const data = new DataTransfer();
+      for (const f of files) data.items.add(f);
+      return data;
+    }
+
+    function paste(data: DataTransfer): ClipboardEvent {
+      const event = new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      });
+      q('workflow-run-composer')!.dispatchEvent(event);
+      return event;
+    }
+
+    function drop(...files: File[]): DragEvent {
+      const event = new DragEvent('drop', {
+        dataTransfer: transfer(...files),
+        bubbles: true,
+        cancelable: true,
+      });
+      q('workflow-run-composer')!.dispatchEvent(event);
+      return event;
+    }
+
+    async function until(done: () => boolean): Promise<void> {
+      for (let i = 0; i < 100 && !done(); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        fixture.detectChanges();
+      }
+      fixture.detectChanges();
+    }
+
+    const thumbs = () => el.querySelectorAll('[data-testid^="workflow-input-images-thumb-"]').length;
+
+    it('shows the paperclip and the help, and no thumbnail before any image', () => {
+      openWith(WITH_IMAGES);
+      expect(q('workflow-input-images-attach')!.getAttribute('aria-label')).toBe('Attach images');
+      expect(q('workflow-input-images')!.textContent).toContain('Reference images');
+      expect(q('workflow-input-images')!.textContent).toContain('up to 4 PNG, JPEG or WebP images');
+      expect(thumbs()).toBe(0);
+    });
+
+    it('pasting an image adds a thumbnail; pasting text is left alone', async () => {
+      openWith(WITH_IMAGES);
+      const plain = new DataTransfer();
+      plain.setData('text/plain', 'hello');
+      expect(paste(plain).defaultPrevented).toBeFalse();
+      expect(thumbs()).toBe(0);
+
+      const event = paste(transfer(file('shot.png')));
+      expect(event.defaultPrevented).toBeTrue();
+      await until(() => thumbs() === 1);
+      const img = q('workflow-input-images-thumb-0') as HTMLImageElement;
+      expect(img.alt).toBe('Reference image 1');
+      expect(img.src).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it('dropping images adds them, and the picker adds more', async () => {
+      openWith(WITH_IMAGES);
+      drop(file('a.png'), file('b.jpg', 'image/jpeg'));
+      await until(() => thumbs() === 2);
+      const input = q('workflow-input-images-file') as HTMLInputElement;
+      input.files = transfer(file('c.webp', 'image/webp')).files;
+      input.dispatchEvent(new Event('change'));
+      await until(() => thumbs() === 3);
+      expect(q('workflow-input-error-images')).toBeNull();
+    });
+
+    it('refuses a fifth image, another type and a file over 5 MB with the backend wording', async () => {
+      openWith(WITH_IMAGES);
+      drop(file('1.png'), file('2.png'), file('3.png'), file('4.png'), file('5.png'));
+      await until(() => thumbs() === 4);
+      expect(text('workflow-input-error-images')).toBe('Reference images must be at most 4 images');
+      expect((q('workflow-input-images-attach') as HTMLButtonElement).disabled).toBeTrue();
+
+      click('workflow-input-images-remove-3');
+      expect(thumbs()).toBe(3);
+      expect(q('workflow-input-error-images')).toBeNull();
+
+      drop(file('a.gif', 'image/gif'));
+      await until(() => q('workflow-input-error-images') !== null);
+      expect(text('workflow-input-error-images')).toBe(
+        'Reference images must be PNG, JPEG or WebP images',
+      );
+      drop(file('big.png', 'image/png', 5 * 1024 * 1024 + 1));
+      await until(() => text('workflow-input-error-images').includes('5 MB'));
+      expect(text('workflow-input-error-images')).toBe('Reference images must be at most 5 MB each');
+      expect(thumbs()).toBe(3);
+    });
+
+    it('Execute sends the images as data URLs, and nothing when there are none', async () => {
+      openWith(WITH_IMAGES);
+      const question = q('workflow-input-question') as HTMLTextAreaElement;
+      question.value = 'Why the dip?';
+      question.dispatchEvent(new Event('input'));
+      click('workflow-run');
+      expect(Object.keys(runs.last.body.input)).not.toContain('images');
+      designer.stop();
+      drop(file('a.png'));
+      await until(() => thumbs() === 1);
+      click('workflow-run');
+      expect((runs.last.body.input['images'] as string[])[0]).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it('a workflow with only an image field takes a paste or a drop there, replacing it', async () => {
+      openWith(RECREATE);
+      expect(q('workflow-input-images')).toBeNull();
+      paste(transfer(file('first.png')));
+      await until(() => q('workflow-input-image-preview') !== null);
+      const first = (q('workflow-input-image-preview') as HTMLImageElement).src;
+      drop(file('second.jpg', 'image/jpeg'));
+      await until(() => (q('workflow-input-image-preview') as HTMLImageElement).src !== first);
+      expect((q('workflow-input-image-preview') as HTMLImageElement).src).toMatch(
+        /^data:image\/jpeg;base64,/,
+      );
+    });
+
+    it('a workflow with no image field leaves a pasted image alone', () => {
+      openWith({ ...ASSISTANT, input: [ASSISTANT.input[0]] });
+      expect(paste(transfer(file('shot.png'))).defaultPrevented).toBeFalse();
+    });
+
+    describe('Follow up and the question bubble', () => {
+      const STORED = assistantRun({
+        input: {
+          question: 'Which team scored the most goals?',
+          datasets: [],
+          images: ['inputs/images/1.png', 'inputs/images/2.jpg'],
+        },
+        answer: { role: 'assistant', content: 'Brazil scored the most goals.', at: 'x' },
+      });
+
+      it('shows the run images under its question, read through the run endpoint', () => {
+        openWith(WITH_IMAGES, STORED);
+        const first = q('workflow-run-question-image-0') as HTMLImageElement;
+        expect(first.alt).toBe('Reference image 1');
+        expect(first.src).toContain('/workflow-runs/run-1/input-image?path=inputs%2Fimages%2F1.png');
+        expect(q('workflow-run-question-image-1')).not.toBeNull();
+        expect(q('workflow-run-question-images')).not.toBeNull();
+      });
+
+      it('shows no thumbnails for a run without images', () => {
+        openWith(WITH_IMAGES, assistantRun());
+        expect(q('workflow-run-question-images')).toBeNull();
+      });
+
+      it('starts with the run images; removing one and adding a new one sends kept paths plus the new image', async () => {
+        openWith(WITH_IMAGES, STORED);
+        expect(thumbs()).toBe(2);
+        expect((q('workflow-input-images-thumb-1') as HTMLImageElement).src).toContain(
+          'input-image?path=inputs%2Fimages%2F2.jpg',
+        );
+        click('workflow-input-images-remove-0');
+        expect(thumbs()).toBe(1);
+        paste(transfer(file('new.png')));
+        await until(() => thumbs() === 2);
+        const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
+        follow.value = 'And the fewest?';
+        follow.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        click('workflow-run-follow-up');
+        const sent = runs.last.body.input['images'] as string[];
+        expect(sent.length).toBe(2);
+        expect(sent[0]).toBe('inputs/images/2.jpg');
+        expect(sent[1]).toMatch(/^data:image\/png;base64,/);
+        expect(runs.last.body.context).toEqual({ fromRunId: 'run-1' });
+      });
+
+      it('removing every image sends the follow-up without images', () => {
+        openWith(WITH_IMAGES, STORED);
+        click('workflow-input-images-remove-1');
+        click('workflow-input-images-remove-0');
+        const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
+        follow.value = 'And the fewest?';
+        follow.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        click('workflow-run-follow-up');
+        expect(Object.keys(runs.last.body.input)).not.toContain('images');
+      });
     });
   });
 

@@ -7,8 +7,8 @@ import {
 import type { z } from 'zod';
 import {
   DATA_READINESS_ASSESSMENT_STEP_SCHEMAS,
-  assessmentInputSchema,
   assessmentResultSchema,
+  assessmentRunInputSchema,
 } from './data-readiness-assessment.schemas';
 import {
   DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
@@ -18,6 +18,12 @@ import {
   assessmentSummary,
   type DataReadinessAssessmentRuntime,
 } from './data-readiness-assessment.steps';
+import {
+  READ_IMAGES_OUTCOME_ID,
+  hasReferenceImages,
+  readImagesOutcome,
+  readImagesStep,
+} from './read-images.workflow';
 import { engineInputSchema, withContract } from './workflow-contract';
 
 // The Assess Data Readiness workflow, defined in code (agents.md 5.13;
@@ -87,6 +93,7 @@ const resolveDatasetStep = createStep({
       return {
         question: assessmentQuestion(params.inputData.question),
         ...target,
+        imageNotes: params.inputData.imageNotes,
       };
     },
   ),
@@ -119,14 +126,21 @@ const scoreReadinessStep = createStep({
     SCHEMAS['score-readiness'],
     async (params: StepParams<(typeof SCHEMAS)['score-readiness']>) => {
       const runtime = runtimeOf(params, STEP['score-readiness'].title);
-      const { question, dataset, datasourceName, datasourceKind, tableCount } =
-        params.inputData;
+      const {
+        question,
+        dataset,
+        datasourceName,
+        datasourceKind,
+        tableCount,
+        imageNotes,
+      } = params.inputData;
       return Promise.resolve({
         question,
         dataset,
         datasourceName,
         datasourceKind,
         tableCount,
+        imageNotes,
         ...runtime.score(),
       });
     },
@@ -164,6 +178,7 @@ const explainReportStep = createStep({
         question: saved.question,
         dataset: saved.dataset,
         reportId: saved.reportId,
+        imageNotes: saved.imageNotes,
       });
       const output = {
         reportId: saved.reportId,
@@ -195,10 +210,10 @@ export const dataReadinessAssessmentWorkflow = createWorkflow({
   id: DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
   description:
     'Assess one PostgreSQL or Databricks dataset: profile it, score it with the deterministic engine, store the report and explain it.',
-  inputSchema: assessmentInputSchema,
+  inputSchema: assessmentRunInputSchema,
   outputSchema: assessmentResultSchema,
   options: {
-    // The run's input is validated against `assessmentInputSchema` before
+    // The run's input is validated against `assessmentRunInputSchema` before
     // the first step (the input node has already checked it, api.md 118).
     validateInputs: true,
     // The run never waits, and its runtime on the RequestContext (the
@@ -206,6 +221,10 @@ export const dataReadinessAssessmentWorkflow = createWorkflow({
     shouldPersistSnapshot: () => false,
   },
 })
+  // Reference images (agents.md 2.15, 5.13): Read images runs first only
+  // when the run has images; the map passes the input on with its notes.
+  .branch([[hasReferenceImages, readImagesStep]])
+  .map(readImagesOutcome, { id: READ_IMAGES_OUTCOME_ID })
   .then(resolveDatasetStep)
   .then(profileSourceStep)
   .then(scoreReadinessStep)

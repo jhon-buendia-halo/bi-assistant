@@ -12,6 +12,7 @@ import type {
   planSchema,
   validationFindingSchema,
 } from './answer-business-question.schemas';
+import { imageNotesBlock } from './read-images.steps';
 
 /** The Plan step's instructions' first line (the stub model routes by it). */
 export const PLAN_FIRST_LINE =
@@ -69,9 +70,23 @@ type Plan = z.output<typeof planSchema>;
 type AnalyseQuery = z.output<typeof analyseQuerySchema>;
 type Finding = z.output<typeof validationFindingSchema>;
 
-/** The Plan step's request: the question and the catalog block with its columns. */
-export function planRequest(question: string, catalogBlock: string): string {
-  return [`Question: ${question}`, '', catalogBlock].join('\n');
+/**
+ * The Plan step's request: the question and the catalog block with its
+ * columns, then Read images' notes when the run has any (agents.md 5.11);
+ * without them, the request is what it was before Read images existed.
+ */
+export function planRequest(
+  question: string,
+  catalogBlock: string,
+  imageNotes?: string,
+): string {
+  const notes = imageNotesBlock(imageNotes);
+  return [
+    `Question: ${question}`,
+    '',
+    catalogBlock,
+    ...(notes ? ['', notes] : []),
+  ].join('\n');
 }
 
 /** A message of the Plan step's request. */
@@ -87,13 +102,16 @@ export interface PlanMessage {
  * (`answered`), the question, the clarifying question Plan asked and the
  * user's answer with the catalog: Plan restates the question with the
  * answer. A bare question with no conversation is the request alone.
- * `fallback` is the question a reply with no restatement plans.
+ * `fallback` is the question a reply with no restatement plans. Read
+ * images' notes, when not empty, end the request either way.
  */
 export function planMessages(input: {
   messages: unknown;
   question: string;
   catalogBlock: string;
   answered?: { question: string; options: readonly string[]; answer: string };
+  /** Read images' notes (agents.md 2.15); absent or `''` without images. */
+  imageNotes?: string;
 }): { messages: string | PlanMessage[]; fallback: string } {
   const before = Array.isArray(input.messages)
     ? (input.messages as PlanMessage[]).slice(0, -1)
@@ -113,13 +131,21 @@ export function planMessages(input: {
         },
         {
           role: 'user',
-          content: planRequest(answered.answer, input.catalogBlock),
+          content: planRequest(
+            answered.answer,
+            input.catalogBlock,
+            input.imageNotes,
+          ),
         },
       ],
       fallback: `${input.question} (${answered.answer})`,
     };
   }
-  const request = planRequest(input.question, input.catalogBlock);
+  const request = planRequest(
+    input.question,
+    input.catalogBlock,
+    input.imageNotes,
+  );
   return {
     messages: Array.isArray(input.messages)
       ? [...before, { role: 'user', content: request }]
@@ -151,18 +177,24 @@ function queryLines(query: AnalyseQuery, index: number): string {
  * The Write answer step's request (agents.md 5.11): the question, the plan,
  * each query's rationale, outcome and rows (at most `ANSWER_ROWS_CAP` each,
  * the whole at most `ANSWER_REQUEST_CAP` characters) and the findings.
+ * Read images' notes, when not empty, follow the plan, set off by blank
+ * lines; without them the request is what it was before Read images.
  */
 export function writeAnswerRequest(input: {
   question: string;
   plan: Plan;
   queries: readonly AnalyseQuery[];
   findings: readonly Finding[];
+  /** Read images' notes (agents.md 2.15); absent or `''` without images. */
+  imageNotes?: string;
 }): string {
+  const notes = imageNotesBlock(input.imageNotes);
   const head = [
     `Question: ${input.question}`,
     '',
     'Plan:',
     JSON.stringify(input.plan),
+    ...(notes ? ['', notes, ''] : []),
     '',
   ].join('\n');
   const findings = [
@@ -254,4 +286,19 @@ export function analysePlanBlock(
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * The system blocks the Analyse step adds after the agent's own context
+ * (agents.md 5.11): the catalog block, the plan block, then Read images'
+ * notes only when the run has images; without them, the two blocks it has
+ * always had.
+ */
+export function analyseSystemBlocks(input: {
+  catalogBlock: string;
+  planBlock: string;
+  imageNotes?: string;
+}): string[] {
+  const notes = imageNotesBlock(input.imageNotes);
+  return [input.catalogBlock, input.planBlock, ...(notes ? [notes] : [])];
 }
