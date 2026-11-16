@@ -317,7 +317,7 @@ test.describe('Feature: Workflows', () => {
             V2_STEP_COUNT,
           );
           await expect(official.getByTestId(`workflow-kind-${READINESS_ID}`)).toHaveText(
-            '7 steps',
+            '8 steps',
           );
           await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
             OFFICIAL.length,

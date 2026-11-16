@@ -173,6 +173,12 @@ const FIXTURES: Record<string, ContractFixture> = {
           ],
         }),
         save: () => Promise.resolve({ reportId: 'r-1' }),
+        findingRows: () =>
+          Promise.resolve({
+            sourceCount: 1,
+            failedSourceCount: 0,
+            stopped: false,
+          }),
         explain: () =>
           Promise.resolve({ answer: 'Managed (84).', stopped: false }),
       } satisfies DataReadinessAssessmentRuntime);

@@ -411,6 +411,7 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
     'profile-source',
     'score-readiness',
     'save-report',
+    'finding-rows',
     'explain-report',
     'wrap-up',
   ];
@@ -446,7 +447,7 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
   );
   await scenarioStep(
     page,
-    'Then its six steps end successfully, in that order',
+    'Then its seven steps end successfully, in that order',
     async () => {
       await expect(page.getByTestId('workflow-run-status')).toHaveText(
         'Run succeeded',
@@ -510,6 +511,92 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
       await expect(panel).toHaveCount(0);
     },
   );
+});
+
+// Roadmap 1.27.11 (data-readiness R34): Rows behind findings runs one
+// read-only query per top finding and records it as a source of the answer.
+// The run page lists those sources once 1.27.10 shows sources for every
+// workflow run with queries.
+test('@demo @story-1.27.11 Each readiness finding opens the rows behind it', async ({
+  page,
+}) => {
+  stub.reply = readReportThenAnswer;
+  let datasourceId = '';
+  let sources: { tool: string; rationale?: string; error?: string }[] = [];
+
+  await scenarioStep(
+    page,
+    `Given the "${DATASET}" dataset exists`,
+    async () => {
+      datasourceId = await seedWorldCup(page);
+    },
+  );
+  await scenarioStep(
+    page,
+    `When I run "Assess Data Readiness" on "${DATASET}"`,
+    async () => {
+      await openWorkflowPage(
+        page,
+        'data-readiness-assessment',
+        'Assess Data Readiness',
+      );
+      await openRunTab(page);
+      await page
+        .getByTestId('workflow-input-dataset')
+        .selectOption({ label: DATASET });
+      await page.getByTestId('workflow-run').click();
+      await expect(page.getByTestId('workflow-run-status')).toHaveText(
+        'Run succeeded',
+        { timeout: 60_000 },
+      );
+      await expect(
+        page
+          .getByTestId('workflow-node-finding-rows')
+          .getByTestId('workflow-node-status'),
+      ).toHaveText('Done');
+    },
+  );
+  await scenarioStep(
+    page,
+    'Then the answer lists a source for each of the top findings',
+    async () => {
+      const [summary] = await listReports(page, datasourceId);
+      const report = await getReport(page, summary.id);
+      const run = await apiJson<{
+        answer?: { data?: { tool: string; rationale?: string; error?: string }[] };
+      }>(page, 'GET', `/workflow-runs/${encodeURIComponent(report.runId!)}`);
+      // The finding sources come first, before the agent's own calls.
+      const data = run.answer?.data ?? [];
+      const first = data.findIndex(
+        (record) => record.tool !== 'run_readonly_sql',
+      );
+      sources = first === -1 ? data : data.slice(0, first);
+      expect(sources.length, 'one source per finding').toBeGreaterThan(0);
+      expect(sources.length).toBeLessThanOrEqual(
+        Math.min(20, report.findings.length),
+      );
+      for (const [index, source] of sources.entries()) {
+        await expect(
+          runAnswer(page).getByTestId(`query-row-${index}`),
+        ).toContainText(source.rationale ?? '');
+      }
+    },
+  );
+  await scenarioStep(page, 'When I open the first finding’s source', async () => {
+    const index = sources.findIndex((source) => !source.error);
+    expect(index, 'a finding query ran').toBeGreaterThanOrEqual(0);
+    await runAnswer(page).getByTestId(`query-row-${index}`).click();
+    const inspector = page.getByTestId('query-inspector');
+    await expect(inspector).toBeVisible();
+    await inspector.getByTestId('query-inspector-tab-result').click();
+  });
+  await scenarioStep(page, 'Then the inspector shows the rows behind it', async () => {
+    const inspector = page.getByTestId('query-inspector');
+    await expect(inspector.getByRole('table')).toBeVisible();
+    await expect(
+      inspector.getByTestId('query-result-page-label'),
+    ).toContainText(/^Rows 1–\d/);
+  });
 });
 
 test('A table too large to profile is listed as not profiled', async ({

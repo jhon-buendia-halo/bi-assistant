@@ -3668,7 +3668,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) data-readiness-assessment's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "598146d8a207",
+  "contractHash": "1c19a0ce25d2",
   "edges": [
     {
       "from": "start",
@@ -3704,6 +3704,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
     },
     {
       "from": "save-report",
+      "kind": "next",
+      "to": "finding-rows",
+    },
+    {
+      "from": "finding-rows",
       "kind": "next",
       "to": "explain-report",
     },
@@ -4286,6 +4291,212 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "findingCount",
           "dimensionScores",
           "reportId",
+        ],
+        "type": "object",
+      },
+    },
+    {
+      "id": "finding-rows",
+      "inputSchema": {
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "dimensionScores": {
+            "description": "The ten dimension scores.",
+            "items": {
+              "properties": {
+                "assessed": {
+                  "description": "False for accuracy and currency.",
+                  "type": "boolean",
+                },
+                "dimension": {
+                  "description": "The DMBOK dimension.",
+                  "type": "string",
+                },
+                "findingCount": {
+                  "description": "Its findings.",
+                  "type": "number",
+                },
+                "score": {
+                  "description": "0 to 100.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "dimension",
+                "score",
+                "assessed",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "reportId": {
+            "description": "The stored report's id.",
+            "type": "string",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "imageNotes",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "dimensionScores",
+          "reportId",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "datasourceKind": {
+            "description": "postgres or databricks.",
+            "enum": [
+              "postgres",
+              "databricks",
+            ],
+            "type": "string",
+          },
+          "datasourceName": {
+            "description": "The dataset's datasource.",
+            "type": "string",
+          },
+          "dimensionScores": {
+            "description": "The ten dimension scores.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "assessed": {
+                  "description": "False for accuracy and currency.",
+                  "type": "boolean",
+                },
+                "dimension": {
+                  "description": "The DMBOK dimension.",
+                  "type": "string",
+                },
+                "findingCount": {
+                  "description": "Its findings.",
+                  "type": "number",
+                },
+                "score": {
+                  "description": "0 to 100.",
+                  "type": "number",
+                },
+              },
+              "required": [
+                "dimension",
+                "score",
+                "assessed",
+                "findingCount",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "failedSourceCount": {
+            "description": "Of those, the queries that failed (kept as failed sources).",
+            "type": "number",
+          },
+          "findingCount": {
+            "description": "All findings.",
+            "type": "number",
+          },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
+          "maturity": {
+            "description": "The maturity band.",
+            "type": "string",
+          },
+          "overallScore": {
+            "description": "The overall score, 0 to 100.",
+            "type": "number",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+          "reportId": {
+            "description": "The stored report's id.",
+            "type": "string",
+          },
+          "sourceCount": {
+            "description": "Findings whose rows were looked up: one source each.",
+            "type": "number",
+          },
+          "stopped": {
+            "description": "Whether the run was stopped.",
+            "type": "boolean",
+          },
+          "tableCount": {
+            "description": "The dataset's tables: the scope.",
+            "type": "number",
+          },
+        },
+        "required": [
+          "question",
+          "dataset",
+          "datasourceName",
+          "datasourceKind",
+          "tableCount",
+          "imageNotes",
+          "overallScore",
+          "maturity",
+          "findingCount",
+          "dimensionScores",
+          "reportId",
+          "sourceCount",
+          "failedSourceCount",
+          "stopped",
         ],
         "type": "object",
       },

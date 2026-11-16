@@ -178,7 +178,7 @@ describe('The workflow catalogue (API)', () => {
           { key: 'data-readiness', name: 'Sarah' },
           { key: 'image-reader', name: 'Zoe' },
         ],
-        stepCount: 7,
+        stepCount: 8,
         bar: 'steps',
         trigger: 'run',
         input: [

@@ -163,8 +163,9 @@ const READINESS_SUMMARY = expect.objectContaining({
   name: 'Assess Data Readiness',
   kind: 'code',
   owner: 'Official',
-  // Read images first (workflows R35), then its six steps.
-  stepCount: 7,
+  // Read images first (workflows R35), then its seven steps (Rows behind
+  // findings since roadmap 1.27.11).
+  stepCount: 8,
   bar: 'steps',
   trigger: 'run',
   starterQuestions: [
