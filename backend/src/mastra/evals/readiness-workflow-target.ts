@@ -153,7 +153,8 @@ export function readinessWorkflowTurnAgent(
     const datasets = requestContext.get(DATASETS_CONTEXT_KEY);
     const runDatasets = Array.isArray(datasets) ? (datasets as string[]) : [];
     const dataset = runDatasets[0];
-    if (!dataset) throw new Error('An Assess Data Readiness case needs a dataset');
+    if (!dataset)
+      throw new Error('An Assess Data Readiness case needs a dataset');
     const sessionId = requestContext.get(SESSION_ID_CONTEXT_KEY);
     if (typeof sessionId !== 'string' || !sessionId) {
       throw new Error(
@@ -222,7 +223,7 @@ export function readinessWorkflowTurnAgent(
         // The run has assessed: the agent reads the stored report and
         // `assess_data_readiness` refuses (agents.md 3.13, 5.13).
         requestContext.set(ASSESSED_REPORT_CONTEXT_KEY, reportId);
-        explained = (await agent.generate(
+        explained = await agent.generate(
           input as never,
           {
             ...options,
@@ -234,7 +235,7 @@ export function readinessWorkflowTurnAgent(
               },
             ],
           } as never,
-        )) as unknown as Record<string, unknown>;
+        );
         answer =
           typeof explained['text'] === 'string' ? explained['text'].trim() : '';
         return { answer, stopped: false };
@@ -255,7 +256,9 @@ export function readinessWorkflowTurnAgent(
         : new Error('The Assess Data Readiness run failed');
     }
     if (!explained) {
-      throw new Error('The Assess Data Readiness run ended before Explain report');
+      throw new Error(
+        'The Assess Data Readiness run ended before Explain report',
+      );
     }
     const details: EvalRunDetails = {
       steps,

@@ -27,6 +27,7 @@ jest.mock('../../mastra/evals/eval-sets', () => {
   return {
     evalSetsFor: (key: string) =>
       sets.filter((set) => (set.agentKey ?? 'assistant') === key),
+    evalTargetIdFor: (key: string) => ({ targetId: key }),
     evalTargetFor: (key: string) => targets[key],
   };
 });

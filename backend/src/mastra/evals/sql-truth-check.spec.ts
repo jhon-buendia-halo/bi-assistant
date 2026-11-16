@@ -116,7 +116,9 @@ describe('answerHasNumber', () => {
   it('reads the first column of the first row by default, within a tolerance', () => {
     const compare = answerHasNumber(undefined, { tolerance: 0.05 });
     const truth = [{ share: '12.34' }];
-    expect(compare(truth, { answer: 'about 12.3%', parsed: undefined, details: {} })).toBeUndefined();
+    expect(
+      compare(truth, { answer: 'about 12.3%', parsed: undefined, details: {} }),
+    ).toBeUndefined();
     expect(
       compare(truth, { answer: 'about 13%', parsed: undefined, details: {} }),
     ).toContain('expected the answer to state 12.34');
@@ -127,7 +129,11 @@ describe('answerHasNumber', () => {
       all.reduce((total, row) => total + Number(row['n']), 0),
     );
     expect(
-      sum([{ n: 2 }, { n: 3 }], { answer: '5 in all', parsed: undefined, details: {} }),
+      sum([{ n: 2 }, { n: 3 }], {
+        answer: '5 in all',
+        parsed: undefined,
+        details: {},
+      }),
     ).toBeUndefined();
     expect(
       answerHasNumber('n')([], { answer: '5', parsed: undefined, details: {} }),
@@ -184,7 +190,9 @@ describe('answerMentionsAll', () => {
     ).toBeUndefined();
     expect(
       compare(truth, { answer: 'Top: toys.', parsed: undefined, details: {} }),
-    ).toBe('the answer does not mention Électronique (category from the reference SQL)');
+    ).toBe(
+      'the answer does not mention Électronique (category from the reference SQL)',
+    );
   });
 
   it('fails when the reference SQL returns no row', () => {

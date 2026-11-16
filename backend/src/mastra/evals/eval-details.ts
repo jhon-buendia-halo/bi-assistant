@@ -63,9 +63,7 @@ export function evalDetailsOf(targetResult: unknown): EvalRunDetails {
   const details = (targetResult as Record<string, unknown> | undefined)?.[
     EVAL_DETAILS_KEY
   ];
-  return details && typeof details === 'object'
-    ? (details as EvalRunDetails)
-    : {};
+  return details && typeof details === 'object' ? details : {};
 }
 
 /**

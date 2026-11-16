@@ -85,8 +85,7 @@ export function isolatedCallAgent<I, O>(
 ): Agent {
   const generate = async (input: unknown, options: GenerateOptions = {}) => {
     const evalCase = options.requestContext?.get(EVAL_CASE_CONTEXT_KEY) as
-      | AssistantEvalCase
-      | undefined;
+      AssistantEvalCase | undefined;
     if (!evalCase) {
       throw new Error('An isolated-call case runs with its case');
     }

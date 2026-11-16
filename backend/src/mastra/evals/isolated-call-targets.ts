@@ -128,7 +128,8 @@ export function imageReaderEvalTarget(
   call: Call<
     { question: string; images: Awaited<ReturnType<typeof loadEvalImages>> },
     ReadImagesOutcome
-  > = (input, options) => readImagesAgents().readImagesWithModel(input, options),
+  > = (input, options) =>
+    readImagesAgents().readImagesWithModel(input, options),
   loadAgent: () => Agent = () =>
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     (require('../agents/image-reader.agent') as typeof ImageReaderAgent)
@@ -164,7 +165,8 @@ export function dataQualityCheckEvalTarget(
   call: Call<
     DataQualityEvalInput,
     { issues: { finding: number; impact: string }[]; stopped: boolean }
-  > = (input, options) => stepAgents().checkDataQualityWithModel(input, options),
+  > = (input, options) =>
+    stepAgents().checkDataQualityWithModel(input, options),
   loadAgent: () => Agent = () =>
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     (require('../agents/data-readiness.agent') as typeof ReadinessAgent)

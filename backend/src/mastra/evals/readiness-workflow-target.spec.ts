@@ -65,7 +65,7 @@ const SUMMARY = {
   topFindings: [],
 };
 
-function setUp(options: { failProfile?: boolean } = {}) {
+function setUp(config: { failProfile?: boolean } = {}) {
   const generate = jest.fn((_input: unknown, opts: Record<string, unknown>) => {
     const requestContext = opts['requestContext'] as RequestContext;
     return Promise.resolve({
@@ -88,7 +88,7 @@ function setUp(options: { failProfile?: boolean } = {}) {
     datasourceKind: 'postgres' as const,
     tableCount: 19,
     profile: jest.fn(() =>
-      options.failProfile
+      config.failProfile
         ? Promise.reject(new Error('Could not reach "Edge Cases PostgreSQL"'))
         : Promise.resolve({
             entityCount: 19,
@@ -115,9 +115,14 @@ function setUp(options: { failProfile?: boolean } = {}) {
     startAssessment: jest.fn(() => Promise.resolve(assessment)),
     runSql: jest.fn(),
     recordFindingSources: jest.fn(
-      (input: Parameters<ReadinessWorkflowParts['recordFindingSources']>[0]) => {
+      (
+        input: Parameters<ReadinessWorkflowParts['recordFindingSources']>[0],
+      ) => {
         input.record(
-          { sql: 'SELECT * FROM edge_cases.customers WHERE email IS NULL', rationale: 'Nulls.' },
+          {
+            sql: 'SELECT * FROM edge_cases.customers WHERE email IS NULL',
+            rationale: 'Nulls.',
+          },
           { columns: ['id'], rows: [{ id: 1 }] },
           { datasourceId: 'ds-edge', rowLimit: 500 },
         );
@@ -246,13 +251,13 @@ describe('readinessWorkflowTurnAgent (agents.md 8.1)', () => {
   it('needs the run host and a dataset', async () => {
     const { target, options, requestContext } = setUp();
     requestContext.set('session-id', '');
-    await expect(
-      target.generate('q', options as never),
-    ).rejects.toThrow('needs the run host');
+    await expect(target.generate('q', options as never)).rejects.toThrow(
+      'needs the run host',
+    );
     requestContext.set('datasets', []);
-    await expect(
-      target.generate('q', options as never),
-    ).rejects.toThrow('needs a dataset');
+    await expect(target.generate('q', options as never)).rejects.toThrow(
+      'needs a dataset',
+    );
   });
 });
 

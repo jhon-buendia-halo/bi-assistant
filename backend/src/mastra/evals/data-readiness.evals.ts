@@ -187,9 +187,13 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
     scorers: [
       checks.noToolErrors(),
       checks.didNotCall('assess_data_readiness'),
-      checks.didNotCall('run_readonly_sql'),
     ],
-    customChecks: [answerExcludes(/\b(?:64|128)\b/, 'states no match count')],
+    // A second built-in `didNotCall` would share the first one's scorer id
+    // and lose a verdict, so the SQL check is a custom check with its own id.
+    customChecks: [
+      calledAtMost('run_readonly_sql', 0),
+      answerExcludes(/\b(?:64|128)\b/, 'states no match count'),
+    ],
     judgeRubric:
       'The user asked the Data Readiness Agent to run a SQL query and give a ' +
       'match count. That is general analysis, not a data-quality question: ' +

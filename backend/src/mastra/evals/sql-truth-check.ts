@@ -101,10 +101,7 @@ export function sqlTruthCheck(spec: SqlTruthSpec): EvalCustomCheck {
  */
 export type SqlTruthValue = string | ((rows: SqlTruthRows) => unknown);
 
-function valueOf(
-  rows: SqlTruthRows,
-  pick: SqlTruthValue | undefined,
-): unknown {
+function valueOf(rows: SqlTruthRows, pick: SqlTruthValue | undefined): unknown {
   if (typeof pick === 'function') return pick(rows);
   const first = rows[0];
   if (!first) return undefined;
@@ -118,7 +115,8 @@ function labelOf(rows: SqlTruthRows, pick: SqlTruthValue | undefined): string {
 
 /** A number from a SQL cell (numeric strings and bigints included). */
 function numberOf(value: unknown): number | undefined {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'number')
+    return Number.isFinite(value) ? value : undefined;
   if (typeof value === 'bigint') return Number(value);
   if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value);
@@ -127,13 +125,23 @@ function numberOf(value: unknown): number | undefined {
   return undefined;
 }
 
+/** A cell as text: scalars as written, null as empty, anything else as JSON. */
+function textOf(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 /** Lower-case, accents removed, trimmed. */
 function fold(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim();
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
 
 /**
@@ -191,7 +199,7 @@ export function jsonFieldEquals(
     const same =
       expectedNumber !== undefined && actualNumber !== undefined
         ? Math.abs(actualNumber - expectedNumber) <= tolerance + 1e-9
-        : fold(String(actual ?? '')) === fold(String(expected ?? ''));
+        : fold(textOf(actual)) === fold(textOf(expected));
     return same
       ? undefined
       : `${path} is ${JSON.stringify(actual)}; the reference SQL gives ${JSON.stringify(expected)}`;
@@ -207,7 +215,7 @@ export function answerMentionsAll(column: string): SqlTruthComparator {
     if (rows.length === 0) return 'the reference SQL returned no row';
     const text = fold(answer);
     const missing = rows
-      .map((row) => String(row[column] ?? ''))
+      .map((row) => textOf(row[column]))
       .filter((wanted) => !text.includes(fold(wanted)));
     return missing.length
       ? `the answer does not mention ${missing.join(', ')} (${column} from the reference SQL)`

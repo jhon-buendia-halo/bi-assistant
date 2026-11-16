@@ -20,7 +20,11 @@ import {
   runAssistantEvalCase,
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
-import { evalSetsFor, evalTargetFor } from '../../mastra/evals/eval-sets';
+import {
+  evalSetsFor,
+  evalTargetFor,
+  evalTargetIdFor,
+} from '../../mastra/evals/eval-sets';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
@@ -145,6 +149,11 @@ export class EvalRunsService {
       return { error: err instanceof Error ? err.message : String(err) };
     }
 
+    // One run is one target: a set that runs on another agent's call (an
+    // isolated call, the readiness workflow) is not mixed with the chat set.
+    const picked = evalTargetIdFor(agentKey, caseIds);
+    if ('error' in picked) return { error: picked.error };
+
     const datasetError = assistantEvalDatasetError(
       bound.map((dataset) => dataset.name),
       bound,
@@ -184,7 +193,7 @@ export class EvalRunsService {
   ): Promise<void> {
     // The agent the cases run on, with its context and clean-up (agents.md
     // 8.1).
-    const target = evalTargetFor(view.agentKey);
+    const target = evalTargetFor(view.agentKey, view.caseIds);
     // A throwaway run host so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
     // still measures the agent without one, just with visual-tool support

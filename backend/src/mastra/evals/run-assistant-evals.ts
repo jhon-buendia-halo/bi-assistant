@@ -114,7 +114,7 @@ async function runEvals(
     caseIds,
     sessions,
     knowledgeBlock,
-    evalTargetFor(agentKey),
+    evalTargetFor(agentKey, caseIds),
   );
   // The whole run (answers and tool calls included) for reading failures.
   const resultsFile = process.env['EVAL_RESULTS_FILE'];

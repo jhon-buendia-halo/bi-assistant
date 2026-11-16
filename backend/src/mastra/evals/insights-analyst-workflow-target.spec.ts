@@ -36,6 +36,7 @@ import type { Agent } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import { answerBusinessQuestionWorkflow } from '../workflows/answer-business-question.workflow';
 import type { AnalysisPlan } from '../workflows/answer-business-question.steps';
+import { evalDetailsOf } from './eval-details';
 import { endsOnClarifyingQuestion } from './insights-analyst-eval-checks';
 import {
   clarificationAnswer,
@@ -197,6 +198,16 @@ describe('the v2 eval target runs the whole answer-business-question workflow (a
       output: ['analyse messages'],
     });
     expect((result['steps'] as unknown[]).length).toBe(1);
+    // Every step's output reaches the checks: Plan's JSON, Validate's
+    // findings, Write answer's headline (agents.md 8.1, "Run details").
+    const steps = evalDetailsOf(result).steps ?? {};
+    expect(Object.keys(steps)).toEqual(
+      expect.arrayContaining(['plan', 'validate', 'write-answer']),
+    );
+    expect(steps['plan']).toMatchObject({ plan: PLAN });
+    expect(steps['write-answer']).toMatchObject({
+      answer: expect.stringContaining('Harry Kane') as string,
+    });
   });
 
   it('retries Analyse once when Validate fails, and scores the last attempt', async () => {

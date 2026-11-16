@@ -23,6 +23,20 @@ import {
   QUERY_EXPLAINER_EVAL_SET,
   queryExplainerEvalTarget,
 } from './query-explainer.evals';
+import {
+  ANALYSIS_PLANNER_EVAL_TARGET,
+  ANSWER_WRITER_EVAL_TARGET,
+  DATA_QUALITY_CHECK_EVAL_TARGET,
+  IMAGE_READER_EVAL_TARGET,
+  analysisPlannerEvalTarget,
+  answerWriterEvalTarget,
+  dataQualityCheckEvalTarget,
+  imageReaderEvalTarget,
+} from './isolated-call-targets';
+import {
+  READINESS_WORKFLOW_EVAL_TARGET,
+  readinessWorkflowEvalTarget,
+} from './readiness-workflow-target';
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
@@ -54,10 +68,89 @@ export function hasEvals(agentKey: string): boolean {
 }
 
 /**
- * The eval target of one run of `agentKey`'s sets. Throws for an agent
- * without evals: `Agent "<key>" has no evals to run`.
+ * The eval targets that an isolated call or a second target of an agent
+ * runs on, by target id (`AssistantEvalSet.target`, else the set's
+ * `agentKey`). Each factory gets the sets that run on it (`setsOfTarget`),
+ * so a set builder registers its set in `EVAL_SETS` and adds nothing here.
+ * An agent's own target is not in this map: `evalTargetFor` builds it.
  */
-export function evalTargetFor(agentKey: string): EvalTarget {
+const EVAL_TARGET_FACTORIES: Record<
+  string,
+  (sets: AssistantEvalSet[]) => EvalTarget
+> = {
+  [ANALYSIS_PLANNER_EVAL_TARGET]: (sets) => analysisPlannerEvalTarget(sets),
+  [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
+  [IMAGE_READER_EVAL_TARGET]: (sets) => imageReaderEvalTarget(sets),
+  [DATA_QUALITY_CHECK_EVAL_TARGET]: (sets) => dataQualityCheckEvalTarget(sets),
+  [READINESS_WORKFLOW_EVAL_TARGET]: (sets) => readinessWorkflowEvalTarget(sets),
+};
+
+/** The target id a set runs on: its `target`, else its agent's key. */
+export function evalSetTargetId(
+  set: Pick<AssistantEvalSet, 'agentKey' | 'target'>,
+): string {
+  return set.target ?? evalSetAgentKey(set);
+}
+
+/** The registered sets that run on one target id. */
+export function setsOfTarget(targetId: string): AssistantEvalSet[] {
+  return EVAL_SETS.filter((set) => evalSetTargetId(set) === targetId);
+}
+
+/**
+ * The one target id of the sets a run touches, or an error when they span
+ * several targets — like samples, one run is one target. `fallback` is the
+ * id when there are no sets.
+ */
+export function targetIdOfSets(
+  sets: Pick<AssistantEvalSet, 'agentKey' | 'target'>[],
+  fallback: string,
+): { targetId: string } | { error: string } {
+  const ids = [...new Set(sets.map(evalSetTargetId))];
+  if (ids.length === 0) return { targetId: fallback };
+  if (ids.length > 1) {
+    return {
+      error: `The selected questions run on several targets (${ids.join(', ')}) — run one set at a time`,
+    };
+  }
+  return { targetId: ids[0] };
+}
+
+/**
+ * The target id the selected cases run on (every case of the agent when
+ * none are named), or an error when they span several targets.
+ */
+export function evalTargetIdFor(
+  agentKey: string,
+  caseIds?: string[],
+): { targetId: string } | { error: string } {
+  const wanted = caseIds ? new Set(caseIds) : undefined;
+  return targetIdOfSets(
+    evalSetsFor(agentKey).filter(
+      (set) => !wanted || set.cases.some((evalCase) => wanted.has(evalCase.id)),
+    ),
+    agentKey,
+  );
+}
+
+/**
+ * The eval target of one run of `agentKey`'s sets; `caseIds` names the
+ * cases of a selection, which pick the set and so its target. Throws for
+ * an agent without evals: `Agent "<key>" has no evals to run`.
+ */
+export function evalTargetFor(
+  agentKey: string,
+  caseIds?: string[],
+): EvalTarget {
+  const picked = evalTargetIdFor(agentKey, caseIds);
+  if ('error' in picked) throw new Error(picked.error);
+  return evalTargetOf(picked.targetId, agentKey);
+}
+
+/** The target of one target id: a registered factory, else the agent's own. */
+export function evalTargetOf(targetId: string, agentKey: string): EvalTarget {
+  const factory = EVAL_TARGET_FACTORIES[targetId];
+  if (factory) return factory(setsOfTarget(targetId));
   if (agentKey === 'assistant') return ASSISTANT_EVAL_TARGET;
   if (agentKey === 'data-readiness') return dataReadinessEvalTarget();
   if (agentKey === INSIGHTS_ANALYST_EVAL_AGENT_KEY)
