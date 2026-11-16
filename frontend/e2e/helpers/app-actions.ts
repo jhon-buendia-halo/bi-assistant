@@ -71,6 +71,8 @@ export async function createWorldCupDataset(
     .getByRole('button', { name: `Save dataset (${tables.length})` })
     .click();
   await expect(page.getByTestId(`dataset-${WORLD_CUP_DATASET}`)).toBeVisible();
+  // The save runs in the background (M1-26): its row shows "Saving…" until it ends.
+  await expect(page.getByTestId('dataset-saving-chip')).toHaveCount(0);
   await expect(
     page.getByText(`PostgreSQL · ${tables.length} entities`),
   ).toBeVisible();

@@ -657,9 +657,9 @@ specs/capabilities/app-shell/spec.md:103-103  R38 The application shell in its i
 specs/capabilities/app-shell/spec.md:105-115  ## Edge cases and errors
 specs/capabilities/app-shell/spec.md:117-124  ## Contracts
 specs/capabilities/app-shell/spec.md:126-133  ## UI
-specs/capabilities/app-shell/spec.md:135-401  ## Flows
-specs/capabilities/app-shell/spec.md:403-407  ## Acceptance
-specs/capabilities/app-shell/spec.md:409-416  ## Open questions
+specs/capabilities/app-shell/spec.md:135-420  ## Flows
+specs/capabilities/app-shell/spec.md:422-426  ## Acceptance
+specs/capabilities/app-shell/spec.md:428-435  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
 specs/capabilities/data-readiness/spec.md:24-226  ## Rules

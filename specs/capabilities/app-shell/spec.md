@@ -400,6 +400,25 @@ Feature: App shell behaviour not yet covered by Playwright
     Then the details panel is collapsed again
 ```
 
+E2E: `frontend/e2e/background-tasks.spec.ts` for the Feature below (M1-26).
+
+```gherkin
+Feature: Background tasks
+
+  Scenario: a dataset save keeps running in the background while the user is elsewhere
+    Given a saved dataset "World Cup" whose next save takes a few seconds
+    When I open it and press Save dataset
+    Then the Datasets list shows at once, with "World Cup" marked Saving
+    And the rail's Background tasks button says 1 running
+    When I open Workflows and the Background tasks panel
+    Then "Saving dataset "World Cup"" is listed as running
+    When I go back to Datasets
+    Then the row is still marked Saving
+    When the save ends
+    Then the Saving mark goes away, the button shows nothing running and a toast says the dataset was saved
+    And the panel lists the save as finished, and its Open button opens the dataset in the editor
+```
+
 ## Acceptance
 
 - The three `layout-accessibility.spec.ts` scenarios pass in the real desktop app.

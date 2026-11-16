@@ -39,6 +39,8 @@ test('tags a schema with a layer and description and keeps them after saving', a
   await page.getByTestId('schema-description').fill(DESCRIPTION);
   await page.getByRole('button', { name: /^Save dataset/ }).click();
   await expect(page.getByTestId(`dataset-${WORLD_CUP_DATASET}`)).toBeVisible();
+  // The save runs in the background (M1-26): its row shows "Saving…" until it ends.
+  await expect(page.getByTestId('dataset-saving-chip')).toHaveCount(0);
 
   // The notes are persisted on the dataset.
   const body = await (await page.request.get(apiUrl(page, '/datasets'))).json();
