@@ -176,7 +176,7 @@ describe('the findings as the writer reads them (roadmap 1.28.8, issue D)', () =
         },
         { check: 'Ran a query', passed: false, detail: 'No SQL query ran.' },
       ],
-    } as never);
+    });
     expect(request).toContain('- warning: Measures covered (warning only).');
     expect(request).toContain('- failed: Ran a query.');
   });
