@@ -110,9 +110,13 @@ describe('AgentDetail eval run as a background task', () => {
   it('polls at the root until the terminal status and leaves no timer', fakeAsync(() => {
     const first = open();
     startRun(first);
-    expect(first.componentInstance.runStarting()).toBeTrue();
+    // Started: shown as running with no result yet (0/3 done) until the first read.
+    expect(first.componentInstance.runStarting()).toBeFalse();
+    expect(first.componentInstance.runStatus()).toBe('running');
+    expect(first.componentInstance.runResults().length).toBe(0);
+    http.expectNone(pollUrl);
 
-    tick(0);
+    tick(1500);
     http.expectOne(pollUrl).flush(poll('running', [result('a', true)]));
     expect(first.componentInstance.runStatus()).toBe('running');
     const task = tasks.active('eval-run', key)!;
@@ -144,7 +148,7 @@ describe('AgentDetail eval run as a background task', () => {
   it('shows the live run and then its results when the page is opened again', fakeAsync(() => {
     const first = open();
     startRun(first);
-    tick(0);
+    tick(1500);
     http.expectOne(pollUrl).flush(poll('running', [result('a', true)]));
     first.destroy();
 
@@ -171,7 +175,7 @@ describe('AgentDetail eval run as a background task', () => {
   it('ends as failed on a job error and shows the error', fakeAsync(() => {
     const fixture = open();
     startRun(fixture);
-    tick(0);
+    tick(1500);
     http
       .expectOne(pollUrl)
       .flush(poll('failed', [], { error: 'The model is not reachable' }));
@@ -201,7 +205,7 @@ describe('AgentDetail eval run as a background task', () => {
   it('opens the agent page on its Evals tab from the task', fakeAsync(() => {
     const first = open();
     startRun(first);
-    tick(0);
+    tick(1500);
     http.expectOne(pollUrl).flush(poll('running', [result('a', true)]));
     first.destroy();
 

@@ -44,9 +44,12 @@ test('a dataset save keeps running in the background while the user is elsewhere
     await tasksButton.click();
     const panel = page.getByRole('dialog', { name: 'Background tasks' });
     await expect(panel).toBeVisible();
-    const row = panel.getByTestId('background-task').filter({
-      hasText: `Saving dataset "${WORLD_CUP_DATASET}"`,
-    });
+    // The first save (setup) is listed as finished; this one runs.
+    const row = panel
+      .getByRole('list', { name: 'Running tasks' })
+      .getByTestId('background-task');
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(`Saving dataset "${WORLD_CUP_DATASET}"`);
     await expect(row).toHaveAttribute('data-status', 'running');
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
@@ -60,16 +63,20 @@ test('a dataset save keeps running in the background while the user is elsewhere
     await expect(tasksButton).toHaveAccessibleName('Background tasks');
     const toast = page
       .getByRole('region', { name: 'Notifications' })
-      .getByText(`Dataset "${WORLD_CUP_DATASET}" saved`, { exact: false });
+      .getByText(`Dataset "${WORLD_CUP_DATASET}" saved`, { exact: false })
+      .last();
     await expect(toast).toBeVisible();
   });
 
   await test.step('The panel lists it as finished, with Open', async () => {
     await tasksButton.click();
     const panel = page.getByRole('dialog', { name: 'Background tasks' });
-    const row = panel.getByTestId('background-task').filter({
-      hasText: `Saving dataset "${WORLD_CUP_DATASET}"`,
-    });
+    // Newest first: this save, then the setup's.
+    const row = panel
+      .getByRole('list', { name: 'Finished tasks' })
+      .getByTestId('background-task')
+      .first();
+    await expect(row).toContainText(`Saving dataset "${WORLD_CUP_DATASET}"`);
     await expect(row).toHaveAttribute('data-status', 'done');
     await row.getByRole('button', { name: 'Open' }).click();
     await expect(panel).toBeHidden();

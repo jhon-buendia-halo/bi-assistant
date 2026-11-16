@@ -15,6 +15,7 @@ import {
   concatMap,
   filter,
   of,
+  startWith,
   switchMap,
   takeWhile,
   timer,
@@ -824,9 +825,18 @@ export class AgentDetail implements OnDestroy {
           return of({ ok: false, message: res.message });
         }
         const jobId = res.jobId;
-        return timer(0, 1500).pipe(
+        // The run is under way as soon as it starts: show it with no result
+        // yet, then read it back every 1.5 s until it ends.
+        return timer(1500, 1500).pipe(
           concatMap(() => this.api.getEvalRun(key, jobId)),
           takeWhile((view) => view.ok && view.status === 'running', true),
+          startWith<EvalRunTick>({
+            ok: true,
+            message: res.message,
+            status: 'running',
+            results: [],
+            totalCases: caseIds.length,
+          }),
         );
       }),
     );
