@@ -43,7 +43,7 @@ function registeredAgentKeys(): string[] {
 }
 
 describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
-  it('holds five code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18) and Review a Website (5.19)', () => {
+  it('holds six code workflows: Insights Analyst, Assess Data Readiness (agents.md 5.13), Dashboard Image to Artifact (5.17), Map a Dashboard to Data (5.18), Review a Website (5.19) and Consumption Gap Analysis (5.20)', () => {
     expect(
       CODE_WORKFLOWS.map(({ id, name, primaryFor, bar, trigger }) => ({
         id,
@@ -85,6 +85,13 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         id: 'review-website',
         name: 'Review a Website',
         primaryFor: 'site-reviewer',
+        bar: 'steps',
+        trigger: 'run',
+      },
+      {
+        id: 'consumption-gap-analysis',
+        name: 'Consumption Gap Analysis',
+        primaryFor: 'gap-advisor',
         bar: 'steps',
         trigger: 'run',
       },
@@ -238,6 +245,82 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         datasets: ['load-dashboard'],
         question: ['read-images', 'load-dashboard'],
         images: ['read-images'],
+      });
+    });
+  });
+
+  // Consumption Gap Analysis (agents.md 5.20; workflows R37; api.md 116).
+  describe('consumption gap analysis', () => {
+    const gap = () =>
+      CODE_WORKFLOWS.find(
+        (workflow) => workflow.id === 'consumption-gap-analysis',
+      )!;
+
+    it('takes the datasets, the questions, reference dashboards and an optional saved dashboard', () => {
+      expect(gap().input).toEqual([
+        {
+          name: 'datasets',
+          label: 'Datasets',
+          type: 'datasets',
+          required: true,
+          help: 'Datasets whose schemas are tagged Landing, Normalized and Consumption.',
+        },
+        {
+          name: 'question',
+          label: 'Business questions',
+          type: 'textarea',
+          required: true,
+          placeholder:
+            'Which team won the most matches in each World Cup?\nWhat share of the goals were penalties?',
+          help: 'One question per line, up to 20.',
+          maxLength: 4000,
+        },
+        {
+          ...IMAGES_FIELD,
+          label: 'Reference dashboards',
+          help: 'Screenshots of the dashboards the model must support.',
+        },
+        {
+          name: 'artifact',
+          label: 'Saved dashboard',
+          type: 'artifact',
+          required: false,
+          artifactKinds: ['dashboard'],
+        },
+      ]);
+      // Grace reads the dashboards itself: no Read images step.
+      expect(gap().steps.map((step) => step.id)).not.toContain('read-images');
+    });
+
+    it('runs Grace, the Requirements Analyst, the Layer Mapper and the Gap Advisor', () => {
+      expect(
+        gap()
+          .steps.filter((step) => step.kind === 'agent')
+          .map((step) => [step.id, stepAgentKey(gap(), step.id)]),
+      ).toEqual([
+        ['read-dashboards', 'dashboard-reader'],
+        ['derive-requirements', 'requirements-analyst'],
+        ['map-requirements', 'layer-mapper'],
+        ['recommend-fixes', 'gap-advisor'],
+      ]);
+      expect(workflowsUsingAgent('requirements-analyst')).toEqual([
+        { id: 'consumption-gap-analysis', name: 'Consumption Gap Analysis' },
+      ]);
+    });
+
+    it('says which steps read each field as api.md 116 lists them', () => {
+      expect(
+        Object.fromEntries(
+          inputFieldsWithUsage(gap()).map((field) => [
+            field.name,
+            field.usedBy,
+          ]),
+        ),
+      ).toEqual({
+        datasets: ['read-dashboards'],
+        question: ['read-dashboards'],
+        images: ['read-dashboards'],
+        artifact: ['read-dashboards'],
       });
     });
   });
