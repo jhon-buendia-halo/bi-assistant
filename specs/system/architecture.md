@@ -1240,11 +1240,11 @@ flowchart LR
   - **B — Mastra's `watch`/`cancel` on the workflow run:** rejected; internal API, every agent step would be rewritten off the session turn path, and the evals would change.
   - **C — Keep the stream open from a root frontend service:** rejected; a reload or closed window still stops the run, and each background run holds one of 6 connections per origin.
 
-#### ADR-0049 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
+#### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
 - **Status:** Accepted
 - **Date:** 2026-11-15
 - **Context:**
-  - Datasources R37 applies a query's row limit after the statement runs, in memory, so no query showed more than 500 rows and an answer kept 200; past that, the only way was the CSV (api.md 143, 148). Users with thousands of rows asked to page through and filter them (roadmap 1.27).
+  - Datasources R37 applies a query's row limit after the statement runs, in memory, so no query showed more than 500 rows and an answer kept 200; past that, the only way was the CSV (api.md 143, 148). Users with thousands of rows asked to page through and filter them (roadmap 1.28).
   - The read-only guard scans the whole statement, quoted identifiers included, so a wrapper that quotes a column such as `"Last Update"` would be refused if it were checked like the stored SQL.
 - **Decision:**
   - **A connector method `runPagedSql`** wraps the stored statement as an aliased subquery (its own top-level LIMIT, when it has one, raised to 50,001 as the CSV does; otherwise unlimited, so filters see the whole result): `SELECT _qti.*, COUNT(*) OVER () … FROM (<sql>) AS _qti WHERE … ORDER BY … LIMIT n OFFSET m`. One execution per page.

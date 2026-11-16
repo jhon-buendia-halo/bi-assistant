@@ -635,7 +635,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     });
   });
 
-  describe('a follow-up over an earlier result (roadmap 1.27.8)', () => {
+  describe('a follow-up over an earlier result (roadmap 1.28.8)', () => {
     const EARLIER: ExplorableQuery = {
       ref: 'Q1',
       sql: 'SELECT m.id AS match_id, m.stage FROM wc.public.matches m CROSS JOIN wc.public.squad_members s',
@@ -1202,7 +1202,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         expect.objectContaining({ imageNotes: NOTES }),
       );
       // Interpret follow-up passes them on to the question path (roadmap
-      // 1.27.8), and Check data quality on to Write answer.
+      // 1.28.8), and Check data quality on to Write answer.
       expect(outputs.get('interpret-follow-up')).toMatchObject({
         imageNotes: NOTES,
         followUp: null,

@@ -42,7 +42,7 @@ import { SESSION_ID_CONTEXT_KEY } from './visual.tools';
  *   projection with the message (`providerMetadata.mastra.modelOutput`), so
  *   memory replay on later turns sends the summary too, never the full
  *   report. `get_readiness_report` with `dimension` adds one page of that
- *   dimension's findings to the summary (story 1.27.12).
+ *   dimension's findings to the summary (story 1.28.12).
  * - Anything else that shows a tool result to a model (the tool-only
  *   synthesis pass, an eval judge) uses `readinessModelOutput` to get the
  *   same projection.
@@ -239,7 +239,7 @@ export const getReadinessReportTool = createTool({
         sessionId,
         reportId: optional(reportId),
         datasetName: optional(dataset),
-        // Left out when absent, so the call is as before (story 1.27.12).
+        // Left out when absent, so the call is as before (story 1.28.12).
         ...(dimension ? { dimension } : {}),
         ...(dimension && page !== undefined ? { page } : {}),
       }),

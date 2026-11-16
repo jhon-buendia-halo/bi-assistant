@@ -1,5 +1,5 @@
 /**
- * The rows behind a readiness finding (roadmap 1.27.11; data-readiness R34):
+ * The rows behind a readiness finding (roadmap 1.28.11; data-readiness R34):
  * one read-only statement per finding, built from its check kind in the
  * datasource's dialect, that the Assess Data Readiness workflow's Rows
  * behind findings step runs and records as a source of the answer.

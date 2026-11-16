@@ -16,7 +16,7 @@ import {
 } from './engine/types';
 
 // The findings come from the real checks, so a change to a check's wording
-// or fields that the builder reads breaks here (roadmap 1.27.11).
+// or fields that the builder reads breaks here (roadmap 1.28.11).
 const CTX: CheckContext = {
   thresholds: DEFAULT_THRESHOLDS,
   now: new Date('2026-11-16T00:00:00Z'),
@@ -49,7 +49,7 @@ function only(findings: Finding[]): Finding {
   return findings[0];
 }
 
-describe('findingRowsQuery (roadmap 1.27.11)', () => {
+describe('findingRowsQuery (roadmap 1.28.11)', () => {
   describe('completeness: the rows where the column is empty', () => {
     const finding = only(
       completenessCheck(

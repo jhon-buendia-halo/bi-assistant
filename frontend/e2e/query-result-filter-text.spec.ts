@@ -72,7 +72,7 @@ async function fillRun(page: Page, question: string, dataset: string): Promise<v
 test.describe("Feature: Filter a query's result in words", () => {
   test(
     'I filter the result of an answer query by typing what I want',
-    { tag: ['@demo', '@story-1.27.5'] },
+    { tag: ['@demo', '@story-1.28.5'] },
     async ({ page }) => {
       const finals = Number(
         await worldCupScalar(

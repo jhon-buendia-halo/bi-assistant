@@ -1,5 +1,5 @@
 /**
- * The figures an answer may derive from result rows (roadmap 1.28.8): the
+ * The figures an answer may derive from result rows (roadmap 1.29.8): the
  * writer's rules allow "averages, ratios and other derived figures", so a
  * check that a figure "comes from the rows" accepts, besides each cell, the
  * sum of each numeric column, the difference of two values and a share of

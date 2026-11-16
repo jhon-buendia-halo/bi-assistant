@@ -6,7 +6,7 @@ import type {
 import type { EvalCustomCheck } from './assistant.evals';
 
 /**
- * Code checks of the `result-explorer` set (agents.md 8.1, 2.16): what is
+ * Code checks of the `result-explorer` set (agents.md 8.1, 2.17): what is
  * deterministic about Nathan's reading of a request. The scored answer is
  * what `specOf` made of his reply, as JSON text (`ExplorerAnswer`: the
  * action, the 0-based candidate, the complete filters and sort, the absolute

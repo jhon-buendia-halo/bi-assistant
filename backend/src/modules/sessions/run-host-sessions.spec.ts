@@ -26,7 +26,7 @@ jest.mock('../../mastra/model-resolver', () => ({
     typeof c === 'object' && c !== null && 'kind' in c,
   resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
-// The query inspector's page path a follow-up pages through (roadmap 1.27.8).
+// The query inspector's page path a follow-up pages through (roadmap 1.28.8).
 const mockPageQuery = jest.fn();
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
@@ -268,7 +268,7 @@ interface BuildOptions {
   session?: Partial<SessionDoc>;
   /** The data-readiness service, for Assess Data Readiness runs. */
   readiness?: object;
-  /** The datasources service's guarded read-only SQL (roadmap 1.27.11). */
+  /** The datasources service's guarded read-only SQL (roadmap 1.28.11). */
   runReadOnlySql?: jest.Mock;
 }
 
@@ -410,7 +410,7 @@ function build(options: BuildOptions = {}) {
         return Promise.resolve({ plan: planOf({}, question), stopped: false });
       },
     ),
-    // Nathan's reading of a follow-up (roadmap 1.27.8): a new question
+    // Nathan's reading of a follow-up (roadmap 1.28.8): a new question
     // unless a test says otherwise.
     interpretResult: jest.fn((input: unknown, opts?: unknown) => {
       void input;
@@ -1351,7 +1351,7 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
     });
   });
 
-  // Roadmap 1.27.11; data-readiness R34: the rows behind each top finding
+  // Roadmap 1.28.11; data-readiness R34: the rows behind each top finding
   // are a source of the answer, ahead of the agent's own records.
   it("records the rows behind each top finding as the answer's sources, a failed query as a failed one, and leaves the agent's input as it was", async () => {
     const readiness = readinessService();
@@ -1450,7 +1450,7 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       ]),
     );
     // The agent's input is unchanged: the same question and no block that
-    // carries the finding queries (out of scope of 1.27.11).
+    // carries the finding queries (out of scope of 1.28.11).
     const [call] = ctx.calls['data-readiness'];
     expect(call.input).toEqual([
       { role: 'user', content: 'Assess the readiness of this dataset' },
@@ -1869,7 +1869,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     }
   });
 
-  it('answers 410 to a run stored under another contract (the Clarify path moved, roadmap 1.27.8): stopped with waitingFor expired, its turn dropped', async () => {
+  it('answers 410 to a run stored under another contract (the Clarify path moved, roadmap 1.28.8): stopped with waitingFor expired, its turn dropped', async () => {
     const ctx = build();
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
       plan: ASKING_PLAN,
@@ -1986,7 +1986,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
   });
 });
 
-describe('a follow-up run over an earlier result (roadmap 1.27.8; workflows R36)', () => {
+describe('a follow-up run over an earlier result (roadmap 1.28.8; workflows R36)', () => {
   const PAGE_2 = {
     columns: ['winner'],
     columnKinds: { winner: 'text' },

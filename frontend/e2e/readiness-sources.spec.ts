@@ -34,7 +34,7 @@ function sources(page: Page) {
 test.describe('Feature: Every workflow whose answer ran queries gets the query inspector', () => {
   test(
     'an Assess Data Readiness run with a drill-down query shows its sources and opens the inspector',
-    { tag: ['@demo', '@story-1.27.10'] },
+    { tag: ['@demo', '@story-1.28.10'] },
     async ({ page }) => {
       const from = `${worldCupKey('matches')} a CROSS JOIN ${worldCupKey('matches')} b`;
       const total = Number(await worldCupScalar(`SELECT COUNT(*) FROM ${from}`));
@@ -76,7 +76,7 @@ test.describe('Feature: Every workflow whose answer ran queries gets the query i
         },
       );
       await scenarioStep(page, 'Then the answer lists the query as a source', async () => {
-        // The rows behind the findings come first (1.27.11); the agent's
+        // The rows behind the findings come first (1.28.11); the agent's
         // drill-down query is the last source.
         await expect(sources(page).last()).toBeVisible();
       });

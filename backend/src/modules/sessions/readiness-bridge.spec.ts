@@ -512,7 +512,7 @@ describe('ReadinessBridge (agents.md 3.13)', () => {
     );
   });
 
-  describe('every finding of a dimension (story 1.27.12)', () => {
+  describe('every finding of a dimension (story 1.28.12)', () => {
     /** 120 findings: 60 completeness (low, then high, then medium), 60 validity. */
     function bigReport(id: string): ReadinessReport {
       const findings: Finding[] = [];

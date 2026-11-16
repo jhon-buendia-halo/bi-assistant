@@ -245,12 +245,12 @@ The query inspector over a session's assistant message (1.25.9; plan `docs/plans
 - Errors: as 147.
 
 #### 154. `POST /sessions/:id/messages/:message/answer/queries/:index/page`
-- Body: `PageRequest` (152). As 152 on the message's query. **Nothing is stored.** Roadmap 1.27.2; decision: [architecture.md](architecture.md) ADR-0049.
+- Body: `PageRequest` (152). As 152 on the message's query. **Nothing is stored.** Roadmap 1.28.2; decision: [architecture.md](architecture.md) ADR-0050.
 - Success `201`: `{ ok: true, result: PageResult }` (152).
 - Errors: the shared ones; then as 152.
 
 #### 155. `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter`
-- Body: `{ text: string; view?: ResultView }` (153). As 153 on the message's query: one call to `result-explorer`, the query its only candidate. **Nothing runs and nothing is stored.** Roadmap 1.27.4.
+- Body: `{ text: string; view?: ResultView }` (153). As 153 on the message's query: one call to `result-explorer`, the query its only candidate. **Nothing runs and nothing is stored.** Roadmap 1.28.4.
 - Success `201`: `{ ok: true, interpretation: FilterInterpretation }` (153).
 - Errors: the body's 400s of 153 first; then the shared ones; then as 153.
 
@@ -996,7 +996,7 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 The query inspector's endpoints over a run's stored answer and its `evidence` (3.6, [data-model.md](data-model.md) 3.4.2a; plan `docs/plans/m1-25-query-inspector.md`). `:index` is an `evidence[].index`: the position of the query's record in `answer.data`. Since 1.25.9 their logic is the engine `AnswerEvidenceService` (`sessions/query-evidence/answer-evidence.service.ts`), shared with 144-148, 154 and 155, and `:id` may also be a **draft run** held in memory (129): a stored run is looked up first, then a held draft run whose agent still exists (the rule of 129, `Agent "<id>" not found`, read as this 404). Rules for all seven:
 - Errors (Style B), in this order: `404 "Run \"<id>\" not found"` (also a draft run past its 30 minutes, dropped, or whose agent is gone); `404 "Run \"<id>\" has no answer"`; `400 "Wait for the run to finish"` (the run is `running` or `suspended`); `400 "Query <index> not found in the run's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). An answer stored without `evidence` has it derived from `data` for these checks.
 - Every write to a run's `answer` goes through **one lock per run**, so two writes cannot overwrite each other: each re-reads the run inside the lock, patches it and writes `answer`. This includes 128. A held draft run is written in memory, under the same lock.
-- Every statement runs through the datasource's `runReadOnlySql` directly (its read-only guard, and PostgreSQL's READ ONLY transaction), never through the SQL repair: a re-run executes the same statement. A page (152) runs through the datasource's `runPagedSql` instead (datasources R52, ADR-0049): the same stored statement, guarded, wrapped in an outer query; no repair either.
+- Every statement runs through the datasource's `runReadOnlySql` directly (its read-only guard, and PostgreSQL's READ ONLY transaction), never through the SQL repair: a re-run executes the same statement. A page (152) runs through the datasource's `runPagedSql` instead (datasources R52, ADR-0050): the same stored statement, guarded, wrapped in an outer query; no repair either.
 - The datasource of a query (as 133): the record's `evidence.datasourceId` when the run's datasets use it, else the run's only datasource; `400 "Several datasources are in scope for this run; this query cannot be re-run"` when there are several, `400 "No datasource is bound to this run's datasets"` when there is none.
 
 #### 139. `POST /workflow-runs/:id/answer/evidence`
@@ -1037,7 +1037,7 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 - Errors: as 142.
 
 #### 152. `POST /workflow-runs/:id/answer/queries/:index/page`
-- Body: `PageRequest`; every field optional. Roadmap 1.27.2; decision: [architecture.md](architecture.md) ADR-0049; types: `backend/src/modules/datasources/connectors/paged-sql.types.ts`.
+- Body: `PageRequest`; every field optional. Roadmap 1.28.2; decision: [architecture.md](architecture.md) ADR-0050; types: `backend/src/modules/datasources/connectors/paged-sql.types.ts`.
   ```ts
   type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'between' | 'in' | 'not_in'
     | 'contains' | 'not_contains' | 'starts_with' | 'is_null' | 'not_null';
@@ -1071,7 +1071,7 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 - Errors (400 unless stated): the shared ones; `"Query <index> has no SQL to run"` (a failed record); `"Query <index> is a sample; it has no full result to page"` (a `sample_rows` record); then, before any query: `"Page must be a whole number of at least 1"`; `"Page size must be a whole number from 1 to 100"`; `"Page <n> is past the 50,000-row limit"` (`(page - 1) × pageSize ≥ 50,000`); `"A view takes at most 10 filters"`; `"A view sorts by at most 3 columns"`; `"Unknown column \"<c>\""`; `"Column \"<c>\" appears more than once in the result; it cannot be filtered or sorted"`; `"Filter on <c>: <op> needs a value"`; `"Filter on <c>: <op> takes at most 50 values"`; `"Filter on <c>: \"<v>\" is not a number"` (or `is not true or false`, `is not a date`); a body of the wrong shape: `"The body must be a JSON object"`, `"filters must be a list"`, `"sort must be a list"`, `"Each filter names a column"`, `"Each sort key names a column"`, `"Filter on <c>: unknown operator \"<op>\""`, `"Filter on <c>: values must be a list"`, `"Sort on <c>: the direction is asc or desc"`. Then the datasource rule's two 400s; `"This warehouse does not support query parameters; filtering is unavailable"` (Databricks); the connector's own message as a 400 otherwise.
 
 #### 153. `POST /workflow-runs/:id/answer/queries/:index/interpret-filter`
-- Body: `{ text: string; view?: ResultView }`: the user's words (trimmed, not blank, at most 500 characters) and the view they see now (152's `ResultView`; omitted or `null` for the answer's stored rows). `view.filters` and `view.sort` are read as 152 reads a body's; a missing or invalid `view.page` is 1, `view.pageSize` 50. Roadmap 1.27.4; decision: [architecture.md](architecture.md) ADR-0049.
+- Body: `{ text: string; view?: ResultView }`: the user's words (trimmed, not blank, at most 500 characters) and the view they see now (152's `ResultView`; omitted or `null` for the answer's stored rows). `view.filters` and `view.sort` are read as 152 reads a body's; a missing or invalid `view.page` is 1, `view.pageSize` 50. Roadmap 1.28.4; decision: [architecture.md](architecture.md) ADR-0050.
 - Reads the words as a view of this query's full result with one call to `result-explorer` ([agents.md](agents.md) 2.16, `MastraService.interpretResult`): the query is the only candidate, `Q<n>` with its rationale, its stored columns, each column's kind (inferred from the stored rows as 152 infers it) and at most 5 distinct stored values per column (text cut to 60 characters). The model never sees the SQL or whole rows. Its reply is turned into a `PageRequest` by code (`specOf`): columns matched exactly, then without case; a filter or sort key on a column the query does not have, or with a value its column's kind cannot take, is left out and listed in `rejected`; at most 10 filters and 3 sort keys; the page move (keep, first, next, previous, last, to) resolved to an absolute page from 1 to the view's page count (`ceil(view.matchedRows / view.pageSize)`, when `matchedRows` is given). The request is then checked as 152 checks it. **Nothing runs and nothing is stored**: the client pages with 152.
 - Success `201`: `{ ok: true, interpretation: FilterInterpretation }`.
   ```ts

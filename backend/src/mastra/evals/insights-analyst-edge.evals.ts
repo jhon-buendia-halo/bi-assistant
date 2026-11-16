@@ -14,7 +14,7 @@ import { answerHasNumber, sqlTruthCheck } from './sql-truth-check';
 
 /**
  * The `insights-analyst-edge` eval set (agents.md 8.1, 5.11; roadmap
- * 1.28.6): Michael's Analyse through the whole Answer a Business Question
+ * 1.29.6): Michael's Analyse through the whole Answer a Business Question
  * workflow on the Edge Cases sample. The truth of every figure is read with
  * live SQL at eval time (`sqlTruthCheck`), and two checks compare the
  * workflow's steps with each other (`details.steps`): Plan's entities are

@@ -65,7 +65,7 @@ function rejection(run: () => unknown): string {
   throw new Error('expected a 400');
 }
 
-describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
+describe('buildPagedSql: the wrapper (plan 1.28.1)', () => {
   it('wraps the stored SQL, unlimited when it has no LIMIT of its own, with the total, the order and the page window', () => {
     const built = buildPagedSql('postgres', stmt({ offset: 100 }));
 

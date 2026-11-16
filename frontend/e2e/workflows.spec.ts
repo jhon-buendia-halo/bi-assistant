@@ -26,7 +26,7 @@ const V2_ID = 'answer-business-question';
  * question, Load catalog, Interpret follow-up, Plan, then a branch (Clarify
  * waits for the answer), then Analyse and Validate (retried once), Write
  * answer and Wrap up; last the follow-up branch (Page result, Page answer,
- * roadmap 1.27.8).
+ * roadmap 1.28.8).
  */
 const V2_STEP_IDS = [
   ['read-images', 'Read images'],

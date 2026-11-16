@@ -3,7 +3,7 @@ import { derivedFigures, matchesRounded } from './derived-figures';
 
 /**
  * The custom checks of the `answer-writer` eval set (agents.md 8.1, 2.11;
- * roadmap 1.28.3): deterministic checks over the answer Jessica's Write
+ * roadmap 1.29.3): deterministic checks over the answer Jessica's Write
  * answer call returns (the scored answer is `{ headline, answer }` as JSON).
  * A check answers `undefined` when it passes and the reason when it fails.
  */

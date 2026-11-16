@@ -207,7 +207,7 @@ export function topFindingCounts(outputs: Record<string, unknown>[]): number[] {
 
 /**
  * The `findings` pages of `dimension` that `get_readiness_report` returned
- * (story 1.27.12), in call order.
+ * (story 1.28.12), in call order.
  */
 export function dimensionPages(
   calls: EvalRawToolCall[],
@@ -225,7 +225,7 @@ export function dimensionPages(
 
 /**
  * Counts an answer may give by counting every finding of a dimension once
- * all its pages were read (story 1.27.12): per severity, per table and the
+ * all its pages were read (story 1.28.12): per severity, per table and the
  * number of tables. A count of some of the pages is never taken for a count
  * of the data.
  */
@@ -453,7 +453,7 @@ export function calledAtMost(name: string, max: number): EvalCustomCheck {
 export function onlyDefinedInputs(): EvalCustomCheck {
   const allowed = new Set(['dataset', 'reportId']);
   const listing = new Set(['dimension', 'page']);
-  // The id stays as it was, so runs before story 1.27.12 compare.
+  // The id stays as it was, so runs before story 1.28.12 compare.
   return drCheck(
     'readiness tools were called only with dataset and reportId',
     ({ toolCalls }) => {
@@ -596,7 +596,7 @@ export function assessOnlyWithoutReport(): EvalCustomCheck {
   );
 }
 
-// ------------------------------- every finding of a dimension (story 1.27.12)
+// ------------------------------- every finding of a dimension (story 1.28.12)
 
 /** Every page of `dimension`'s findings, 1 to its pageCount, was read. */
 export function readsEveryPage(dimension: string): EvalCustomCheck {

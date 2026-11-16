@@ -3,7 +3,7 @@ import { isolatedCase } from './isolated-call-target';
 import type { ImageReaderEvalInput } from './isolated-call-targets';
 
 /**
- * The `image-reader` eval set (agents.md 8.1, 2.15; roadmap 1.28.5): Zoe's
+ * The `image-reader` eval set (agents.md 8.1, 2.15; roadmap 1.29.5): Zoe's
  * Read images call alone, on generated images committed under
  * `__fixtures__/images/` (`backend/scripts/generate-eval-images.cjs`). The
  * scored answer is `{ imageNotes, imageCount }` as JSON: the notes are the

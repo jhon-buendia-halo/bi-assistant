@@ -1,10 +1,10 @@
 /**
- * The result explorer's catalogue data (agents.md 2.16; plan
- * docs/plans/m1-27-result-explorer.md 0.3): its job description, its reply
+ * The result explorer's catalogue data (agents.md 2.17; plan
+ * docs/plans/m1-28-result-explorer.md 0.3): its job description, its reply
  * schema, the candidates and the request it reads, and `specOf`, the pure
  * code that turns its reply into a `FilterInterpretation` over the known
  * columns only. Framework-free (Zod only), so Jest loads it without Mastra;
- * `explore_result` (1.27.7) and the follow-up branch (1.27.8) reuse it.
+ * `explore_result` (1.28.7) and the follow-up branch (1.28.8) reuse it.
  */
 import { z } from 'zod';
 import { RESULT_EXPLORER_AGENT_KEY } from '../agent-constants';

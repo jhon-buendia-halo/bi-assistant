@@ -78,7 +78,7 @@ async function run(check: EvalCustomCheck, answer: string) {
   });
 }
 
-describe('analysis-planner checks (story 1.28.2)', () => {
+describe('analysis-planner checks (story 1.29.2)', () => {
   it('planParses refuses prose and accepts a plan', async () => {
     expect(await run(planParses(), plan())).toBeUndefined();
     expect(await run(planParses(), 'I would count the orders.')).toBeDefined();

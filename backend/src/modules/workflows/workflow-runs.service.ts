@@ -647,7 +647,7 @@ export class WorkflowRunsService implements OnModuleInit {
    * `Answer is required`; 400 `Step "<stepId>" is not waiting for an
    * answer`. A run whose workflow's contract changed since it started
    * (its stored `contractHash`, data-model 3.16; e.g. the Clarify path
-   * that moved under `question-path` in roadmap 1.27.8) cannot be resumed
+   * that moved under `question-path` in roadmap 1.28.8) cannot be resumed
    * either: 410, as an expired run. A run that passes is taken out of the
    * waiting runs, so it is resumed once.
    */

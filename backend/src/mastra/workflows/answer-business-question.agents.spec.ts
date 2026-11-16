@@ -139,7 +139,7 @@ describe("the model calls with Read images' notes", () => {
   });
 });
 
-describe('the findings as the writer reads them (roadmap 1.28.8, issue D)', () => {
+describe('the findings as the writer reads them (roadmap 1.29.8, issue D)', () => {
   it('reads a warning-only check that did not pass as a warning, never as failed', () => {
     expect(findingStatus({ passed: true, check: 'Ran a query' })).toBe(
       'passed',

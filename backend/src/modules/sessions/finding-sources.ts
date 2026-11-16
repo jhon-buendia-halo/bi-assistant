@@ -1,5 +1,5 @@
 /**
- * Assess Data Readiness's Rows behind findings step (roadmap 1.27.11;
+ * Assess Data Readiness's Rows behind findings step (roadmap 1.28.11;
  * agents.md 5.13; data-readiness R34): the rows behind each of a report's
  * top findings, one guarded read-only query each, handed to the turn as a
  * `run_readonly_sql` source with its query facts. A query that fails is a

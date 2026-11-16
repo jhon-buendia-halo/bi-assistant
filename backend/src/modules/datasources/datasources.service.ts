@@ -268,7 +268,7 @@ export class DatasourcesService {
         );
   }
 
-  /** One page of a stored statement's result (datasources R52, ADR-0049). */
+  /** One page of a stored statement's result (datasources R52, ADR-0050). */
   async runPagedSql(id: string, stmt: PagedStatement): Promise<PagedRows> {
     const ds = await this.get(id);
     return this.connector(ds.kind).runPagedSql(ds.config, stmt);

@@ -9,7 +9,7 @@ import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "A follow-up over an earlier result" in
- * specs/capabilities/workflows/spec.md (R36, roadmap 1.27.8): a follow-up
+ * specs/capabilities/workflows/spec.md (R36, roadmap 1.28.8): a follow-up
  * run of Answer a Business Question that asks for the next page answers
  * with that page of the earlier answer's query, without planning. The
  * `result-explorer` reply (Interpret follow-up) comes from the LLM stub's
@@ -81,7 +81,7 @@ async function fillRun(page: Page, question: string, dataset: string): Promise<v
 test.describe('Feature: A follow-up over an earlier result', () => {
   test(
     'A follow-up asking for the next page answers with that page of the earlier result',
-    { tag: ['@demo', '@story-1.27.8'] },
+    { tag: ['@demo', '@story-1.28.8'] },
     async ({ page }) => {
       // The fixture's tables are small (16 matches): every match with every
       // squad member gives a result of over a thousand rows.

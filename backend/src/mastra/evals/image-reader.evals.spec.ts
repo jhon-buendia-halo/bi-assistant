@@ -62,7 +62,7 @@ async function run(check: EvalCustomCheck, answer: string) {
   });
 }
 
-describe('image-reader checks (story 1.28.5)', () => {
+describe('image-reader checks (story 1.29.5)', () => {
   it('copiesFigures and inventsNoFigure', async () => {
     const good = notes(
       '### Image 1: Revenue by region (chart)\nNorth 1,204.50, South 980, East 15.3%, West 2,000,000.',
@@ -84,7 +84,7 @@ describe('image-reader checks (story 1.28.5)', () => {
     ).toBeDefined();
   });
 
-  it('inventsNoFigure reads a date as one figure (1.28.8)', async () => {
+  it('inventsNoFigure reads a date as one figure (1.29.8)', async () => {
     const check = inventsNoFigure(['-4,250.75', '2024-01-15', '2024-02-03']);
     expect(
       await run(

@@ -1,6 +1,6 @@
-# M1-28 — Inconsistency report: every agent of Answer a Business Question and Assess Data Readiness
+# M1-29 — Inconsistency report: every agent of Answer a Business Question and Assess Data Readiness
 
-Roadmap 1.28.8. Model: CLIProxyAPI, `claude-sonnet-5-5` (Anthropic style), fresh copies of a data dir holding the "Edge Cases" and "World Cup" samples. Three runs per case. Sets and cases: [agents.md](../../specs/system/agents.md) 8.1; plan: [docs/plans/m1-28-agent-evals.md](../../docs/plans/m1-28-agent-evals.md).
+Roadmap 1.29.8. Model: CLIProxyAPI, `claude-sonnet-5-5` (Anthropic style), fresh copies of a data dir holding the "Edge Cases" and "World Cup" samples. Three runs per case. Sets and cases: [agents.md](../../specs/system/agents.md) 8.1; plan: [docs/plans/m1-29-agent-evals.md](../../docs/plans/m1-29-agent-evals.md).
 
 ## Results by round
 
@@ -13,7 +13,7 @@ Roadmap 1.28.8. Model: CLIProxyAPI, `claude-sonnet-5-5` (Anthropic style), fresh
 | `answer-writer` | Jessica (Write answer) | 10 | 8, 8, 8 | 9, 7, 8 | 9, 9, 10 → 10, 10, 10 (round 4, case fixed) |
 | `image-reader` | Zoe (Read images) | 6 | 5, 5, 5 | 5, 6, 6 | — |
 | `insights-analyst-edge` | Michael (whole workflow) | 8 | 7, 6, 5 | 7, 8, 8 | 8, 7*, 8 |
-| `insights-analyst` (World Cup, existing) | Michael (whole workflow) | 10 | 29/30 before M1-28 | 10, 9, 10 | 10, 9, 9 |
+| `insights-analyst` (World Cup, existing) | Michael (whole workflow) | 10 | 29/30 before M1-29 | 10, 9, 10 | 10, 9, 9 |
 
 \* a run error, not the agent.
 
@@ -53,7 +53,7 @@ Each failure was read (answer, tool calls, the check's reason) and classed as an
 - **B** (Sarah's chat prompt served to the tool-less Check data quality call): not seen. `data-quality-check` 24 of 24, `dq-non-readiness-question` included; no refusal, no prose. Not changed.
 - **C** (Explain report drops the workflow's question): not a visible bug. The catalog copies the question (or its default) into the run's input, so the turn input is the same text; `rw-stale-tables` 3 of 3.
 - **D**: fixed (above).
-- **A** (`dr-no-sql` scorer collision): fixed in 1.28.1.
+- **A** (`dr-no-sql` scorer collision): fixed in 1.29.1.
 
 ### Run errors (not agents)
 

@@ -10,7 +10,7 @@ import {
 
 /**
  * The eval set of Sarah's Check data quality call (agents.md 8.1, 5.11,
- * epic M1-28 story 1.28.4), run on the `data-readiness:check-data-quality`
+ * epic M1-29 story 1.29.4), run on the `data-readiness:check-data-quality`
  * target over the Edge Cases sample. A case is the frozen request Sarah gets
  * in the Answer a Business Question workflow: the question, the tables, the
  * SQL (no rows) and the engine's numbered findings. The findings are written

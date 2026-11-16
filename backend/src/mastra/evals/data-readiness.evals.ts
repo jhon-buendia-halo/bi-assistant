@@ -298,7 +298,7 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
     id: 'dr-all-completeness-findings',
     question: 'What are all the completeness issues?',
     intent:
-      'D15, story 1.27.12 (execution 129ad364): every completeness finding is read from the stored report with get_readiness_report and dimension "completeness", page by page; the answer gives the total the report states and never recounts nulls with run_readonly_sql.',
+      'D15, story 1.28.12 (execution 129ad364): every completeness finding is read from the stored report with get_readiness_report and dimension "completeness", page by page; the answer gives the total the report states and never recounts nulls with run_readonly_sql.',
     scorers: [checks.calledTool('get_readiness_report'), checks.noToolErrors()],
     customChecks: [
       calledWithInput('get_readiness_report', 'dimension', 'completeness'),

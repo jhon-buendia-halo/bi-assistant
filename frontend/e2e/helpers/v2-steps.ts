@@ -29,7 +29,7 @@ export const V2_QUALITY_LINE =
   'Check the data quality behind an answer from Questions to Insights.';
 
 /**
- * The first line of `result-explorer`'s instructions (roadmap 1.27.4,
+ * The first line of `result-explorer`'s instructions (roadmap 1.28.4,
  * backend `result-explorer.prompts.ts`): the structured call that turns a
  * reader's words into a view of a query result. Keep it equal to that file.
  */
@@ -41,7 +41,7 @@ export function isResultExplorerCall(systemTexts: string[]): boolean {
   return systemTexts.some((text) => firstLine(text) === RESULT_EXPLORER_LINE);
 }
 
-/** `result-explorer`'s reply (plan 1.27, 0.3). */
+/** `result-explorer`'s reply (plan 1.28, 0.3). */
 export interface ExplorerReply {
   action: 'explore' | 'new-question';
   query: number | null;

@@ -106,7 +106,7 @@ export interface LlmStub {
   plan: (request: StubRequest) => V2Plan;
   /**
    * `result-explorer`'s reply (a filter in words, or Answer a Business
-   * Question's Interpret follow-up, roadmap 1.27.8). The default reads a new
+   * Question's Interpret follow-up, roadmap 1.28.8). The default reads a new
    * question, so a follow-up run plans as before; a test that explores sets it.
    */
   explore: (request: StubRequest) => ExplorerReply;

@@ -58,7 +58,7 @@ async function run(check: EvalCustomCheck, answer: string) {
   });
 }
 
-describe('answer-writer checks (story 1.28.3)', () => {
+describe('answer-writer checks (story 1.29.3)', () => {
   it('answerParses refuses prose', async () => {
     expect(
       await run(answerParses(), written('37,712 orders were cancelled.')),
@@ -84,7 +84,7 @@ describe('answer-writer checks (story 1.28.3)', () => {
     expect(await run(check, written('The top 5 statuses.'))).toBeUndefined();
   });
 
-  it('figuresFromRows accepts derived figures (sum, difference, share) and still refuses a made-up one (1.28.8)', async () => {
+  it('figuresFromRows accepts derived figures (sum, difference, share) and still refuses a made-up one (1.29.8)', async () => {
     const counts = [
       { status: 'delivered', orders: 112319 },
       { status: 'returned', orders: 37941 },

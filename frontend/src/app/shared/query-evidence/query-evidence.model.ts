@@ -70,7 +70,7 @@ export interface QueryEvidence {
   rowLimit?: number;
   tables?: QueryTableSize[];
   explanation?: QueryExplanation;
-  /** Set on an `explore_result` record: the view the answer showed (roadmap 1.27.7). */
+  /** Set on an `explore_result` record: the view the answer showed (roadmap 1.28.7). */
   view?: ResultView;
 }
 
@@ -84,8 +84,8 @@ export interface QueryRerunResult {
   ranAt: string;
 }
 
-// Paging, filtering and sorting a stored query's full result (roadmap 1.27,
-// ADR-0049). A copy of the wire types of the backend's
+// Paging, filtering and sorting a stored query's full result (roadmap 1.28,
+// ADR-0050). A copy of the wire types of the backend's
 // `datasources/connectors/paged-sql.types.ts`: change both together.
 
 export const FILTER_OPS = [
@@ -106,7 +106,7 @@ export const FILTER_OPS = [
 ] as const;
 export type FilterOp = (typeof FILTER_OPS)[number];
 
-/** The inspector's label of each operator (plan 1.27, 0.5). */
+/** The inspector's label of each operator (plan 1.28, 0.5). */
 export const FILTER_OP_LABELS: Record<FilterOp, string> = {
   eq: 'is',
   neq: 'is not',

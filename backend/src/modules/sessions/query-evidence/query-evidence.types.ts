@@ -22,7 +22,7 @@ export interface QueryFacts {
   totalRows?: number;
   /** The tool's cap for this call: `run_readonly_sql` limit ?? 100, `sample_rows` limit ?? 10. */
   rowLimit?: number;
-  /** `explore_result` only: the view its page was read with (roadmap 1.27.7). */
+  /** `explore_result` only: the view its page was read with (roadmap 1.28.7). */
   view?: ResultView;
 }
 
@@ -93,7 +93,7 @@ export interface QueryEvidence {
   /**
    * Set on an `explore_result` record only: the view (filters, sort, page)
    * its rows were read with; the inspector opens the query on it (roadmap
-   * 1.27.7, agent-answers R83, R84). Never on the record, which models read.
+   * 1.28.7, agent-answers R83, R84). Never on the record, which models read.
    */
   view?: ResultView;
 }

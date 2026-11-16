@@ -21,7 +21,7 @@ import {
 } from '../../datasources/connectors/paged-sql.types';
 
 /**
- * The page engine (roadmap 1.27.2, api.md 152, 154): a `PageRequest` checked
+ * The page engine (roadmap 1.28.2, api.md 152, 154): a `PageRequest` checked
  * against one stored query and turned into the connector's `PagedStatement`,
  * and the connector's rows into a `PageResult`. Pure: no query, no store.
  * Every refusal is a 400, raised before any query runs.

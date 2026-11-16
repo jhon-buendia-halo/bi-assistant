@@ -270,7 +270,7 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
     });
   });
 
-  // Roadmap 1.27.11: the rows behind the report's top findings become the
+  // Roadmap 1.28.11: the rows behind the report's top findings become the
   // answer's sources before the agent explains the report.
   it('looks up the rows behind the findings after Save report and before Explain report', async () => {
     const given = runtime();

@@ -65,7 +65,7 @@ async function run(check: EvalCustomCheck, answer: string, sql: string[] = []) {
 const ctx = (answer: string) =>
   ({ answer, parsed: undefined, details: undefined }) as never;
 
-describe('insights-analyst-edge checks (story 1.28.6)', () => {
+describe('insights-analyst-edge checks (story 1.29.6)', () => {
   it('answerKeepsTie wants the tie stated', async () => {
     expect(
       await run(answerKeepsTie(), 'Five products tie at 50,000,000.00 each.'),
@@ -90,7 +90,7 @@ describe('insights-analyst-edge checks (story 1.28.6)', () => {
     ).toBeDefined();
   });
 
-  it('answerSaysNoRows accepts a summary table of zeros (1.28.8)', async () => {
+  it('answerSaysNoRows accepts a summary table of zeros (1.29.8)', async () => {
     const summary =
       'No gift cards have been issued.\n\n| Measure | Result |\n|---|---|\n| Gift cards issued | 0 |\n| Total value | none |';
     expect(await run(answerSaysNoRows('gift cards'), summary)).toBeUndefined();

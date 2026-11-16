@@ -317,7 +317,7 @@ describe('the readiness tools (agents.md 3.13)', () => {
       });
     });
 
-    it('takes an optional dimension (the engine ids) and a 1-based page (story 1.27.12)', () => {
+    it('takes an optional dimension (the engine ids) and a 1-based page (story 1.28.12)', () => {
       const schema = readinessTools.get_readiness_report
         .inputSchema as unknown as {
         safeParse: (v: unknown) => { success: boolean };

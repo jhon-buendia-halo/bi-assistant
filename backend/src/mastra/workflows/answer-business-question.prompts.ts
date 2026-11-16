@@ -187,7 +187,7 @@ function queryLines(query: AnalyseQuery, index: number): string {
 /**
  * How a Validate finding reads to the writer: a warning-only check that did
  * not pass is a `warning`, not a `failed` check, so it never becomes a
- * caveat (roadmap 1.28.8, known issue D).
+ * caveat (roadmap 1.29.8, known issue D).
  */
 export function findingStatus(finding: {
   passed: boolean;

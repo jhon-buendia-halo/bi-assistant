@@ -190,7 +190,7 @@ export interface DataReadinessAssessmentRuntime {
   /** Save report: stores it and shows its readiness card. */
   save(): Promise<{ reportId: string }>;
   /**
-   * Rows behind findings (roadmap 1.27.11): one read-only query per top
+   * Rows behind findings (roadmap 1.28.11): one read-only query per top
    * finding of the saved report, each recorded as a source of the answer;
    * a failed query is a failed source, never a failed run. `stopped` when
    * the run was stopped meanwhile.

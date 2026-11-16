@@ -155,7 +155,7 @@ function withExplicit(base: PageRequest, input: ExploreInput): PageRequest {
  * One page of an explorable query's full result, through the query
  * inspector's own page path (agents.md 3.15): the call `explore_result`
  * makes, shared with Answer a Business Question's Page result step
- * (roadmap 1.27.8). Its view is written beside the result as facts (under
+ * (roadmap 1.28.8). Its view is written beside the result as facts (under
  * `callId` when the call has one, and under the source SQL), never into
  * it. A refusal or failure comes back as `{ error }`, never thrown.
  */
@@ -223,7 +223,7 @@ export function exploreModelOutput(result: unknown): unknown {
 }
 
 /**
- * `explore_result` (agents.md 3.15; plan docs/plans/m1-27-result-explorer.md
+ * `explore_result` (agents.md 3.15; plan docs/plans/m1-28-result-explorer.md
  * 0.4): another page, a filter or an order over the full result of a query
  * an earlier call ran, read through the query inspector's page path. The
  * user's words go to `result-explorer`; explicit fields override what it

@@ -62,7 +62,7 @@ import { engineInputSchema, withContract } from './workflow-contract';
 //       not stopped, a follow-up over an earlier result → explore-result:
 //         page-result → page-answer)
 //
-// Interpret follow-up (roadmap 1.27.8) makes no model call on a run without
+// Interpret follow-up (roadmap 1.28.8) makes no model call on a run without
 // earlier queries; otherwise result-explorer reads whether the question asks
 // for another page, a filter or an order of an earlier result. Its "no"
 // (a new question, or a model error) plans the question as before.
@@ -187,7 +187,7 @@ function optionalRuntimeOf(params: {
     AnswerBusinessQuestionRuntime | undefined;
 }
 
-// A follow-up over an earlier result (roadmap 1.27.8): a code gate, then at
+// A follow-up over an earlier result (roadmap 1.28.8): a code gate, then at
 // most one result-explorer call. A run without earlier queries makes no
 // model call; a new question or a model error plans as before.
 const interpretFollowUpStep = createStep({
@@ -630,7 +630,7 @@ const questionPathWorkflow = createWorkflow({
   ])
   .commit();
 
-// A follow-up over an earlier result (roadmap 1.27.8): its page, then the
+// A follow-up over an earlier result (roadmap 1.28.8): its page, then the
 // answer written from it. Never waits.
 const exploreResultWorkflow = createWorkflow({
   id: 'explore-result',

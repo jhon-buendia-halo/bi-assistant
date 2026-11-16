@@ -55,9 +55,9 @@ export interface DatasourceConnector<
   ): Promise<QueryResult>;
   /**
    * One page of a stored statement's result, filtered and sorted in an outer
-   * query (datasources R52, ADR-0049): the stored SQL is checked read-only as
+   * query (datasources R52, ADR-0050): the stored SQL is checked read-only as
    * `runReadOnlySql` checks it, the wrapper is built from `stmt` with bound
-   * parameters. An empty `stmt.sort` means the default order (plan 1.27.1).
+   * parameters. An empty `stmt.sort` means the default order (plan 1.28.1).
    */
   runPagedSql(config: TConfig, stmt: PagedStatement): Promise<PagedRows>;
   /**
@@ -174,7 +174,7 @@ export function assertReadOnlySql(sql: string): string {
  * The stored statement made ready to wrap (datasources R52): leading fences
  * and comments peeled, a trailing comment and semicolon dropped, then the
  * read-only guard of `runReadOnlySql`. Only this text is guarded; the
- * connector's wrapper around it is code (ADR-0049).
+ * connector's wrapper around it is code (ADR-0050).
  */
 export function cleanReadOnlySql(sql: string): string {
   const framed = stripSqlFraming((sql ?? '').trim());

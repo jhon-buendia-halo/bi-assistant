@@ -490,7 +490,7 @@ export interface AnswerBusinessQuestionRuntime {
     imageNotes?: string;
   }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
   /**
-   * The run's earlier queries (roadmap 1.27.8): an earlier run's answer's
+   * The run's earlier queries (roadmap 1.28.8): an earlier run's answer's
    * queries on a follow-up, a chat's earlier answers' queries. Absent or
    * empty on a first run: Interpret follow-up then makes no model call.
    */
@@ -1190,7 +1190,7 @@ export function turnSummaryOf(
 }
 
 /**
- * Interpret follow-up (roadmap 1.27.8): a code gate, then at most one
+ * Interpret follow-up (roadmap 1.28.8): a code gate, then at most one
  * result-explorer call. A run without earlier queries (every first run,
  * every eval case) makes no model call and plans as before. Otherwise the
  * words are read against every earlier query, from the latest one's view:
@@ -1270,7 +1270,7 @@ function pageHeadline(
 }
 
 /**
- * Page answer (roadmap 1.27.8): the run's answer from one page of an
+ * Page answer (roadmap 1.28.8): the run's answer from one page of an
  * earlier query's result, written by code: the headline (which rows, of
  * how many), the query and what the words were understood as, a Markdown
  * table of the page's rows, and where the page sits.

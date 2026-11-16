@@ -13,7 +13,7 @@ import type {
 
 /**
  * One page of every finding of a dimension, read from the stored report
- * (`get_readiness_report` with `dimension`, agents.md 3.13, story 1.27.12):
+ * (`get_readiness_report` with `dimension`, agents.md 3.13, story 1.28.12):
  * most severe first, then in report order; never recomputed.
  */
 export interface ReadinessFindingsPage {
@@ -74,7 +74,7 @@ export interface ReadinessToolServices {
     sessionId: string;
     reportId?: string;
     datasetName?: string;
-    /** Adds that dimension's findings page to the summary (story 1.27.12). */
+    /** Adds that dimension's findings page to the summary (story 1.28.12). */
     dimension?: string;
     /** 1-based page of those findings; the first when absent. */
     page?: number;

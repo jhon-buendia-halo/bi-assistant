@@ -208,7 +208,7 @@ function dimensionOf(name: string): Dimension {
 
 /**
  * One page of every finding of `dimension` in a stored report
- * (`get_readiness_report` with `dimension`, agents.md 3.13, story 1.27.12):
+ * (`get_readiness_report` with `dimension`, agents.md 3.13, story 1.28.12):
  * most severe first, then in report order, `FINDINGS_PAGE_SIZE` a page. Read
  * from the report, never recomputed. Throws the text the model sees for an
  * unknown dimension or a page past the last.

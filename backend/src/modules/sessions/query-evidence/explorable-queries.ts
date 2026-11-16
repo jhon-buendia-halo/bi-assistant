@@ -1,10 +1,10 @@
 /**
- * The queries a chat turn may explore with `explore_result` (roadmap 1.27.7,
- * agents.md 3.15, plan docs/plans/m1-27-result-explorer.md 0.4 and 2): the
+ * The queries a chat turn may explore with `explore_result` (roadmap 1.28.7,
+ * agents.md 3.15, plan docs/plans/m1-28-result-explorer.md 0.4 and 2): the
  * run's or session's earlier queries, then the turn's own. Each one keeps
  * its SQL, its columns with their kinds and a few stored values, never whole
  * rows. Pure (no Mastra import, no query, no store): the turn engine, the
- * workflow runs and the tool share it, and 1.27.8's follow-up branch reuses
+ * workflow runs and the tool share it, and 1.28.8's follow-up branch reuses
  * it.
  */
 import {

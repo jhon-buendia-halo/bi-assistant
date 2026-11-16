@@ -513,11 +513,11 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
   );
 });
 
-// Roadmap 1.27.11 (data-readiness R34): Rows behind findings runs one
+// Roadmap 1.28.11 (data-readiness R34): Rows behind findings runs one
 // read-only query per top finding and records it as a source of the answer.
-// The run page lists those sources once 1.27.10 shows sources for every
+// The run page lists those sources once 1.28.10 shows sources for every
 // workflow run with queries.
-test('@demo @story-1.27.11 Each readiness finding opens the rows behind it', async ({
+test('@demo @story-1.28.11 Each readiness finding opens the rows behind it', async ({
   page,
 }) => {
   stub.reply = readReportThenAnswer;

@@ -14,7 +14,7 @@ import {
 
 /**
  * The custom checks of the `readiness-workflow` set (agents.md 8.1, story
- * 1.28.7): Explain report as the Assess Data Readiness workflow runs it.
+ * 1.29.7): Explain report as the Assess Data Readiness workflow runs it.
  * The saved report is `details.report` (the target's own record of what the
  * engine scored), so a check compares the answer with it, not with what the
  * agent chose to read. Each answers `undefined` when it passes and the

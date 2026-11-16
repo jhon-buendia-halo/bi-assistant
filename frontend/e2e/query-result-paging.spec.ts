@@ -71,7 +71,7 @@ async function fillRun(page: Page, question: string, dataset: string): Promise<v
 test.describe("Feature: Page, sort and filter a query's result", () => {
   test(
     'I page, sort and filter the full result of an answer query',
-    { tag: ['@demo', '@story-1.27.3'] },
+    { tag: ['@demo', '@story-1.28.3'] },
     async ({ page }) => {
       // The fixture's tables are small (16 matches): every match with every
       // squad member gives a result of over a thousand rows.

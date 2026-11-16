@@ -35,7 +35,7 @@ import { engineInputSchema, withContract } from './workflow-contract';
 //
 // The first five steps are code: the deterministic engine owns every score
 // (data-readiness R4), and Rows behind findings runs one read-only query
-// per top finding, recorded as a source of the answer (roadmap 1.27.11).
+// per top finding, recorded as a source of the answer (roadmap 1.28.11).
 // Explain report runs the Data Readiness Agent over the stored report. A stopped run bails at the step it was stopped in,
 // which ends the run as a success with that step's output (`stopped`).
 //

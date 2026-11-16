@@ -118,7 +118,7 @@ describe('the target a run uses', () => {
   });
 
   it("refuses to run all of an agent's sets when they use several targets", () => {
-    // Sarah's chat set and her Check data quality set (story 1.28.4).
+    // Sarah's chat set and her Check data quality set (story 1.29.4).
     expect(evalTargetIdFor('data-readiness')).toEqual({
       error: expect.stringContaining('run one set at a time') as string,
     });

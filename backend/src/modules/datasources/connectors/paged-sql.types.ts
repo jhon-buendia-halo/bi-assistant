@@ -1,6 +1,6 @@
 /**
  * The contract of a paged, filtered and sorted read of a stored query's
- * result (roadmap 1.27, ADR-0049, datasources R52). No framework import: the
+ * result (roadmap 1.28, ADR-0050, datasources R52). No framework import: the
  * connectors, the query-evidence layer, the `explore_result` tool and the
  * `result-explorer` agent all read it, and the frontend keeps a copy of the
  * wire types in `shared/query-evidence/query-evidence.model.ts`.
@@ -58,7 +58,7 @@ export interface PageRequest {
   pageSize?: number;
   /** At most `FILTERS_MAX`, AND-ed. */
   filters?: FilterSpec[];
-  /** At most `SORT_KEYS_MAX`; none = the default order (plan 1.27.1). */
+  /** At most `SORT_KEYS_MAX`; none = the default order (plan 1.28.1). */
   sort?: SortSpec[];
 }
 
@@ -116,7 +116,7 @@ export interface PagedStatement {
   filters: FilterSpec[];
   /**
    * The requested keys; empty = the default order, resolved by the
-   * connector (plan 1.27.1, 7: the stored outer ORDER BY when expressible,
+   * connector (plan 1.28.1, 7: the stored outer ORDER BY when expressible,
    * else the first column), always followed by every column as tie-breaker.
    */
   sort: SortSpec[];

@@ -105,7 +105,7 @@ const V2_STEP_TRAIL = [
   // The branches not taken, once the run ended: Read images (no images),
   // Clarify, Check data quality, which the input did not ask for
   // (agents.md 5.11), and the follow-up branch a first run never takes
-  // (roadmap 1.27.8).
+  // (roadmap 1.28.8).
   'read-images:skipped',
   'clarify:skipped',
   'check-data-quality:skipped',

@@ -42,7 +42,7 @@ import {
 } from './result-explorer.evals';
 import { explorerTurnAgent } from './result-explorer-eval-target';
 
-describe('result-explorer eval set (agents.md 8.1, 2.16)', () => {
+describe('result-explorer eval set (agents.md 8.1, 2.17)', () => {
   it('has 13 cases with unique ids, across every set too', () => {
     expect(RESULT_EXPLORER_EVAL_SET.cases).toHaveLength(13);
     const ids = EVAL_SETS.flatMap((s) => s.cases.map((c) => c.id));
@@ -60,7 +60,7 @@ describe('result-explorer eval set (agents.md 8.1, 2.16)', () => {
     expect(evalTargetFor('result-explorer').agentKey).toBe('result-explorer');
   });
 
-  it('has an Edge Cases set on the same target, its words distinct (story 1.28.6)', () => {
+  it('has an Edge Cases set on the same target, its words distinct (story 1.29.6)', () => {
     expect(RESULT_EXPLORER_EDGE_EVAL_SET).toMatchObject({
       fixtureId: 'edge-cases',
       agentKey: 'result-explorer',

@@ -21,7 +21,7 @@ import {
 } from './analysis-planner-eval-checks';
 
 /**
- * The `analysis-planner` eval set (agents.md 8.1, 2.11; roadmap 1.28.2):
+ * The `analysis-planner` eval set (agents.md 8.1, 2.11; roadmap 1.29.2):
  * Olivia's Plan call alone, on a frozen input built as the workflow builds
  * it (the question, the Edge Cases catalog block of Load catalog, and for
  * one case the answer to a Clarify question). The scored answer is the plan

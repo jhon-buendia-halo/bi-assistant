@@ -10,7 +10,7 @@
  * The flow (agents.md 5.11): Read images when the run has reference images
  * (its schemas are ./read-images.schemas.ts), Receive question → Load catalog
  * → Interpret follow-up, then either Page result → Page answer (a follow-up
- * over an earlier result, roadmap 1.27.8) or Plan, then a branch: Clarify
+ * over an earlier result, roadmap 1.28.8) or Plan, then a branch: Clarify
  * (the run waits for the user's answer, then goes back to
  * Plan with it), or the analysis loop (Analyse → Validate, retried once;
  * Analyse can wait for an answer too) → Write answer → Wrap up. A step
@@ -163,7 +163,7 @@ export const resultViewSchema = z.object({
 });
 
 /**
- * What Interpret follow-up read in a follow-up's words (roadmap 1.27.8):
+ * What Interpret follow-up read in a follow-up's words (roadmap 1.28.8):
  * another page, a filter or an order over one of the run's earlier
  * queries. A new question is no follow-up (`followUp: null`).
  */
@@ -516,7 +516,7 @@ export const turnSummarySchema = z.object({
  * The run's result (the workflow's output): the branch taken after
  * Interpret follow-up, keyed by its nested workflow id. `explore-result`
  * holds Page answer's summary (a follow-up over an earlier result,
- * roadmap 1.27.8); `question-path` holds the branch taken after the plan
+ * roadmap 1.28.8); `question-path` holds the branch taken after the plan
  * loop: `analysis-path` with `answer-path`'s Wrap up summary (absent when
  * the turn was stopped). A run waiting for an answer has no result until
  * it is resumed.
@@ -542,7 +542,7 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
     input: receivedQuestionSchema,
     output: catalogedQuestionSchema,
   },
-  // A follow-up over an earlier result (roadmap 1.27.8): no model call on
+  // A follow-up over an earlier result (roadmap 1.28.8): no model call on
   // a run without earlier queries.
   'interpret-follow-up': {
     input: catalogedQuestionSchema,

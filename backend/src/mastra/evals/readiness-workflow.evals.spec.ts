@@ -77,7 +77,7 @@ async function verdict(check: EvalCustomCheck, c: Ctx) {
   return check.run(c);
 }
 
-describe('readiness-workflow checks (story 1.28.7)', () => {
+describe('readiness-workflow checks (story 1.29.7)', () => {
   it('quotesReportScoreAndMaturity wants the saved score and band', async () => {
     const check = quotesReportScoreAndMaturity();
     expect(

@@ -160,7 +160,7 @@ import {
 import type { TurnOptions } from './turn-options';
 import type { SqlChecks } from './sql-checks';
 
-/** The count columns of the rows behind a readiness finding (1.27.11). */
+/** The count columns of the rows behind a readiness finding (1.28.11). */
 const FINDING_COUNT_COLUMNS = new Set(['matching_rows', 'occurrences']);
 
 /**
@@ -309,7 +309,7 @@ export class TurnEngine {
       session.messages,
     );
     options.requestContext.set(EXPLORABLE_QUERIES_CONTEXT_KEY, explorable);
-    // What v2's Interpret follow-up may page (roadmap 1.27.8): the earlier
+    // What v2's Interpret follow-up may page (roadmap 1.28.8): the earlier
     // queries as the turn starts, before it runs any of its own.
     const followUp: readonly ExplorableQuery[] = [...explorable];
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
@@ -566,7 +566,7 @@ export class TurnEngine {
     };
     // Assess Data Readiness's assessment, once Resolve dataset started it.
     let assessment: ReadinessAssessment | undefined;
-    // Its stored report, once Save report stored it (roadmap 1.27.11).
+    // Its stored report, once Save report stored it (roadmap 1.28.11).
     let savedReport: ReadinessReport | undefined;
     const startedAssessment = (): ReadinessAssessment => {
       if (!assessment) throw new Error('No assessment has been started');
@@ -850,7 +850,7 @@ export class TurnEngine {
               };
             }
           },
-          // v2's follow-up branch (roadmap 1.27.8): the earlier queries,
+          // v2's follow-up branch (roadmap 1.28.8): the earlier queries,
           // Nathan's reading of the words, the page and the answer.
           followUp,
           interpretFollowUp: async (request) => {
@@ -1010,7 +1010,7 @@ export class TurnEngine {
             if (shown) readinessReport = shown;
             return { reportId: saved.report.id };
           },
-          // Rows behind findings (roadmap 1.27.11; data-readiness R34): the
+          // Rows behind findings (roadmap 1.28.11; data-readiness R34): the
           // rows behind each top finding become the answer's first sources,
           // each shown as a SQL call and its result. Nothing reaches the
           // agent's prompt: the records only add sources to the answer.
@@ -1436,7 +1436,7 @@ export class TurnEngine {
         checkDataQuality: (input) =>
           captured(() => runtime.checkDataQuality(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
-        // A follow-up over an earlier result (roadmap 1.27.8). Nathan's
+        // A follow-up over an earlier result (roadmap 1.28.8). Nathan's
         // failure is no step's: the run plans the question instead.
         ...(runtime.followUp ? { followUp: runtime.followUp } : {}),
         interpretFollowUp: (input) => runtime.interpretFollowUp(input),

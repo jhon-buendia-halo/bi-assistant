@@ -317,29 +317,29 @@ roadmap.md:588-592  #### 1.26.2 — Saving a dataset and loading an inventory ru
 roadmap.md:594-598  #### 1.26.3 — Testing Data, ontology suggestions and the synthetic profile run in the background  `🚧 In progress`
 roadmap.md:600-604  #### 1.26.4 — Visual tailor and refresh, and eval runs, run in the background  `🚧 In progress`
 roadmap.md:606-611  #### 1.26.5 — Workflow runs keep running when the user leaves their page  `🚧 In progress`
-roadmap.md:613-693  ### Milestone 1.27 — Explore a query's full result: page, filter, sort (M1-27)
-roadmap.md:617-621  #### 1.27.1 — Paged SQL builder and the connectors' paged read  `✅ Done`
-roadmap.md:623-627  #### 1.27.2 — Page engine and the page routes  `✅ Done`
-roadmap.md:629-633  #### 1.27.3 — Query inspector: pager, sort and column filters  `✅ Done`
-roadmap.md:635-639  #### 1.27.4 — The result-explorer agent and the interpret-filter routes  `✅ Done`
-roadmap.md:641-645  #### 1.27.5 — Query inspector: filter in words and explore records  `✅ Done`
-roadmap.md:647-651  #### 1.27.6 — result-explorer evals  `✅ Done`
-roadmap.md:653-657  #### 1.27.7 — The explore_result tool for chat agents  `✅ Done`
-roadmap.md:659-663  #### 1.27.8 — A follow-up over an earlier result pages it in Answer a Business Question  `✅ Done`
-roadmap.md:665-669  #### 1.27.9 — Sources a reader can understand: numbered, described, one per table  `✅ Done`
-roadmap.md:671-675  #### 1.27.10 — Every workflow whose answer ran queries gets the query inspector  `✅ Done`
-roadmap.md:677-681  #### 1.27.11 — Each readiness finding opens the rows behind it  `✅ Done`
-roadmap.md:683-687  #### 1.27.12 — The Data Readiness agent lists every finding of a dimension from the report  `✅ Done`
-roadmap.md:689-693  #### 1.27.13 — An Edge Cases testing dataset  `✅ Done`
-roadmap.md:695-745  ### Milestone 1.28 — Border-case evals for every agent of the two workflows (M1-28)
-roadmap.md:699-703  #### 1.28.1 — Eval infrastructure for isolated agent calls and workflow targets  `✅ Done`
-roadmap.md:705-709  #### 1.28.2 — analysis-planner border-case evals  `✅ Done`
-roadmap.md:711-715  #### 1.28.3 — answer-writer border-case evals  `✅ Done`
-roadmap.md:717-721  #### 1.28.4 — Check data quality border-case evals  `✅ Done`
-roadmap.md:723-727  #### 1.28.5 — image-reader border-case evals  `✅ Done`
-roadmap.md:729-733  #### 1.28.6 — insights-analyst and result-explorer evals on Edge Cases  `✅ Done`
-roadmap.md:735-739  #### 1.28.7 — Explain report evals inside Assess Data Readiness  `✅ Done`
-roadmap.md:741-745  #### 1.28.8 — Baseline, inconsistency report and fixes  `✅ Done`
+roadmap.md:613-693  ### Milestone 1.28 — Explore a query's full result: page, filter, sort (M1-28)
+roadmap.md:617-621  #### 1.28.1 — Paged SQL builder and the connectors' paged read  `✅ Done`
+roadmap.md:623-627  #### 1.28.2 — Page engine and the page routes  `✅ Done`
+roadmap.md:629-633  #### 1.28.3 — Query inspector: pager, sort and column filters  `✅ Done`
+roadmap.md:635-639  #### 1.28.4 — The result-explorer agent and the interpret-filter routes  `✅ Done`
+roadmap.md:641-645  #### 1.28.5 — Query inspector: filter in words and explore records  `✅ Done`
+roadmap.md:647-651  #### 1.28.6 — result-explorer evals  `✅ Done`
+roadmap.md:653-657  #### 1.28.7 — The explore_result tool for chat agents  `✅ Done`
+roadmap.md:659-663  #### 1.28.8 — A follow-up over an earlier result pages it in Answer a Business Question  `✅ Done`
+roadmap.md:665-669  #### 1.28.9 — Sources a reader can understand: numbered, described, one per table  `✅ Done`
+roadmap.md:671-675  #### 1.28.10 — Every workflow whose answer ran queries gets the query inspector  `✅ Done`
+roadmap.md:677-681  #### 1.28.11 — Each readiness finding opens the rows behind it  `✅ Done`
+roadmap.md:683-687  #### 1.28.12 — The Data Readiness agent lists every finding of a dimension from the report  `✅ Done`
+roadmap.md:689-693  #### 1.28.13 — An Edge Cases testing dataset  `✅ Done`
+roadmap.md:695-745  ### Milestone 1.29 — Border-case evals for every agent of the two workflows (M1-29)
+roadmap.md:699-703  #### 1.29.1 — Eval infrastructure for isolated agent calls and workflow targets  `✅ Done`
+roadmap.md:705-709  #### 1.29.2 — analysis-planner border-case evals  `✅ Done`
+roadmap.md:711-715  #### 1.29.3 — answer-writer border-case evals  `✅ Done`
+roadmap.md:717-721  #### 1.29.4 — Check data quality border-case evals  `✅ Done`
+roadmap.md:723-727  #### 1.29.5 — image-reader border-case evals  `✅ Done`
+roadmap.md:729-733  #### 1.29.6 — insights-analyst and result-explorer evals on Edge Cases  `✅ Done`
+roadmap.md:735-739  #### 1.29.7 — Explain report evals inside Assess Data Readiness  `✅ Done`
+roadmap.md:741-745  #### 1.29.8 — Baseline, inconsistency report and fixes  `✅ Done`
 roadmap.md:747-751  ## Release 2 — Multi-user  (no target date yet)
 roadmap.md:751-751  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
 roadmap.md:753-755  ## Backlog
@@ -1712,21 +1712,21 @@ specs/epics/M1-26/spec.md:36-41  ## Specs touched
 specs/epics/M1-26/spec.md:43-48  ## Acceptance
 specs/epics/M1-26/spec.md:50-54  ## Dependencies, risks and open questions
 
-specs/epics/M1-27/spec.md:5-12  ## Goal
-specs/epics/M1-27/spec.md:14-18  ## Scope
-specs/epics/M1-27/spec.md:20-24  ## Out of scope
-specs/epics/M1-27/spec.md:26-42  ## Stories
-specs/epics/M1-27/spec.md:44-48  ## Specs touched
-specs/epics/M1-27/spec.md:50-55  ## Acceptance
-specs/epics/M1-27/spec.md:57-61  ## Dependencies, risks and open questions
+specs/epics/M1-28/spec.md:5-12  ## Goal
+specs/epics/M1-28/spec.md:14-18  ## Scope
+specs/epics/M1-28/spec.md:20-24  ## Out of scope
+specs/epics/M1-28/spec.md:26-42  ## Stories
+specs/epics/M1-28/spec.md:44-48  ## Specs touched
+specs/epics/M1-28/spec.md:50-55  ## Acceptance
+specs/epics/M1-28/spec.md:57-61  ## Dependencies, risks and open questions
 
-specs/epics/M1-28/spec.md:5-7  ## Goal
-specs/epics/M1-28/spec.md:9-11  ## Scope
-specs/epics/M1-28/spec.md:13-15  ## Out of scope
-specs/epics/M1-28/spec.md:17-28  ## Stories
-specs/epics/M1-28/spec.md:30-32  ## Specs touched
-specs/epics/M1-28/spec.md:34-36  ## Acceptance
-specs/epics/M1-28/spec.md:38-42  ## Dependencies, risks and open questions
+specs/epics/M1-29/spec.md:5-7  ## Goal
+specs/epics/M1-29/spec.md:9-11  ## Scope
+specs/epics/M1-29/spec.md:13-15  ## Out of scope
+specs/epics/M1-29/spec.md:17-28  ## Stories
+specs/epics/M1-29/spec.md:30-32  ## Specs touched
+specs/epics/M1-29/spec.md:34-36  ## Acceptance
+specs/epics/M1-29/spec.md:38-42  ## Dependencies, risks and open questions
 
 specs/product/non-functional.md:5-19  ## 1. Platforms and delivery
 specs/product/non-functional.md:21-33  ## 2. Local-first data
@@ -1779,7 +1779,7 @@ specs/system/agents.md:763-775  ### 2.12 `query-explainer` — Query Explainer
 specs/system/agents.md:777-787  ### 2.13 `dashboard-reader` (id `dashboard-reader`) — Dashboard Reader
 specs/system/agents.md:789-800  ### 2.14 `data-mapper` (id `data-mapper`) — Data Mapper
 specs/system/agents.md:802-828  ### 2.15 `image-reader` (id `image-reader`) — Image Reader
-specs/system/agents.md:830-843  ### 2.16 `result-explorer` — Result Explorer
+specs/system/agents.md:830-843  ### 2.17 `result-explorer` — Result Explorer
 specs/system/agents.md:845-1060  ## 3. Tools
 specs/system/agents.md:857-862  ### 3.1 `list_entities`
 specs/system/agents.md:864-869  ### 3.2 `describe_entity`
@@ -2093,7 +2093,7 @@ specs/system/architecture.md:1155-1175  #### ADR-0045 — Brands chosen at build
 specs/system/architecture.md:1177-1197  #### ADR-0046 — The product is "Halo Workbench" in the app and the operating system
 specs/system/architecture.md:1199-1218  #### ADR-0047 — Long work the user starts runs as a background task owned by the shell, not by the screen that started it
 specs/system/architecture.md:1220-1241  #### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
-specs/system/architecture.md:1243-1263  #### ADR-0049 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
+specs/system/architecture.md:1243-1263  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
 specs/system/architecture.md:1265-1320  ## Level 4 — Code
 
 specs/system/data-model.md:13-57  ## 1. Storage overview

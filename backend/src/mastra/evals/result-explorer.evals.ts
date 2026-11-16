@@ -34,7 +34,7 @@ import {
 } from './result-explorer-eval-target';
 
 /**
- * The eval set of Nathan, Result Explorer (agents.md 8.1, 2.16), run on the
+ * The eval set of Nathan, Result Explorer (agents.md 8.1, 2.17), run on the
  * `result-explorer` agent over the World Cup sample. A case is the user's
  * words, the candidates they are said about (built with `explorerCandidateOf`
  * from hard-coded stored rows of the fixture's real columns: no database is
@@ -497,7 +497,7 @@ const edgeOrders = (ref = 'Q1') =>
     'Edge Cases orders with their notes, year, discount, address and status',
   );
 
-/** Nathan on awkward column names (roadmap 1.28.6). */
+/** Nathan on awkward column names (roadmap 1.29.6). */
 export const RESULT_EXPLORER_EDGE_CASES: ExplorerCase[] = [
   {
     id: 'rxe-notes-with-percent',

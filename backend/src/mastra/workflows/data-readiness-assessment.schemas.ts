@@ -92,7 +92,7 @@ export const savedReportSchema = scoredSourceSchema.extend({
 });
 
 /**
- * What Rows behind findings added (roadmap 1.27.11): the stored report, and
+ * What Rows behind findings added (roadmap 1.28.11): the stored report, and
  * how many of its top findings became a source of the answer.
  */
 export const findingRowsSchema = savedReportSchema.extend({

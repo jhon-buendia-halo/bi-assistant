@@ -55,7 +55,7 @@ export const DATA_MAPPER_AGENT_NAME = 'Data Mapper';
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 /**
  * The agent that turns a user's words into a view (filters, sort, page) of
- * a stored query's result (agents.md 2.16).
+ * a stored query's result (agents.md 2.17).
  */
 export const RESULT_EXPLORER_AGENT_KEY = 'result-explorer';
 /**

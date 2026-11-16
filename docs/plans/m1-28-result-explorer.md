@@ -1,6 +1,6 @@
-# M1-27 — Explore a query's full result: page, filter, sort
+# M1-28 — Explore a query's full result: page, filter, sort
 
-Plan and contract for [Milestone 1.27](../../roadmap.md) ([epic spec](../../specs/epics/M1-27/spec.md), ADR-0049). Approach B, picked by the user on 2026-11-15 among three (A: shared layer only, no agent; C: an interactive suspend/resume workflow): the paging and filter engine lives in the shared query-evidence layer, so every host of the query inspector gets it, and an auxiliary agent, `result-explorer`, turns the user's words into a structured view. Scope: the results of agents' queries only; raw dataset browsing stays out (datasets R22).
+Plan and contract for [Milestone 1.28](../../roadmap.md) ([epic spec](../../specs/epics/M1-28/spec.md), ADR-0050). Approach B, picked by the user on 2026-11-15 among three (A: shared layer only, no agent; C: an interactive suspend/resume workflow): the paging and filter engine lives in the shared query-evidence layer, so every host of the query inspector gets it, and an auxiliary agent, `result-explorer`, turns the user's words into a structured view. Scope: the results of agents' queries only; raw dataset browsing stays out (datasets R22).
 
 Decisions taken with the user (2026-11-15, "Sí, todas"):
 
@@ -25,10 +25,10 @@ Facts the design rests on (checked at `a07cb4e5`):
 
 Additional type changes, each owned by one story:
 
-- `DatasourceConnector.runPagedSql?(config, stmt: PagedStatement): Promise<PagedRows>` and `DatasourcesService.runPagedSql(id, stmt)` are in the contract commit; 1.27.1 implements the method on every connector and makes it required. An empty `stmt.sort` means the default order, resolved by the connector (1 below, 7); `PageResult.view.sort` echoes the request, `[]` for the default.
-- `QueryEvidence.view?: ResultView` (backend type and frontend copy), set only on `explore_result` records, carried on evidence, never on `ToolDataRecord` (records are fed to models) (1.27.7; the frontend reads it in 1.27.5).
-- `QueryFacts.view?: ResultView`; `EVIDENCE_TOOLS` gains `'explore_result'` (1.27.7).
-- Frontend `QueryEvidenceApi` gains `page(index, request: PageRequest): Observable<PageResult>` (1.27.3) and `interpretFilter(index, text, view: ResultView | null): Observable<FilterInterpretation>` (1.27.5). Every host implements both.
+- `DatasourceConnector.runPagedSql?(config, stmt: PagedStatement): Promise<PagedRows>` and `DatasourcesService.runPagedSql(id, stmt)` are in the contract commit; 1.28.1 implements the method on every connector and makes it required. An empty `stmt.sort` means the default order, resolved by the connector (1 below, 7); `PageResult.view.sort` echoes the request, `[]` for the default.
+- `QueryEvidence.view?: ResultView` (backend type and frontend copy), set only on `explore_result` records, carried on evidence, never on `ToolDataRecord` (records are fed to models) (1.28.7; the frontend reads it in 1.28.5).
+- `QueryFacts.view?: ResultView`; `EVIDENCE_TOOLS` gains `'explore_result'` (1.28.7).
+- Frontend `QueryEvidenceApi` gains `page(index, request: PageRequest): Observable<PageResult>` (1.28.3) and `interpretFilter(index, text, view: ResultView | null): Observable<FilterInterpretation>` (1.28.5). Every host implements both.
 
 ### 0.2 Routes (api.md 152–155)
 
@@ -36,10 +36,10 @@ All `POST`, store nothing, answer `201`, the same errors as 142/147 plus the one
 
 | # | Route | Body → success | Story |
 |---|---|---|---|
-| 152 | `POST /workflow-runs/:id/answer/queries/:index/page` | `PageRequest` → `{ ok: true, result: PageResult }` | 1.27.2 |
-| 153 | `POST /workflow-runs/:id/answer/queries/:index/interpret-filter` | `{ text: string, view?: ResultView }` → `{ ok: true, interpretation: FilterInterpretation }` | 1.27.4 |
-| 154 | `POST /sessions/:id/messages/:message/answer/queries/:index/page` | as 152 | 1.27.2 |
-| 155 | `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter` | as 153 | 1.27.4 |
+| 152 | `POST /workflow-runs/:id/answer/queries/:index/page` | `PageRequest` → `{ ok: true, result: PageResult }` | 1.28.2 |
+| 153 | `POST /workflow-runs/:id/answer/queries/:index/interpret-filter` | `{ text: string, view?: ResultView }` → `{ ok: true, interpretation: FilterInterpretation }` | 1.28.4 |
+| 154 | `POST /sessions/:id/messages/:message/answer/queries/:index/page` | as 152 | 1.28.2 |
+| 155 | `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter` | as 153 | 1.28.4 |
 
 Errors (400 unless stated): `Query <index> is a sample; it has no full result to page` · `Unknown column "<c>"` · `Column "<c>" appears more than once in the result; it cannot be filtered or sorted` · `Filter on <c>: <op> needs a value` · `Page <n> is past the 50,000-row limit` · `This warehouse does not support query parameters; filtering is unavailable`. 153/155 only: `That asks a new question, not a filter on this result` · `The filter could not be understood: <model error>`. Draft runs (Try it) answer 404 as they already do. Each story updates the api.md header counts for the handlers it adds.
 
@@ -58,7 +58,7 @@ Zod schema in `backend/src/mastra/agents/result-explorer.prompts.ts` (no framewo
 
 Request: the user's words, the current `ResultView` and `pageCount`, and the candidates (Q label, rationale, columns with their kind and up to 5 distinct stored values each). Pure code `specOf(reply, candidates, current) → FilterInterpretation`: columns matched exactly then case-insensitively, values coerced by kind, unknown columns to `rejected`, `move` resolved to an absolute page clamped to `pageCount`.
 
-### 0.4 `explore_result` tool (1.27.7)
+### 0.4 `explore_result` tool (1.28.7)
 
 ```ts
 input: { query?: string      // the SQL exactly as an earlier run_readonly_sql ran it; omitted = the latest query
@@ -75,12 +75,12 @@ Explicit `filters`/`sort`/`page` override what `filterText` produced. Full resul
 - Sort: each `th` holds a `button` `query-result-sort` with `aria-sort`; a click cycles none → ascending → descending → none.
 - Column filters: `query-filter-add` (`Add filter`) opens a row with `query-filter-column` (select), `query-filter-op` (select), `query-filter-value` (input; `query-filter-value-to` for between), `query-filter-apply` (`Apply`). Each active filter is a chip `query-filter-chip` (`Country is Brazil`) with `query-filter-chip-remove` (aria-label `Remove filter Country is Brazil`); `query-filter-clear` (`Clear filters`).
 - Operator labels: is, is not, greater than, at least, less than, at most, between, is one of, is not one of, contains, does not contain, starts with, is empty, is not empty.
-- Filter in words (1.27.5): input `query-filter-text`, label `Filter in words`, placeholder `e.g. only Brazil, goals over 3, newest first`; `query-filter-text-apply` (`Apply`); `query-filter-understood` (`Understood as: Country is Brazil · Goals at least 3`); failure: `Could not turn that into a filter: <reason>`.
+- Filter in words (1.28.5): input `query-filter-text`, label `Filter in words`, placeholder `e.g. only Brazil, goals over 3, newest first`; `query-filter-text-apply` (`Apply`); `query-filter-understood` (`Understood as: Country is Brazil · Goals at least 3`); failure: `Could not turn that into a filter: <reason>`.
 - States: `query-result-empty` (`No rows match these filters.`); `query-page-error` (role alert, `Could not load this page: <message>`, a `Retry` button); `Show the answer's rows` returns to the stored rows.
 - Top-N note: when the query's coverage is `top-n`, `Paging the full result, not only the top <n> the answer used`.
-- Explore record (1.27.5): opens on its stored `view`; note `Page 2 of 41 · Country is Brazil · sorted by Goals, high to low`.
+- Explore record (1.28.5): opens on its stored `view`; note `Page 2 of 41 · Country is Brazil · sorted by Goals, high to low`.
 
-## 1. SQL generation (1.27.1)
+## 1. SQL generation (1.28.1)
 
 One pure module `paged-sql.ts`: `buildPagedSql(dialect, stmt) → { text, params }`.
 
@@ -105,7 +105,7 @@ One pure module `paged-sql.ts`: `buildPagedSql(dialect, stmt) → { text, params
 7. Sort: `ORDER BY c ASC|DESC NULLS LAST`, then every remaining ordinal as a tie-breaker; default order as decided above.
 8. Cost: each page re-runs the inner query; measure on one small and one large real table before the wave check.
 
-## 2. The follow-up branch (1.27.8)
+## 2. The follow-up branch (1.28.8)
 
 A code gate, then one `result-explorer` call that both decides and returns the view. The gate: the run has earlier queries (`runtime.followUp` reads `contextQueries`). `analysis-planner` is untouched; a first run makes no extra model call.
 
@@ -127,32 +127,32 @@ receive-question → load-catalog → interpret-follow-up
 
 | Story | Model | Files | Depends on | Failing test first |
 |---|---|---|---|---|
-| 1.27.0 Contract (lead) | Opus | `paged-sql.types.ts`, frontend type copy, this plan, epic spec, ADR-0049, roadmap | – | – |
-| 1.27.1 Paged SQL builder and connectors | Opus | new `connectors/paged-sql.ts` + spec; `connector.ts` (`cleanReadOnlySql`, interface); postgres, databricks, rest connectors; `datasources.service.ts`; datasources spec R37, new R52 | 1.27.0 | `paged-sql.spec.ts` (quoting per dialect, `$n`/`:pn`/`?`, CTE, trailing `--` and `;`, raised LIMIT, a forbidden word inside a column name passes, NULLS LAST, ordinals); `rest.connector.spec.ts` on real better-sqlite3 (boolean binding); `databricks.connector.spec.ts` (`namedParameters`) |
-| 1.27.2 Page engine and routes 152/154 | Opus | new `query-evidence/result-view.ts` + spec; `query-evidence.service.ts` `page()`; `answer-evidence.service.ts`; `session-evidence.service.ts`; workflow-runs service and controller; `sessions.controller.ts`; api.md; data-model; non-functional §5 (Result paging table, N72) | 1.27.0 (mocks `runPagedSql`) | `result-view.spec.ts` (unknown/duplicate column, op without value, page past 50,000, coercion, default order); service spec (page stores nothing; a sample is refused) |
-| 1.27.3 Inspector: pager, sort, column filters | Sonnet | new `shared/query-evidence/query-result/query-result.{ts,html,spec.ts}`; `query-inspector.html`; `run-query-evidence-api.ts`; `session-query-evidence-api.ts`; the two API services; ui.md 4.12.2; agent-answers R76, new R79–R81 | 1.27.0 | `query-result.spec.ts` (Next requests page 2; sort cycles `aria-sort`; chip shows and removes; cap note; error and Retry). E2E `frontend/e2e/query-result-paging.spec.ts` |
-| 1.27.4 `result-explorer` agent and routes 153/155 | Opus | `agents/result-explorer.prompts.ts`, `agents/result-explorer.agent.ts`; `index.ts`; agent constants, personas, shipped prompts; `mastra.service.ts` `interpretResult`; evidence services and controllers; agents.md 1.1, 2.15 | 1.27.2 | `result-explorer.prompts.spec.ts` (`specOf` drops unknown columns, `next` → absolute page, `new-question` → 400 in inspector mode) |
-| 1.27.5 Inspector: filter in words, explore preset | Sonnet | `query-result.*`; both API adapters (`interpretFilter`); opening an explore record on its `view`; ui.md; agent-answers R82–R83 | 1.27.3 | `query-result.spec.ts` (understood line, rejected part, preset view). E2E `frontend/e2e/query-result-filter-text.spec.ts` |
-| 1.27.6 result-explorer evals | Sonnet | `evals/result-explorer.evals.ts`, `-eval-target.ts`, `-eval-checks.ts` + specs; `eval-sets.ts`; agents.md 8.1 | 1.27.4 | checks unit-tested on one real reply |
-| 1.27.7 `explore_result` tool | Opus | `tools/explore-result.tool.ts`; `dataset.tools.ts`; `tool-services.ts` (`pageQuery`, `interpretResult`); `sessions.service.ts` (`RunHostSpec.contextQueries`); `turn-data.ts`; `query-evidence.ts` (`EVIDENCE_TOOLS`, coverage `partial`); turn-engine (`explorable-queries` request-context key, facts `view`); `assistant.agent.ts`; insights-analyst catalogue and agent; `agent-workflows.ts`; workflow-runs and node-chats services (`contextQueries`); agents.md 2.1, 2.11, 3.15, 4.2; agent-answers R84 | 1.27.2, 1.27.4 | `explore-result.tool.spec.ts` (latest by default, unknown SQL lists candidates, `toModelOutput` hides `sourceSql`); `turn-data.spec` (record `input` is the source SQL); `query-evidence.spec` (evidence `view`) |
-| 1.27.8 Follow-up branch in Answer a Business Question | Opus | `answer-business-question.{schemas,steps,workflow}.ts`; `workflow-catalog.ts`; turn-engine runtime (`followUp`, `pageResult`, `deliverAnswer`); `insights-analyst-workflow-target.ts`; `workflow-contracts` snapshot; workflows spec R1, R2, R27, new R35; agents.md 5.11, 5.12 | 1.27.4, 1.27.7 | steps spec (`pageAnswer`; `turnSummaryOf` both shapes); workflow spec on the stub (no context: no model call, Plan runs; explore: Plan skipped). E2E `frontend/e2e/result-follow-up.spec.ts` |
+| 1.28.0 Contract (lead) | Opus | `paged-sql.types.ts`, frontend type copy, this plan, epic spec, ADR-0050, roadmap | – | – |
+| 1.28.1 Paged SQL builder and connectors | Opus | new `connectors/paged-sql.ts` + spec; `connector.ts` (`cleanReadOnlySql`, interface); postgres, databricks, rest connectors; `datasources.service.ts`; datasources spec R37, new R52 | 1.28.0 | `paged-sql.spec.ts` (quoting per dialect, `$n`/`:pn`/`?`, CTE, trailing `--` and `;`, raised LIMIT, a forbidden word inside a column name passes, NULLS LAST, ordinals); `rest.connector.spec.ts` on real better-sqlite3 (boolean binding); `databricks.connector.spec.ts` (`namedParameters`) |
+| 1.28.2 Page engine and routes 152/154 | Opus | new `query-evidence/result-view.ts` + spec; `query-evidence.service.ts` `page()`; `answer-evidence.service.ts`; `session-evidence.service.ts`; workflow-runs service and controller; `sessions.controller.ts`; api.md; data-model; non-functional §5 (Result paging table, N72) | 1.28.0 (mocks `runPagedSql`) | `result-view.spec.ts` (unknown/duplicate column, op without value, page past 50,000, coercion, default order); service spec (page stores nothing; a sample is refused) |
+| 1.28.3 Inspector: pager, sort, column filters | Sonnet | new `shared/query-evidence/query-result/query-result.{ts,html,spec.ts}`; `query-inspector.html`; `run-query-evidence-api.ts`; `session-query-evidence-api.ts`; the two API services; ui.md 4.12.2; agent-answers R76, new R79–R81 | 1.28.0 | `query-result.spec.ts` (Next requests page 2; sort cycles `aria-sort`; chip shows and removes; cap note; error and Retry). E2E `frontend/e2e/query-result-paging.spec.ts` |
+| 1.28.4 `result-explorer` agent and routes 153/155 | Opus | `agents/result-explorer.prompts.ts`, `agents/result-explorer.agent.ts`; `index.ts`; agent constants, personas, shipped prompts; `mastra.service.ts` `interpretResult`; evidence services and controllers; agents.md 1.1, 2.15 | 1.28.2 | `result-explorer.prompts.spec.ts` (`specOf` drops unknown columns, `next` → absolute page, `new-question` → 400 in inspector mode) |
+| 1.28.5 Inspector: filter in words, explore preset | Sonnet | `query-result.*`; both API adapters (`interpretFilter`); opening an explore record on its `view`; ui.md; agent-answers R82–R83 | 1.28.3 | `query-result.spec.ts` (understood line, rejected part, preset view). E2E `frontend/e2e/query-result-filter-text.spec.ts` |
+| 1.28.6 result-explorer evals | Sonnet | `evals/result-explorer.evals.ts`, `-eval-target.ts`, `-eval-checks.ts` + specs; `eval-sets.ts`; agents.md 8.1 | 1.28.4 | checks unit-tested on one real reply |
+| 1.28.7 `explore_result` tool | Opus | `tools/explore-result.tool.ts`; `dataset.tools.ts`; `tool-services.ts` (`pageQuery`, `interpretResult`); `sessions.service.ts` (`RunHostSpec.contextQueries`); `turn-data.ts`; `query-evidence.ts` (`EVIDENCE_TOOLS`, coverage `partial`); turn-engine (`explorable-queries` request-context key, facts `view`); `assistant.agent.ts`; insights-analyst catalogue and agent; `agent-workflows.ts`; workflow-runs and node-chats services (`contextQueries`); agents.md 2.1, 2.11, 3.15, 4.2; agent-answers R84 | 1.28.2, 1.28.4 | `explore-result.tool.spec.ts` (latest by default, unknown SQL lists candidates, `toModelOutput` hides `sourceSql`); `turn-data.spec` (record `input` is the source SQL); `query-evidence.spec` (evidence `view`) |
+| 1.28.8 Follow-up branch in Answer a Business Question | Opus | `answer-business-question.{schemas,steps,workflow}.ts`; `workflow-catalog.ts`; turn-engine runtime (`followUp`, `pageResult`, `deliverAnswer`); `insights-analyst-workflow-target.ts`; `workflow-contracts` snapshot; workflows spec R1, R2, R27, new R35; agents.md 5.11, 5.12 | 1.28.4, 1.28.7 | steps spec (`pageAnswer`; `turnSummaryOf` both shapes); workflow spec on the stub (no context: no model call, Plan runs; explore: Plan skipped). E2E `frontend/e2e/result-follow-up.spec.ts` |
 
-Waves: **1** = 1.27.1 ∥ 1.27.2 ∥ 1.27.3 (no agent input changes, no evals). **2** = 1.27.4 ∥ 1.27.5, then 1.27.7 (assistant and insights-analyst evals). **3** = 1.27.8 ∥ 1.27.6 (insights-analyst evals once for 1.27.7 and 1.27.8; result-explorer set first run).
+Waves: **1** = 1.28.1 ∥ 1.28.2 ∥ 1.28.3 (no agent input changes, no evals). **2** = 1.28.4 ∥ 1.28.5, then 1.28.7 (assistant and insights-analyst evals). **3** = 1.28.8 ∥ 1.28.6 (insights-analyst evals once for 1.28.7 and 1.28.8; result-explorer set first run).
 
-Ownership: only 1.27.0 edits `paged-sql.types.ts`; only 1.27.3 creates the `query-result` component; only 1.27.7 adds `RunHostSpec.contextQueries`; 1.27.2 owns api.md 152 and 154, 1.27.4 owns 153 and 155.
+Ownership: only 1.28.0 edits `paged-sql.types.ts`; only 1.28.3 creates the `query-result` component; only 1.28.7 adds `RunHostSpec.contextQueries`; 1.28.2 owns api.md 152 and 154, 1.28.4 owns 153 and 155.
 
 ## 4. Specs
 
-- datasources: R37 gains "except a paged read of a stored query's result (R52, ADR-0049)"; new R52.
+- datasources: R37 gains "except a paged read of a stored query's result (R52, ADR-0050)"; new R52.
 - agent-answers: R76 (stored rows first; paging, sorting or filtering asks the server); new R79 pager, R80 sort, R81 column filters, R82 filter in words, R83 explore records open on their view, R84 `explore_result` answers link through the shared layer.
 - workflows: R1, R2, R27; new R35.
-- api.md 152–155 and header counts, `QueryEvidence.view`; data-model 3.4.2a `view`; non-functional §5 Result paging and N72; agents.md 1.1, 2.16, 3.15, 4.2, 5.11, 5.12, 8.1; ui.md 4.12.2.
+- api.md 152–155 and header counts, `QueryEvidence.view`; data-model 3.4.2a `view`; non-functional §5 Result paging and N72; agents.md 1.1, 2.17, 3.15, 4.2, 5.11, 5.12, 8.1; ui.md 4.12.2.
 
 ## 5. Evals
 
-- 1.27.1–1.27.5: no existing agent's input changes.
-- 1.27.7: the tool list and generated tool section of `assistant` (every tool selection, user agents too) and `insights-analyst` change: their sets, ≥ 3 runs per case against base.
-- 1.27.8: the insights-analyst target runs the whole workflow, so its set runs, in the same round as 1.27.7.
+- 1.28.1–1.28.5: no existing agent's input changes.
+- 1.28.7: the tool list and generated tool section of `assistant` (every tool selection, user agents too) and `insights-analyst` change: their sets, ≥ 3 runs per case against base.
+- 1.28.8: the insights-analyst target runs the whole workflow, so its set runs, in the same round as 1.28.7.
 - New set `result-explorer` (World Cup fixture): 1 "next page" → `next`; 2 "page 5" → `to 5`; 3 "only Brazil" → `eq`, spelled as stored; 4 "goals over 3 in 2018"; 5 "between 2000 and 2010"; 6 "teams starting with B"; 7 "highest attendance first"; 8 "clear the filters"; 9 "solo Brasil"; 10 two candidates, picks the right Q; 11–13 negatives (a new measure, a new grouping, a column that does not exist) → `new-question` or `rejected`.
 
 ## 6. Risks

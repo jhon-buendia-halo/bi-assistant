@@ -518,7 +518,7 @@ describe('data readiness eval checks', () => {
     ).resolves.toMatch(/no query reads goals/);
   });
 
-  describe('every finding of a dimension (story 1.27.12)', () => {
+  describe('every finding of a dimension (story 1.28.12)', () => {
     const item = (severity: string, entity: string, field: string) => ({
       severity,
       entity,
@@ -681,7 +681,7 @@ describe('data readiness eval checks', () => {
     });
   });
 
-  it('onlyDefinedInputs accepts the dimension and page of get_readiness_report (story 1.27.12)', async () => {
+  it('onlyDefinedInputs accepts the dimension and page of get_readiness_report (story 1.28.12)', async () => {
     await expect(
       run(onlyDefinedInputs(), '', [
         call('get_readiness_report', summary(), {
@@ -865,7 +865,7 @@ describe('data-readiness eval set', () => {
       agentKey: 'data-readiness',
     });
     expect(EVAL_SETS).toContain(DATA_READINESS_EVAL_SET);
-    // Sarah's page also lists her Check data quality set (story 1.28.4).
+    // Sarah's page also lists her Check data quality set (story 1.29.4).
     expect(evalSetsFor('data-readiness')).toContain(DATA_READINESS_EVAL_SET);
     expect(hasEvals('data-readiness')).toBe(true);
     expect(agentForCases(['dr-assess', 'dr-no-sql'])).toEqual({

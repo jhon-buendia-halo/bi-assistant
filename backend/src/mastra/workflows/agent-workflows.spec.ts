@@ -84,7 +84,7 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       tools: [],
       maxSteps: 1,
     });
-    // Nathan reads a follow-up over an earlier result (roadmap 1.27.8).
+    // Nathan reads a follow-up over an earlier result (roadmap 1.28.8).
     expect(agentOf('interpret-follow-up')).toEqual({
       key: 'result-explorer',
       name: 'Nathan',

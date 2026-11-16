@@ -1,6 +1,6 @@
 /**
  * The paged, filtered and sorted read of a stored query's result
- * (datasources R52, ADR-0049, plan docs/plans/m1-27-result-explorer.md 1).
+ * (datasources R52, ADR-0050, plan docs/plans/m1-28-result-explorer.md 1).
  * Pure: the stored SQL goes through the read-only guard once, the wrapper
  * around it is code, its identifiers checked against the result's columns
  * and quoted per dialect, its values bound as parameters, LIMIT and OFFSET
@@ -346,7 +346,7 @@ function orderBy(d: Dialect, stmt: PagedStatement, sql: string): string {
 }
 
 /**
- * The page statement and its count statement for `stmt` (plan 1.27.1, 3):
+ * The page statement and its count statement for `stmt` (plan 1.28.1, 3):
  *
  *   SELECT _qti.*, COUNT(*) OVER () AS "__qti_total"
  *   FROM (
@@ -412,7 +412,7 @@ export interface DriverRows {
 
 /**
  * Run the page, strip the window total off it, and when a page past the end
- * comes back empty run the count once (plan 1.27.1, 3). `exec` runs one
+ * comes back empty run the count once (plan 1.28.1, 3). `exec` runs one
  * statement of `built` with `built.params`.
  */
 export async function readPagedRows(
