@@ -634,56 +634,6 @@ test('an agent saved before links gets a links line', async ({
   await expect(page.getByTestId('agent-save')).toBeEnabled();
 });
 
-test('the Graph tab shows the chain from instructions to skill to tool', async ({
-  page,
-}) => {
-  await createSkill(page, {
-    name: CHART_STYLE,
-    description: 'Use when drawing a chart.',
-    body: 'Draw every chart with [[tool:create_visual]].',
-  });
-  const id = await createUserAgent(page, {
-    name: 'Chart helper',
-    instructions: `Use [[skill:${CHART_STYLE}]] and [[tool:sample_rows]].`,
-    datasets: [WORLD_CUP_DATASET],
-  });
-  await publishAgent(page, id);
-  await openAgentPage(page, id, 'Chart helper');
-  await page.getByTestId('agent-tab-graph').click();
-
-  for (const node of [
-    'prompt',
-    `skill:${CHART_STYLE}`,
-    'tool:create_visual',
-    'tool:sample_rows',
-  ]) {
-    await expect(page.getByTestId(`graph-node-${node}`)).toBeVisible();
-  }
-  await expect(page.getByTestId('graph-node-prompt')).toContainText(
-    'Instructions',
-  );
-  const graph = page.getByTestId('agent-graph');
-  await expect(graph.locator('desc')).toContainText(
-    `The instructions link the ${CHART_STYLE} skill`,
-  );
-  await expect(graph.locator('desc')).toContainText(
-    `The ${CHART_STYLE} skill links the create_visual tool`,
-  );
-  await expect(graph.locator('desc')).not.toContainText(
-    'The instructions link the create_visual tool',
-  );
-  await expect(page.getByText('What happens on each message')).toBeVisible();
-  await expect(
-    page.getByTestId('graph-node-tool:ask_clarification'),
-  ).toHaveCount(0);
-  await evidence(page, '1.14.8', 'agent-graph-chain.png');
-
-  await page.getByTestId('graph-show-unlinked').check();
-  const unlinked = page.getByTestId('graph-node-tool:ask_clarification');
-  await expect(unlinked).toBeVisible();
-  await expect(unlinked).toHaveClass(/inactive/);
-});
-
 test('the LLM Config tab shows whether the key is set and never the key', async ({
   page,
 }) => {

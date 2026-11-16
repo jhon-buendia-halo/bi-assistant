@@ -1,5 +1,4 @@
 import {
-  officialGraphInput,
   officialLinkSkills,
   officialLinkTools,
   officialPromptCopy,
@@ -70,34 +69,6 @@ describe('official-links (agents-evals R99, R105)', () => {
       'report-package',
     ]);
     expect(officialLinkSkills(null, 'report')).toEqual([]);
-  });
-
-  it("draws the Report Builder's graph: its skills with the tools each links, and every tool, always on", () => {
-    const graph = officialGraphInput(report, SKILLS);
-    expect(graph.skills).toEqual([
-      { name: 'report-outline', tools: ['list_clients', 'get_report'] },
-      { name: 'report-package', tools: ['get_report'] },
-    ]);
-    expect(graph.toolLinks).toEqual([
-      {
-        name: 'list_clients',
-        status: 'always-on',
-        linkedVia: { instructions: true, skills: ['report-outline'] },
-      },
-      {
-        name: 'get_report',
-        status: 'always-on',
-        linkedVia: {
-          instructions: false,
-          skills: ['report-outline', 'report-package'],
-        },
-      },
-      {
-        name: 'ask_clarification',
-        status: 'always-on',
-        linkedVia: { instructions: false, skills: [] },
-      },
-    ]);
   });
 
   it("names the agent in the editor's copy by its persona name, with no article (R107)", () => {

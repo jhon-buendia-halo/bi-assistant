@@ -16,7 +16,6 @@ import {
   CircleCheck,
   CircleX,
   Cpu,
-  Network,
   Trash2,
   Gauge,
   Loader2,
@@ -48,8 +47,6 @@ import {
 } from '../../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { AgentSkills } from '../agent-skills/agent-skills';
-import { AgentGraph } from '../agent-graph/agent-graph';
-import { AgentWorkflowView } from '../agent-workflow/agent-workflow';
 import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
 import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
 import { AgentTryIt } from '../agent-try-it/agent-try-it';
@@ -70,7 +67,6 @@ import {
   usedInEmptyText,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
-import { officialGraphInput } from '../../services/official-links';
 import { knownLinks, linkableBuiltInSkills } from '../../services/prompt-links';
 import {
   BuiltInSkillSummary,
@@ -87,8 +83,6 @@ type EvalTab = 'questions' | 'runs';
   imports: [
     LucideAngularModule,
     AgentSkills,
-    AgentGraph,
-    AgentWorkflowView,
     AgentLlmConfig,
     AgentToolLinks,
     AgentTryIt,
@@ -106,7 +100,6 @@ export class AgentDetail implements OnDestroy {
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
   readonly Cpu = Cpu;
-  readonly Network = Network;
   readonly Gauge = Gauge;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
@@ -185,7 +178,6 @@ export class AgentDetail implements OnDestroy {
       prompt: this.ScrollText,
       skills: this.BookOpen,
       tools: this.Wrench,
-      graph: this.Network,
       memory: this.Brain,
       evals: this.Gauge,
       model: this.Cpu,
@@ -277,7 +269,7 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /** The owner's skills, for the Graph tab and the instruction chips. */
+  /** The owner's skills, for the Skills tab and the instruction chips. */
   readonly librarySkills = signal<SkillSummary[] | null>(null);
   readonly librarySkillsError = signal<string | null>(null);
   /** The names that exist, so a link to anything else shows as not found. */
@@ -330,16 +322,6 @@ export class AgentDetail implements OnDestroy {
       },
     });
   }
-
-  /**
-   * The Graph tab of an Official agent (R105): the skills it gets and every
-   * one of its tools, always on. Null while the built-in skills load.
-   */
-  readonly officialGraph = computed(() => {
-    const agent = this.agent();
-    const skills = this.builtInSkills();
-    return agent && skills ? officialGraphInput(agent, skills) : null;
-  });
 
   /** Reload the owner's skills after the Skills tab changed one. */
   reloadLibrary(): void {

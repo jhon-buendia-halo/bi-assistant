@@ -20,7 +20,6 @@ describe('agent page util', () => {
       'prompt',
       'skills',
       'tools',
-      'graph',
       'memory',
       'evals',
       'model',
@@ -28,9 +27,9 @@ describe('agent page util', () => {
     expect(agentTabIds('official')).not.toContain('chat');
     expect(agentTabIds('official')[0]).toBe('prompt');
     expect(agentTabIds('system')).not.toContain('chat');
-    expect(
-      AGENT_TAB_ORDER.find((tab) => tab.id === 'chat')?.label,
-    ).toBe('Try it');
+    expect(AGENT_TAB_ORDER.find((tab) => tab.id === 'chat')?.label).toBe(
+      'Try it',
+    );
   });
 
   it('opens a user agent on Try it and every built-in agent on System Prompt (R5, R91)', () => {

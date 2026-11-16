@@ -22,7 +22,7 @@ Agent Hub and agent detail
 - R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name, description or, for a built-in agent, its persona intro (agents.md 1.1), and SHALL apply as the user types. The pills SHALL show: All, the sections of R1; Pinned, a single **Pinned** section (`agent-section-pinned`) holding every pinned agent matching the owner menu and the search, ordered by kind (Official, Mine, System) and then by name; a domain pill, only that domain's section. The owner menu SHALL limit every view to the agents of that owner (Official, Mine = user agents, System). Search, pill and owner menu combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned pill with nothing pinned shows `No pinned agents yet.`, the owner Mine under All with no user agents shows `No agents of yours yet.`, and any other combination that matches nothing shows `No agents match these filters.`.
 - R3. Every section SHALL show all its cards; there is no `Show more` or `Show less` (removed with the grouping by domain, 2026-11-13). The search text, the pill and the owner menu SHALL reset each time the hub opens (to empty, All and Any owner), including on return from a detail view.
 - R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own domain section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
-- R5. Clicking a card anywhere but its pin toggle SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the job title under it when there is one (`agent-detail-role`), the id, the line **Used in** (R109), the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Try it** (user agents only), **Job Description**, **Skills (N)**, **Tools (N)**, **Graph** (user agents only), **Memory**, **Evals** and **LLM Config**. The first tab shown is Try it for a user agent, and Job Description for an Official or System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. No agent's detail SHALL offer **Start chat** or **Run** (R53); a user agent is tried only through **Try it** (R60). A user agent's detail SHALL offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
+- R5. Clicking a card anywhere but its pin toggle SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the job title under it when there is one (`agent-detail-role`), the id, the line **Used in** (R109), the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Try it** (user agents only), **Job Description**, **Skills (N)**, **Tools (N)**, **Memory**, **Evals** and **LLM Config**. The first tab shown is Try it for a user agent, and Job Description for an Official or System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. No agent's detail SHALL offer **Start chat** or **Run** (R53); a user agent is tried only through **Try it** (R60). A user agent's detail SHALL offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
   - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
   - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
 
@@ -211,12 +211,12 @@ The editor and menu that link skills and tools in an agent's instructions and in
 - R85. An agent saved before links, whose draft has no `tools`, or has `tools` or `skills` its instructions do not link, SHALL open in the editor with a new last line `Tools and skills: ` followed by a chip for each such item (no `tools` stands for `sample_rows`, `ask_clarification` and `create_visual`), and the notice `Links were added for what this agent had. Save to keep them.`, with the form unsaved. Until it is saved the agent keeps its stored tools, and an agent with no `tools` keeps every tool. Refusals on a create or draft save come after the name checks, in this order: `Unknown skill "<name>"`, `Unknown tool "<name>"`, `An agent can have at most 10 skills`.
 - R86. Read-only views of text with links (the Job Description tab for a user agent when it is not being edited, R6, and an in-app skill's `SKILL.md` on the Skills tab, R63) SHALL show the same chips, not editable.
 
-### Tools, Graph and LLM Config tabs
+### Tools and LLM Config tabs
 
-The agent detail's tabs for tools, their links and the model settings ([../../system/ui.md](../../system/ui.md) 4.5, 4.5.6, 4.5.7).
+The agent detail's tabs for tools, their links and the model settings ([../../system/ui.md](../../system/ui.md) 4.5, 4.5.7).
 
 - R87. For a user agent the **Tools** tab SHALL list every tool of the library by name with its status: `Always on` (the three data tools and `show_in_panel`), `Linked` or `Not linked`, and for a linked tool where the link comes from: `Linked from the instructions` and/or `Linked by <skill names>`. The status comes from the Live version, else the draft. A built-in agent's Tools tab is unchanged (R6).
-- R88. The **Graph** tab (user agents only) SHALL draw three columns, Instructions, the linked skills and the tools, with an edge for each link; hovering or focusing a node highlights its chain; a legend names Instructions, Skill, Tool and Always on; **Show unlinked** adds the unlinked skills and the not-linked tools, greyed. Under the drawing, `What happens on each message` lists four steps. A System agent's Graph tab SHALL say `This agent has no links: it gets all of its tools.`; an Official agent's Graph tab is R105.
+- R88. *Removed on 2026-11-15:* the agent page has no **Graph** tab any more (it drew the links from the instructions to skills and tools); the links stay visible as chips in the job description (R86) and in the Tools tab (R87).
 - R89. The **LLM Config** tab (every agent; it replaces the Model tab) SHALL be read-only and show `Provider`, `Model` (with ` (agent override)` when a user agent sets one), `API key` as `Set` or `Not set`, `Max output tokens` (`Default` when the app sets no cap, which is the case for the assistant today) and `Reasoning effort` (the effective one). The key's value SHALL never be shown or sent. Settings are changed in [../llm-settings/spec.md](../llm-settings/spec.md).
 
 ### Agent page tabs
@@ -254,7 +254,7 @@ The Job Description tab (the system prompt) of the Official and System agents, e
 - R102. **Reset to built-in**, shown while the prompt is modified, SHALL ask `Reset the job description of "<name>" to the built-in version?`, delete the override, show `Job description of "<name>" reset` and show the shipped text.
 - R103. A save or a reset SHALL apply to the next call of every session, user agent, visual, SQL fix and verification, ontology bootstrap and eval run, without a restart. With no override every prompt is the shipped one, unchanged. A user agent runs on the assistant, so an edit of the assistant's prompt changes its core prompt too. The code-enforced guards stay whatever the prompt says.
 - R104. When a modified prompt's shipped text has changed since the override was saved, the tab SHALL say `The app's built-in version changed since this was edited. Review it, then save again or reset.` and offer **Show the built-in version**, the shipped text read-only. The override SHALL keep serving until it is saved again or reset. Overrides SHALL apply to every session and agent. The eval baseline describes the shipped prompts; an eval run uses the overrides.
-- R105. The Job Description tab of an Official agent (the assistant and Insights Analyst) SHALL render `prompt.editable` with its links as chips (R86) and, in place of the `## Tools` section, a muted note `## Tools — generated from the tools Emily gets` (for v2: `## Tools — generated from the tools Michael gets`); the generated list stays available in a collapsed `<details>` titled `Prompt as sent to the model` showing `instructions`. A chip is known when it names one of that agent's own tools or skills (the assistant: the library tools and the built-in on-demand skills). The Graph tab of an Official agent SHALL draw its prompt's links (instructions to skills and tools) with every one of its tools shown `Always on` and the linked ones joined to the instructions; a built-in skill's body links draw as skill → tool ([api.md](../../system/api.md) 99). A workflow-backed agent's Graph tab first draws its workflow (R108). The message `This agent has no links: it gets all of its tools.` stays only for System agents (R88). The shipped assistant prompt links every tool it mentions and the built-in `curated-knowledge` skill; the model sees them as plain mentions (R83).
+- R105. The Job Description tab of an Official agent (the assistant and Insights Analyst) SHALL render `prompt.editable` with its links as chips (R86) and, in place of the `## Tools` section, a muted note `## Tools — generated from the tools Emily gets` (for v2: `## Tools — generated from the tools Michael gets`); the generated list stays available in a collapsed `<details>` titled `Prompt as sent to the model` showing `instructions`. A chip is known when it names one of that agent's own tools or skills (the assistant: the library tools and the built-in on-demand skills). The shipped assistant prompt links every tool it mentions and the built-in `curated-knowledge` skill; the model sees them as plain mentions (R83).
 
 ### Retired agents
 
@@ -264,21 +264,7 @@ The Job Description tab (the system prompt) of the Official and System agents, e
   - it is the agent of the workflow `Answer a Business Question`, which runs from the Workflows page ([workflows](../workflows/spec.md) R12), not from the agent's page (R53); the agent has no datasets of its own, so the dataset picker and the required name stay;
   - the detail SHALL open on **Job Description** (R91), say **Used in** `Answer a Business Question` (R109) and show its description `A business data analyst: answers questions over the datasets you pick with read-only SQL, checks its results and explains how it got them.`; the **Tools** tab SHALL list its five tools, the **Memory** tab the assistant's settings (R7: 40 messages, no semantic recall, no working memory, no generated titles), the **Skills** tab its three built-in skills, each `On demand` (R63), and the **Evals** tab no sets;
   - the **Job Description** tab SHALL be that of an Official agent (R97-R105): `Built-in` and `Modified` chips, the editable text without `## Tools` and **Edit**, **Reset to built-in**, with the hint `Type / to link a tool or a built-in skill. Links here are mentions; Michael keeps every tool.` and the note `The ## Tools list is generated from the tools Michael gets and is inserted before ## Working rules.` Its editor links only its five tools and its three skills; **Save job description** refuses a prompt that does not start with `You are Questions to Insights`, a `[[skill:…]]` link to a skill not its own and an unknown tool, with the backend's message ([api.md](../../system/api.md) 103).
-- R108. The Graph tab of a **workflow-backed agent** SHALL open with a drawing of its workflow under the heading **What happens on each message**. Today the only such agent is Insights Analyst (ADR-0034, [agents.md](../../system/agents.md) 5.11).
-  - The drawing comes from the agent's `workflow` ([api.md](../../system/api.md) 34), which is built from the workflow defined in code, never from the prompt. It replaces the four-step list of R88.
-  - It SHALL draw one card per step, left to right, numbered and titled as in the workflow bar ([agent-panel](../agent-panel/spec.md) R8a).
-    - A code step is marked `Code`.
-    - The agent step is marked `LLM` and drawn open, with the agent's name, its tools and `≤ <n> steps`.
-    - A legend names `Code` and `LLM`.
-  - Between two cards, an arrow is labelled with the fields the first step passes on, comma-separated.
-  - Under a card, each of its other exits is listed as one sentence, the outcome first: `Fails the turn if <label>`, `Ends the turn if <label>` or `Waits <label>` (for example `Fails the turn if the model returns an error`, `Ends the turn if you stop it`, `Waits if it asks you a question`).
-  - Hovering or focusing a card SHALL highlight it.
-  - Clicking a card, or pressing Enter or Space on it, SHALL select it and show a details card under the drawing:
-    - its number and title, its kind, its summary, `Input` and `Output` (the field names, comma-separated);
-    - for the agent step, also `Tools` and `Max steps`.
-    - Selecting the same card again closes the details card.
-  - Under the drawing, the prompt-links graph of R105 SHALL stay, under the heading **Prompt links** and without the four-step list.
-  - An agent that is not workflow-backed keeps its Graph tab unchanged.
+- R108. *Removed on 2026-11-15* with the Graph tab (R88): the agent page no longer draws a workflow-backed agent's turn. The workflow's steps stay on the workflow page ([workflows](../workflows/spec.md) R7), and the agent detail still returns `workflow` ([api.md](../../system/api.md) 34).
 - R109. The agent detail's header SHALL carry the line **Used in** under the id, from the agent's `usedInWorkflows` ([api.md](../../system/api.md) 34): one chip per workflow whose steps call the agent, reading the workflow's name. Each chip SHALL be a button that opens that workflow's page ([workflows](../workflows/spec.md) R7), with **Workflows** the current rail item ([app-shell](../app-shell/spec.md) R3). Since 2026-11-12 the only workflow is Answer a Business Question (until 2026-11-13 shown as Questions to Insights v2), so only the agents its steps run have a chip (`Answer a Business Question`): `Insights Analyst` (Michael, Analyse), `Analysis Planner` (Olivia, Plan) and `Answer Writer` (Jessica, Write answer). When no workflow uses the agent, the line SHALL instead say:
   - a user agent, draft-only or Live: `Not used in any workflow.` (publishing it adds no workflow);
   - a System agent: `Not used in any workflow. The app calls this agent itself.`;
@@ -859,16 +845,6 @@ Feature: Agent editor
     And I see "Links were added for what this agent had. Save to keep them."
     And "Save" is enabled
 
-  Scenario: The Graph tab shows the chain from instructions to skill to tool
-    Given a skill "chart-style" that links the tool "create_visual" in its body
-    And a Live user agent "Chart helper" over "World Cup Core" whose instructions link "chart-style" and "sample_rows"
-    When I open "Chart helper" from "Agents" and open the Graph tab
-    Then I see the nodes "Instructions", "chart-style", "create_visual" and "sample_rows"
-    And the "create_visual" node is reached through "chart-style"
-    And I see "What happens on each message"
-    When I tick "Show unlinked"
-    Then "ask_clarification" is shown greyed
-
   Scenario: The LLM Config tab shows whether the key is set and never the key
     Given LLM settings with the API key "sk-secret-123" are saved
     When I open the "Emily" agent and open the LLM Config tab
@@ -1160,20 +1136,6 @@ Feature: Built-in agent prompts
     When I append "[[skill:curated-knowledge]]" to the prompt
     And I click "Save job description"
     Then I see the toast 'Job description of "Emily" saved'
-
-  Scenario: Insights Analyst's Graph tab draws what happens on each message
-    When I open the "Michael" agent
-    And I open the Graph tab
-    Then I see "What happens on each message" with its nine steps from "Receive question" to "Wrap up", numbered 1 to 9
-    And "Analyse" is marked "LLM" and shows "list_entities", "describe_entity", "sample_rows", "run_readonly_sql", "ask_clarification" and "≤ 15 steps"
-    And the code steps are marked "Code"
-    And the arrow from "Load catalog" to "Plan" reads "question, catalog"
-    And "Plan", "Analyse" and "Write answer" show "Fails the turn if the model returns an error" and "Ends the turn if you stop it", "Clarify" shows "Waits until you answer", and "Analyse" also "Waits if it asks you a question"
-    When I click the "Load catalog" step
-    Then the step details show Input "question, datasets" and Output "question, catalog, columns"
-    And I see "Prompt links" with the agent's tools
-    When I open the "Emily" agent and its Graph tab
-    Then I do not see the workflow drawing
 
 ```
 

@@ -1345,7 +1345,7 @@ The model never writes this state: v2 has no `update_workflow`. A failed step en
 
 The non-streamed turn was removed in 1.23.27: every turn is a run (5.1).
 
-**The step catalogue describes each step for the agent's Graph tab** ([agents-evals](../capabilities/agents-evals/spec.md) R108) and the workflow page. Besides the id and title, it holds for each step:
+**The step catalogue describes each step for the workflow page** (the agent page's Graph tab that also drew it was removed on 2026-11-15, [agents-evals](../capabilities/agents-evals/spec.md) R108). Besides the id and title, it holds for each step:
 - its kind, `code` or `agent` (Plan and Write answer are `agent` steps that run their own registered System agent, `analysis-planner` and `answer-writer`, for one model call without tools, `modelOnly`; `stepAgents` on the code workflow source maps each such step to its agent's registry key, and Analyse runs `insights-analyst`);
 - a one-line summary;
 - the field names of its input and output, in the order of the step's input and output schemas, derived from those schemas (5.12);
