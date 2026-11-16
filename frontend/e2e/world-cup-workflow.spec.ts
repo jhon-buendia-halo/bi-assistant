@@ -54,6 +54,21 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
     await page.getByTestId('query-inspector-tab-sql').click();
     await expect(page.getByTestId('query-sql')).toHaveText(SQL);
     await page.getByTestId('query-inspector-close').click();
+
+    // Analyse's Story names the query and opens it in the same inspector.
+    await page.getByTestId('workflow-node-analyse').dblclick();
+    const dialog = page.getByTestId('workflow-ndv');
+    await expect(dialog.getByTestId('workflow-step-story-headline')).toContainText(
+      'Ran 1 query on the data.',
+    );
+    await dialog.getByTestId('workflow-step-story-query-0').click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId('query-inspector-sheet')).toBeVisible();
+    await page.getByTestId('query-inspector-tab-sql').click();
+    await expect(page.getByTestId('query-sql')).toHaveText(SQL);
+    await page.getByTestId('query-inspector-close').click();
+    await expect(page.getByTestId('workflow-node-analyse')).toBeFocused();
+
     const toolResult = stub.requests
       .flatMap((request) => request.messages)
       .filter((message) => message.role === 'tool')

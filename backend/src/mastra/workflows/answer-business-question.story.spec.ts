@@ -120,12 +120,14 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
           label: 'Query 1',
           values: ['Goals per player — failed: no column player_id'],
           verdict: 'failed',
+          sql: 'a',
         },
         {
           label: 'Query 2',
           values: ['Goals per player (fixed column) — 116 rows'],
+          sql: 'b',
         },
-        { label: 'Query 3', values: ['Top 10 scorers — 10 rows'] },
+        { label: 'Query 3', values: ['Top 10 scorers — 10 rows'], sql: 'c' },
       ],
       stats: [{ value: '3', label: 'queries · 1 failed' }],
     });

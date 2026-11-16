@@ -114,6 +114,8 @@
         [runId]="designer.runId()"
         [runContractHash]="designer.runContractHash()"
         [chat]="designer.nodeChat()"
+        [answerData]="storyAnswerData()"
+        (openQuery)="openStoryQuery($event)"
         (close)="closeNode()"
         (openAgent)="onOpenAgent($event)"
         (openStep)="designer.openNode($event)"

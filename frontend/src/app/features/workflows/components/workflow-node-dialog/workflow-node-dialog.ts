@@ -50,15 +50,20 @@ import {
   runStatusLine,
   runStepStatusLabel,
 } from '../../services/workflows.util';
+import { buildStepNarrative } from '../../services/workflow-step-narrative';
 import {
-  buildStepNarrative,
-  narrativeMarkdown,
-} from '../../services/workflow-step-narrative';
+  answerQueryIndex,
+  storyMarkdown,
+} from '../../services/workflow-step-story';
+import { ToolDataRecord } from '../../../sessions/models/session.model';
 import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
-import { WorkflowStepNarrative } from '../workflow-step-narrative/workflow-step-narrative';
+import {
+  StoryQueryOpen,
+  WorkflowStepStory,
+} from '../workflow-step-story/workflow-step-story';
 import { exitSentence } from '../../../agents/services/workflow-flow';
 import { formatNodeDuration, nodeStatusChip } from './workflow-node-format';
 import {
@@ -78,10 +83,10 @@ const TAB_LABELS: Record<DialogTab, string> = {
 };
 
 /** The views of an agent step's artifact (ui.md 4.4b). */
-type ArtifactView = 'preview' | 'data' | 'config';
+type ArtifactView = 'story' | 'data' | 'config';
 
 const VIEW_LABELS: Record<ArtifactView, string> = {
-  preview: 'Preview',
+  story: 'Story',
   data: 'Data',
   config: 'Config',
 };
@@ -108,11 +113,12 @@ const FOCUSABLE =
 
 /**
  * The node dialog (ui.md 4.4b). An agent step shows a chat with its agent
- * beside an artifact of its run: a Preview that tells what it received, did
- * and returned, its Data (input and output) and its Config (parameters and
- * settings). Any other node shows its input, its parameters and settings,
- * and its output, stacked top to bottom, Input and Output collapsed. The
- * parent returns focus on `close`.
+ * beside an artifact of its run: its Story (the server's `step.story`), its
+ * Data (input and output) and its Config (parameters and settings). A code
+ * step shows its Story, then its input, its parameters and settings, and
+ * its output, stacked top to bottom, Input and Output collapsed; Start and
+ * End the same without a Story. A query in a Story opens in the query
+ * inspector (`openQuery`). The parent returns focus on `close`.
  */
 @Component({
   selector: 'app-workflow-node-dialog',
@@ -122,8 +128,8 @@ const FOCUSABLE =
     WorkflowAttemptSwitcher,
     WorkflowDataView,
     WorkflowNodeChat,
-    WorkflowStepNarrative,
     WorkflowStepOutputView,
+    WorkflowStepStory,
   ],
   templateUrl: './workflow-node-dialog.html',
   styles: `
@@ -202,8 +208,34 @@ export class WorkflowNodeDialog {
     () => this.artifact() && this.chat().state !== 'hidden',
   );
   readonly viewLabels = VIEW_LABELS;
-  readonly views: readonly ArtifactView[] = ['preview', 'data', 'config'];
-  readonly view = signal<ArtifactView>('preview');
+  readonly views: readonly ArtifactView[] = ['story', 'data', 'config'];
+  readonly view = signal<ArtifactView>('story');
+
+  /**
+   * The shown answer's records (its `data`) when the page inspects its
+   * queries; null otherwise: a Story's queries then have no Open query.
+   */
+  readonly answerData = input<readonly ToolDataRecord[] | null>(null);
+  /** A Story's query was picked: its index among the answer's queries. */
+  readonly openQuery = output<StoryQueryOpen>();
+  /** Where a statement is among the answer's queries; null when none can be opened. */
+  readonly queryIndexOf = computed(() => {
+    const data = this.answerData();
+    return data?.length ? (sql: string) => answerQueryIndex(data, sql) : null;
+  });
+  /** A step (not Start, End or a tool) has a Story. */
+  readonly hasStory = computed(
+    () => this.node().kind === 'code' || this.node().kind === 'agent',
+  );
+  /** What the Story says for a step without one. */
+  readonly storyEmpty = computed(() => {
+    const run = this.run();
+    if (!run) return NOT_RUN;
+    if (run.status === 'running')
+      return 'Running… its story appears when it ends.';
+    if (run.status === 'suspended') return 'Waiting for your answer.';
+    return 'No story was kept for this step. Data has what it received and returned.';
+  });
   readonly copied = signal(false);
 
   /** Show another view of the artifact, from its top. */
@@ -442,9 +474,11 @@ export class WorkflowNodeDialog {
     this.nodeChat()?.prefill(question);
   }
 
-  /** Copy the Preview as Markdown. */
+  /** Copy the Story as Markdown. */
   copyNarrative(): void {
-    const text = narrativeMarkdown(this.artifactTitle(), this.narrative());
+    const story = this.run()?.story;
+    if (!story) return;
+    const text = storyMarkdown(this.artifactTitle(), story);
     void navigator.clipboard?.writeText(text).then(
       () => {
         this.copied.set(true);

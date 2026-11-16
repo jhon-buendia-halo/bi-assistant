@@ -151,6 +151,17 @@ interface StoryQuery {
   why: string | null;
   rows: number | null;
   error: string | null;
+  /** The statement, to find it among the answer's queries; null when not kept. */
+  sql: string | null;
+}
+
+/** The longest statement a query fact carries, in characters. */
+const STORY_SQL_MAX = 4000;
+
+function sqlOf(value: unknown): string | null {
+  return typeof value === 'string' && value.trim()
+    ? value.slice(0, STORY_SQL_MAX)
+    : null;
 }
 
 function queriesOf(step: StoryStep): StoryQuery[] {
@@ -173,6 +184,7 @@ function queriesOf(step: StoryStep): StoryQuery[] {
                 typeof query['error'] === 'string' && query['error']
                   ? query['error']
                   : null,
+              sql: sqlOf(query['sql']),
             },
           ]
         : [],
@@ -184,6 +196,7 @@ function queriesOf(step: StoryStep): StoryQuery[] {
       why: null,
       rows: typeof call.rowCount === 'number' ? call.rowCount : null,
       error: call.error ?? null,
+      sql: sqlOf(call.input),
     }));
 }
 
@@ -243,6 +256,7 @@ function analyse(step: StoryStep): Told | undefined {
             .join(' — '),
         ],
         ...(query.error ? { verdict: 'failed' as const } : {}),
+        ...(query.sql ? { sql: query.sql } : {}),
       },
     ];
   });

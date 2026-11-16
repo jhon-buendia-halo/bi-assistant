@@ -1602,7 +1602,7 @@ type WorkflowRunStep = {
 
 type StepStory = {
   headline: string;     // one sentence: what the step did, or why it did not run
-  facts?: { label: string; values: string[]; code?: true; verdict?: 'passed' | 'failed' }[];
+  facts?: { label: string; values: string[]; code?: true; verdict?: 'passed' | 'failed'; sql?: string }[];   // `sql`: a query fact's statement (at most 4 000 characters), to open it among the answer's queries
   next?: string;        // what came next because of it (a branch taken, a retry)
   stats?: { value: string; label: string }[];   // the run's figures this step accounts for (the All nodes header)
   source: 'step' | 'generic';  // `step`: the workflow's own storyteller; `generic`: its output fields labelled by their schema descriptions

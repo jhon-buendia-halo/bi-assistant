@@ -218,7 +218,7 @@ async function expandNodeSection(page: Page, section: 'input' | 'output'): Promi
 }
 
 /** An agent step's artifact (ui.md 4.4b): show its Preview, Data or Config. */
-async function showArtifactView(page: Page, view: 'preview' | 'data' | 'config'): Promise<Locator> {
+async function showArtifactView(page: Page, view: 'story' | 'data' | 'config'): Promise<Locator> {
   const tab = nodeDialog(page).getByTestId(`workflow-ndv-view-${view}`);
   await tab.click();
   await expect(tab).toHaveAttribute('aria-selected', 'true');
@@ -577,28 +577,28 @@ test.describe('Feature: Workflows (run workflows)', () => {
         page,
         'Then its report shows the question, the measures, the entities, the scope and the assumptions',
         async () => {
-          await expect(nodeDialog(page).getByTestId('workflow-ndv-view-preview')).toHaveAttribute(
+          await expect(nodeDialog(page).getByTestId('workflow-ndv-view-story')).toHaveAttribute(
             'aria-selected',
             'true',
           );
-          const view = nodeDialog(page)
-            .getByTestId('workflow-narrative')
-            .getByTestId('workflow-plan-view');
-          await expect(view).toBeVisible();
-          await expect(view.getByTestId('workflow-plan-question')).toHaveText(QUESTION);
-          await expect(view.getByTestId('workflow-plan-measures').getByRole('listitem')).toHaveText([
-            'match count',
-          ]);
-          await expect(view.getByTestId('workflow-plan-entities').getByRole('listitem')).toHaveText([
-            'matches',
-          ]);
-          await expect(view.getByTestId('workflow-plan-scope')).toHaveText('The picked datasets');
-          await expect(view.getByTestId('workflow-plan-assumptions').getByRole('listitem')).toHaveText([
-            'Every match in the data counts once',
-          ]);
-          await expect(view.getByTestId('workflow-plan-clarification')).toHaveCount(0);
-          // The raw data is in Data.
+          // Its Story (api.md 3.6 `story`): the question as Plan read it, then the plan.
+          const story = nodeDialog(page).getByTestId('workflow-step-story');
+          await expect(story.getByTestId('workflow-step-story-headline')).toContainText(QUESTION);
+          const facts = story.getByTestId('workflow-step-story-facts');
+          await expect(facts).toContainText('Will measure');
+          await expect(facts).toContainText('match count');
+          await expect(facts.locator('code')).toHaveText(['matches']);
+          await expect(facts).toContainText('The picked datasets');
+          await expect(facts).toContainText('Every match in the data counts once');
+          await expect(story.getByTestId('workflow-step-story-next')).toHaveText(
+            'Nothing was ambiguous, so Clarify was skipped and Analyse ran next.',
+          );
+          // The plan's own panel is in Data.
           await showArtifactView(page, 'data');
+          const view = nodeDialog(page).getByTestId('workflow-plan-view');
+          await expect(view.getByTestId('workflow-plan-question')).toHaveText(QUESTION);
+          await expect(view.getByTestId('workflow-plan-clarification')).toHaveCount(0);
+          // The raw data follows it in Data.
           await expect(
             nodeDialog(page).getByTestId('workflow-ndv-output').getByTestId('workflow-data-json'),
           ).toContainText('"measures"');
@@ -1090,8 +1090,8 @@ test.describe('Feature: Workflows (the designer)', () => {
         async () => {
           const dialog = nodeDialog(page);
           await expect(dialog.getByTestId('workflow-ndv-title')).toHaveText('Analyse');
-          // An agent step opens on its report; its fields are under Config.
-          await expect(dialog.getByTestId('workflow-ndv-view-preview')).toHaveAttribute(
+          // An agent step opens on its Story; its fields are under Config.
+          await expect(dialog.getByTestId('workflow-ndv-view-story')).toHaveAttribute(
             'aria-selected',
             'true',
           );
@@ -1256,7 +1256,8 @@ test.describe('Feature: Workflows (the designer)', () => {
       await test.step('Then the "Analyse" dialog shows the error in its Output', async () => {
         const dialog = await openNode(page, 'analyse', 'Analyse');
         await expect(dialog.getByTestId('workflow-ndv-output-status')).toHaveText('Failed');
-        await expect(dialog.getByTestId('workflow-narrative-error')).toBeVisible();
+        // Its Story says it failed (the generic story: `It failed: <error>`).
+        await expect(dialog.getByTestId('workflow-step-story-headline')).toContainText('It failed:');
         await showArtifactView(page, 'data');
         await expect(dialog.getByTestId('workflow-ndv-output-error')).toBeVisible();
         await expect(dialog.getByTestId('workflow-ndv-output-error')).not.toBeEmpty();
@@ -1343,7 +1344,9 @@ test.describe('Feature: Workflows (the designer)', () => {
         async () => {
           const dialog = await openNode(page, 'analyse', 'Analyse');
           await expect(dialog.getByTestId('workflow-ndv-chat-pane')).toBeVisible();
-          await expect(dialog.getByTestId('workflow-narrative-not-run')).toBeVisible();
+          await expect(dialog.getByTestId('workflow-ndv-story-empty')).toHaveText(
+            'This node has not run yet. Execute the workflow to see its data.',
+          );
           await expect(dialog.getByTestId('workflow-node-chat-unavailable')).toHaveText(
             "Execute the workflow, then chat with this agent about this step's data.",
           );
@@ -1404,7 +1407,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       await scenarioStep(page, 'And I open "Analyse", its chat beside its report', async () => {
         const dialog = await openNode(page, 'analyse', 'Analyse');
         await expect(dialog.getByTestId('workflow-ndv-chat-intro')).toBeVisible();
-        await expect(dialog.getByTestId('workflow-narrative-action')).not.toHaveCount(0);
+        await expect(dialog.getByTestId('workflow-step-story-headline')).toContainText('Ran ');
         await expect(dialog.getByTestId('workflow-node-chat-note')).toHaveText(
           /^\s*Chatting about run \S{8}: this step's input, output and tool calls\.\s*$/,
         );
@@ -1568,8 +1571,11 @@ test('the Workflows pages have no detectable accessibility violations in either 
 
   // Plan's and Validate's outputs as panels (ui.md 4.4b).
   await openNode(page, 'plan', 'Plan');
+  await expect(nodeDialog(page).getByTestId('workflow-step-story')).toBeVisible();
+  await scan('Answer a Business Question page, Plan dialog after a run: Story');
+  await showArtifactView(page, 'data');
   await expect(nodeDialog(page).getByTestId('workflow-plan-view')).toBeVisible();
-  await scan('Answer a Business Question page, Plan dialog after a run');
+  await scan('Answer a Business Question page, Plan dialog after a run: Data');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
   await openNode(page, 'validate', 'Validate');
@@ -1587,9 +1593,8 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await chatDialog.getByTestId('workflow-node-chat-send').click();
   await expect(chatDialog.getByTestId('workflow-node-chat-message')).toHaveCount(2);
   await expect(chatDialog.getByTestId('workflow-node-chat-tool-call')).toHaveCount(1);
-  await chatDialog.getByTestId('workflow-narrative-sql-toggle').first().click();
-  await expect(chatDialog.getByTestId('workflow-narrative-sql')).toBeVisible();
-  await scan('Answer a Business Question page, Analyse dialog: chat and report');
+  await expect(chatDialog.getByTestId('workflow-step-story')).toBeVisible();
+  await scan('Answer a Business Question page, Analyse dialog: chat and Story');
   await showArtifactView(page, 'data');
   await scan('Answer a Business Question page, Analyse dialog: Data');
   await showArtifactView(page, 'config');

@@ -18,6 +18,8 @@ export interface StoryFact {
   code?: true;
   /** A check's verdict, when the fact is one. */
   verdict?: 'passed' | 'failed';
+  /** A query fact: its statement, so a reader can open it among the answer's queries. */
+  sql?: string;
 }
 
 /** One figure of the run (the Logs' All nodes header). */

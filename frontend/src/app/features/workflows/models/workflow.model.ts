@@ -270,6 +270,8 @@ export interface StoryFact {
   code?: true;
   /** A check's verdict, when the fact is one. */
   verdict?: 'passed' | 'failed';
+  /** A query fact: its statement, to open it among the answer's queries. */
+  sql?: string;
 }
 
 /** One figure of the run, shown above the All nodes timeline. */

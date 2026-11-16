@@ -43,6 +43,28 @@
             </span>
           } @else if (fact.values.length === 1) {
             {{ fact.values[0] }}
+            @let index = queryIndex(fact);
+            @if (index !== null) {
+              <button
+                type="button"
+                [attr.data-testid]="'workflow-step-story-query-' + $index"
+                class="ml-1 inline-flex items-center gap-1 text-[12px] whitespace-nowrap text-primary hover:underline"
+                (click)="
+                  openQuery.emit({
+                    index: index,
+                    opener: $any($event.currentTarget),
+                  })
+                "
+              >
+                Open query
+                <lucide-angular
+                  [img]="OpenIcon"
+                  [size]="12"
+                  aria-hidden="true"
+                />
+                <span class="sr-only">: {{ fact.label }}</span>
+              </button>
+            }
           } @else {
             <ul class="m-0 list-none p-0">
               @for (value of fact.values; track $index) {

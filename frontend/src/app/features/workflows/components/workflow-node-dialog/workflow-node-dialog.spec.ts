@@ -45,8 +45,8 @@ describe('WorkflowNodeDialog', () => {
     fixture.componentRef.setInput('runId', runId);
     fixture.detectChanges();
   }
-  /** An agent step's artifact: show its Preview, Data or Config. */
-  function showView(view: 'preview' | 'data' | 'config') {
+  /** An agent step's artifact: show its Story, Data or Config. */
+  function showView(view: 'story' | 'data' | 'config') {
     byId(`workflow-ndv-view-${view}`)!.click();
     fixture.detectChanges();
   }
@@ -69,7 +69,7 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-ndv-output-status')).toBe('Done');
   });
 
-  it('shows an agent step as an artifact: Preview first, then Data and Config', () => {
+  it('shows an agent step as an artifact: Story first, then Data and Config', () => {
     open(node('analyse'));
     const views = Array.from(
       byId('workflow-ndv-artifact')!.querySelectorAll<HTMLElement>(
@@ -77,12 +77,12 @@ describe('WorkflowNodeDialog', () => {
       ),
     );
     expect(views.map((v) => v.textContent?.trim())).toEqual([
-      'Preview',
+      'Story',
       'Data',
       'Config',
     ]);
     expect(views[0].getAttribute('aria-selected')).toBe('true');
-    expect(byId('workflow-narrative')).not.toBeNull();
+    expect(byId('workflow-ndv-story-body')).not.toBeNull();
     expect(byId('workflow-ndv-input')).toBeNull();
     expect(byId('workflow-ndv-params')).toBeNull();
 
@@ -90,7 +90,7 @@ describe('WorkflowNodeDialog', () => {
     expect(views[1].getAttribute('aria-selected')).toBe('true');
     expect(byId('workflow-ndv-input')).not.toBeNull();
     expect(byId('workflow-ndv-output')).not.toBeNull();
-    expect(byId('workflow-narrative')).toBeNull();
+    expect(byId('workflow-ndv-story-body')).toBeNull();
 
     showView('config');
     expect(byId('workflow-ndv-params')).not.toBeNull();
@@ -101,25 +101,82 @@ describe('WorkflowNodeDialog', () => {
     expect(byId('workflow-ndv-tab-parameters')).toBeNull();
   });
 
-  it("tells the agent step's run in the Preview", () => {
-    open(node('analyse'));
-    expect(text('workflow-narrative-heading')).toBe('Top 5 states?');
-    const actions = Array.from(
-      el().querySelectorAll<HTMLElement>(
-        '[data-testid="workflow-narrative-action"]',
-      ),
+  it("tells the agent step's run in its Story, each query the answer kept opening in the inspector", () => {
+    const analyse = node('analyse');
+    open({
+      ...analyse,
+      run: {
+        ...analyse.run!,
+        story: {
+          headline: 'Ran 2 queries on the data (1 failed).',
+          facts: [
+            {
+              label: 'Query 1',
+              values: ['States by claims — 5 rows'],
+              sql: 'SELECT  state FROM claims;',
+            },
+            {
+              label: 'Query 2',
+              values: ['Ran a query — failed: No such entity'],
+              verdict: 'failed',
+              sql: 'SELECT * FROM nope',
+            },
+          ],
+          source: 'step',
+        },
+      },
+    });
+    expect(text('workflow-step-story-headline')).toBe(
+      'Ran 2 queries on the data (1 failed).',
     );
-    expect(actions.length).toBe(3);
-    expect(actions[2].getAttribute('data-failed')).toBe('true');
-    expect(actions[2].textContent).toContain('No such entity');
-    const toggle = actions[1].querySelector<HTMLElement>(
-      '[data-testid="workflow-narrative-sql-toggle"]',
-    )!;
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    toggle.click();
+    // Without the answer's records, no query can be opened.
+    expect(byId('workflow-step-story-query-0')).toBeNull();
+
+    fixture.componentRef.setInput('answerData', [
+      { tool: 'list_entities' },
+      { tool: 'run_readonly_sql', input: 'SELECT state FROM claims' },
+    ]);
     fixture.detectChanges();
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(text('workflow-narrative-sql')).toBe('SELECT state FROM claims');
+    // Matched by its statement (whitespace and a final `;` aside); the
+    // failed one is not among the answer's records.
+    const link = byId('workflow-step-story-query-0')!;
+    expect(link.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'Open query : Query 1',
+    );
+    expect(byId('workflow-step-story-query-1')).toBeNull();
+    const opened: number[] = [];
+    fixture.componentInstance.openQuery.subscribe((o) => opened.push(o.index));
+    link.click();
+    expect(opened).toEqual([1]);
+  });
+
+  it('opens a code step with its Story above Input, the tabs and Output', () => {
+    const receive = node('receive');
+    open({
+      ...receive,
+      run: {
+        ...receive.run!,
+        story: { headline: 'Got the question “Top 5 states?”.', source: 'step' },
+      },
+    });
+    const order = Array.from(
+      byId('workflow-ndv')!.querySelectorAll<HTMLElement>(
+        '[data-testid="workflow-ndv-story"], [data-testid="workflow-ndv-input"], [data-testid="workflow-ndv-output"]',
+      ),
+    ).map((s) => s.dataset['testid']);
+    expect(order).toEqual([
+      'workflow-ndv-story',
+      'workflow-ndv-input',
+      'workflow-ndv-output',
+    ]);
+    expect(text('workflow-step-story-headline')).toBe(
+      'Got the question “Top 5 states?”.',
+    );
+  });
+
+  it('has no Story for Start and End', () => {
+    open(node('start'));
+    expect(byId('workflow-ndv-story')).toBeNull();
   });
 
   it('stacks Input, the tabs and Output, with Input and Output collapsed until toggled', () => {
@@ -203,9 +260,6 @@ describe('WorkflowNodeDialog', () => {
   it('says so when an agent step recorded no tool calls', () => {
     const analyse = node('analyse');
     open({ ...analyse, run: { ...analyse.run!, toolCalls: [] } });
-    expect(byId('workflow-narrative-actions')?.textContent).toContain(
-      'No tool calls recorded.',
-    );
     showView('data');
     expect(byId('workflow-ndv-output')?.textContent).toContain(
       'No tool calls recorded.',
@@ -327,7 +381,7 @@ describe('WorkflowNodeDialog', () => {
       expect(api.getNodeChat).toHaveBeenCalledOnceWith('run_8f21c4', 'analyse');
       expect(byId('workflow-ndv-tab-chat')).toBeNull();
       expect(
-        byId('workflow-ndv-view-preview')!.getAttribute('aria-selected'),
+        byId('workflow-ndv-view-story')!.getAttribute('aria-selected'),
       ).toBe('true');
     });
 
@@ -424,7 +478,7 @@ describe('WorkflowNodeDialog', () => {
       byId('workflow-ndv-artifact-card')!.click();
       fixture.detectChanges();
       expect(
-        byId('workflow-ndv-view-preview')!.getAttribute('aria-selected'),
+        byId('workflow-ndv-view-story')!.getAttribute('aria-selected'),
       ).toBe('true');
     });
 
@@ -453,7 +507,7 @@ describe('WorkflowNodeDialog', () => {
 
   it('shows the not-run states', () => {
     open(FIXTURE_NODES_NOT_RUN[2], null);
-    expect(text('workflow-narrative-not-run')).toBe(
+    expect(text('workflow-ndv-story-empty')).toBe(
       'This node has not run yet. Execute the workflow to see its data.',
     );
     showView('data');
@@ -686,8 +740,9 @@ describe('WorkflowNodeDialog', () => {
     it('shows an input contract violation with its field path highlighted', () => {
       openContract(FIXTURE_INPUT_VIOLATION);
       expect(text('workflow-ndv-output-status')).toBe('Failed');
-      expect(text('workflow-narrative-error')).toBe(
-        'Failed: Contract violation in Analyse (input): question Required',
+      // A failed step without a story: its Story shows the error.
+      expect(text('workflow-ndv-story-error')).toBe(
+        'Contract violation in Analyse (input): question Required',
       );
       data();
       expect(text('workflow-ndv-output-error')).toBe(
@@ -888,7 +943,7 @@ describe('WorkflowNodeDialog', () => {
       ),
     ).filter((e) => e.closest('[hidden]') === null);
     const last = focusable[focusable.length - 1];
-    // The Preview's last control is the last that Tab reaches.
+    // The artifact's last control is the last that Tab reaches.
     expect(byId('workflow-ndv-artifact')!.contains(last)).toBeTrue();
     last.focus();
     const tab = new KeyboardEvent('keydown', {
@@ -919,7 +974,7 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
       running: false,
     });
 
-  function showView(view: 'preview' | 'data' | 'config') {
+  function showView(view: 'story' | 'data' | 'config') {
     byId(`workflow-ndv-view-${view}`)!.click();
     fixture.detectChanges();
   }
@@ -960,7 +1015,8 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     expect(one.textContent?.trim()).toBe('Attempt 1');
     expect(two.getAttribute('aria-pressed')).toBe('true');
     expect(one.getAttribute('aria-pressed')).toBe('false');
-    expect(text('workflow-narrative-meta')).toContain('attempt 2 of 2');
+    // A run stored without stories says so in the Story.
+    expect(text('workflow-ndv-story-empty')).toContain('No story was kept');
     showView('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain('second');
     expect(text('workflow-ndv-tool-call')).toContain('select 2');
@@ -973,8 +1029,23 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     expect(text('workflow-ndv-tool-call')).toContain('select 1');
     expect(text('workflow-ndv-tool-call')).toContain('boom');
     expect(header()).toContain('6.0 s');
-    showView('preview');
-    expect(text('workflow-narrative-meta')).toContain('attempt 1 of 2');
+  });
+
+  it("shows the Story of the attempt picked", () => {
+    const told = (attempt: number) => ({
+      headline: `Attempt ${attempt} ran.`,
+      source: 'step' as const,
+    });
+    open('analyse', {
+      ...GRAPH_RETRY_RUN,
+      steps: GRAPH_RETRY_RUN.steps.map((s) =>
+        s.id === 'analyse' ? { ...s, story: told(s.attempt ?? 1) } : s,
+      ),
+    });
+    expect(text('workflow-step-story-headline')).toBe('Attempt 2 ran.');
+    byId('workflow-attempt-1')!.click();
+    fixture.detectChanges();
+    expect(text('workflow-step-story-headline')).toBe('Attempt 1 ran.');
   });
 
   it('shows no attempt switcher for a step that ran once', () => {
@@ -984,10 +1055,6 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
 
   it("shows Plan's output as a plan above the data", () => {
     open('plan');
-    // The Preview shows it under What it returned.
-    expect(
-      byId('workflow-narrative')!.contains(byId('workflow-plan-view')),
-    ).toBeTrue();
     showView('data');
     const view = byId('workflow-plan-view')!;
     expect(view).not.toBeNull();
@@ -1031,6 +1098,7 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
       ),
     };
     open('plan', run);
+    showView('data');
     expect(text('workflow-plan-clarification-question')).toBe(
       'Which tournament?',
     );
