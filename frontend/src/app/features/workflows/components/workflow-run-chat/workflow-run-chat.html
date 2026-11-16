@@ -341,7 +341,7 @@
         <form
           data-testid="workflow-run-composer"
           aria-label="Input"
-          class="composer flex flex-col gap-2"
+          class="composer composer-form flex flex-col gap-2"
           (submit)="$event.preventDefault(); designer.execute()"
         >
           @for (field of composerFields(); track field.name) {
@@ -693,7 +693,9 @@
               {{ message }}
             </p>
           }
-          <div class="flex flex-wrap items-center justify-end gap-2">
+          <div
+            class="composer-actions flex flex-wrap items-center justify-end gap-2"
+          >
             @if (designer.running()) {
               <button
                 type="button"

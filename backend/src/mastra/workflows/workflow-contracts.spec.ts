@@ -58,6 +58,13 @@ import {
   type RecreateDashboardRuntime,
 } from './recreate-dashboard.steps';
 import { recreateDashboardWorkflow } from './recreate-dashboard.workflow';
+import { REVIEW_WEBSITE_STEP_SCHEMAS } from './review-website.schemas';
+import {
+  REVIEW_WEBSITE_RUNTIME_KEY,
+  REVIEW_WEBSITE_WORKFLOW_ID,
+  type ReviewWebsiteRuntime,
+} from './review-website.steps';
+import { reviewWebsiteWorkflow } from './review-website.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
 interface StubRun {
@@ -238,6 +245,101 @@ const FIXTURES: Record<string, ContractFixture> = {
         saveMappedDashboard: ({ bundle }) =>
           Promise.resolve({ visualId: 'v-1', title: bundle.title }),
       } satisfies MapDashboardDataRuntime);
+      return context;
+    },
+  },
+  [REVIEW_WEBSITE_WORKFLOW_ID]: {
+    workflow: reviewWebsiteWorkflow as unknown as ContractFixture['workflow'],
+    schemas: REVIEW_WEBSITE_STEP_SCHEMAS,
+    input: {
+      url: 'https://shop.example.com/',
+      maxPages: 10,
+      maxDepth: 2,
+      mobile: true,
+      tablet: false,
+      laptop: true,
+      desktop: false,
+      exclude: '',
+      needsSignIn: false,
+      loginUrl: '',
+    },
+    requestContext: () => {
+      const context = new RequestContext();
+      // The stubbed run: two pages found, one finding on one of them, and
+      // the stored report.
+      const unused = () => Promise.reject(new Error('not used'));
+      context.set(REVIEW_WEBSITE_RUNTIME_KEY, {
+        checkSignIn: unused,
+        openSignIn: unused,
+        finishSignIn: unused,
+        discoverPages: () =>
+          Promise.resolve({
+            pages: [
+              {
+                url: 'https://shop.example.com/',
+                finalUrl: 'https://shop.example.com/',
+                status: 200,
+                title: 'Shop',
+                depth: 0,
+                parent: null,
+                group: '/',
+                error: null,
+              },
+              {
+                url: 'https://shop.example.com/items/12',
+                finalUrl: 'https://shop.example.com/items/12',
+                status: 200,
+                title: 'Item 12',
+                depth: 1,
+                parent: 'https://shop.example.com/',
+                group: '/items/:id',
+                error: null,
+              },
+            ],
+            skippedLinks: ['https://shop.example.com/logout'],
+            capped: false,
+            sessionLost: null,
+          }),
+        captureAndCheck: () =>
+          Promise.resolve({
+            captures: [
+              {
+                url: 'https://shop.example.com/items/12',
+                screen: 'mobile',
+                group: '/items/:id',
+                screenshot: 'site-review/mobile/items-12.jpg',
+                thumbnail: null,
+                status: 200,
+                error: null,
+              },
+            ],
+            findings: [
+              {
+                id: 'f-00000001',
+                rule: 'overflow-x',
+                severity: 'major',
+                title: 'Page scrolls sideways',
+                screen: 'mobile',
+                group: '/items/:id',
+                selector: 'table.lines',
+                measured: 'Content is 512 px wide in a 390 px screen',
+                expected:
+                  'No sideways scrolling at 390 px (WCAG 1.4.10 Reflow)',
+                rect: { x: 0, y: 200, width: 512, height: 300 },
+                helpUrl: null,
+                pages: ['https://shop.example.com/items/12'],
+                crop: null,
+              },
+            ],
+          }),
+        readImages: () => Promise.resolve({}),
+        saveReport: () =>
+          Promise.resolve({
+            visualId: 'v-1',
+            reportFile: 'site-review/findings.json',
+          }),
+        showAnswer: () => Promise.resolve(),
+      } satisfies ReviewWebsiteRuntime);
       return context;
     },
   },

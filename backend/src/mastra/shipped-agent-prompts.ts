@@ -9,6 +9,7 @@ import {
   MAP_DATA_INSTRUCTIONS,
   READ_DASHBOARD_INSTRUCTIONS,
 } from './workflows/recreate-dashboard.prompts';
+import { SITE_REVIEWER_INSTRUCTIONS } from './workflows/review-website.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
@@ -39,6 +40,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'dashboard-reader': READ_DASHBOARD_INSTRUCTIONS,
   'data-mapper': MAP_DATA_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
+  'site-reviewer': SITE_REVIEWER_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

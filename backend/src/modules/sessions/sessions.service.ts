@@ -47,6 +47,7 @@ import { OntologyService } from '../ontology/ontology.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { ArtifactsService } from '../artifacts/artifacts.service';
+import { SiteReviewService } from '../site-review/site-review.service';
 import {
   buildPanelItem,
   tableCsv,
@@ -170,6 +171,8 @@ export interface RunHostSpec {
   image?: { path: string; data: Buffer };
   /** Dashboard Image to Artifact's saved dashboard: the artifact's id. */
   artifact?: string;
+  /** The run's whole checked input (Review a Website, agents.md 5.19). */
+  inputValues?: Record<string, string | number | boolean | string[]>;
   /**
    * A follow-up run (agents.md 5.14): the earlier run's host id, whose
    * memory threads the host starts from as copies of its own.
@@ -213,6 +216,8 @@ export class SessionsService implements OnModuleInit {
     private readonly syntheticData?: SyntheticDataBridgeDeps['synthetic'],
     // The saved dashboards a Dashboard Image to Artifact run takes (agents.md 5.17).
     @Optional() private readonly artifacts?: ArtifactsService,
+    // Review a Website's browser work (agents.md 5.19).
+    @Optional() private readonly siteReview?: SiteReviewService,
   ) {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
     // service's own dependencies and its session reads and writes.
@@ -279,6 +284,14 @@ export class SessionsService implements OnModuleInit {
         });
         return { id: saved.id, name: saved.name };
       },
+      siteReview: (io) => {
+        if (!this.siteReview) {
+          throw new Error('Review a Website is not available');
+        }
+        return this.siteReview.forRun(io);
+      },
+      writeFile: (sessionId, path, data) =>
+        writeWorkspaceFile(sessionId, path, data),
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -532,6 +545,7 @@ export class SessionsService implements OnModuleInit {
       ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
+      ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,

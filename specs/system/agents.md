@@ -41,6 +41,7 @@ An **agent** is a named, stateless-by-default LLM wrapper with:
 | `query-explainer` | Hannah | Query Explainer | `sql` |
 | `dashboard-reader` | Grace | Dashboard Analyst | `storytelling` |
 | `data-mapper` | Daniel | Data Mapping Analyst | `data-foundations` |
+| `site-reviewer` | Iris | Website Reviewer | `quality` |
 
 Each persona also carries a **domain**, the specialty that groups the agent in the Agent Hub. The six ids, in the order the hub shows them: `data-foundations` (Data Foundations), `analysis` (Analysis), `sql` (SQL Engineering), `storytelling` (Storytelling), `quality` (Quality & Evals) and `general` (General). `general` is the default (`DEFAULT_AGENT_DOMAIN`) and belongs to no built-in agent: it is where user agents with no domain chosen sit. The ids and the check `isAgentDomain` live in `agent-personas.ts` (`AGENT_DOMAINS`, `AgentDomain`).
 
@@ -85,7 +86,7 @@ Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings, or custom settings with the Anthropic API style, or `copilot` settings (its model comes from the model factory, 1.3). See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the thirteen agents, a composite storage, a Pino logger and observability. It registers five workflows: `answer-business-question` (5.11), `data-readiness-assessment` (5.13), `recreate-dashboard` (5.17), `map-dashboard-data` (5.18) and `agent-turn`, which is no longer a catalogue entry but the internal single-step turn behind Try it (draft runs), the eval runner and stored sessions (ADR-0042); the `agent:<key>` ids are internal and never listed. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it; the stream's `resume` and `discard` continue or drop a suspended run, ADR-0043), `discardSuspendedWorkflowRuns(key)`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the fourteen agents, a composite storage, a Pino logger and observability. It registers six workflows: `answer-business-question` (5.11), `data-readiness-assessment` (5.13), `recreate-dashboard` (5.17), `map-dashboard-data` (5.18), `review-website` (5.19) and `agent-turn`, which is no longer a catalogue entry but the internal single-step turn behind Try it (draft runs), the eval runner and stored sessions (ADR-0042); the `agent:<key>` ids are internal and never listed. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `streamWorkflow(key, inputData, requestContext)` (creates a run and streams it; the stream's `resume` and `discard` continue or drop a suspended run, ADR-0043), `discardSuspendedWorkflowRuns(key)`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -794,6 +795,18 @@ Hannah (1.1), the agent of the query inspector's Step by step tab (roadmap 1.25,
 
 > Implementation note: `mastra/agents/data-mapper.agent.ts` (`dataMapperAgent`); the call is `mapDataWithModel` in `mastra/workflows/recreate-dashboard.agents.ts`.
 
+### 2.15 `site-reviewer` (id `site-reviewer`) — Site Reviewer
+
+- **Purpose.** The agent of Review a Website (5.19), its `primaryFor` (since 2026-11-16). In phase 1 **no step calls it**: every finding is measured in the browser, with no model. It answers what the user asks about a run's report: a follow-up on the run and a node chat (5.16), from the run's answer and step data.
+- **Persona.** Iris, Website Reviewer (1.1). A System agent.
+- **Model.** The app's model (`resolveAgentModel`, 1.3).
+- **Tools, memory, skills.** None (`maxSteps: 1` in `STEP_AGENTS`).
+- **Instructions.** `SITE_REVIEWER_INSTRUCTIONS` (`mastra/workflows/review-website.prompts.ts`), listed in `SHIPPED` and editable in the app (ADR-0026): answer only from the review given, name the element, page pattern and screen and quote the measured value, rank what to fix first by severity then by pages, suggest concrete fixes, keep it short.
+- **Query inspector.** Not applicable: the agent answers from a website review, not from datasets, so it never calls `run_readonly_sql`. Each finding carries its own evidence instead (element, measured value, rule, crop of the screenshot), in the report (5.19).
+- **Phase 2** (docs/plans/m1-27-site-review.md) gives it a step: one vision call per page template, desktop and mobile side by side with numbered marks, and its eval set.
+
+> Implementation note: `mastra/agents/site-reviewer.agent.ts` (`siteReviewerAgent`).
+
 ## 3. Tools
 
 All tools belong to the `assistant` (3.1-3.9), or to the Data Readiness Agent (3.13, 3.14); `insights-analyst` (2.11) reuses five of the assistant's (3.1-3.5); `ask_clarification`, `show_in_panel` (3.11) and `update_workflow` (3.12) are shared by the assistant and the Data Readiness Agent. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
@@ -1373,11 +1386,12 @@ The workflow's edges (`ANSWER_BUSINESS_QUESTION_EDGES`, [api.md](api.md) 117) sa
 
 A **workflow** is a fixed sequence of steps defined in code, each deterministic code or one bounded call to an agent ([workflows](../capabilities/workflows/spec.md); ADR-0040, partly superseded by ADR-0042). Workflows are never created, edited or stored by the app. Agents are not workflows (2026-11-12): they are a library that workflow steps call.
 
-**The catalogue.** Four code-defined workflows, in this order, each a run workflow (`trigger: 'run'`) that drives the workflow bar's view from its steps (`bar: 'steps'`), with its steps and edges in `CODE_WORKFLOWS[].edges`:
+**The catalogue.** Five code-defined workflows, in this order, each a run workflow (`trigger: 'run'`) that drives the workflow bar's view from its steps (`bar: 'steps'`), with its steps and edges in `CODE_WORKFLOWS[].edges`:
 - `answer-business-question`, *Answer a Business Question*, whose agent is `insights-analyst` (its `primaryFor` agent), with the steps of 5.11;
 - `data-readiness-assessment`, *Assess Data Readiness* (since 2026-11-13), whose agent is `data-readiness`, with the steps of 5.13;
 - `recreate-dashboard`, *Dashboard Image to Artifact* (since 2026-11-15), whose agent is `dashboard-reader`, with the steps of 5.17;
-- `map-dashboard-data`, *Map a Dashboard to Data* (since 2026-11-15), whose agent is `data-mapper`, with the steps of 5.18.
+- `map-dashboard-data`, *Map a Dashboard to Data* (since 2026-11-15), whose agent is `data-mapper`, with the steps of 5.18;
+- `review-website`, *Review a Website* (since 2026-11-16), whose agent is `site-reviewer` (no step calls it in phase 1), with the steps of 5.19.
 
 The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or `agent:<user-agent id>`), `seq-text-demo` (5.13) and `deep-analysis` (5.15) are removed from the catalogue and the API. The `agent-turn` Mastra workflow stays as an internal turn only: Try it (agents-evals R60), the eval runner (`createRunHost({ agentKey })`) and stored sessions use it; its `agent:<key>` ids never reach `GET /workflows`. A user agent's only run is its draft preview, Try it.
 
@@ -1385,7 +1399,7 @@ The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or 
 
 **The input node.** A workflow's `input` is its Start node: it holds everything its steps read, with the right types (the data contract, below). Each field's `usedBy` (116) lists the steps that read it straight from the input. A run's whole input is validated before the run (`validateWorkflowInput`; api.md 118, 119): a refused input stores no run and runs no step, so no step has an "invalid input" exit.
 
-**The data contract** ([workflows](../capabilities/workflows/spec.md) R26). Every step declares its input and output once, as Zod schemas in a framework-free module (`answer-business-question.schemas.ts`, `data-readiness-assessment.schemas.ts`, `recreate-dashboard.schemas.ts`, `map-dashboard-data.schemas.ts`), used by both the Mastra workflow and the step catalogue. From them come:
+**The data contract** ([workflows](../capabilities/workflows/spec.md) R26). Every step declares its input and output once, as Zod schemas in a framework-free module (`answer-business-question.schemas.ts`, `data-readiness-assessment.schemas.ts`, `recreate-dashboard.schemas.ts`, `map-dashboard-data.schemas.ts`, `review-website.schemas.ts`), used by both the Mastra workflow and the step catalogue. From them come:
 - the step's `input` / `output` field names (the top-level properties, in schema order) and its `inputSchema` / `outputSchema` JSON Schemas (`z.toJSONSchema`, the input side for `inputSchema`, the output side for `outputSchema`, without `$schema`; [api.md](api.md) 117);
 - the workflow's `contractHash`: the first 12 hex of the sha256 of the canonical JSON (keys sorted) of `{ input: [{ name, type, required }], steps: [{ id, inputSchema, outputSchema }], edges: [{ from, to, kind }] }` (`edges` only for a workflow with edges; [api.md](api.md) 117). Each stored run keeps the hash its workflow had when it started ([data-model.md](data-model.md) 3.16).
 
@@ -1393,7 +1407,7 @@ The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or 
 
 *Validated at run time, both ways* (`withContract`). Every step's execute is wrapped: its input is parsed with its input schema before it runs and its output (or the value it bails with) with its output schema after; the step gets and passes on the parsed values (unknown keys dropped). On failure it throws a `ContractViolationError` whose message is `Contract violation in <Step title>: <path> <message>` for its output and `Contract violation in <Step title> (input): <path> <message>` for its input; `<path>` is the first issue's path, dotted with indices (`calls[2].rowCount`), or `(root)` for the whole value, so it is always one word; `<message>` is Zod's. The step fails with that error (its `failed` step event and the stored run step's `error`), later steps do not run, and the run is `failed` with it ([api.md](api.md) 3.6). The engine sees each step's declared input schema but never refuses with it (`engineInputSchema`: the schema with a `catch` that passes the value on), so the step's own message is the one a run shows; the workflow's run input is validated against its input schema by the engine (`validateInputs: true`), after the input node has already checked it. An agent turn's own error is unchanged (5.11). A contract test runs every catalogued workflow end to end on a sample input with a stubbed model and parses every step's output with its schema; a snapshot test holds every workflow's JSON Schemas and hash, so any contract change is a reviewed diff.
 
-**Ids.** `answer-business-question`, `data-readiness-assessment`, `recreate-dashboard` and `map-dashboard-data` are the only workflow ids. Any other id, including a former one-step id (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `agent:rfp`), `seq-text-demo` and `deep-analysis`, is not a workflow and answers `Workflow "<id>" not found` ([api.md](api.md) 117).
+**Ids.** `answer-business-question`, `data-readiness-assessment`, `recreate-dashboard`, `map-dashboard-data` and `review-website` are the only workflow ids. Any other id, including a former one-step id (`agent:assistant`, `agent:data-readiness`, `agent:<user-agent id>`, `agent:rfp`), `seq-text-demo` and `deep-analysis`, is not a workflow and answers `Workflow "<id>" not found` ([api.md](api.md) 117).
 
 **A session's workflow** ([data-model.md](data-model.md) 3.4). A stored session keeps its `workflowId` as stored; the derived `workflowRef` ([api.md](api.md) 2.1) is:
 
@@ -1403,12 +1417,13 @@ The one-step workflows of ADR-0040 (one per agent, id `agent:<registry key>` or 
 | `workflowId: 'data-readiness-assessment'` (only a run host, 5.13) | `data-readiness-assessment` |
 | `workflowId: 'recreate-dashboard'` (only a run host, 5.17) | `recreate-dashboard` |
 | `workflowId: 'map-dashboard-data'` (only a run host, 5.18) | `map-dashboard-data` |
+| `workflowId: 'review-website'` (only a run host, 5.19) | `review-website` |
 | `agentKey: 'data-readiness'` with no such `workflowId`, an `agentId`, a stored `agent:*` id, or none | the internal `agent:*` reference as before (`agent:data-readiness`, `agent:<id>`, `agent:assistant`); not in the catalogue, no workflow page. A wrapped agent's key derives its agent turn before any code workflow it runs a step of, so the Data Readiness Agent's past chats and its eval host stay on `agent:data-readiness` |
 | a stored `seq-text-demo` or `deep-analysis` id | a plain Assistant session (`agent:assistant`) |
 
 Which agent a stored session's turn ran is unchanged history; no new turn runs on a session (ADR-0041).
 
-**Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): `insights-analyst`, `analysis-planner` and `answer-writer` → `answer-business-question`; `data-readiness` → `answer-business-question` (Check data quality, 5.11) and `data-readiness-assessment`; `dashboard-reader` → `recreate-dashboard`; `data-mapper` → `map-dashboard-data`; every other agent → none.
+**Which workflows use an agent** ([api.md](api.md) 34 `usedInWorkflows`): `insights-analyst`, `analysis-planner` and `answer-writer` → `answer-business-question`; `data-readiness` → `answer-business-question` (Check data quality, 5.11) and `data-readiness-assessment`; `dashboard-reader` → `recreate-dashboard`; `data-mapper` → `map-dashboard-data`; `site-reviewer` → `review-website` (its `primaryFor` agent); every other agent → none.
 
 > Implementation note: the framework-free catalogue is `mastra/workflows/workflow-catalog.ts` (`CODE_WORKFLOWS`, each with its `contractHash`, `parseWorkflowId`, `sessionWorkflowId`, `workflowsUsingAgent`); the contract's check, hash, JSON Schema conversion and `withContract` are in `mastra/workflows/workflow-contract.ts` (Zod and Node only). `WorkflowsService` (`modules/workflows/`) builds the API's catalogue from it; `SessionsService` never depends on it (that would be a module cycle) and resolves workflows from the pure catalogue. `agentWorkflow()` (`agent-workflows.ts`) reads each workflow's steps from `CODE_WORKFLOWS` by its `primaryFor` agent.
 
@@ -1567,6 +1582,55 @@ It reads no image and never calls the Dashboard Reader: the same saved dashboard
 **Limits (this version).** The mapped widgets still show invented values: no query runs. The mapping is not stored on the artifact: it lives in the run that made it, since it depends on the datasets picked. Tailoring or refreshing the dashboard through the visual routes runs the visual designer (6), which has no data for it.
 
 > Implementation note: `mastra/workflows/map-dashboard-data.schemas.ts` (the contract), `.steps.ts` (catalogue entries, edges, `MapDashboardDataRuntime`) and `.workflow.ts` (the Mastra steps); the shared pure code and the prompts are 5.17's files; the runtime is built in `modules/sessions/turn/turn-engine.ts`.
+
+### 5.19 Workflow: `review-website` (Review a Website)
+
+The user gives the entry URL of a website and gets a map of its pages and the visual and usability defects of every page on each chosen screen size, **measured in a real browser**, each with its evidence (since 2026-11-16, roadmap 1.27, plan `docs/plans/m1-27-site-review.md`; it brings the goal of the `site-mapping-agent` prototype into the app with a different design). Phase 1 makes **no model call**. Four steps in sequence (Mastra `.then`), one wait (suspend), one early end (bail):
+
+```
+start → prepare-session → discover-pages → capture-and-check → save-report → end
+```
+
+**Input** ([api.md](api.md) 116): `url` (`Entry URL`, text, required, at most 2000 characters), `maxPages` (number, default 50, 1 to 250), `maxDepth` (number, default 3, 0 to 6), `mobile` (390 px, default on), `tablet` (768 px, off), `laptop` (1440 px, on), `desktop` (1920 px, off), `exclude` (`Never follow links matching`, a regular expression over a link's path and query, default `logout|log-out|signout|sign-out|logoff|delete|remove|unsubscribe`), `needsSignIn` (boolean, off) and `loginUrl` (`Sign-in page`, optional; else the entry URL). The run's question is the entry URL (`agentRunTurn`: `question`, else `url`). The run host keeps the whole checked input (`SessionDoc.inputValues`, in memory) and the turn builds the workflow's input from it (`reviewWebsiteInputOf`).
+
+| # | id | Title | Kind | What it does | Output |
+|---|---|---|---|---|---|
+| 1 | `prepare-session` | Prepare session | code | Makes the input usable (`preparedSessionOf`): the screens as a list, narrowest first; the limits within their bounds; the default exclusion when blank. Fails with `Entry URL must be a web address starting with http:// or https://`, `Sign-in page must be …`, `Never follow links matching is not a valid pattern: …` or `Choose at least one screen`. With `needsSignIn`: checks the sign-in saved for the site's origin (`site_signins`, [data-model.md](data-model.md) 3.19) by opening the entry URL with it; when none works, opens a **visible** browser window on the sign-in page and **suspends** with `Sign in to <host> in the browser window that just opened … then press Continue.` and the option `Continue`. On resume it checks the window: signed in, it saves the window's storage state (encrypted) for the origin, closes the window and goes on; else it suspends again with `Still not signed in to <host>. …` (the window stays open). | `url`, `maxPages`, `maxDepth`, `screens`, `exclude`, `needsSignIn`, `loginUrl`, `origin`, `signedIn` |
+| 2 | `discover-pages` | Discover pages | code | Breadth first from the entry URL on the widest chosen screen: the site's origin only, http(s), no file links (pdf, images, archives, office files…), `maxDepth` clicks, `maxPages` pages, never a link `exclude` matches (listed as skipped, never opened). Each page: URL, final URL, status, title, depth, parent, its **group** (`urlGroup`: the path with ids, UUIDs, long tokens and dates as `:id`) and its load error. A signed-in crawl whose page does not look signed in (`looksSignedIn`: it left the origin, landed on the sign-in page, or shows a password field) stops there: the step **bails** with `sessionLost`, the answer says so (`sessionLostAnswer`) and nothing is measured or saved. Each page found is a progress line. | the prepared input, `pages`, `skippedLinks`, `capped`, `sessionLost` |
+| 3 | `capture-and-check` | Capture and check | code | Every page that loaded, on every chosen screen, two at a time: a full-page JPEG screenshot, a viewport thumbnail for the first page of each group, the **DOM snapshot** (`collectDomSnapshot`, run in the page), **axe** (`axe-core`, injected), the page's status and console errors; then the measured rules (`review-website.checks.ts`, table below), a crop around each finding's element the first time it is found in its group, and the merge (`mergeFindings`: one finding per rule, screen, group and element, with every page it was found on; sorted by severity, then pages). Each page checked is a progress line. | the discovered site, `captures`, `findings` |
+| 4 | `save-report` | Save report | code | Reads the crops and thumbnails as `data:` URIs, draws the report (`renderReportBundle`) and stores it as version 1 of a visual of the run (`VisualizationService.createFromBundle`, as 5.17), writes every page, capture and finding to `site-review/findings.json` in the run's workspace, and writes the answer (`reviewAnswer`). | `visualId`, `reportFile`, `origin`, `pageCount`, `groupCount`, `findingCount`, `counts`, `answer` |
+
+**The measured rules** (raw facts from the page, severity from the rule):
+
+| Rule | Finding | Severity |
+|---|---|---|
+| `axe:<id>` | an axe violation, per element (contrast, names, labels, alt…), with axe's summary as the measured value | critical/serious → major; moderate/minor → minor |
+| `overflow-x` | the page is wider than the screen; names the widest element (WCAG 1.4.10) | major on mobile and tablet, else minor |
+| `clipped-text` | text cut by its box (overflow hidden or ellipsis) | minor |
+| `covered-element` | a link, button or field at least half under a fixed or sticky element at load | critical for a submit button, else major |
+| `tap-target` | an interactive element under 24×24 px on mobile and tablet, inline text links excepted (WCAG 2.5.8) | minor |
+| `broken-image` | an image that loaded with no pixels | major |
+| `http-error` | the page answered 400 or more | major |
+| `console-error` | uncaught errors or `console.error` on load | minor |
+| `placeholder-text` | `lorem ipsum`, `{{ }}`, `undefined`, `NaN`, `[object Object]`, `Forename`, `TODO` in the visible text | major |
+
+A finding is `{ id, rule, severity, title, screen, group, selector, measured, expected, rect, helpUrl, pages[], crop }`.
+
+**The report** is a code-built visual (no model writes markup, as 5.17): a fixed style sheet and script with the data embedded as JSON made safe for a script; every text from the website reaches the page as a text node; images only as `data:` URIs (the visual frame has no network, 6.6). It shows the host, the counts by severity, a screen toggle, the groups with their badges, the selected group's findings (badge, title, measured, expected with its link, selector, crop, the pages it was found on), the group's thumbnail, the pages as a tree, and a Coverage box (pages reached of the limit, links skipped by the exclusion, pages that failed, captures that failed). It reads the frame's theme tokens, so it works in Light and Dark.
+
+**The answer** (`reviewAnswer`) is fixed text: `**<host>**: <n> pages on <screens> — <counts>.`, up to three `Fix first` bullets (the worst findings), a `Coverage:` paragraph and a line pointing to the report.
+
+**The browser** (ADR-0049): `playwright-core` drives the computer's own Microsoft Edge, else Google Chrome (`SITE_REVIEW_BROWSER_PATH` names another executable, for tests); with neither the step fails with `Review a Website needs Microsoft Edge or Google Chrome installed on this computer`. Pages load with a 30 s timeout, then wait up to 5 s for the network to settle. GET navigation only: nothing is clicked or submitted. The browser work lives in `SiteReviewService` (`modules/site-review/`), reached by the turn's runtime (`siteReview`); a sign-in window is held there by run host for at most 30 minutes (as a waiting run, workflows R28) and closed at shutdown.
+
+**Snapshots.** Written only while the run waits for the sign-in (`shouldPersistSnapshot` while `suspended`); the runtime and the browser are never serialised. After a restart the waiting run expires (R28).
+
+**Stop and failure.** Stop aborts the browser work between pages (`The review was stopped`). A page that fails to load is a page with an error (and an `http-error` finding when it answered); a capture that fails keeps its findings so far and its error. Screenshots of signed-in pages stay in the run's workspace on this computer; no step sends them anywhere.
+
+**Run host.** The run runs on a run host bound to `site-reviewer` (2.15, 5.14). No step calls the agent.
+
+**Limits (this version).** Pages are grouped by URL pattern only (phase 2 adds the DOM fingerprint). No vision review, no comparison with an earlier run (phases 2 and 3). A site's saved sign-in cannot be seen or cleared from the app yet: a failed check opens the sign-in window again. No overlay is dismissed before the screenshots: a banner over a control is a finding.
+
+> Implementation note: `mastra/workflows/review-website.schemas.ts` (the contract and the shared shapes), `.steps.ts` (catalogue entries, edges, `ReviewWebsiteRuntime`, the input and sign-in code), `.collect.ts` (the in-page collector), `.checks.ts` (the rules, the grouping and the merge), `.report.ts` (the report and the answers), `.prompts.ts` and `.workflow.ts` (the Mastra steps); `modules/site-review/` (`SiteReviewService`, `site-browser.ts`, `site-urls.ts`, `SiteSignInsRepository`); the runtime is built in `modules/sessions/turn/turn-engine.ts`.
 ---
 
 ## 6. Visual designer pipeline

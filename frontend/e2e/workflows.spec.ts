@@ -59,6 +59,7 @@ const OFFICIAL = [
   [READINESS_ID, READINESS],
   ['recreate-dashboard', 'Dashboard Image to Artifact'],
   ['map-dashboard-data', 'Map a Dashboard to Data'],
+  ['review-website', 'Review a Website'],
 ] as const;
 
 const QUESTION = 'How many matches were played in each stage?';
@@ -292,7 +293,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Official, and no Mine section',
+        'Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact", "Map a Dashboard to Data" and "Review a Website" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',

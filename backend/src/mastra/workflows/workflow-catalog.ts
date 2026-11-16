@@ -17,6 +17,7 @@ import {
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
+  SITE_REVIEWER_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
@@ -49,6 +50,16 @@ import {
   RECREATE_DASHBOARD_WORKFLOW_ID,
   RECREATE_DASHBOARD_WORKFLOW_NAME,
 } from './recreate-dashboard.steps';
+import {
+  REVIEW_WEBSITE_DEFAULT_EXCLUDE,
+  REVIEW_WEBSITE_DEPTH,
+  REVIEW_WEBSITE_DESCRIPTION,
+  REVIEW_WEBSITE_EDGES,
+  REVIEW_WEBSITE_PAGES,
+  REVIEW_WEBSITE_STEPS,
+  REVIEW_WEBSITE_WORKFLOW_ID,
+  REVIEW_WEBSITE_WORKFLOW_NAME,
+} from './review-website.steps';
 import {
   ANSWER_BUSINESS_QUESTION_EDGES,
   ANSWER_BUSINESS_QUESTION_STEPS,
@@ -280,11 +291,109 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
       edges: MAP_DASHBOARD_DATA_EDGES,
       bar: 'steps',
     },
+    {
+      id: REVIEW_WEBSITE_WORKFLOW_ID,
+      name: REVIEW_WEBSITE_WORKFLOW_NAME,
+      description: REVIEW_WEBSITE_DESCRIPTION,
+      // Iris answers what you ask about the report; no step calls her yet.
+      primaryFor: SITE_REVIEWER_AGENT_KEY,
+      trigger: 'run',
+      input: [
+        {
+          name: 'url',
+          label: 'Entry URL',
+          type: 'text',
+          required: true,
+          placeholder: 'https://www.example.com/',
+          help: 'Where the review starts. Only pages of the same site are followed.',
+          maxLength: 2000,
+        },
+        {
+          name: 'maxPages',
+          label: 'Max pages',
+          type: 'number',
+          required: false,
+          default: REVIEW_WEBSITE_PAGES.default,
+          min: REVIEW_WEBSITE_PAGES.min,
+          max: REVIEW_WEBSITE_PAGES.max,
+          help: 'Every page is opened and measured once per screen.',
+        },
+        {
+          name: 'maxDepth',
+          label: 'Max depth',
+          type: 'number',
+          required: false,
+          default: REVIEW_WEBSITE_DEPTH.default,
+          min: REVIEW_WEBSITE_DEPTH.min,
+          max: REVIEW_WEBSITE_DEPTH.max,
+          help: 'How many clicks away from the entry URL.',
+        },
+        {
+          name: 'mobile',
+          label: 'Mobile (390 px)',
+          type: 'boolean',
+          required: false,
+          default: true,
+        },
+        {
+          name: 'tablet',
+          label: 'Tablet (768 px)',
+          type: 'boolean',
+          required: false,
+          default: false,
+        },
+        {
+          name: 'laptop',
+          label: 'Laptop (1440 px)',
+          type: 'boolean',
+          required: false,
+          default: true,
+        },
+        {
+          name: 'desktop',
+          label: 'Desktop (1920 px)',
+          type: 'boolean',
+          required: false,
+          default: false,
+        },
+        {
+          name: 'exclude',
+          label: 'Never follow links matching',
+          type: 'text',
+          required: false,
+          default: REVIEW_WEBSITE_DEFAULT_EXCLUDE,
+          placeholder: REVIEW_WEBSITE_DEFAULT_EXCLUDE,
+          help: 'A regular expression over the link’s path. Keeps the review from signing out or deleting anything.',
+          maxLength: 500,
+        },
+        {
+          name: 'needsSignIn',
+          label: 'The site needs a sign-in',
+          type: 'boolean',
+          required: false,
+          default: false,
+          help: 'A browser window opens for you to sign in the first time; the sign-in is saved, encrypted, for the next reviews. Screenshots of signed-in pages stay on this computer.',
+        },
+        {
+          name: 'loginUrl',
+          label: 'Sign-in page',
+          type: 'text',
+          required: false,
+          placeholder: 'The entry URL',
+          default: '',
+          help: 'Where to sign in, when it is not the entry URL.',
+          maxLength: 2000,
+        },
+      ],
+      steps: REVIEW_WEBSITE_STEPS,
+      edges: REVIEW_WEBSITE_EDGES,
+      bar: 'steps',
+    },
   ]).map((workflow) => ({ ...workflow, contractHash: contractHash(workflow) }));
 
 /** What one agent turn of a run takes from the run's input (plan 4.2, 5.1). */
 export interface AgentRunTurn {
-  /** The user message: `question`, trimmed. */
+  /** The user message: `question`, else the entry `url`, trimmed. */
   question: string;
   /** `datasets`, or the readiness run's one `dataset`; absent otherwise. */
   datasets?: string[];
@@ -306,7 +415,8 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
       ? [text(values['dataset'])]
       : undefined;
   return {
-    question: text(values['question']),
+    // A workflow with no question runs on its entry URL (Review a Website).
+    question: text(values['question']) || text(values['url']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
     ...(values['checkDataQuality'] === true

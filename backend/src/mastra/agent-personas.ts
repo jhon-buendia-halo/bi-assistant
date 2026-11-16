@@ -134,6 +134,13 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       "I match the columns a dashboard needs to the columns in your datasets, and tell you what's missing.",
   },
+  'site-reviewer': {
+    name: 'Iris',
+    role: 'Website Reviewer',
+    domain: 'quality',
+    intro:
+      'I walk through your website on every screen size and show you what is broken, with the element, what I measured and a picture of it.',
+  },
   'query-explainer': {
     name: 'Hannah',
     role: 'Query Explainer',

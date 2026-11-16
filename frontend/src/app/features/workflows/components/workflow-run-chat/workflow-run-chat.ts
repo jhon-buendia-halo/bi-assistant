@@ -97,6 +97,19 @@ const FORM_CONTROLS =
     .composer:focus-within {
       border-color: var(--qti-border-selected);
     }
+    /* A long input (Review a Website has eleven fields) scrolls inside the
+       composer, so the chat above keeps its room; Execute stays in view. */
+    .composer-form {
+      max-height: 35vh;
+      overflow-y: auto;
+    }
+    .composer-actions {
+      position: sticky;
+      bottom: -0.5rem;
+      margin-bottom: -0.5rem;
+      padding-bottom: 0.5rem;
+      background-color: var(--qti-surface);
+    }
     .composer-input {
       width: 100%;
       resize: none;
