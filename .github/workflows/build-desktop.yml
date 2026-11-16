@@ -10,10 +10,11 @@ name: Build desktop installers
 # but CI no longer builds or publishes them. The build stays a one-entry matrix
 # so adding a platform back is one line in `prepare`.
 #
-# The brand is chosen at build time (ADR-0045): the `brand` input (halo or
-# mercer) becomes BRAND for the build, which sets the app name, app id, icon and
-# installer name (Questions-to-Insights-*.exe or Agentic-Hub-*.exe). The
-# uploaded artifact carries the brand in its name. Tag pushes build halo.
+# The brand is chosen at build time (ADR-0045): each build job sets BRAND, which
+# sets the app name, app id, icon and installer name (Halo-Workbench-*.exe or
+# Agentic-Hub-*.exe). The `brand` input picks `both` (the default: one job per
+# brand, both installers on the same release), `halo` or `mercer`. The uploaded
+# artifact carries the brand in its name. Tag pushes build both.
 #
 # Publishing never needs a tag to exist up front. When the ref is not a v* tag
 # the `prepare` job derives one from the version committed at that ref
@@ -29,18 +30,19 @@ on:
         type: string
         required: false
       publish:
-        description: Attach the Windows installer to the GitHub release for the built tag
+        description: Attach the Windows installers to the GitHub release for the built tag
         type: boolean
         required: false
         default: false
       brand:
-        description: Brand to build (ADR-0045) — halo ships as "Halo BI Assistant", mercer as "Agentic Hub"
+        description: Brand to build (ADR-0045) — halo ships as "Halo Workbench", mercer as "Agentic Hub"; both builds the two installers
         type: choice
         options:
+          - both
           - halo
           - mercer
         required: false
-        default: halo
+        default: both
   push:
     tags:
       - "v*"
@@ -58,7 +60,6 @@ jobs:
       tag: ${{ steps.select.outputs.tag }}
       version: ${{ steps.select.outputs.version }}
       sha: ${{ steps.select.outputs.sha }}
-      brand: ${{ steps.select.outputs.brand }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -72,25 +73,30 @@ jobs:
         id: select
         env:
           INPUT_REF: ${{ inputs.ref }}
-          # Tag pushes have no inputs and build Halo.
-          INPUT_BRAND: ${{ inputs.brand || 'halo' }}
+          # Tag pushes have no inputs and build both brands.
+          INPUT_BRAND: ${{ inputs.brand || 'both' }}
         run: |
           set -euo pipefail
 
-          brand=$INPUT_BRAND
-          if [ ! -f "frontend/brands/$brand/brand.json" ]; then
-            echo "::error::Unknown brand \"$brand\" (no frontend/brands/$brand/brand.json)."
-            exit 1
-          fi
+          case "$INPUT_BRAND" in
+            both) brands='["halo","mercer"]' ;;
+            *)    brands=$(jq -cn --arg b "$INPUT_BRAND" '[$b]') ;;
+          esac
+          for brand in $(jq -r '.[]' <<<"$brands"); do
+            if [ ! -f "frontend/brands/$brand/brand.json" ]; then
+              echo "::error::Unknown brand \"$brand\" (no frontend/brands/$brand/brand.json)."
+              exit 1
+            fi
+          done
 
-          # The only shipped installer (BA-302). Manual runs and tag pushes
-          # both build exactly this. The installer glob matches every brand's
-          # artifactName (Questions-to-Insights-*.exe, Agentic-Hub-*.exe).
+          # The only shipped platform (BA-302), once per selected brand. The
+          # installer glob matches every brand's artifactName
+          # (Halo-Workbench-*.exe, Agentic-Hub-*.exe).
           selected='[
             {"id":"windows-x64","name":"Windows x64","os":"windows-2022","target":"win","format":"nsis","arch":"x64","artifact":"questions-to-insights-windows-x64","installer":"frontend/release/*.exe"}
           ]'
-          selected=$(jq -c --arg brand "$brand" \
-            'map(.artifact = "\(.artifact)-\($brand)" | .name = "\(.name) (\($brand))")' <<<"$selected")
+          selected=$(jq -c --argjson brands "$brands" \
+            '[.[] as $t | $brands[] as $b | $t + {brand: $b, artifact: "\($t.artifact)-\($b)", name: "\($t.name) (\($b))"}]' <<<"$selected")
 
           ref=${INPUT_REF:-$GITHUB_REF}
           sha=$(git rev-parse HEAD)
@@ -124,9 +130,8 @@ jobs:
               ;;
           esac
 
-          echo "Building $(jq -r '[.[].id] | join(", ")' <<<"$selected") for brand $brand from $ref ($sha) as $tag"
+          echo "Building $(jq -r '[.[].name] | join(", ")' <<<"$selected") from $ref ($sha) as $tag"
           echo "matrix={\"include\":$selected}" >> "$GITHUB_OUTPUT"
-          echo "brand=$brand" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
@@ -147,7 +152,7 @@ jobs:
       # Installers are stored as Actions artifacts; the publish job handles releases.
       GH_TOKEN: ""
       # The brand electron:dist packages (frontend/scripts/brand.mjs).
-      BRAND: ${{ needs.prepare.outputs.brand }}
+      BRAND: ${{ matrix.brand }}
 
     steps:
       - name: Check out repository

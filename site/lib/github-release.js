@@ -9,12 +9,49 @@
 
 export const REPO = 'jhon-buendia-halo/bi-assistant';
 
-/** Download targets, keyed by the URL segment the page links to. */
+/**
+ * Installer file-name prefixes per product (ADR-0045, ADR-0046). Halo Workbench
+ * shipped as `Questions-to-Insights-…` before the rename, so both count.
+ */
+const HALO_PREFIXES = ['Halo-Workbench-', 'Questions-to-Insights-'];
+const AGENTIC_HUB_PREFIXES = ['Agentic-Hub-'];
+
+/**
+ * Download targets, keyed by the URL segment the page links to. An asset
+ * matches when its name starts with one of the product's prefixes and ends
+ * with the platform suffix. `win-x64` stays the Halo Workbench link so older
+ * links keep working.
+ */
 export const TARGETS = {
-  'mac-arm64': { suffix: '-mac-arm64.dmg', label: 'macOS · Apple silicon' },
-  'mac-x64': { suffix: '-mac-x64.dmg', label: 'macOS · Intel' },
-  'win-x64': { suffix: '-win-x64.exe', label: 'Windows x64' },
+  'win-x64': {
+    prefixes: HALO_PREFIXES,
+    suffix: '-win-x64.exe',
+    label: 'Halo Workbench · Windows x64',
+  },
+  'agentic-hub-win-x64': {
+    prefixes: AGENTIC_HUB_PREFIXES,
+    suffix: '-win-x64.exe',
+    label: 'Agentic Hub · Windows x64',
+  },
+  'mac-arm64': {
+    prefixes: HALO_PREFIXES,
+    suffix: '-mac-arm64.dmg',
+    label: 'Halo Workbench · macOS Apple silicon',
+  },
+  'mac-x64': {
+    prefixes: HALO_PREFIXES,
+    suffix: '-mac-x64.dmg',
+    label: 'Halo Workbench · macOS Intel',
+  },
 };
+
+/** Whether a release asset is the installer a target names. */
+export function assetMatches(name, spec) {
+  return (
+    name.endsWith(spec.suffix) &&
+    spec.prefixes.some((prefix) => name.startsWith(prefix))
+  );
+}
 
 /** How long a resolved release list is reused before GitHub is asked again. */
 const CACHE_SECONDS = 300;
@@ -29,7 +66,7 @@ function apiHeaders(env) {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
     // GitHub rejects API requests without one.
-    'User-Agent': 'halo-bi-assistant-site',
+    'User-Agent': 'halo-workbench-site',
   };
 }
 
@@ -86,7 +123,7 @@ export async function resolveTargets(env) {
 
   for (const [key, spec] of Object.entries(TARGETS)) {
     for (const release of releases) {
-      const asset = release.assets.find((a) => a.name.endsWith(spec.suffix));
+      const asset = release.assets.find((a) => assetMatches(a.name, spec));
       if (!asset) continue;
       targets[key] = {
         label: spec.label,
@@ -104,7 +141,7 @@ export async function resolveTargets(env) {
   // The headline version is the newest release that shipped any installer.
   const newest = releases.find((r) =>
     Object.values(TARGETS).some((s) =>
-      r.assets.some((a) => a.name.endsWith(s.suffix)),
+      r.assets.some((a) => assetMatches(a.name, s)),
     ),
   );
 

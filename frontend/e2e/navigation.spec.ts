@@ -122,7 +122,7 @@ test('Opens the empty Costs page from the rail', async ({ page }) => {
 
 test('the start page explains how the product works', async ({ page }) => {
   await expect(
-    page.getByRole('heading', { name: 'Welcome to Halo Powered' }),
+    page.getByRole('heading', { name: 'Welcome to Halo Workbench' }),
   ).toBeVisible();
   const steps = [
     'Pick your data',
@@ -363,18 +363,18 @@ test('opens Settings as an area with a section list', async ({ page }) => {
 test('shows the product name', async ({ page }) => {
   // The header names the product, then the open area (app-shell R7, ADR-0044).
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Halo Powered',
+    'Halo Workbench',
   );
   await expect(page.getByTestId('header-area')).toHaveCount(0);
-  await expect(page).toHaveTitle('Halo Powered');
+  await expect(page).toHaveTitle('Halo Workbench');
   await expect(
-    rail(page).getByRole('img', { name: 'Halo Powered' }),
+    rail(page).getByRole('img', { name: 'Halo Workbench' }),
   ).toBeVisible();
 
   await railItem(page, 'Settings').click();
   await expect(page.getByTestId('header-area')).toHaveText('Settings');
   await expect(page.getByTestId('app-version')).toHaveText(
-    /^Halo Powered v\d+\.\d+\.\d+$/,
+    /^Halo Workbench v\d+\.\d+\.\d+$/,
   );
 });
 
@@ -383,7 +383,7 @@ test('the app opens straight into the shell', async ({ page }) => {
   await expect(rail(page)).toBeVisible();
   await expect(page.getByLabel('Open system logs')).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Welcome to Halo Powered' }),
+    page.getByRole('heading', { name: 'Welcome to Halo Workbench' }),
   ).toBeVisible();
   // No sign-in page.
   await expect(page.getByRole('button', { name: /sign in/i })).toHaveCount(0);

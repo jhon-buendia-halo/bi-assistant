@@ -53,7 +53,7 @@
         </div>
       }
 
-      <!-- Brand: the HALO wordmark and "Powered" (only the O on the narrow rail),
+      <!-- Brand: the HALO wordmark and the brand's wordmark label (only the O on the narrow rail),
            or the framed shell's gradient logo circle and product name -->
       <div class="flex h-9 shrink-0 items-center gap-3 pl-2.5" [class.pr-1]="navExpanded()">
         @if (art; as art) {
@@ -77,11 +77,13 @@
             [title]="brand.productName"
           >
             <app-logo [height]="14" [label]="brand.productName" />
-            <span
-              aria-hidden="true"
-              class="ml-2.5 border-l border-border pl-2.5 text-[12.5px] font-medium whitespace-nowrap text-fg-muted"
-              >Powered</span
-            >
+            @if (brand.wordmarkLabel) {
+              <span
+                aria-hidden="true"
+                class="ml-2.5 border-l border-border pl-2.5 text-[12.5px] font-medium whitespace-nowrap text-fg-muted"
+                >{{ brand.wordmarkLabel }}</span
+              >
+            }
           </span>
           <ng-container *ngTemplateOutlet="navToggle" />
         } @else {

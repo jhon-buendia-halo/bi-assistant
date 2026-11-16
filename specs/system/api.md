@@ -1663,8 +1663,8 @@ The renderer maps `down`/`restarting`/`starting` to a status banner; see [ui.md]
 
 ### 4.4 Data directory and secret (desktop)
 
-- `userData` is `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR` when set (E2E isolation); otherwise the OS per-user app dir, preferring the current app-name folder and falling back to the pre-rename legacy folder (`Questions to Insights`) if only that exists. The app display name is "Halo BI Assistant".
-- `APP_DATA_DIR` passed to the backend equals `userData`, except on Windows (no isolation override, `LOCALAPPDATA` set) where it is `%LOCALAPPDATA%\Halo BI Assistant`; existing `app.sqlite`, `mastra.sqlite`, `workspaces` are migrated there once (rollback on failure, continues on roaming profile).
+- `userData` is `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR` when set (E2E isolation); otherwise the OS per-user app dir, preferring the current app-name folder and falling back, when that folder does not exist, to the newest pre-rename legacy folder that does (`Halo BI Assistant`, then `Questions to Insights`; brand.json `legacyOsNames`). The app display name is "Halo Workbench".
+- `APP_DATA_DIR` passed to the backend equals `userData`, except on Windows (no isolation override, `LOCALAPPDATA` set) where it is `%LOCALAPPDATA%\Halo Workbench` (or, when that does not exist, the newest existing `%LOCALAPPDATA%\<legacy name>`, used in place); otherwise existing `app.sqlite`, `mastra.sqlite`, `workspaces` are migrated there once (rollback on failure, continues on roaming profile).
 - `APP_SECRET` = env `APP_SECRET` if set, else read from `<APP_DATA_DIR>/.app-secret`, else 32 random bytes hex generated and written there with mode `0600`. Failure to persist logs an error diagnostic (stored API keys then cannot be decrypted after restart).
 
 ---

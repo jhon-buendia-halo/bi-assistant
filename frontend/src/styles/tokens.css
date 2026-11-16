@@ -10,7 +10,7 @@
 
 @theme inline {
   --font-sans: var(--qti-font-sans);
-  /* The accent word of a display title ("Welcome to Halo Powered"). */
+  /* The accent word of a display title ("Welcome to Halo Workbench"). */
   --font-display: var(--qti-font-display);
 
   --color-canvas: var(--qti-canvas);

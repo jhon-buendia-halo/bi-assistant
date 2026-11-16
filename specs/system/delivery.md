@@ -2,7 +2,7 @@
 
 How the app is built, run, packaged, distributed and released. The stack and code layout are in [tech-stack.md](tech-stack.md); the reasons for the delivery shape are ADR-0001 and ADR-0002 in [architecture.md](architecture.md). The CLI flags and the desktop IPC bridge are contracts, specified in [api.md](api.md); this file records how they are delivered.
 
-The app ships three ways from one codebase: the **Halo BI Assistant** desktop installers (Electron), the **npm package** that runs the same app in a browser, and, separately, a static **product page** (`site/`).
+The app ships three ways from one codebase: the **Halo Workbench** desktop installers (Electron), the **npm package** that runs the same app in a browser, and, separately, a static **product page** (`site/`).
 
 ## 1. Electron single-app delivery
 
@@ -30,24 +30,24 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 
 | Item | Behaviour |
 |---|---|
-| `APP_DATA_DIR` | Electron's `userData` directory. The profile name tracks the app name; if only the pre-rename directory (`Questions to Insights`) exists on an existing install, that one is kept. On **Windows**, backend data (`app.sqlite`, `mastra.sqlite`, `workspaces`) is moved once from the roaming profile to `%LOCALAPPDATA%\Halo BI Assistant`, with rollback and a diagnostics entry on failure, because roaming profiles are often synced or locked. |
+| `APP_DATA_DIR` | Electron's `userData` directory. The profile name tracks the app name; if it does not exist, the newest existing pre-rename directory (`Halo BI Assistant`, then `Questions to Insights`; brand.json `legacyOsNames`) is kept in place (ADR-0046). On **Windows**, backend data (`app.sqlite`, `mastra.sqlite`, `workspaces`) lives in `%LOCALAPPDATA%\Halo Workbench` (or an existing pre-rename `%LOCALAPPDATA%\<legacy name>`) and is moved there once from the roaming profile, with rollback and a diagnostics entry on failure, because roaming profiles are often synced or locked. |
 | `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR` | Overrides `userData` entirely and disables the Windows redirect. Used by the Playwright fixture so tests never touch a real profile; also the way to run an isolated desktop instance from a worktree. |
 | `APP_SECRET` | The backend derives the AES-256-GCM key that encrypts stored API keys from it. Taken from the `APP_SECRET` environment variable if set; otherwise read from `<APP_DATA_DIR>/.app-secret`, or generated (32 random bytes, hex) and written there with mode 0600. It must stay stable across launches. Back up `.app-secret` with the data; without it stored keys cannot be decrypted. The backend itself, run bare without `APP_SECRET`, reads or creates `.app-secret` in its own data dir the same way. |
 | Other files in the profile | `logs/system.ndjson` (diagnostics, rotated to `system.previous.ndjson` above 5 MB; the last 2,000 entries are kept in memory). |
 
 ### Dev and branding helpers
 
-- `frontend/scripts/brand-electron.sh` renames `node_modules/electron/dist/Electron.app` to `<osName>.app` (the selected brand's `osName`, "Halo BI Assistant" by default), rewrites its `CFBundleName` / `CFBundleDisplayName` and the launcher's `path.txt`, and refreshes LaunchServices, so the macOS menu bar and Dock show the product name in unpackaged runs. Idempotent; a no-op off macOS. Packaged builds get the name from electron-builder's `productName`.
+- `frontend/scripts/brand-electron.sh` renames `node_modules/electron/dist/Electron.app` to `<osName>.app` (the selected brand's `osName`, "Halo Workbench" by default), rewrites its `CFBundleName` / `CFBundleDisplayName` and the launcher's `path.txt`, and refreshes LaunchServices, so the macOS menu bar and Dock show the product name in unpackaged runs. Idempotent; a no-op off macOS. Packaged builds get the name from electron-builder's `productName`.
 - The app icon is per brand: `frontend/brands/<id>/public/brand/icon.png` (electron-builder derives `.icns` / `.ico`), rendered at 1024 px from `frontend/brands/<id>/art/app-icon.svg` (ADR-0044, ADR-0045); a copy ships in the renderer bundle as `brand/icon.png`.
 - The Electron main process reads `frontend/electron/brand.json` (a gitignored copy of the selected brand's `brand.json`, written by `brand.mjs electron-prepare`; it falls back to `brands/halo/brand.json` when absent) for the app name, window title, legacy userData migration (halo only), window background per theme and icon. Mercer has its own userData folder and no migration, so both apps install and run side by side.
 
 ### Brands (ADR-0045)
 
-`BRAND=halo|mercer` (default `halo`) picks the brand for every build; one build is one brand. Each brand is a folder `frontend/brands/<id>/` (`brand.json`, `tokens.css`, `public/`, `art/`), and `brand.json` carries `id`, `osName`, `legacyOsName`, `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}` and `publishNpm`.
+`BRAND=halo|mercer` (default `halo`) picks the brand for every build; one build is one brand. Each brand is a folder `frontend/brands/<id>/` (`brand.json`, `tokens.css`, `public/`, `art/`), and `brand.json` carries `id`, `osName`, `legacyOsNames` (earlier OS names, newest first), `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}` and `publishNpm`.
 
 | Brand | Product | OS name | appId | Installer | npm |
 |---|---|---|---|---|---|
-| `halo` | Halo Powered | Halo BI Assistant | `com.halopowered.questions-to-insights` | `Questions-to-Insights-<version>-<os>-<arch>.<ext>` | yes |
+| `halo` | Halo Powered | Halo Workbench | `com.halopowered.questions-to-insights` (kept from before the rename so installs upgrade in place) | `Halo-Workbench-<version>-<os>-<arch>.<ext>` | yes |
 | `mercer` | Agentic Hub | Agentic Hub | `com.halopowered.agentic-hub` | `Agentic-Hub-<version>-<os>-<arch>.<ext>` | no |
 
 ```bash
@@ -160,13 +160,13 @@ Configuration lives in the `build` block of `frontend/package.json`.
 | Setting | Value |
 |---|---|
 | `appId` | `com.halopowered.questions-to-insights` (halo); `electron-dist.mjs` overrides it from the selected brand's `brand.json` (mercer: `com.halopowered.agentic-hub`) |
-| `productName` | `Halo BI Assistant` (halo); the brand's `osName` (mercer: `Agentic Hub`) |
-| `artifactName` | `Questions-to-Insights-${version}-${os}-${arch}.${ext}`, for example `Questions-to-Insights-0.20.3-mac-arm64.dmg`, `…-win-x64.exe`; mercer: `Agentic-Hub-${version}-${os}-${arch}.${ext}` |
+| `productName` | `Halo Workbench` (halo); the brand's `osName` (mercer: `Agentic Hub`) |
+| `artifactName` | `Halo-Workbench-${version}-${os}-${arch}.${ext}`, for example `Halo-Workbench-0.65.0-win-x64.exe` (releases before ADR-0046: `Questions-to-Insights-…`); mercer: `Agentic-Hub-${version}-${os}-${arch}.${ext}` |
 | Output | `frontend/release/` (gitignored) |
 | Build resources / icon | `frontend/build/` (now only `installer.nsh`); the icon is `brands/<id>/public/brand/icon.png` (`brands/halo/…` in the config, also set for `mac` and `win`; `electron-dist.mjs` swaps in the brand's) |
 | Packaged files | `dist/frontend/**`, `electron/**` except `electron/**/*.test.cjs` (the shell's `node --test` unit tests), `package.json` |
 | macOS | category `public.app-category.productivity`; `.dmg` for arm64 and x64 |
-| Windows | NSIS `.exe` for x64, electron-builder's default one-click per-user installer: it silently runs the previous version's uninstaller (keeping app data) before installing. `build/installer.nsh` (picked up automatically from build resources) defines `customCheckAppRunning`: electron-builder's usual check (asks to close a running app) runs first, then `taskkill /F /T` ends every app executable (`${APP_EXECUTABLE_FILENAME}`, "Halo BI Assistant.exe" for halo) the current user still runs, such as an orphaned backend, so no file in the install folder stays locked. The installer and the uninstaller both run it. |
+| Windows | NSIS `.exe` for x64, electron-builder's default one-click per-user installer: it silently runs the previous version's uninstaller (keeping app data) before installing. `build/installer.nsh` (picked up automatically from build resources) defines `customCheckAppRunning`: electron-builder's usual check (asks to close a running app) runs first, then `taskkill /F /T` ends every app executable (`${APP_EXECUTABLE_FILENAME}`, "Halo Workbench.exe" for halo) the current user still runs, such as an orphaned backend, so no file in the install folder stays locked. The installer and the uninstaller both run it. |
 | Signing | none: CI sets `CSC_IDENTITY_AUTO_DISCOVERY=false` and produces unsigned artifacts |
 
 **Backend staging** (`frontend/scripts/stage-backend.sh`): runs `npm run build` in `backend/`; recreates `backend/release-staging/` (gitignored); copies in `dist/`, `package.json` and `package-lock.json`; then runs `npm ci --omit=dev --ignore-scripts --legacy-peer-deps --no-audit --no-fund` there. Production dependencies only; install scripts are skipped, so the native modules come from their prebuilt binaries.
@@ -254,19 +254,19 @@ Conventional Commit subjects therefore drive the bump, Because the bump reads ev
 
 ### `build-desktop.yml` — Build desktop installers
 
-Manual: Actions → Build desktop installers → Run workflow. A hand-pushed `v*` tag also triggers it. It builds and publishes **only the Windows x64 installer** (BA-302); macOS `.dmg` files can still be built locally with `electron:dist` (section 2) but CI no longer builds them.
+Manual: Actions → Build desktop installers → Run workflow. A hand-pushed `v*` tag also triggers it. It builds and publishes **only Windows x64 installers** (BA-302), by default one per brand (Halo Workbench and Agentic Hub); macOS `.dmg` files can still be built locally with `electron:dist` (section 2) but CI no longer builds them.
 
 | Input | Default | Meaning |
 |---|---|---|
 | `ref` | empty | Tag, branch or SHA to build; empty = the branch the run was started from |
-| `publish` | false | Attach the Windows installer to the GitHub release for the resolved tag |
-| `brand` | `halo` | The brand to build (`halo` or `mercer`, ADR-0045); a `v*` tag push has no inputs and builds halo |
+| `publish` | false | Attach the Windows installers to the GitHub release for the resolved tag |
+| `brand` | `both` | The brands to build: `both` (halo and mercer, one build job each, both installers on the same release), `halo` or `mercer` (ADR-0045); a `v*` tag push has no inputs and builds both |
 
-`prepare` fails on a brand without `frontend/brands/<brand>/brand.json`, exposes it as an output, and appends it to the artifact and job names (`questions-to-insights-windows-x64-<brand>`); the `build` job sets it as `BRAND` for `electron:dist`, so the installer is `Questions-to-Insights-*.exe` or `Agentic-Hub-*.exe`.
+`prepare` fails on a brand without `frontend/brands/<brand>/brand.json` and emits one matrix entry per brand, carrying the brand and appending it to the artifact and job names (`questions-to-insights-windows-x64-<brand>`); each `build` job sets its entry's brand as `BRAND` for `electron:dist`, so the installer is `Halo-Workbench-*.exe` or `Agentic-Hub-*.exe`.
 
 Jobs:
 
-1. **`prepare`** checks out the ref with full history and tags, emits the build matrix (`{"include":[…]}`) with its one entry, Windows x64 (runner `windows-2022`, NSIS `.exe`), and resolves the tag:
+1. **`prepare`** checks out the ref with full history and tags, emits the build matrix (`{"include":[…]}`): Windows x64 (runner `windows-2022`, NSIS `.exe`) once per selected brand, and resolves the tag:
    - a `v*` ref publishes to exactly that tag;
    - anything else (branch, SHA, empty) takes the version committed at that ref (`frontend/package.json`) and **walks the patch level up** until it finds a tag that either does not exist or already points at this commit, so building `main` twice gives `v0.13.0` then `v0.13.1` instead of clobbering a shipped release.
 2. **`build`** (one runner per matrix entry, so one Windows runner; 45 min timeout, `fail-fast: false`): checks out the resolved SHA, **stamps the resolved version** into both `package.json`s (so the installer filename and the tag never disagree), `npm ci --legacy-peer-deps` in `backend/` and `frontend/`, then `npm run electron:dist -- --<target> <format> --<arch>`, and uploads the installer as an Actions artifact (retention 14 days). Artifacts are unsigned (`CSC_IDENTITY_AUTO_DISCOVERY=false`).
@@ -395,13 +395,13 @@ A separate, static deliverable: the public page for the app, a section of the Ha
 | Content | Plain static HTML/CSS in `site/public/` (no build step, no framework), styled with the Labs design tokens; screenshots in `public/shots/` |
 | Hosting | Cloudflare Pages project `halo-bi-assistant` (`halo-bi-assistant.pages.dev`), custom domain `bi-assistant.halo-powered-labs.com` |
 | Scripts | `scripts/dev.sh` (local on :4500 via `wrangler pages dev`), `deploy.sh` (publish; needs `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, optional `CF_PAGES_PROJECT`), `domain.sh` (attach the domain), `protect.sh` (optional Cloudflare Access lock) |
-| Download routes | Pages Functions: `/download/mac-arm64`, `/download/mac-x64`, `/download/win-x64` redirect to the newest published installer for that platform. The page links only `/download/win-x64` (BA-304); the macOS routes stay, unlinked, for old links and serve v0.13.1, the last release with macOS installers; `/api/latest` returns JSON (version, file sizes) for the page. A new release needs no site edit. |
+| Download routes | Pages Functions: `/download/win-x64` (Halo Workbench: `Halo-Workbench-*` or the older `Questions-to-Insights-*`), `/download/agentic-hub-win-x64` (Agentic Hub: `Agentic-Hub-*`), `/download/mac-arm64` and `/download/mac-x64` (Halo, older releases) redirect to the newest published installer of that edition and platform, matched by file-name prefix and platform suffix. The page links the two Windows routes, one button per edition (ADR-0045, ADR-0046); the macOS routes stay, unlinked, for old links and serve v0.13.1, the last release with macOS installers; `/api/latest` returns JSON (version, file sizes) for the page. A new release needs no site edit. |
 | Private-repo trick | The repo is private, so `releases/download/…` 404s publicly. The Function asks the GitHub API for the asset with `Accept: application/octet-stream`, takes the credential-free short-lived `Location`, and redirects the browser to it; the token never leaves the edge. Per platform it picks the newest release that carries that installer, so a Windows-only release leaves the macOS routes on the last release that had them. |
 | Secret | `GITHUB_TOKEN` (fine-grained PAT, Contents: read-only, scoped to this repo; expires within a year) set with `wrangler pages secret put`. Without it both routes answer 503 and the page shows static copy with buttons marked unavailable. |
-| Screenshots | Re-shot from the real app against the World Cup demo fixture with `site/scripts/screenshots/seed-demo.cjs` and `capture.mjs` (see `site/README.md` for the full procedure). |
+| Screenshots | Re-shot from the real app (web mode, scratch data directory) against the World Cup demo fixture after two real runs (Answer a Business Question, Assess Data Readiness), with `site/scripts/screenshots/capture.mjs` (see `site/README.md` for the full procedure). |
 | Skill | The project skill `deploy-labs-site` covers publishing or redeploying it. |
 
-Installers are named `Questions-to-Insights-<version>-<os>-<arch>.<ext>` while the product is branded Halo BI Assistant; change `build.artifactName` if the downloaded file should carry the product name.
+The page presents the product as Halo Workbench (ADR-0046). Installers are named `Halo-Workbench-<version>-<os>-<arch>.<ext>` (before ADR-0046, `Questions-to-Insights-…`) and `Agentic-Hub-<version>-<os>-<arch>.<ext>`; the resolver matches each edition's prefixes plus the platform suffix, so the old Halo names still resolve and the editions never pick each other's file.
 
 ## 9. Claude Code mods (`.claude/mods/`)
 

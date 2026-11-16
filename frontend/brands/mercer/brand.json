@@ -1,7 +1,7 @@
 {
   "id": "mercer",
   "osName": "Agentic Hub",
-  "legacyOsName": null,
+  "legacyOsNames": [],
   "windowTitle": "Agentic Hub",
   "appId": "com.halopowered.agentic-hub",
   "artifactName": "Agentic-Hub-${version}-${os}-${arch}.${ext}",

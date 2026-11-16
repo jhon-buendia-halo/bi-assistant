@@ -172,11 +172,11 @@ test('has no automatically detectable accessibility violations on any screen in 
 });
 
 test('text in the app can be selected', async ({ page }) => {
-  const heading = page.getByRole('heading', { name: 'Welcome to Halo Powered' });
+  const heading = page.getByRole('heading', { name: 'Welcome to Halo Workbench' });
   await heading.click({ clickCount: 3 });
   expect(
     await page.evaluate(() => window.getSelection()?.toString()),
-  ).toContain('Welcome to Halo Powered');
+  ).toContain('Welcome to Halo Workbench');
   await evidence(page, '1.20.5', 'text-selected.png');
   expect(
     await heading.evaluate((el) => getComputedStyle(el).userSelect),

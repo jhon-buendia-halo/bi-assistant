@@ -60,7 +60,7 @@ function isProcessAlive(pid) {
 
 /**
  * The image name of a running PID, or null. Windows: `tasklist` CSV
- * (`"Halo BI Assistant.exe","1234",…`). Elsewhere: `ps -o comm=`, which may be
+ * (`"Halo Workbench.exe","1234",…`). Elsewhere: `ps -o comm=`, which may be
  * a full path (macOS) or truncated to 15 characters (Linux).
  */
 function processImageName(pid, platform = process.platform, run = execFileSync) {
@@ -92,6 +92,11 @@ function imageMatches(actual, expected) {
   return a === e || (a.length === 15 && e.startsWith(a));
 }
 
+function matchesAnyImage(actual, expected) {
+  const names = Array.isArray(expected) ? expected : [expected];
+  return names.some((name) => imageMatches(actual, name));
+}
+
 async function waitUntilGone(pid, isAlive, sleep, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -103,7 +108,8 @@ async function waitUntilGone(pid, isAlive, sleep, timeoutMs) {
 
 /**
  * Stops the backend recorded in `<dataDir>/backend.pid` when it is still
- * running as `expectedImage`, then removes the file. Resolves to
+ * running as `expectedImage` (one image name, or a list: the current one and
+ * those of the app's earlier names), then removes the file. Resolves to
  * `{ pid, stopped }` (`pid` null when no file was found).
  */
 async function stopStaleBackend(
@@ -127,7 +133,7 @@ async function stopStaleBackend(
   if (
     pid !== ownPid &&
     isAlive(pid) &&
-    imageMatches(imageName(pid), expectedImage)
+    matchesAnyImage(imageName(pid), expectedImage)
   ) {
     try {
       kill(pid);

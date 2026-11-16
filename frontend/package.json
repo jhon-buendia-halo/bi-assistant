@@ -24,8 +24,8 @@
   },
   "build": {
     "appId": "com.halopowered.questions-to-insights",
-    "productName": "Halo BI Assistant",
-    "artifactName": "Questions-to-Insights-${version}-${os}-${arch}.${ext}",
+    "productName": "Halo Workbench",
+    "artifactName": "Halo-Workbench-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "build"

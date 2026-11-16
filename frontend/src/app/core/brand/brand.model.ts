@@ -1,6 +1,6 @@
 /**
  * What the renderer needs to know about the brand it was built for
- * (ADR-0045). The build picks one: `brand.ts` (Halo Powered, the default) or,
+ * (ADR-0045). The build picks one: `brand.ts` (Halo Workbench, the default) or,
  * for BRAND=mercer, `brand.mercer.ts` swapped in by Angular's
  * fileReplacements, so one brand's names never reach the other's bundle.
  * Colours, fonts and images are per brand too, under frontend/brands/<id>/.
@@ -20,6 +20,8 @@ export interface Brand {
    * and rounded panels (ADR-0007).
    */
   readonly shell: 'flat' | 'framed';
+  /** The word after the HALO wordmark in the flat shell's expanded rail; null for the framed shell. */
+  readonly wordmarkLabel: string | null;
   /** The "Powered by LenAI" mark at the foot of the rail. */
   readonly poweredByLenai: boolean;
   /** Images of the framed shell, under the brand's public/ folder; null for the flat shell. */

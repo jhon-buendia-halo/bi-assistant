@@ -46,7 +46,7 @@ function main(argv) {
   console.log(`[electron-dist] packaging "${id}" (${config.osName})`);
   // electron-builder's own CLI under this Node, with no shell (what `npx
   // electron-builder` runs): on Windows npx is a .cmd that needs one, and
-  // cmd.exe would split "Halo BI Assistant" at its spaces.
+  // cmd.exe would split "Halo Workbench" at its spaces.
   const cli = require.resolve('electron-builder/cli.js');
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: frontendRoot,

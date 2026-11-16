@@ -9,7 +9,7 @@ Var pid
 ; Runs in the installer (before the previous version is uninstalled) and in
 ; the uninstaller. electron-builder's usual check goes first: it asks the user
 ; to close a running app and ends processes inside the install folder. Then
-; every "Halo BI Assistant.exe" this user still runs is force-ended with its
+; every "Halo Workbench.exe" this user still runs is force-ended with its
 ; children, so a backend orphaned by a crashed window (same executable, no
 ; window to close) can't keep files locked or the port taken.
 !macro customCheckAppRunning

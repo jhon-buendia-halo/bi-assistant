@@ -583,7 +583,7 @@ specs/capabilities/agents-evals/spec.md:1265-1271  ## Acceptance
 specs/capabilities/agents-evals/spec.md:1273-1282  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
-specs/capabilities/app-shell/spec.md:16-93  ## Rules
+specs/capabilities/app-shell/spec.md:16-94  ## Rules
 specs/capabilities/app-shell/spec.md:19-19  R1 The system SHALL present, left to right: the navigation rail (expandab
 specs/capabilities/app-shell/spec.md:20-20  R2 On launch the navigation drawer SHALL be expanded unless the user last
 specs/capabilities/app-shell/spec.md:21-23  R3 The rail SHALL offer, under "Workspace navigation", one icon button ea
@@ -620,32 +620,33 @@ specs/capabilities/app-shell/spec.md:60-60  R30 Each toast SHALL have a dismiss 
 specs/capabilities/app-shell/spec.md:61-63  R31 Every error toast SHALL also be recorded as an error entry with source
 specs/capabilities/app-shell/spec.md:64-64  R32 The Settings list pane SHALL end with the build identity: the brand's
 specs/capabilities/app-shell/spec.md:65-65  R33 In the `halo` brand the window title and the document title SHALL be "
-specs/capabilities/app-shell/spec.md:66-68  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
-specs/capabilities/app-shell/spec.md:69-69  R46 In the Runs area the content shows an open run of a removed workflow o
-specs/capabilities/app-shell/spec.md:70-70  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
-specs/capabilities/app-shell/spec.md:71-71  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
-specs/capabilities/app-shell/spec.md:72-72  R49 In the Runs area the page SHALL start with a header: an icon, then the
-specs/capabilities/app-shell/spec.md:73-73  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
-specs/capabilities/app-shell/spec.md:74-76  R51 The home view (R2) SHALL welcome the user and explain how the product
-specs/capabilities/app-shell/spec.md:77-77  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
-specs/capabilities/app-shell/spec.md:78-80  R53 All text in the app SHALL be selectable and copyable with the mouse an
-specs/capabilities/app-shell/spec.md:81-81  R39 The Appearance section SHALL offer a single choice labelled **Theme**
-specs/capabilities/app-shell/spec.md:82-82  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
-specs/capabilities/app-shell/spec.md:83-83  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
-specs/capabilities/app-shell/spec.md:84-84  R42 The resolved theme SHALL be applied before the page first paints, so t
-specs/capabilities/app-shell/spec.md:85-85  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
-specs/capabilities/app-shell/spec.md:86-86  R44 In the desktop app, the window's own background (shown while resizing
-specs/capabilities/app-shell/spec.md:87-89  R45 Both themes SHALL produce zero violations in the automated accessibili
-specs/capabilities/app-shell/spec.md:90-90  R35 The application shell, in its initial state, SHALL produce zero violat
-specs/capabilities/app-shell/spec.md:91-91  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
-specs/capabilities/app-shell/spec.md:92-92  R37 Every icon-only control in the shell SHALL have an accessible name (a
-specs/capabilities/app-shell/spec.md:93-93  R38 The application shell in its initial state SHALL match the approved `a
-specs/capabilities/app-shell/spec.md:95-105  ## Edge cases and errors
-specs/capabilities/app-shell/spec.md:107-114  ## Contracts
-specs/capabilities/app-shell/spec.md:116-122  ## UI
-specs/capabilities/app-shell/spec.md:124-390  ## Flows
-specs/capabilities/app-shell/spec.md:392-396  ## Acceptance
-specs/capabilities/app-shell/spec.md:398-404  ## Open questions
+specs/capabilities/app-shell/spec.md:66-66  R57 The desktop app SHALL keep the data of an install made under an earlie
+specs/capabilities/app-shell/spec.md:67-69  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
+specs/capabilities/app-shell/spec.md:70-70  R46 In the Runs area the content shows an open run of a removed workflow o
+specs/capabilities/app-shell/spec.md:71-71  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
+specs/capabilities/app-shell/spec.md:72-72  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
+specs/capabilities/app-shell/spec.md:73-73  R49 In the Runs area the page SHALL start with a header: an icon, then the
+specs/capabilities/app-shell/spec.md:74-74  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
+specs/capabilities/app-shell/spec.md:75-77  R51 The home view (R2) SHALL welcome the user and explain how the product
+specs/capabilities/app-shell/spec.md:78-78  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
+specs/capabilities/app-shell/spec.md:79-81  R53 All text in the app SHALL be selectable and copyable with the mouse an
+specs/capabilities/app-shell/spec.md:82-82  R39 The Appearance section SHALL offer a single choice labelled **Theme**
+specs/capabilities/app-shell/spec.md:83-83  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
+specs/capabilities/app-shell/spec.md:84-84  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
+specs/capabilities/app-shell/spec.md:85-85  R42 The resolved theme SHALL be applied before the page first paints, so t
+specs/capabilities/app-shell/spec.md:86-86  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
+specs/capabilities/app-shell/spec.md:87-87  R44 In the desktop app, the window's own background (shown while resizing
+specs/capabilities/app-shell/spec.md:88-90  R45 Both themes SHALL produce zero violations in the automated accessibili
+specs/capabilities/app-shell/spec.md:91-91  R35 The application shell, in its initial state, SHALL produce zero violat
+specs/capabilities/app-shell/spec.md:92-92  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
+specs/capabilities/app-shell/spec.md:93-93  R37 Every icon-only control in the shell SHALL have an accessible name (a
+specs/capabilities/app-shell/spec.md:94-94  R38 The application shell in its initial state SHALL match the approved `a
+specs/capabilities/app-shell/spec.md:96-106  ## Edge cases and errors
+specs/capabilities/app-shell/spec.md:108-115  ## Contracts
+specs/capabilities/app-shell/spec.md:117-123  ## UI
+specs/capabilities/app-shell/spec.md:125-391  ## Flows
+specs/capabilities/app-shell/spec.md:393-397  ## Acceptance
+specs/capabilities/app-shell/spec.md:399-406  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
 specs/capabilities/data-readiness/spec.md:24-224  ## Rules
@@ -1951,7 +1952,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1175  ## Level 3 — Components
+specs/system/architecture.md:258-1197  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -1985,7 +1986,8 @@ specs/system/architecture.md:1086-1106  #### ADR-0042 — Workflows and agents a
 specs/system/architecture.md:1108-1129  #### ADR-0043 — Human in the loop: a run that needs the user is suspended with Mastra's suspend/resume and continued in place; its runtime stays in memory, with a snapshot only while it waits
 specs/system/architecture.md:1131-1153  #### ADR-0044 — Halo Powered rebrand: n8n-style flat shell, halopowered.com palette and type, HALO wordmark
 specs/system/architecture.md:1155-1175  #### ADR-0045 — Brands chosen at build time (white-label): Halo Powered and Agentic Hub
-specs/system/architecture.md:1177-1232  ## Level 4 — Code
+specs/system/architecture.md:1177-1197  #### ADR-0046 — The product is "Halo Workbench" in the app and the operating system
+specs/system/architecture.md:1199-1254  ## Level 4 — Code
 
 specs/system/data-model.md:13-57  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory
