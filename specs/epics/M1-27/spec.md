@@ -27,19 +27,19 @@ A dataset query can return thousands of rows, but an answer kept at most 200 and
 
 | Story | What | Status |
 |---|---|---|
-| 1.27.1 | Paged SQL builder and the connectors' paged read | In progress |
-| 1.27.2 | Page engine and the page routes (api.md 152, 154) | In progress |
-| 1.27.3 | Query inspector: pager, sort and column filters | In progress |
-| 1.27.4 | The result-explorer agent and the interpret-filter routes (api.md 153, 155) | In progress |
-| 1.27.5 | Query inspector: filter in words and explore records | In progress |
-| 1.27.6 | result-explorer evals | In progress |
-| 1.27.7 | The explore_result tool for chat agents | In progress |
-| 1.27.8 | A follow-up over an earlier result pages it in Answer a Business Question | In progress |
-| 1.27.9 | Sources a reader can understand: numbered, described, one per table (added 2026-11-16 at the user's request) | In progress |
-| 1.27.10 | Every workflow whose answer ran queries gets the query inspector (added 2026-11-16) | In progress |
-| 1.27.11 | Each readiness finding opens the rows behind it (added 2026-11-16) | In progress |
-| 1.27.12 | The Data Readiness agent lists every finding of a dimension from the report (added 2026-11-16, execution 129ad364) | In progress |
-| 1.27.13 | An Edge Cases testing dataset (added 2026-11-16) | In progress |
+| 1.27.1 | Paged SQL builder and the connectors' paged read | Done |
+| 1.27.2 | Page engine and the page routes (api.md 152, 154) | Done |
+| 1.27.3 | Query inspector: pager, sort and column filters | Done |
+| 1.27.4 | The result-explorer agent and the interpret-filter routes (api.md 153, 155) | Done |
+| 1.27.5 | Query inspector: filter in words and explore records | Done |
+| 1.27.6 | result-explorer evals | Done |
+| 1.27.7 | The explore_result tool for chat agents | Done |
+| 1.27.8 | A follow-up over an earlier result pages it in Answer a Business Question | Done |
+| 1.27.9 | Sources a reader can understand: numbered, described, one per table (added 2026-11-16 at the user's request) | Done |
+| 1.27.10 | Every workflow whose answer ran queries gets the query inspector (added 2026-11-16) | Done |
+| 1.27.11 | Each readiness finding opens the rows behind it (added 2026-11-16) | Done |
+| 1.27.12 | The Data Readiness agent lists every finding of a dimension from the report (added 2026-11-16, execution 129ad364) | Done |
+| 1.27.13 | An Edge Cases testing dataset (added 2026-11-16) | Done |
 
 ## Specs touched
 

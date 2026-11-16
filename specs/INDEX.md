@@ -318,28 +318,28 @@ roadmap.md:594-598  #### 1.26.3 — Testing Data, ontology suggestions and the s
 roadmap.md:600-604  #### 1.26.4 — Visual tailor and refresh, and eval runs, run in the background  `🚧 In progress`
 roadmap.md:606-611  #### 1.26.5 — Workflow runs keep running when the user leaves their page  `🚧 In progress`
 roadmap.md:613-693  ### Milestone 1.27 — Explore a query's full result: page, filter, sort (M1-27)
-roadmap.md:617-621  #### 1.27.1 — Paged SQL builder and the connectors' paged read  `🚧 In progress`
-roadmap.md:623-627  #### 1.27.2 — Page engine and the page routes  `🚧 In progress`
-roadmap.md:629-633  #### 1.27.3 — Query inspector: pager, sort and column filters  `🚧 In progress`
-roadmap.md:635-639  #### 1.27.4 — The result-explorer agent and the interpret-filter routes  `🚧 In progress`
-roadmap.md:641-645  #### 1.27.5 — Query inspector: filter in words and explore records  `🚧 In progress`
-roadmap.md:647-651  #### 1.27.6 — result-explorer evals  `🚧 In progress`
-roadmap.md:653-657  #### 1.27.7 — The explore_result tool for chat agents  `🚧 In progress`
-roadmap.md:659-663  #### 1.27.8 — A follow-up over an earlier result pages it in Answer a Business Question  `🚧 In progress`
-roadmap.md:665-669  #### 1.27.9 — Sources a reader can understand: numbered, described, one per table  `🚧 In progress`
-roadmap.md:671-675  #### 1.27.10 — Every workflow whose answer ran queries gets the query inspector  `🚧 In progress`
-roadmap.md:677-681  #### 1.27.11 — Each readiness finding opens the rows behind it  `🚧 In progress`
-roadmap.md:683-687  #### 1.27.12 — The Data Readiness agent lists every finding of a dimension from the report  `🚧 In progress`
-roadmap.md:689-693  #### 1.27.13 — An Edge Cases testing dataset  `🚧 In progress`
+roadmap.md:617-621  #### 1.27.1 — Paged SQL builder and the connectors' paged read  `✅ Done`
+roadmap.md:623-627  #### 1.27.2 — Page engine and the page routes  `✅ Done`
+roadmap.md:629-633  #### 1.27.3 — Query inspector: pager, sort and column filters  `✅ Done`
+roadmap.md:635-639  #### 1.27.4 — The result-explorer agent and the interpret-filter routes  `✅ Done`
+roadmap.md:641-645  #### 1.27.5 — Query inspector: filter in words and explore records  `✅ Done`
+roadmap.md:647-651  #### 1.27.6 — result-explorer evals  `✅ Done`
+roadmap.md:653-657  #### 1.27.7 — The explore_result tool for chat agents  `✅ Done`
+roadmap.md:659-663  #### 1.27.8 — A follow-up over an earlier result pages it in Answer a Business Question  `✅ Done`
+roadmap.md:665-669  #### 1.27.9 — Sources a reader can understand: numbered, described, one per table  `✅ Done`
+roadmap.md:671-675  #### 1.27.10 — Every workflow whose answer ran queries gets the query inspector  `✅ Done`
+roadmap.md:677-681  #### 1.27.11 — Each readiness finding opens the rows behind it  `✅ Done`
+roadmap.md:683-687  #### 1.27.12 — The Data Readiness agent lists every finding of a dimension from the report  `✅ Done`
+roadmap.md:689-693  #### 1.27.13 — An Edge Cases testing dataset  `✅ Done`
 roadmap.md:695-745  ### Milestone 1.28 — Border-case evals for every agent of the two workflows (M1-28)
-roadmap.md:699-703  #### 1.28.1 — Eval infrastructure for isolated agent calls and workflow targets  `🚧 In progress`
-roadmap.md:705-709  #### 1.28.2 — analysis-planner border-case evals  `🚧 In progress`
-roadmap.md:711-715  #### 1.28.3 — answer-writer border-case evals  `🚧 In progress`
-roadmap.md:717-721  #### 1.28.4 — Check data quality border-case evals  `🚧 In progress`
-roadmap.md:723-727  #### 1.28.5 — image-reader border-case evals  `🚧 In progress`
-roadmap.md:729-733  #### 1.28.6 — insights-analyst and result-explorer evals on Edge Cases  `🚧 In progress`
-roadmap.md:735-739  #### 1.28.7 — Explain report evals inside Assess Data Readiness  `🚧 In progress`
-roadmap.md:741-745  #### 1.28.8 — Baseline, inconsistency report and fixes  `🚧 In progress`
+roadmap.md:699-703  #### 1.28.1 — Eval infrastructure for isolated agent calls and workflow targets  `✅ Done`
+roadmap.md:705-709  #### 1.28.2 — analysis-planner border-case evals  `✅ Done`
+roadmap.md:711-715  #### 1.28.3 — answer-writer border-case evals  `✅ Done`
+roadmap.md:717-721  #### 1.28.4 — Check data quality border-case evals  `✅ Done`
+roadmap.md:723-727  #### 1.28.5 — image-reader border-case evals  `✅ Done`
+roadmap.md:729-733  #### 1.28.6 — insights-analyst and result-explorer evals on Edge Cases  `✅ Done`
+roadmap.md:735-739  #### 1.28.7 — Explain report evals inside Assess Data Readiness  `✅ Done`
+roadmap.md:741-745  #### 1.28.8 — Baseline, inconsistency report and fixes  `✅ Done`
 roadmap.md:747-751  ## Release 2 — Multi-user  (no target date yet)
 roadmap.md:751-751  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
 roadmap.md:753-755  ## Backlog

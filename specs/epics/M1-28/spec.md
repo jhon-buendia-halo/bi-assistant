@@ -18,14 +18,14 @@ Every agent of Answer a Business Question (Zoe, Nathan, Olivia, Michael, Sarah's
 
 | Story | What | Status |
 |---|---|---|
-| 1.28.1 | Eval infrastructure | In progress |
-| 1.28.2 | analysis-planner evals | In progress |
-| 1.28.3 | answer-writer evals | In progress |
-| 1.28.4 | Check data quality evals | In progress |
-| 1.28.5 | image-reader evals | In progress |
-| 1.28.6 | insights-analyst and result-explorer evals on Edge Cases | In progress |
-| 1.28.7 | Explain report evals inside Assess Data Readiness | In progress |
-| 1.28.8 | Baseline, inconsistency report and fixes | In progress |
+| 1.28.1 | Eval infrastructure | Done |
+| 1.28.2 | analysis-planner evals | Done |
+| 1.28.3 | answer-writer evals | Done |
+| 1.28.4 | Check data quality evals | Done |
+| 1.28.5 | image-reader evals | Done |
+| 1.28.6 | insights-analyst and result-explorer evals on Edge Cases | Done |
+| 1.28.7 | Explain report evals inside Assess Data Readiness | Done |
+| 1.28.8 | Baseline, inconsistency report and fixes | Done |
 
 ## Specs touched
 

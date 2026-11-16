@@ -327,14 +327,14 @@ export const ANSWER_WRITER_EVAL_SET: AssistantEvalSet = {
       id: 'aw-warning-is-not-a-caveat',
       question: 'How many orders were delivered?',
       intent:
-        'Known issue D: the warning-only "Measures covered" check is not a limit of the answer; with every other check passed, the answer gives no caveat about missing measures.',
+        'Known issue D: the warning-only "Measures covered" check matches words, so it can miss a measure the query does compute (here "number of delivered orders" is the count). With every other check passed, that warning is not a limit: the answer has no Caveats section.',
       scorers: [],
       customChecks: [
         ...BASE(),
         figuresFromRows([{ delivered: 112319 }]),
         neverSays(
-          /\b(measure|could not (cover|find)|not covered|missing)\b/i,
-          'reports the warning as a limit',
+          /\bcaveats?\b|not (calculated|computed|covered)|no query (calculated|computed|names)/i,
+          'reports the word-matching warning as a limit',
           'no-warning-caveat',
         ),
       ],
@@ -342,7 +342,7 @@ export const ANSWER_WRITER_EVAL_SET: AssistantEvalSet = {
         question: 'How many orders were delivered?',
         plan: plan(
           'How many orders were delivered?',
-          ['delivered orders', 'delivery rate'],
+          ['number of delivered orders'],
           ['orders'],
         ),
         queries: [
@@ -353,7 +353,7 @@ export const ANSWER_WRITER_EVAL_SET: AssistantEvalSet = {
         ],
         findings: findings({
           'Measures covered (warning only)':
-            'No query names the measure "delivery rate".',
+            'No query names the measure "number of delivered orders".',
         }),
       },
     }),
