@@ -1,0 +1,250 @@
+@if (pageable()) {
+  <div class="flex flex-wrap items-center gap-2" data-testid="query-filters">
+    <button
+      type="button"
+      data-testid="query-filter-add"
+      class="btn btn-secondary px-2.5 py-1 text-[12px]"
+      [attr.aria-expanded]="adding()"
+      (click)="openFilter()"
+    >
+      Add filter
+    </button>
+    @for (chip of chips(); track $index) {
+      <span
+        data-testid="query-filter-chip"
+        class="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-[12px] text-on-primary-soft"
+      >
+        {{ chip.text }}
+        <button
+          type="button"
+          data-testid="query-filter-chip-remove"
+          class="rounded-full px-1 leading-none"
+          [attr.aria-label]="'Remove filter ' + chip.text"
+          (click)="removeFilter($index)"
+        >
+          ×
+        </button>
+      </span>
+    }
+    @if (filtered()) {
+      <button
+        type="button"
+        data-testid="query-filter-clear"
+        class="text-[12px] underline"
+        (click)="clearFilters()"
+      >
+        Clear filters
+      </button>
+    }
+  </div>
+  @if (adding()) {
+    <form
+      class="flex flex-wrap items-end gap-2 rounded-md bg-surface-muted p-2"
+      (submit)="$event.preventDefault(); applyFilter()"
+    >
+      <label class="flex flex-col gap-1 text-[12px] text-fg-muted">
+        Column
+        <select
+          data-testid="query-filter-column"
+          class="field py-1 text-[12px]"
+          (change)="draftColumn.set($any($event.target).value)"
+        >
+          @for (column of shownColumns(); track column) {
+            <option [value]="column" [selected]="column === selectedColumn()">
+              {{ column }}
+            </option>
+          }
+        </select>
+      </label>
+      <label class="flex flex-col gap-1 text-[12px] text-fg-muted">
+        Condition
+        <select
+          data-testid="query-filter-op"
+          class="field py-1 text-[12px]"
+          (change)="setOp($any($event.target).value)"
+        >
+          @for (op of ops; track op) {
+            <option [value]="op" [selected]="op === draftOp()">
+              {{ opLabels[op] }}
+            </option>
+          }
+        </select>
+      </label>
+      @if (needsValue()) {
+        <label class="flex flex-col gap-1 text-[12px] text-fg-muted">
+          Value
+          <input
+            type="text"
+            data-testid="query-filter-value"
+            class="field py-1 text-[12px]"
+            [value]="draftValue()"
+            (input)="draftValue.set($any($event.target).value)"
+          />
+        </label>
+      }
+      @if (needsValueTo()) {
+        <label class="flex flex-col gap-1 text-[12px] text-fg-muted">
+          To
+          <input
+            type="text"
+            data-testid="query-filter-value-to"
+            class="field py-1 text-[12px]"
+            [value]="draftValueTo()"
+            (input)="draftValueTo.set($any($event.target).value)"
+          />
+        </label>
+      }
+      <button
+        type="submit"
+        data-testid="query-filter-apply"
+        class="btn btn-primary px-2.5 py-1 text-[12px]"
+        [disabled]="!canApply()"
+      >
+        Apply
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost px-2.5 py-1 text-[12px]"
+        (click)="cancelFilter()"
+      >
+        Cancel
+      </button>
+    </form>
+  }
+}
+@if (error(); as message) {
+  <div
+    data-testid="query-page-error"
+    role="alert"
+    class="flex flex-wrap items-center gap-2 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+  >
+    <span>Could not load this page: {{ message }}</span>
+    <button
+      type="button"
+      data-testid="query-page-retry"
+      class="btn btn-secondary px-2.5 py-1 text-[12px]"
+      (click)="retry()"
+    >
+      Retry
+    </button>
+  </div>
+}
+@if (result() === null && note(); as noteText) {
+  <p data-testid="query-result-note" class="m-0 text-[12px] text-fg-muted">
+    {{ noteText }}
+  </p>
+}
+@if (topNNote(); as topText) {
+  <p data-testid="query-result-topn-note" class="m-0 text-[12px] text-fg-muted">
+    {{ topText }}
+  </p>
+}
+@if (result() !== null) {
+  <p class="m-0 text-[12px]">
+    <button
+      type="button"
+      data-testid="query-result-show-stored"
+      class="underline"
+      (click)="showStored()"
+    >
+      Show the answer's rows
+    </button>
+  </p>
+}
+<div
+  class="max-h-full overflow-auto rounded-lg border border-border"
+  tabindex="0"
+  aria-label="Result rows"
+  role="region"
+  [attr.aria-busy]="loading()"
+>
+  <table data-testid="query-result-table" class="w-full border-collapse text-left text-[12px]">
+    <thead>
+      <tr>
+        @for (column of shownColumns(); track column) {
+          <th
+            scope="col"
+            class="sticky top-0 border-b border-border bg-surface-muted px-2 py-1 font-semibold whitespace-nowrap text-fg-strong"
+            [attr.aria-sort]="pageable() ? sortState(column) : null"
+          >
+            @if (pageable()) {
+              <button
+                type="button"
+                data-testid="query-result-sort"
+                class="font-semibold"
+                [disabled]="loading()"
+                (click)="toggleSort(column)"
+              >
+                {{ column }}
+                @switch (sortState(column)) {
+                  @case ('ascending') {
+                    <span aria-hidden="true">▲</span>
+                  }
+                  @case ('descending') {
+                    <span aria-hidden="true">▼</span>
+                  }
+                }
+              </button>
+            } @else {
+              {{ column }}
+            }
+          </th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of shownRows(); track $index) {
+        <tr>
+          @for (column of shownColumns(); track column) {
+            <td class="border-b border-border px-2 py-1 whitespace-nowrap text-fg">
+              {{ cell(row[column]) }}
+            </td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+@if (result() !== null && shownRows().length === 0 && !error()) {
+  <p data-testid="query-result-empty" class="m-0 text-[13px] text-fg-muted">
+    No rows match these filters.
+  </p>
+}
+@if (pageable() && (result() !== null || rows().length > 0)) {
+  <div
+    data-testid="query-result-pager"
+    class="flex flex-wrap items-center gap-2"
+  >
+    <button
+      type="button"
+      data-testid="query-result-prev-page"
+      class="btn btn-secondary px-2.5 py-1 text-[12px]"
+      aria-label="Previous page"
+      [disabled]="!canPrevious()"
+      (click)="previous()"
+    >
+      Previous
+    </button>
+    <button
+      type="button"
+      data-testid="query-result-next-page"
+      class="btn btn-secondary px-2.5 py-1 text-[12px]"
+      aria-label="Next page"
+      [disabled]="!canNext()"
+      (click)="next()"
+    >
+      Next
+    </button>
+    <span
+      data-testid="query-result-page-label"
+      role="status"
+      class="text-[12px] text-fg-muted"
+      >{{ pageLabel() }}</span
+    >
+  </div>
+}
+@if (capNote()) {
+  <p data-testid="query-result-cap-note" class="m-0 text-[12px] text-fg-muted">
+    {{ capText }}
+  </p>
+}

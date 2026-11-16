@@ -94,6 +94,10 @@ describe('SessionsApiService answer evidence (api.md 144 to 148)', () => {
     http.expectOne(`${base}/queries/2/stage-counts`).flush({ ok: true, message });
     service.rerunQuery('s 1', 3, 2).subscribe();
     expect(http.expectOne(`${base}/queries/2/rerun`).request.method).toBe('POST');
+    service.pageQuery('s 1', 3, 2, { page: 2 }).subscribe();
+    const page = http.expectOne(`${base}/queries/2/page`);
+    expect(page.request.method).toBe('POST');
+    expect(page.request.body).toEqual({ page: 2 });
     service.queryCsv('s 1', 3, 2).subscribe();
     const csv = http.expectOne(`${base}/queries/2/csv`);
     expect(csv.request.method).toBe('GET');

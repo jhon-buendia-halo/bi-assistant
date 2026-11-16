@@ -659,6 +659,22 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
 
   afterEach(() => http.verify());
 
+  it('posts a page request to the page route (api.md 151)', () => {
+    const request = { page: 2, filters: [{ column: 'a', op: 'eq' as const, value: 'x' }] };
+    let matched = -1;
+    service
+      .pageQuery('run 1', 3, request)
+      .subscribe((response) => (matched = response.result.matchedRows));
+    const call = http.expectOne(
+      (r) =>
+        r.method === 'POST' &&
+        r.url.endsWith('/workflow-runs/run%201/answer/queries/3/page'),
+    );
+    expect(call.request.body).toEqual(request);
+    call.flush({ ok: true, result: { matchedRows: 9 } });
+    expect(matched).toBe(9);
+  });
+
   it('posts to the evidence, explanation, stage-counts and rerun routes', () => {
     const base = '/workflow-runs/run%201/answer';
     service.prepareEvidence('run 1').subscribe();

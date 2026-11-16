@@ -192,6 +192,8 @@ export interface QueryEvidenceApi {
   countStages(index: number): Observable<void>;
   rerun(index: number): Observable<QueryRerunResult>;
   downloadCsv(index: number): Observable<Blob>;
+  /** One page of the query's full result, filtered and sorted; stores nothing. */
+  page(index: number, request: PageRequest): Observable<PageResult>;
 }
 
 export const QUERY_EVIDENCE_API = new InjectionToken<QueryEvidenceApi>(

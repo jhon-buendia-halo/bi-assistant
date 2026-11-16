@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import {
+  PageRequest,
+  PageResult,
   QueryEvidenceApi,
   QueryRerunResult,
 } from '../../../shared/query-evidence/query-evidence.model';
@@ -54,6 +56,8 @@ export class SessionQueryEvidenceApi implements QueryEvidenceApi {
         ),
       rerun: (t, i) => this.sessions.rerunQuery(t.sessionId, t.message, i),
       downloadCsv: (t, i) => this.sessions.queryCsv(t.sessionId, t.message, i),
+      page: (t, i, request) =>
+        this.sessions.pageQuery(t.sessionId, t.message, i, request),
     },
   );
 
@@ -65,6 +69,9 @@ export class SessionQueryEvidenceApi implements QueryEvidenceApi {
     this.api.rerun(index);
   downloadCsv = (index: number): Observable<Blob> =>
     this.api.downloadCsv(index);
+
+  page = (index: number, request: PageRequest): Observable<PageResult> =>
+    this.api.page(index, request);
 
   private withRef(
     ref: SessionMessageRef,
