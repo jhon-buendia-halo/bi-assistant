@@ -158,6 +158,6 @@ Ownership: only 1.27.0 edits `paged-sql.types.ts`; only 1.27.3 creates the `quer
 ## 6. Risks
 
 - A top-N answer pages the whole result (as the CSV does): the top-N note says so.
-- Every page re-runs the query (REST re-fetches its endpoints): measure; timeouts unchanged.
+- Every page re-runs the query (REST re-fetches its endpoints); timeouts unchanged. Measured at the wave 1 check (Postgres 55432, `EXPLAIN ANALYZE`): 1,264 rows (matches × squad members) 0.17 ms raw vs 0.18 ms for page 2 with a text filter and a sort; 2,000,000 rows (`generate_series`) 1,034 ms raw vs 1,356 ms for page 1,000 with a filter and a descending sort, returning 50 rows instead of loading 2,000,000.
 - Wrong routing of a follow-up: the instructions say explore only when the answer is the earlier rows filtered, sorted or paged; negative eval cases.
 - Text filters bypass indexes (`LOWER(CAST(…))`); the database does the work, a page returns at most 100 rows.

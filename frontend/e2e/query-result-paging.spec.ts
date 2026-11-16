@@ -73,9 +73,12 @@ test.describe("Feature: Page, sort and filter a query's result", () => {
     'I page, sort and filter the full result of an answer query',
     { tag: ['@demo', '@story-1.27.3'] },
     async ({ page }) => {
-      const total = Number(await worldCupScalar(`SELECT COUNT(*) FROM ${worldCupKey('matches')}`));
-      expect(total).toBeGreaterThan(100);
-      const sql = `SELECT * FROM ${worldCupKey('matches')} LIMIT 100`;
+      // The fixture's tables are small (16 matches): every match with every
+      // squad member gives a result of over a thousand rows.
+      const from = `${worldCupKey('matches')} m CROSS JOIN ${worldCupKey('squad_members')} s`;
+      const total = Number(await worldCupScalar(`SELECT COUNT(*) FROM ${from}`));
+      expect(total).toBeGreaterThan(200);
+      const sql = `SELECT m.id AS match_id, m.stage, s.player_id, s.shirt_number FROM ${from}`;
       stub.reply = (request) => {
         if (!isTurn(request, QUESTION)) return { text: 'The stub model answered this question.' };
         return afterToolResult(request)
