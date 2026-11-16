@@ -12,6 +12,11 @@ import { parseClarification } from '../tools/clarification.tool';
 import { analyseAttemptOf } from '../../modules/sessions/turn/turn-workflow';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
 import { captureStepRecords } from './assistant.evals';
+import {
+  EVAL_DETAILS_KEY,
+  recordStepOutput,
+  type EvalRunDetails,
+} from './eval-details';
 
 /**
  * The `insights-analyst` eval target's turn (agents.md 8.1): every case runs the
@@ -224,7 +229,8 @@ export function workflowTurnAgent(
       },
       requestContext,
     });
-    for await (const event of run.fullStream) void event;
+    const steps: Record<string, unknown> = {};
+    for await (const event of run.fullStream) recordStepOutput(event, steps);
     const outcome = await run.result;
     if (outcome.status === 'failed') {
       throw outcome.error instanceof Error
@@ -245,6 +251,7 @@ export function workflowTurnAgent(
         scoringData: { input, output: [] },
       }),
       text: clarified ? clarificationAnswer(clarified) : answer,
+      [EVAL_DETAILS_KEY]: { steps } satisfies EvalRunDetails,
     };
   };
   return new Proxy(agent, {
