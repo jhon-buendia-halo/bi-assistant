@@ -174,6 +174,9 @@ export function workflowTurnAgent(
     };
     let analysis: Record<string, unknown> | undefined;
     let answer = '';
+    // Every case is a single-turn first question: the runtime holds no
+    // earlier queries (`followUp`), so Interpret follow-up makes no model
+    // call and the run takes the question path (roadmap 1.27.8).
     const runtime: AnswerBusinessQuestionRuntime = {
       plan: ({ question, catalogBlock }) =>
         parts.plan({ messages: input as never, question, catalogBlock }, model),

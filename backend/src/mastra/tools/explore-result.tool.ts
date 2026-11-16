@@ -25,10 +25,10 @@ import {
 } from '../agents/result-explorer.prompts';
 import { runErrorMessage } from '../workflows/workflow-run';
 import {
-  getDatasetToolServices,
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
-} from '../tool-services';
+} from '../../modules/sessions/query-evidence/query-facts';
+import { getDatasetToolServices } from '../tool-services';
 import {
   DATASETS_CONTEXT_KEY,
   RATIONALE_DESCRIPTION,
@@ -149,6 +149,67 @@ function withExplicit(base: PageRequest, input: ExploreInput): PageRequest {
   return request;
 }
 
+/**
+ * One page of an explorable query's full result, through the query
+ * inspector's own page path (agents.md 3.15): the call `explore_result`
+ * makes, shared with Answer a Business Question's Page result step
+ * (roadmap 1.27.8). Its view is written beside the result as facts (under
+ * `callId` when the call has one, and under the source SQL), never into
+ * it. A refusal or failure comes back as `{ error }`, never thrown.
+ */
+export async function pageExplorableQuery(
+  target: ExplorableQuery,
+  request: PageRequest,
+  understood: string,
+  requestContext: RequestContextLike,
+  callId?: string,
+): Promise<ExploreResultOutput | { error: string }> {
+  const services = getDatasetToolServices();
+  if (!services.pageQuery) {
+    return { error: 'Exploring an earlier result is not available here' };
+  }
+  let page: PageResult & { datasourceId: string };
+  try {
+    page = await services.pageQuery(
+      {
+        sql: target.sql,
+        ...(target.datasourceId ? { datasourceId: target.datasourceId } : {}),
+        columns: target.columns,
+        kinds: target.kinds,
+      },
+      datasetNames(requestContext),
+      request,
+    );
+  } catch (error) {
+    return { error: runErrorMessage(error) };
+  }
+
+  // What the inspector needs beside the result, never in it.
+  const facts = requestContext.get(QUERY_FACTS_CONTEXT_KEY);
+  if (facts instanceof Map) {
+    const known: QueryFacts = {
+      datasourceId: page.datasourceId,
+      totalRows: page.matchedRows,
+      rowLimit: page.pageSize,
+      view: page.view,
+    };
+    if (callId) facts.set(callId, known);
+    facts.set(queryFactsKey('explore_result', target.sql), known);
+  }
+  return {
+    sourceSql: target.sql,
+    datasourceId: page.datasourceId,
+    view: page.view,
+    columns: page.columns,
+    rows: page.rows,
+    page: page.page,
+    pageCount: page.pageCount,
+    matchedRows: page.matchedRows,
+    capped: page.capped,
+    understood,
+  };
+}
+
 /** What the model reads: the page, without the source SQL, datasource or view. */
 export function exploreModelOutput(result: unknown): unknown {
   if (!result || typeof result !== 'object' || 'error' in result) return result;
@@ -230,48 +291,14 @@ export const exploreResultTool = createTool({
       understood = understoodOf(request);
     }
 
-    let page: PageResult & { datasourceId: string };
-    try {
-      page = await services.pageQuery(
-        {
-          sql: target.sql,
-          ...(target.datasourceId ? { datasourceId: target.datasourceId } : {}),
-          columns: target.columns,
-          kinds: target.kinds,
-        },
-        datasetNames(requestContext),
-        request,
-      );
-    } catch (error) {
-      return { error: runErrorMessage(error) };
-    }
-
-    // What the inspector needs beside the result, never in it.
-    const facts = requestContext.get(QUERY_FACTS_CONTEXT_KEY);
-    if (facts instanceof Map) {
-      const known: QueryFacts = {
-        datasourceId: page.datasourceId,
-        totalRows: page.matchedRows,
-        rowLimit: page.pageSize,
-        view: page.view,
-      };
-      const callId = (context as { agent?: { toolCallId?: string } }).agent
-        ?.toolCallId;
-      if (callId) facts.set(callId, known);
-      facts.set(queryFactsKey('explore_result', target.sql), known);
-    }
-    const output: ExploreResultOutput = {
-      sourceSql: target.sql,
-      datasourceId: page.datasourceId,
-      view: page.view,
-      columns: page.columns,
-      rows: page.rows,
-      page: page.page,
-      pageCount: page.pageCount,
-      matchedRows: page.matchedRows,
-      capped: page.capped,
+    const callId = (context as { agent?: { toolCallId?: string } }).agent
+      ?.toolCallId;
+    return pageExplorableQuery(
+      target,
+      request,
       understood,
-    };
-    return output;
+      requestContext,
+      callId,
+    );
   },
 });

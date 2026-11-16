@@ -7,7 +7,20 @@
  * loading Mastra; the workflow itself is built in ./answer-business-question.workflow.ts.
  */
 import type { z } from 'zod';
+import type {
+  PageRequest,
+  ResultView,
+} from '../../modules/datasources/connectors/paged-sql.types';
+import {
+  explorerCandidateOfQuery,
+  type ExplorableQuery,
+} from '../../modules/sessions/query-evidence/explorable-queries';
 import { coverageOf } from '../../modules/sessions/query-evidence/query-coverage';
+import {
+  pageCountOf,
+  type ExplorerCandidate,
+  type ExplorerSpec,
+} from '../agents/result-explorer.prompts';
 import { getDatasetToolServices } from '../tool-services';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
@@ -23,6 +36,8 @@ import {
   type dataQualitySummarySchema,
   type answerBusinessQuestionInputSchema,
   type entityColumnsSchema,
+  type followUpSchema,
+  type pagedResultSchema,
   type turnSummarySchema,
   type validateOutcomeSchema,
   type validationFindingSchema,
@@ -155,6 +170,19 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: 'interpret-follow-up',
+      title: 'Interpret follow-up',
+      kind: 'agent',
+      summary:
+        "On a follow-up over an earlier result, Result Explorer's model reads whether the question asks for another page, a filter or an order of the earlier rows. A first run makes no model call. No tools.",
+      // A model error is no failure: the run plans the question instead.
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
+      modelOnly: true,
+    },
+    SCHEMAS['interpret-follow-up'],
+  ),
+  contractStepEntry(
+    {
       id: 'plan',
       title: 'Plan',
       kind: 'agent',
@@ -238,6 +266,28 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
     },
     SCHEMAS['wrap-up'],
   ),
+  contractStepEntry(
+    {
+      id: 'page-result',
+      title: 'Page result',
+      kind: 'code',
+      summary:
+        "Reads the page of the earlier query's full result the follow-up asks for, through the query inspector's page path. No LLM.",
+      exits: [{ label: 'the page cannot be read', outcome: 'fails' }],
+    },
+    SCHEMAS['page-result'],
+  ),
+  contractStepEntry(
+    {
+      id: 'page-answer',
+      title: 'Page answer',
+      kind: 'code',
+      summary:
+        'Writes the answer from the page: which rows it shows, what was understood and a table of the rows. No LLM.',
+      exits: [],
+    },
+    SCHEMAS['page-answer'],
+  ),
 ];
 
 /** The edges of the workflow (api.md 117), from Start to End. */
@@ -245,7 +295,19 @@ export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
   // Start → Receive question, or through Read images when the run has images.
   ...readImagesEdges('receive-question'),
   { from: 'receive-question', to: 'load-catalog', kind: 'next' },
-  { from: 'load-catalog', to: 'plan', kind: 'next' },
+  { from: 'load-catalog', to: 'interpret-follow-up', kind: 'next' },
+  {
+    from: 'interpret-follow-up',
+    to: 'plan',
+    kind: 'branch',
+    label: 'New question',
+  },
+  {
+    from: 'interpret-follow-up',
+    to: 'page-result',
+    kind: 'branch',
+    label: 'Explore the earlier result',
+  },
   { from: 'plan', to: 'clarify', kind: 'branch', label: 'Needs clarification' },
   { from: 'clarify', to: 'plan', kind: 'loop', label: 'Answered' },
   { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
@@ -266,6 +328,8 @@ export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
   { from: 'check-data-quality', to: 'write-answer', kind: 'next' },
   { from: 'write-answer', to: 'wrap-up', kind: 'next' },
   { from: 'wrap-up', to: 'end', kind: 'next' },
+  { from: 'page-result', to: 'page-answer', kind: 'next' },
+  { from: 'page-answer', to: 'end', kind: 'next' },
 ];
 
 /** The most attempts of the analysis loop: the first and one retry. */
@@ -326,6 +390,21 @@ export type AnswerBusinessQuestionSummary = z.output<typeof turnSummarySchema>;
 
 /** What Check data quality measured (its output's `dataQuality`). */
 export type DataQualitySummary = z.output<typeof dataQualitySummarySchema>;
+
+/** What Interpret follow-up read: the page of an earlier result asked for. */
+export type FollowUp = z.output<typeof followUpSchema>;
+
+/** One page of an earlier query's full result, as Page result passes it on. */
+export type PagedFollowUp = z.output<typeof pagedResultSchema>;
+
+/** What result-explorer reads (api.md 153's call): the words and the queries. */
+export interface FollowUpRequest {
+  text: string;
+  candidates: ExplorerCandidate[];
+  /** The latest query's view; null for its stored rows. */
+  view: ResultView | null;
+  pageCount: number | null;
+}
 
 /** One table the queries read, with the dataset it belongs to. */
 export interface QualityTable {
@@ -410,6 +489,31 @@ export interface AnswerBusinessQuestionRuntime {
     /** Read images' notes (agents.md 2.15); absent or `''` without images. */
     imageNotes?: string;
   }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
+  /**
+   * The run's earlier queries (roadmap 1.27.8): an earlier run's answer's
+   * queries on a follow-up, a chat's earlier answers' queries. Absent or
+   * empty on a first run: Interpret follow-up then makes no model call.
+   */
+  followUp?: readonly ExplorableQuery[];
+  /**
+   * Interpret follow-up's model call: result-explorer reads the words as a
+   * view of one of the earlier queries; `stopped` when the turn was stopped.
+   */
+  interpretFollowUp?(
+    input: FollowUpRequest,
+  ): Promise<{ spec: ExplorerSpec | null; stopped: boolean }>;
+  /**
+   * Page result: the page of earlier query `query` (an index into
+   * `followUp`) through the query inspector's page path, recorded as an
+   * `explore_result` call of the turn. Throws the reason it cannot be read.
+   */
+  pageResult?(input: {
+    query: number;
+    request: PageRequest;
+    understood: string;
+  }): Promise<PagedFollowUp>;
+  /** Page answer: the run's answer, written by code. */
+  deliverAnswer?(answer: string): Promise<void>;
 }
 
 /**
@@ -620,6 +724,21 @@ function resultColumns(rows: readonly Record<string, unknown>[]): string[] {
   return [...seen];
 }
 
+/** A Markdown table of the rows, written cell by cell: a header, then a row each. */
+function markdownTable(
+  columns: readonly { key: string; header: string }[],
+  rows: readonly Record<string, unknown>[],
+): string[] {
+  const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
+  return [
+    line(columns.map((column) => tableCell(column.header))),
+    line(columns.map(() => '---')),
+    ...rows.map((row) =>
+      line(columns.map((column) => tableCell(row[column.key]))),
+    ),
+  ];
+}
+
 /**
  * The lines a marker line becomes: the query's table (and the note when the
  * result has more rows than it shows), or none when the marker names no
@@ -646,14 +765,7 @@ function rowTableLines(
   const columns = named.length
     ? named
     : all.map((key) => ({ key, header: readableColumn(key) }));
-  const line = (cells: string[]) => `| ${cells.join(' | ')} |`;
-  const table = [
-    line(columns.map((column) => tableCell(column.header))),
-    line(columns.map(() => '---')),
-    ...rows.map((row) =>
-      line(columns.map((column) => tableCell(row[column.key]))),
-    ),
-  ];
+  const table = markdownTable(columns, rows);
   const total = Math.max(query.rowCount, query.rows.length);
   return total > rows.length
     ? [
@@ -1062,12 +1174,130 @@ export function dataQualityFailure(reason: string): ValidationFinding {
   };
 }
 
-/** The Wrap up summary of a run's result, when the run got that far. */
+/**
+ * The run's summary, when the run got that far: Page answer's on a
+ * follow-up over an earlier result, else Wrap up's.
+ */
 export function turnSummaryOf(
   result: unknown,
 ): AnswerBusinessQuestionSummary | undefined {
   const parsed = answerBusinessQuestionResultSchema.safeParse(result);
-  return parsed.success
-    ? parsed.data['analysis-path']?.['answer-path']
-    : undefined;
+  if (!parsed.success) return undefined;
+  return (
+    parsed.data['explore-result'] ??
+    parsed.data['question-path']?.['analysis-path']?.['answer-path']
+  );
+}
+
+/**
+ * Interpret follow-up (roadmap 1.27.8): a code gate, then at most one
+ * result-explorer call. A run without earlier queries (every first run,
+ * every eval case) makes no model call and plans as before. Otherwise the
+ * words are read against every earlier query, from the latest one's view:
+ * a view of one of them is the follow-up; a new question, a part that
+ * names no known column, or a model error is none (the run plans the
+ * question, it never fails here).
+ */
+export async function interpretFollowUp(
+  question: string,
+  runtime:
+    | Pick<AnswerBusinessQuestionRuntime, 'followUp' | 'interpretFollowUp'>
+    | undefined,
+): Promise<{ followUp: FollowUp | null; stopped: boolean }> {
+  const queries = runtime?.followUp ?? [];
+  const none = { followUp: null, stopped: false };
+  if (!queries.length || !runtime?.interpretFollowUp) return none;
+  const latest = queries[queries.length - 1];
+  const view = latest.view ?? null;
+  let read: { spec: ExplorerSpec | null; stopped: boolean };
+  try {
+    read = await runtime.interpretFollowUp({
+      text: question,
+      candidates: queries.map(explorerCandidateOfQuery),
+      view,
+      pageCount: pageCountOf(view),
+    });
+  } catch {
+    return none;
+  }
+  if (read.stopped) return { followUp: null, stopped: true };
+  const { spec } = read;
+  if (
+    !spec ||
+    spec.action !== 'explore' ||
+    spec.interpretation.rejected?.length
+  ) {
+    return none;
+  }
+  const index = queries[spec.query] ? spec.query : queries.length - 1;
+  return {
+    followUp: {
+      action: 'explore',
+      query: index,
+      ref: queries[index].ref,
+      request: spec.interpretation.request,
+      understood: spec.interpretation.understood,
+    },
+    stopped: false,
+  };
+}
+
+/** `1264` reads `1,264`. */
+function count(value: number): string {
+  return value.toLocaleString('en-US');
+}
+
+/**
+ * The page's headline, in the query inspector's words (plan 0.5):
+ * `Rows 51–100 of 2,034`, `Rows 1–50 of 312 matching`, `Rows 1–50 of
+ * 50,000+`; `No rows match these filters.` when none does.
+ */
+function pageHeadline(
+  view: ResultView,
+  shown: number,
+  matchedRows: number,
+  capped: boolean,
+): string {
+  const filtered = view.filters.length > 0;
+  if (!shown) {
+    return filtered
+      ? 'No rows match these filters.'
+      : 'The result has no rows.';
+  }
+  const first = (Math.max(1, view.page) - 1) * view.pageSize + 1;
+  const last = first + shown - 1;
+  return `Rows ${count(first)}–${count(last)} of ${count(matchedRows)}${capped ? '+' : ''}${filtered ? ' matching' : ''}`;
+}
+
+/**
+ * Page answer (roadmap 1.27.8): the run's answer from one page of an
+ * earlier query's result, written by code: the headline (which rows, of
+ * how many), the query and what the words were understood as, a Markdown
+ * table of the page's rows, and where the page sits.
+ */
+export function pageAnswer(
+  view: ResultView,
+  result: Pick<
+    PagedFollowUp,
+    'columns' | 'rows' | 'pageCount' | 'matchedRows' | 'capped' | 'understood'
+  >,
+  queryTitle: string,
+): string {
+  const lines = [
+    pageHeadline(view, result.rows.length, result.matchedRows, result.capped),
+    '',
+    `Query: ${queryTitle}`,
+    `Understood as: ${result.understood}`,
+  ];
+  if (!result.rows.length) return lines.join('\n');
+  const columns = (
+    result.columns.length ? result.columns : resultColumns(result.rows)
+  ).map((key) => ({ key, header: readableColumn(key) }));
+  lines.push(
+    '',
+    ...markdownTable(columns, result.rows),
+    '',
+    `Page ${count(view.page)} of ${count(result.pageCount)}. Open the query to page, filter or sort the full result.`,
+  );
+  return lines.join('\n');
 }

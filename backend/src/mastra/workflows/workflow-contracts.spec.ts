@@ -269,9 +269,13 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
       }
       expect((await output.result).status).toBe('success');
       // The clear path: every step but Clarify and Read images, whose
-      // branches are not taken (the sample input has no images).
+      // branches are not taken (the sample input has no images), and the
+      // follow-up branch (a first run has no earlier result).
       const ran = source.steps.filter(
-        (step) => step.id !== 'clarify' && step.id !== 'read-images',
+        (step) =>
+          !['clarify', 'read-images', 'page-result', 'page-answer'].includes(
+            step.id,
+          ),
       );
       expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
       for (const step of ran) {

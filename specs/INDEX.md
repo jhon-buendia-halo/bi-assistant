@@ -1397,7 +1397,7 @@ specs/capabilities/visuals/spec.md:408-430  ### Feature: Skills the designer is 
 specs/capabilities/visuals/spec.md:432-444  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
-specs/capabilities/workflows/spec.md:13-96  ## Rules
+specs/capabilities/workflows/spec.md:13-103  ## Rules
 specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly four workflows, in this orde
 specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `answer-business-question`, `data-readines
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
@@ -1432,14 +1432,16 @@ specs/capabilities/workflows/spec.md:74-74  R31 The answer of a run of Answer a 
 specs/capabilities/workflows/spec.md:75-80  R32 Dashboard Image to Artifact SHALL run, fixed in code ([../../system/ag
 specs/capabilities/workflows/spec.md:81-83  R33 **Artifacts** SHALL be reusable context saved from workflow runs, kept
 specs/capabilities/workflows/spec.md:84-89  R34 Map a Dashboard to Data SHALL run, fixed in code ([../../system/agents
-specs/capabilities/workflows/spec.md:90-96  R35 **Reference images** (2026-11-15). Answer a Business Question, Assess
-specs/capabilities/workflows/spec.md:98-115  ## Edge cases and errors
-specs/capabilities/workflows/spec.md:117-121  ## Contracts
-specs/capabilities/workflows/spec.md:123-130  ## UI
-specs/capabilities/workflows/spec.md:132-313  ## Flows
-specs/capabilities/workflows/spec.md:134-232  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:234-313  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:315-332  ## Acceptance
+specs/capabilities/workflows/spec.md:90-98  R35 **Reference images** (2026-11-15). Answer a Business Question, Assess
+specs/capabilities/workflows/spec.md:99-103  R36 A run of Answer a Business Question whose question asks for another pa
+specs/capabilities/workflows/spec.md:105-122  ## Edge cases and errors
+specs/capabilities/workflows/spec.md:124-128  ## Contracts
+specs/capabilities/workflows/spec.md:130-137  ## UI
+specs/capabilities/workflows/spec.md:139-328  ## Flows
+specs/capabilities/workflows/spec.md:141-239  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:241-320  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:322-328  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:330-348  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -1770,7 +1772,7 @@ specs/system/agents.md:1059-1196  ## 4. Per-turn context
 specs/system/agents.md:1061-1163  ### 4.1 System context blocks
 specs/system/agents.md:1165-1185  ### 4.2 requestContext keys
 specs/system/agents.md:1187-1196  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1198-1639  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1198-1646  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1200-1230  ### 5.1 Streamed chat turn
 specs/system/agents.md:1232-1236  ### 5.2 Read-only enforcement
 specs/system/agents.md:1238-1252  ### 5.3 Execution-guided repair
@@ -1781,48 +1783,48 @@ specs/system/agents.md:1296-1311  ### 5.7 Persisting the turn (derived fields)
 specs/system/agents.md:1313-1328  ### 5.8 Careful mode — independent cross-check
 specs/system/agents.md:1330-1337  ### 5.9 Result-set comparison
 specs/system/agents.md:1339-1364  ### 5.10 Chart-form heuristic
-specs/system/agents.md:1366-1436  ### 5.11 Workflow-backed turn: `answer-business-question` (Answer a Business Question)
-specs/system/agents.md:1438-1479  ### 5.12 Workflows: the catalogue and the ids
-specs/system/agents.md:1481-1501  ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
-specs/system/agents.md:1503-1535  ### 5.14 Runs of Answer a Business Question
-specs/system/agents.md:1537-1539  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
-specs/system/agents.md:1541-1562  ### 5.16 Node chats: chatting with a run step's agent
-specs/system/agents.md:1564-1605  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
-specs/system/agents.md:1607-1639  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
-specs/system/agents.md:1641-1814  ## 6. Visual designer pipeline
-specs/system/agents.md:1645-1655  ### 6.1 Entry points
-specs/system/agents.md:1657-1659  ### 6.2 Data handed to the designer
-specs/system/agents.md:1661-1677  ### 6.3 Modes and loop
-specs/system/agents.md:1679-1714  ### 6.4 Designer prompt
-specs/system/agents.md:1716-1721  ### 6.5 Repair
-specs/system/agents.md:1723-1725  ### 6.6 Assembled files
-specs/system/agents.md:1727-1729  ### 6.7 Call options
-specs/system/agents.md:1731-1774  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1776-1814  ### 6.9 Chart runtime contract
-specs/system/agents.md:1816-1989  ## 7. Skills and workspaces
-specs/system/agents.md:1818-1827  ### 7.1 Session workspaces
-specs/system/agents.md:1829-1870  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:1872-1898  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:1900-1983  ### 7.4 Skills per agent
-specs/system/agents.md:1985-1989  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:1991-2109  ## 8. Evals
-specs/system/agents.md:1995-2066  ### 8.1 Case and set format
-specs/system/agents.md:2068-2075  ### 8.2 Data preflight
-specs/system/agents.md:2077-2088  ### 8.3 Executing a case
-specs/system/agents.md:2090-2095  ### 8.4 Runs, regression and report
-specs/system/agents.md:2097-2109  ### 8.5 Other entry points
-specs/system/agents.md:2111-2115  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2117-2130  ## Open questions and gaps
-specs/system/agents.md:2132-2271  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2273-2309  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2311-2313  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2315-2392  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2394-2498  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2500-2548  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2506-2523  ### Plan
-specs/system/agents.md:2525-2548  ### Write answer
-specs/system/agents.md:2550-2566  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2568-2587  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:1366-1443  ### 5.11 Workflow-backed turn: `answer-business-question` (Answer a Business Question)
+specs/system/agents.md:1445-1486  ### 5.12 Workflows: the catalogue and the ids
+specs/system/agents.md:1488-1508  ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
+specs/system/agents.md:1510-1542  ### 5.14 Runs of Answer a Business Question
+specs/system/agents.md:1544-1546  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
+specs/system/agents.md:1548-1569  ### 5.16 Node chats: chatting with a run step's agent
+specs/system/agents.md:1571-1612  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
+specs/system/agents.md:1614-1646  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
+specs/system/agents.md:1648-1821  ## 6. Visual designer pipeline
+specs/system/agents.md:1652-1662  ### 6.1 Entry points
+specs/system/agents.md:1664-1666  ### 6.2 Data handed to the designer
+specs/system/agents.md:1668-1684  ### 6.3 Modes and loop
+specs/system/agents.md:1686-1721  ### 6.4 Designer prompt
+specs/system/agents.md:1723-1728  ### 6.5 Repair
+specs/system/agents.md:1730-1732  ### 6.6 Assembled files
+specs/system/agents.md:1734-1736  ### 6.7 Call options
+specs/system/agents.md:1738-1781  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1783-1821  ### 6.9 Chart runtime contract
+specs/system/agents.md:1823-1996  ## 7. Skills and workspaces
+specs/system/agents.md:1825-1834  ### 7.1 Session workspaces
+specs/system/agents.md:1836-1877  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:1879-1905  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:1907-1990  ### 7.4 Skills per agent
+specs/system/agents.md:1992-1996  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:1998-2116  ## 8. Evals
+specs/system/agents.md:2002-2073  ### 8.1 Case and set format
+specs/system/agents.md:2075-2082  ### 8.2 Data preflight
+specs/system/agents.md:2084-2095  ### 8.3 Executing a case
+specs/system/agents.md:2097-2102  ### 8.4 Runs, regression and report
+specs/system/agents.md:2104-2116  ### 8.5 Other entry points
+specs/system/agents.md:2118-2122  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2124-2137  ## Open questions and gaps
+specs/system/agents.md:2139-2278  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2280-2316  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2318-2320  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2322-2399  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2401-2505  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2507-2555  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2513-2530  ### Plan
+specs/system/agents.md:2532-2555  ### Write answer
+specs/system/agents.md:2557-2573  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2575-2594  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

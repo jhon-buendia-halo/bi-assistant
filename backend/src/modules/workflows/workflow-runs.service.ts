@@ -645,8 +645,11 @@ export class WorkflowRunsService implements OnModuleInit {
    * restarted since (the stored run is then `stopped` with `waitingFor`
    * marked `expired`); 409 `Run "<id>" is not waiting for an answer`; 400
    * `Answer is required`; 400 `Step "<stepId>" is not waiting for an
-   * answer`. A run that passes is taken out of the waiting runs, so it is
-   * resumed once.
+   * answer`. A run whose workflow's contract changed since it started
+   * (its stored `contractHash`, data-model 3.16; e.g. the Clarify path
+   * that moved under `question-path` in roadmap 1.27.8) cannot be resumed
+   * either: 410, as an expired run. A run that passes is taken out of the
+   * waiting runs, so it is resumed once.
    */
   async prepareResume(id: string, body: unknown): Promise<PreparedResume> {
     const run = await this.stored(id);
@@ -669,12 +672,32 @@ export class WorkflowRunsService implements OnModuleInit {
         `Step "${stepId}" is not waiting for an answer`,
       );
     }
+    const changed = await this.contractChanged(run);
     const taken = this.waiting.take(id);
-    if (!taken || taken.expired) {
+    if (!taken || taken.expired || changed) {
       await this.expire(id, taken?.value);
       throw new GoneException(RUN_EXPIRED_ERROR);
     }
     return { held: taken.value, answer };
+  }
+
+  /**
+   * Whether the run's workflow no longer has the contract the run started
+   * with: its stored hash differs from the catalogue's. A run stored
+   * without a hash, or of a workflow the catalogue no longer holds, is
+   * left to the other checks.
+   */
+  private async contractChanged(run: WorkflowRunDoc): Promise<boolean> {
+    if (!run.contractHash) return false;
+    try {
+      const workflow = await this.workflows.definition(run.workflowId);
+      return (
+        workflow.contractHash !== undefined &&
+        workflow.contractHash !== run.contractHash
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**
