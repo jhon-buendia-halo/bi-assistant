@@ -1782,106 +1782,109 @@ specs/product/vision.md:30-46  ## Product principles
 specs/product/vision.md:48-55  ## What the product deliberately is not
 specs/product/vision.md:57-63  ## Where it is going
 
-specs/system/agents.md:16-211  ## 1. Agent runtime model
-specs/system/agents.md:18-61  ### 1.1 What an agent is
-specs/system/agents.md:63-93  ### 1.2 Registry and lookup
-specs/system/agents.md:95-119  ### 1.3 Model resolution
-specs/system/agents.md:121-176  ### 1.4 Per-call tuning (reasoning effort, token caps)
-specs/system/agents.md:178-191  ### 1.5 Visual designer model override
-specs/system/agents.md:193-200  ### 1.6 Retries and timeouts
-specs/system/agents.md:202-211  ### 1.7 Storage and observability
-specs/system/agents.md:213-856  ## 2. Agents
-specs/system/agents.md:215-365  ### 2.1 `assistant` — Questions to Insights Assistant
-specs/system/agents.md:367-400  ### 2.2 `visualization` (id `interactive-visual-designer`) — Interactive Visual Designer
-specs/system/agents.md:402-448  ### 2.3 `sql-fixer` — SQL Fixer
-specs/system/agents.md:450-498  ### 2.4 `sql-verifier` — SQL Verifier
-specs/system/agents.md:500-593  ### 2.5 `knowledge-bootstrap` — Ontology Bootstrap
-specs/system/agents.md:595-635  ### 2.6 `assistant-eval-judge` — Assistant Eval Judge
-specs/system/agents.md:637-639  ### 2.7 Deep analysis (removed 2026-11-12)
-specs/system/agents.md:641-643  ### 2.8 Retired (2026-11-12): the RFP Builder
-specs/system/agents.md:645-649  ### 2.9 Retired (1.23.8): the showcase agents
-specs/system/agents.md:651-716  ### 2.10 `data-readiness` (id `data-readiness-agent`) — Data Readiness Agent
-specs/system/agents.md:718-762  ### 2.11 `insights-analyst` (id `insights-analyst`) — Insights Analyst
-specs/system/agents.md:764-776  ### 2.12 `query-explainer` — Query Explainer
-specs/system/agents.md:778-788  ### 2.13 `dashboard-reader` (id `dashboard-reader`) — Dashboard Reader
-specs/system/agents.md:790-801  ### 2.14 `data-mapper` (id `data-mapper`) — Data Mapper
-specs/system/agents.md:803-829  ### 2.15 `image-reader` (id `image-reader`) — Image Reader
-specs/system/agents.md:831-841  ### 2.16 `site-reviewer` (id `site-reviewer`) — Site Reviewer
-specs/system/agents.md:843-856  ### 2.17 `result-explorer` — Result Explorer
-specs/system/agents.md:858-1073  ## 3. Tools
-specs/system/agents.md:870-875  ### 3.1 `list_entities`
-specs/system/agents.md:877-882  ### 3.2 `describe_entity`
-specs/system/agents.md:884-890  ### 3.3 `sample_rows`
-specs/system/agents.md:892-899  ### 3.4 `run_readonly_sql`
-specs/system/agents.md:901-907  ### 3.5 `ask_clarification`
-specs/system/agents.md:909-915  ### 3.6 `create_visual`
-specs/system/agents.md:917-923  ### 3.7 `update_visual`
-specs/system/agents.md:925-927  ### 3.8 Workspace tools
-specs/system/agents.md:929-933  ### 3.9 The framework's skill tools
-specs/system/agents.md:935-937  ### 3.10 Retired (2026-11-12): RFP tools
-specs/system/agents.md:939-968  ### 3.11 `show_in_panel`
-specs/system/agents.md:970-1001  ### 3.12 `update_workflow`
-specs/system/agents.md:1003-1035  ### 3.13 Readiness tools
-specs/system/agents.md:1037-1058  ### 3.14 Synthetic-data tools
-specs/system/agents.md:1060-1073  ### 3.15 `explore_result`
-specs/system/agents.md:1075-1212  ## 4. Per-turn context
-specs/system/agents.md:1077-1179  ### 4.1 System context blocks
-specs/system/agents.md:1181-1201  ### 4.2 requestContext keys
-specs/system/agents.md:1203-1212  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1214-1728  ## 5. Turn orchestration and the SQL reliability loop
-specs/system/agents.md:1216-1246  ### 5.1 Streamed chat turn
-specs/system/agents.md:1248-1252  ### 5.2 Read-only enforcement
-specs/system/agents.md:1254-1268  ### 5.3 Execution-guided repair
-specs/system/agents.md:1270-1280  ### 5.4 Result guards
-specs/system/agents.md:1282-1296  ### 5.5 Tool-only turn synthesis
-specs/system/agents.md:1298-1310  ### 5.6 Grounding guard (zero-tool turns)
-specs/system/agents.md:1312-1327  ### 5.7 Persisting the turn (derived fields)
-specs/system/agents.md:1329-1344  ### 5.8 Careful mode — independent cross-check
-specs/system/agents.md:1346-1353  ### 5.9 Result-set comparison
-specs/system/agents.md:1355-1380  ### 5.10 Chart-form heuristic
-specs/system/agents.md:1382-1459  ### 5.11 Workflow-backed turn: `answer-business-question` (Answer a Business Question)
-specs/system/agents.md:1461-1504  ### 5.12 Workflows: the catalogue and the ids
-specs/system/agents.md:1506-1529  ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
-specs/system/agents.md:1531-1563  ### 5.14 Runs of Answer a Business Question
-specs/system/agents.md:1565-1567  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
-specs/system/agents.md:1569-1590  ### 5.16 Node chats: chatting with a run step's agent
-specs/system/agents.md:1592-1635  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
-specs/system/agents.md:1637-1670  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
-specs/system/agents.md:1672-1728  ### 5.19 Workflow: `review-website` (Review a Website)
-specs/system/agents.md:1730-1903  ## 6. Visual designer pipeline
-specs/system/agents.md:1734-1744  ### 6.1 Entry points
-specs/system/agents.md:1746-1748  ### 6.2 Data handed to the designer
-specs/system/agents.md:1750-1766  ### 6.3 Modes and loop
-specs/system/agents.md:1768-1803  ### 6.4 Designer prompt
-specs/system/agents.md:1805-1810  ### 6.5 Repair
-specs/system/agents.md:1812-1814  ### 6.6 Assembled files
-specs/system/agents.md:1816-1818  ### 6.7 Call options
-specs/system/agents.md:1820-1863  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1865-1903  ### 6.9 Chart runtime contract
-specs/system/agents.md:1905-2079  ## 7. Skills and workspaces
-specs/system/agents.md:1907-1916  ### 7.1 Session workspaces
-specs/system/agents.md:1918-1959  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:1961-1987  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:1989-2073  ### 7.4 Skills per agent
-specs/system/agents.md:2075-2079  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2081-2256  ## 8. Evals
-specs/system/agents.md:2085-2211  ### 8.1 Case and set format
-specs/system/agents.md:2213-2220  ### 8.2 Data preflight
-specs/system/agents.md:2222-2233  ### 8.3 Executing a case
-specs/system/agents.md:2235-2240  ### 8.4 Runs, regression and report
-specs/system/agents.md:2242-2256  ### 8.5 Other entry points
-specs/system/agents.md:2258-2262  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2264-2277  ## Open questions and gaps
-specs/system/agents.md:2279-2418  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2420-2456  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2458-2460  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2462-2545  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2547-2651  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2653-2705  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2659-2678  ### Plan
-specs/system/agents.md:2680-2705  ### Write answer
-specs/system/agents.md:2707-2723  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2725-2744  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:16-217  ## 1. Agent runtime model
+specs/system/agents.md:18-64  ### 1.1 What an agent is
+specs/system/agents.md:66-99  ### 1.2 Registry and lookup
+specs/system/agents.md:101-125  ### 1.3 Model resolution
+specs/system/agents.md:127-182  ### 1.4 Per-call tuning (reasoning effort, token caps)
+specs/system/agents.md:184-197  ### 1.5 Visual designer model override
+specs/system/agents.md:199-206  ### 1.6 Retries and timeouts
+specs/system/agents.md:208-217  ### 1.7 Storage and observability
+specs/system/agents.md:219-901  ## 2. Agents
+specs/system/agents.md:221-371  ### 2.1 `assistant` — Questions to Insights Assistant
+specs/system/agents.md:373-406  ### 2.2 `visualization` (id `interactive-visual-designer`) — Interactive Visual Designer
+specs/system/agents.md:408-454  ### 2.3 `sql-fixer` — SQL Fixer
+specs/system/agents.md:456-504  ### 2.4 `sql-verifier` — SQL Verifier
+specs/system/agents.md:506-599  ### 2.5 `knowledge-bootstrap` — Ontology Bootstrap
+specs/system/agents.md:601-641  ### 2.6 `assistant-eval-judge` — Assistant Eval Judge
+specs/system/agents.md:643-645  ### 2.7 Deep analysis (removed 2026-11-12)
+specs/system/agents.md:647-649  ### 2.8 Retired (2026-11-12): the RFP Builder
+specs/system/agents.md:651-655  ### 2.9 Retired (1.23.8): the showcase agents
+specs/system/agents.md:657-722  ### 2.10 `data-readiness` (id `data-readiness-agent`) — Data Readiness Agent
+specs/system/agents.md:724-768  ### 2.11 `insights-analyst` (id `insights-analyst`) — Insights Analyst
+specs/system/agents.md:770-782  ### 2.12 `query-explainer` — Query Explainer
+specs/system/agents.md:784-794  ### 2.13 `dashboard-reader` (id `dashboard-reader`) — Dashboard Reader
+specs/system/agents.md:796-807  ### 2.14 `data-mapper` (id `data-mapper`) — Data Mapper
+specs/system/agents.md:809-835  ### 2.15 `image-reader` (id `image-reader`) — Image Reader
+specs/system/agents.md:837-847  ### 2.16 `site-reviewer` (id `site-reviewer`) — Site Reviewer
+specs/system/agents.md:849-862  ### 2.17 `result-explorer` — Result Explorer
+specs/system/agents.md:864-875  ### 2.18 `requirements-analyst` (id `requirements-analyst`) — Requirements Analyst
+specs/system/agents.md:877-888  ### 2.19 `layer-mapper` (id `layer-mapper`) — Layer Mapper
+specs/system/agents.md:890-901  ### 2.20 `gap-advisor` (id `gap-advisor`) — Gap Advisor
+specs/system/agents.md:903-1118  ## 3. Tools
+specs/system/agents.md:915-920  ### 3.1 `list_entities`
+specs/system/agents.md:922-927  ### 3.2 `describe_entity`
+specs/system/agents.md:929-935  ### 3.3 `sample_rows`
+specs/system/agents.md:937-944  ### 3.4 `run_readonly_sql`
+specs/system/agents.md:946-952  ### 3.5 `ask_clarification`
+specs/system/agents.md:954-960  ### 3.6 `create_visual`
+specs/system/agents.md:962-968  ### 3.7 `update_visual`
+specs/system/agents.md:970-972  ### 3.8 Workspace tools
+specs/system/agents.md:974-978  ### 3.9 The framework's skill tools
+specs/system/agents.md:980-982  ### 3.10 Retired (2026-11-12): RFP tools
+specs/system/agents.md:984-1013  ### 3.11 `show_in_panel`
+specs/system/agents.md:1015-1046  ### 3.12 `update_workflow`
+specs/system/agents.md:1048-1080  ### 3.13 Readiness tools
+specs/system/agents.md:1082-1103  ### 3.14 Synthetic-data tools
+specs/system/agents.md:1105-1118  ### 3.15 `explore_result`
+specs/system/agents.md:1120-1257  ## 4. Per-turn context
+specs/system/agents.md:1122-1224  ### 4.1 System context blocks
+specs/system/agents.md:1226-1246  ### 4.2 requestContext keys
+specs/system/agents.md:1248-1257  ### 4.3 What the chat turn sends as input (memory bootstrap)
+specs/system/agents.md:1259-1773  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1261-1291  ### 5.1 Streamed chat turn
+specs/system/agents.md:1293-1297  ### 5.2 Read-only enforcement
+specs/system/agents.md:1299-1313  ### 5.3 Execution-guided repair
+specs/system/agents.md:1315-1325  ### 5.4 Result guards
+specs/system/agents.md:1327-1341  ### 5.5 Tool-only turn synthesis
+specs/system/agents.md:1343-1355  ### 5.6 Grounding guard (zero-tool turns)
+specs/system/agents.md:1357-1372  ### 5.7 Persisting the turn (derived fields)
+specs/system/agents.md:1374-1389  ### 5.8 Careful mode — independent cross-check
+specs/system/agents.md:1391-1398  ### 5.9 Result-set comparison
+specs/system/agents.md:1400-1425  ### 5.10 Chart-form heuristic
+specs/system/agents.md:1427-1504  ### 5.11 Workflow-backed turn: `answer-business-question` (Answer a Business Question)
+specs/system/agents.md:1506-1549  ### 5.12 Workflows: the catalogue and the ids
+specs/system/agents.md:1551-1574  ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
+specs/system/agents.md:1576-1608  ### 5.14 Runs of Answer a Business Question
+specs/system/agents.md:1610-1612  ### 5.15 Run workflows that call an agent: `deep-analysis` (removed 2026-11-12)
+specs/system/agents.md:1614-1635  ### 5.16 Node chats: chatting with a run step's agent
+specs/system/agents.md:1637-1680  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
+specs/system/agents.md:1682-1715  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
+specs/system/agents.md:1717-1773  ### 5.19 Workflow: `review-website` (Review a Website)
+specs/system/agents.md:1775-1948  ## 6. Visual designer pipeline
+specs/system/agents.md:1779-1789  ### 6.1 Entry points
+specs/system/agents.md:1791-1793  ### 6.2 Data handed to the designer
+specs/system/agents.md:1795-1811  ### 6.3 Modes and loop
+specs/system/agents.md:1813-1848  ### 6.4 Designer prompt
+specs/system/agents.md:1850-1855  ### 6.5 Repair
+specs/system/agents.md:1857-1859  ### 6.6 Assembled files
+specs/system/agents.md:1861-1863  ### 6.7 Call options
+specs/system/agents.md:1865-1908  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1910-1948  ### 6.9 Chart runtime contract
+specs/system/agents.md:1950-2124  ## 7. Skills and workspaces
+specs/system/agents.md:1952-1961  ### 7.1 Session workspaces
+specs/system/agents.md:1963-2004  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:2006-2032  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:2034-2118  ### 7.4 Skills per agent
+specs/system/agents.md:2120-2124  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:2126-2301  ## 8. Evals
+specs/system/agents.md:2130-2256  ### 8.1 Case and set format
+specs/system/agents.md:2258-2265  ### 8.2 Data preflight
+specs/system/agents.md:2267-2278  ### 8.3 Executing a case
+specs/system/agents.md:2280-2285  ### 8.4 Runs, regression and report
+specs/system/agents.md:2287-2301  ### 8.5 Other entry points
+specs/system/agents.md:2303-2307  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2309-2322  ## Open questions and gaps
+specs/system/agents.md:2324-2463  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2465-2501  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2503-2505  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2507-2590  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2592-2696  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2698-2750  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2704-2723  ### Plan
+specs/system/agents.md:2725-2750  ### Write answer
+specs/system/agents.md:2752-2768  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2770-2789  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

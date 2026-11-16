@@ -11,6 +11,11 @@ import {
   READ_DASHBOARD_INSTRUCTIONS,
 } from './workflows/recreate-dashboard.prompts';
 import { READ_IMAGES_INSTRUCTIONS } from './workflows/read-images.prompts';
+import {
+  GAP_ADVISOR_INSTRUCTIONS,
+  LAYER_MAPPER_INSTRUCTIONS,
+  REQUIREMENTS_ANALYST_INSTRUCTIONS,
+} from './workflows/consumption-gap-analysis.prompts';
 import { SITE_REVIEWER_INSTRUCTIONS } from './workflows/review-website.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
@@ -41,6 +46,9 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
   'dashboard-reader': READ_DASHBOARD_INSTRUCTIONS,
   'data-mapper': MAP_DATA_INSTRUCTIONS,
+  'requirements-analyst': REQUIREMENTS_ANALYST_INSTRUCTIONS,
+  'layer-mapper': LAYER_MAPPER_INSTRUCTIONS,
+  'gap-advisor': GAP_ADVISOR_INSTRUCTIONS,
   'image-reader': READ_IMAGES_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
   'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
