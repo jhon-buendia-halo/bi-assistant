@@ -575,6 +575,39 @@ A user of Answer a Business Question could not tell how its queries were built a
 - **Acceptance:** each check unit-tested on one real answer; `EVAL_SET=query-explainer` runs from the CLI; the set passes 3 of 3 runs on the code checks and at least 2 of 3 on each judged case, or the failing case is reported with its reason.
 - **Notes:** no UI of its own.
 
+### Milestone 1.26 — Background tasks survive navigation (M1-26)
+
+Saving a dataset disappeared when the user opened another screen, and the dataset showed up only once the save ended; twenty slow operations behaved the same way, some were even cancelled. Long work the user starts now runs as a background task owned by the shell: a **Background tasks** button in the rail beside System logs lists what runs and what ended, the screen shown again reads its state back, and a toast offers **Open** or **Retry** at the end. Requested and confirmed with a prototype on 2026-11-15 (Free style). Epic spec: [specs/epics/M1-26/spec.md](specs/epics/M1-26/spec.md). Plan and contract: [docs/plans/m1-26-background-tasks.md](docs/plans/m1-26-background-tasks.md). ADR-0047.
+
+#### 1.26.1 — The background tasks layer and the rail indicator  `🚧 In progress`
+- **Intent:** one place where long work lives and can be seen, whatever screen is shown.
+- **Scope:** per plan 1.26.1: `BackgroundTasksService`, the rail button and its panel, toast actions; app-shell R30, R37, R58–R63; ui.md 1.3, 3.3, 3.7, 5.1, 5.3; ADR-0047.
+- **Out of scope:** wiring any operation (1.26.2–1.26.5); storing tasks across a reload.
+- **Acceptance:** `background-tasks.service.spec.ts` (the work survives at the root, no duplicate start, failure and Retry, progress, Stop, Open, the cap of 20).
+
+#### 1.26.2 — Saving a dataset and loading an inventory run in the background  `🚧 In progress`
+- **Intent:** the reported case: a dataset being saved appears in the Datasets list at once and stays visible while the user works elsewhere.
+- **Scope:** per plan 1.26.2 and section 4: the save returns to the list with a pending row; the inventory load is no longer cancelled by leaving; datasets spec.
+- **Out of scope:** the backend.
+- **Acceptance:** unit tests for the pending row, the save task and the re-created catalog browser.
+
+#### 1.26.3 — Testing Data, ontology suggestions and the synthetic profile run in the background  `🚧 In progress`
+- **Intent:** the Settings and dataset-editor operations keep running and keep their result when the user leaves.
+- **Scope:** per plan 1.26.3; testing-data, dataset-ontology and synthetic-data specs.
+- **Out of scope:** test connection, script and export downloads.
+- **Acceptance:** unit tests: the busy state survives re-creating each screen and the result is applied after it.
+
+#### 1.26.4 — Visual tailor and refresh, and eval runs, run in the background  `🚧 In progress`
+- **Intent:** a visual being tailored and an eval run stay visible and land when the user is elsewhere; eval polling no longer leaks after the agent page closes.
+- **Scope:** per plan 1.26.4; visuals and agents-evals specs.
+- **Out of scope:** the automatic visual repair; eval jobs started before an app reload.
+- **Acceptance:** unit tests: busy state and result across re-creation; polling stops at the terminal status and with no timer left.
+
+#### 1.26.5 — Workflow runs keep running when the user leaves their page  `📋 Planned`
+- **Intent:** leaving a workflow's page no longer stops its run; the run shows in Background tasks and the page re-attaches to it.
+- **Scope:** the approach the user picks among the three proposed on 2026-11-15 (backend run registry with re-attach, Mastra's run lifecycle, or the frontend keeping the connection), with its ADR.
+- **Notes:** waiting for the user's choice (CLAUDE.md, *New or changed workflows start from Mastra's docs*).
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

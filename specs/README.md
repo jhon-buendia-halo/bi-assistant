@@ -83,6 +83,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | M1-22 Sampled profiling and synthetic data | [epics/M1-22](epics/M1-22/spec.md) |
 | M1-23 Workflow-first: chats run workflows, agents are building blocks | [epics/M1-23](epics/M1-23/spec.md) |
 | M1-25 Query inspector: every figure links to its query | [epics/M1-25](epics/M1-25/spec.md) |
+| M1-26 Background tasks survive navigation | [epics/M1-26](epics/M1-26/spec.md) |
 | M0-5 Faster workflow, repo-only planning | [epics/M0-5](epics/M0-5/spec.md) |
 | M0-6 Workflow modes: Strict and Free style | [epics/M0-6](epics/M0-6/spec.md) |
 

@@ -65,6 +65,7 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
 5. A flexible spacer.
 6. Bottom group, 4 px apart (centred while collapsed):
+   - **Background tasks** (list-checks icon, `icon` colour; while a task runs, a spinning loader-circle icon in `accent`; title "Background tasks", `aria-label` "Background tasks" or "Background tasks, <n> running", `aria-haspopup="dialog"`, `aria-expanded`; label "Background tasks" when expanded; `data-testid="background-tasks-button"`), with a count badge (`primary` fill, `on-primary` text, top-right of the icon, `data-testid="background-tasks-count"`) showing the running tasks, capped at "99+", hidden at zero. Opens the Background tasks panel (3.7); `surface-selected` while it is open (app-shell R59).
    - **System logs** (scroll-text icon, `icon` colour; `aria-label="Open system logs"`, title "System logs and diagnostics"; label "System logs" when expanded), with a red count badge (`danger` palette, top-right of the icon) showing the number of error + warning log entries, capped at "99+", hidden at zero. Opens the system logs panel (3.2).
    - **Settings** (gear icon, `icon` colour, title and `aria-label` "Settings"; label "Settings" when expanded), marked current (`surface-selected`, `aria-current="page"`) while the Settings area is shown.
    - Nothing follows Settings: the LenAI mark, the "Powered by LenAI" artwork and the divider above them were removed (ADR-0044). LenAI stays an LLM provider (4.9).
@@ -186,6 +187,8 @@ Fixed stack at bottom-right (16 px from right and bottom, width 360, 8 px gap, a
 | `info` | info (`accent`) | 4000 ms |
 | `error` | circle-alert (`on-danger-soft`) | 8000 ms |
 
+A toast may carry one action button between the message and the X (`btn btn-outline`, 12 px, `data-testid="toast-action"`): **Open** on a background task's success, **Retry** on its failure (3.7). Clicking it runs the action and dismisses the toast.
+
 Toasts stack in creation order; the X dismisses immediately. Every **error** toast is also recorded as a diagnostic entry with source `user-visible` (it therefore shows up in the system logs and in the issue badge).
 
 ### 3.4 App logo
@@ -221,6 +224,17 @@ Pieces every restyled screen uses, defined as Tailwind v4 `@utility` classes in 
 Page titles use 20 px / 28 px line height, light weight, `fg-strong` (the Figma `heading/medium-alt` style); see the page header in 1.2.
 
 Focus: buttons show a 2 px `focus` outline offset by 2 px on keyboard focus. Disabled buttons and fields drop to 55–60 % opacity with a not-allowed cursor.
+
+### 3.7 Background tasks panel
+
+A `section` with `role="dialog"`, `aria-label="Background tasks"` and `data-testid="background-tasks-panel"`, opened by the rail's Background tasks button (1.3), floating 12 px right of the rail with its bottom at the button's bottom: 380 px wide, at most 70% of the window tall, the `menu` surface (radius 12, `shadow`), no padding. App-shell R58–R63, ADR-0047.
+
+- **Header** (bottom `border`, 14 x 12 px): "Background tasks" (14 px semibold `fg-strong`), the note "Keep working, they run on their own" (12 px `fg-muted`) and a close `btn-icon` (X, "Close background tasks").
+- **Empty**: "Nothing is running. Saving a dataset, loading testing data, running evals or a workflow shows up here." (13 px `fg-muted`, centred).
+- **Running · <n>** (11 px uppercase `fg-muted` group label), then one row per running task (`data-testid="background-task"`, `data-status="running"`): a spinning loader-circle (16 px, `accent`), the title (13 px semibold `fg-strong`, one line), the current step when known followed by the elapsed time `m:ss` (12 px `fg-muted`, the time in `data-testid="background-task-elapsed"`), and a 3 px progress bar 224 px wide (`border` track, `primary` fill: proportional when the task reports done and total, otherwise a third-width segment sliding left to right, a static faint full bar with reduced motion). **Open** (`btn btn-outline`, 12 px) on the right when the task has a place to open.
+- **Finished**, newest first: circle-check (`on-success-soft`) for done, circle-alert (`on-danger-soft`) for failed, circle-stop (`fg-muted`) for stopped; the title; the outcome message (the server's, or the error) and how long ago ("just now", "<n> min ago", "<n> h ago"), at most two lines; then **Open** (done or stopped, when it has a place to open), **Retry** (failed or stopped) and **Dismiss** (`btn btn-ghost`).
+- **Footer** (only with finished tasks; top `border`, 12 px `fg-muted`): "Finished tasks clear when the app restarts" and **Clear finished** (semibold `accent`).
+- Escape, the close button or a click outside closes it; focus returns to the rail button.
 
 ## 4. Screens and panels
 
@@ -878,7 +892,7 @@ Capability: [app-shell](../capabilities/app-shell/spec.md) R39–R45.
 
 ### 5.1 State that survives view changes
 
-Session list, the active session, the selected visual and the right-panel width/collapse live at shell level, so switching between views does not reload them. Form drafts inside settings sections are not preserved across section changes (each is re-created). The composer draft in a chat is per-chat-instance.
+Session list, the active session, the selected visual and the right-panel width/collapse live at shell level, so switching between views does not reload them. Long work the user starts runs as a background task (`BackgroundTasksService`, 3.7, ADR-0047): leaving its screen neither cancels it nor loses its result, and the screen shown again reads its running state or result from the task. Form drafts inside settings sections are not preserved across section changes (each is re-created). The composer draft in a chat is per-chat-instance.
 
 ### 5.2 Selection state
 
@@ -886,7 +900,7 @@ The dataset browser's inclusion set and the current tree selection are shell-wid
 
 ### 5.3 Toast policy
 
-Every action failure surfaces as an error toast with the server's `message` (or `Backend unreachable` when the request itself failed); every successful mutating action surfaces a success toast carrying the server's message. Exception: pinning or unpinning an agent shows its result on the card at once and toasts only on failure (4.4). Errors persist 8 s, others 4 s (3.3).
+Every action failure surfaces as an error toast with the server's `message` (or `Backend unreachable` when the request itself failed); every successful mutating action surfaces a success toast carrying the server's message. Exception: pinning or unpinning an agent shows its result on the card at once and toasts only on failure (4.4). Errors persist 8 s, others 4 s (3.3). A background task's outcome is toasted once, by the task layer, with **Open** or **Retry** (3.7); the screen that started it does not toast it again.
 
 ## 6. Design tokens
 

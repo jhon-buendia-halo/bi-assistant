@@ -1196,6 +1196,27 @@ flowchart LR
   - **Rename only the UI and keep "Halo BI Assistant" in the OS:** rejected by the user; the product would keep two names.
   - **New `appId`:** rejected; the new app would install beside the old one and start with an empty profile.
 
+#### ADR-0047 — Long work the user starts runs as a background task owned by the shell, not by the screen that started it
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Context:**
+  - The renderer has no router: changing area, view, tab or opening Settings destroys the screen. Twenty slow operations kept their in-progress state in the component, so leaving made the work invisible (a dataset save, a Testing Data load, ontology suggestions), cancelled it (an inventory load, a synthetic profile) or left it untracked (an eval run, whose poll timer even outlived the page). The user saw a dataset appear only when its save ended and asked for the process to stay visible.
+- **Decision:**
+  - **One root service, `BackgroundTasksService`** (`frontend/src/app/core/background-tasks/`): a task is `{ kind, key, title, work }`, where `work` is a factory of an Observable that the service subscribes at the root. The component that starts it never subscribes; it reads its busy state and result back from the task (`active(kind, key)`, `latest(kind, key)`, `finished$`), so a screen shown again is right. The same kind and key never runs twice.
+  - **One place to see it:** a Background tasks button in the rail above System logs, with the count of running tasks, and its panel (ui.md 3.7). The rail exists in both brands; the header crumb does not exist in `mercer`.
+  - **One outcome message:** the service toasts the end once, with **Open** (back to the result) or **Retry** (the same work again); `ToastService` gains one optional action per toast.
+  - **No backend change for these tasks:** a root subscription keeps the HTTP request open, so the backend sees no closed connection. Kept in memory only; nothing is stored.
+  - **Workflow runs are a separate decision:** their stream is closed by the page and the backend stops a run when its connection closes (api.md 3.6); keeping them alive needs the backend change chosen in roadmap 1.26.5.
+- **Consequences:**
+  - Each long operation is wired to the service once (roadmap 1.26.2–1.26.4); new long work starts there instead of in a component.
+  - Components lose their own toasts for that work, and the E2E specs that waited for a component toast keep working because the copy is the server's message.
+  - Tasks do not survive a window reload; work the backend finishes anyway (a dataset save) still lands, only its row in the panel is lost.
+  - **Stack-neutral:** a rebuild needs an app-level job registry that outlives screens, a single indicator, and screens that read their state from it.
+- **Alternatives considered:**
+  - **Keep each component's state in its own feature service:** rejected; twenty ad-hoc stores and no single place to see what runs.
+  - **Header indicator:** rejected by the user in favour of the rail; the `mercer` banner has no crumb.
+  - **Backend job queue for every operation:** rejected for now; the requests already complete if the client keeps the connection, so a queue would add endpoints and storage for no visible gain.
+
 ## Level 4 — Code
 
 ```mermaid
