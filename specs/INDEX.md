@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-693  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-745  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -331,20 +331,29 @@ roadmap.md:671-675  #### 1.27.10 — Every workflow whose answer ran queries get
 roadmap.md:677-681  #### 1.27.11 — Each readiness finding opens the rows behind it  `🚧 In progress`
 roadmap.md:683-687  #### 1.27.12 — The Data Readiness agent lists every finding of a dimension from the report  `🚧 In progress`
 roadmap.md:689-693  #### 1.27.13 — An Edge Cases testing dataset  `🚧 In progress`
-roadmap.md:695-699  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:699-699  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:701-703  ## Backlog
+roadmap.md:695-745  ### Milestone 1.28 — Border-case evals for every agent of the two workflows (M1-28)
+roadmap.md:699-703  #### 1.28.1 — Eval infrastructure for isolated agent calls and workflow targets  `🚧 In progress`
+roadmap.md:705-709  #### 1.28.2 — analysis-planner border-case evals  `🚧 In progress`
+roadmap.md:711-715  #### 1.28.3 — answer-writer border-case evals  `🚧 In progress`
+roadmap.md:717-721  #### 1.28.4 — Check data quality border-case evals  `🚧 In progress`
+roadmap.md:723-727  #### 1.28.5 — image-reader border-case evals  `🚧 In progress`
+roadmap.md:729-733  #### 1.28.6 — insights-analyst and result-explorer evals on Edge Cases  `🚧 In progress`
+roadmap.md:735-739  #### 1.28.7 — Explain report evals inside Assess Data Readiness  `🚧 In progress`
+roadmap.md:741-745  #### 1.28.8 — Baseline, inconsistency report and fixes  `🚧 In progress`
+roadmap.md:747-751  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:751-751  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:753-755  ## Backlog
 
-specs/README.md:7-89  ## Layout
+specs/README.md:7-90  ## Layout
 specs/README.md:28-52  ### Capabilities
-specs/README.md:54-89  ### Epics
-specs/README.md:91-95  ## Stack neutrality
-specs/README.md:97-106  ## Data assets
-specs/README.md:108-169  ## Formats
-specs/README.md:110-144  ### Capability spec — `capabilities/<capability>/spec.md`
-specs/README.md:146-169  ### Epic spec — `epics/<EPIC-ID>/spec.md`
-specs/README.md:171-175  ## Lifecycle
-specs/README.md:177-183  ## Rebuild prompt
+specs/README.md:54-90  ### Epics
+specs/README.md:92-96  ## Stack neutrality
+specs/README.md:98-107  ## Data assets
+specs/README.md:109-170  ## Formats
+specs/README.md:111-145  ### Capability spec — `capabilities/<capability>/spec.md`
+specs/README.md:147-170  ### Epic spec — `epics/<EPIC-ID>/spec.md`
+specs/README.md:172-176  ## Lifecycle
+specs/README.md:178-184  ## Rebuild prompt
 
 specs/capabilities/agent-answers/spec.md:7-9  ## Concepts
 specs/capabilities/agent-answers/spec.md:11-217  ## Rules
@@ -1710,6 +1719,14 @@ specs/epics/M1-27/spec.md:26-42  ## Stories
 specs/epics/M1-27/spec.md:44-48  ## Specs touched
 specs/epics/M1-27/spec.md:50-55  ## Acceptance
 specs/epics/M1-27/spec.md:57-61  ## Dependencies, risks and open questions
+
+specs/epics/M1-28/spec.md:5-7  ## Goal
+specs/epics/M1-28/spec.md:9-11  ## Scope
+specs/epics/M1-28/spec.md:13-15  ## Out of scope
+specs/epics/M1-28/spec.md:17-28  ## Stories
+specs/epics/M1-28/spec.md:30-32  ## Specs touched
+specs/epics/M1-28/spec.md:34-36  ## Acceptance
+specs/epics/M1-28/spec.md:38-42  ## Dependencies, risks and open questions
 
 specs/product/non-functional.md:5-19  ## 1. Platforms and delivery
 specs/product/non-functional.md:21-33  ## 2. Local-first data

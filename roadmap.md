@@ -692,6 +692,58 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 - **Out of scope:** new eval sets on it.
 - **Acceptance:** `registry.spec.ts` passes; the seed loads on the shared Postgres within the seed timeout; a smoke script shows every documented edge case present.
 
+### Milestone 1.28 — Border-case evals for every agent of the two workflows (M1-28)
+
+Each agent of Answer a Business Question and Assess Data Readiness gets its own border-case eval set, run in isolation on frozen inputs, plus two whole-workflow sets on the Edge Cases sample, so an inconsistency is found and traced to the agent that made it. Requested on 2026-11-16; the user asked to go on with the recommendation. Epic spec: [specs/epics/M1-28/spec.md](specs/epics/M1-28/spec.md). Plan: [docs/plans/m1-28-agent-evals.md](docs/plans/m1-28-agent-evals.md).
+
+#### 1.28.1 — Eval infrastructure for isolated agent calls and workflow targets  `🚧 In progress`
+- **Intent:** an isolated-call target per agent, a live-SQL truth check, edge-cases fixture support, a target that runs Assess Data Readiness whole, and the `dr-no-sql` scorer collision fixed.
+- **Scope:** per plan 1.28.1.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.28.2 — analysis-planner border-case evals  `🚧 In progress`
+- **Intent:** Olivia's plan on Edge Cases: when to clarify, measures the data lacks, awkward names spelled exactly, no second question after Clarify.
+- **Scope:** per plan 1.28.2.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.28.3 — answer-writer border-case evals  `🚧 In progress`
+- **Intent:** Jessica's answer from frozen rows: ties, NaN, rounding, empty and cut results, caveats only for failed checks, every figure from the rows.
+- **Scope:** per plan 1.28.3.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.28.4 — Check data quality border-case evals  `🚧 In progress`
+- **Intent:** Sarah's step call: the findings of the columns used, none else, JSON only, never declining.
+- **Scope:** per plan 1.28.4.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.28.5 — image-reader border-case evals  `🚧 In progress`
+- **Intent:** Zoe on generated images: figures copied exactly, injected text reported not obeyed, image order and count.
+- **Scope:** per plan 1.28.5.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.28.6 — insights-analyst and result-explorer evals on Edge Cases  `🚧 In progress`
+- **Intent:** Michael through the whole workflow on Edge Cases with live-SQL truth; Nathan on awkward column names.
+- **Scope:** per plan 1.28.6.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.28.7 — Explain report evals inside Assess Data Readiness  `🚧 In progress`
+- **Intent:** Sarah's explanation as the workflow runs it: figures from the report, planted problems named, the user's question kept.
+- **Scope:** per plan 1.28.7.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
+#### 1.28.8 — Baseline, inconsistency report and fixes  `🚧 In progress`
+- **Intent:** three runs per case, every failure traced to an agent, fixes re-run to green.
+- **Scope:** per plan 1.28.8.
+- **Out of scope:** changing an agent before the baseline shows a failure (1.28.8 owns fixes).
+- **Acceptance:** checks unit-tested on one correct and one wrong output; the set runs from the CLI and the Agents screen.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
