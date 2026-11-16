@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { splitSqlStatements } from '../sql-statements';
-import { SAMPLE_FIXTURES, findFixture } from './registry';
+import {
+  SAMPLE_FIXTURES,
+  findFixture,
+  ownedSchemas,
+  requiredEntities,
+} from './registry';
 
 function seedSql(seedFile: string): string {
   const raw = readFileSync(join(__dirname, seedFile));
@@ -22,10 +27,14 @@ describe('sample fixture catalogue', () => {
     ]),
   )('the %s seed creates every required table', (_id, fixture) => {
     const sql = seedSql(fixture.seedFile as string);
-    const missing = fixture.requiredTables.filter((table) => {
+    const missing = fixture.requiredTables.filter((entry) => {
+      // A multi-schema sample qualifies its tables; the others do not.
+      const [schema, table] = fixture.layerSchemas
+        ? entry.split('.')
+        : [fixture.schema, entry];
       const created = new RegExp(
         String.raw`CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?(?:TABLE|VIEW)\s+` +
-          String.raw`(?:"?${fixture.schema}"?\.)?"?${table}"?[\s(]`,
+          String.raw`(?:"?${schema}"?\.)?"?${table}"?[\s(]`,
         'i',
       );
       return !created.test(sql);
@@ -38,6 +47,41 @@ describe('sample fixture catalogue', () => {
       const values = SAMPLE_FIXTURES.map((fixture) => fixture[key]);
       expect(new Set(values).size).toBe(values.length);
     }
+  });
+
+  describe('world-cup-medallion', () => {
+    const fixture = findFixture('world-cup-medallion')!;
+    const sql = seedSql(fixture.seedFile as string);
+
+    it('owns three layer schemas in the world_cup database', () => {
+      expect(fixture.defaults.database).toBe('world_cup');
+      expect(ownedSchemas(fixture)).toEqual([
+        'wc_landing',
+        'wc_normalized',
+        'wc_consumption',
+      ]);
+      expect(fixture.layerSchemas?.map((entry) => entry.layer)).toEqual([
+        'landing',
+        'normalized',
+        'consumption',
+      ]);
+      expect(requiredEntities(fixture)).toContain(
+        'wc_consumption.fct_match_results',
+      );
+      expect(fixture.requiredTables).toHaveLength(11);
+    });
+
+    it('splits into statements and has no cards or bookings table', () => {
+      expect(splitSqlStatements(sql).length).toBeGreaterThan(20);
+      expect(sql).not.toMatch(/card|booking/i);
+    });
+  });
+
+  it('single-schema fixtures own exactly their one schema', () => {
+    const wc = findFixture('world-cup')!;
+    expect(wc.layerSchemas).toBeUndefined();
+    expect(ownedSchemas(wc)).toEqual(['world_cup']);
+    expect(requiredEntities(wc)[0]).toBe('world_cup.tournaments');
   });
 
   describe('intellify', () => {
