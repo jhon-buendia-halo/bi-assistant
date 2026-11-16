@@ -152,6 +152,7 @@ describe('the readiness tools (agents.md 3.13)', () => {
       'generate_synthetic_data',
       'describe_entity',
       'run_readonly_sql',
+      'explore_result',
       'show_in_panel',
       'ask_clarification',
     ]);

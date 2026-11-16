@@ -261,13 +261,28 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       http.verify();
     });
 
-    it('renders a run of another workflow as before: Data used, no query rows, no evidence call', () => {
-      const other: WorkflowRun = { ...WITH_QUERIES, workflowId: 'other-workflow' };
+    it('gives a run of another workflow whose answer ran queries the inspector too', () => {
+      const other: WorkflowRun = {
+        ...WITH_QUERIES,
+        workflowId: 'assess-data-readiness',
+      };
+      const { http, el } = mountWithHttp(other);
+      http.expectOne(evidence).flush({ ok: true, run: other });
+      expect(el.querySelector('[data-testid="query-row-0"]')).not.toBeNull();
+      http.verify();
+    });
+
+    it('renders a run of another workflow with no query as before: no query rows, no Data used, no evidence call', () => {
+      const other: WorkflowRun = {
+        ...WITH_QUERIES,
+        workflowId: 'other-workflow',
+        answer: { ...WITH_QUERIES.answer!, data: undefined },
+      };
       const { http, el } = mountWithHttp(other);
       http.expectNone(evidence);
       expect(el.querySelector('[data-testid="query-row-0"]')).toBeNull();
       expect(el.querySelector('[data-testid="figure-ref"]')).toBeNull();
-      expect(el.textContent).toContain('Data used');
+      expect(el.textContent).not.toContain('Data used');
       http.verify();
     });
   });

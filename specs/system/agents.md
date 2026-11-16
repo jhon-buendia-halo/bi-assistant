@@ -670,7 +670,7 @@ It is never called by the grounding guard (5.6), careful mode (5.8) (and no deep
 
 - A successful `generate_synthetic_data` result stores a `file` panel item and emits it as `panel-item`, as `show_in_panel` does (3.14).
 
-**Tools**, in order: the readiness tools of 3.13 (3), the synthetic-data tools `profile_data_sample` and `generate_synthetic_data` (3.14), then the shared `describe_entity` and `run_readonly_sql` (3.2, 3.4, ADR-0035), `show_in_panel` (3.11) and the shared `ask_clarification` (3.5).
+**Tools**, in order: the readiness tools of 3.13 (3), the synthetic-data tools `profile_data_sample` and `generate_synthetic_data` (3.14), then the shared `describe_entity` and `run_readonly_sql` (3.2, 3.4, ADR-0035), `explore_result` (3.15; since 2026-11-16, to page, filter or re-sort a drill-down query's full result), `show_in_panel` (3.11) and the shared `ask_clarification` (3.5).
 - `describe_entity` and `run_readonly_sql` are the assistant's own tools, unchanged: session-scoped to the session's datasets, with the read-only guard, the SQL Fixer and the result guards (3.2, 3.4).
 - It has no other dataset tools, no visual tools, no `update_workflow` and no workspace tools.
 - It declares `skills`, so the framework adds its skill tools (3.9).
@@ -1180,7 +1180,7 @@ No score is put in the context. The agent reads scores only through its tools (2
 
 The `insights-analyst` agent's calls carry `datasets`, `session-id`, `turn-question` and `knowledge-used` only (2.11), plus `turn-data-records` and `explorable-queries` on a streamed turn. They carry no `session-workspace-id` (it has no workspace) and none of the `agent-*` keys.
 
-The `data-readiness` agent's calls carry `datasets`, `session-id`, `turn-question`, `session-workspace-id`, `turn-data-records` and `explorable-queries` (which it does not read: it has no `explore_result`). They carry none of the `agent-*` keys, `active-visual-id` or `knowledge-used`.
+The `data-readiness` agent's calls carry `datasets`, `session-id`, `turn-question`, `session-workspace-id`, `turn-data-records` and `explorable-queries` (which its `explore_result` reads, 3.15). They carry none of the `agent-*` keys, `active-visual-id` or `knowledge-used`.
 
 A fresh context object is created per call, so nothing leaks between turns or sessions.
 
@@ -1487,6 +1487,8 @@ Which agent a stored session's turn ran is unchanged history; no new turn runs o
 
 ### 5.13 Workflow: `data-readiness-assessment` (Assess Data Readiness)
 
+*Since 2026-11-16, an answer that holds the Explain report step's drill-down queries (`run_readonly_sql`, `explore_result` records) links them as sources and opens them in the query inspector like Answer a Business Question's (workflows R31); a run whose answer ran no query shows none.*
+
 *Since 2026-11-13; this number held the removed `seq-text-demo` (ADR-0042), whose stored runs stay readable as legacy runs ([workflows](../capabilities/workflows/spec.md) R23).*
 
 A run of **Assess Data Readiness** assesses one PostgreSQL or Databricks dataset ([data-readiness](../capabilities/data-readiness/spec.md) R2) as a Mastra workflow of seven steps (https://mastra.ai/docs/workflows/control-flow): an optional **Read images** branch first (since 2026-11-15; workflows R35), then six steps in one line, `.then` only. The deterministic engine owns every number (data-readiness R4): four code steps profile, score and store; one agent step explains the stored report.
@@ -1570,6 +1572,8 @@ The whole block is at most **40 000 characters** (`NODE_CHAT_CONTEXT_CAP`). When
 
 ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
 
+*Its answer shows no sources and no query inspector (workflows R31): its Dashboard Reader step has no tools and runs no query, so no answer of this workflow holds a `data` record.*
+
 The user uploads the image of a dashboard and gets it back as data: an interactive mock on invented data, saved in Artifacts so it can be mapped to datasets later (since 2026-11-15; until the same day one workflow did both this and the mapping of 5.18). Three steps in sequence (Mastra `.then`), no branch, no loop, no wait:
 
 ```
@@ -1612,6 +1616,8 @@ start → load-image → read-dashboard → save-dashboard → end
 > Implementation note: `mastra/workflows/recreate-dashboard.schemas.ts` (the contract, the blueprint and the mapping), `.steps.ts` (catalogue entries, edges, `RecreateDashboardRuntime`, and the pure code both workflows share: `blueprintOf`, `mappingOf`, `renderDashboardBundle`, `mappingExplanation`), `.runtime.ts` (the fixed script and style sheet), `.prompts.ts`, `.agents.ts` (the two model calls), `.workflow.ts` (the Mastra steps) and `.sample.ts` (test data); the runtime is built in `modules/sessions/turn/turn-engine.ts`; the image is written by `SessionsService.createRunHost` and read by `readWorkspaceImage` (`modules/sessions/workspace-files.ts`); artifacts are `modules/artifacts/` (`ArtifactsService`, `ArtifactsController`).
 
 ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
+
+*Its answer shows no sources and no query inspector (workflows R31): its agent steps have no tools and run no query, so no answer of this workflow holds a `data` record.*
 
 The user picks a dashboard saved in Artifacts (5.17) and at least one dataset, and gets the dashboard drawn with every widget saying whether the datasets can feed it, and an explanation of that data mapping (since 2026-11-15). Five steps (Mastra): an optional **Read images** branch first (workflows R35), then four steps in sequence (`.then`), no loop, no wait:
 

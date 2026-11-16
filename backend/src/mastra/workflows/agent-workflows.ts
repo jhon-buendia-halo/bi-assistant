@@ -74,6 +74,7 @@ const STEP_AGENTS: Record<
       'generate_synthetic_data',
       'describe_entity',
       'run_readonly_sql',
+      'explore_result',
       'show_in_panel',
       'ask_clarification',
     ],

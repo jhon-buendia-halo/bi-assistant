@@ -40,6 +40,7 @@ import { shippedAgentPrompt } from '../shipped-agent-prompts';
 import { toolSection } from '../tool-section';
 import { readinessTools } from '../tools/readiness.tools';
 import { describeEntityTool, runReadOnlySqlTool } from '../tools/dataset.tools';
+import { exploreResultTool } from '../tools/explore-result.tool';
 import {
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
@@ -72,6 +73,7 @@ const TOOL_NAMES = [
   'generate_synthetic_data',
   'describe_entity',
   'run_readonly_sql',
+  'explore_result',
   'show_in_panel',
   'ask_clarification',
 ];
@@ -93,7 +95,7 @@ describe('the Data Readiness Agent (agents.md 2.10)', () => {
     );
   });
 
-  it('has the three readiness tools, the two synthetic-data tools, describe_entity, run_readonly_sql, show_in_panel and ask_clarification, in order, and nothing else', async () => {
+  it('has the three readiness tools, the two synthetic-data tools, describe_entity, run_readonly_sql, explore_result, show_in_panel and ask_clarification, in order, and nothing else', async () => {
     expect(Object.keys(await dataReadinessAgent.listTools())).toEqual(
       TOOL_NAMES,
     );
@@ -101,6 +103,7 @@ describe('the Data Readiness Agent (agents.md 2.10)', () => {
     // workflow bar and no workspace (so no workspace tools).
     expect(readinessTools.run_readonly_sql).toBe(runReadOnlySqlTool);
     expect(readinessTools.describe_entity).toBe(describeEntityTool);
+    expect(readinessTools.explore_result).toBe(exploreResultTool);
     expect(Object.keys(readinessTools)).not.toContain('update_workflow');
     expect(config['workspace']).toBeUndefined();
   });

@@ -11,6 +11,7 @@ import {
 } from '../readiness-tool-services';
 import { askClarificationTool } from './clarification.tool';
 import { describeEntityTool, runReadOnlySqlTool } from './dataset.tools';
+import { exploreResultTool } from './explore-result.tool';
 import { showInPanelTool } from './panel.tool';
 import {
   generateSyntheticDataTool,
@@ -234,7 +235,7 @@ export const listReadinessReportsTool = createTool({
 /**
  * Every tool the Data Readiness Agent is given, in the order of agents.md
  * 2.10: the three readiness tools, the two synthetic-data tools (3.14),
- * the shared `describe_entity` and `run_readonly_sql`, then `show_in_panel`
+ * the shared `describe_entity`, `run_readonly_sql` and `explore_result`, then `show_in_panel`
  * and `ask_clarification`.
  */
 export const readinessTools = {
@@ -249,6 +250,8 @@ export const readinessTools = {
   // read-only dataset tools. They never touch a score.
   describe_entity: describeEntityTool,
   run_readonly_sql: runReadOnlySqlTool,
+  // Another page, a filter or an order over a drill-down result (agents.md 3.15).
+  explore_result: exploreResultTool,
   show_in_panel: showInPanelTool,
   ask_clarification: askClarificationTool,
 };
