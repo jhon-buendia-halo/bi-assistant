@@ -1184,7 +1184,7 @@ The fixer's and verifier's outputs are additionally cleaned (fence and trailing 
 2. On failure, if **2** repair attempts (`SQL_REPAIR_ATTEMPTS`; at most 3 executions) are used up, or the error is **not repairable**, rethrow.
    - Not repairable: a guard rejection (the statement never reached the engine), or a transport/auth failure matching `\bstatus code\b|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|\bsocket hang up\b|\btimed? ?out\b|\bconnection (?:refused|reset|closed)\b` (case-insensitive). Anything else is repairable.
 3. Build the fixer context once per call: dialect (`sqlite` for REST datasources, else the kind, default `databricks`) and an `entity(column type, …)` block for the datasets on that datasource (all session datasets if none match), 4,000-char budget.
-4. Call `sql-fixer` (2.3) with the **current** statement (attempt 2 repairs the fixer's own rewrite) and the error. No usable output, or output identical to the input → rethrow the original error. Otherwise log one warn line `Repairing failed SQL (attempt <n>): <error> — SQL: <statement flattened, capped at 500 chars>` and retry with the corrected statement.
+4. Call `sql-fixer` (2.3) with the **current** statement (attempt 2 repairs the fixer's own rewrite) and the error. No usable output, or output identical to the input → rethrow the original error. Otherwise log one warn line `Repairing failed SQL (attempt <n>): <error flattened to one line, capped at 500 chars> — SQL: <statement flattened, capped at 500 chars>` and retry with the corrected statement.
 
 A fixer call that itself fails is logged (`SQL repair attempt failed: …`) and treated as "no usable output".
 
