@@ -15,6 +15,8 @@ import {
   splitEntity,
   SQL_ROWS_MAX,
 } from './connector';
+import { buildPagedSql, readPagedRows } from './paged-sql';
+import type { PagedRows, PagedStatement } from './paged-sql.types';
 
 const SYSTEM_SCHEMAS = new Set([
   'pg_catalog',
@@ -241,6 +243,32 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
           rows: all.slice(0, lim),
           totalRows: all.length,
         };
+      } finally {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+    });
+  }
+
+  /**
+   * One page of a stored statement's result (datasources R52): the wrapper
+   * from `buildPagedSql` with `$n` parameters, in the same READ ONLY
+   * transaction and 30 s statement timeout as `runReadOnlySql`.
+   */
+  async runPagedSql(
+    config: PostgresConfig,
+    stmt: PagedStatement,
+  ): Promise<PagedRows> {
+    const built = buildPagedSql('postgres', stmt);
+    return this.withClient(config, 30_000, async (client) => {
+      await client.query('BEGIN READ ONLY');
+      try {
+        return await readPagedRows(built, stmt.offset, async (text) => {
+          const result = await client.query(text, built.params);
+          return {
+            columns: result.fields.map((f) => f.name),
+            rows: result.rows as Record<string, unknown>[],
+          };
+        });
       } finally {
         await client.query('ROLLBACK').catch(() => undefined);
       }

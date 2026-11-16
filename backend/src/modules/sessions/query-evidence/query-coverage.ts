@@ -3,8 +3,16 @@
  * docs/plans/m1-25-query-inspector.md 2.1, api.md 139 and 143). Pure: it
  * reads only the SQL, with literals and comments masked, at bracket depth 0.
  */
+import { outerLimit, topLevel } from '../../datasources/connectors/sql-text';
 import { capOf, maskLiterals } from '../result-guards';
 import type { QueryCoverage } from './query-evidence.types';
+
+// Moved to the datasources connectors (the paged read raises the same
+// LIMIT, datasources R52); re-exported so callers are unchanged.
+export {
+  outerLimitOf,
+  withExportLimit,
+} from '../../datasources/connectors/sql-text';
 
 /** Rows a CSV download keeps (api.md 143); the statement fetches one more to tell a cut. */
 export const EXPORT_ROWS = 50_000;
@@ -22,72 +30,6 @@ export interface CoverageInput {
   rowLimit?: number;
   /** The bridge's flag: the rows filled the tool's limit. */
   truncated?: boolean;
-}
-
-interface OuterLimit {
-  value: number;
-  /** Offsets of the count's digits in the SQL. */
-  start: number;
-  end: number;
-  /** Offset of the LIMIT / FETCH keyword. */
-  at: number;
-}
-
-/**
- * The masked SQL with everything inside brackets blanked, offsets kept, so
- * only the statement's own clauses are left to scan.
- */
-function topLevel(mask: string): string {
-  let depth = 0;
-  let out = '';
-  for (const ch of mask) {
-    if (ch === '(') {
-      depth += 1;
-      out += ' ';
-    } else if (ch === ')') {
-      depth = Math.max(0, depth - 1);
-      out += ' ';
-    } else {
-      out += depth > 0 ? (ch === '\n' ? '\n' : ' ') : ch;
-    }
-  }
-  return out;
-}
-
-function outerLimit(sql: string): OuterLimit | undefined {
-  const top = topLevel(maskLiterals(sql));
-  let found: OuterLimit | undefined;
-  for (const m of top.matchAll(/\blimit\s+(\d+)(\s*,\s*(\d+))?/gi)) {
-    // SQLite's `LIMIT offset, count`: the count is the second number.
-    const digits = m[3] ?? m[1];
-    const start =
-      m.index +
-      (m[3] !== undefined ? m[0].length - digits.length : m[0].indexOf(digits));
-    found = {
-      value: Number(digits),
-      start,
-      end: start + digits.length,
-      at: m.index,
-    };
-  }
-  for (const m of top.matchAll(
-    /\bfetch\s+(?:first|next)\s+(\d+)\s+rows?\s+only\b/gi,
-  )) {
-    if (found && found.at > m.index) continue;
-    const start = m.index + m[0].indexOf(m[1], 'fetch'.length);
-    found = {
-      value: Number(m[1]),
-      start,
-      end: start + m[1].length,
-      at: m.index,
-    };
-  }
-  return found;
-}
-
-/** The statement's own top-level LIMIT or FETCH FIRST n, if any. */
-export function outerLimitOf(sql: string): number | undefined {
-  return outerLimit(sql)?.value;
 }
 
 /** Whether a top-level ORDER BY comes before the outer limit. */
@@ -120,21 +62,4 @@ export function coverageOf(input: CoverageInput): QueryCoverage {
     return rankedBefore(sql, limit.at) ? 'top-n' : 'sample';
   }
   return 'whole-table';
-}
-
-/**
- * The statement for a CSV download (api.md 143): its top-level LIMIT (or
- * FETCH FIRST n) raised to `EXPORT_ROWS + 1`, or that LIMIT appended. A
- * trailing semicolon or comment is dropped first.
- */
-export function withExportLimit(sql: string, rows = EXPORT_ROWS + 1): string {
-  const mask = maskLiterals(sql);
-  let end = mask.length;
-  while (end > 0 && /[\s;]/.test(mask[end - 1])) end -= 1;
-  const body = sql.slice(0, end);
-  const limit = outerLimit(body);
-  if (limit) {
-    return `${body.slice(0, limit.start)}${rows}${body.slice(limit.end)}`;
-  }
-  return `${body}\nLIMIT ${rows}`;
 }

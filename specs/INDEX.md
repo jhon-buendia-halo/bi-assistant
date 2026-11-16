@@ -846,7 +846,7 @@ specs/capabilities/datasets/spec.md:150-265  ### Feature: Dataset management
 specs/capabilities/datasets/spec.md:267-280  ## Acceptance
 
 specs/capabilities/datasources/spec.md:5-16  ## Concepts
-specs/capabilities/datasources/spec.md:18-110  ## Rules
+specs/capabilities/datasources/spec.md:18-119  ## Rules
 specs/capabilities/datasources/spec.md:20-31  ### Kinds and configuration
 specs/capabilities/datasources/spec.md:22-22  R1 The system SHALL support exactly three datasource kinds: Databricks SQ
 specs/capabilities/datasources/spec.md:23-23  R2 A datasource SHALL have a name, a kind, a kind-specific configuration,
@@ -910,12 +910,14 @@ specs/capabilities/datasources/spec.md:105-105  R49 A connection saved before da
 specs/capabilities/datasources/spec.md:106-106  R50 Datasets that carry no datasource binding SHALL resolve to the default
 specs/capabilities/datasources/spec.md:108-110  ### Availability
 specs/capabilities/datasources/spec.md:110-110  R51 Listing datasources, reading their inventory and creating, testing, di
-specs/capabilities/datasources/spec.md:112-122  ## Edge cases and errors
-specs/capabilities/datasources/spec.md:124-129  ## Contracts
-specs/capabilities/datasources/spec.md:131-160  ## UI
-specs/capabilities/datasources/spec.md:162-219  ## Flows
-specs/capabilities/datasources/spec.md:164-219  ### Feature: Datasources, datasets, and sessions (World Cup database)
-specs/capabilities/datasources/spec.md:221-231  ## Acceptance
+specs/capabilities/datasources/spec.md:112-119  ### Paged read of a stored query's result
+specs/capabilities/datasources/spec.md:114-119  R52 A connector SHALL read one page of a stored statement's result, filter
+specs/capabilities/datasources/spec.md:121-131  ## Edge cases and errors
+specs/capabilities/datasources/spec.md:133-138  ## Contracts
+specs/capabilities/datasources/spec.md:140-169  ## UI
+specs/capabilities/datasources/spec.md:171-228  ## Flows
+specs/capabilities/datasources/spec.md:173-228  ### Feature: Datasources, datasets, and sessions (World Cup database)
+specs/capabilities/datasources/spec.md:230-240  ## Acceptance
 
 specs/capabilities/developer-settings/spec.md:5-13  ## Concepts
 specs/capabilities/developer-settings/spec.md:15-58  ## Rules
