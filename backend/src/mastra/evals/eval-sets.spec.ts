@@ -112,8 +112,15 @@ describe('the target a run uses', () => {
   });
 
   it('is the agent key for an agent whose sets are all on its own target', () => {
+    expect(evalTargetIdFor('query-explainer')).toEqual({
+      targetId: 'query-explainer',
+    });
+  });
+
+  it("refuses to run all of an agent's sets when they use several targets", () => {
+    // Sarah's chat set and her Check data quality set (story 1.28.4).
     expect(evalTargetIdFor('data-readiness')).toEqual({
-      targetId: 'data-readiness',
+      error: expect.stringContaining('run one set at a time') as string,
     });
   });
 
