@@ -50,24 +50,33 @@ Backend status banner
 - R55. The desktop shell SHALL NOT report `ready` for a server it did not start: a backend left running by an earlier launch SHALL be stopped at startup, a backend SHALL exit once its desktop shell is gone, and another process answering on the backend port SHALL keep the status off `ready` and record an error diagnostic ([api.md](../../system/api.md) 4.3).
 - R23. The readiness probe SHALL be an HTTP GET of the sessions list on the loopback address at the backend port (default 3000, overridable by the backend-port environment variable), counted ready only on a 200 response. It SHALL be retried every 100 ms, each attempt timing out after 500 ms, until 30 seconds have passed.
 - R24. The window SHALL open as soon as the backend is ready, or after the 30-second probe deadline expires. If the deadline expires the shell SHALL record an error diagnostic ("Backend did not become ready before timeout"), SHALL keep probing in the background, and SHALL publish `ready` if the backend answers later.
-- R25. When the backend exits unexpectedly (anything other than the app quitting), the shell SHALL publish `restarting` and relaunch it after a delay of 1 s, then 2 s, then 4 s for the first, second and third consecutive failure, each time probing for readiness. After the third failed relaunch the shell SHALL publish `down` and record an error diagnostic ("Backend restart budget exhausted…"). `down` SHALL NOT recover without restarting the app.
+- R25. When the backend exits unexpectedly (anything other than the app quitting), the shell SHALL publish `restarting` and relaunch it after a delay of 1 s, then 2 s, then 4 s for the first, second and third consecutive failure, each time probing for readiness. After the third failed relaunch the shell SHALL publish `down` and record an error diagnostic ("Backend restart budget exhausted…"). `down` SHALL NOT recover without restarting the app. When the backend exits with the dedicated port-in-use code (98, its port is taken by another program), the shell SHALL NOT retry: it SHALL publish `down` at once and record one error diagnostic that names the port and says another program or another copy of the app is using it.
 - R26. A backend that has stayed ready for 60 seconds SHALL be treated as healthy again: the next crash SHALL get a fresh three-attempt budget instead of inheriting an earlier streak.
 - R27. Quitting the app SHALL stop the backend and SHALL NOT trigger a relaunch.
 
 Toasts
 - R28. The system SHALL show short messages as toasts stacked at the bottom-right of the window, newest last, above all other content, without blocking the content beneath them.
 - R29. A toast SHALL be one of three kinds: `success`, `error` or `info`, each with its own icon (check, alert, info) and colour. Success and info toasts SHALL disappear after 4 seconds; error toasts SHALL disappear after 8 seconds.
-- R30. Each toast SHALL have a dismiss button, named "Dismiss notification", that removes it immediately. The toasts SHALL sit in a region named "Notifications" that assistive technology announces politely. Several toasts MAY be visible at once; there is no de-duplication.
+- R30. Each toast SHALL have a dismiss button, named "Dismiss notification", that removes it immediately. A toast MAY carry one action button (**Open**, **Retry**; R61) that runs the action and removes the toast. The toasts SHALL sit in a region named "Notifications" that assistive technology announces politely. Several toasts MAY be visible at once; there is no de-duplication.
 - R31. Every error toast SHALL also be recorded as an error entry with source `user-visible` in diagnostics (see [../diagnostics/spec.md](../diagnostics/spec.md)).
 
 App identity and version
 - R32. The Settings list pane SHALL end with the build identity: the brand's product name followed by `v` and the shipped version, for example "Halo Workbench v0.24.3" ("Agentic Hub v0.24.3" in a `mercer` build, R56). The version SHALL be the same number the installer and release tag carry.
 - R33. In the `halo` brand the window title and the document title SHALL be "Halo Workbench". The operating-system app name (the macOS menu bar and Dock, the installers and the data directory) SHALL be "Halo Workbench" too (since ADR-0046; it was "Halo BI Assistant", and "Questions to Insights" before that). An install made under an earlier name SHALL keep its data directory (R57). (A `mercer` build uses "Agentic Hub" for all of them, R56.)
 - R57. The desktop app SHALL keep the data of an install made under an earlier product name ("Halo BI Assistant", then "Questions to Insights"): when the profile or Windows local data directory of the current name does not exist, it SHALL use the newest earlier-named one that does, in place, without moving it; and at startup it SHALL stop a backend recorded in that directory that still runs as the app's executable under an earlier name (ADR-0046).
+
+Background tasks (M1-26, ADR-0047)
+- R58. Long work the user starts (saving a dataset, loading a datasource inventory, loading testing data, ontology suggestions, a synthetic-data profile, tailoring or refreshing a visual, an eval run) SHALL keep running when the user opens another area, view, tab or Settings, and its result SHALL NOT be lost: the screen that started it, shown again, SHALL show it still running, or its result once it has ended.
+- R59. The rail SHALL show a **Background tasks** button above **System logs** (title "Background tasks", accessible name "Background tasks" or "Background tasks, <n> running"; label "Background tasks" in the drawer). While tasks run, its icon SHALL spin and a badge SHALL show how many run (capped at "99+"); with none running, no badge.
+- R60. The button SHALL open a panel named "Background tasks" listing the running tasks (title, current step when known, elapsed time `m:ss`, a progress bar: proportional when the work reports done and total, indeterminate otherwise) and then the finished ones, newest first (done, failed with the error, or stopped; how long ago). A finished task SHALL offer **Open** (when it has a place to open) and **Dismiss**; a failed or stopped one also **Retry**, which starts the same work again. **Clear finished** SHALL remove every finished task. Escape, the close button or a click outside SHALL close the panel.
+- R61. When a task ends, the app SHALL toast its outcome with the server's message: a success toast with an **Open** button when the task has a place to open, an error toast with a **Retry** button. A task MAY skip the success toast while its own screen is showing the result. The screen that started the task SHALL NOT toast the same outcome again.
+- R62. Starting work that is already running for the same object (the same dataset, fixture, datasource, visual or agent) SHALL NOT start it twice; the running task is shown instead.
+- R63. The task list SHALL live only in the running app: it starts empty on launch and keeps at most the 20 newest finished tasks.
+
 - R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
 
 Sessions area
-- R46. In the Runs area the content shows an open run of a removed workflow or one still running (`run-detail`: its workflow and status, input, steps and answer, read-only; any other run opens on its workflow's page drawn with that run, with **Run again** there; [workflows](../workflows/spec.md) R19), an open past chat (read-only; past-chats R66), or, with nothing open (the **Runs** page), two tabs: **Runs**, the stored runs, newest first, ten to a page under a "Search runs by title, workflow or ID…" field, each row with its title, workflow chip, status chip (`Done`, `Failed`, `Stopped`, `Running`), `ID <first 8 characters>` and start time and an options menu with **Delete run**; and **Past chats**, the old sessions (past-chats R63). The navigation rail and drawer SHALL NOT list runs or sessions. Selecting a run row SHALL open its run; selecting a past-chat row SHALL open that session read-only. Deleting the open run or session SHALL return to the Runs page, where the list no longer shows it.
+- R46. In the Runs area the content shows an open run of a removed workflow (`run-detail`: its workflow and status, input, steps and answer, read-only; any other run, a running one included (where its live view continues, ADR-0048), opens on its workflow's page drawn with that run, with **Run again** there; [workflows](../workflows/spec.md) R19), an open past chat (read-only; past-chats R66), or, with nothing open (the **Runs** page), two tabs: **Runs**, the stored runs, newest first, ten to a page under a "Search runs by title, workflow or ID…" field, each row with its title, workflow chip, status chip (`Done`, `Failed`, `Stopped`, `Running`), `ID <first 8 characters>` and start time and an options menu with **Delete run**; and **Past chats**, the old sessions (past-chats R63). The navigation rail and drawer SHALL NOT list runs or sessions. Selecting a run row SHALL open its run; selecting a past-chat row SHALL open that session read-only. Deleting the open run or session SHALL return to the Runs page, where the list no longer shows it.
 - R47. Removed in roadmap 1.8.8: the separate, collapsible session list pane is replaced by the drawer (R48).
 - R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon. Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
 - R49. In the Runs area the page SHALL start with a header: an icon, then the title — the open past chat's name, or "Runs" — with the past chat's context under the title while one is open (its agent, when it was started from one, then its datasources; past-chats R57). It has no button that starts a conversation (the **Start New Conversation** button is gone since 1.23.22).
@@ -90,7 +99,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions" (the list on the Sessions page), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Workflows, Agents, Artifacts, Sessions, Costs, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Workflows, Agents, Artifacts, Sessions, Costs, Monitoring, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel, Background tasks and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -120,7 +129,8 @@ Lives in the shell itself: [../../system/ui.md](../../system/ui.md). States:
 - Banner: hidden (starting, ready), amber (restarting), red (down).
 - Rail: one current area (Datasets, Workflows, Agents, Artifacts, Runs, Costs, Monitoring or Settings), or none on home.
 - Details panel: expanded at the remembered width, collapsed.
-- Toasts: success, info, error, several stacked.
+- Toasts: success, info, error, several stacked; with or without an action button (Open, Retry).
+- Background tasks: button idle, button running (spinning icon and count), panel empty, panel with running and finished tasks.
 
 ## Flows
 
@@ -388,6 +398,25 @@ Feature: App shell behaviour not yet covered by Playwright
     Given I expanded the details panel
     When I reopen the app
     Then the details panel is collapsed again
+```
+
+E2E: `frontend/e2e/background-tasks.spec.ts` for the Feature below (M1-26).
+
+```gherkin
+Feature: Background tasks
+
+  Scenario: a dataset save keeps running in the background while the user is elsewhere
+    Given a saved dataset "World Cup" whose next save takes a few seconds
+    When I open it and press Save dataset
+    Then the Datasets list shows at once, with "World Cup" marked Saving
+    And the rail's Background tasks button says 1 running
+    When I open Workflows and the Background tasks panel
+    Then "Saving dataset "World Cup"" is listed as running
+    When I go back to Datasets
+    Then the row is still marked Saving
+    When the save ends
+    Then the Saving mark goes away, the button shows nothing running and a toast says the dataset was saved
+    And the panel lists the save as finished, and its Open button opens the dataset in the editor
 ```
 
 ## Acceptance

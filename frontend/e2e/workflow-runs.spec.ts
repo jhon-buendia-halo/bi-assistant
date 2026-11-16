@@ -4,6 +4,7 @@ import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET, followOsTheme } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
+import { apiBaseOf } from './helpers/api';
 import {
   LlmStub,
   StubReply,
@@ -633,11 +634,92 @@ test.describe('Feature: Workflow runs', () => {
         await expect(page.getByTestId('workflow-run')).toHaveText('Execute');
         await expect(page.getByTestId('workflow-run-stop')).toHaveCount(0);
       });
+      await test.step('And the run is stored "stopped" on the server, not only on the page', async () => {
+        // Stop is the server's (api.md 150); leaving the page would not stop it.
+        await expect
+          .poll(async () => {
+            const res = await page.request.get(`${apiBaseOf(page)}/workflow-runs`);
+            const { runs } = (await res.json()) as { runs: { status: string }[] };
+            return runs.map((run) => run.status);
+          })
+          .toEqual(['stopped']);
+      });
     } finally {
       held.release();
     }
   });
 
+  test(
+    'A run keeps running while I am elsewhere, and its page shows it again',
+    { tag: ['@demo', '@story-1.26.5'] },
+    async ({ page }) => {
+      stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+      // The answer waits until the test has come back to the page.
+      const held = gate();
+      stub.hold = (request) =>
+        isTurn(request, QUESTION) && afterToolResult(request) ? held.promise : undefined;
+      const tasksButton = page
+        .getByRole('complementary', { name: 'Navigation rail' })
+        .getByTestId('background-tasks-button');
+      try {
+        await scenarioStep(page, `Given "${V2}" is running on a question`, async () => {
+          await openWorkflowPage(page, V2_ID, V2);
+          await openRunTab(page);
+          await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+          await page.getByTestId('workflow-run').click();
+          await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+        });
+        await scenarioStep(page, 'When I go to another area', async () => {
+          await railItem(page, 'Datasets').click();
+          await expect(page.getByTestId('workflow-detail-name')).toHaveCount(0);
+        });
+        await scenarioStep(
+          page,
+          'Then the Background tasks button shows the run, 1 running',
+          async () => {
+            await expect(tasksButton).toHaveAccessibleName('Background tasks, 1 running');
+            await tasksButton.click();
+            const panel = page.getByRole('dialog', { name: 'Background tasks' });
+            const row = panel
+              .getByTestId('background-task')
+              .filter({ hasText: `${V2}: ${QUESTION}` });
+            await expect(row).toHaveAttribute('data-status', 'running');
+            await page.keyboard.press('Escape');
+            await expect(panel).toBeHidden();
+            // Leaving did not stop it: the stored run still runs.
+            const stored = await page.request.get(`${apiBaseOf(page)}/workflow-runs`);
+            const { runs } = (await stored.json()) as { runs: { status: string }[] };
+            expect(runs.map((run) => run.status)).toEqual(['running']);
+          },
+        );
+        await scenarioStep(page, `When I open "${V2}" again`, async () => {
+          await openWorkflowPage(page, V2_ID, V2);
+        });
+        await scenarioStep(
+          page,
+          'Then the live view is there: the question, Analyse running and its SQL call',
+          async () => {
+            await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+            await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
+            await expect(page.getByTestId('workflow-run-live')).toContainText('Thinking');
+            await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+            await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
+          },
+        );
+        await scenarioStep(page, 'When the model answers', async () => {
+          held.release();
+        });
+        await scenarioStep(page, 'Then the answer shows and the task ends', async () => {
+          await expect(runAnswer(page)).toContainText(ANSWER);
+          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          // The task reads the run every 3 s until it ends.
+          await expect(tasksButton).toHaveAccessibleName('Background tasks');
+        });
+      } finally {
+        held.release();
+      }
+    },
+  );
 });
 
 test('the Run tab with an answer has no detectable accessibility violations in either theme', async ({

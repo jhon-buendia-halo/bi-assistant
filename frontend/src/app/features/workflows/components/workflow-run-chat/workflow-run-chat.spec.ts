@@ -96,6 +96,7 @@ class FakeRunsApi {
     signal?: AbortSignal;
   }[] = [];
   getRun = jasmine.createSpy('getRun');
+  stopRun = jasmine.createSpy('stopRun').and.returnValue(EMPTY);
   prepareEvidence = jasmine.createSpy('prepareEvidence').and.returnValue(EMPTY);
 
   streamRun(
@@ -729,9 +730,12 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       pickDataset();
       click('workflow-run');
       const h = runs.last.handlers;
+      h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
       h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
       fixture.detectChanges();
       click('workflow-run-stop');
+      // The server stops the run (api.md 150); the stream is dropped.
+      expect(runs.stopRun).toHaveBeenCalledOnceWith('run-1');
       expect(runs.last.signal?.aborted).toBe(true);
       expect(text('workflow-run-status')).toBe('Run stopped');
       expect(q('workflow-run-step-answer')).toBeNull();

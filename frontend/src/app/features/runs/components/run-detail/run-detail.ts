@@ -1,4 +1,11 @@
-import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import {
   ArrowLeft,
   Loader2,
@@ -44,8 +51,9 @@ export function runInputEntries(
 
 /**
  * A stored run reopened read-only (workflows R19, R23; ui.md 4.4c
- * `run-detail`): a run of a removed workflow, or one still running; any
- * other run opens on its workflow's page. It shows its workflow and status,
+ * `run-detail`): a run of a removed workflow; any other run, a running one
+ * included (followed live there, ADR-0048), opens on its workflow's page.
+ * It shows its workflow and status,
  * its input, its steps and the answer through `answer-view`. Only the
  * visual actions of the answer change the run.
  */
@@ -53,7 +61,9 @@ export function runInputEntries(
   selector: 'app-run-detail',
   imports: [LucideAngularModule, AnswerView, QueryInspector, RunVisual],
   templateUrl: './run-detail.html',
-  providers: [{ provide: QUERY_EVIDENCE_API, useClass: RunDetailQueryEvidenceApi }],
+  providers: [
+    { provide: QUERY_EVIDENCE_API, useClass: RunDetailQueryEvidenceApi },
+  ],
 })
 export class RunDetail {
   protected readonly state = inject(RunsState);
@@ -71,7 +81,8 @@ export class RunDetail {
   /** A run of Answer a Business Question shows its answer with the query inspector (workflows R31). */
   protected readonly inspectsQueries = computed(
     () =>
-      this.state.activeRun()?.workflowId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+      this.state.activeRun()?.workflowId ===
+      ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   );
   /** The query open in the sheet: an index into the answer's `data`. */
   private readonly openIndex = signal<number | null>(null);

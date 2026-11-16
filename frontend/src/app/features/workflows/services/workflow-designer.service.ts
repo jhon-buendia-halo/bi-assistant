@@ -41,7 +41,11 @@ import {
   validateRunForm,
 } from './workflow-input-validation';
 import { ContractSide, contractViolationSides } from './workflow-contract';
-import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
+import {
+  RunStreamHandlers,
+  WorkflowRunsApiService,
+} from './workflow-runs-api.service';
+import { WorkflowRunTasks } from './workflow-run-tasks';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
   RunFormValues,
@@ -76,14 +80,24 @@ const NO_RUN_SUMMARY: WorkflowStateSummary = {
  * Logs, node data) (workflows R7, R12, R13, R21): the open workflow, the selected
  * and the open node, the run form, and the run shown, streamed live (api.md
  * 119, 3.6) and then as stored. Leaving the page discards the form and the
- * run shown (the run itself stays stored).
+ * run shown (the run itself stays stored). A run runs on the server whatever
+ * the page does (ADR-0048): leaving only drops its stream, the run goes on
+ * as a background task, and opening its workflow again (or the run from
+ * Runs or the task) follows it again with the live view rebuilt (api.md
+ * 149). Stop stops it on the server (150).
  */
 @Injectable({ providedIn: 'root' })
 export class WorkflowDesigner {
   private readonly api = inject(WorkflowsApiService);
   private readonly runsApi = inject(WorkflowRunsApiService);
+  private readonly runTasks = inject(WorkflowRunTasks);
   private readonly toast = inject(ToastService);
   private readonly datasetsApi = inject(DatasetsApiService);
+
+  constructor() {
+    // The run shown ends here, not in a toast.
+    this.runTasks.watchShown(() => this.runId());
+  }
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -166,6 +180,14 @@ export class WorkflowDesigner {
   private pendingRun: WorkflowRun | null = null;
   /** Form values to hold once the workflow has loaded (an artifact's "Use in"). */
   private pendingValues: Record<string, WorkflowInputValue> | null = null;
+
+  /**
+   * The run the page showed running (or waiting) when it was left: opening
+   * its workflow again shows it again (ADR-0048).
+   */
+  private leftRun: { workflowId: string; runId: string } | null = null;
+  /** Stop was pressed before the run had an id: stop it once it has one. */
+  private stopRequested = false;
 
   private loadSubscription: Subscription | null = null;
   private datasetsSubscription: Subscription | null = null;
@@ -442,14 +464,21 @@ export class WorkflowDesigner {
         this.workflow.set(workflow);
         this.inputValues.set(initialInputValues(workflow.input));
         this.loading.set(false);
+        // The run left running on this workflow is shown once more at most.
+        const left =
+          this.leftRun?.workflowId === workflow.id ? this.leftRun : null;
+        if (left !== null) this.leftRun = null;
         if (this.pendingRun !== null) {
           const pending = this.pendingRun;
           this.pendingRun = null;
           if (pending.workflowId === workflow.id) {
-            this.showStored(pending);
+            this.showOrFollow(workflow, pending);
             // New question keeps the run's other fields (its datasets).
             this.inputValues.set(runAgainValues(workflow.input, pending.input));
           }
+        } else if (left !== null) {
+          // The run left running here is shown again, as it is now.
+          this.reopen(workflow, left.runId);
         }
         if (this.pendingValues !== null) {
           const prefill = this.pendingValues;
@@ -489,8 +518,23 @@ export class WorkflowDesigner {
     });
   }
 
-  /** Leaving the page discards the workflow, the selection and the run shown (R13). */
+  /**
+   * Leaving the page discards the workflow, the selection and the run shown
+   * (R13). A run still running (or waiting for the user) is not stopped: only
+   * its stream is dropped, and the page shows it again when the workflow is
+   * opened again (ADR-0048).
+   */
   clear(): void {
+    const shownWorkflow = this.workflow();
+    const shownRun = this.runId();
+    if (
+      shownWorkflow !== null &&
+      shownRun !== null &&
+      !this.stopped() &&
+      (this.running() || this.runResult()?.status === 'suspended')
+    ) {
+      this.leftRun = { workflowId: shownWorkflow.id, runId: shownRun };
+    }
     this.loadSubscription?.unsubscribe();
     this.loadSubscription = null;
     this.datasetsSubscription?.unsubscribe();
@@ -764,16 +808,135 @@ export class WorkflowDesigner {
   }
 
   /**
-   * Stop the run (api.md 3.6): the stream is aborted, the server stores the
-   * run `stopped` with any partial answer, which is then read back.
+   * Stop the run (api.md 150): the stream is dropped and the server stops
+   * the run, storing it `stopped` with any partial answer, shown as it
+   * answers it. A run with no id yet is stopped as soon as it has one.
    */
   stop(): void {
     if (!this.running()) return;
-    this.cancelStream();
+    const id = this.runId();
+    if (id === null) {
+      this.stopRequested = true;
+      this.running.set(false);
+    } else {
+      this.cancelStream();
+      this.stopRun(id);
+    }
     this.stopped.set(true);
     this.liveFinishedAt.set(new Date().toISOString());
-    const id = this.runId();
-    if (id !== null) this.readBackStopped(id, this.generation, 0);
+  }
+
+  /** Ask the server to stop the run, then show it as stored. */
+  private stopRun(id: string): void {
+    const generation = this.generation;
+    this.stoppedSubscription = this.runTasks.stop(id).subscribe({
+      next: (result) => {
+        if (generation !== this.generation) return;
+        if (result.run.status === 'running') {
+          this.readBackStopped(id, generation, 0);
+        } else {
+          this.showStored(result.run);
+        }
+      },
+      error: () => {
+        if (generation === this.generation) {
+          this.readBackStopped(id, generation, 0);
+        }
+      },
+    });
+  }
+
+  /** Show a run opened on this page: a running one is followed live. */
+  private showOrFollow(workflow: WorkflowDetail, run: WorkflowRun): void {
+    if (run.status === 'running') this.follow(workflow, run);
+    else this.showStored(run);
+  }
+
+  /** The run left running here, read again (121) and shown as it is now. */
+  private reopen(workflow: WorkflowDetail, runId: string): void {
+    const generation = this.generation;
+    this.stoppedSubscription = this.runsApi.getRun(runId).subscribe({
+      next: (run) => {
+        if (generation !== this.generation) return;
+        if (this.workflow()?.id !== workflow.id) return;
+        this.inputValues.set(runAgainValues(workflow.input, run.input));
+        this.showOrFollow(workflow, run);
+      },
+      error: () => undefined,
+    });
+  }
+
+  /**
+   * Follow a run that runs on the server (api.md 149; ADR-0048): its events
+   * from the first one rebuild the live view (the steps, Thinking, tool
+   * calls, the answer forming), then it goes on live to its end. A run the
+   * server no longer holds is read back (121) and shown as stored.
+   */
+  private follow(workflow: WorkflowDetail, run: WorkflowRun): void {
+    this.cancelStream();
+    const generation = this.generation;
+    const live = () => generation === this.generation;
+    this.resetRun();
+    const grouped: Record<string, WorkflowRunStep[]> = {};
+    for (const step of run.steps) {
+      (grouped[step.id] ??= []).push(step);
+    }
+    this.liveSteps.set(grouped);
+    this.runId.set(run.id);
+    this.liveInput.set(run.input ?? null);
+    this.liveStartedAt.set(run.startedAt);
+    this.running.set(true);
+    const title = this.taskTitle(workflow, run.input);
+    this.runTasks.track({
+      id: run.id,
+      workflowName: run.workflowName || workflow.name,
+      title,
+    });
+    const controller = new AbortController();
+    this.abort = controller;
+    const base = this.streamHandlers(workflow, live, title);
+    let refused: number | null = null;
+    void this.runsApi
+      .attachRun(
+        run.id,
+        {
+          ...base,
+          onRefused: (status) => {
+            refused = status;
+          },
+          onError: (message, errors) => {
+            if (!live()) return;
+            if (refused === null) {
+              base.onError?.(message, errors);
+              return;
+            }
+            // No longer held: the stored run is how it ended.
+            this.running.set(false);
+            this.readBackStopped(run.id, generation, 0);
+          },
+        },
+        controller.signal,
+      )
+      .finally(() => {
+        if (!live()) return;
+        this.running.set(false);
+        this.abort = null;
+      });
+  }
+
+  /** A run's task title: its question, else its first text input. */
+  private taskTitle(
+    workflow: WorkflowDetail,
+    input: Record<string, WorkflowInputValue> | null | undefined,
+  ): string {
+    if (!input) return '';
+    const field = questionFieldName(workflow.input);
+    const question = field !== null ? input[field] : undefined;
+    if (typeof question === 'string' && question.trim()) return question;
+    const text = Object.values(input).find(
+      (value): value is string => typeof value === 'string' && !!value.trim(),
+    );
+    return text ?? '';
   }
 
   private readBackStopped(id: string, generation: number, tries: number): void {
@@ -808,6 +971,10 @@ export class WorkflowDesigner {
   private showStored(run: WorkflowRun): void {
     this.run.set(run);
     this.prepareEvidence(run);
+    // Its end shows here: its background task does not toast it.
+    if (run.status !== 'running' && run.status !== 'suspended') {
+      this.runTasks.markSeen(run.id);
+    }
   }
 
   private resetRun(): void {
@@ -824,6 +991,7 @@ export class WorkflowDesigner {
     this.streamingText.set('');
     this.streamError.set(null);
     this.stopped.set(false);
+    this.stopRequested = false;
     this.liveWaiting.set(null);
     this.resumeError.set(null);
   }
@@ -865,7 +1033,11 @@ export class WorkflowDesigner {
     this.running.set(true);
     const controller = new AbortController();
     this.abort = controller;
-    const base = this.streamHandlers(workflow, live);
+    const base = this.streamHandlers(
+      workflow,
+      live,
+      this.taskTitle(workflow, stored.input),
+    );
     let refused: number | null = null;
     void this.runsApi
       .resumeRun(
@@ -935,7 +1107,11 @@ export class WorkflowDesigner {
       .streamRun(
         workflow.id,
         request,
-        this.streamHandlers(workflow, live),
+        this.streamHandlers(
+          workflow,
+          live,
+          this.taskTitle(workflow, request.input),
+        ),
         controller.signal,
       )
       .finally(() => {
@@ -945,15 +1121,27 @@ export class WorkflowDesigner {
       });
   }
 
-  /** The run stream's handlers, shared by a run and its resume; `live` is false once superseded. */
+  /**
+   * The run stream's handlers, shared by a run, its resume and a run
+   * followed again; `live` is false once superseded. Each run becomes a
+   * background task (`title`) as soon as it has its id, so it stays listed
+   * when the page is left (ADR-0048).
+   */
   private streamHandlers(
     workflow: WorkflowDetail,
     live: () => boolean,
+    title: string,
   ): RunStreamHandlers {
     return {
       onRun: ({ runId }) => {
+        this.runTasks.track({ id: runId, workflowName: workflow.name, title });
         if (!live()) return;
         this.runId.set(runId);
+        if (this.stopRequested) {
+          this.stopRequested = false;
+          this.cancelStream();
+          this.stopRun(runId);
+        }
       },
       onStep: (step) => {
         if (!live()) return;

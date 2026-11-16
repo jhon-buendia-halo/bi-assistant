@@ -8,6 +8,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import type { LiveRuns } from './live-runs';
 import type { WorkflowRun } from './workflow-run-steps';
 import { WorkflowRunsService, type PreparedRun } from './workflow-runs.service';
 import {
@@ -20,7 +21,7 @@ import {
  * Answer as an SSE stream with the chat stream's framing (api.md 3.1):
  * `work` sends its events through `send`, and closing the connection aborts
  * its signal. A throw before the connection closed is sent as `error {
- * content }`. Used by 119, 137 and R12.
+ * content }`. Used by 137 and R12 (a stored run follows `followSse`).
  */
 export async function streamSse(
   res: Response,
@@ -51,8 +52,52 @@ export async function streamSse(
 }
 
 /**
- * Answer a prepared run as the SSE stream of api.md 3.6: the chat stream's
- * framing, and closing the connection stops the run. Used by 119 and R12.
+ * Follow a live run as the SSE stream of api.md 3.6 (ADR-0048): its logged
+ * events after `after`, then the live ones, each frame carrying its `seq`
+ * beside the event (`data: {"seq":3,"type":"step",…}`); the response ends
+ * when the run ends. Closing the connection only stops the following: the
+ * run goes on. Used by 119, 138 and 149.
+ */
+export function followSse(
+  res: Response,
+  live: LiveRuns,
+  runId: string,
+  after = 0,
+): Promise<void> {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  return new Promise<void>((resolve) => {
+    // Set once subscribed; `finish` may run before that (a run that ended).
+    const following: { leave?: () => void } = {};
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      res.off('close', finish);
+      following.leave?.();
+      if (!res.writableEnded) res.end();
+      resolve();
+    };
+    res.once('close', finish);
+    following.leave = live.subscribe(runId, after, {
+      event: ({ seq, event }) => {
+        if (!done) res.write(`data: ${JSON.stringify({ seq, ...event })}\n\n`);
+      },
+      end: finish,
+    });
+    // Not held (dropped meanwhile): nothing more will come.
+    if (!following.leave) finish();
+    // Left before subscribing ended: stop following at once.
+    else if (done) following.leave();
+  });
+}
+
+/**
+ * Answer a prepared run as the SSE stream of api.md 3.6, tied to the
+ * connection: closing it stops the run. Used by Try it (R12) only; a stored
+ * run (119) runs detached and is followed with `followSse`.
  */
 export function streamPrepared(
   runs: WorkflowRunsService,
@@ -101,8 +146,10 @@ export class WorkflowsController {
   /**
    * Run a workflow once, streamed (api.md 119; workflows R14). A refusal
    * answers its real status before the stream starts (Style B); once it
-   * starts, the stream is SSE with the chat stream's framing (api.md 3.1).
-   * Closing the connection stops the run.
+   * starts, the stream is SSE with the chat stream's framing (api.md 3.1),
+   * each frame with its `seq`. The run is detached from the connection
+   * (ADR-0048): closing it stops only the stream; Stop is 150, and 149
+   * follows the run again.
    */
   @Post(':id/runs/stream')
   @HttpCode(200)
@@ -111,6 +158,7 @@ export class WorkflowsController {
     @Body() body: unknown,
     @Res() res: Response,
   ): Promise<void> {
-    await streamPrepared(this.runs, await this.runs.prepare(id, body), res);
+    const runId = await this.runs.launch(await this.runs.prepare(id, body));
+    await followSse(res, this.runs.live, runId);
   }
 }

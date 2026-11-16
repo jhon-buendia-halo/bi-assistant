@@ -17,6 +17,10 @@ import { AddressInfo } from 'node:net';
 import { extname, join, resolve } from 'node:path';
 import { AppModule } from './app.module';
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
+import {
+  isAddressInUse,
+  PortInUseError,
+} from './infrastructure/process/exit-codes';
 import { installNestLogRedaction } from './infrastructure/logging/redacting-nest-logger';
 
 /** The largest JSON request body the API reads. */
@@ -142,10 +146,16 @@ export async function createApp(
   }
 
   await app.init();
-  if (options.host) {
-    await app.listen(options.port, options.host);
-  } else {
-    await app.listen(options.port);
+  try {
+    if (options.host) {
+      await app.listen(options.port, options.host);
+    } else {
+      await app.listen(options.port);
+    }
+  } catch (error) {
+    // A taken port is not a crash: the desktop shell must not retry it.
+    if (isAddressInUse(error)) throw new PortInUseError(options.port);
+    throw error;
   }
 
   const address = app.getHttpServer().address() as AddressInfo;

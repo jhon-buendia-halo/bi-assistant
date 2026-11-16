@@ -29,6 +29,13 @@ export function copilotToolAsTextNudge(toolName: string): string {
   return `You wrote the arguments of the ${toolName} tool as your message instead of calling it. Call the ${toolName} tool now with those arguments. Never write tool arguments as text.`;
 }
 
+/** R67: the chosen Copilot model cannot read the images of a request. */
+export function copilotModelCannotReadImagesMessage(model: string): string {
+  return copilotRequestFailedMessage(
+    `the model ${model} cannot read images; choose a model that can, or leave the model as auto`,
+  );
+}
+
 /** R56: the model that lets Copilot choose from the seat's plan. */
 export const COPILOT_AUTO_MODEL = 'auto';
 

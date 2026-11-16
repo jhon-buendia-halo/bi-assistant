@@ -1,4 +1,12 @@
-import { Component, OnInit, inject, output, signal } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  output,
+  signal,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   LucideAngularModule,
   EllipsisVertical,
@@ -15,6 +23,11 @@ import {
   DatasetsApiService,
 } from '../../services/datasets-api.service';
 import { ToastService } from '../../../../core/toast/toast.service';
+import {
+  BackgroundTask,
+  formatElapsed,
+} from '../../../../core/background-tasks/background-tasks.service';
+import { DatasetTasksService } from '../../services/dataset-tasks.service';
 
 interface DatasetSection {
   label: string;
@@ -39,6 +52,8 @@ export class DatasetList implements OnInit {
 
   private readonly api = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
+  private readonly datasetTasks = inject(DatasetTasksService);
+  private readonly tasks = this.datasetTasks.tasks;
   readonly filters = ['All', 'Pinned'];
   readonly activeFilter = signal('All');
   readonly newDataset = output<void>();
@@ -50,17 +65,100 @@ export class DatasetList implements OnInit {
   /** Name of the dataset whose contextual menu is open. */
   readonly menuOpen = signal<string | null>(null);
 
+  /** The list is being re-read after a save ended. */
+  private readonly reloading = signal(false);
+  private readonly names = computed(
+    () => new Set(this.sections().flatMap((s) => s.items.map((i) => i.name))),
+  );
+
+  /** Names of the saved datasets being saved again: their row shows the chip. */
+  readonly resaving = computed(
+    () =>
+      new Set(
+        this.tasks
+          .running()
+          .filter((t) => t.kind === 'dataset-save' && this.names().has(t.key))
+          .map((t) => t.key),
+      ),
+  );
+
+  /**
+   * Saves of a name not in the list yet: still running, or just ended and the
+   * list is being re-read (so the row does not blink out in between).
+   */
+  readonly pending = computed(() =>
+    this.tasks
+      .tasks()
+      .filter(
+        (t) =>
+          t.kind === 'dataset-save' &&
+          !this.names().has(t.key) &&
+          (t.status === 'running' || (t.status === 'done' && this.reloading())),
+      ),
+  );
+
+  /** Saves that failed, newest per name: error text with Retry / Dismiss. */
+  readonly failed = computed(() =>
+    this.tasks
+      .finished()
+      .filter(
+        (t) =>
+          t.kind === 'dataset-save' &&
+          t.status === 'failed' &&
+          this.tasks.latest('dataset-save', t.key)?.id === t.id,
+      ),
+  );
+
+  constructor() {
+    this.tasks.finished$.pipe(takeUntilDestroyed()).subscribe((task) => {
+      if (task.kind === 'dataset-save') this.reload(true);
+    });
+  }
+
   ngOnInit(): void {
+    this.reload(false);
+  }
+
+  private reload(quiet: boolean): void {
+    if (quiet) this.reloading.set(true);
     this.api.getDatasets().subscribe({
       next: (res) => {
         this.sections.set(groupByMonth(res.datasets));
         this.loading.set(false);
+        this.reloading.set(false);
       },
       error: (err) => {
-        this.error.set(err?.error?.message ?? 'Backend unreachable');
+        if (!quiet)
+          this.error.set(err?.error?.message ?? 'Backend unreachable');
         this.loading.set(false);
+        this.reloading.set(false);
       },
     });
+  }
+
+  /** `Saving… 0:12` for a save in flight. */
+  savingChip(task: BackgroundTask): string {
+    const end = task.finishedAt ?? this.tasks.now();
+    return `Saving… ${formatElapsed(end - task.startedAt)}`;
+  }
+
+  resavingChip(name: string): string {
+    const task = this.tasks.active('dataset-save', name);
+    return task ? this.savingChip(task) : 'Saving…';
+  }
+
+  pendingInfo(name: string): string {
+    const info = this.datasetTasks.pendingInfo().get(name);
+    if (!info) return '';
+    return `${info.datasourceName} · ${info.entityCount} entities`;
+  }
+
+  retry(id: number): void {
+    this.tasks.retry(id);
+  }
+
+  dismiss(id: number): void {
+    this.tasks.dismiss(id);
   }
 
   toggleMenu(name: string): void {

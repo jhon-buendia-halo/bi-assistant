@@ -182,16 +182,39 @@ describe('SyntheticDataPanel', () => {
     );
   });
 
-  it('destroying the panel mid-request cancels the HTTP request', () => {
+  it('destroying the panel mid-request keeps the request and its busy state', () => {
     render(dataset(1));
     q('synth-profile')!.click();
     fixture.detectChanges();
     const req = http.expectOne((r) =>
       r.url.endsWith('/synthetic-data/profiles'),
     );
-    expect(req.cancelled).toBe(false);
     fixture.destroy();
-    expect(req.cancelled).toBe(true);
+    expect(req.cancelled).toBe(false);
+
+    // Back on the tab while the sampling still runs.
+    fixture = TestBed.createComponent(SyntheticDataPanel);
+    render(dataset(1));
+    expect(q('synth-profile')!.textContent).toContain('Sampling 1 tables…');
+    expect(q('synth-cancel')).toBeTruthy();
+    expect((q('synth-profile') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows the profile that ended while the panel was gone', () => {
+    render(dataset(1));
+    q('synth-profile')!.click();
+    fixture.detectChanges();
+    const req = http.expectOne((r) =>
+      r.url.endsWith('/synthetic-data/profiles'),
+    );
+    fixture.destroy();
+    req.flush(profile());
+
+    fixture = TestBed.createComponent(SyntheticDataPanel);
+    render(dataset(1));
+    expect(q('synth-profile-view')).toBeTruthy();
+    expect(q('synth-profile-summary')!.textContent).toContain('1 table');
+    expect(q('synth-profile')!.textContent).toContain('Profile sample');
   });
 
   it('shows a dash for the range of an identifier without stats', () => {

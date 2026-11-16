@@ -414,6 +414,69 @@ describe('WorkflowRunsApiService, resume (api.md 138)', () => {
   });
 });
 
+describe('WorkflowRunsApiService, a run followed again and Stop (api.md 149, 150; ADR-0048)', () => {
+  let service: WorkflowRunsApiService;
+  let fetchSpy: jasmine.Spy;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(WorkflowRunsApiService);
+    http = TestBed.inject(HttpTestingController);
+    fetchSpy = spyOn(window, 'fetch');
+  });
+
+  afterEach(() => http.verify());
+
+  it('reads the events after a seq with a GET and reports them as a run stream (frames carry their seq)', async () => {
+    fetchSpy.and.resolveTo(
+      sseResponse(
+        { seq: 1, type: 'run', runId: 'run 1', workflowId: 'answer-business-question' },
+        { seq: 2, type: 'step', id: 'answer', title: 'Answer', status: 'running' },
+        { seq: 4, type: 'text', content: 'Brazil' },
+        { seq: 5, type: 'done', run: RUN },
+      ),
+    );
+    const order: string[] = [];
+    await service.attachRun('run 1', {
+      onRun: (run) => order.push(`run:${run.runId}`),
+      onStep: (step) => order.push(`step:${step.id}`),
+      onText: (delta) => order.push(`text:${delta}`),
+      onDone: (run) => order.push(`done:${run.id}`),
+    });
+    const [url, init] = fetchSpy.calls.mostRecent().args as [string, RequestInit];
+    expect(url).toMatch(/\/workflow-runs\/run%201\/events\/stream\?after=0$/);
+    expect(init.method).toBe('GET');
+    expect(order).toEqual(['run:run 1', 'step:answer', 'text:Brazil', 'done:run-1']);
+  });
+
+  it('reports a run the server no longer holds as a 404 refusal', async () => {
+    fetchSpy.and.resolveTo(
+      new Response(JSON.stringify({ message: 'Run "run-1" has no live events' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const onRefused = jasmine.createSpy('onRefused');
+    const onError = jasmine.createSpy('onError');
+    await service.attachRun('run-1', { onRefused, onError }, undefined, 7);
+    expect(fetchSpy.calls.mostRecent().args[0]).toMatch(/after=7$/);
+    expect(onRefused).toHaveBeenCalledOnceWith(404);
+    expect(onError).toHaveBeenCalledOnceWith('Run "run-1" has no live events');
+  });
+
+  it('posts Stop to the encoded run id and answers the stored run', () => {
+    let answered: WorkflowRun | undefined;
+    service.stopRun('run 1').subscribe((res) => (answered = res.run));
+    const req = http.expectOne((r) => r.url.endsWith('/workflow-runs/run%201/stop'));
+    expect(req.request.method).toBe('POST');
+    req.flush({ ok: true, message: 'Run stopped', run: { ...RUN, status: 'stopped' } });
+    expect(answered?.status).toBe('stopped');
+  });
+});
+
 describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)', () => {
   let service: WorkflowRunsApiService;
   let http: HttpTestingController;

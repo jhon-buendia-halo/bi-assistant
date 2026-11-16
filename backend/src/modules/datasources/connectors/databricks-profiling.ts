@@ -11,6 +11,7 @@ import type {
   KeyConstraint,
   ProfiledTable,
   ProfilingConnector,
+  ProfilingReach,
   ScopedProfiler,
   TablePrivilege,
 } from './profiling';
@@ -44,9 +45,30 @@ interface UcObject {
 /** The pooled-session scope of one `withSessions` call (BA-323, ADR-0033). */
 interface Scope {
   run: Run;
-  /** Whole-warehouse inventory (`tables(config)` with no schema), read once. */
+  /** Inventory (`tables(config)` with no schema), read once. */
   inventory?: Promise<ProfiledTable[]>;
+  /** What the catalogue reads cover; every listed catalog when absent. */
+  reach?: ProfilingReach;
 }
+
+/** One catalog a catalogue read visits, narrowed when the scope has a reach. */
+export interface CatalogRead {
+  catalog: string;
+  /** Schema names (without the catalog) to read; every schema when absent. */
+  schemas?: string[];
+  /** The scope's own tables in this catalog, read alone when a schema is too large. */
+  tables?: { schema: string; name: string }[];
+}
+
+interface SkippedCatalog {
+  catalog: string;
+  error: unknown;
+}
+
+/** At most this many skipped catalogs are named in the one warning. */
+const MAX_SKIPPED_NAMED = 10;
+/** Each skipped catalog's reason is cut to this many characters. */
+const MAX_SKIP_REASON = 160;
 
 /** Databricks profiling queries (unit 6, BA-257). Spark SQL, aggregate-only. */
 @Injectable()
@@ -68,10 +90,14 @@ export class DatabricksProfiler
     size: number,
     signal: AbortSignal | undefined,
     fn: (scoped: ScopedProfiler<DatabricksConfig>) => Promise<T>,
+    reach?: ProfilingReach,
   ): Promise<T> {
     const pool = new SessionPool(config, Math.max(1, Math.floor(size)), signal);
     const scoped = Object.create(this) as DatabricksProfiler;
-    scoped.scope = { run: (sql) => pool.run(sql) };
+    scoped.scope = {
+      run: (sql) => pool.run(sql),
+      ...(reach && reach.namespaces.length > 0 ? { reach } : {}),
+    };
     try {
       return await fn(scoped);
     } catch (err) {
@@ -204,72 +230,75 @@ export class DatabricksProfiler
     schema?: string,
   ): Promise<ProfiledTable[]> {
     return this.withSession(config, async (run) => {
-      let catalogs: string[];
-      let schemaFilter: string | undefined;
       if (schema) {
         const [catalog, name] = splitSchema(schema);
-        catalogs = [catalog];
-        schemaFilter = name;
-      } else {
-        catalogs = await listUserCatalogs(run);
+        return readCatalogTables(
+          run,
+          catalog,
+          ` AND table_schema = ${qStr(name)}`,
+        );
       }
+      const plan = await this.catalogPlan(run);
       const out: ProfiledTable[] = [];
-      for (const catalog of catalogs) {
-        const base = `${qIdent(catalog)}.information_schema`;
-        const where = `WHERE table_schema <> 'information_schema'${
-          schemaFilter ? ` AND table_schema = ${qStr(schemaFilter)}` : ''
-        }`;
-        let cols: Row[];
-        let tabs: Row[];
+      const skipped: SkippedCatalog[] = [];
+      for (const read of plan) {
+        let failure: unknown;
         try {
-          cols = await run(
-            `SELECT table_schema, table_name, column_name, full_data_type, is_nullable
-             FROM ${base}.columns ${where}
-             ORDER BY table_schema, table_name, ordinal_position`,
-          );
-          tabs = await run(
-            `SELECT table_schema, table_name, last_altered
-             FROM ${base}.tables ${where}
-             ORDER BY table_schema, table_name`,
-          );
-        } catch (err) {
-          if (schema) throw err;
-          this.logger.warn(
-            `[tables] skipping catalog "${catalog}": ${(err as Error).message}`,
+          out.push(
+            ...(await readCatalogTables(
+              run,
+              read.catalog,
+              inClause('table_schema', read.schemas),
+            )),
           );
           continue;
+        } catch (err) {
+          if (isAbort(err)) throw err;
+          failure = err;
         }
-        const byTable = new Map<string, ProfiledTable>();
-        for (const t of tabs) {
-          const s = `${catalog}.${text(t.table_schema)}`;
-          const name = text(t.table_name);
-          const iso = toIso(t.last_altered);
-          byTable.set(`${s}\u0000${name}`, {
-            schema: s,
-            table: name,
-            columns: [],
-            ...(iso ? { lastModifiedAt: iso } : {}),
-          });
-        }
-        for (const c of cols) {
-          const s = `${catalog}.${text(c.table_schema)}`;
-          const name = text(c.table_name);
-          const key = `${s}\u0000${name}`;
-          let entry = byTable.get(key);
-          if (!entry) {
-            entry = { schema: s, table: name, columns: [] };
-            byTable.set(key, entry);
+        // A schema too large to list in one statement: still read the
+        // assessment's own tables, so they are not lost (R28).
+        if (read.tables?.length) {
+          try {
+            out.push(
+              ...(await readCatalogTables(
+                run,
+                read.catalog,
+                tablesClause(read.tables),
+              )),
+            );
+            continue;
+          } catch (err) {
+            if (isAbort(err)) throw err;
+            failure = err;
           }
-          entry.columns.push({
-            name: text(c.column_name),
-            type: text(c.full_data_type),
-            nullable: text(c.is_nullable).toUpperCase() === 'YES',
-          });
         }
-        out.push(...byTable.values());
+        skipped.push({ catalog: read.catalog, error: failure });
       }
+      this.logSkipped('tables', skipped, plan.length);
       return out;
     });
+  }
+
+  /**
+   * The catalogs (and, for a reached scope, the schemas and tables) the
+   * catalogue reads cover: the scope's reach when `withSessions` was given
+   * one, else every catalog the user can list.
+   */
+  private async catalogPlan(run: Run): Promise<CatalogRead[]> {
+    const reach = this.scope?.reach;
+    if (reach) return catalogReads(reach);
+    return (await listUserCatalogs(run)).map((catalog) => ({ catalog }));
+  }
+
+  /** One warning for every catalog a catalogue read had to skip. */
+  private logSkipped(
+    what: string,
+    skipped: SkippedCatalog[],
+    total: number,
+  ): void {
+    if (skipped.length === 0) return;
+    this.logger.warn(skippedCatalogsMessage(what, skipped, total));
   }
 
   async columnStats(
@@ -355,7 +384,9 @@ export class DatabricksProfiler
   async keys(config: DatabricksConfig): Promise<KeyConstraint[]> {
     return this.withSession(config, async (run) => {
       const keys: KeyConstraint[] = [];
-      for (const catalog of await listUserCatalogs(run)) {
+      const plan = await this.catalogPlan(run);
+      const skipped: SkippedCatalog[] = [];
+      for (const { catalog, schemas } of plan) {
         const base = `${qIdent(catalog)}.information_schema`;
         let rows: Row[];
         try {
@@ -371,13 +402,12 @@ export class DatabricksProfiler
               AND kcu.table_name = tc.table_name
               AND kcu.constraint_name = tc.constraint_name
              WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
-               AND tc.table_schema <> 'information_schema'
+               AND tc.table_schema <> 'information_schema'${inClause('tc.table_schema', schemas)}
              ORDER BY tc.table_schema, tc.table_name, tc.constraint_name, kcu.ordinal_position`,
           );
         } catch (err) {
-          this.logger.warn(
-            `[keys] constraint query failed for catalog "${catalog}", skipping: ${(err as Error).message}`,
-          );
+          if (isAbort(err)) throw err;
+          skipped.push({ catalog, error: err });
           continue;
         }
         const grouped = new Map<string, KeyConstraint>();
@@ -402,6 +432,7 @@ export class DatabricksProfiler
         }
         keys.push(...grouped.values());
       }
+      this.logSkipped('keys', skipped, plan.length);
       return keys;
     });
   }
@@ -410,7 +441,9 @@ export class DatabricksProfiler
     try {
       return await this.withSession(config, async (run) => {
         const edges: FkEdge[] = [];
-        for (const catalog of await listUserCatalogs(run)) {
+        const plan = await this.catalogPlan(run);
+        const skipped: SkippedCatalog[] = [];
+        for (const { catalog, schemas } of plan) {
           const base = `${qIdent(catalog)}.information_schema`;
           let rows: Row[];
           try {
@@ -428,13 +461,12 @@ export class DatabricksProfiler
                 AND ref.constraint_schema = rc.unique_constraint_schema
                 AND ref.constraint_name = rc.unique_constraint_name
                 AND ref.ordinal_position = kcu.position_in_unique_constraint
-               WHERE kcu.table_schema <> 'information_schema'
+               WHERE kcu.table_schema <> 'information_schema'${inClause('kcu.table_schema', schemas)}
                ORDER BY kcu.table_schema, kcu.table_name, kcu.constraint_name, kcu.ordinal_position`,
             );
           } catch (err) {
-            this.logger.warn(
-              `[foreignKeys] failed for catalog "${catalog}", skipping: ${(err as Error).message}`,
-            );
+            if (isAbort(err)) throw err;
+            skipped.push({ catalog, error: err });
             continue;
           }
           for (const r of rows) {
@@ -448,6 +480,7 @@ export class DatabricksProfiler
             });
           }
         }
+        this.logSkipped('foreignKeys', skipped, plan.length);
         return edges;
       });
     } catch (err) {
@@ -827,6 +860,143 @@ function normalizedExpr(column: string): string {
  */
 function invalidPredicate(column: string, pattern: string): string {
   return `NOT regexp_like(CAST(${qIdent(column)} AS STRING), ${qRawStr(`(?i)${pattern}`)})`;
+}
+
+/**
+ * One catalog's tables and columns from its `information_schema`, narrowed by
+ * `filter` (an ` AND …` clause over `table_schema` / `table_name`).
+ */
+async function readCatalogTables(
+  run: Run,
+  catalog: string,
+  filter: string,
+): Promise<ProfiledTable[]> {
+  const base = `${qIdent(catalog)}.information_schema`;
+  const where = `WHERE table_schema <> 'information_schema'${filter}`;
+  const cols = await run(
+    `SELECT table_schema, table_name, column_name, full_data_type, is_nullable
+             FROM ${base}.columns ${where}
+             ORDER BY table_schema, table_name, ordinal_position`,
+  );
+  const tabs = await run(
+    `SELECT table_schema, table_name, last_altered
+             FROM ${base}.tables ${where}
+             ORDER BY table_schema, table_name`,
+  );
+  const byTable = new Map<string, ProfiledTable>();
+  for (const t of tabs) {
+    const s = `${catalog}.${text(t.table_schema)}`;
+    const name = text(t.table_name);
+    const iso = toIso(t.last_altered);
+    byTable.set(`${s}\u0000${name}`, {
+      schema: s,
+      table: name,
+      columns: [],
+      ...(iso ? { lastModifiedAt: iso } : {}),
+    });
+  }
+  for (const c of cols) {
+    const s = `${catalog}.${text(c.table_schema)}`;
+    const name = text(c.table_name);
+    const key = `${s}\u0000${name}`;
+    let entry = byTable.get(key);
+    if (!entry) {
+      entry = { schema: s, table: name, columns: [] };
+      byTable.set(key, entry);
+    }
+    entry.columns.push({
+      name: text(c.column_name),
+      type: text(c.full_data_type),
+      nullable: text(c.is_nullable).toUpperCase() === 'YES',
+    });
+  }
+  return [...byTable.values()];
+}
+
+/**
+ * A reach as catalog reads, in name order: each catalog with its schemas
+ * and the reach's own tables in it. A namespace that is not
+ * `catalog.schema` is ignored.
+ */
+export function catalogReads(reach: ProfilingReach): CatalogRead[] {
+  const byCatalog = new Map<
+    string,
+    { schemas: Set<string>; tables: Map<string, CatalogTable> }
+  >();
+  const entry = (namespace: string) => {
+    const i = namespace.indexOf('.');
+    if (i <= 0 || i === namespace.length - 1) return undefined;
+    const catalog = namespace.slice(0, i);
+    const schema = namespace.slice(i + 1);
+    let e = byCatalog.get(catalog);
+    if (!e) {
+      e = { schemas: new Set(), tables: new Map() };
+      byCatalog.set(catalog, e);
+    }
+    e.schemas.add(schema);
+    return { e, schema };
+  };
+  for (const namespace of reach.namespaces) entry(namespace);
+  for (const t of reach.entities ?? []) {
+    const found = entry(t.namespace);
+    if (!found || !t.name) continue;
+    found.e.tables.set(`${found.schema}\u0000${t.name}`, {
+      schema: found.schema,
+      name: t.name,
+    });
+  }
+  return [...byCatalog.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([catalog, e]) => ({
+      catalog,
+      schemas: [...e.schemas].sort(),
+      ...(e.tables.size > 0 ? { tables: [...e.tables.values()] } : {}),
+    }));
+}
+
+type CatalogTable = { schema: string; name: string };
+
+/** ` AND <column> IN ('a', 'b')`, or nothing when `values` is absent or empty. */
+function inClause(column: string, values?: string[]): string {
+  if (!values?.length) return '';
+  return ` AND ${column} IN (${values.map(qStr).join(', ')})`;
+}
+
+/** ` AND (<schema and name match one of the tables>)`. */
+function tablesClause(tables: CatalogTable[]): string {
+  const any = tables
+    .map(
+      (t) =>
+        `(table_schema = ${qStr(t.schema)} AND table_name = ${qStr(t.name)})`,
+    )
+    .join(' OR ');
+  return ` AND (${any})`;
+}
+
+/**
+ * The one warning for the catalogs a catalogue read skipped: how many of
+ * how many, then the first few by name with their reason on one line.
+ */
+export function skippedCatalogsMessage(
+  what: string,
+  skipped: { catalog: string; error: unknown }[],
+  total: number,
+): string {
+  const named = skipped
+    .slice(0, MAX_SKIPPED_NAMED)
+    .map((s) => `"${s.catalog}" (${oneLineReason(s.error)})`);
+  const more = skipped.length - named.length;
+  return `[${what}] skipped ${skipped.length} of ${total} catalog(s): ${named.join('; ')}${
+    more > 0 ? `; and ${more} more` : ''
+  }`;
+}
+
+function oneLineReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const flat = message.replace(/\s+/g, ' ').trim();
+  return flat.length > MAX_SKIP_REASON
+    ? `${flat.slice(0, MAX_SKIP_REASON - 1)}…`
+    : flat;
 }
 
 async function listUserCatalogs(run: Run): Promise<string[]> {
