@@ -668,6 +668,18 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 - **Out of scope:** what the agents write; the inspector itself.
 - **Acceptance:** Karma tests for the chip, the card, the table source line and the labels; the Playwright specs that click a chip updated; a reader's "source 3" pages the query shown as Source 3.
 
+#### 1.27.10 — Every workflow whose answer ran queries gets the query inspector  `🚧 In progress`
+- **Intent:** exploring a large result was possible only in Answer a Business Question; a run of Assess Data Readiness (screenshot, 2026-11-16) showed no sources. Every run whose answer holds queries, and every follow-up answer, now gets the sources, the inspector, paging and filters.
+- **Scope:** option B of three picked by the user on 2026-11-16 (part 1): drop the Answer a Business Question gate in the Run panel and the run detail page, pass the inspector to follow-up answers, give the Data Readiness agent `explore_result`, and say in the dashboard workflows' specs why they show none (they run no query). workflows R31, agent-answers R67, ui.md, agents.md 2.10, 5.13, 5.18, CLAUDE.md.
+- **Out of scope:** rows behind each readiness finding (1.27.11).
+- **Acceptance:** Karma tests for the gate on any workflow with queries and on follow-ups; data-readiness evals against main; a Playwright check on an Assess Data Readiness run with a drill-down query.
+
+#### 1.27.11 — Each readiness finding opens the rows behind it  `🚧 In progress`
+- **Intent:** a readiness report says "92% null"; the reader can open and page the rows that make it so.
+- **Scope:** option B part 2; the approach is picked among three (mastra-workflows) before building.
+- **Out of scope:** changing how findings are scored.
+- **Acceptance:** to be set with the approach.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

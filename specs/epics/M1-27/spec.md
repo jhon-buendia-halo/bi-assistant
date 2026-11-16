@@ -36,6 +36,8 @@ A dataset query can return thousands of rows, but an answer kept at most 200 and
 | 1.27.7 | The explore_result tool for chat agents | In progress |
 | 1.27.8 | A follow-up over an earlier result pages it in Answer a Business Question | In progress |
 | 1.27.9 | Sources a reader can understand: numbered, described, one per table (added 2026-11-16 at the user's request) | In progress |
+| 1.27.10 | Every workflow whose answer ran queries gets the query inspector (added 2026-11-16) | In progress |
+| 1.27.11 | Each readiness finding opens the rows behind it (added 2026-11-16) | In progress |
 
 ## Specs touched
 
