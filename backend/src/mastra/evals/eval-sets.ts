@@ -13,16 +13,23 @@ import {
   DATA_READINESS_EVAL_SET,
   dataReadinessEvalTarget,
 } from './data-readiness.evals';
+import {
+  QUERY_EXPLAINER_EVAL_AGENT_KEY,
+  QUERY_EXPLAINER_EVAL_SET,
+  queryExplainerEvalTarget,
+} from './query-explainer.evals';
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
- * assistant's, then the Data Readiness Agent's. A set runs on the agent its
+ * assistant's, the Data Readiness Agent's, Insights Analyst's and the Query
+ * Explainer's. A set runs on the agent its
  * `agentKey` names, the `assistant` when it names none.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...ASSISTANT_EVAL_SETS,
   DATA_READINESS_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
+  QUERY_EXPLAINER_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
@@ -49,6 +56,8 @@ export function evalTargetFor(agentKey: string): EvalTarget {
   if (agentKey === 'data-readiness') return dataReadinessEvalTarget();
   if (agentKey === INSIGHTS_ANALYST_EVAL_AGENT_KEY)
     return insightsAnalystEvalTarget();
+  if (agentKey === QUERY_EXPLAINER_EVAL_AGENT_KEY)
+    return queryExplainerEvalTarget();
   throw new Error(`Agent "${agentKey}" has no evals to run`);
 }
 

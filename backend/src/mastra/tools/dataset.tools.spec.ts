@@ -82,6 +82,34 @@ describe('run_readonly_sql: facts beside the result (plan m1-25 1.25.1)', () => 
     });
   });
 
+  it('warns that the row cap was reached only when the cap dropped rows', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ name: `p${n}` }));
+    const ranked = `${SQL} ORDER BY name`;
+    const ask = async (totalRows: number | undefined) => {
+      setDatasetToolServices(
+        services({
+          runReadOnlySql: jest.fn().mockResolvedValue({
+            columns: ['name'],
+            rows,
+            ...(totalRows === undefined ? {} : { totalRows }),
+          }),
+        }),
+      );
+      const { requestContext } = turnContext();
+      const result = (await execute(
+        { sql: ranked, rationale: 'r' },
+        { requestContext, agent: { toolCallId: 'call-1' } },
+      )) as { warnings?: string[] };
+      return (result.warnings ?? []).join(' ');
+    };
+    // The statement produced 2,431 rows and the cap kept 100.
+    expect(await ask(2431)).toContain('stopped at 100 rows');
+    // It produced exactly 100: nothing was dropped.
+    expect(await ask(100)).not.toContain('stopped at');
+    // A connector that does not say: a full page still warns.
+    expect(await ask(undefined)).toContain('stopped at 100 rows');
+  });
+
   it('writes the facts keyed by the tool call id and by the statement', async () => {
     setDatasetToolServices(services());
     const { requestContext, facts } = turnContext();

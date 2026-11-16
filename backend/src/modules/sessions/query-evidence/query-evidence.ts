@@ -3,7 +3,7 @@
  * docs/plans/m1-25-query-inspector.md 2.1), and the CSV of a re-run's rows
  * (api.md 143). Pure, no framework imports.
  */
-import type { ToolDataRecord } from '../entities/session.entity';
+import type { ChatMessage, ToolDataRecord } from '../entities/session.entity';
 import { coverageOf, outerLimitOf } from './query-coverage';
 import type { QueryEvidence, QueryFacts } from './query-evidence.types';
 
@@ -65,6 +65,17 @@ export function evidenceOf(
     });
   });
   return evidence;
+}
+
+/**
+ * A message as a past chat reads it (api.md 2): an assistant message with
+ * `data` and no stored `evidence` gets the evidence derived from its data
+ * (no query, nothing stored); any other message is returned as it is.
+ */
+export function withDerivedEvidence(message: ChatMessage): ChatMessage {
+  if (message.role !== 'assistant' || !message.data?.length) return message;
+  if (message.evidence) return message;
+  return { ...message, evidence: evidenceOf(message.data) };
 }
 
 function csvCell(value: unknown): string {

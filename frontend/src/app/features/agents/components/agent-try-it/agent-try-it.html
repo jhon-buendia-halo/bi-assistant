@@ -80,7 +80,13 @@
     }
     @if (answer(); as message) {
       <div data-testid="agent-tryit-answer">
-        <app-answer-view [message]="message" [latest]="true" />
+        <app-answer-view
+          [message]="message"
+          [latest]="true"
+          [queryInspector]="true"
+          [question]="inspector.question()"
+          (inspectQuery)="inspector.inspect($event)"
+        />
       </div>
     }
     @if (errorMessage(); as message) {

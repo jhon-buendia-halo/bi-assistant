@@ -533,6 +533,41 @@ A user of Answer a Business Question could not tell how its queries were built a
 - **Acceptance:** the cases of plan 1.25.7; the insights-analyst evals of 1.25.6's run cover it.
 - **Notes:** confirmed in code on 2026-11-15: `SELECT … LIMIT 50` with no sort, under the tool's limit of 100, passed Validate with only a warning to the model.
 
+#### 1.25.8 — The SQL bridge flags a result as cut only when rows were dropped  `✅ Done`
+- **Intent:** a result that lands exactly on the row limit with nothing dropped (a `LIMIT 100` under the default limit of 100) is no longer told `row limit reached` nor warned as cut short.
+- **Scope:** per plan 1.25.8: `truncated`, the note and the `row-cap-reached` warning follow the connector's `totalRows`; agents.md 3.4, agent-answers R28.
+- **Out of scope:** a connector that reports no `totalRows` (a full page still reads as cut).
+- **Acceptance:** the bridge and tool tests of plan 1.25.8; the evals of `assistant`, `insights-analyst` and `data-readiness` compared with base, 3 runs per case per build.
+- **Notes:** no UI. It changes a tool result three agents' models read.
+
+#### 1.25.9 — Answer evidence for a session's message and for a draft run  `✅ Done`
+- **Intent:** the inspector's backend works for any answer the app can show, not only a stored run's: a past chat's message and a Try it run.
+- **Scope:** per plan 1.25.9 on the decisions of plan section 5: `AnswerEvidenceService` over an answer host; the draft run kept in memory for 30 minutes behind 139 to 143; endpoints 144 to 148 for a session's message; `evidence` derived on read of a session; api.md, data-model.md, past-chats and agents-evals specs.
+- **Out of scope:** the frontend; any model input; the workflow files; storing a draft run.
+- **Acceptance:** the tests of plan 1.25.9, the existing tests of 139 to 143 unchanged and green, and a negative test for each access rule.
+- **Notes:** no UI. Opus: it moves code every stored run's evidence goes through.
+
+#### 1.25.10 — Past chats host the inspector  `✅ Done`
+- **Intent:** an answer in a past chat, of any agent, shows its figure chips, coverage and queries and opens the inspector, as a run does.
+- **Scope:** per plan 1.25.10: the session chat in inspector mode, the adapter over 144 to 148, the sheet; ui.md, past-chats and agent-answers specs.
+- **Out of scope:** the backend; Try it; any change to a past chat being read-only for the user.
+- **Acceptance:** `session-chat.spec.ts` (chips and query rows on an assistant message with data, the question passed, the inspector opens from a row and closes with Escape, prepare on the last answer once); then, in round 2, a Playwright scenario tagged `@story-1.25.10` on a stored session.
+- **Notes:** UI story. The Data Readiness Agent's stored sessions are past chats: covered here.
+
+#### 1.25.11 — Try it hosts the inspector  `✅ Done`
+- **Intent:** a user agent's answer in Try it, the only place such an agent runs, shows its evidence through the same inspector.
+- **Scope:** per plan 1.25.11: Try it in inspector mode on the draft's run id, the expired-preview message, the sheet over the editor; ui.md 4.5.1, agents-evals R60 and R61.
+- **Out of scope:** the backend; storing a draft run.
+- **Acceptance:** `agent-try-it.spec.ts` (inspector mode on an answer with data, the run id from the stream drives the calls, a 404 shows the expired message); then, in round 2, a Playwright scenario tagged `@story-1.25.11`.
+- **Notes:** UI story.
+
+#### 1.25.12 — Evals for the query explainer  `✅ Done`
+- **Intent:** a change to Hannah's instructions or model can be measured: her steps are checked on real statements, and her counts against real data.
+- **Scope:** per plan 1.25.12: the eval set `query-explainer` on the World Cup fixture, its target and checks, its listing under the agent's Evals tab and in the CLI; agents.md 2.12 and 8.
+- **Out of scope:** Hannah's instructions; any other agent's set.
+- **Acceptance:** each check unit-tested on one real answer; `EVAL_SET=query-explainer` runs from the CLI; the set passes 3 of 3 runs on the code checks and at least 2 of 3 on each judged case, or the failing case is reported with its reason.
+- **Notes:** no UI of its own.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

@@ -1659,6 +1659,34 @@ describe('SessionsService SQL self-correction', () => {
     expect(result.truncated).toBe(true);
     expect(result.note).toContain('row limit 100 reached');
   });
+
+  it('flags a result the connector cut at the limit', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ n }));
+    const runs = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows, totalRows: 2431 });
+    const { run } = await bridge({ runs });
+
+    const result = await run('SELECT n FROM main.health.claims');
+
+    expect(result.truncated).toBe(true);
+    expect(result.note).toContain('row limit 100 reached');
+  });
+
+  it('does not flag a result that lands exactly on the limit with nothing dropped', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ n }));
+    const runs = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows, totalRows: 100 });
+    const { run } = await bridge({ runs });
+
+    const result = await run(
+      'SELECT n FROM main.health.claims ORDER BY n LIMIT 100',
+    );
+
+    expect(result.truncated).toBeUndefined();
+    expect(result.note ?? '').not.toContain('row limit');
+  });
 });
 
 describe('SessionsService visual tool bridge (turn records)', () => {
@@ -2335,6 +2363,38 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
           'agent-1',
         ),
       ).rejects.toThrow('Select at least one dataset to preview');
+    });
+  });
+
+  describe('saveMessage (api.md 144-146: what the query inspector caches)', () => {
+    it('writes one message back through the repository, keeping the recency; 404 for an unknown session', async () => {
+      const { service, repository } = build(null, []);
+      const stored: SessionDoc = {
+        id: 's-1',
+        name: 'Past chat',
+        datasets: [],
+        messages: [
+          { role: 'user', content: 'Q', at: 'a' },
+          { role: 'assistant', content: 'A', at: 'b' },
+        ],
+      };
+      const updateMessages = jest.fn().mockResolvedValue(stored);
+      Object.assign(repository, { updateMessages });
+      repository.get.mockImplementation((id: string) =>
+        Promise.resolve(id === 's-1' ? stored : null),
+      );
+      const answer = { ...stored.messages[1], evidence: [{ index: 0 }] };
+
+      await service.saveMessage('s-1', 1, answer);
+
+      expect(updateMessages).toHaveBeenCalledWith('s-1', [
+        stored.messages[0],
+        answer,
+      ]);
+      expect(repository.update).not.toHaveBeenCalled();
+      await expect(service.saveMessage('nope', 1, answer)).rejects.toThrow(
+        'Session nope not found',
+      );
     });
   });
 });

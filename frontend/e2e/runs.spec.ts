@@ -526,3 +526,109 @@ test.describe('Runs and Past chats', () => {
     }
   });
 });
+
+test.describe('Past chats host the query inspector', () => {
+  const QUESTION = 'How many matches are in the data?';
+  const ANSWER = 'The data holds 964 matches.';
+  const CHAT = 'Match count chat';
+  let stub: LlmStub;
+
+  test.beforeEach(async ({ page }) => {
+    // The explainer's reply is no JSON object: the stored steps are the code-built ones.
+    stub = await startLlmStub();
+    stub.reply = () => ({ text: 'Not a JSON object.' });
+    await saveLenaiSettings(page, stub.baseUrl);
+  });
+
+  test.afterEach(async () => {
+    await stub.close();
+  });
+
+  test(
+    'I inspect the queries behind an old answer',
+    { tag: ['@demo', '@story-1.25.10'] },
+    async ({ appDataDir, page }) => {
+      const openChat = async () => {
+        await page
+          .getByRole('complementary', { name: 'Navigation rail' })
+          .getByRole('button', { name: 'Runs', exact: true })
+          .click();
+        await page.getByTestId('runs-tab-past-chats').click();
+        await sessionRow(page, CHAT).getByRole('button', { name: new RegExp(`^${CHAT}`) }).click();
+      };
+      await scenarioStep(page, 'Given an old chat whose answer ran a query over the matches table', async () => {
+        seedPastChat(appDataDir, {
+          name: CHAT,
+          datasets: [WORLD_CUP_DATASET],
+          workflowId: 'agent:assistant',
+          turns: [
+            {
+              question: QUESTION,
+              answer: ANSWER,
+              data: [
+                {
+                  tool: 'run_readonly_sql',
+                  input: `SELECT COUNT(*) AS n FROM ${worldCupKey('matches')}`,
+                  columns: ['n'],
+                  rows: [{ n: 964 }],
+                  rowCount: 1,
+                  rationale: 'Counting all the matches.',
+                },
+              ],
+            },
+          ],
+        });
+        await page.reload();
+      });
+      await scenarioStep(page, 'When I open the old chat', openChat);
+      await scenarioStep(page, 'Then it is still read-only', async () => {
+        await expect(page.getByTestId('past-chat-banner')).toContainText('This is a past chat');
+        await expect(page.getByPlaceholder('Ask a follow-up question…')).toHaveCount(0);
+      });
+      await scenarioStep(
+        page,
+        'And I see a figure chip, the coverage line with the table size and the query row with its coverage',
+        async () => {
+          await expect(page.getByTestId('figure-ref').first()).toHaveText('Q1');
+          await expect(page.getByTestId('query-coverage-line')).toContainText(/table was read \(\d[\d,]* rows\)/);
+          const row = page.getByTestId('query-row-0');
+          await expect(row).toContainText('Counting all the matches.');
+          await expect(row.getByTestId('query-coverage-chip')).toHaveText('Whole table');
+        },
+      );
+      await scenarioStep(page, 'When I open the query from its chip', async () => {
+        await page.getByTestId('figure-ref').first().click();
+      });
+      await scenarioStep(page, 'Then the inspector shows its header and its steps', async () => {
+        await expect(page.getByTestId('query-inspector-close')).toBeFocused();
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-inspector-title')).toHaveText('Counting all the matches.');
+        await expect(page.getByTestId('query-inspector-meta')).toContainText('PostgreSQL');
+        const steps = page.getByTestId('query-funnel-step');
+        await expect(steps.first()).toHaveAttribute('data-verb', 'start');
+        await expect(steps.last()).toHaveAttribute('data-verb', 'show');
+      });
+      await scenarioStep(page, 'When I switch to Result and to SQL', async () => {
+        await page.getByTestId('query-inspector-tab-result').click();
+        await expect(page.getByTestId('query-result-table')).toBeVisible();
+        await page.getByTestId('query-inspector-tab-sql').click();
+        await expect(page.getByTestId('query-sql')).toContainText('COUNT(*)');
+      });
+      await scenarioStep(page, 'And I press Escape', async () => {
+        await page.keyboard.press('Escape');
+      });
+      await scenarioStep(page, 'Then the sheet closes and the focus is back on the chip', async () => {
+        await expect(page.getByTestId('query-inspector')).toHaveCount(0);
+        await expect(page.getByTestId('figure-ref').first()).toBeFocused();
+      });
+      await scenarioStep(page, 'When I reload the page and open the chat again', async () => {
+        await page.reload();
+        await openChat();
+      });
+      await scenarioStep(page, 'Then the query row is still there with its coverage', async () => {
+        await expect(page.getByTestId('query-row-0').getByTestId('query-coverage-chip')).toHaveText('Whole table');
+        await expect(page.getByTestId('query-coverage-line')).toContainText(/table was read \(\d[\d,]* rows\)/);
+      });
+    },
+  );
+});

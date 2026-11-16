@@ -92,7 +92,7 @@ Its request holds the dialect, the rationale, the tables with their sizes, the c
   | top-n | `Show the first 100` | `(LIMIT 100: only the list is shortened)` |
   | sample (a LIMIT with no sort) | `Show 100 rows in no set order` | `(LIMIT 100 without a sort: a sample, not the top 100)` |
   | partial | `Show the first 500` | `(the query tool stops at 500 rows: the rest of the result was not read)` |
-  | whole-table | `Show all 37 rows` | none |
+  | whole-table | `Show all 37 rows` (`Show the 1 row` for one) | none |
   | the `sample_rows` tool | `Show 10 sample rows` | `(a sample to see what the data looks like: no figure should come from it)` |
 
   Its count reads `100 of 1,870` only once the counts are verified; before that, `100 rows`.
@@ -249,6 +249,45 @@ Note from the evals (2026-11-15, `claude-sonnet-5-5`, case `v2-ranking-ties-top-
 - The retry block and Write answer's findings carry it as they carry the others.
 - A question that asks for examples (`show me 5 orders`) fails the check once and is answered after the second attempt, with the finding as a caveat: accepted.
 
-Note, not in scope: the SQL bridge (`sessions/turn/sql-checks.ts`) sets `truncated` when a result lands exactly on the tool's row limit, so a `LIMIT 100` that returns 100 rows under the default limit of 100 is told `row limit reached` although nothing was cut. `totalRows` now tells the two apart. Fixing it changes a tool result every agent's model reads, so it needs the evals of each agent that uses the tool.
+Note (fixed by story 1.25.8): the SQL bridge (`sessions/turn/sql-checks.ts`) set `truncated` when a result landed exactly on the tool's row limit, so a `LIMIT 100` that returns 100 rows under the default limit of 100 is told `row limit reached` although nothing was cut. `totalRows` now tells the two apart. Fixing it changes a tool result every agent's model reads, so it needs the evals of each agent that uses the tool.
 
 First failing test: `LIMIT 50` with no ORDER BY returning 50 rows, alone, fails the check; followed by an aggregate that succeeds, it passes; `ORDER BY … LIMIT 50` passes; a failed sample query does not count.
+
+## 5. Follow-ups after the first delivery (2026-11-15, branch `jhon-buendia-halo/query-inspector-follow-ups`)
+
+The user asked for what PR #109 left out: the other hosts of the answer view, the bridge's false "cut", evals for the explainer, and the epic's records.
+
+Decisions:
+
+- **One engine, three kinds of answer.** The logic of endpoints 139 to 143 (the lock, the single flight, prepare, explain, count the steps, re-run, CSV) moves out of `WorkflowRunsService` into one framework-light service, `AnswerEvidenceService` (`backend/src/modules/sessions/query-evidence/answer-evidence.service.ts`), that works on an **answer host**: `{ key, load(): Promise<{ answer: ChatMessage; datasets: string[] }>, save(answer): Promise<void> }`. `key` names the lock and the single flight; `load` raises the host's own 404 and 400. A stored run, a session's message and a draft run kept in memory are hosts. The behaviour of 139 to 143 does not change, and their tests keep passing.
+- **Past chats.** A session's assistant message is a host. Endpoints 144 to 148 mirror 139 to 143 under `/sessions/:id/messages/:message/answer/…` (`:message` is the message's index in the session), with the same checks and errors, `Session`/`message` in place of `Run` where a text names it, and `{ ok: true, message }` (the updated `ChatMessage`) in place of `{ ok: true, run }`. Evidence and explanations are written into the stored message: a past chat is read-only for the user, not for what the app caches about it. `GET /sessions/:id` (2) returns each assistant message that has `data` and no stored `evidence` with the evidence derived in code (`evidenceOf`, no query, nothing stored), so every past answer shows its coverage at once.
+- **Try it.** A draft run is still never stored, listed or readable through 120 or 121. Its finished run is kept **in memory for 30 minutes** (at most 20 drafts, the oldest dropped first), and 139 to 143 accept its run id for that time, writing to the copy in memory. After that they answer `404 "Run \"<id>\" not found"`, and the inspector says `This preview is no longer available. Run it again.` No new endpoint, no SQL sent by the client.
+- **Who may call.** Each new route applies the same access rule as reading its host today (`GET /sessions/:id`; the draft's `POST /agents/:id/draft-runs/stream`), with a negative test for each rule.
+- **Where the inspector opens.** The same non-modal sheet as the run detail page (at most 720 px at the right of the host's main area; focus to its close button; Escape returns the focus to the opener), not a view of the app's right panel: one behaviour on every host. In Try it, whose answer lives in the Details panel, the sheet covers the editor in the main column, flush with the panel's left edge, as on the workflow page.
+- **Question passed to the answer view.** A past chat: the user message before the answer. Try it: the question that was run.
+- **When evidence is prepared** (144, 139): a past chat prepares the last answer when the chat opens and any other answer when one of its queries is first opened; Try it prepares when the answer arrives. In the background, silent on failure.
+
+### 1.25.8 — The SQL bridge flags a result as cut only when rows were dropped
+
+Done in `sessions/turn/sql-checks.ts` and `mastra/tools/dataset.tools.ts`: `truncated`, the note `row limit <n> reached` and the warning `row-cap-reached` need the connector's `totalRows` to exceed the rows returned; without a `totalRows`, a full page still reads as cut. It changes a tool result the models of `assistant`, `insights-analyst` and `data-readiness` read: their evals are compared with base (3 runs per case per build) before the PR.
+
+### 1.25.9 — Answer evidence for a session's message and for a draft run (backend)
+
+- `AnswerEvidenceService` as decided above; `WorkflowRunsService` keeps its public methods (`prepareEvidence`, `explainQuery`, `countQuerySteps`, `rerunQuery`, `queryCsv`, `patchEvidence`, `withAnswerLock`) as thin calls into it.
+- Draft runs: the finished draft's run is held in memory (30 minutes, 20 at most); 139 to 143 resolve an id that is no stored run from there; 120, 121 and 122 never see it.
+- Sessions: endpoints 144 to 148 in the sessions module; the session's message as a host (`save` writes the message back through the sessions repository, under the engine's lock keyed by session and message); `evidence` derived on read in `toView`.
+- First failing tests: the engine on a fake host (prepare sizes each table once; explain is stored once; counts unverified store no count; re-run stores nothing); 144 to 148 on a stored session (the checks, `{ ok, message }`, the message written back, an index that is not an assistant message with data answers `400 "Message <n> has no answer with queries"`); a draft run answers 139 and 140 within its time and 404 after it, and never appears in 120 or 121; the access rule's negative test for each host.
+- Specs: `api.md` (144 to 148, the note on 129 and on 139 to 143 for drafts, `evidence` on read in 2), `data-model.md` (the draft kept in memory is not stored data: say so where runs are described), `agents.md` only where it names where the evidence code lives, `specs/capabilities/past-chats/spec.md` and `agents-evals` (Try it) for the rules.
+- Must not touch: the frontend; what any model receives; the workflow files.
+
+### 1.25.10 — Past chats host the inspector (frontend)
+
+`features/sessions/components/session-chat/`: the answer view in inspector mode for every assistant message that has `data`, with the question before it; one open query at a time (message and query); a `QUERY_EVIDENCE_API` adapter per open message over 144 to 148 (put what it shares with `RunEvidenceApi` in `shared/query-evidence/`); `prepare` as decided above; the sheet as on the run detail page. Specs: `ui.md` (the past chat section, the note in 4.12.2 on hosts), `past-chats` spec, the agent-answers rule that names the hosts. Unit tests in round 1; the Playwright scenario in round 2, once 1.25.9 is merged.
+
+### 1.25.11 — Try it hosts the inspector (frontend)
+
+`features/agents/components/agent-try-it/`: the answer view in inspector mode with the question run; the draft's run id from the stream (find the event that carries it) drives `RunEvidenceApi`; `prepare` when the answer arrives; a 404 from any call shows `This preview is no longer available. Run it again.`; the sheet over the editor, flush with the Details panel's left edge. Specs: `ui.md` 4.5.1, `agents-evals` R60 and R61. Unit tests in round 1; the Playwright scenario in round 2.
+
+### 1.25.12 — Evals for the query explainer
+
+An eval set `query-explainer` on the `world-cup` fixture, run as the other sets are (`EVAL_SET=query-explainer`, the Agents screen's Evals tab for Hannah): about 8 cases, each a statement over the World Cup tables with its rationale (an aggregate, a join with a group, a rank kept with a filter, a CTE, a top N with a LIMIT, a distinct count, a HAVING, a UNION). The target sizes the tables with real counts, asks the explainer, then counts the steps on the real data, and answers with the explanation as JSON text. Code checks, each on one real answer first: the reply was a JSON object (no `fallback`); the first step is `start` on a table the query reads; no step text is over 160 characters or holds a SQL keyword (`SELECT`, `JOIN`, `GROUP BY`, `WHERE`, `ORDER BY`, `LIMIT`, `COUNT(`); the step counts are `verified`. One judged rubric per case with one pass condition: the steps say what the query does to the rows, in order, without inventing a filter or a table. Specs: `agents.md` 2.12 (it has an eval set now), 8.1 and 8.5 (the set id). The lead runs the set (3 runs) before the PR.

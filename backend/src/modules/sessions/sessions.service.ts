@@ -421,6 +421,28 @@ export class SessionsService implements OnModuleInit {
     return session;
   }
 
+  /**
+   * Write message `index` of session `id` back (api.md 144-146: the query
+   * evidence a past chat caches). The session is re-read first; a stored
+   * session keeps its `updatedAt`, so the past chats keep their order. The
+   * caller serialises writes to one session.
+   */
+  async saveMessage(
+    id: string,
+    index: number,
+    message: ChatMessage,
+  ): Promise<void> {
+    const session = await this.get(id);
+    const messages = session.messages.map((m, i) =>
+      i === index ? message : m,
+    );
+    if (this.memoryHosts.has(id)) {
+      await this.updateDoc(id, { messages });
+      return;
+    }
+    await this.repository.updateMessages(id, messages);
+  }
+
   /** Delete a session and all Mastra state owned exclusively by it. */
   async delete(id: string): Promise<SessionDoc> {
     const session = await this.get(id);

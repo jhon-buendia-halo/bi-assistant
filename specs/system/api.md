@@ -128,12 +128,17 @@ Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, wor
 | 105 | `GET /sessions/:id/rfp-packages/:rfpId/download` | Download an RFP package (Removed 2026-11-12) | — |
 | 106 | `GET /sessions/:id/panel-items/:itemId/file` | Read the text of a file panel item | yes |
 | 107 | `GET /sessions/:id/panel-items/:itemId/download` | Download a file, document or table panel item | yes |
+| 144 | `POST /sessions/:id/messages/:message/answer/evidence` | Build the query evidence of a message's answer, and size the tables its queries read | no |
+| 145 | `POST /sessions/:id/messages/:message/answer/queries/:index/explanation` | Explain one of the message's queries step by step (cached in the message) | no |
+| 146 | `POST /sessions/:id/messages/:message/answer/queries/:index/stage-counts` | Count the rows after each step of an explained query, checked | no |
+| 147 | `POST /sessions/:id/messages/:message/answer/queries/:index/rerun` | Run one of the message's queries again; nothing stored | no |
+| 148 | `GET /sessions/:id/messages/:message/answer/queries/:index/csv` | One query's rows as CSV, up to 50,000 | no |
 
 The session on the wire (endpoints 1 and 2) is the stored `SessionDoc` (data-model 3.4) plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`insights-analyst`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (past-chats R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`. A stored `agentKey: "rfp"` (the removed RFP Builder) does not resolve: such a session reads as a plain one. It is computed on every read, never stored.
 
 Every session on the wire also carries an always-present, derived `workflowRef: { id: string; name: string; kind: 'code' | 'agent'; deleted: boolean }`: the workflow the session runs ([workflows](../capabilities/workflows/spec.md) R4; [agents.md](agents.md) 5.12). A session of Answer a Business Question reads `{ id: 'answer-business-question', name: 'Answer a Business Question', kind: 'code', deleted: false }`. Since 2026-11-12 (ADR-0042) the `agent:*` ids are internal and never in the catalogue, but a session bound to one keeps its reference as before (`agent:assistant` named `Assistant`, `agent:data-readiness`, `agent:<user-agent id>` named after the agent's Live name, with `deleted: true` and the stored `agentName` once the agent is deleted), and shows no link to a workflow page. A session stored with the removed workflow `seq-text-demo` or `deep-analysis` reads as a plain Assistant session (`{ id: 'agent:assistant', name: 'Assistant', kind: 'agent', deleted: false }`). It is computed on every read, never stored. The `agent` and `workflow` fields above are unchanged: `workflow` is the workflow bar's view, not this reference.
 
-Since 1.23.27 the routes that wrote to a session are removed (3, 5, 6, 7, 8, 10-13 here and 46, 47 in 2.7): a stored session is listed, read, downloaded from and deleted, nothing more ([past-chats](../capabilities/past-chats/spec.md)). A preview session never exists any more; the agent editor's preview is a draft run (api.md 129).
+Since 1.23.27 the routes that wrote to a session are removed (3, 5, 6, 7, 8, 10-13 here and 46, 47 in 2.7): a stored session is listed, read, downloaded from and deleted, nothing more ([past-chats](../capabilities/past-chats/spec.md)). The query inspector (144-148, since 1.25.9) writes only what the app caches about an answer (its `evidence` and their explanations) into the stored message, never the conversation, and keeps the session's `updatedAt`, so the list order does not change. A preview session never exists any more; the agent editor's preview is a draft run (api.md 129).
 
 #### 1. `GET /sessions`
 - Response `200`: `{ sessions: SessionDoc[] }`. Ordering is the repository's (most recently updated first; see data-model). No pagination; full documents including messages are returned.
@@ -141,7 +146,7 @@ Since 1.23.27 the routes that wrote to a session are removed (3, 5, 6, 7, 8, 10-
 - Past chats stay readable (read-only). Until 1.23.22 this was also the Electron main process's backend readiness probe; the probe is `GET /health` (135, 4.3).
 
 #### 2. `GET /sessions/:id`
-- Response `200`: `SessionDoc` (bare, not enveloped), with `panelItems` and `workflow` as above.
+- Response `200`: `SessionDoc` (bare, not enveloped), with `panelItems` and `workflow` as above. Each assistant message that has `data` and no stored `evidence` carries `evidence` derived in code from its `data` (`evidenceOf`: coverage from the SQL and the cap its rows ran into; no query runs, nothing is stored), so every past answer shows its coverage at once (1.25.9). 1 returns the messages as stored.
 - Errors: `404 "Session <id> not found"` (Style B).
 
 #### 3. `POST /sessions`
@@ -203,6 +208,39 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
   - a `table` item: `text/csv`, filename `<slug>.csv`, a header row of the item's columns and one line per stored row, fields quoted per RFC 4180 (a field with a comma, a quote or a line break is wrapped in double quotes and its quotes doubled); a null or undefined value is empty, an object is its JSON text.
   The slug is the item's title as in #14 (fallback `panel-<first 8 of the item id>`).
 - Errors (Style B): as #106 for the session, the item and (for a file) the file; `400 "Panel item \"<itemId>\" can't be downloaded"` for a `visual` item (a visual downloads through #14); `400 "Panel item \"<itemId>\" can't be downloaded as PDF"` for `format=pdf` on any other item; `400 "Unknown download format \"<format>\": use pdf, md or csv"` for any other `format`. Capability: [agent-panel](../capabilities/agent-panel/spec.md).
+
+#### Query evidence of a past chat (144-148)
+
+The query inspector over a session's assistant message (1.25.9; plan `docs/plans/m1-25-query-inspector.md` section 5). Each mirrors 139-143 (2.6.3) on the same engine (`AnswerEvidenceService`, `sessions/query-evidence/answer-evidence.service.ts`), with `message` in place of `run`. `:message` is the message's index in `messages` (0-based); `:index` is an `evidence[].index` of that message, as in 140-143. Capability: [past-chats](../capabilities/past-chats/spec.md).
+- Who may call: whoever may read the session through 2 (the same read, `SessionsService.get`); anything else answers 2's 404.
+- Errors (Style B), in this order: `404 "Session <id> not found"`; `400 "Message <message> has no answer with queries"` (no message at that index, not an assistant message, a message without `data`, or a `:message` that is not a whole number); `400 "Query <index> not found in the message's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). A message stored without `evidence` has it derived from `data` for these checks. There is no `Wait for the run to finish`: a past chat does not run.
+- Every write goes into the stored message (`messages[<message>]`: its `evidence`, nothing else), under the engine's lock keyed by session and message, and each write re-reads the session first, one write per session at a time. The session's `updatedAt` does not change.
+- Statements and the datasource of a query: as 139-143 over the session's `datasets` (the datasource rule's two 400s keep their text, which names the run).
+
+#### 144. `POST /sessions/:id/messages/:message/answer/evidence`
+- Body: none. As 139 on the message: builds `evidence`, sizes the tables (one `SELECT COUNT(*)` per distinct table, at most 3 at a time); with nothing missing it runs no query and writes nothing.
+- Success `201`: `{ ok: true, message: ChatMessage }`: the message as stored after the call.
+- Errors: the shared ones.
+
+#### 145. `POST /sessions/:id/messages/:message/answer/queries/:index/explanation`
+- Body: none. As 140: the stored explanation when there is one, else `sample_rows` by code or one call to `query-explainer`, stored at `messages[<message>].evidence[k].explanation`. A second request for the same session, message and index while one runs waits for the same result.
+- Success `201`: `{ ok: true, message: ChatMessage }`.
+- Errors: the shared ones; `400 "Query <index> has no SQL to explain"`; `400 "The query could not be explained: <model error>"`.
+
+#### 146. `POST /sessions/:id/messages/:message/answer/queries/:index/stage-counts`
+- Body: none. As 141, stored in the message.
+- Success `201`: `{ ok: true, message: ChatMessage }`.
+- Errors: the shared ones; `400 "Explain query <index> first"`.
+
+#### 147. `POST /sessions/:id/messages/:message/answer/queries/:index/rerun`
+- Body: none. As 142. **Nothing is stored.**
+- Success `201`: `{ ok: true, result: QueryRerunResult }` (142).
+- Errors: the shared ones; `400 "Query <index> has no SQL to run"`; the datasource rule's two 400s; the connector's own message as a 400 otherwise.
+
+#### 148. `GET /sessions/:id/messages/:message/answer/queries/:index/csv`
+- As 143: the checks of 147 before any header, up to 50 000 rows.
+- Response `200`: `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="query-<Q>-<first 8 of the session id>-<message>.csv"`, `X-Rows-Cut: 50000` when more rows existed; the body as 143.
+- Errors: as 147.
 
 ### 2.2 Datasources
 
@@ -484,7 +522,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 #### 36. `POST /agents/:key/evals/run`
 - Body: `{ datasourceId: string; caseIds?: string[] }`. `caseIds` omitted = all questions.
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
-- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (an agent with no sets: neither `assistant` nor `data-readiness`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
+- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (an agent with no sets: none of `assistant`, `data-readiness`, `insights-analyst`, `query-explainer`); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
 - Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
 
 #### 37. `GET /agents/:key/evals/runs`
@@ -855,6 +893,7 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Body: `{ input: { question: string } }`. Runs the agent's saved **draft** once on the question, streamed as 119 is (section 3.6, same events and framing). The agent turn runs on a run host that is a preview-shaped session over the draft (its instructions, model and effort overrides, linked tools and skills, and the datasets of it that exist), through the chat turn path ([agents.md](agents.md) 5.14), so its model request equals a chat turn's. The `run` event carries `workflowId: "agent:<id>"`.
 - Refusals (Style B, before the stream starts, nothing runs): `404 "Agent \"<id>\" not found"`; `400 "Select at least one dataset to preview"` when none of the draft's datasets exists; `400 "Question is required"` for a missing or blank question.
 - Side effects: **none are kept.** The run is not stored in `workflow_runs` (it is not in 120 or 121); its host `run-<run id>` and workspace `session-run-<run id>` are created for the turn and deleted when the run ends, with its memory thread, however it ends (success, failure or a stop). `done.run` is the run as it ended, with its `answer`; it has no stored copy to read back, and its files do not download. A workspace left by a stop of the app is deleted at the next backend start (the runs' start-up recovery).
+- The finished run (`done.run`, however it ended) is **held in server memory for 30 minutes** from its end, at most 20 of them, the oldest dropped first (1.25.9), for the query inspector only: 139-143 accept its id (the `runId` of the stream's first event, `run`, which equals `done.run.id`) and write to the copy in memory. 120, 121 and 122 never see it. After its time, after a restart, or once its agent is deleted, 139-143 answer `404 "Run \"<id>\" not found"`.
 
 #### 130. `POST /workflow-runs/:id/visualizations`
 - Body: `{ sourceMessageAt?: string }`. Omitted: the run's answer. As 8, over the run's workspace and its answer as the source.
@@ -915,9 +954,9 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 
 #### Query evidence (139-143)
 
-The query inspector's endpoints over a run's stored answer and its `evidence` (3.6, [data-model.md](data-model.md) 3.4.2a; plan `docs/plans/m1-25-query-inspector.md`). `:index` is an `evidence[].index`: the position of the query's record in `answer.data`. Rules for all five:
-- Errors (Style B), in this order: `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`; `400 "Wait for the run to finish"` (the run is `running` or `suspended`); `400 "Query <index> not found in the run's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). An answer stored without `evidence` has it derived from `data` for these checks.
-- Every write to a run's `answer` goes through **one lock per run**, so two writes cannot overwrite each other: each re-reads the run inside the lock, patches it and writes `answer`. This includes 128.
+The query inspector's endpoints over a run's stored answer and its `evidence` (3.6, [data-model.md](data-model.md) 3.4.2a; plan `docs/plans/m1-25-query-inspector.md`). `:index` is an `evidence[].index`: the position of the query's record in `answer.data`. Since 1.25.9 their logic is the engine `AnswerEvidenceService` (`sessions/query-evidence/answer-evidence.service.ts`), shared with 144-148, and `:id` may also be a **draft run** held in memory (129): a stored run is looked up first, then a held draft run whose agent still exists (the rule of 129, `Agent "<id>" not found`, read as this 404). Rules for all five:
+- Errors (Style B), in this order: `404 "Run \"<id>\" not found"` (also a draft run past its 30 minutes, dropped, or whose agent is gone); `404 "Run \"<id>\" has no answer"`; `400 "Wait for the run to finish"` (the run is `running` or `suspended`); `400 "Query <index> not found in the run's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). An answer stored without `evidence` has it derived from `data` for these checks.
+- Every write to a run's `answer` goes through **one lock per run**, so two writes cannot overwrite each other: each re-reads the run inside the lock, patches it and writes `answer`. This includes 128. A held draft run is written in memory, under the same lock.
 - Every statement runs through the datasource's `runReadOnlySql` directly (its read-only guard, and PostgreSQL's READ ONLY transaction), never through the SQL repair: a re-run executes the same statement.
 - The datasource of a query (as 133): the record's `evidence.datasourceId` when the run's datasets use it, else the run's only datasource; `400 "Several datasources are in scope for this run; this query cannot be re-run"` when there are several, `400 "No datasource is bound to this run's datasets"` when there is none.
 

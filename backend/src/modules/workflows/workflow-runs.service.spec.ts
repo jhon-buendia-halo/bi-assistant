@@ -125,6 +125,8 @@ interface TurnScript {
   /** Abort the run mid-turn, as a closed connection does. */
   abort?: AbortController;
   answer?: string;
+  /** The answer's data records. */
+  data?: unknown[];
 }
 
 function build(
@@ -158,7 +160,12 @@ function build(
   } as unknown as MastraService;
   const agents = new AgentsService(mastra, userAgents);
   const workflows = new WorkflowsService(agents);
-  let hostMessages: { role: string; content: string; at: string }[] = [];
+  let hostMessages: {
+    role: string;
+    content: string;
+    at: string;
+    data?: unknown[];
+  }[] = [];
   let draftHost = false;
   const sessions = {
     createRunHost: jest.fn(
@@ -211,6 +218,7 @@ function build(
           role: 'assistant',
           content: script.answer ?? 'Brazil won.',
           at: 't',
+          ...(script.data ? { data: script.data } : {}),
         });
         emit({ type: 'done', session: { id: 'host' } });
         await Promise.resolve();
@@ -2115,5 +2123,90 @@ describe('WorkflowRunsService: a draft run (api.md R12; agents-evals R60)', () =
     expect(events.at(-1)).toEqual({ type: 'error', content: 'provider down' });
     expect(ctx.sessions.deleteRunHostResources).toHaveBeenCalledTimes(1);
     expect(await ctx.repository.get(run.id)).toBeNull();
+  });
+
+  describe('its finished run, held in memory for the query inspector (plan section 5)', () => {
+    const SAMPLE = {
+      tool: 'sample_rows',
+      input: 'shop.public.returns',
+      columns: ['id'],
+      rows: [{ id: 1 }],
+      rowCount: 10,
+    };
+    let now = Date.parse('2026-11-15T10:00:00.000Z');
+    beforeEach(() => {
+      now = Date.parse('2026-11-15T10:00:00.000Z');
+      jest.spyOn(Date, 'now').mockImplementation(() => now);
+    });
+    afterEach(() => jest.restoreAllMocks());
+
+    async function draftRun() {
+      ctx = build(DATASETS, { data: [SAMPLE] });
+      const prepared = await ctx.service.prepareDraft('agent-1', {
+        input: { question: 'Show some returns' },
+      });
+      const events: RunStreamEvent[] = [];
+      const run = await ctx.service.stream(prepared, (e) => events.push(e));
+      return { run, events };
+    }
+
+    it('answers 139 and 140 for 30 minutes, writing to its copy in memory, then 404', async () => {
+      const { run, events } = await draftRun();
+      // The stream's first event carries the id 139-143 accept.
+      expect(events[0]).toMatchObject({ type: 'run', runId: run.id });
+
+      const prepared = await ctx.service.prepareEvidence(run.id);
+      expect(prepared.id).toBe(run.id);
+      expect(ctx.queryEvidence.prepare).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'Brazil won.' }),
+        ['World Cup Core'],
+      );
+      const explained = await ctx.service.explainQuery(run.id, 0);
+      expect(explained.answer?.evidence?.[0].explanation?.steps.length).toBe(2);
+      // The copy in memory keeps it: a second call reads it back.
+      now += 29 * 60 * 1000;
+      const again = await ctx.service.explainQuery(run.id, 0);
+      expect(again.answer?.evidence?.[0].explanation).toEqual(
+        explained.answer?.evidence?.[0].explanation,
+      );
+      expect(await ctx.repository.get(run.id)).toBeNull();
+
+      now += 60 * 1000;
+      await expect(ctx.service.prepareEvidence(run.id)).rejects.toThrow(
+        `Run "${run.id}" not found`,
+      );
+      await expect(ctx.service.explainQuery(run.id, 0)).rejects.toThrow(
+        `Run "${run.id}" not found`,
+      );
+    });
+
+    it('is never listed, read or deleted through 120, 121 and 122', async () => {
+      const { run } = await draftRun();
+      expect(await ctx.service.list()).toEqual([]);
+      await expect(ctx.service.get(run.id)).rejects.toThrow(
+        `Run "${run.id}" not found`,
+      );
+      await expect(ctx.service.delete(run.id)).rejects.toThrow(
+        `Run "${run.id}" not found`,
+      );
+      // Still held for the inspector.
+      await expect(ctx.service.rerunQuery(run.id, 9)).rejects.toThrow(
+        "Query 9 not found in the run's answer",
+      );
+    });
+
+    it('SHALL NOT answer once its agent is gone: the rule of POST /agents/:id/draft-runs/stream', async () => {
+      const { run } = await draftRun();
+      ctx.sessions.draftRunTarget.mockImplementationOnce(() =>
+        Promise.reject(new NotFoundException('Agent "agent-1" not found')),
+      );
+      await expect(ctx.service.prepareEvidence(run.id)).rejects.toThrow(
+        `Run "${run.id}" not found`,
+      );
+      // Dropped: it stays not found.
+      await expect(ctx.service.explainQuery(run.id, 0)).rejects.toThrow(
+        `Run "${run.id}" not found`,
+      );
+    });
   });
 });
