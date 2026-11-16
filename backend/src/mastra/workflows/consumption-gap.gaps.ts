@@ -663,8 +663,20 @@ function mappedEdges(sources: readonly FieldSource[]): LineageEdge[] {
   return out;
 }
 
-/** Whether the entities are joined, directly or through each other, by a shared column name. */
-function joined(entities: readonly string[], tables: readonly LayerTable[]) {
+/** A column name that reads as a key: `id`, `<x>_id`, `<x>_key`, `<x>_code`. */
+const KEY_COLUMN = /^(id|key|.+_(id|key|code))$/i;
+
+/**
+ * Whether the entities are joined, directly or through each other, by a
+ * shared column that can carry the join: a key-like column, or one of the
+ * requirement's own columns (`usable`, lower case). Sharing only another
+ * column (a year both tables carry) would multiply rows, not join them.
+ */
+function joined(
+  entities: readonly string[],
+  tables: readonly LayerTable[],
+  usable: ReadonlySet<string>,
+) {
   if (entities.length < 2) return true;
   const columnsOf = (entity: string) =>
     new Set(
@@ -680,7 +692,10 @@ function joined(entities: readonly string[], tables: readonly LayerTable[]) {
     for (let i = 0; i < sets.length; i += 1) {
       if (reached.has(i)) continue;
       const shares = [...reached].some((j) =>
-        [...sets[i]].some((name) => sets[j].has(name)),
+        [...sets[i]].some(
+          (name) =>
+            sets[j].has(name) && (KEY_COLUMN.test(name) || usable.has(name)),
+        ),
       );
       if (shares) {
         reached.add(i);
@@ -743,8 +758,9 @@ function reasonOf(
  * Normalized (else Landing) source whose lineage edges reach a Consumption
  * column counts as that column. The requirement takes its worst field's
  * status (`missing` when it has no field); when every field is in
- * Consumption and their entities are not joined by a shared column name
- * (directly or through each other), it is `grain`. Returns the assessments
+ * Consumption and their entities are not joined (directly or through each
+ * other) by a shared key-like column (`id`, `*_id`, `*_key`, `*_code`) or a
+ * shared column the requirement itself reads, it is `grain`. Returns the assessments
  * (evidence `''`) and the lineage with a `mapped` edge from each mapped
  * source to the next mapped layer up (the lower source's expression); an
  * edge that already joins the two columns is kept and gets the expression
@@ -827,9 +843,14 @@ export function traceGaps(input: {
           .filter((e): e is string => e !== undefined),
       ),
     ];
+    const usable = new Set(
+      fields
+        .map((f) => f.consumption?.column.toLowerCase())
+        .filter((c): c is string => c !== undefined),
+    );
     if (
       (status === 'supported' || status === 'derivable') &&
-      !joined(entities, tables)
+      !joined(entities, tables, usable)
     ) {
       status = 'grain';
     }

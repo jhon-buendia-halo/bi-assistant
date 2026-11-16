@@ -685,6 +685,60 @@ describe('traceGaps', () => {
     );
   });
 
+  it('marks grain when the entities share only a column the requirement does not read', () => {
+    // Scorers by stage: agg_player_goals and fct_match_results share only
+    // tournament_year, which would multiply rows, not join them.
+    const source = (entity: string, column: string) => ({
+      layer: 'consumption' as const,
+      entity: `${C}.${entity}`,
+      column,
+      expression: '',
+    });
+    const reqs = [
+      requirement('W7', [
+        measure('goals'),
+        dimension('player'),
+        dimension('stage'),
+      ]),
+    ];
+    const mapped = (field: string, entity: string, column: string) => ({
+      requirementId: 'W7',
+      field,
+      sources: [source(entity, column)],
+      note: '',
+    });
+    const out = traceGaps({
+      requirements: reqs,
+      mappings: [
+        mapped('goals', 'agg_player_goals', 'goals'),
+        mapped('player', 'agg_player_goals', 'player'),
+        mapped('stage', 'fct_match_results', 'stage'),
+      ],
+      lineage: SAMPLE_LINEAGE,
+      tables: GAP_SAMPLE_TABLES,
+    });
+    expect(out.assessments[0].status).toBe('grain');
+    // Reading the shared year itself makes it a usable join column.
+    const byYear = traceGaps({
+      requirements: [
+        requirement('W8', [measure('goals'), dimension('tournament_year')]),
+      ],
+      mappings: [
+        {
+          ...mapped('goals', 'agg_player_goals', 'goals'),
+          requirementId: 'W8',
+        },
+        {
+          ...mapped('tournament_year', 'fct_match_results', 'tournament_year'),
+          requirementId: 'W8',
+        },
+      ],
+      lineage: SAMPLE_LINEAGE,
+      tables: GAP_SAMPLE_TABLES,
+    });
+    expect(byYear.assessments[0].status).toBe('supported');
+  });
+
   it('calls a requirement with no field missing', () => {
     const out = traceGaps({
       requirements: [requirement('Q8', [])],
