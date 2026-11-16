@@ -317,3 +317,272 @@ export function collectDomSnapshot(args: {
     visibleText,
   };
 }
+
+/**
+ * The open page's structure as text, for a fingerprint: its landmarks,
+ * headings, media, forms and controls nested as `section(h2,img)`, with no
+ * text, attribute or count of repeated siblings. In-page like
+ * `collectDomSnapshot`: one synchronous, self-contained function.
+ */
+export function structureSkeleton(): string {
+  const KEPT = [
+    'header',
+    'nav',
+    'main',
+    'section',
+    'article',
+    'aside',
+    'footer',
+    'form',
+    'table',
+    'ul',
+    'ol',
+    'dl',
+    'h1',
+    'h2',
+    'h3',
+    'img',
+    'svg',
+    'video',
+    'iframe',
+    'button',
+    'input',
+    'select',
+    'textarea',
+    'details',
+  ];
+  const MAX_NESTING = 6;
+
+  const isShown = (el: Element): boolean => {
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') {
+      return false;
+    }
+    return parseFloat(style.opacity) > 0;
+  };
+
+  // Joins tokens, folding a run of identical neighbours (one or more) into the bare token.
+  const join = (tokens: string[]): string => {
+    const out: string[] = [];
+    let i = 0;
+    while (i < tokens.length) {
+      let j = i;
+      while (j + 1 < tokens.length && tokens[j + 1] === tokens[i]) j++;
+      out.push(tokens[i]);
+      i = j + 1;
+    }
+    return out.join(',');
+  };
+
+  const walk = (el: Element, nesting: number): string[] => {
+    const tag = el.tagName.toLowerCase();
+    if (!isShown(el)) return [];
+    if (KEPT.includes(tag)) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 && rect.height <= 0) return [];
+      if (tag === 'svg') return [tag];
+      const inner =
+        nesting + 1 < MAX_NESTING ? walkChildren(el, nesting + 1) : [];
+      return [inner.length > 0 ? tag + '(' + join(inner) + ')' : tag];
+    }
+    return walkChildren(el, nesting);
+  };
+
+  const walkChildren = (el: Element, nesting: number): string[] => {
+    const tokens: string[] = [];
+    for (const child of Array.from(el.children)) {
+      tokens.push(...walk(child, nesting));
+    }
+    return tokens;
+  };
+
+  if (!document.body) return '';
+  return join(walkChildren(document.body, 0)).slice(0, 4000);
+}
+
+/**
+ * Draws numbered marks over the elements of the page's top (the set-of-marks
+ * of the vision review) and returns what each number stands for. In-page like
+ * `collectDomSnapshot`: one synchronous, self-contained function.
+ */
+export function drawReviewMarks(args: {
+  maxMarks: number;
+  maxHeight: number;
+}): Array<{
+  n: number;
+  selector: string;
+  tag: string;
+  text: string;
+  rect: { x: number; y: number; width: number; height: number };
+}> {
+  const sx = window.scrollX;
+  const sy = window.scrollY;
+  const viewportArea = window.innerWidth * window.innerHeight;
+
+  // A copy of the module-level class test: the two must stay in sync.
+  const generatedClass = (name: string): boolean => {
+    if (!/^[A-Za-z_][\w-]*$/.test(name)) return true;
+    if (/^(css|sc|jsx|emotion|styled|svelte|ng|chakra|mui|Mui)-/.test(name)) {
+      return true;
+    }
+    if (/^_?[A-Za-z0-9]{6,}$/.test(name) && /\d/.test(name)) return true;
+    if (/(__|_)[A-Za-z0-9_-]{4,}$/.test(name) && /\d/.test(name)) return true;
+    return false;
+  };
+
+  const collapse = (value: string | null | undefined): string =>
+    (value ?? '').replace(/\s+/g, ' ').trim();
+
+  const isVisible = (el: Element): boolean => {
+    const style = getComputedStyle(el);
+    return (
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      parseFloat(style.opacity) > 0
+    );
+  };
+
+  const uniqueId = (el: Element): boolean =>
+    !!el.id && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1;
+
+  const segment = (el: Element): string => {
+    let part = el.tagName.toLowerCase();
+    const classes = Array.from(el.classList)
+      .filter((name) => !generatedClass(name))
+      .slice(0, 2);
+    for (const name of classes) part += '.' + CSS.escape(name);
+    const parent = el.parentElement;
+    if (parent) {
+      const same = Array.from(parent.children).filter(
+        (child) => child.tagName === el.tagName,
+      );
+      if (same.length > 1)
+        part += ':nth-of-type(' + (same.indexOf(el) + 1) + ')';
+    }
+    return part;
+  };
+
+  const selectorOf = (el: Element): string => {
+    if (uniqueId(el)) return '#' + CSS.escape(el.id);
+    const parts: string[] = [];
+    let node: Element | null = el;
+    while (
+      node &&
+      node !== document.body &&
+      node !== document.documentElement &&
+      parts.length < 4
+    ) {
+      if (parts.length > 0 && uniqueId(node)) {
+        parts.unshift('#' + CSS.escape(node.id));
+        break;
+      }
+      parts.unshift(segment(node));
+      node = node.parentElement;
+    }
+    return parts.join(' > ') || el.tagName.toLowerCase();
+  };
+
+  const kindOf = (el: Element): string | null => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'a') return el.hasAttribute('href') ? 'interactive' : null;
+    if (tag === 'input') {
+      return el.getAttribute('type') !== 'hidden' ? 'interactive' : null;
+    }
+    if (['button', 'select', 'textarea'].includes(tag)) return 'interactive';
+    if (el.getAttribute('role') === 'button') return 'interactive';
+    if (['h1', 'h2', 'h3'].includes(tag)) return 'heading';
+    if (['img', 'svg', 'video'].includes(tag)) return 'media';
+    if (['header', 'nav', 'footer', 'form'].includes(tag)) return 'landmark';
+    return null;
+  };
+
+  type Box = { x: number; y: number; width: number; height: number };
+  const inside = (inner: Box, outer: Box): boolean =>
+    inner.x >= outer.x - 1 &&
+    inner.y >= outer.y - 1 &&
+    inner.x + inner.width <= outer.x + outer.width + 1 &&
+    inner.y + inner.height <= outer.y + outer.height + 1;
+
+  const picked: Array<{ el: Element; kind: string; rect: Box }> = [];
+  for (const el of Array.from(document.body.querySelectorAll('*'))) {
+    const kind = kindOf(el);
+    if (!kind || !isVisible(el)) continue;
+    const r = el.getBoundingClientRect();
+    const rect = {
+      x: r.left + sx,
+      y: r.top + sy,
+      width: r.width,
+      height: r.height,
+    };
+    if (rect.width < 8 || rect.height < 8) continue;
+    if (rect.y >= args.maxHeight) continue;
+    if (rect.width * rect.height > 0.7 * viewportArea) continue;
+    // A mark on the control already stands for the picture inside it.
+    const covered = picked.some(
+      (other) =>
+        inside(rect, other.rect) &&
+        (other.kind === kind ||
+          (kind === 'media' && other.kind === 'interactive')),
+    );
+    if (covered) continue;
+    picked.push({ el, kind, rect });
+  }
+
+  picked.sort(
+    (a, b) =>
+      Math.round(a.rect.y / 8) - Math.round(b.rect.y / 8) ||
+      a.rect.x - b.rect.x,
+  );
+  const chosen = picked.slice(0, args.maxMarks);
+
+  const container = document.createElement('div');
+  container.id = '__qti_review_marks';
+  container.style.cssText =
+    'position:absolute;top:0;left:0;pointer-events:none;z-index:2147483647;';
+  const result = chosen.map((item, index) => {
+    const n = index + 1;
+    const box = document.createElement('div');
+    box.style.cssText =
+      'position:absolute;box-sizing:border-box;outline:2px solid #e11d48;' +
+      'left:' +
+      item.rect.x +
+      'px;top:' +
+      item.rect.y +
+      'px;' +
+      'width:' +
+      item.rect.width +
+      'px;height:' +
+      item.rect.height +
+      'px;';
+    const badge = document.createElement('div');
+    badge.textContent = String(n);
+    badge.style.cssText =
+      'position:absolute;left:0;top:0;min-width:16px;padding:0 3px;' +
+      'box-sizing:border-box;text-align:center;font:bold 11px/16px sans-serif;' +
+      'color:#fff;background:#e11d48;';
+    box.appendChild(badge);
+    container.appendChild(box);
+    const html = item.el as HTMLElement;
+    const text = collapse(
+      html.innerText ||
+        item.el.getAttribute('aria-label') ||
+        item.el.getAttribute('alt') ||
+        (item.el as HTMLInputElement).value ||
+        '',
+    ).slice(0, 60);
+    return {
+      n,
+      selector: selectorOf(item.el),
+      tag: item.el.tagName.toLowerCase(),
+      text,
+      rect: item.rect,
+    };
+  });
+  document.body.appendChild(container);
+  return result;
+}
+
+/** Removes the marks `drawReviewMarks` drew. In-page, self-contained. */
+export function clearReviewMarks(): void {
+  document.getElementById('__qti_review_marks')?.remove();
+}

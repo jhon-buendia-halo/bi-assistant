@@ -9,9 +9,9 @@
  */
 import {
   SITE_SCREENS,
-  type CheckedSite,
   type DiscoveredSite,
   type Finding,
+  type ReviewedSite,
   type SeverityCounts,
 } from './review-website.schemas';
 
@@ -90,19 +90,33 @@ function failedPages(site: DiscoveredSite) {
  * The run's answer in Markdown: what was reviewed, the worst findings to
  * fix first, and what the crawl did and did not reach. Fixed text.
  */
-export function reviewAnswer(site: CheckedSite): string {
+export function reviewAnswer(site: ReviewedSite): string {
   const counts = countBySeverity(site.findings);
   const screens = joinList(site.screens.map(screenLabel));
   const lines = [
     `**${hostOf(site)}**: ${counted(site.pages.length, 'page')} on ${screens} — ${severityLine(counts)}.`,
   ];
 
+  if (site.reviewed.length > 0) {
+    const irisCount = site.findings.filter((f) => f.source === 'iris').length;
+    lines.push(
+      '',
+      `Iris reviewed ${counted(site.reviewed.length, 'page template')} and found ${counted(irisCount, 'visual issue')}.`,
+    );
+  } else if (
+    site.visualReview &&
+    site.reviewTemplates.length === 0 &&
+    site.templates.length > 0
+  ) {
+    lines.push('', "Iris's visual review was skipped: measured checks only.");
+  }
+
   if (site.findings.length) {
     const bullets = site.findings
       .slice(0, 3)
       .map(
         (finding) =>
-          `- **${finding.title}** (${finding.severity}, ${screenLabel(finding.screen)}) on ${counted(finding.pages.length, 'page')} of \`${finding.group}\`: ${finding.measured}`,
+          `- **${finding.title}** (${finding.severity}, ${screenLabel(finding.screen)})${finding.source === 'iris' ? ' (Iris)' : ''} on ${counted(finding.pages.length, 'page')} of \`${finding.group}\`: ${finding.measured}`,
       );
     lines.push('', 'Fix first:', ...bullets);
   }
@@ -113,6 +127,7 @@ export function reviewAnswer(site: CheckedSite): string {
         ? '; the crawl stopped at the page limit, so the site may have more'
         : ''
     }.`,
+    `${counted(site.templates.length, 'page template')}.`,
   ];
   const skipped = site.skippedLinks.length;
   if (skipped) {
@@ -194,6 +209,11 @@ const REPORT_CSS = `
 .sr-box > .sr-h { margin-bottom: 6px; }
 .sr-box ul { display: flex; flex-direction: column; gap: 2px; }
 .sr-empty { border: 1px solid var(--sr-border); border-radius: 8px; padding: 16px; background: var(--sr-surface); color: var(--sr-strong); font-weight: 700; }
+.sr-src { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; vertical-align: 1px; }
+.sr-src-measured { background: var(--sr-surface); color: var(--sr-strong); border: 1px solid var(--sr-border); }
+.sr-src-iris { background: transparent; color: var(--sr-strong); border: 1px solid var(--sr-focus); }
+.sr .sr-quote { margin-bottom: 12px; padding: 8px 12px; border-left: 4px solid var(--sr-focus); border-radius: 4px; background: var(--sr-surface); color: var(--sr-fg); }
+.sr-quote-label { display: block; font-size: 11px; font-weight: 700; color: var(--sr-muted); margin-bottom: 2px; }
 .sr-tree li { font-size: 12px; padding: 2px 0; overflow-wrap: anywhere; }
 .sr-tree .sr-st { color: var(--sr-muted); }
 `;
@@ -280,6 +300,9 @@ const REPORT_RUNTIME = `
       return el;
     }
 
+    var reviewedBy = {};
+    (site.reviewed || []).forEach(function (r) { reviewedBy[r.template] = r; });
+
     function groupsOf(screen) {
       var byGroup = {};
       var order = [];
@@ -331,20 +354,28 @@ const REPORT_RUNTIME = `
       var items = groups.map(function (entry) {
         var btn = h('button', { type: 'button', class: 'sr-group', 'data-key': 'group:' + entry.group, 'aria-current': entry.group === state.group ? 'true' : null }, [
           h('span', { class: 'sr-group-pattern', text: entry.group }),
-          h('span', { class: 'sr-group-line' }, [h('span', { text: plural(entry.pages, 'page') }), h('span', { class: 'sr-row' }, badges(entry.counts, true))]),
+          h('span', { class: 'sr-group-line' }, [
+            h('span', { class: 'sr-row' }, [h('span', { text: plural(entry.pages, 'page') }), reviewedBy[entry.group] ? sourceTag('iris') : null]),
+            h('span', { class: 'sr-row' }, badges(entry.counts, true)),
+          ]),
         ]);
         btn.addEventListener('click', function () { state.group = entry.group; render(); });
         return h('li', null, [btn]);
       });
-      return h('div', null, [h('h3', { class: 'sr-h', text: 'URL groups' }), h('ul', { class: 'sr-groups' }, items)]);
+      return h('div', null, [h('h3', { class: 'sr-h', text: 'Page templates' }), h('ul', { class: 'sr-groups' }, items)]);
+    }
+
+    function sourceTag(source) {
+      return h('span', { class: 'sr-src sr-src-' + (source === 'iris' ? 'iris' : 'measured'), text: source === 'iris' ? 'Iris' : 'Measured' });
     }
 
     function findingCard(f) {
-      var expected = [h('span', { class: 'sr-label', text: 'Expected: ' }), h('span', { text: f.expected })];
-      if (f.helpUrl && isWebUrl(f.helpUrl)) { expected.push(' '); expected.push(link(f.helpUrl, '(rule)')); }
+      var iris = f.source === 'iris';
+      var expected = [h('span', { class: 'sr-label', text: iris ? 'Suggestion: ' : 'Expected: ' }), h('span', { text: f.expected })];
+      if (!iris && f.helpUrl && isWebUrl(f.helpUrl)) { expected.push(' '); expected.push(link(f.helpUrl, '(rule)')); }
       var body = [
-        h('div', null, [badge(f.severity, f.severity), h('span', { class: 'sr-ftitle', text: f.title })]),
-        h('p', null, [h('span', { class: 'sr-label', text: 'Measured: ' }), h('span', { text: f.measured })]),
+        h('div', null, [badge(f.severity, f.severity), ' ', sourceTag(f.source), h('span', { class: 'sr-ftitle', text: f.title })]),
+        h('p', null, [h('span', { class: 'sr-label', text: iris ? 'Observed: ' : 'Measured: ' }), h('span', { text: f.measured })]),
         h('p', null, expected),
       ];
       if (f.selector) body.push(h('p', null, [h('span', { class: 'sr-label', text: 'Element: ' }), h('code', { text: f.selector })]));
@@ -362,8 +393,12 @@ const REPORT_RUNTIME = `
         if (c.group === entry.group && c.screen === state.screen && c.thumbnail) { thumbCapture = c; break; }
       }
       if (thumbCapture) kids.push(image(thumbCapture.thumbnail, 'Screenshot of ' + thumbCapture.url + ' on ' + screenLabel(state.screen), 'sr-thumb'));
+      var review = reviewedBy[entry.group];
+      if (review) {
+        kids.push(h('p', { class: 'sr-quote' }, [h('span', { class: 'sr-quote-label', text: 'Iris' }), h('span', { text: review.summary })]));
+      }
       if (!entry.findings.length) {
-        kids.push(h('p', { class: 'sr-empty', text: 'No measured issues in this group on ' + screenLabel(state.screen) + '.' }));
+        kids.push(h('p', { class: 'sr-empty', text: 'No ' + (review ? '' : 'measured ') + 'issues in this page template on ' + screenLabel(state.screen) + '.' }));
       } else {
         kids.push(h('ul', { class: 'sr-cards' }, entry.findings.map(findingCard)));
       }
@@ -434,7 +469,7 @@ const REPORT_RUNTIME = `
 
       var kids = [header()];
       if (!site.findings.length) {
-        kids.push(h('p', { class: 'sr-empty', text: 'No measured issues found on ' + plural(site.pages.length, 'page') + '.' }));
+        kids.push(h('p', { class: 'sr-empty', text: 'No ' + (site.reviewed && site.reviewed.length ? '' : 'measured ') + 'issues found on ' + plural(site.pages.length, 'page') + '.' }));
         kids.push(pagesTree());
         kids.push(coverage());
       } else {
@@ -466,7 +501,7 @@ const REPORT_RUNTIME = `
  * refers to are embedded; one missing from `images` shows a placeholder.
  */
 export function renderReportBundle(input: {
-  site: CheckedSite;
+  site: ReviewedSite;
   /** Workspace path to `data:image/jpeg;base64,...`. */
   images: Readonly<Record<string, string>>;
   generatedAt: string;

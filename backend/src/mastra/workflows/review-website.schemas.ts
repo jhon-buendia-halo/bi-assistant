@@ -170,18 +170,106 @@ export const rawFindingSchema = z.object({
 });
 export type RawFinding = z.output<typeof rawFindingSchema>;
 
+/** Who found a finding: a measured rule (phase 1) or Iris's vision review (phase 2). */
+export const FINDING_SOURCES = ['measured', 'iris'] as const;
+export type FindingSource = (typeof FINDING_SOURCES)[number];
+
 /** A finding as the report shows it: one rule and element across the pages of a group. */
 export const findingSchema = rawFindingSchema.omit({ url: true }).extend({
   /** A stable id: rule, screen, group and selector. */
   id: z.string(),
-  /** The URL pattern of the pages it was found on (`/claims/:id`). */
+  /** The page template of the pages it was found on (`/claims/:id`). */
   group: z.string(),
   /** Every page it was found on, first the one its crop comes from. */
   pages: z.array(z.string()),
   /** The crop's path in the run's workspace, else null. */
   crop: z.string().nullable(),
+  /** A measured rule, else Iris's review (rule `visual:<category>`). */
+  source: z.enum(FINDING_SOURCES),
 });
 export type Finding = z.output<typeof findingSchema>;
+
+// ---------------------------------------------------------------------------
+// Phase 2: page templates and Iris's vision review (agents.md 5.19).
+// ---------------------------------------------------------------------------
+
+/** The kinds of visual defect Iris reports (rule `visual:<category>`). */
+export const VISUAL_CATEGORIES = [
+  'hierarchy',
+  'alignment',
+  'spacing',
+  'consistency',
+  'imagery',
+  'legibility',
+  'content',
+  'responsive',
+  'other',
+] as const;
+export type VisualCategory = (typeof VISUAL_CATEGORIES)[number];
+
+/** One numbered mark drawn on a review screenshot: the element it stands for. */
+export const reviewMarkSchema = z.object({
+  /** The number drawn on the screenshot, from 1. */
+  n: z.number(),
+  selector: z.string(),
+  tag: z.string(),
+  /** Its visible text or label, at most 60 characters. */
+  text: z.string(),
+  /** Its box in document coordinates. */
+  rect: rectSchema,
+  /** A crop around it in the run's workspace, else null. */
+  crop: z.string().nullable(),
+});
+export type ReviewMark = z.output<typeof reviewMarkSchema>;
+
+/** A page template: pages that share a URL pattern or a page structure. */
+export const pageTemplateSchema = z.object({
+  /** Its name and id: the most common URL pattern of its pages (`/claims/:id`). */
+  id: z.string(),
+  /** Its pages, in crawl order. */
+  pages: z.array(z.string()),
+  /** The page Iris looks at: the first one reached that loaded. */
+  representative: z.string(),
+});
+export type PageTemplate = z.output<typeof pageTemplateSchema>;
+
+/** The screenshots of one template's representative on one screen, for Iris. */
+export const reviewShotSchema = z.object({
+  template: z.string(),
+  url: z.string(),
+  screen: screenNameSchema,
+  /** The top of the page (at most two screens tall), as is. */
+  clean: z.string(),
+  /** The same, with the numbered marks drawn on it. */
+  marked: z.string(),
+  marks: z.array(reviewMarkSchema),
+});
+export type ReviewShot = z.output<typeof reviewShotSchema>;
+
+/** One visual finding as Iris returns it, read leniently. */
+export const irisFindingSchema = z.object({
+  /** The mark it is about, else null for the page as a whole. */
+  mark: z.number().nullable(),
+  screen: screenNameSchema,
+  severity: z.enum(FINDING_SEVERITIES),
+  category: z.enum(VISUAL_CATEGORIES),
+  /** One line, in plain words. */
+  title: z.string(),
+  /** What she sees, in one or two sentences. */
+  observed: z.string(),
+  /** What to change. */
+  suggestion: z.string(),
+});
+export type IrisFinding = z.output<typeof irisFindingSchema>;
+
+/** Iris's reply for one template. */
+export const irisReviewSchema = z.object({
+  /** At most eight findings, worst first; empty when the template looks right. */
+  findings: z.array(irisFindingSchema),
+  /** One sentence on the template as a whole. */
+  summary: z.string(),
+});
+export type IrisReview = z.output<typeof irisReviewSchema>;
 
 // ---------------------------------------------------------------------------
 // The workflow's input and the steps' contracts.
@@ -203,6 +291,9 @@ export const reviewWebsiteInputSchema = z.object({
   loginUrl: z
     .string()
     .describe('Where the sign-in starts, else the entry URL.'),
+  visualReview: z
+    .boolean()
+    .describe('Whether Iris reviews one page per template with vision.'),
 });
 export type ReviewWebsiteInput = z.output<typeof reviewWebsiteInputSchema>;
 
@@ -229,6 +320,9 @@ export const preparedSessionSchema = z.object({
   signedIn: z
     .boolean()
     .describe('Whether the crawl runs with a saved sign-in.'),
+  visualReview: z
+    .boolean()
+    .describe('Whether Iris reviews one page per template with vision.'),
 });
 export type PreparedSession = z.output<typeof preparedSessionSchema>;
 
@@ -251,8 +345,13 @@ export const discoveredPageSchema = z.object({
   depth: z.number(),
   /** The page it was first linked from, else null for the entry page. */
   parent: z.string().nullable(),
-  /** Its URL pattern (`/claims/:id`): pages with one pattern are one group. */
+  /**
+   * Its page template: the URL pattern (`/claims/:id`) after Discover pages,
+   * the template's id once Group templates has run.
+   */
   group: z.string(),
+  /** A hash of its page structure (`structureFingerprint`), else '' when it did not load. */
+  fingerprint: z.string(),
   /** Why it could not be loaded, else null. */
   error: z.string().nullable(),
 });
@@ -289,12 +388,55 @@ export const captureSchema = z.object({
 });
 export type Capture = z.output<typeof captureSchema>;
 
+/** What Group templates found, and which templates Iris will review. */
+export const groupedSiteSchema = discoveredSiteSchema.extend({
+  templates: z
+    .array(pageTemplateSchema)
+    .describe('The page templates, biggest first.'),
+  reviewTemplates: z
+    .array(z.string())
+    .describe('The ids of the templates Iris reviews: all, some or none.'),
+  askBeforeReview: z
+    .boolean()
+    .describe('Whether the review is big enough to ask the user first.'),
+});
+export type GroupedSite = z.output<typeof groupedSiteSchema>;
+
+/** What the waiting Confirm review asks: the cost and the choices. */
+export const reviewQuestionSchema = signInQuestionSchema;
+/** The user's choice. */
+export const reviewAnswerSchema = signInAnswerSchema;
+
+/** What Confirm review settled: the templates Iris reviews. */
+export const reviewChoiceSchema = z.object({
+  reviewTemplates: z
+    .array(z.string())
+    .describe('The ids of the templates Iris reviews.'),
+});
+
 /** What Capture and check measured. */
-export const checkedSiteSchema = discoveredSiteSchema.extend({
+export const checkedSiteSchema = groupedSiteSchema.extend({
   captures: z.array(captureSchema),
   findings: z.array(findingSchema),
+  reviewShots: z
+    .array(reviewShotSchema)
+    .describe('The marked screenshots of the templates Iris reviews.'),
 });
 export type CheckedSite = z.output<typeof checkedSiteSchema>;
+
+/** What Review templates added: Iris's findings, merged with the measured ones. */
+export const reviewedSiteSchema = checkedSiteSchema.extend({
+  reviewed: z
+    .array(
+      z.object({
+        template: z.string(),
+        summary: z.string(),
+        findingCount: z.number(),
+      }),
+    )
+    .describe('Each template Iris reviewed, with her one-line summary.'),
+});
+export type ReviewedSite = z.output<typeof reviewedSiteSchema>;
 
 /** Counts by severity. */
 export const severityCountsSchema = z.object({
@@ -340,9 +482,23 @@ export const REVIEW_WEBSITE_STEP_SCHEMAS = {
     input: preparedSessionSchema,
     output: discoveredSiteSchema,
   },
-  'capture-and-check': {
+  'group-templates': {
     input: discoveredSiteSchema,
+    output: groupedSiteSchema,
+  },
+  'confirm-review': {
+    input: groupedSiteSchema,
+    output: reviewChoiceSchema,
+    suspend: reviewQuestionSchema,
+    resume: reviewAnswerSchema,
+  },
+  'capture-and-check': {
+    input: groupedSiteSchema,
     output: checkedSiteSchema,
   },
-  'save-report': { input: checkedSiteSchema, output: savedReportSchema },
+  'review-templates': {
+    input: checkedSiteSchema,
+    output: reviewedSiteSchema,
+  },
+  'save-report': { input: reviewedSiteSchema, output: savedReportSchema },
 } as const;

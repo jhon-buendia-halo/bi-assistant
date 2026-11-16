@@ -393,6 +393,14 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
           maxLength: 500,
         },
         {
+          name: 'visualReview',
+          label: 'Visual review with Iris',
+          type: 'boolean',
+          required: false,
+          default: true,
+          help: 'Iris looks at one page per page template and reports what measuring cannot see. One AI call per template; with more than ten templates the run asks first.',
+        },
+        {
           name: 'needsSignIn',
           label: 'The site needs a sign-in',
           type: 'boolean',

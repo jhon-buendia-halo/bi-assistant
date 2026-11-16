@@ -324,7 +324,7 @@ Feature: Review a Website
 
   @demo @story-1.27.1
   Scenario: I review a website and every defect comes with its evidence
-    When I open "Review a Website" from Workflows, enter the site's URL and click Execute
+    When I open "Review a Website" from Workflows, enter the site's URL, untick "Visual review with Iris" and click Execute
     Then I see the running step and its progress, page by page
     And the run succeeds with no model call
     And the answer names the covered "Buy now" button as critical, then the broken image on the 2 pages of "/items/:id"
@@ -332,6 +332,13 @@ Feature: Review a Website
     And the sign-out link was never opened
     When I open the report
     Then I see the page groups with their severities, and picking "/items/:id" shows "Image does not load" found on 2 pages with its crop
+
+  @story-1.27.2
+  Scenario: Iris reviews one page per template and her findings join the report
+    Given the stub model answers as Iris with one visual finding
+    When I review the site with "Visual review with Iris" ticked
+    Then the run succeeds and Iris reviewed each page template that loaded, one call each, with its screenshots
+    And the report tags her finding "Iris", with what she observed and her suggestion
 ```
 
 ## Acceptance

@@ -262,6 +262,7 @@ const FIXTURES: Record<string, ContractFixture> = {
       exclude: '',
       needsSignIn: false,
       loginUrl: '',
+      visualReview: true,
     },
     requestContext: () => {
       const context = new RequestContext();
@@ -283,6 +284,7 @@ const FIXTURES: Record<string, ContractFixture> = {
                 depth: 0,
                 parent: null,
                 group: '/',
+                fingerprint: 'a1b2c3d4',
                 error: null,
               },
               {
@@ -293,6 +295,7 @@ const FIXTURES: Record<string, ContractFixture> = {
                 depth: 1,
                 parent: 'https://shop.example.com/',
                 group: '/items/:id',
+                fingerprint: 'e5f6a7b8',
                 error: null,
               },
             ],
@@ -329,9 +332,49 @@ const FIXTURES: Record<string, ContractFixture> = {
                 helpUrl: null,
                 pages: ['https://shop.example.com/items/12'],
                 crop: null,
+                source: 'measured',
+              },
+            ],
+            // The item template's page, marked for Iris.
+            reviewShots: [
+              {
+                template: '/items/:id',
+                url: 'https://shop.example.com/items/12',
+                screen: 'mobile',
+                clean: 'site-review/review/mobile/items-12.clean.jpg',
+                marked: 'site-review/review/mobile/items-12.marked.jpg',
+                marks: [
+                  {
+                    n: 1,
+                    selector: 'button.buy',
+                    tag: 'button',
+                    text: 'Buy',
+                    rect: { x: 16, y: 300, width: 80, height: 32 },
+                    crop: null,
+                  },
+                ],
               },
             ],
           }),
+        reviewTemplate: () =>
+          Promise.resolve({
+            review: {
+              findings: [
+                {
+                  mark: 1,
+                  screen: 'mobile',
+                  severity: 'minor',
+                  category: 'consistency',
+                  title: 'Buy button differs from the home page buttons',
+                  observed: 'Square corners here, rounded elsewhere.',
+                  suggestion: 'Use the shared button style.',
+                },
+              ],
+              summary: 'Clean layout; one inconsistent button.',
+            },
+            stopped: false,
+          }),
+        progress: () => undefined,
         loadReportImages: () => Promise.resolve({}),
         saveReport: () =>
           Promise.resolve({
@@ -373,7 +416,10 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
       // The clear path: every step but Clarify and Read images, whose
       // branches are not taken (the sample input has no images).
       const ran = source.steps.filter(
-        (step) => step.id !== 'clarify' && step.id !== 'read-images',
+        (step) =>
+          step.id !== 'clarify' &&
+          step.id !== 'read-images' &&
+          step.id !== 'confirm-review',
       );
       expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
       for (const step of ran) {

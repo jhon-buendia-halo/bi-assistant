@@ -1,7 +1,7 @@
 import {
-  checkedSiteSchema,
   discoveredSiteSchema,
-  type CheckedSite,
+  reviewedSiteSchema,
+  type ReviewedSite,
 } from './review-website.schemas';
 import {
   renderReportBundle,
@@ -26,13 +26,14 @@ function page(
     depth: path === '/' ? 0 : 1,
     parent: path === '/' ? null : `${BASE}/`,
     group,
+    fingerprint: 'abc123',
     error: null,
     ...extra,
   };
 }
 
-function fixture(): CheckedSite {
-  return checkedSiteSchema.parse({
+function fixture(): ReviewedSite {
+  return reviewedSiteSchema.parse({
     url: `${BASE}/`,
     maxPages: 5,
     maxDepth: 2,
@@ -42,6 +43,35 @@ function fixture(): CheckedSite {
     loginUrl: `${BASE}/`,
     origin: BASE,
     signedIn: false,
+    visualReview: true,
+    templates: [
+      {
+        id: '/',
+        pages: [`${BASE}/`],
+        representative: `${BASE}/`,
+      },
+      {
+        id: '/claims/:id',
+        pages: [`${BASE}/claims/1`, `${BASE}/claims/2`, `${BASE}/claims/3`],
+        representative: `${BASE}/claims/1`,
+      },
+      {
+        id: '/claims/new',
+        pages: [`${BASE}/claims/new`],
+        representative: `${BASE}/claims/new`,
+      },
+    ],
+    reviewTemplates: ['/claims/:id'],
+    askBeforeReview: false,
+    reviewShots: [],
+    reviewed: [
+      {
+        template: '/claims/:id',
+        summary:
+          'The claim page is busy and the headline competes with a banner.',
+        findingCount: 1,
+      },
+    ],
     pages: [
       page('/', '/', { title: HOSTILE }),
       page('/claims/1', '/claims/:id'),
@@ -87,6 +117,23 @@ function fixture(): CheckedSite {
         group: '/claims/:id',
         pages: [`${BASE}/claims/1`, `${BASE}/claims/2`, `${BASE}/claims/3`],
         crop: 'crops/submit.jpg',
+        source: 'measured',
+      },
+      {
+        id: 'visual:hierarchy:mobile:/claims/:id:3',
+        rule: 'visual:hierarchy',
+        severity: 'major',
+        title: 'Two competing headlines',
+        screen: 'mobile',
+        selector: 'h1.hero',
+        measured: 'The banner and the page title have the same weight',
+        expected: 'Make the page title larger than the banner',
+        rect: null,
+        helpUrl: null,
+        group: '/claims/:id',
+        pages: [`${BASE}/claims/1`],
+        crop: null,
+        source: 'iris',
       },
       {
         id: 'overflow-x:mobile:/claims/:id:',
@@ -102,6 +149,7 @@ function fixture(): CheckedSite {
         group: '/claims/:id',
         pages: [`${BASE}/claims/1`, `${BASE}/claims/2`],
         crop: 'crops/overflow.jpg',
+        source: 'measured',
       },
       {
         id: 'tap-target:laptop:/claims/new:a.x',
@@ -117,6 +165,7 @@ function fixture(): CheckedSite {
         group: '/claims/new',
         pages: [`${BASE}/claims/new`],
         crop: 'crops/missing.jpg',
+        source: 'measured',
       },
       {
         id: 'placeholder-text:laptop:/:',
@@ -132,6 +181,7 @@ function fixture(): CheckedSite {
         group: '/',
         pages: [`${BASE}/`],
         crop: null,
+        source: 'measured',
       },
     ],
   });
@@ -170,7 +220,7 @@ describe('renderReportBundle', () => {
   it('titles the report and describes it in one sentence', () => {
     expect(bundle.title).toBe('Site review: example.com');
     expect(bundle.description).toBe(
-      'Reviewed 5 pages on Mobile and Laptop: 1 critical, 2 major and 1 minor.',
+      'Reviewed 5 pages on Mobile and Laptop: 1 critical, 3 major and 1 minor.',
     );
   });
 
@@ -182,6 +232,28 @@ describe('renderReportBundle', () => {
     expect(bundle.javascript).toContain('"/claims/:id"');
     expect(bundle.html).toContain('site-review-root');
     expect(bundle.css).toContain('--qti-focus');
+  });
+
+  it('names the templates, the sources and Iris in the data and the runtime', () => {
+    expect(bundle.javascript).toContain("text: 'Page templates'");
+    expect(bundle.javascript).not.toContain('URL groups');
+    expect(bundle.javascript).toContain("'Measured'");
+    expect(bundle.javascript).toContain("'Iris'");
+    expect(bundle.javascript).toContain("'Observed: '");
+    expect(bundle.javascript).toContain("'Suggestion: '");
+    expect(bundle.javascript).toContain('"source":"iris"');
+    expect(bundle.javascript).toContain('"source":"measured"');
+    expect(bundle.javascript).toContain(
+      'The claim page is busy and the headline competes with a banner.',
+    );
+    expect(bundle.css).toContain('.sr-src-iris');
+    expect(bundle.css).toContain('.sr-quote');
+  });
+
+  it('shows the Iris summary as a text node, never as markup', () => {
+    expect(bundle.javascript).toContain("h('p', { class: 'sr-quote' }");
+    expect(bundle.javascript).toContain('text: review.summary');
+    expect(bundle.javascript).not.toContain('innerHTML');
   });
 
   it('never lets a hostile page title reach the markup or break the script', () => {
@@ -210,14 +282,16 @@ describe('reviewAnswer', () => {
   it('summarises the findings and the coverage', () => {
     expect(reviewAnswer(fixture())).toBe(
       [
-        '**example.com**: 5 pages on Mobile and Laptop — 1 critical, 2 major and 1 minor.',
+        '**example.com**: 5 pages on Mobile and Laptop — 1 critical, 3 major and 1 minor.',
+        '',
+        'Iris reviewed 1 page template and found 1 visual issue.',
         '',
         'Fix first:',
         '- **Submit button covered by the cookie banner** (critical, Mobile) on 3 pages of `/claims/:id`: Element is 100% under div.cookie-bar',
+        '- **Two competing headlines** (major, Mobile) (Iris) on 1 page of `/claims/:id`: The banner and the page title have the same weight',
         '- **Page scrolls sideways** (major, Mobile) on 2 pages of `/claims/:id`: Content is 512 px wide in a 390 px screen',
-        '- **Tap target too small** (major, Laptop) on 1 page of `/claims/new`: 20 x 20 px',
         '',
-        'Coverage: 5 pages reached out of a limit of 5; the crawl stopped at the page limit, so the site may have more. 1 link was not followed because of the exclusion rule. 1 page failed to load. 1 capture failed.',
+        'Coverage: 5 pages reached out of a limit of 5; the crawl stopped at the page limit, so the site may have more. 3 page templates. 1 link was not followed because of the exclusion rule. 1 page failed to load. 1 capture failed.',
         '',
         'The full report is the visual above: every finding shows the element, what was measured and a crop of the screenshot.',
       ].join('\n'),
@@ -225,7 +299,7 @@ describe('reviewAnswer', () => {
   });
 
   it('says so when nothing was found and omits zero facts', () => {
-    const clean = checkedSiteSchema.parse({
+    const clean = reviewedSiteSchema.parse({
       ...fixture(),
       pages: [page('/', '/'), page('/about', '/about')],
       captures: [],
@@ -233,16 +307,52 @@ describe('reviewAnswer', () => {
       skippedLinks: [],
       capped: false,
       screens: ['mobile', 'tablet', 'laptop'],
+      visualReview: false,
+      reviewTemplates: [],
+      reviewed: [],
+      templates: [
+        { id: '/', pages: [`${BASE}/`], representative: `${BASE}/` },
+        {
+          id: '/about',
+          pages: [`${BASE}/about`],
+          representative: `${BASE}/about`,
+        },
+      ],
     });
     expect(reviewAnswer(clean)).toBe(
       [
         '**example.com**: 2 pages on Mobile, Tablet and Laptop — no measured issues.',
         '',
-        'Coverage: 2 pages reached out of a limit of 5.',
+        'Coverage: 2 pages reached out of a limit of 5. 2 page templates.',
         '',
         'The full report is the visual above: every finding shows the element, what was measured and a crop of the screenshot.',
       ].join('\n'),
     );
+  });
+
+  it('says Iris was skipped when the user chose measured checks only', () => {
+    const skipped = reviewedSiteSchema.parse({
+      ...fixture(),
+      reviewTemplates: [],
+      reviewed: [],
+      findings: [],
+    });
+    const answer = reviewAnswer(skipped);
+    expect(answer).toContain(
+      "Iris's visual review was skipped: measured checks only.",
+    );
+    expect(answer).not.toContain('Iris reviewed');
+  });
+
+  it('says nothing about Iris when the visual review is off', () => {
+    const off = reviewedSiteSchema.parse({
+      ...fixture(),
+      visualReview: false,
+      reviewTemplates: [],
+      reviewed: [],
+      findings: fixture().findings.filter((f) => f.source === 'measured'),
+    });
+    expect(reviewAnswer(off)).not.toContain('Iris');
   });
 });
 

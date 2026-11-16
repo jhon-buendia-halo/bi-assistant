@@ -105,6 +105,10 @@ A finding: `{ rule, severity, screen, page, selector, measured, expected, rect, 
 
 1.27.3 and 1.27.5 can run in parallel after 1.27.2.
 
+## 7b. Phase 2 as built (2026-11-16)
+
+Approach A: `group-templates` → `.branch` to `confirm-review` (more than ten templates) → `.map` (`review-choice`) → `capture-and-check` (also the review shots) → `review-templates` (Iris, two at a time) → `save-report`. Templates join pages that share a URL pattern or a structure fingerprint (`structureSkeleton`, repeats collapsed). Iris gets, per template, the narrowest and widest screen's top of page, clean then marked (up to 30 marks), the legend and the template's measured findings; her findings point at a mark (exact selector, box and crop from the DOM). New input `visualReview` (on). Spec: agents.md 5.19.
+
 ## 8. Tests
 
 - Jest: the rules over snapshot fixtures, URL grouping, exclusion matching, finding merge, the answer text, the workflow with the stub (`.then`, suspend/resume, bail on session lost), `workflow-contracts` snapshot updated on purpose.

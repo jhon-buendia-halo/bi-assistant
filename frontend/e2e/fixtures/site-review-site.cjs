@@ -32,7 +32,7 @@ createServer((request, response) => {
           `${nav}<h1>Shop</h1>
         <table style="width:900px"><tr><td>A table wider than a phone</td></tr></table>
         <button style="width:16px;height:16px;padding:0" aria-label="Close"></button>
-        <input type="text" placeholder="Search">`,
+        <p style="color:#c8c8c8;background:#ffffff">Low contrast note</p>`,
         ),
       );
     case "/items/1":

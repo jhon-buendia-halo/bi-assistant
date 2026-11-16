@@ -4,7 +4,12 @@ import { join } from 'path';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import { CryptoService } from '../../infrastructure/crypto/crypto.service';
 import { sessionWorkspacePath } from '../../mastra/session-workspaces';
-import { collectDomSnapshot } from '../../mastra/workflows/review-website.collect';
+import {
+  clearReviewMarks,
+  collectDomSnapshot,
+  drawReviewMarks,
+  structureSkeleton,
+} from '../../mastra/workflows/review-website.collect';
 import {
   axeFindings,
   exclusionMatcher,
@@ -21,6 +26,9 @@ import {
   type Capture,
   type DiscoveredPage,
   type DiscoveredSite,
+  type GroupedSite,
+  type ReviewMark,
+  type ReviewShot,
   type PreparedSession,
   type RawFinding,
   type Rect,
@@ -34,7 +42,7 @@ import {
 import { writeWorkspaceFile } from '../sessions/workspace-files';
 import { launchSiteBrowser } from './site-browser';
 import { SiteSignInsRepository } from './site-signins.repository';
-import { pageFileName, pageUrlOf } from './site-urls';
+import { pageFileName, pageUrlOf, shortHash } from './site-urls';
 
 /** What a run hands the browser work: its host, its stop and its progress. */
 export interface SiteReviewRunIo {
@@ -54,7 +62,19 @@ export type SiteReviewWork = Pick<
   | 'discoverPages'
   | 'captureAndCheck'
   | 'loadReportImages'
->;
+> & {
+  /** Review templates: a template's review shots, read back as images. */
+  shotImages(shots: readonly ReviewShot[]): Promise<
+    {
+      screen: SiteScreenName;
+      label: string;
+      width: number;
+      clean: { data: Buffer; mediaType: string };
+      marked: { data: Buffer; mediaType: string };
+      marks: ReviewMark[];
+    }[]
+  >;
+};
 
 type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
 
@@ -182,6 +202,7 @@ export class SiteReviewService implements OnApplicationShutdown {
       discoverPages: (input) => this.discoverPages(input, io),
       captureAndCheck: (input) => this.captureAndCheck(input, io),
       loadReportImages: (paths) => this.readImages(io.sessionId, paths),
+      shotImages: (shots) => this.shotImages(io.sessionId, shots),
     };
   }
 
@@ -350,12 +371,18 @@ export class SiteReviewService implements OnApplicationShutdown {
           depth: next.depth,
           parent: next.parent,
           group: urlGroup(next.url),
+          fingerprint: '',
           error: null,
         };
         try {
           record.status = await openPage(page, next.url);
           record.finalUrl = page.url();
           record.title = (await page.title().catch(() => '')).slice(0, 200);
+          // The page's structure, for Group templates (phase 2).
+          const skeleton = await page
+            .evaluate(structureSkeleton)
+            .catch(() => '');
+          record.fingerprint = skeleton ? shortHash(skeleton) : '';
         } catch (error) {
           record.error =
             error instanceof Error
@@ -417,11 +444,12 @@ export class SiteReviewService implements OnApplicationShutdown {
    * it is found in its group.
    */
   private async captureAndCheck(
-    site: DiscoveredSite,
+    site: GroupedSite,
     io: SiteReviewRunIo,
   ): Promise<{
     captures: Capture[];
     findings: ReturnType<typeof mergeFindings>;
+    reviewShots: ReviewShot[];
   }> {
     const axeSource = await readFile(
       require.resolve('axe-core/axe.min.js'),
@@ -436,6 +464,17 @@ export class SiteReviewService implements OnApplicationShutdown {
     );
     const captures: Capture[] = [];
     const raw: (RawFinding & { crop: string | null })[] = [];
+    // Phase 2: the representative of each template Iris reviews, on the
+    // narrowest and the widest screen, gets its review shots.
+    const reviewed = new Map(
+      site.templates
+        .filter((template) => site.reviewTemplates.includes(template.id))
+        .map((template) => [template.representative, template.id]),
+    );
+    const reviewScreens = [
+      ...new Set([site.screens[0], site.screens[site.screens.length - 1]]),
+    ];
+    const reviewShots: ReviewShot[] = [];
     const browser = await launchSiteBrowser({ headless: true });
     try {
       for (const screen of site.screens) {
@@ -467,6 +506,20 @@ export class SiteReviewService implements OnApplicationShutdown {
               }
               captures.push(result.capture);
               raw.push(...result.findings);
+              const template = reviewed.get(target.url);
+              if (
+                template !== undefined &&
+                reviewScreens.includes(screen) &&
+                !result.capture.error
+              ) {
+                const shot = await this.captureReviewShot(page, {
+                  sessionId: io.sessionId,
+                  template,
+                  url: target.url,
+                  screen,
+                }).catch(() => undefined);
+                if (shot) reviewShots.push(shot);
+              }
               checkedCount += 1;
               io.progress(
                 `Checked ${checkedCount} of ${checkTotal} · ${shortPath(target.url)} on ${screenLabel(screen)} · ${result.findings.length} finding${result.findings.length === 1 ? '' : 's'}`,
@@ -494,7 +547,141 @@ export class SiteReviewService implements OnApplicationShutdown {
         (order.get(a.url) ?? 0) - (order.get(b.url) ?? 0),
     );
     raw.sort((a, b) => (order.get(a.url) ?? 0) - (order.get(b.url) ?? 0));
-    return { captures, findings: mergeFindings(raw) };
+    // Findings merge per page template (Group templates), not per URL pattern.
+    const templateOf = new Map(
+      site.pages.map((page) => [page.url, page.group]),
+    );
+    reviewShots.sort(
+      (a, b) =>
+        (order.get(a.url) ?? 0) - (order.get(b.url) ?? 0) ||
+        site.screens.indexOf(a.screen) - site.screens.indexOf(b.screen),
+    );
+    return {
+      captures,
+      findings: mergeFindings(
+        raw,
+        (url) => templateOf.get(url) ?? urlGroup(url),
+      ),
+      reviewShots,
+    };
+  }
+
+  /** The most marks drawn on a review shot. */
+  private static readonly MAX_MARKS = 30;
+
+  /**
+   * One template's review shots on one screen (phase 2): the top of the
+   * page, at most two screens tall, as is and with numbered marks drawn on
+   * its elements, and a crop around each mark, all in the run's workspace.
+   */
+  private async captureReviewShot(
+    page: Page,
+    shot: {
+      sessionId: string;
+      template: string;
+      url: string;
+      screen: SiteScreenName;
+    },
+  ): Promise<ReviewShot> {
+    const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
+    const pageHeight = await page.evaluate(() =>
+      Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0,
+      ),
+    );
+    const clip = {
+      x: 0,
+      y: 0,
+      width: viewport.width,
+      height: Math.max(1, Math.min(pageHeight, viewport.height * 2)),
+    };
+    const base = `${SITE_REVIEW_DIR}/review/${shot.screen}/${pageFileName(shot.url)}`;
+    const jpeg = (area: Rect) =>
+      page.screenshot({
+        fullPage: true,
+        clip: area,
+        type: 'jpeg',
+        quality: 70,
+      });
+    await page.evaluate(clearReviewMarks);
+    const clean = `${base}.clean.jpg`;
+    await writeWorkspaceFile(shot.sessionId, clean, await jpeg(clip));
+    const drafts = await page.evaluate(drawReviewMarks, {
+      maxMarks: SiteReviewService.MAX_MARKS,
+      maxHeight: clip.height,
+    });
+    const marked = `${base}.marked.jpg`;
+    try {
+      await writeWorkspaceFile(shot.sessionId, marked, await jpeg(clip));
+    } finally {
+      await page.evaluate(clearReviewMarks);
+    }
+    const marks: ReviewMark[] = [];
+    for (const draft of drafts) {
+      const area = cropOf(draft.rect, {
+        width: clip.width,
+        height: Math.max(pageHeight, clip.height),
+      });
+      let crop: string | null = null;
+      if (area) {
+        const path = `${base}.mark-${draft.n}.jpg`;
+        try {
+          await writeWorkspaceFile(shot.sessionId, path, await jpeg(area));
+          crop = path;
+        } catch {
+          // The mark stays, without its crop.
+        }
+      }
+      marks.push({ ...draft, crop });
+    }
+    return {
+      template: shot.template,
+      url: shot.url,
+      screen: shot.screen,
+      clean,
+      marked,
+      marks,
+    };
+  }
+
+  /** A review shot's images, read back for Iris's call. */
+  private async shotImages(
+    sessionId: string,
+    shots: readonly ReviewShot[],
+  ): Promise<
+    {
+      screen: SiteScreenName;
+      label: string;
+      width: number;
+      clean: { data: Buffer; mediaType: string };
+      marked: { data: Buffer; mediaType: string };
+      marks: ReviewMark[];
+    }[]
+  > {
+    const root = sessionWorkspacePath(sessionId);
+    const read = async (path: string) => {
+      if (!path.startsWith(`${SITE_REVIEW_DIR}/`) || path.includes('..')) {
+        throw new Error(`Not a review image: ${path}`);
+      }
+      return {
+        data: await readFile(join(root, path)),
+        mediaType: 'image/jpeg',
+      };
+    };
+    return Promise.all(
+      shots.map(async (shot) => {
+        const spec = SITE_SCREENS.find((entry) => entry.name === shot.screen);
+        return {
+          screen: shot.screen,
+          label: spec?.label ?? shot.screen,
+          width: spec?.width ?? 0,
+          clean: await read(shot.clean),
+          marked: await read(shot.marked),
+          marks: shot.marks,
+        };
+      }),
+    );
   }
 
   /** One page on one screen: its images, its measures and its findings. */

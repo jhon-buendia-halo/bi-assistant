@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-629  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-632  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -317,13 +317,13 @@ roadmap.md:588-592  #### 1.26.2 — Saving a dataset and loading an inventory ru
 roadmap.md:594-598  #### 1.26.3 — Testing Data, ontology suggestions and the synthetic profile run in the background  `🚧 In progress`
 roadmap.md:600-604  #### 1.26.4 — Visual tailor and refresh, and eval runs, run in the background  `🚧 In progress`
 roadmap.md:606-611  #### 1.26.5 — Workflow runs keep running when the user leaves their page  `🚧 In progress`
-roadmap.md:613-629  ### Milestone 1.27 — Review a Website: measured visual QA of every page (M1-27)
+roadmap.md:613-632  ### Milestone 1.27 — Review a Website: measured visual QA of every page (M1-27)
 roadmap.md:617-621  #### 1.27.1 — Phase 1: crawl, measure and report, with the site's sign-in  `🚧 In progress`
-roadmap.md:623-625  #### 1.27.2 — Phase 2: page templates and Iris's vision review  `📋 Planned`
-roadmap.md:627-629  #### 1.27.3 — Phase 3: compare with the last run  `📋 Planned`
-roadmap.md:631-635  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:635-635  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:637-639  ## Backlog
+roadmap.md:623-628  #### 1.27.2 — Phase 2: page templates and Iris's vision review  `🚧 In progress`
+roadmap.md:630-632  #### 1.27.3 — Phase 3: compare with the last run  `📋 Planned`
+roadmap.md:634-638  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:638-638  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:640-642  ## Backlog
 
 specs/README.md:7-89  ## Layout
 specs/README.md:28-52  ### Capabilities
@@ -1419,11 +1419,11 @@ specs/capabilities/workflows/spec.md:90-96  R35 **Reference images** (2026-11-15
 specs/capabilities/workflows/spec.md:98-115  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:117-121  ## Contracts
 specs/capabilities/workflows/spec.md:123-130  ## UI
-specs/capabilities/workflows/spec.md:132-335  ## Flows
+specs/capabilities/workflows/spec.md:132-342  ## Flows
 specs/capabilities/workflows/spec.md:134-232  ### Feature: Workflows
 specs/capabilities/workflows/spec.md:234-313  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:315-335  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:337-354  ## Acceptance
+specs/capabilities/workflows/spec.md:315-342  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:344-361  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -1752,7 +1752,7 @@ specs/system/agents.md:1040-1176  ## 4. Per-turn context
 specs/system/agents.md:1042-1144  ### 4.1 System context blocks
 specs/system/agents.md:1146-1165  ### 4.2 requestContext keys
 specs/system/agents.md:1167-1176  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1178-1670  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1178-1677  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1180-1210  ### 5.1 Streamed chat turn
 specs/system/agents.md:1212-1216  ### 5.2 Read-only enforcement
 specs/system/agents.md:1218-1232  ### 5.3 Execution-guided repair
@@ -1771,40 +1771,40 @@ specs/system/agents.md:1519-1521  ### 5.15 Run workflows that call an agent: `de
 specs/system/agents.md:1523-1544  ### 5.16 Node chats: chatting with a run step's agent
 specs/system/agents.md:1546-1587  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
 specs/system/agents.md:1589-1620  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
-specs/system/agents.md:1622-1670  ### 5.19 Workflow: `review-website` (Review a Website)
-specs/system/agents.md:1672-1845  ## 6. Visual designer pipeline
-specs/system/agents.md:1676-1686  ### 6.1 Entry points
-specs/system/agents.md:1688-1690  ### 6.2 Data handed to the designer
-specs/system/agents.md:1692-1708  ### 6.3 Modes and loop
-specs/system/agents.md:1710-1745  ### 6.4 Designer prompt
-specs/system/agents.md:1747-1752  ### 6.5 Repair
-specs/system/agents.md:1754-1756  ### 6.6 Assembled files
-specs/system/agents.md:1758-1760  ### 6.7 Call options
-specs/system/agents.md:1762-1805  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1807-1845  ### 6.9 Chart runtime contract
-specs/system/agents.md:1847-2020  ## 7. Skills and workspaces
-specs/system/agents.md:1849-1858  ### 7.1 Session workspaces
-specs/system/agents.md:1860-1901  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:1903-1929  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:1931-2014  ### 7.4 Skills per agent
-specs/system/agents.md:2016-2020  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2022-2137  ## 8. Evals
-specs/system/agents.md:2026-2094  ### 8.1 Case and set format
-specs/system/agents.md:2096-2103  ### 8.2 Data preflight
-specs/system/agents.md:2105-2116  ### 8.3 Executing a case
-specs/system/agents.md:2118-2123  ### 8.4 Runs, regression and report
-specs/system/agents.md:2125-2137  ### 8.5 Other entry points
-specs/system/agents.md:2139-2143  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2145-2158  ## Open questions and gaps
-specs/system/agents.md:2160-2298  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2300-2336  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2338-2340  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2342-2419  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2421-2525  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2527-2575  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2533-2550  ### Plan
-specs/system/agents.md:2552-2575  ### Write answer
-specs/system/agents.md:2577-2593  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:1622-1677  ### 5.19 Workflow: `review-website` (Review a Website)
+specs/system/agents.md:1679-1852  ## 6. Visual designer pipeline
+specs/system/agents.md:1683-1693  ### 6.1 Entry points
+specs/system/agents.md:1695-1697  ### 6.2 Data handed to the designer
+specs/system/agents.md:1699-1715  ### 6.3 Modes and loop
+specs/system/agents.md:1717-1752  ### 6.4 Designer prompt
+specs/system/agents.md:1754-1759  ### 6.5 Repair
+specs/system/agents.md:1761-1763  ### 6.6 Assembled files
+specs/system/agents.md:1765-1767  ### 6.7 Call options
+specs/system/agents.md:1769-1812  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1814-1852  ### 6.9 Chart runtime contract
+specs/system/agents.md:1854-2027  ## 7. Skills and workspaces
+specs/system/agents.md:1856-1865  ### 7.1 Session workspaces
+specs/system/agents.md:1867-1908  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:1910-1936  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:1938-2021  ### 7.4 Skills per agent
+specs/system/agents.md:2023-2027  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:2029-2155  ## 8. Evals
+specs/system/agents.md:2033-2112  ### 8.1 Case and set format
+specs/system/agents.md:2114-2121  ### 8.2 Data preflight
+specs/system/agents.md:2123-2134  ### 8.3 Executing a case
+specs/system/agents.md:2136-2141  ### 8.4 Runs, regression and report
+specs/system/agents.md:2143-2155  ### 8.5 Other entry points
+specs/system/agents.md:2157-2161  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2163-2176  ## Open questions and gaps
+specs/system/agents.md:2178-2316  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2318-2354  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2356-2358  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2360-2437  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2439-2543  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2545-2593  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2551-2568  ### Plan
+specs/system/agents.md:2570-2593  ### Write answer
+specs/system/agents.md:2595-2611  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

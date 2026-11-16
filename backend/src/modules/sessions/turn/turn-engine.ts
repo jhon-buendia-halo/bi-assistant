@@ -14,6 +14,7 @@ import {
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
+  SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
@@ -1073,6 +1074,36 @@ export class TurnEngine {
               emit({ type: 'text', content: text });
               return Promise.resolve();
             },
+            // Review templates (agents.md 5.19): Iris over one template's
+            // shots, on the app's model, recorded as text only.
+            reviewTemplate: async ({ template, shots, measured }) => {
+              const work = (siteWork ??= this.deps.siteReview({
+                sessionId: id,
+                signal: turn.signal,
+                progress: (line) =>
+                  emit({ type: 'reasoning', content: `${line}\n` }),
+              }));
+              const images = await work.shotImages(shots);
+              try {
+                const reviewed = await this.deps.mastra.reviewTemplate(
+                  {
+                    url: template.representative,
+                    template,
+                    shots: images,
+                    measured,
+                  },
+                  stepModelOf(SITE_REVIEWER_AGENT_KEY),
+                );
+                return {
+                  ...reviewed,
+                  stopped: reviewed.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                throw await stepError(error);
+              }
+            },
+            progress: (line) =>
+              emit({ type: 'reasoning', content: `${line}\n` }),
           }),
         },
         (event) => onStepEvent?.(event),
@@ -1265,6 +1296,8 @@ export class TurnEngine {
     work: () => SiteReviewWork;
     saveReport: ReviewWebsiteRuntime['saveReport'];
     showAnswer: ReviewWebsiteRuntime['showAnswer'];
+    reviewTemplate: ReviewWebsiteRuntime['reviewTemplate'];
+    progress: ReviewWebsiteRuntime['progress'];
   }): ReviewWebsiteRuntime {
     return {
       checkSignIn: (input) => parts.work().checkSignIn(input),
@@ -1275,6 +1308,8 @@ export class TurnEngine {
       loadReportImages: (paths) => parts.work().loadReportImages(paths),
       saveReport: parts.saveReport,
       showAnswer: parts.showAnswer,
+      reviewTemplate: parts.reviewTemplate,
+      progress: parts.progress,
     };
   }
 
@@ -1354,6 +1389,10 @@ export class TurnEngine {
           captured(() => runtime.loadReportImages(paths)),
         saveReport: (input) => captured(() => runtime.saveReport(input)),
         showAnswer: (text) => captured(() => runtime.showAnswer(text)),
+        reviewTemplate: (input) =>
+          captured(() => runtime.reviewTemplate(input)),
+        // Synchronous and never throws: a progress line only.
+        progress: (line) => runtime.progress(line),
       } satisfies ReviewWebsiteRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {

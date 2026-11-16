@@ -18,11 +18,16 @@ import {
   QUERY_EXPLAINER_EVAL_SET,
   queryExplainerEvalTarget,
 } from './query-explainer.evals';
+import {
+  SITE_REVIEWER_EVAL_AGENT_KEY,
+  SITE_REVIEWER_EVAL_SET,
+  siteReviewerEvalTarget,
+} from './site-reviewer.evals';
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
- * assistant's, the Data Readiness Agent's, Insights Analyst's and the Query
- * Explainer's. A set runs on the agent its
+ * assistant's, the Data Readiness Agent's, Insights Analyst's, the Query
+ * Explainer's and the Site Reviewer's. A set runs on the agent its
  * `agentKey` names, the `assistant` when it names none.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
@@ -30,6 +35,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   DATA_READINESS_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
   QUERY_EXPLAINER_EVAL_SET,
+  SITE_REVIEWER_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
@@ -58,6 +64,8 @@ export function evalTargetFor(agentKey: string): EvalTarget {
     return insightsAnalystEvalTarget();
   if (agentKey === QUERY_EXPLAINER_EVAL_AGENT_KEY)
     return queryExplainerEvalTarget();
+  if (agentKey === SITE_REVIEWER_EVAL_AGENT_KEY)
+    return siteReviewerEvalTarget();
   throw new Error(`Agent "${agentKey}" has no evals to run`);
 }
 

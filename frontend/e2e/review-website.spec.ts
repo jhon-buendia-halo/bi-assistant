@@ -3,6 +3,8 @@ import path from 'node:path';
 import { chromium, type Locator, type Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
+import { saveLenaiSettings } from './helpers/agents-api';
+import { startLlmStub, type StubRequest } from './helpers/llm-stub';
 
 // Review a Website drives a browser from the backend (agents.md 5.19,
 // ADR-0049): the app under test gets Playwright's own Chromium, so the
@@ -57,7 +59,7 @@ test.describe('Feature: Review a Website', () => {
       test.setTimeout(180_000);
       await scenarioStep(
         page,
-        'When I open "Review a Website" from Workflows, enter the site\'s URL and click Execute',
+        'When I open "Review a Website" from Workflows, enter the site\'s URL, untick "Visual review with Iris" and click Execute',
         async () => {
           await railItem(page, 'Workflows').click();
           await page.getByTestId('workflow-review-website').click();
@@ -66,6 +68,8 @@ test.describe('Feature: Review a Website', () => {
           );
           await page.getByTestId('workflow-input-url').fill(`${SITE}/`);
           await page.getByTestId('workflow-input-maxPages').fill('20');
+          // Measured checks only: Iris's review has its own scenario.
+          await page.getByTestId('workflow-input-visualReview').uncheck();
           await page.getByTestId('workflow-run').click();
         },
       );
@@ -150,6 +154,93 @@ test.describe('Feature: Review a Website', () => {
           ).toHaveAttribute('src', /^data:image\/jpeg;base64,/);
         },
       );
+    },
+  );
+  test(
+    'Iris reviews one page per template and her findings join the report',
+    { tag: ['@story-1.27.2'] },
+    async ({ page }) => {
+      test.setTimeout(180_000);
+      const stub = await startLlmStub();
+      const reviewed: StubRequest[] = [];
+      try {
+        await saveLenaiSettings(page, stub.baseUrl);
+        // Iris's reply: one visual finding on mark 1 of the Mobile shot.
+        stub.reply = (request) => {
+          reviewed.push(request);
+          return {
+            text: JSON.stringify({
+              findings: [
+                {
+                  mark: 1,
+                  screen: 'mobile',
+                  severity: 'major',
+                  category: 'consistency',
+                  title: 'Navigation links look unlike the buttons',
+                  observed:
+                    'The links are plain blue text while buttons are dark.',
+                  suggestion: 'Give the navigation one shared style.',
+                },
+              ],
+              summary: 'Plain layout with an inconsistent navigation.',
+            }),
+          };
+        };
+        await scenarioStep(
+          page,
+          'When I review the site with "Visual review with Iris" ticked',
+          async () => {
+            await railItem(page, 'Workflows').click();
+            await page.getByTestId('workflow-review-website').click();
+            await page.getByTestId('workflow-input-url').fill(`${SITE}/`);
+            await page.getByTestId('workflow-input-maxPages').fill('20');
+            await expect(
+              page.getByTestId('workflow-input-visualReview'),
+            ).toBeChecked();
+            await page.getByTestId('workflow-run').click();
+          },
+        );
+        const answer = page.getByTestId('run-answer');
+        await scenarioStep(
+          page,
+          'Then the run succeeds and Iris reviewed each page template that loaded, one call each, with its screenshots',
+          async () => {
+            await expect(page.getByText('Run succeeded')).toBeVisible({
+              timeout: 150_000,
+            });
+            await expect(answer).toContainText(
+              'Iris reviewed 4 page templates and found 4 visual issues.',
+            );
+            expect(reviewed).toHaveLength(4);
+            const parts = reviewed[0].messages.flatMap((message) =>
+              Array.isArray(message.content)
+                ? (message.content as { type?: string }[])
+                : [],
+            );
+            expect(
+              parts.filter((part) => part.type === 'image_url').length,
+            ).toBe(4);
+          },
+        );
+        await scenarioStep(
+          page,
+          'And the report tags her finding "Iris", with what she observed and her suggestion',
+          async () => {
+            await page.getByTestId('workflow-run-dock-maximize').click();
+            await page.getByRole('button', { name: /^View/ }).first().click();
+            const report = page.frameLocator('iframe').first();
+            const card = report
+              .getByRole('listitem')
+              .filter({ hasText: 'Navigation links look unlike the buttons' })
+              .first();
+            await expect(card).toContainText('Iris');
+            await expect(card).toContainText('Observed:');
+            await expect(card).toContainText('Suggestion:');
+          },
+        );
+      } finally {
+        await stub.close();
+      }
     },
   );
 });

@@ -35,6 +35,10 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { CryptoService } from '../../infrastructure/crypto/crypto.service';
 import { preparedSessionOf } from '../../mastra/workflows/review-website.steps';
+import {
+  groupTemplates,
+  reviewPlan,
+} from '../../mastra/workflows/review-website.templates';
 import type { PreparedSession } from '../../mastra/workflows/review-website.schemas';
 import { SiteReviewService } from './site-review.service';
 import type {
@@ -71,7 +75,7 @@ function site(visits: string[]): Server {
             `${NAV}<h1>Shop</h1>
             <table style="width:900px"><tr><td>A table wider than a phone</td></tr></table>
             <button style="width:16px;height:16px;padding:0" aria-label="Close"></button>
-            <input type="text" placeholder="Search">`,
+            <p style="color:#c8c8c8;background:#ffffff">Low contrast note</p>`,
           ),
         );
       case '/items/1':
@@ -189,6 +193,7 @@ describeWithBrowser(
           exclude: '',
           needsSignIn: false,
           loginUrl: '',
+          visualReview: false,
         }),
         signedIn: false,
         ...patch,
@@ -204,7 +209,7 @@ describeWithBrowser(
     it('crawls the site, measures every page on every screen, and crops the evidence', async () => {
       const service = new SiteReviewService(signIns(), new CryptoService());
       const work = service.forRun(io());
-      const prepared = session();
+      const prepared = session({ visualReview: true });
       const found = await work.discoverPages(prepared);
       const paths = found.pages.map((page) => new URL(page.url).pathname);
       expect(paths).toEqual(['/', '/items/1', '/items/2', '/about', '/broken']);
@@ -220,7 +225,46 @@ describeWithBrowser(
         new Set(['/', '/items/:id', '/about', '/broken']),
       );
 
-      const checked = await work.captureAndCheck({ ...prepared, ...found });
+      // Every loaded page has a structure fingerprint; the two item pages
+      // share theirs.
+      expect(
+        found.pages
+          .filter((page) => !page.error)
+          .every((page) => page.fingerprint),
+      ).toBe(true);
+      const items = found.pages.filter((page) => page.group === '/items/:id');
+      expect(items[0].fingerprint).toBe(items[1].fingerprint);
+      const grouped = groupTemplates(found.pages);
+      const plan = reviewPlan(grouped.templates, true, grouped.pages);
+      // The 500 page is never reviewed.
+      expect([...plan.reviewTemplates].sort()).toEqual([
+        '/',
+        '/about',
+        '/items/:id',
+      ]);
+      const checked = await work.captureAndCheck({
+        ...prepared,
+        ...found,
+        pages: grouped.pages,
+        templates: grouped.templates,
+        ...plan,
+      });
+      // Phase 2: each reviewed template's page, on Mobile and Laptop, marked.
+      expect(checked.reviewShots).toHaveLength(6);
+      for (const shot of checked.reviewShots) {
+        expect(shot.marks.length).toBeGreaterThan(0);
+        expect(shot.marks.map((mark) => mark.n)).toEqual(
+          shot.marks.map((_, at) => at + 1),
+        );
+      }
+      const about = checked.reviewShots.find(
+        (shot) => shot.template === '/about' && shot.screen === 'mobile',
+      )!;
+      expect(about.marks.some((mark) => mark.tag === 'button')).toBe(true);
+      const shotImages = await work.shotImages([about]);
+      expect(shotImages[0].clean.data.length).toBeGreaterThan(1000);
+      expect(shotImages[0].marked.data.length).toBeGreaterThan(1000);
+      expect(shotImages[0].label).toBe('Mobile');
       expect(checked.captures).toHaveLength(10);
       expect(checked.captures.every((capture) => capture.screenshot)).toBe(
         true,

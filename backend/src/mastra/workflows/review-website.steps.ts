@@ -13,6 +13,11 @@ import {
   SITE_SCREENS,
   type CheckedSite,
   type DiscoveredSite,
+  type Finding,
+  type GroupedSite,
+  type IrisReview,
+  type PageTemplate,
+  type ReviewShot,
   type PreparedSession,
   type ReviewWebsiteInput,
 } from './review-website.schemas';
@@ -92,14 +97,51 @@ export const REVIEW_WEBSITE_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: 'group-templates',
+      title: 'Group templates',
+      kind: 'code',
+      summary:
+        'Groups the pages into page templates: pages that share a URL pattern or a page structure. Picks one page per template for Iris and counts the AI calls her review takes. No LLM.',
+      exits: [],
+    },
+    SCHEMAS['group-templates'],
+  ),
+  contractStepEntry(
+    {
+      id: 'confirm-review',
+      title: 'Confirm review',
+      kind: 'code',
+      summary:
+        'Only when Iris would review more than ten templates: asks whether to review them all, only the ten biggest, or to keep to the measured checks. No LLM.',
+      exits: [{ label: 'until you choose', outcome: 'waits' }],
+    },
+    SCHEMAS['confirm-review'],
+  ),
+  contractStepEntry(
+    {
       id: 'capture-and-check',
       title: 'Capture and check',
       kind: 'code',
       summary:
-        'Opens every page on every screen, takes a full-page screenshot and measures it: accessibility (axe), sideways scrolling, cut-off text, controls covered by banners, small tap targets, broken images, HTTP and console errors, placeholder text. No LLM.',
+        'Opens every page on every screen, takes a full-page screenshot and measures it: accessibility (axe), sideways scrolling, cut-off text, controls covered by banners, small tap targets, broken images, HTTP and console errors, placeholder text. For each template Iris reviews, also takes the top of its page with numbered marks on its elements. No LLM.',
       exits: [{ label: 'you stop it', outcome: 'stops' }],
     },
     SCHEMAS['capture-and-check'],
+  ),
+  contractStepEntry(
+    {
+      id: 'review-templates',
+      title: 'Review templates',
+      kind: 'agent',
+      summary:
+        'Iris looks at one page per template, the narrowest and the widest screen side by side, with the measured findings as context, and reports what measuring cannot see: hierarchy, alignment, spacing, consistency, imagery, legibility. One model call per template, two at a time.',
+      exits: [
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
+      ],
+      modelOnly: true,
+    },
+    SCHEMAS['review-templates'],
   ),
   contractStepEntry(
     {
@@ -107,7 +149,7 @@ export const REVIEW_WEBSITE_STEPS: readonly ContractStepEntry[] = [
       title: 'Save report',
       kind: 'code',
       summary:
-        'Groups the findings by page pattern, draws the report as a visual of the run with a crop of each finding, saves the findings as a file of the run and writes the answer. No LLM.',
+        'Draws the report by page template as a visual of the run, with a crop of each finding, saves the findings as a file of the run and writes the answer. No LLM.',
       exits: [],
     },
     SCHEMAS['save-report'],
@@ -118,8 +160,22 @@ export const REVIEW_WEBSITE_STEPS: readonly ContractStepEntry[] = [
 export const REVIEW_WEBSITE_EDGES: readonly WorkflowEdge[] = [
   { from: 'start', to: 'prepare-session', kind: 'next' },
   { from: 'prepare-session', to: 'discover-pages', kind: 'next' },
-  { from: 'discover-pages', to: 'capture-and-check', kind: 'next' },
-  { from: 'capture-and-check', to: 'save-report', kind: 'next' },
+  { from: 'discover-pages', to: 'group-templates', kind: 'next' },
+  {
+    from: 'group-templates',
+    to: 'capture-and-check',
+    kind: 'next',
+    label: 'Ten templates or fewer',
+  },
+  {
+    from: 'group-templates',
+    to: 'confirm-review',
+    kind: 'branch',
+    label: 'More than ten templates',
+  },
+  { from: 'confirm-review', to: 'capture-and-check', kind: 'next' },
+  { from: 'capture-and-check', to: 'review-templates', kind: 'next' },
+  { from: 'review-templates', to: 'save-report', kind: 'next' },
   { from: 'save-report', to: 'end', kind: 'next' },
 ];
 
@@ -156,10 +212,24 @@ export interface ReviewWebsiteRuntime {
   ): Promise<
     Pick<DiscoveredSite, 'pages' | 'skippedLinks' | 'capped' | 'sessionLost'>
   >;
-  /** Capture and check: every page on every screen, measured. */
+  /**
+   * Capture and check: every page on every screen, measured; and the marked
+   * screenshots of the templates Iris reviews.
+   */
   captureAndCheck(
-    input: DiscoveredSite,
-  ): Promise<Pick<CheckedSite, 'captures' | 'findings'>>;
+    input: GroupedSite,
+  ): Promise<Pick<CheckedSite, 'captures' | 'findings' | 'reviewShots'>>;
+  /**
+   * Review templates: Iris's review of one template, from its shots, with
+   * the measured findings of that template as context.
+   */
+  reviewTemplate(input: {
+    template: PageTemplate;
+    shots: readonly ReviewShot[];
+    measured: readonly Finding[];
+  }): Promise<{ review: IrisReview; stopped: boolean }>;
+  /** Review templates: one progress line. */
+  progress(line: string): void;
   /** Save report: the images, as `data:` URIs, by workspace path. */
   loadReportImages(paths: readonly string[]): Promise<Record<string, string>>;
   /**
@@ -199,6 +269,7 @@ export function reviewWebsiteInputOf(
     exclude: text('exclude'),
     needsSignIn: flag('needsSignIn', false),
     loginUrl: text('loginUrl'),
+    visualReview: flag('visualReview', true),
   };
 }
 
@@ -276,6 +347,7 @@ export function preparedSessionOf(
     screens,
     exclude,
     needsSignIn: input.needsSignIn,
+    visualReview: input.visualReview,
     loginUrl: loginUrl || url,
     origin,
   };

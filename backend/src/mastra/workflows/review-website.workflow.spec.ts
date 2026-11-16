@@ -19,6 +19,7 @@ import {
 import type {
   DiscoveredPage,
   Finding,
+  GroupedSite,
   ReviewWebsiteInput,
 } from './review-website.schemas';
 
@@ -52,6 +53,7 @@ interface StubRun {
 interface StubWorkflow {
   id: string;
   steps: { id: string; description?: string }[];
+  entries: { type: string; pairs?: [unknown, { id: string }][] }[];
   options?: {
     shouldPersistSnapshot?: (args: { workflowStatus: string }) => boolean;
   };
@@ -71,6 +73,8 @@ const INPUT: ReviewWebsiteInput = {
   exclude: '',
   needsSignIn: false,
   loginUrl: '',
+  // Phase 1's flow; Iris's review has its own tests below.
+  visualReview: false,
 };
 
 const PAGES: DiscoveredPage[] = [
@@ -82,6 +86,7 @@ const PAGES: DiscoveredPage[] = [
     depth: 0,
     parent: null,
     group: '/',
+    fingerprint: 'f00d',
     error: null,
   },
 ];
@@ -100,6 +105,7 @@ const FINDING: Finding = {
   helpUrl: null,
   pages: ['https://shop.example.com/'],
   crop: 'site-review/mobile/home.0.crop.jpg',
+  source: 'measured',
 };
 
 type MockedRuntime = { [K in keyof ReviewWebsiteRuntime]: jest.Mock };
@@ -132,8 +138,16 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
           },
         ],
         findings: [FINDING],
+        reviewShots: [],
       }),
     ),
+    reviewTemplate: jest.fn(() =>
+      Promise.resolve({
+        review: { findings: [], summary: 'Looks right.' },
+        stopped: false,
+      }),
+    ),
+    progress: jest.fn(),
     loadReportImages: jest.fn((paths: string[]) =>
       Promise.resolve(
         Object.fromEntries(
@@ -180,11 +194,17 @@ async function start(
 }
 
 describe('review-website workflow (agents.md 5.19)', () => {
-  it('builds the four catalogue steps, in order, with their titles', () => {
+  it('builds the catalogue steps in order, Confirm review inside the branch', () => {
     expect(workflow.id).toBe(REVIEW_WEBSITE_WORKFLOW_ID);
     expect(workflow.steps.map((step) => [step.id, step.description])).toEqual(
-      REVIEW_WEBSITE_STEPS.map((step) => [step.id, step.title]),
+      REVIEW_WEBSITE_STEPS.filter((step) => step.id !== 'confirm-review').map(
+        (step) => [step.id, step.title],
+      ),
     );
+    const branch = workflow.entries.find((entry) => entry.type === 'branch');
+    expect(branch?.pairs?.map(([, step]) => step.id)).toEqual([
+      'confirm-review',
+    ]);
   });
 
   it('snapshots only while the run waits for the sign-in', () => {
@@ -203,8 +223,14 @@ describe('review-website workflow (agents.md 5.19)', () => {
       'prepare-session:success',
       'discover-pages:running',
       'discover-pages:success',
+      'group-templates:running',
+      'group-templates:success',
+      'review-choice:running',
+      'review-choice:success',
       'capture-and-check:running',
       'capture-and-check:success',
+      'review-templates:running',
+      'review-templates:success',
       'save-report:running',
       'save-report:success',
     ]);
@@ -360,5 +386,198 @@ describe('review-website workflow (agents.md 5.19)', () => {
     expect(String(result.error)).toContain(
       'The Discover pages step has no website to review',
     );
+  });
+  describe('phase 2: page templates and Iris (agents.md 5.19)', () => {
+    /** `count` pages, each its own template (distinct URL patterns and structures). */
+    function sitePages(count: number): DiscoveredPage[] {
+      return Array.from({ length: count }, (_, at) => ({
+        url: `https://shop.example.com/section-${at}`,
+        finalUrl: `https://shop.example.com/section-${at}`,
+        status: 200,
+        title: `Section ${at}`,
+        depth: at === 0 ? 0 : 1,
+        parent: at === 0 ? null : 'https://shop.example.com/section-0',
+        group: `/section-${at}`,
+        fingerprint: `fp-${at}`,
+        error: null,
+      }));
+    }
+
+    /** A runtime on `count` templates whose capture returns a shot per reviewed template. */
+    function reviewRuntime(
+      count: number,
+      overrides: Partial<MockedRuntime> = {},
+    ) {
+      const pages = sitePages(count);
+      return runtime({
+        discoverPages: jest.fn(() =>
+          Promise.resolve({
+            pages,
+            skippedLinks: [],
+            capped: false,
+            sessionLost: null,
+          }),
+        ),
+        captureAndCheck: jest.fn((site: GroupedSite) =>
+          Promise.resolve({
+            captures: [],
+            findings: [],
+            reviewShots: site.reviewTemplates.map((template) => ({
+              template,
+              url: site.templates.find((t) => t.id === template)!
+                .representative,
+              screen: 'mobile',
+              clean: `site-review/review/mobile/${template.slice(1)}.clean.jpg`,
+              marked: `site-review/review/mobile/${template.slice(1)}.marked.jpg`,
+              marks: [
+                {
+                  n: 1,
+                  selector: 'h1',
+                  tag: 'h1',
+                  text: 'Title',
+                  rect: { x: 0, y: 0, width: 200, height: 40 },
+                  crop: `site-review/review/mobile/${template.slice(1)}.mark-1.jpg`,
+                },
+              ],
+            })),
+          }),
+        ),
+        reviewTemplate: jest.fn(() =>
+          Promise.resolve({
+            review: {
+              findings: [
+                {
+                  mark: 1,
+                  screen: 'mobile',
+                  severity: 'major',
+                  category: 'hierarchy',
+                  title: 'Title competes with the banner',
+                  observed: 'The banner is bigger than the page title.',
+                  suggestion: 'Make the title the largest text.',
+                },
+              ],
+              summary: 'Busy header.',
+            },
+            stopped: false,
+          }),
+        ),
+        ...overrides,
+      });
+    }
+
+    it('Iris reviews every template when there are ten or fewer, and her findings join the report', async () => {
+      const given = reviewRuntime(3);
+      const { events, result } = await start(given, { visualReview: true });
+      expect(result.status).toBe('success');
+      expect(events).not.toContain('confirm-review:running');
+      expect(given.reviewTemplate).toHaveBeenCalledTimes(3);
+      const first = (given.reviewTemplate.mock.calls as unknown[][])[0][0] as {
+        template: { id: string };
+        shots: unknown[];
+      };
+      expect(first.template.id).toBe('/section-0');
+      expect(first.shots).toHaveLength(1);
+      const saved = (given.saveReport.mock.calls as unknown[][])[0][0] as {
+        findings: string;
+        answer: string;
+      };
+      const stored = JSON.parse(saved.findings) as {
+        findings: Finding[];
+        reviewed: { template: string; summary: string }[];
+      };
+      expect(stored.findings.filter((f) => f.source === 'iris')).toHaveLength(
+        3,
+      );
+      expect(stored.findings[0]).toEqual(
+        expect.objectContaining({
+          rule: 'visual:hierarchy',
+          selector: 'h1',
+          crop: 'site-review/review/mobile/section-0.mark-1.jpg',
+        }),
+      );
+      expect(stored.reviewed.map((r) => r.template)).toEqual([
+        '/section-0',
+        '/section-1',
+        '/section-2',
+      ]);
+      expect(saved.answer).toContain('Iris reviewed 3 page templates');
+      expect(given.progress).toHaveBeenCalledWith(
+        expect.stringContaining('Reviewed 3 of 3 templates'),
+      );
+    });
+
+    it('asks before reviewing more than ten templates; "Only the 10 biggest" reviews ten', async () => {
+      const given = reviewRuntime(12);
+      const started = await start(given, { visualReview: true });
+      expect(started.result.status).toBe('suspended');
+      const asked = started.suspended[0] as {
+        question: string;
+        options: string[];
+      };
+      expect(asked.options).toEqual([
+        'Review all 12 templates',
+        'Only the 10 biggest templates',
+        'Measured checks only',
+      ]);
+      expect(given.captureAndCheck).not.toHaveBeenCalled();
+      const resumed = await drain(
+        started.engineRun.resumeStream({
+          step: started.result.suspended![0],
+          resumeData: { answer: 'Only the 10 biggest templates' },
+          requestContext: started.requestContext,
+        }),
+      );
+      expect(resumed.result.status).toBe('success');
+      const site = (
+        given.captureAndCheck.mock.calls as unknown[][]
+      )[0][0] as GroupedSite;
+      expect(site.reviewTemplates).toHaveLength(10);
+      expect(site.templates).toHaveLength(12);
+      expect(given.reviewTemplate).toHaveBeenCalledTimes(10);
+    });
+
+    it('"Measured checks only" calls no model', async () => {
+      const given = reviewRuntime(12);
+      const started = await start(given, { visualReview: true });
+      const resumed = await drain(
+        started.engineRun.resumeStream({
+          step: started.result.suspended![0],
+          resumeData: { answer: 'Measured checks only' },
+          requestContext: started.requestContext,
+        }),
+      );
+      expect(resumed.result.status).toBe('success');
+      expect(given.reviewTemplate).not.toHaveBeenCalled();
+      const saved = (given.saveReport.mock.calls as unknown[][])[0][0] as {
+        answer: string;
+      };
+      expect(saved.answer).toContain('measured checks only');
+    });
+
+    it('Visual review off: no template is planned and no model is called', async () => {
+      const given = reviewRuntime(12);
+      const { result } = await start(given, { visualReview: false });
+      expect(result.status).toBe('success');
+      const site = (
+        given.captureAndCheck.mock.calls as unknown[][]
+      )[0][0] as GroupedSite;
+      expect(site.reviewTemplates).toEqual([]);
+      expect(given.reviewTemplate).not.toHaveBeenCalled();
+    });
+
+    it('a stopped review ends the run early, nothing saved', async () => {
+      const given = reviewRuntime(2, {
+        reviewTemplate: jest.fn(() =>
+          Promise.resolve({
+            review: { findings: [], summary: '' },
+            stopped: true,
+          }),
+        ),
+      });
+      const { events, result } = await start(given, { visualReview: true });
+      expect(result.status).toBe('success');
+      expect(events).toContain('review-templates:bailed');
+      expect(given.saveReport).not.toHaveBeenCalled();
+    });
   });
 });

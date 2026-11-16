@@ -620,9 +620,12 @@ Brings the goal of the `site-mapping-agent` prototype into the app as a workflow
 - **Out of scope:** the vision review and template fingerprints (phase 2); comparing runs (phase 3); listing or clearing saved sign-ins in the app; dismissing overlays; design references.
 - **Acceptance:** Jest: the rules, grouping and merge, the collector (real browser when `SITE_REVIEW_BROWSER_PATH` is set), the report and answers, the workflow on the stub (public run, sign-in wait and resume, asking again, session lost, bad input), the contract snapshot, and `SiteReviewService` against a local fixture site in a real browser; a run in the app on a fixture site.
 
-#### 1.27.2 — Phase 2: page templates and Iris's vision review  `📋 Planned`
-- **Intent:** what measuring cannot see (hierarchy, balance, brand, imagery), one model call per template instead of per page.
-- **Scope:** DOM-fingerprint grouping, the cost check (suspend), Iris with set-of-marks on desktop and mobile side by side, the measured findings as context; her eval set.
+#### 1.27.2 — Phase 2: page templates and Iris's vision review  `🚧 In progress`
+- **Intent:** what measuring cannot see (hierarchy, alignment, consistency, imagery, legibility), one model call per template instead of per page.
+- **Scope:** approach A of three (picked by the user on 2026-11-16): Group templates (URL pattern or structure fingerprint), Confirm review in a `.branch` when Iris would review more than ten templates (all / the ten biggest / measured only), review shots with numbered marks on the narrowest and widest screen, Review templates (Iris, two at a time, measured findings as context), her findings in the report and the answer; the `Visual review with Iris` input (on); agents.md 2.16, 5.19, api.md 116; her eval set.
+- **Out of scope:** comparing runs (1.27.3); reviewing more than the top two screens of a page.
+- **Acceptance:** Jest: grouping and plan, the skeleton and marks in a real browser, Iris's reader and request, the workflow on the stub (review, ask and choose, measured only, off, stop), the contract snapshot, the service's review shots in a real browser; E2E `review-website.spec.ts` with the stub model as Iris; the `site-reviewer` eval set.
+- **Notes:** rejected: B (`.foreach` over a nested workflow: the stub cannot run it and the canvas shows one node), C (a second workflow on an earlier run: a new input type and two runs for one result).
 
 #### 1.27.3 — Phase 3: compare with the last run  `📋 Planned`
 - **Intent:** a second review leads with what changed: new, fixed and changed-look findings.

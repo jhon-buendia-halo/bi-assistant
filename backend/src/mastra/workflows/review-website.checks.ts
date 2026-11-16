@@ -285,10 +285,12 @@ function fnv1a(text: string): string {
  */
 export function mergeFindings(
   raw: Array<RawFinding & { crop: string | null }>,
+  /** A page's template (Group templates); its URL pattern by default. */
+  groupOf: (url: string) => string = urlGroup,
 ): Finding[] {
   const groups = new Map<string, Array<RawFinding & { crop: string | null }>>();
   for (const finding of raw) {
-    const group = urlGroup(finding.url);
+    const group = groupOf(finding.url);
     const key = `${finding.rule}|${finding.screen}|${group}|${finding.selector ?? ''}`;
     const list = groups.get(key);
     if (list) list.push(finding);
@@ -318,12 +320,26 @@ export function mergeFindings(
       expected: rep.expected,
       rect: rep.rect,
       helpUrl: rep.helpUrl,
-      group: urlGroup(rep.url),
+      group: groupOf(rep.url),
       pages,
       crop: rep.crop,
+      source: 'measured',
     });
   }
   return merged.sort(
+    (a, b) =>
+      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
+      b.pages.length - a.pages.length ||
+      a.title.localeCompare(b.title),
+  );
+}
+
+/**
+ * Every finding of the run, sorted as `mergeFindings` sorts: severity, then
+ * pages, then title (the measured ones and Iris's together).
+ */
+export function sortFindings(findings: readonly Finding[]): Finding[] {
+  return [...findings].sort(
     (a, b) =>
       SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
       b.pages.length - a.pages.length ||

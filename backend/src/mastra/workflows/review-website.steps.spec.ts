@@ -19,6 +19,7 @@ const INPUT: ReviewWebsiteInput = {
   exclude: ' ',
   needsSignIn: true,
   loginUrl: '',
+  visualReview: true,
 };
 
 describe('Review a Website pure step code (agents.md 5.19)', () => {
@@ -32,6 +33,7 @@ describe('Review a Website pure step code (agents.md 5.19)', () => {
       needsSignIn: true,
       loginUrl: 'https://shop.example.com/start',
       origin: 'https://shop.example.com',
+      visualReview: true,
     });
   });
 
@@ -70,6 +72,7 @@ describe('Review a Website pure step code (agents.md 5.19)', () => {
       exclude: '',
       needsSignIn: false,
       loginUrl: '',
+      visualReview: true,
     });
   });
 
