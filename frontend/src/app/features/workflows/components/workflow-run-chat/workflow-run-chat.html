@@ -232,7 +232,7 @@
             [busy]="designer.running()"
             [showRating]="true"
             [ratingPending]="designer.ratingPending()"
-            [queryInspector]="designer.inspectsQueries()"
+            [queryInspector]="hasQueries(answer)"
             [question]="designer.shownQuestion()"
             (inspectQuery)="inspectQuery($event)"
             (rate)="designer.rateAnswer($event)"

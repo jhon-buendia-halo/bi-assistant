@@ -177,7 +177,13 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
     expect(q('workflow-state-status')!.classList).toContain('chip-success');
     expect(text('workflow-state-progress')).toBe('3 of 3 nodes ran');
     expect(text('workflow-state-duration')).toBe('4.0 s');
-    expect(text('workflow-state-run-id')).toBe('run-42');
+    // The run id is the copyable Execution ID chip (its first 8 characters).
+    expect(text('workflow-state-run-id')).toBe('Execution ID run-42');
+    expect(
+      q('workflow-state-run-id')!
+        .querySelector('[data-testid="execution-id"]')!
+        .getAttribute('data-execution-id'),
+    ).toBe('run-42');
   });
 
   it('reads a failed run as a danger pill and a refused Execute as the invalid chip', () => {

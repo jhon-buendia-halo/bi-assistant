@@ -7,6 +7,8 @@ description: Use when the user asks to see the records behind a readiness findin
 
 Tools for this skill: [[tool:describe_entity]], [[tool:run_readonly_sql]].
 
+This skill shows the rows behind a finding. To list every finding of a dimension, call get_readiness_report with that dimension instead, page by page; never count findings again with a query.
+
 ## Before the query
 1. Find the table and the column: from a finding in a report read in this conversation (its entity and field), or from the user's words. When the user names a column but not its table and no report has been read yet, call get_readiness_report for the dataset and take the entity from the finding on that column. Never search information_schema for it. If the table is still unclear, ask.
 2. Name the table as the dataset stores it: the "named like" key of its dataset in the orientation block shows the form (catalog.schema.table). A finding's entity is schema.table, so put the same catalog in front of it.

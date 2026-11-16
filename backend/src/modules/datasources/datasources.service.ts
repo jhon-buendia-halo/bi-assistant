@@ -13,6 +13,7 @@ import type {
   ForeignKeyEdge,
 } from './connectors/connector';
 import { mapWithConcurrency, MASKED } from './connectors/connector';
+import type { PagedRows, PagedStatement } from './connectors/paged-sql.types';
 import { DatasourcesRepository } from './repositories/datasources.repository';
 import { InventoryCacheRepository } from './repositories/inventory-cache.repository';
 import {
@@ -265,6 +266,12 @@ export class DatasourcesService {
           rowLimit,
           maxRows,
         );
+  }
+
+  /** One page of a stored statement's result (datasources R52, ADR-0050). */
+  async runPagedSql(id: string, stmt: PagedStatement): Promise<PagedRows> {
+    const ds = await this.get(id);
+    return this.connector(ds.kind).runPagedSql(ds.config, stmt);
   }
 
   view(ds: Datasource): DatasourceView {

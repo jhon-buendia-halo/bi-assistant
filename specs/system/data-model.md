@@ -309,7 +309,7 @@ How much data one query of an answer stands for (the query inspector, roadmap 1.
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `index` | number | yes | Index of the record in `data`; also the `:index` of [api.md](api.md) 140-143. |
-| `coverage` | enum | no | `whole-table` \| `top-n` \| `sample` \| `partial`; absent on a failed record. Rules, in order, over the SQL with literals and comments masked, at bracket depth 0: `sample_rows` is `sample`; rows cut by the tool's cap are `partial` (`totalRows > rowCount`; for a record without `totalRows`, the cap its rows ran into, unless that is the statement's own LIMIT); the statement's own top-level `LIMIT` (or `FETCH FIRST n`) reached is `top-n` with an `ORDER BY` before it and `sample` without; anything else is `whole-table`. |
+| `coverage` | enum | no | `whole-table` \| `top-n` \| `sample` \| `partial`; absent on a failed record. Rules, in order, over the SQL with literals and comments masked, at bracket depth 0: `sample_rows` is `sample`; an `explore_result` page is `partial` when more rows matched than it holds (`view.matchedRows`, else `totalRows`, > `rowCount`); rows cut by the tool's cap are `partial` (`totalRows > rowCount`; for a record without `totalRows`, the cap its rows ran into, unless that is the statement's own LIMIT); the statement's own top-level `LIMIT` (or `FETCH FIRST n`) reached is `top-n` with an `ORDER BY` before it and `sample` without; anything else is `whole-table`. |
 | `outerLimit` | number | no | The statement's own top-level `LIMIT` / `FETCH FIRST n`. |
 | `datasourceId` | string | no | The datasource the call ran on. |
 | `datasourceKind` | string | no | Filled by api.md 139. |
@@ -317,6 +317,7 @@ How much data one query of an answer stands for (the query inspector, roadmap 1.
 | `rowLimit` | number | no | The tool's cap for the call: `run_readonly_sql` `limit` ?? 100, `sample_rows` `limit` ?? 10. |
 | `tables` | `QueryTableSize[]` | no | Filled by api.md 139: `{entity, rows: number \| null, error?}` per table the query reads, an exact `COUNT(*)`; `rows: null` with the error when the count failed. |
 | `explanation` | `QueryExplanation` | no | Filled when the inspector first opens the query (api.md 140, 141): `{steps: QueryStep[], fallback?: true, at, stageCounts?: {status: 'verified' \| 'unverified', at, reason?}}`. |
+| `view` | `ResultView` | no | Set on an `explore_result` record only ([agents.md](agents.md) 3.15): the filters, sort, page, page size, matched rows and cap its rows were read with (api.md 152's `ResultView`); the inspector opens the query on it. Never on the record itself, which models read. |
 
 Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143), and to a past chat message's `evidence` through the lock of that session and message (144-146). A re-run (142, 147) never changes it.
 

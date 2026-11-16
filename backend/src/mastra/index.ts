@@ -5,6 +5,7 @@ import { assistantAgent } from './agents/assistant.agent';
 import { analysisPlannerAgent } from './agents/analysis-planner.agent';
 import { answerWriterAgent } from './agents/answer-writer.agent';
 import { queryExplainerAgent } from './agents/query-explainer.agent';
+import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
 import { dataMapperAgent } from './agents/data-mapper.agent';
@@ -55,6 +56,8 @@ export const mastra = new Mastra({
     'image-reader': imageReaderAgent,
     // The query inspector's explainer (agents.md 2.12).
     'query-explainer': queryExplainerAgent,
+    // The query inspector's filter in words (agents.md 2.17).
+    'result-explorer': resultExplorerAgent,
     // Review a Website's agent (agents.md 2.16, 5.19).
     'site-reviewer': siteReviewerAgent,
   },

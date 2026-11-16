@@ -1,6 +1,10 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { Observable, catchError, throwError } from 'rxjs';
 import {
+  FilterInterpretation,
+  PageRequest,
+  ResultView,
+  PageResult,
   QueryRerunResult,
 } from '../../../shared/query-evidence/query-evidence.model';
 import {
@@ -120,6 +124,18 @@ export class TryItInspector extends RunEvidenceApi {
 
   override downloadCsv(index: number): Observable<Blob> {
     return super.downloadCsv(index).pipe(this.noteGone());
+  }
+
+  override page(index: number, request: PageRequest): Observable<PageResult> {
+    return super.page(index, request).pipe(this.noteGone());
+  }
+
+  override interpretFilter(
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<FilterInterpretation> {
+    return super.interpretFilter(index, text, view).pipe(this.noteGone());
   }
 
   /** A 404 means the draft was dropped (30 minutes, or the backend restarted). */

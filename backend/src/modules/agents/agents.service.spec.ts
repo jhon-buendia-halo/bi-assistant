@@ -209,6 +209,7 @@ describe('AgentsService (built-in and user agents)', () => {
         'Read images',
         'Receive question',
         'Load catalog',
+        'Interpret follow-up',
         'Plan',
         'Clarify',
         'Analyse',
@@ -216,6 +217,8 @@ describe('AgentsService (built-in and user agents)', () => {
         'Check data quality',
         'Write answer',
         'Wrap up',
+        'Page result',
+        'Page answer',
       ]);
       expect((await v2.service.get('assistant'))?.workflow).toBeUndefined();
       // Its built-in skills, on demand (agents.md 7.4).

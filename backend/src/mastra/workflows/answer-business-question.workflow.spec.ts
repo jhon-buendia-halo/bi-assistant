@@ -28,6 +28,8 @@ jest.mock('../tool-services', () => ({
 
 import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
+import type { ExplorableQuery } from '../../modules/sessions/query-evidence/explorable-queries';
+import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import { answerBusinessQuestionWorkflow } from './answer-business-question.workflow';
 import {
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
@@ -162,7 +164,7 @@ const FAILED_ATTEMPT: AnalyseAttempt = {
 
 /** The runtime's step calls (its flags left out). */
 type TurnCalls = Required<
-  Omit<AnswerBusinessQuestionRuntime, 'checksDataQuality'>
+  Omit<AnswerBusinessQuestionRuntime, 'checksDataQuality' | 'followUp'>
 >;
 
 /** A runtime whose model steps are mocks, each answering as scripted. */
@@ -171,7 +173,10 @@ type ScriptedTurn = {
     ReturnType<TurnCalls[K]>,
     Parameters<TurnCalls[K]>
   >;
-} & { checksDataQuality?: boolean };
+} & {
+  checksDataQuality?: boolean;
+  followUp?: AnswerBusinessQuestionRuntime['followUp'];
+};
 
 /** A runtime whose model steps answer as scripted. */
 function runtime(
@@ -283,21 +288,22 @@ async function resume(
 
 /** The plan loop's events of a round where Plan needed no clarification. */
 const CLEAR_PLAN_ROUND = [
-  'plan-round:running',
-  'plan-round.plan:running',
-  'plan-round.plan:success',
-  'plan-round.plan-round-outcome:running',
-  'plan-round.plan-round-outcome:success',
-  'plan-round:success',
+  'question-path.plan-round:running',
+  'question-path.plan-round.plan:running',
+  'question-path.plan-round.plan:success',
+  'question-path.plan-round.plan-round-outcome:running',
+  'question-path.plan-round.plan-round-outcome:success',
+  'question-path.plan-round:success',
 ];
 
 describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
-  it('builds the ten catalogue steps, in order, with their titles', () => {
+  it('builds the thirteen catalogue steps, in order, with their titles', () => {
     expect(workflow.id).toBe(ANSWER_BUSINESS_QUESTION_WORKFLOW_ID);
     expect(leafSteps(workflow).map((s) => [s.id, s.description])).toEqual([
       ['read-images', 'Read images'],
       ['receive-question', 'Receive question'],
       ['load-catalog', 'Load catalog'],
+      ['interpret-follow-up', 'Interpret follow-up'],
       ['plan', 'Plan'],
       ['clarify', 'Clarify'],
       ['analyse', 'Analyse'],
@@ -305,15 +311,28 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       ['check-data-quality', 'Check data quality'],
       ['write-answer', 'Write answer'],
       ['wrap-up', 'Wrap up'],
+      ['page-result', 'Page result'],
+      ['page-answer', 'Page answer'],
     ]);
   });
 
-  it('is built with a .branch() to Read images and its outcome map first, .dountil() around the plan round (Plan, then Clarify), a .branch() to the analysis, and .dountil() around the analysis attempt', () => {
+  it('is built with a .branch() to Read images and its outcome map first, then Interpret follow-up and a .branch() to the question path (.dountil() around the plan round, a .branch() to the analysis, .dountil() around the analysis attempt) or to the explore path', () => {
     expect(workflow.entries.map((entry) => entry.type)).toEqual([
       'branch',
       'map',
       'step',
       'step',
+      'step',
+      'branch',
+    ]);
+    const top = workflow.entries[5] as Extract<StubEntry, { type: 'branch' }>;
+    expect(top.pairs.map(([, step]) => step.id)).toEqual([
+      'question-path',
+      'explore-result',
+    ]);
+    const questionPath = top.pairs[0][1];
+    expect(questionPath.entries?.map((entry) => entry.type)).toEqual([
+      'map',
       'dountil',
       'branch',
     ]);
@@ -325,7 +344,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'read-images',
     ]);
     expect(workflow.entries[1]).toMatchObject({ id: READ_IMAGES_OUTCOME_ID });
-    const planLoop = workflow.entries[4] as Extract<
+    const planLoop = questionPath.entries![1] as Extract<
       StubEntry,
       { type: 'dountil' }
     >;
@@ -339,7 +358,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'plan',
       'clarify',
     ]);
-    const branch = workflow.entries[5] as Extract<
+    const branch = questionPath.entries![2] as Extract<
       StubEntry,
       { type: 'branch' }
     >;
@@ -354,6 +373,10 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     expect(leafSteps(loop.step).map((step) => step.id)).toEqual([
       'analyse',
       'validate',
+    ]);
+    expect(leafSteps(top.pairs[1][1]).map((step) => step.id)).toEqual([
+      'page-result',
+      'page-answer',
     ]);
   });
 
@@ -394,6 +417,10 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'load-catalog': [
         ['question', 'datasets', 'imageNotes'],
         ['question', 'catalog', 'columns', 'imageNotes'],
+      ],
+      'interpret-follow-up': [
+        ['question', 'catalog', 'columns', 'imageNotes'],
+        ['question', 'catalog', 'columns', 'imageNotes', 'followUp', 'stopped'],
       ],
       plan: [
         ['question', 'catalog', 'columns', 'imageNotes', 'clarification'],
@@ -469,6 +496,34 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         ['answer', 'calls'],
         ['sqlQueries', 'failedQueries', 'rows', 'answer'],
       ],
+      'page-result': [
+        ['question', 'catalog', 'columns', 'imageNotes', 'followUp', 'stopped'],
+        [
+          'title',
+          'columns',
+          'rows',
+          'page',
+          'pageCount',
+          'matchedRows',
+          'capped',
+          'view',
+          'understood',
+        ],
+      ],
+      'page-answer': [
+        [
+          'title',
+          'columns',
+          'rows',
+          'page',
+          'pageCount',
+          'matchedRows',
+          'capped',
+          'view',
+          'understood',
+        ],
+        ['sqlQueries', 'failedQueries', 'rows', 'answer'],
+      ],
     });
   });
 
@@ -495,24 +550,30 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
+      'question-path:running',
+      'question-path.question-input:running',
+      'question-path.question-input:success',
       ...CLEAR_PLAN_ROUND,
-      'analysis-path:running',
-      'analysis-path.analysis-attempt:running',
-      'analysis-path.analysis-attempt.analyse:running',
-      'analysis-path.analysis-attempt.analyse:success',
-      'analysis-path.analysis-attempt.validate:running',
-      'analysis-path.analysis-attempt.validate:success',
-      'analysis-path.analysis-attempt:success',
-      'analysis-path.answer-path:running',
+      'question-path.analysis-path:running',
+      'question-path.analysis-path.analysis-attempt:running',
+      'question-path.analysis-path.analysis-attempt.analyse:running',
+      'question-path.analysis-path.analysis-attempt.analyse:success',
+      'question-path.analysis-path.analysis-attempt.validate:running',
+      'question-path.analysis-path.analysis-attempt.validate:success',
+      'question-path.analysis-path.analysis-attempt:success',
+      'question-path.analysis-path.answer-path:running',
       // No data-quality check asked: its branch is not taken.
-      'analysis-path.answer-path.quality-outcome:running',
-      'analysis-path.answer-path.quality-outcome:success',
-      'analysis-path.answer-path.write-answer:running',
-      'analysis-path.answer-path.write-answer:success',
-      'analysis-path.answer-path.wrap-up:running',
-      'analysis-path.answer-path.wrap-up:success',
-      'analysis-path.answer-path:success',
-      'analysis-path:success',
+      'question-path.analysis-path.answer-path.quality-outcome:running',
+      'question-path.analysis-path.answer-path.quality-outcome:success',
+      'question-path.analysis-path.answer-path.write-answer:running',
+      'question-path.analysis-path.answer-path.write-answer:success',
+      'question-path.analysis-path.answer-path.wrap-up:running',
+      'question-path.analysis-path.answer-path.wrap-up:success',
+      'question-path.analysis-path.answer-path:success',
+      'question-path.analysis-path:success',
+      'question-path:success',
     ]);
     expect(turn.checkDataQuality).not.toHaveBeenCalled();
     const catalogBlock = [
@@ -546,7 +607,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       }),
     );
     expect(
-      outputs.get('analysis-path.analysis-attempt.validate'),
+      outputs.get('question-path.analysis-path.analysis-attempt.validate'),
     ).toMatchObject({ ok: true, attempt: 1 });
     expect(turn.writeAnswer).toHaveBeenCalledWith({
       question: 'How many matches?',
@@ -560,15 +621,176 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     expect(result).toEqual({
       status: 'success',
       result: {
-        'analysis-path': {
-          'answer-path': {
-            sqlQueries: 1,
-            failedQueries: 0,
-            rows: 1,
-            answer: 'The data holds 16 matches.\n\nHow I got this: …',
+        'question-path': {
+          'analysis-path': {
+            'answer-path': {
+              sqlQueries: 1,
+              failedQueries: 0,
+              rows: 1,
+              answer: 'The data holds 16 matches.\n\nHow I got this: …',
+            },
           },
         },
       },
+    });
+  });
+
+  describe('a follow-up over an earlier result (roadmap 1.28.8)', () => {
+    const EARLIER: ExplorableQuery = {
+      ref: 'Q1',
+      sql: 'SELECT m.id AS match_id, m.stage FROM wc.public.matches m CROSS JOIN wc.public.squad_members s',
+      datasourceId: 'ds-pg',
+      columns: ['match_id', 'stage'],
+      kinds: { match_id: 'number', stage: 'text' },
+      sampleValues: { match_id: [1], stage: ['final'] },
+      rationale: 'I list each match with its squad members.',
+    };
+    const NEXT_PAGE: ExplorerSpec = {
+      action: 'explore',
+      query: 0,
+      interpretation: {
+        request: { filters: [], sort: [], page: 2, pageSize: 50 },
+        understood: 'page 2',
+      },
+    };
+    const VIEW = {
+      filters: [],
+      sort: [],
+      page: 2,
+      pageSize: 50,
+      matchedRows: 1264,
+      capped: false,
+    };
+    const PAGE = {
+      title: EARLIER.rationale!,
+      columns: ['match_id', 'stage'],
+      rows: Array.from({ length: 50 }, (_, i) => ({
+        match_id: 3 + i,
+        stage: 'final',
+      })),
+      page: 2,
+      pageCount: 26,
+      matchedRows: 1264,
+      capped: false,
+      view: VIEW,
+      understood: 'page 2',
+    };
+    const followUpTurn = (
+      spec: ExplorerSpec | Error,
+      followUp: ExplorableQuery[] = [EARLIER],
+    ) =>
+      runtime({
+        followUp,
+        interpretFollowUp: jest.fn(() =>
+          spec instanceof Error
+            ? Promise.reject(spec)
+            : Promise.resolve({ spec, stopped: false }),
+        ),
+        pageResult: jest.fn(() => Promise.resolve(PAGE)),
+        deliverAnswer: jest.fn(() => Promise.resolve()),
+      });
+
+    it('makes no model call on a run without earlier queries, and plans the question', async () => {
+      const turn = followUpTurn(NEXT_PAGE, []);
+      const { events, outputs, result } = await run('Next page', turn);
+      expect(turn.interpretFollowUp).not.toHaveBeenCalled();
+      expect(outputs.get('interpret-follow-up')).toMatchObject({
+        followUp: null,
+      });
+      expect(turn.plan).toHaveBeenCalledTimes(1);
+      expect(events.some((event) => event.startsWith('explore-result'))).toBe(
+        false,
+      );
+      expect(turn.pageResult).not.toHaveBeenCalled();
+      expect(turnSummaryOf(result.result)?.answer).toContain('16 matches');
+    });
+
+    it('pages the earlier result instead of planning: Page result, then Page answer delivers the answer', async () => {
+      const turn = followUpTurn(NEXT_PAGE);
+      const { events, result } = await run('  next page  ', turn);
+      expect(events).toEqual([
+        `${READ_IMAGES_OUTCOME_ID}:running`,
+        `${READ_IMAGES_OUTCOME_ID}:success`,
+        'receive-question:running',
+        'receive-question:success',
+        'load-catalog:running',
+        'load-catalog:success',
+        'interpret-follow-up:running',
+        'interpret-follow-up:success',
+        'explore-result:running',
+        'explore-result.page-result:running',
+        'explore-result.page-result:success',
+        'explore-result.page-answer:running',
+        'explore-result.page-answer:success',
+        'explore-result:success',
+      ]);
+      expect(turn.interpretFollowUp).toHaveBeenCalledTimes(1);
+      expect(turn.interpretFollowUp).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'next page', view: null }),
+      );
+      expect(turn.plan).not.toHaveBeenCalled();
+      expect(turn.analyse).not.toHaveBeenCalled();
+      expect(turn.writeAnswer).not.toHaveBeenCalled();
+      expect(turn.pageResult).toHaveBeenCalledWith({
+        query: 0,
+        request: NEXT_PAGE.interpretation.request,
+        understood: 'page 2',
+      });
+      expect(turn.deliverAnswer).toHaveBeenCalledTimes(1);
+      const answer = turn.deliverAnswer.mock.calls[0][0];
+      expect(answer.split('\n')[0]).toBe('Rows 51–100 of 1,264');
+      expect(result).toEqual({
+        status: 'success',
+        result: {
+          'explore-result': {
+            sqlQueries: 1,
+            failedQueries: 0,
+            rows: 50,
+            answer,
+          },
+        },
+      });
+      expect(turnSummaryOf(result.result)?.answer).toBe(answer);
+    });
+
+    it('plans the question when result-explorer reads a new question or fails', async () => {
+      for (const reply of [
+        { ...NEXT_PAGE, action: 'new-question' as const },
+        new Error('The provider failed'),
+      ]) {
+        const turn = followUpTurn(reply);
+        const { events, result } = await run('Goals per team?', turn);
+        expect(turn.interpretFollowUp).toHaveBeenCalledTimes(1);
+        expect(turn.plan).toHaveBeenCalledTimes(1);
+        expect(turn.pageResult).not.toHaveBeenCalled();
+        expect(events).toContain('question-path:success');
+        expect(result.status).toBe('success');
+      }
+    });
+
+    it('takes neither branch when the turn was stopped while the words were read', async () => {
+      const turn = followUpTurn(NEXT_PAGE);
+      turn.interpretFollowUp.mockResolvedValueOnce({
+        spec: NEXT_PAGE,
+        stopped: true,
+      });
+      const { events, result } = await run('next page', turn);
+      expect(events.at(-1)).toBe('interpret-follow-up:success');
+      expect(turn.plan).not.toHaveBeenCalled();
+      expect(turn.pageResult).not.toHaveBeenCalled();
+      expect(result).toEqual({ status: 'success', result: {} });
+    });
+
+    it('fails Page result with the reason the page cannot be read; no answer is delivered', async () => {
+      const turn = followUpTurn(NEXT_PAGE);
+      turn.pageResult.mockRejectedValueOnce(
+        new Error('Page 2000 is past the 50,000-row limit'),
+      );
+      const { events, result } = await run('page 2000', turn);
+      expect(events).toContain('explore-result.page-result:failed');
+      expect(turn.deliverAnswer).not.toHaveBeenCalled();
+      expect(result.status).toBe('failed');
+      expect(String(result.error)).toContain('past the 50,000-row limit');
     });
   });
 
@@ -600,14 +822,18 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       const { events, outputs } = await run('How many matches?', turn);
       expect(events).toEqual(
         expect.arrayContaining([
-          'analysis-path.answer-path.check-data-quality:running',
-          'analysis-path.answer-path.check-data-quality:success',
+          'question-path.analysis-path.answer-path.check-data-quality:running',
+          'question-path.analysis-path.answer-path.check-data-quality:success',
         ]),
       );
       expect(
-        events.indexOf('analysis-path.answer-path.check-data-quality:success'),
+        events.indexOf(
+          'question-path.analysis-path.answer-path.check-data-quality:success',
+        ),
       ).toBeLessThan(
-        events.indexOf('analysis-path.answer-path.write-answer:running'),
+        events.indexOf(
+          'question-path.analysis-path.answer-path.write-answer:running',
+        ),
       );
       // Only the catalog's tables the SQL names (wc.public.teams is not).
       expect(turn.checkDataQuality).toHaveBeenCalledWith({
@@ -622,7 +848,9 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         ],
       });
       expect(
-        outputs.get('analysis-path.answer-path.check-data-quality'),
+        outputs.get(
+          'question-path.analysis-path.answer-path.check-data-quality',
+        ),
       ).toMatchObject({ dataQuality: MEASURED });
       const written = turn.writeAnswer.mock.calls[0][0];
       // Validate's findings first, then the data-quality one.
@@ -670,14 +898,14 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     expect(
       events.filter((event) => /\.(analyse|validate):/.test(event)),
     ).toEqual([
-      'analysis-path.analysis-attempt.analyse:running',
-      'analysis-path.analysis-attempt.analyse:success',
-      'analysis-path.analysis-attempt.validate:running',
-      'analysis-path.analysis-attempt.validate:success',
-      'analysis-path.analysis-attempt.analyse:running',
-      'analysis-path.analysis-attempt.analyse:success',
-      'analysis-path.analysis-attempt.validate:running',
-      'analysis-path.analysis-attempt.validate:success',
+      'question-path.analysis-path.analysis-attempt.analyse:running',
+      'question-path.analysis-path.analysis-attempt.analyse:success',
+      'question-path.analysis-path.analysis-attempt.validate:running',
+      'question-path.analysis-path.analysis-attempt.validate:success',
+      'question-path.analysis-path.analysis-attempt.analyse:running',
+      'question-path.analysis-path.analysis-attempt.analyse:success',
+      'question-path.analysis-path.analysis-attempt.validate:running',
+      'question-path.analysis-path.analysis-attempt.validate:success',
     ]);
     expect(turn.analyse).toHaveBeenCalledTimes(2);
     const second = turn.analyse.mock.calls[1][0] as unknown as {
@@ -692,7 +920,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       '- Ran a query: None of the 1 SQL query succeeded.',
     );
     expect(
-      outputs.get('analysis-path.analysis-attempt.validate'),
+      outputs.get('question-path.analysis-path.analysis-attempt.validate'),
     ).toMatchObject({ ok: true, attempt: 2 });
     expect(turn.writeAnswer).toHaveBeenCalledTimes(1);
   });
@@ -720,20 +948,23 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       ),
     });
     const { events, result } = await run('Which team was dominant?', turn);
-    expect(events.slice(-4)).toEqual([
-      'plan-round.plan:success',
-      'plan-round.clarify:running',
-      'plan-round.clarify:suspended',
-      'plan-round:suspended',
+    expect(events.slice(-5)).toEqual([
+      'question-path.plan-round.plan:success',
+      'question-path.plan-round.clarify:running',
+      'question-path.plan-round.clarify:suspended',
+      'question-path.plan-round:suspended',
+      'question-path:suspended',
     ]);
-    expect(events.some((event) => event.startsWith('analysis-path'))).toBe(
-      false,
-    );
+    expect(
+      events.some((event) => event.startsWith('question-path.analysis-path')),
+    ).toBe(false);
     expect(turn.analyse).not.toHaveBeenCalled();
     expect(result.status).toBe('suspended');
     // The path from the top, handed back unchanged on resume (ADR-0043).
-    expect(result.suspended).toEqual([['plan-round', 'clarify']]);
-    expect(result.steps?.['plan-round']?.suspendPayload).toEqual(
+    expect(result.suspended).toEqual([
+      ['question-path', 'plan-round', 'clarify'],
+    ]);
+    expect(result.steps?.['question-path']?.suspendPayload).toEqual(
       CLARIFYING.clarification,
     );
   });
@@ -748,17 +979,18 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     });
     const started = await run('Which team was dominant?', turn);
     const { events, outputs, result } = await resume(started, 'Matches won');
-    expect(events.slice(0, 6)).toEqual([
-      'plan-round:running',
-      'plan-round.clarify:running',
-      'plan-round.clarify:success',
-      'plan-round.plan-round-outcome:running',
-      'plan-round.plan-round-outcome:success',
-      'plan-round:success',
+    expect(events.slice(0, 7)).toEqual([
+      'question-path:running',
+      'question-path.plan-round:running',
+      'question-path.plan-round.clarify:running',
+      'question-path.plan-round.clarify:success',
+      'question-path.plan-round.plan-round-outcome:running',
+      'question-path.plan-round.plan-round-outcome:success',
+      'question-path.plan-round:success',
     ]);
-    expect(events.slice(6, 12)).toEqual(CLEAR_PLAN_ROUND);
+    expect(events.slice(7, 13)).toEqual(CLEAR_PLAN_ROUND);
     // Clarify hands Plan its own input back, with the answer.
-    expect(outputs.get('plan-round.clarify')).toEqual({
+    expect(outputs.get('question-path.plan-round.clarify')).toEqual({
       question: 'Which team was dominant?',
       catalog: expect.any(Array) as unknown,
       columns: expect.any(Array) as unknown,
@@ -770,7 +1002,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       question: 'Which team was dominant?',
       clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
     });
-    expect(outputs.get('plan-round.plan')).toMatchObject({
+    expect(outputs.get('question-path.plan-round.plan')).toMatchObject({
       plan: { needsClarification: false, clarification: null },
     });
     expect(turn.analyse).toHaveBeenCalledTimes(1);
@@ -790,26 +1022,28 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         .mockResolvedValueOnce(GOOD_ATTEMPT),
     });
     const started = await run('How many matches?', turn);
-    expect(started.events.slice(-3)).toEqual([
-      'analysis-path.analysis-attempt.analyse:suspended',
-      'analysis-path.analysis-attempt:suspended',
-      'analysis-path:suspended',
+    expect(started.events.slice(-4)).toEqual([
+      'question-path.analysis-path.analysis-attempt.analyse:suspended',
+      'question-path.analysis-path.analysis-attempt:suspended',
+      'question-path.analysis-path:suspended',
+      'question-path:suspended',
     ]);
     expect(started.result.status).toBe('suspended');
     expect(started.result.suspended).toEqual([
-      ['analysis-path', 'analysis-attempt', 'analyse'],
+      ['question-path', 'analysis-path', 'analysis-attempt', 'analyse'],
     ]);
-    expect(started.result.steps?.['analysis-path']?.suspendPayload).toEqual(
+    expect(started.result.steps?.['question-path']?.suspendPayload).toEqual(
       asked,
     );
     expect(turn.writeAnswer).not.toHaveBeenCalled();
 
     const { events, result } = await resume(started, '2022');
-    expect(events.slice(0, 4)).toEqual([
-      'analysis-path:running',
-      'analysis-path.analysis-attempt:running',
-      'analysis-path.analysis-attempt.analyse:running',
-      'analysis-path.analysis-attempt.analyse:success',
+    expect(events.slice(0, 5)).toEqual([
+      'question-path:running',
+      'question-path.analysis-path:running',
+      'question-path.analysis-path.analysis-attempt:running',
+      'question-path.analysis-path.analysis-attempt.analyse:running',
+      'question-path.analysis-path.analysis-attempt.analyse:success',
     ]);
     expect(turn.analyse).toHaveBeenCalledTimes(2);
     // The agent goes on with its question and the answer, same attempt.
@@ -828,13 +1062,15 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       ),
     });
     const { events, result } = await run('Go', turn);
-    expect(events).toContain('analysis-path.analysis-attempt.analyse:bailed');
+    expect(events).toContain(
+      'question-path.analysis-path.analysis-attempt.analyse:bailed',
+    );
     expect(events.some((event) => event.includes('validate'))).toBe(false);
     expect(events.some((event) => event.includes('write-answer'))).toBe(false);
     expect(turn.analyse).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       status: 'success',
-      result: { 'analysis-path': {} },
+      result: { 'question-path': { 'analysis-path': {} } },
     });
   });
 
@@ -843,14 +1079,15 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       plan: jest.fn(() => Promise.resolve({ plan: PLAN, stopped: true })),
     });
     const { events, result } = await run('Go', turn);
-    expect(events.slice(-3)).toEqual([
-      'plan-round.plan:running',
-      'plan-round.plan:bailed',
-      'plan-round:success',
+    expect(events.slice(-4)).toEqual([
+      'question-path.plan-round.plan:running',
+      'question-path.plan-round.plan:bailed',
+      'question-path.plan-round:success',
+      'question-path:success',
     ]);
-    expect(events.some((event) => event.startsWith('analysis-path'))).toBe(
-      false,
-    );
+    expect(
+      events.some((event) => event.startsWith('question-path.analysis-path')),
+    ).toBe(false);
     expect(turn.analyse).not.toHaveBeenCalled();
     expect(result.status).toBe('success');
   });
@@ -871,7 +1108,9 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       ),
     });
     const { events, result } = await run('Go', turn);
-    expect(events).toContain('analysis-path.analysis-attempt.analyse:failed');
+    expect(events).toContain(
+      'question-path.analysis-path.analysis-attempt.analyse:failed',
+    );
     expect(events.some((event) => event.includes('write-answer'))).toBe(false);
     expect(result.status).toBe('failed');
     expect(result.error).toBeInstanceOf(ContractViolationError);
@@ -910,7 +1149,9 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         writeAnswer: jest.fn(() => Promise.reject(new Error('model down'))),
       }),
     );
-    expect(events).toContain('analysis-path.answer-path.write-answer:failed');
+    expect(events).toContain(
+      'question-path.analysis-path.answer-path.write-answer:failed',
+    );
     expect(events.some((event) => event.includes('wrap-up'))).toBe(false);
     expect(result).toMatchObject({ status: 'failed' });
     expect((result.error as Error).message).toBe('model down');
@@ -960,9 +1201,16 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       expect(turn.analyse).toHaveBeenCalledWith(
         expect.objectContaining({ imageNotes: NOTES }),
       );
-      // Check data quality passes them on to Write answer.
+      // Interpret follow-up passes them on to the question path (roadmap
+      // 1.28.8), and Check data quality on to Write answer.
+      expect(outputs.get('interpret-follow-up')).toMatchObject({
+        imageNotes: NOTES,
+        followUp: null,
+      });
       expect(
-        outputs.get('analysis-path.answer-path.check-data-quality'),
+        outputs.get(
+          'question-path.analysis-path.answer-path.check-data-quality',
+        ),
       ).toMatchObject({ imageNotes: NOTES });
       expect(turn.writeAnswer).toHaveBeenCalledWith(
         expect.objectContaining({ imageNotes: NOTES }),
@@ -1001,7 +1249,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       );
       expect(started.result.status).toBe('suspended');
       const { outputs, result } = await resume(started, 'Matches won');
-      expect(outputs.get('plan-round.clarify')).toMatchObject({
+      expect(outputs.get('question-path.plan-round.clarify')).toMatchObject({
         imageNotes: NOTES,
       });
       expect(turn.plan).toHaveBeenCalledTimes(2);

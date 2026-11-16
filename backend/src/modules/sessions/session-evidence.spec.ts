@@ -13,7 +13,13 @@ import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
+import type { InterpretResultInput } from '../../mastra/agents/result-explorer.agent';
+import {
+  specOf,
+  type ExplorerSpec,
+} from '../../mastra/agents/result-explorer.prompts';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import type { PagedStatement } from '../datasources/connectors/paged-sql.types';
 import type { DatasourcesService } from '../datasources/datasources.service';
 import type { ChatMessage, SessionDoc } from './entities/session.entity';
 import { AnswerEvidenceService } from './query-evidence/answer-evidence.service';
@@ -43,6 +49,7 @@ const ANSWER: ChatMessage = {
       rowCount: 100,
     },
     { tool: 'run_readonly_sql', input: 'SELECT nope', error: 'no column' },
+    { tool: 'sample_rows', input: 'shop.public.returns', rows: [] },
   ],
 };
 
@@ -107,6 +114,13 @@ async function build() {
           rows: [{ product: 'b', n: 1 }],
         }),
   );
+  const runPagedSql = jest.fn((_id: string, stmt: PagedStatement) =>
+    Promise.resolve({
+      columns: stmt.columns,
+      rows: [{ product: 'c', n: 2 }],
+      matchedRows: 61,
+    }),
+  );
   const queryEvidence = new QueryEvidenceService(
     {
       getByNames: jest.fn().mockResolvedValue([
@@ -118,11 +132,39 @@ async function build() {
         },
       ]),
     } as unknown as DatasetsRepository,
-    { runReadOnlySql } as unknown as DatasourcesService,
+    { runReadOnlySql, runPagedSql } as unknown as DatasourcesService,
   );
   const explainQuery = jest.fn(() => Promise.resolve(EXPLANATION));
+  // The result explorer, stubbed: its reply read by the real `specOf`.
+  const interpretResult = jest.fn(
+    (input: InterpretResultInput): Promise<ExplorerSpec> =>
+      Promise.resolve(
+        specOf(
+          {
+            action: 'explore',
+            query: 1,
+            filters: [
+              {
+                column: 'Product',
+                op: 'eq',
+                value: 'a',
+                valueTo: null,
+                values: null,
+              },
+            ],
+            sort: [{ column: 'n', direction: 'desc' }],
+            page: { move: 'first', to: null },
+            understood: '',
+          },
+          input.candidates,
+          input.view,
+          input.pageCount,
+        ),
+      ),
+  );
   const engine = new AnswerEvidenceService(queryEvidence, {
     explainQuery,
+    interpretResult,
   } as unknown as MastraService);
   const moduleRef = await Test.createTestingModule({
     controllers: [SessionsController],
@@ -142,7 +184,9 @@ async function build() {
     repository,
     sessions,
     runReadOnlySql,
+    runPagedSql,
     explainQuery,
+    interpretResult,
     stored,
   };
 }
@@ -154,13 +198,13 @@ type Server = Parameters<typeof request>[0];
 interface Body {
   ok?: boolean;
   message: ChatMessage;
-  result: { rows: unknown[] };
+  result: { rows: unknown[]; pageCount?: number; view?: unknown };
 }
 const bodyOf = (res: { body: unknown }) => res.body as Body;
 const errorOf = (res: { body: unknown }) =>
   (res.body as { message: string }).message;
 
-describe('A past chat hosts the query inspector (api.md 144-148)', () => {
+describe('A past chat hosts the query inspector (api.md 144-148, 154)', () => {
   let ctx: Awaited<ReturnType<typeof build>>;
   beforeEach(async () => {
     ctx = await build();
@@ -244,6 +288,133 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
     expect(ctx.sessions.saveMessage).not.toHaveBeenCalled();
   });
 
+  it('154 pages one query and stores nothing; a sample is refused', async () => {
+    const server = ctx.app.getHttpServer() as Server;
+    const res = await request(server)
+      .post(`${base}/1/answer/queries/0/page`)
+      .send({
+        pageSize: 20,
+        filters: [{ column: 'product', op: 'in', values: ['a', 'c'] }],
+      })
+      .expect(201);
+
+    expect(bodyOf(res).ok).toBe(true);
+    expect(bodyOf(res).result).toMatchObject({
+      rows: [{ product: 'c', n: 2 }],
+      pageCount: 4,
+      view: {
+        filters: [{ column: 'product', op: 'in', values: ['a', 'c'] }],
+        sort: [],
+        page: 1,
+        pageSize: 20,
+      },
+    });
+    expect(ctx.runPagedSql).toHaveBeenCalledWith(
+      'ds-1',
+      expect.objectContaining({ sql: SQL, columns: ['product', 'n'] }),
+    );
+    expect((await ctx.stored()).messages[1]).toEqual(ANSWER);
+    expect(ctx.sessions.saveMessage).not.toHaveBeenCalled();
+
+    const sample = await request(server)
+      .post(`${base}/1/answer/queries/2/page`)
+      .expect(400);
+    expect(errorOf(sample)).toBe(
+      'Query 2 is a sample; it has no full result to page',
+    );
+    const unknown = await request(server)
+      .post(`${base}/1/answer/queries/0/page`)
+      .send({ sort: [{ column: 'Product', direction: 'asc' }] })
+      .expect(400);
+    expect(errorOf(unknown)).toBe('Unknown column "Product"');
+    expect(ctx.runPagedSql).toHaveBeenCalledTimes(1);
+  });
+
+  it('155 reads the words as a view of one query and stores nothing; a new question, a sample and blank text are refused', async () => {
+    const server = ctx.app.getHttpServer() as Server;
+    const path = `${base}/1/answer/queries/0/interpret-filter`;
+    const view = {
+      filters: [{ column: 'n', op: 'gt', value: 1 }],
+      sort: [],
+      page: 2,
+      pageSize: 20,
+      matchedRows: 61,
+      capped: false,
+    };
+    const res = await request(server)
+      .post(path)
+      .send({ text: 'only product a, most first', view })
+      .expect(201);
+
+    expect(res.body).toEqual({
+      ok: true,
+      interpretation: {
+        request: {
+          page: 1,
+          pageSize: 20,
+          filters: [{ column: 'product', op: 'eq', value: 'a' }],
+          sort: [{ column: 'n', direction: 'desc' }],
+        },
+        understood: 'product is a · sorted by n, high to low',
+      },
+    });
+    expect(ctx.interpretResult).toHaveBeenCalledWith({
+      text: 'only product a, most first',
+      candidates: [
+        {
+          ref: 'Q1',
+          columns: [
+            { name: 'product', kind: 'text', values: ['a'] },
+            { name: 'n', kind: 'number', values: [9] },
+          ],
+        },
+      ],
+      view,
+      pageCount: 4,
+    });
+    expect((await ctx.stored()).messages[1]).toEqual(ANSWER);
+    expect(ctx.sessions.saveMessage).not.toHaveBeenCalled();
+    expect(ctx.runPagedSql).not.toHaveBeenCalled();
+
+    ctx.interpretResult.mockResolvedValueOnce({
+      action: 'new-question',
+      query: 0,
+      interpretation: { request: {}, understood: 'Returns per month' },
+    });
+    const newQuestion = await request(server)
+      .post(path)
+      .send({ text: 'returns per month' })
+      .expect(400);
+    expect(errorOf(newQuestion)).toBe(
+      'That asks a new question, not a filter on this result',
+    );
+    ctx.interpretResult.mockRejectedValueOnce(new Error('no model set'));
+    const failed = await request(server)
+      .post(path)
+      .send({ text: 'only a' })
+      .expect(400);
+    expect(errorOf(failed)).toBe(
+      'The filter could not be understood: no model set',
+    );
+    const sample = await request(server)
+      .post(`${base}/1/answer/queries/2/interpret-filter`)
+      .send({ text: 'only a' })
+      .expect(400);
+    expect(errorOf(sample)).toBe(
+      'Query 2 is a sample; it has no full result to page',
+    );
+    const noSql = await request(server)
+      .post(`${base}/1/answer/queries/1/interpret-filter`)
+      .send({ text: 'only a' })
+      .expect(400);
+    expect(errorOf(noSql)).toBe('Query 1 has no SQL to run');
+    for (const body of [{}, { text: '' }, { text: ' \n ' }, { text: 7 }]) {
+      const blank = await request(server).post(path).send(body).expect(400);
+      expect(errorOf(blank)).toBe('Write what to filter, sort or page');
+    }
+    expect(ctx.interpretResult).toHaveBeenCalledTimes(3);
+  });
+
   it('answers the checks of 140-143 with the message named', async () => {
     const server = ctx.app.getHttpServer() as Server;
     const message = async (path: string, method: 'get' | 'post' = 'post') =>
@@ -267,6 +438,12 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
     expect(await message('/1/answer/queries/1/rerun')).toBe(
       'Query 1 has no SQL to run',
     );
+    expect(await message('/1/answer/queries/1/page')).toBe(
+      'Query 1 has no SQL to run',
+    );
+    expect(await message('/1/answer/queries/x/page')).toBe(
+      "Query x not found in the message's answer",
+    );
     expect(await message('/1/answer/queries/1/explanation')).toBe(
       'Query 1 has no SQL to explain',
     );
@@ -283,10 +460,15 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
       ['post', `${unknown}/queries/0/explanation`],
       ['post', `${unknown}/queries/0/stage-counts`],
       ['post', `${unknown}/queries/0/rerun`],
+      ['post', `${unknown}/queries/0/page`],
+      ['post', `${unknown}/queries/0/interpret-filter`],
       ['get', `${unknown}/queries/0/csv`],
       ['get', '/sessions/nope'],
     ] as const) {
-      const res = await request(server)[method](path).expect(404);
+      const call = request(server)[method](path);
+      const res = await (
+        method === 'post' ? call.send({ text: 'only a' }) : call
+      ).expect(404);
       expect(errorOf(res)).toBe('Session nope not found');
     }
     expect(ctx.runReadOnlySql).not.toHaveBeenCalled();
@@ -302,6 +484,7 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
     expect(answer.evidence).toEqual([
       { index: 0, coverage: 'top-n', outerLimit: 100 },
       { index: 1 },
+      { index: 2, coverage: 'sample' },
     ]);
     expect(ctx.runReadOnlySql).not.toHaveBeenCalled();
     expect((await ctx.stored()).messages[1].evidence).toBeUndefined();

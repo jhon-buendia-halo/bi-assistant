@@ -20,6 +20,8 @@ import {
   splitEntity,
   SQL_ROWS_MAX,
 } from './connector';
+import { buildPagedSql, readPagedRows, TOTAL_COLUMN } from './paged-sql';
+import type { PagedRows, PagedStatement } from './paged-sql.types';
 
 // Timeouts mirrored from data-readiness-agent's Databricks connector: fast
 // metadata queries vs slower information_schema walks, plus a cap on
@@ -568,6 +570,55 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     }
   }
 
+  /**
+   * One page of a stored statement's result (datasources R52): the wrapper
+   * from `buildPagedSql` with `:pN` named parameters. A warehouse that
+   * refuses parameter markers cannot filter (400); values are never inlined.
+   */
+  async runPagedSql(
+    raw: DatabricksConfig,
+    stmt: PagedStatement,
+  ): Promise<PagedRows> {
+    const built = buildPagedSql('databricks', stmt);
+    const namedParameters = Object.fromEntries(
+      built.params.map((value, i) => [`p${i + 1}`, value]),
+    );
+    const config = this.validate(raw);
+    const { client, session } = await this.openSession(
+      config,
+      QUERY_TIMEOUT_MS,
+    );
+    try {
+      return await readPagedRows(built, stmt.offset, async (text) => {
+        let rows: Record<string, unknown>[];
+        try {
+          const op = await session.executeStatement(
+            text,
+            built.params.length ? { namedParameters } : {},
+          );
+          rows = await this.fetchWithTimeout(op, QUERY_TIMEOUT_MS);
+        } catch (err) {
+          if (built.params.length && refusesParameters(err)) {
+            throw new BadRequestException(
+              'This warehouse does not support query parameters; filtering is unavailable',
+            );
+          }
+          throw err;
+        }
+        const page = rows.map((r) => ({ ...r }));
+        return {
+          columns: page.length
+            ? Object.keys(page[0])
+            : [...stmt.columns, TOTAL_COLUMN],
+          rows: page,
+        };
+      });
+    } finally {
+      await session.close();
+      await client.close();
+    }
+  }
+
   private async walkCatalog(
     client: DBSQLClient,
     catalog: string,
@@ -696,6 +747,18 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
 /** Backtick-escape a Unity Catalog identifier for interpolation. */
 function qIdent(ident: string): string {
   return ident.replace(/`/g, '``');
+}
+
+/**
+ * A warehouse (or runtime) that cannot bind parameter markers: it reports
+ * them unbound or unsupported, or fails to parse the `:p1` the stored
+ * statement, which already ran, never had.
+ */
+function refusesParameters(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /UNBOUND_SQL_PARAMETER|parameter marker|parameterized (query|statement)s? (is|are) not supported|named parameters? (is|are) not supported|PARSE_SYNTAX_ERROR[^\n]*near ':'/i.test(
+    message,
+  );
 }
 
 function asError(err: unknown): Error {

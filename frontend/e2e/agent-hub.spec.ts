@@ -30,6 +30,7 @@ const V2_TOOLS = [
   'sample_rows',
   'run_readonly_sql',
   'ask_clarification',
+  'explore_result',
 ];
 /** Its built-in skills, on demand (agents.md 7.4), sorted by name. */
 const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
@@ -47,8 +48,15 @@ const DOMAIN_SECTIONS = [
   'quality',
   'general',
 ];
-/** The Analysis section: Official by name, then System (R1). */
-const ANALYSIS_KEYS = ['assistant', V2_KEY, 'analysis-planner'];
+/** The Analysis section: Official by name, then System by name (R1). */
+const ANALYSIS_KEYS = [
+  'assistant',
+  V2_KEY,
+  'result-explorer',
+  'analysis-planner',
+];
+/** Every card under All: 16 built-in agents and the Background's 2. */
+const ALL_CARDS = 18;
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -140,7 +148,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   await expect(button(page, 'New agent')).toBeEnabled();
   // Every card shows: no section hides a row behind Show more (R3).
   await expect(page.getByText(/^Show more/)).toHaveCount(0);
-  await expect(cards(page)).toHaveCount(17);
+  await expect(cards(page)).toHaveCount(ALL_CARDS);
 
   const analysis = section(page, 'analysis');
   await expect(
@@ -314,7 +322,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
 
   await owner.selectOption({ label: 'Any owner' });
   await filter(page, 'All').click();
-  await expect(cards(page)).toHaveCount(17);
+  await expect(cards(page)).toHaveCount(ALL_CARDS);
   await expect.poll(() => sectionIds(page)).toEqual(DOMAIN_SECTIONS);
 });
 
@@ -511,7 +519,7 @@ test('the hub has no detectable accessibility violations in either theme', async
 }) => {
   await followOsTheme(page);
   await openHub(page);
-  await expect(cards(page)).toHaveCount(17);
+  await expect(cards(page)).toHaveCount(ALL_CARDS);
 
   await page.addScriptTag({ content: axe.source });
   for (const theme of ['light', 'dark'] as const) {
@@ -590,7 +598,7 @@ test('Insights Analyst is an Official card', async ({ page }) => {
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
 });
 
-test("Insights Analyst's page shows its prompt, five tools and three skills", async ({
+test("Insights Analyst's page shows its prompt, six tools and three skills", async ({
   page,
 }) => {
   await openHub(page);
@@ -608,7 +616,7 @@ test("Insights Analyst's page shows its prompt, five tools and three skills", as
     'You are Questions to Insights',
   );
 
-  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(5\)/);
+  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(6\)/);
   await page.getByTestId('agent-tab-tools').click();
   for (const tool of V2_TOOLS) {
     await expect(

@@ -14,6 +14,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-angular';
+import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import {
   activityLine,
@@ -41,7 +42,12 @@ import {
  */
 @Component({
   selector: 'app-workflow-run-dock',
-  imports: [LucideAngularModule, WorkflowRunActivity, WorkflowRunChat],
+  imports: [
+    ExecutionId,
+    LucideAngularModule,
+    WorkflowRunActivity,
+    WorkflowRunChat,
+  ],
   templateUrl: './workflow-run-dock.html',
   styles: `
     :host {

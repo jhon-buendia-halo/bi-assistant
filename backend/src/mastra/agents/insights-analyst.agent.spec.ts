@@ -73,6 +73,7 @@ const TOOLS_SECTION = [
   '- describe_entity(entity, datasourceId): Describe one dataset entity: its columns with types, nullability, and — when captured at save time — a description and real sample values per column.',
   '- sample_rows(entity, datasourceId, limit, rationale): Fetch up to 100 sample rows from one dataset entity.',
   '- run_readonly_sql(sql, datasourceId, limit, rationale): Run a single read-only SELECT/WITH statement (live) against one datasource.',
+  '- explore_result(query, filterText, filters, sort, page, pageSize, rationale): Page, filter or re-sort the full result of a query an earlier run_readonly_sql call already ran, when the user asks for more rows, another page, only some rows or another order of a result already shown; never for a new measure, grouping, join or table (use run_readonly_sql).',
   '- ask_clarification(question, options): Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches.',
 ];
 
@@ -81,6 +82,7 @@ const TOOL_NAMES = [
   'describe_entity',
   'sample_rows',
   'run_readonly_sql',
+  'explore_result',
   'ask_clarification',
 ];
 
@@ -103,12 +105,12 @@ describe('Insights Analyst (agents.md 2.11)', () => {
     );
   });
 
-  it("has the assistant's data tools, sample_rows and ask_clarification, the same instances, in order", async () => {
+  it("has the assistant's data tools, sample_rows, explore_result and ask_clarification, the same instances, in order", async () => {
     const tools = await insightsAnalystAgent.listTools();
     expect(Object.keys(tools)).toEqual(TOOL_NAMES);
     expect(INSIGHTS_ANALYST_TOOL_NAMES).toEqual(TOOL_NAMES);
     expect(tools).toBe(insightsAnalystTools);
-    for (const name of TOOL_NAMES.slice(0, 4)) {
+    for (const name of TOOL_NAMES.slice(0, 5)) {
       expect(
         insightsAnalystTools[name as keyof typeof insightsAnalystTools],
       ).toBe(datasetTools[name as keyof typeof datasetTools]);
@@ -167,7 +169,10 @@ describe("Insights Analyst's prompt (agents.md 2.11, Appendix E)", () => {
 
   it('links only its own tools and skills', () => {
     const links = parseLinks(INSIGHTS_ANALYST_PROMPT);
-    expect([...links.tools].sort()).toEqual([...TOOL_NAMES].sort());
+    // explore_result is told by its Tools line alone (agents.md 3.15).
+    expect([...links.tools].sort()).toEqual(
+      TOOL_NAMES.filter((name) => name !== 'explore_result').sort(),
+    );
     expect([...links.skills].sort()).toEqual(SKILL_NAMES);
   });
 

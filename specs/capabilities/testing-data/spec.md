@@ -25,11 +25,12 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
   | `formula-1` | Formula 1 | `formula1` | bundled gzipped SQL | "Formula 1 PostgreSQL" | "Formula 1" | 48 (seasons, drivers, constructors, circuits, races, standings and per-session results; full list in the catalogue) |
   | `intellify` | Intellify | `intellify` | bundled gzipped SQL | "Intellify PostgreSQL" | "Intellify" | 49: every collection of the Intellify data model (clients, products, plan designs, policies, coverages and financials, census, carrier credits, fees, surveys, marketplace point solutions, platform reference lists; full list in the catalogue) |
   | `us-health` | US Health | `us_health` | bundled gzipped SQL | "US Health PostgreSQL" | "US Health" | 45: 41 tables of the US Health data model (firm and clients, benefit programs, members and claims, benchmarking, employee surveys, life/absence/disability, strategy, data feeds) and views `v_monthly_cost`, `v_large_claimants`, `v_lad_loss_ratio`, `v_client_revenue`; full list in the catalogue |
+  | `edge-cases` | Edge Cases | `edge_cases` | bundled SQL | "Edge Cases PostgreSQL" | "Edge Cases" | 19: 15 tables (`store_settings`, `categories`, `customers`, `customer_profile_wide`, `products`, `promotions`, `orders`, `order_lines`, `payments`, `shipments`, `returns`, `reviews`, `inventory_snapshots`, `gift_cards`, `LegacyOrders`), views `v_order_totals`, `v_customer_ltv`, `v_product_revenue` and materialized view `mv_daily_sales` |
 | `world-cup-rest` | World Cup (REST API) | `world_cup` | none (register-only, kind REST) | "World Cup REST API" | "World Cup (REST)" | the same 9 names as World Cup, keyed `api.world_cup.<table>` |
 
-  World Cup describes "Men’s FIFA World Cup, 2018 and 2022 — tournaments, matches, teams, venues, players, goals and two reporting views." Formula 1 describes "Formula One world championship, 1950 to 2026 — seasons, drivers, constructors, circuits, races, standings and per-session results." Intellify describes "Intellify employee-benefits data model, synthetic data — clients, lines of coverage, plan designs, policies and premiums, census, carrier credits and point solutions." US Health describes "A US health & benefits consultancy, synthetic data — clients and consulting revenue, plans and renewals, members and claims, benchmarks, employee surveys, life/absence/disability and strategy." The REST sample describes "The World Cup sample over a local REST API ('npm run worldcup:api' serves it on http://127.0.0.1:55080)."
-- R3. The default connection of the PostgreSQL samples SHALL be host `127.0.0.1`, port `55432` (overridable with the `WORLD_CUP_DB_PORT` environment variable), SSL off, and the development-only credentials of the repository's compose database: user `world_cup`, password `world_cup_dev`; database `world_cup` for World Cup, `formula1` for Formula 1, `intellify` for Intellify and `us_health` for US Health (all live on the same server, whose superuser is the first sample's user). The REST sample's defaults are placeholders (`127.0.0.1:55080`).
-- R4. The seed files are data assets: `001_world_cup.sql` (a transaction that creates schema `world_cup` with tables for confederations, countries, teams, tournaments, tournament teams, venues, players, squad members, matches, match team statistics, goals, disciplinary events, indexes and reporting views) `002_formula_1.sql.gz` (a gzipped dump creating schema `formula1`) and `003_intellify.sql.gz` (gzipped; creates schema `intellify` with the 49 tables of the Intellify data model, their 52 foreign keys, a comment on every table and column naming the source collection or Mongo field, and deterministic synthetic rows). The Intellify seed is generated, not hand-written: `python3 scripts/generate-intellify-seed.py` rewrites it byte for byte, so change the generator and regenerate rather than editing the seed. `004_us_health.sql.gz` (gzipped; creates schema `us_health` with the 41 tables and 4 views of the US Health data model, their 55 declared foreign keys, a comment on every table and column giving its grain and meaning, and deterministic synthetic rows: 60 fictional clients over plan years 2023–2027, census and claims for 8 of them, the dataset's "today" fixed at 2026-10-31, national benchmark means taken from published industry National Survey headlines and everything else invented, with planted business signals and about 0.5% deliberate data-quality defects) is generated the same way by `python3 scripts/generate-us-health-seed.py`, whose tests (`scripts/test_us_health_signals.py` for the planted signals and defects, `scripts/test_us_health_structure.py` for the tables, views, foreign keys and comments) pin it. A rebuild SHALL carry them over verbatim; they are not described row by row. The World Cup SQL is also shipped as the compose database's first-boot init script and the two copies SHALL be kept identical.
+  World Cup describes "Men’s FIFA World Cup, 2018 and 2022 — tournaments, matches, teams, venues, players, goals and two reporting views." Formula 1 describes "Formula One world championship, 1950 to 2026 — seasons, drivers, constructors, circuits, races, standings and per-session results." Intellify describes "Intellify employee-benefits data model, synthetic data — clients, lines of coverage, plan designs, policies and premiums, census, carrier credits and point solutions." US Health describes "A US health & benefits consultancy, synthetic data — clients and consulting revenue, plans and renewals, members and claims, benchmarks, employee surveys, life/absence/disability and strategy." Edge Cases describes "An e-commerce store built to break things, synthetic data — 1,000,000 order lines, a 65-column table, an empty and a one-row table, odd column names (spaces, MixedCase, reserved words, accents, %), NULLs, NaN, huge numbers, far dates, duplicates, orphans, invalid emails and phones, inconsistent spellings, outliers and ranking ties." The REST sample describes "The World Cup sample over a local REST API ('npm run worldcup:api' serves it on http://127.0.0.1:55080)."
+- R3. The default connection of the PostgreSQL samples SHALL be host `127.0.0.1`, port `55432` (overridable with the `WORLD_CUP_DB_PORT` environment variable), SSL off, and the development-only credentials of the repository's compose database: user `world_cup`, password `world_cup_dev`; database `world_cup` for World Cup, `formula1` for Formula 1, `intellify` for Intellify, `us_health` for US Health and `edge_cases` for Edge Cases (all live on the same server, whose superuser is the first sample's user). The REST sample's defaults are placeholders (`127.0.0.1:55080`).
+- R4. The seed files are data assets: `001_world_cup.sql` (a transaction that creates schema `world_cup` with tables for confederations, countries, teams, tournaments, tournament teams, venues, players, squad members, matches, match team statistics, goals, disciplinary events, indexes and reporting views) `002_formula_1.sql.gz` (a gzipped dump creating schema `formula1`) and `003_intellify.sql.gz` (gzipped; creates schema `intellify` with the 49 tables of the Intellify data model, their 52 foreign keys, a comment on every table and column naming the source collection or Mongo field, and deterministic synthetic rows). The Intellify seed is generated, not hand-written: `python3 scripts/generate-intellify-seed.py` rewrites it byte for byte, so change the generator and regenerate rather than editing the seed. `004_us_health.sql.gz` (gzipped; creates schema `us_health` with the 41 tables and 4 views of the US Health data model, their 55 declared foreign keys, a comment on every table and column giving its grain and meaning, and deterministic synthetic rows: 60 fictional clients over plan years 2023–2027, census and claims for 8 of them, the dataset's "today" fixed at 2026-10-31, national benchmark means taken from published industry National Survey headlines and everything else invented, with planted business signals and about 0.5% deliberate data-quality defects) is generated the same way by `python3 scripts/generate-us-health-seed.py`, whose tests (`scripts/test_us_health_signals.py` for the planted signals and defects, `scripts/test_us_health_structure.py` for the tables, views, foreign keys and comments) pin it. `005_edge_cases.sql` (plain SQL, a few hundred lines) creates schema `edge_cases` and generates every row on the server with `generate_series` and `md5`-based expressions (no clock, no unseeded randomness), so every load holds identical data; it is hand-maintained, keeps to what the statement splitter handles (no dollar quoting, no backslash-escaped quotes) and loads in about 10 s on the compose server. Its planted edge cases are listed in R24. A rebuild SHALL carry them over verbatim; they are not described row by row. The World Cup SQL is also shipped as the compose database's first-boot init script and the two copies SHALL be kept identical.
 
 ### Status
 
@@ -62,6 +63,71 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 ### Background task
 
 - R23. Loading a fixture SHALL run as a background task of kind `testing-data-load`, keyed by the fixture id and titled `Loading testing data "<name>"` ([app-shell](../app-shell/spec.md) R58–R63). Leaving Settings SHALL NOT cancel the load; the card reads its loading state, and the error of a failed load, from the task, so they are shown again when Testing Data is reopened. The service toasts the outcome (the loader's message) with **Open** (Settings → Testing Data), and the status refreshes when the task ends.
+
+### The Edge Cases sample
+
+- R24. The Edge Cases sample SHALL hold every edge case below, at the place and with the count given, so paging, filters, sources, result exploration and readiness can be tried on border cases. The counts are exact (the seed is deterministic) and are pinned by `backend/test/edge-cases-fixture.e2e-spec.ts`, an opt-in live test (`EDGE_CASES_SMOKE=1 npx jest --config ./test/jest-e2e.json edge-cases-fixture` in `backend/`) that seeds the sample through the loader's splitter and batches into database `edge_cases` and counts each one. Changing the seed means changing that test and this table together.
+
+  Rows: `order_lines` 1,000,000 (the largest), `orders` 300,000, `payments` 262,500, `shipments` 250,000, `inventory_snapshots` 60,000, `customers` 50,000, `reviews` 40,000, `customer_profile_wide` 20,000, `returns` 15,000, `LegacyOrders` 5,250, `products` 5,000, `mv_daily_sales` 2,129, `categories` 70, `promotions` 40, `store_settings` 1, `gift_cards` 0.
+
+  | Edge case | Where | Count |
+  |---|---|---|
+  | Wide table | `customer_profile_wide` | 65 columns |
+  | Empty table / one-row table | `gift_cards` / `store_settings` | 0 / 1 rows |
+  | Regular views; materialized view refreshed by the seed | `v_order_totals`, `v_customer_ltv`, `v_product_revenue`; `mv_daily_sales` | 3; 1 |
+  | Table without a primary key | `LegacyOrders` | 0 keys |
+  | Composite primary key | `inventory_snapshots` (`product_id`, `warehouse_code`, `snapshot_date`) | 3 columns |
+  | Self-referencing foreign key, three levels | `categories.parent_category_id` | 62 children |
+  | MixedCase table name | `"LegacyOrders"` (and its column `"OrderTotal"`) | 1 |
+  | Column name with a space | `orders."Order Notes"` | 1 |
+  | MixedCase column name | `customers."CustomerTier"` | 1 |
+  | Reserved words as column names | `orders."order"`, `orders."user"`, `categories."group"`, `products."select"` | 4 |
+  | Accents and ñ in column names | `orders."año"`, `customers."región"` | 2 |
+  | `%`, `_` and `-` in column names | `orders."discount_%"`, `promotions."discount_%"`, `orders."ship-to"` | 3 |
+  | A column named `matching_rows` | `products.matching_rows` | 1 |
+  | A column named `id` in several tables (joins give duplicate names) | `customers`, `products`, `orders`, `order_lines`, `payments`, `reviews`, `store_settings`, `gift_cards` | 8 tables |
+  | NULL rate 0% / 5% / 50% / 100% | `customers.first_name` / `phone` / `middle_name` / `fax` | 0 / 2,500 / 25,000 / 50,000 nulls |
+  | NULLs in a column whose name has a space | `orders."Order Notes"` | 148,500 nulls |
+  | Boolean with NULLs | `customers.is_vip` | 5,000 nulls |
+  | Text with `%`, `_`, a backslash, a single quote, a double quote | `products.name` | 2, 2, 1, 2, 1 rows |
+  | Text with emoji, a newline, leading/trailing spaces | `products.name` (also `orders."Order Notes"`, `reviews.body`) | 1, 1, 1 rows |
+  | Empty string vs NULL | `products.name` | 1 empty, 1 NULL |
+  | Empty and blank strings | `order_lines.gift_message` | 20,000 rows |
+  | Text over 10,000 characters | `orders."Order Notes"`, `reviews.body`, `products.description` | 3 rows each |
+  | Duplicate names on different keys | `products.name` = 'Classic Mug' | 5 rows |
+  | bigint at its maximum (beyond JavaScript's safe integers) | `order_lines.event_sequence` | max 9223372036854775807 |
+  | numeric(38,10) at full precision | `products.cost` | max 1234567890123456789012345678.1234567890 |
+  | integer at its maximum | `reviews.helpful_votes` | max 2147483647 |
+  | Negative and zero quantities | `order_lines.quantity` | 500 negative, 200 zero |
+  | Zero prices | `order_lines.unit_price` | 123 rows |
+  | NaN and Infinity in a double column | `products.weight_kg` | 5 NaN, 1 Infinity |
+  | Half-cent amounts (rounding) | `orders.discount_amount` (numeric(12,4): 0.0050, 2.6750, 0.1250, 19.9950) | 200,000 rows |
+  | Negative amounts | `returns.refund_amount` | 15,000 rows |
+  | timestamptz entered in eight time zones | `orders.ordered_at`, zone in `orders.ordered_tz` | 8 zones |
+  | DST gap and DST overlap (New York) | `orders.ordered_at` of order 1 (2024-03-10 02:30 local → 07:30 UTC) and order 2 (2024-11-03 01:30 local → 06:30 UTC) | 2 rows |
+  | Far-future date | `orders.expected_delivery_date` = 2999-12-31 | 3 rows |
+  | Far-past dates | `customers.birth_date` 1899-12-31 and 1900-01-01 | 2 rows |
+  | Date stored as text: not ISO / ISO-shaped but impossible | `customers.signup_date` ('N/A', '', '31/12/2024', 'yesterday' / '2024-02-30', '2024-13-01') | 67 / 33 rows |
+  | Nested JSONB, three levels | `customers.preferences` (`address.geo.lat`; also `{}`, JSON `null` and SQL NULL) | 49,850 rows |
+  | text[] with a NULL element (also empty arrays) | `products.tags` | 50 rows |
+  | UUID; ENUM; inet with IPv6 | `orders.order_uuid`; `orders.status` (type `order_status`); `customers.last_login_ip` | 300,000 distinct; 6 values; 172 IPv6 |
+  | Exact duplicate rows | `LegacyOrders` | 200 rows |
+  | Duplicate values in an id-like column, no key declared | `LegacyOrders.legacy_order_id` | 250 extra rows |
+  | Orphans behind a declared foreign key (`NOT VALID`) | `order_lines.order_id` → `orders.id` | 20 rows |
+  | Orphans behind an inferred join (no foreign key) | `order_lines.product_id` → `products.id`; `LegacyOrders.customer_id` → `customers.id` | 25; 52 rows |
+  | Invalid emails (readiness validity rule) | `customers.email`; `payments.payer_email` | 1,000; 750 rows |
+  | Invalid phones (readiness validity rule) | `customers.phone` | 500 rows |
+  | Invalid URLs (readiness validity rule) | `shipments.tracking_url` | 800 rows |
+  | Invalid UUIDs in a text column (readiness validity rule) | `LegacyOrders.legacy_uuid` | 20 rows |
+  | Invalid date strings (readiness validity rule) | `customers.signup_date` | 67 rows |
+  | Postal codes that are not five digits (no readiness rule) | `shipments.postal_code` | 800 rows |
+  | Same value with other case or spaces ("Brazil", "brazil", " BRAZIL ") | `customers.country`; `shipments.country`; `products.color`; `payments.method` | 6; 3; 5; 3 values collapse |
+  | Price outlier and negative price | `products.unit_price` (1,000,000,000.00 and -19.99) | 1 and 1 rows |
+  | Percentage above 100 | `products.margin_pct` | 5 rows |
+  | End before start, some rows | `shipments.delivered_at` < `shipped_at` | 3,000 rows |
+  | End before start, every row (columns look swapped) | `promotions.end_date` < `start_date` | 40 rows |
+  | Stale table | `LegacyOrders.placed_at` | newest 2015-02-19 |
+  | Ranking tie at the top | `v_product_revenue.revenue` (products 1 to 5) | 5 products at 50,000,000.00 |
 
 ### Retired
 
@@ -114,7 +180,7 @@ Feature: Testing data
 
   Scenario: Lists the bundled samples and what is loaded
     When I open Settings and click "Testing Data"
-    Then I see the "World Cup", "Formula 1", "Intellify", "US Health" and "World Cup (REST API)" samples
+    Then I see the "World Cup", "Formula 1", "Intellify", "US Health", "Edge Cases" and "World Cup (REST API)" samples
     And each shows "0/<required> entities" with a cross when nothing is loaded
     And each shows its description
 
@@ -202,5 +268,6 @@ Feature: Testing data
 5. Remove clears both app-side records and leaves the database intact; status returns to `0/<required>`.
 6. A failure at any stage (connection, creation, seed, missing entities) produces the corresponding message and does not leave a dataset behind; a seed failure leaves nothing registered.
 7. The assistant eval start checks the datasets bound to the chosen datasource against the required entities of the fixture the selected questions belong to (by `schema.table`), so a loaded fixture lets its question set run and a datasource lacking those entities is refused ([agents-evals](../agents-evals/spec.md)).
+8. Loading Edge Cases into a server that lacks the `edge_cases` database creates it, seeds the 15 tables, 3 views and the materialized view well within the seed timeout and reports `19/19 entities`; two loads hold identical data, and the opt-in live test finds every edge case of R24 with its count.
 
-<!-- sources: backend/src/modules/testing-data/**, scripts/generate-intellify-seed.py, scripts/generate-us-health-seed.py, scripts/test_us_health_signals.py, scripts/test_us_health_structure.py, backend/src/modules/testing-data/fixtures/registry.ts, backend/src/modules/agents/eval-runs.service.ts (fixture preflight), docker-compose.yml, backend/package.json (worldcup scripts), frontend/src/app/features/testing-data/**, frontend/src/app/app.html (Testing Data navigation) -->
+<!-- sources: backend/src/modules/testing-data/**, scripts/generate-intellify-seed.py, scripts/generate-us-health-seed.py, scripts/test_us_health_signals.py, scripts/test_us_health_structure.py, backend/test/edge-cases-fixture.e2e-spec.ts, backend/src/modules/testing-data/fixtures/registry.ts, backend/src/modules/agents/eval-runs.service.ts (fixture preflight), docker-compose.yml, backend/package.json (worldcup scripts), frontend/src/app/features/testing-data/**, frontend/src/app/app.html (Testing Data navigation) -->

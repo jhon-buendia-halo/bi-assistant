@@ -180,6 +180,12 @@ const FIXTURES: Record<string, ContractFixture> = {
           ],
         }),
         save: () => Promise.resolve({ reportId: 'r-1' }),
+        findingRows: () =>
+          Promise.resolve({
+            sourceCount: 1,
+            failedSourceCount: 0,
+            stopped: false,
+          }),
         explain: () =>
           Promise.resolve({ answer: 'Managed (84).', stopped: false }),
       } satisfies DataReadinessAssessmentRuntime);
@@ -416,12 +422,17 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
       }
       expect((await output.result).status).toBe('success');
       // The clear path: every step but Clarify and Read images, whose
-      // branches are not taken (the sample input has no images).
+      // branches are not taken (the sample input has no images), and the
+      // follow-up branch (a first run has no earlier result).
       const ran = source.steps.filter(
         (step) =>
-          step.id !== 'clarify' &&
-          step.id !== 'read-images' &&
-          step.id !== 'confirm-review',
+          ![
+            'clarify',
+            'read-images',
+            'page-result',
+            'page-answer',
+            'confirm-review',
+          ].includes(step.id),
       );
       expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
       for (const step of ran) {

@@ -39,6 +39,12 @@ import type {
   InteractiveVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
+import type {
+  FilterInterpretation,
+  PageRequest,
+  PageResult,
+  ResultView,
+} from '../datasources/connectors/paged-sql.types';
 import {
   AnswerEvidenceService,
   type AnswerHost,
@@ -51,6 +57,10 @@ import type {
 } from '../sessions/query-evidence/query-evidence.service';
 import { QUERY_EVIDENCE_SERVICE } from '../sessions/query-evidence/query-evidence.token';
 import type { QueryEvidence } from '../sessions/query-evidence/query-evidence.types';
+import {
+  explorableQueriesOf,
+  type ExplorableQuery,
+} from '../sessions/query-evidence/explorable-queries';
 import {
   RUN_HOST_ID_PREFIX,
   SessionsService,
@@ -189,6 +199,11 @@ export interface PreparedRun {
     fromRunId: string;
     question: string;
     answer: string;
+    /**
+     * The earlier answer's queries, for `explore_result` (agents.md 3.15;
+     * plan m1-27 2); absent when it ran none.
+     */
+    queries?: ExplorableQuery[];
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -610,6 +625,10 @@ export class WorkflowRunsService implements OnModuleInit {
               },
               // Its agents go on from copies of the earlier run's threads.
               continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
+              // "Next page" or "only Brazil" explores its queries.
+              ...(prepared.context.queries?.length
+                ? { contextQueries: prepared.context.queries }
+                : {}),
             }
           : {}),
       });
@@ -631,8 +650,11 @@ export class WorkflowRunsService implements OnModuleInit {
    * restarted since (the stored run is then `stopped` with `waitingFor`
    * marked `expired`); 409 `Run "<id>" is not waiting for an answer`; 400
    * `Answer is required`; 400 `Step "<stepId>" is not waiting for an
-   * answer`. A run that passes is taken out of the waiting runs, so it is
-   * resumed once.
+   * answer`. A run whose workflow's contract changed since it started
+   * (its stored `contractHash`, data-model 3.16; e.g. the Clarify path
+   * that moved under `question-path` in roadmap 1.28.8) cannot be resumed
+   * either: 410, as an expired run. A run that passes is taken out of the
+   * waiting runs, so it is resumed once.
    */
   async prepareResume(id: string, body: unknown): Promise<PreparedResume> {
     const run = await this.stored(id);
@@ -655,12 +677,32 @@ export class WorkflowRunsService implements OnModuleInit {
         `Step "${stepId}" is not waiting for an answer`,
       );
     }
+    const changed = await this.contractChanged(run);
     const taken = this.waiting.take(id);
-    if (!taken || taken.expired) {
+    if (!taken || taken.expired || changed) {
       await this.expire(id, taken?.value);
       throw new GoneException(RUN_EXPIRED_ERROR);
     }
     return { held: taken.value, answer };
+  }
+
+  /**
+   * Whether the run's workflow no longer has the contract the run started
+   * with: its stored hash differs from the catalogue's. A run stored
+   * without a hash, or of a workflow the catalogue no longer holds, is
+   * left to the other checks.
+   */
+  private async contractChanged(run: WorkflowRunDoc): Promise<boolean> {
+    if (!run.contractHash) return false;
+    try {
+      const workflow = await this.workflows.definition(run.workflowId);
+      return (
+        workflow.contractHash !== undefined &&
+        workflow.contractHash !== run.contractHash
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -886,6 +928,31 @@ export class WorkflowRunsService implements OnModuleInit {
   /** Run one of the answer's queries again; nothing is stored (api.md 142). */
   async rerunQuery(id: string, index: number): Promise<QueryRerunResult> {
     return this.answers.rerun(this.answerHost(id), index);
+  }
+
+  /**
+   * One page of one of the answer's queries, filtered and sorted (api.md
+   * 152); nothing is stored.
+   */
+  async pageQuery(
+    id: string,
+    index: number,
+    request: PageRequest,
+  ): Promise<PageResult> {
+    return this.answers.page(this.answerHost(id), index, request);
+  }
+
+  /**
+   * The user's words read as a view of one of the answer's queries (api.md
+   * 153); nothing is stored.
+   */
+  async interpretFilter(
+    id: string,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Promise<FilterInterpretation> {
+    return this.answers.interpretFilter(this.answerHost(id), index, text, view);
   }
 
   /**
@@ -1357,10 +1424,15 @@ export class WorkflowRunsService implements OnModuleInit {
         `Run "${earlier.id}" has no answer to continue from`,
       );
     }
+    const queries = explorableQueriesOf(
+      earlier.answer.data ?? [],
+      earlier.answer.evidence,
+    );
     return {
       fromRunId: earlier.id,
       question: earlier.question,
       answer: earlier.answer.content,
+      ...(queries.length ? { queries } : {}),
     };
   }
 

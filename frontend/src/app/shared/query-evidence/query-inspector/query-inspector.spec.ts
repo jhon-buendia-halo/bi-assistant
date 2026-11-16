@@ -18,6 +18,8 @@ class FakeApi implements QueryEvidenceApi {
   countStages = jasmine.createSpy('countStages').and.returnValue(of(undefined));
   rerun = jasmine.createSpy('rerun');
   downloadCsv = jasmine.createSpy('downloadCsv').and.returnValue(of(new Blob(['x'])));
+  page = jasmine.createSpy('page');
+  interpretFilter = jasmine.createSpy('interpretFilter');
 }
 
 const EXPLANATION = (status?: 'verified' | 'unverified'): QueryExplanation => ({
@@ -81,11 +83,11 @@ describe('QueryInspector (ui.md 4.12.2)', () => {
     });
   });
 
-  it('reads Query 2 of 2 with the rationale, the source and the tabs', () => {
+  it('reads Source 2 of 2 with the rationale, the source and the tabs', () => {
     const root = setup(
       message([{}, { datasourceKind: 'postgres', coverage: 'top-n', outerLimit: 100 }]),
     );
-    expect(text(root, 'query-inspector-position')).toBe('Query 2 of 2');
+    expect(text(root, 'query-inspector-position')).toBe('Source 2 of 2');
     expect(text(root, 'query-inspector-title')).toBe('Top products by revenue');
     expect(text(root, 'query-inspector-meta')).toBe('PostgreSQL · 100 rows');
     expect(root.getAttribute('role')).toBe('dialog');

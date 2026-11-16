@@ -13,6 +13,7 @@ const SAMPLES = [
   { id: 'formula-1', name: 'Formula 1', required: 48 },
   { id: 'intellify', name: 'Intellify', required: 49 },
   { id: 'us-health', name: 'US Health', required: 45 },
+  { id: 'edge-cases', name: 'Edge Cases', required: 19 },
   { id: 'world-cup-rest', name: 'World Cup (REST API)', required: 9 },
 ];
 

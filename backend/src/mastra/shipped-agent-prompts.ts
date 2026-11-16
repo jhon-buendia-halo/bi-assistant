@@ -5,6 +5,7 @@ import {
   WRITE_ANSWER_INSTRUCTIONS,
 } from './workflows/answer-business-question.prompts';
 import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
+import { RESULT_EXPLORER_INSTRUCTIONS } from './agents/result-explorer.prompts';
 import {
   MAP_DATA_INSTRUCTIONS,
   READ_DASHBOARD_INSTRUCTIONS,
@@ -42,6 +43,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'data-mapper': MAP_DATA_INSTRUCTIONS,
   'image-reader': READ_IMAGES_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
+  'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
   'site-reviewer': SITE_REVIEWER_INSTRUCTIONS,
 };
 

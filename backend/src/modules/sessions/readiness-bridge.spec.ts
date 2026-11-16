@@ -6,7 +6,9 @@ import type {
 } from '../data-readiness/engine/types';
 import type { PreparedAssessment } from '../data-readiness/data-readiness.service';
 import {
+  FINDINGS_PAGE_SIZE,
   ReadinessBridge,
+  dimensionFindingsPage,
   readinessOrientationBlock,
   readinessPanelItem,
   readinessReportIdOf,
@@ -508,6 +510,114 @@ describe('ReadinessBridge (agents.md 3.13)', () => {
         total: 2,
       },
     );
+  });
+
+  describe('every finding of a dimension (story 1.28.12)', () => {
+    /** 120 findings: 60 completeness (low, then high, then medium), 60 validity. */
+    function bigReport(id: string): ReadinessReport {
+      const findings: Finding[] = [];
+      for (let i = 0; i < 60; i++) {
+        const severity: Severity = i < 20 ? 'low' : i < 40 ? 'high' : 'medium';
+        findings.push(finding(severity, `c${i}`));
+        findings.push({ ...finding('high', `v${i}`), dimension: 'validity' });
+      }
+      return report(id, findings);
+    }
+
+    it('pages the stored findings of one dimension, most severe first, then in report order', () => {
+      const first = dimensionFindingsPage(bigReport('r-1'), 'completeness');
+      expect(FINDINGS_PAGE_SIZE).toBe(50);
+      expect(first).toMatchObject({
+        dimension: 'completeness',
+        total: 60,
+        page: 1,
+        pageCount: 2,
+        pageSize: 50,
+      });
+      expect(first.items).toHaveLength(50);
+      expect(first.items.map((f) => f.entity).slice(0, 3)).toEqual([
+        'c20',
+        'c21',
+        'c22',
+      ]);
+      expect(first.items[20].entity).toBe('c40');
+      expect(first.items[0]).toEqual({
+        severity: 'high',
+        entity: 'c20',
+        field: 'col',
+        measured: 0.2,
+        description: 'high c20',
+        recommendation: 'Fill it',
+      });
+      const second = dimensionFindingsPage(bigReport('r-1'), 'completeness', 2);
+      expect(second.items.map((f) => f.entity)).toEqual(
+        Array.from({ length: 10 }, (_, i) => `c${i + 10}`),
+      );
+      expect(second.items.every((f) => f.severity === 'low')).toBe(true);
+    });
+
+    it('reads a dimension name in any case, and gives an empty first page when it has no finding', () => {
+      expect(dimensionFindingsPage(bigReport('r-1'), ' Validity ').total).toBe(
+        60,
+      );
+      expect(dimensionFindingsPage(report('r-0'), 'timeliness')).toEqual({
+        dimension: 'timeliness',
+        total: 0,
+        page: 1,
+        pageCount: 1,
+        pageSize: 50,
+        items: [],
+      });
+    });
+
+    it('answers an unknown dimension or a page past the last with the text the model sees', () => {
+      expect(() => dimensionFindingsPage(report('r-0'), 'nulls')).toThrow(
+        'Unknown dimension "nulls". Use one of: completeness, accuracy, validity, consistency, integrity, uniqueness, timeliness, currency, reasonability, accessibility.',
+      );
+      expect(() =>
+        dimensionFindingsPage(bigReport('r-1'), 'completeness', 3),
+      ).toThrow(
+        'Page 3 is past the last page (2) of the completeness findings.',
+      );
+      expect(() =>
+        dimensionFindingsPage(bigReport('r-1'), 'completeness', 0),
+      ).toThrow('Page must be a whole number from 1.');
+    });
+
+    it('adds the page to the summary of the stored report, and leaves the result as it was without a dimension', async () => {
+      const ctx = build(['World Cup']);
+      ctx.readiness.list.mockResolvedValue({ reports: [{ id: 'r-2' }] });
+      ctx.readiness.get.mockImplementation((id: string) =>
+        Promise.resolve(bigReport(id)),
+      );
+      const plain = await ctx.bridge.getReadinessReport({ sessionId: 's-1' });
+      expect(plain.summary).toEqual(readinessSummary(bigReport('r-2')));
+      expect(plain.summary).not.toHaveProperty('findings');
+
+      const paged = await ctx.bridge.getReadinessReport({
+        sessionId: 's-1',
+        dimension: 'completeness',
+        page: 2,
+      });
+      expect(paged.report.id).toBe('r-2');
+      expect(paged.summary).toEqual({
+        ...readinessSummary(bigReport('r-2')),
+        findings: dimensionFindingsPage(bigReport('r-2'), 'completeness', 2),
+      });
+      expect(ctx.readiness.assess).not.toHaveBeenCalled();
+    });
+
+    it('refuses an unknown dimension before reading any report', async () => {
+      const ctx = build(['World Cup']);
+      await expect(
+        ctx.bridge.getReadinessReport({
+          sessionId: 's-1',
+          reportId: 'r-1',
+          dimension: 'nulls',
+        }),
+      ).rejects.toThrow('Unknown dimension "nulls".');
+      expect(ctx.readiness.get).not.toHaveBeenCalled();
+    });
   });
 
   it('remembers the reports it resolved for the stream event', async () => {

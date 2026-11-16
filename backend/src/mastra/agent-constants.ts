@@ -54,6 +54,11 @@ export const DATA_MAPPER_AGENT_NAME = 'Data Mapper';
 /** The agent that explains a stored query step by step (agents.md 2.12). */
 export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 /**
+ * The agent that turns a user's words into a view (filters, sort, page) of
+ * a stored query's result (agents.md 2.17).
+ */
+export const RESULT_EXPLORER_AGENT_KEY = 'result-explorer';
+/**
  * The agent of Read images, the optional first step of Answer a Business
  * Question, Assess Data Readiness and Map a Dashboard to Data (agents.md
  * 2.15; workflows R35): it describes the run's reference images as text.
@@ -75,6 +80,7 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   DATA_MAPPER_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
   'visualization',
   'sql-fixer',

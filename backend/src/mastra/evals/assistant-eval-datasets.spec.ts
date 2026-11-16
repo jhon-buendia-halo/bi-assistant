@@ -220,4 +220,28 @@ describe('the fixture registry is the single source of required entities', () =>
       'Unknown sample fixture',
     );
   });
+
+  it('accepts the Edge Cases fixture (19 entities) and names what is missing', () => {
+    const edge = evalFixture('edge-cases');
+    expect(edge.datasetName).toBe('Edge Cases');
+    const edgeTables = edge.requiredTables.map(
+      (table) => `edge_cases.${edge.schema}.${table}`,
+    );
+    expect(edgeTables).toHaveLength(19);
+    const snapshot = fixture({ name: 'Edge Cases', tables: edgeTables });
+    expect(check(['Edge Cases'], [snapshot], 'edge-cases')).toBeUndefined();
+    const error = check(
+      ['Edge Cases'],
+      [
+        {
+          ...snapshot,
+          tables: edgeTables.filter(
+            (table) => !table.endsWith('.LegacyOrders'),
+          ),
+        },
+      ],
+      'edge-cases',
+    );
+    expect(error).toContain('Missing entities: edge_cases.LegacyOrders.');
+  });
 });

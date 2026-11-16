@@ -1263,6 +1263,28 @@ flowchart LR
   - **Vision on every page, as the prototype:** rejected for phase 1, the cost and the imprecision above.
   - **Username and password filled by the crawler:** rejected, breaks on SSO and MFA and stores passwords.
 
+#### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Context:**
+  - Datasources R37 applies a query's row limit after the statement runs, in memory, so no query showed more than 500 rows and an answer kept 200; past that, the only way was the CSV (api.md 143, 148). Users with thousands of rows asked to page through and filter them (roadmap 1.28).
+  - The read-only guard scans the whole statement, quoted identifiers included, so a wrapper that quotes a column such as `"Last Update"` would be refused if it were checked like the stored SQL.
+- **Decision:**
+  - **A connector method `runPagedSql`** wraps the stored statement as an aliased subquery (its own top-level LIMIT, when it has one, raised to 50,001 as the CSV does; otherwise unlimited, so filters see the whole result): `SELECT _qti.*, COUNT(*) OVER () … FROM (<sql>) AS _qti WHERE … ORDER BY … LIMIT n OFFSET m`. One execution per page.
+  - **Filters are structured only** (`FilterSpec`: a known result column, an operator, values), compiled with bound parameters per driver (`$n`, `:pn`, `?`); identifiers are checked against the result's columns and quoted per dialect; LIMIT and OFFSET are code-checked integers. No model writes SQL for a view: `result-explorer` returns a structured view.
+  - **Only the stored SQL goes through the read-only guard;** the wrapper is the connector's own text.
+  - Order is stable: the requested keys, else the stored query's own outer `ORDER BY` when expressible on its columns, else the first column, then every orderable column as a tie-breaker.
+  - **R37 stays true everywhere else** (agent queries, re-run, samples).
+- **Consequences:**
+  - Every page re-runs the statement under its datasource's timeout; a REST datasource re-fetches its endpoints.
+  - A Databricks warehouse that refuses parameter markers cannot filter (400), never inlined values.
+  - Text filters compare `LOWER(CAST(…))` and do not use indexes; accepted: the database does the work and a page returns at most 100 rows.
+  - **Stack-neutral:** a rebuild needs a parameterised outer query over the stored statement and a column allow-list.
+- **Alternatives considered:**
+  - **Load the result once and page in memory (SQLite):** rejected; memory per open inspector and stale rows.
+  - **Let a model write the filtered SQL:** rejected; an injection surface and no stable evidence link.
+  - **Page only on the client:** rejected; limited to the 200 stored rows.
+
 ## Level 4 — Code
 
 ```mermaid

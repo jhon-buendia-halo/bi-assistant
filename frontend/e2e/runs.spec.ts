@@ -426,7 +426,9 @@ test.describe('Runs and Past chats', () => {
           await expect(
             page.getByTestId('workflow-node-receive-question').getByTestId('workflow-node-status'),
           ).toHaveText('Done');
-          await expect(page.getByTestId('workflow-state-run-id')).toContainText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
         },
       );
       await scenarioStep(page, 'When I click Run again', async () => {
@@ -586,9 +588,9 @@ test.describe('Past chats host the query inspector', () => {
       });
       await scenarioStep(
         page,
-        'And I see a figure chip, the coverage line with the table size and the query row with its coverage',
+        'And I see a numbered source on a figure, the coverage line with the table size and the query row with its coverage',
         async () => {
-          await expect(page.getByTestId('figure-ref').first()).toHaveText('Q1');
+          await expect(page.getByTestId('figure-ref').first()).toHaveText('1');
           await expect(page.getByTestId('query-coverage-line')).toContainText(/table was read \(\d[\d,]* rows\)/);
           const row = page.getByTestId('query-row-0');
           await expect(row).toContainText('Counting all the matches.');
@@ -600,7 +602,7 @@ test.describe('Past chats host the query inspector', () => {
       });
       await scenarioStep(page, 'Then the inspector shows its header and its steps', async () => {
         await expect(page.getByTestId('query-inspector-close')).toBeFocused();
-        await expect(page.getByTestId('query-inspector-position')).toHaveText('Query 1 of 1');
+        await expect(page.getByTestId('query-inspector-position')).toHaveText('Source 1 of 1');
         await expect(page.getByTestId('query-inspector-title')).toHaveText('Counting all the matches.');
         await expect(page.getByTestId('query-inspector-meta')).toContainText('PostgreSQL');
         const steps = page.getByTestId('query-funnel-step');

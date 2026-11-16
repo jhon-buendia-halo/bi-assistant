@@ -163,8 +163,9 @@ const READINESS_SUMMARY = expect.objectContaining({
   name: 'Assess Data Readiness',
   kind: 'code',
   owner: 'Official',
-  // Read images first (workflows R35), then its six steps.
-  stepCount: 7,
+  // Read images first (workflows R35), then its seven steps (Rows behind
+  // findings since roadmap 1.28.11).
+  stepCount: 8,
   bar: 'steps',
   trigger: 'run',
   starterQuestions: [
@@ -190,7 +191,7 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
     { key: 'data-readiness', name: 'Sarah' },
     { key: 'answer-writer', name: 'Jessica' },
   ],
-  stepCount: 10,
+  stepCount: 13,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -300,6 +301,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
       ).toEqual([
         'image-reader',
+        'result-explorer',
         'analysis-planner',
         'insights-analyst',
         'data-readiness',
@@ -315,15 +317,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'answer-business-question',
-        stepCount: 10,
+        stepCount: 13,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
       // Plan receives the question (a string), the catalog and Read
       // images' notes ('' without images; optional, so a run stored before
       // Read images existed resumes with none).
-      expect(detail.steps[3]).toMatchObject({ id: 'plan' });
-      expect(detail.steps[3].inputSchema).toMatchObject({
+      expect(detail.steps[4]).toMatchObject({ id: 'plan' });
+      expect(detail.steps[4].inputSchema).toMatchObject({
         type: 'object',
         properties: {
           question: { type: 'string' },

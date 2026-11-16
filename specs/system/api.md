@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **102 HTTP route handlers** across 18 app controllers (agents 17, workflow runs 15, skills 9, sessions 7, llm 7, datasources 6, ontology 6, metrics 5, monitoring 6, synthetic data 4, workflows 4, datasets 3, data readiness 3, developer settings 3, testing data 3, UI preferences 2, draft runs 1, health 1). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **107 HTTP route handlers** across 18 app controllers (agents 17, workflow runs 18, skills 9, sessions 9, llm 7, datasources 6, ontology 6, metrics 5, monitoring 6, synthetic data 4, workflows 4, datasets 3, data readiness 3, developer settings 3, testing data 3, UI preferences 2, draft runs 1, health 1). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -133,6 +133,8 @@ Controller prefix `/sessions`. Capability: past-chats, visuals, agent-panel, wor
 | 146 | `POST /sessions/:id/messages/:message/answer/queries/:index/stage-counts` | Count the rows after each step of an explained query, checked | no |
 | 147 | `POST /sessions/:id/messages/:message/answer/queries/:index/rerun` | Run one of the message's queries again; nothing stored | no |
 | 148 | `GET /sessions/:id/messages/:message/answer/queries/:index/csv` | One query's rows as CSV, up to 50,000 | no |
+| 154 | `POST /sessions/:id/messages/:message/answer/queries/:index/page` | One page of one of the message's queries, filtered and sorted; nothing stored | no |
+| 155 | `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter` | The user's words read as a view (filters, sort, page) of one of the message's queries; nothing stored | no |
 
 The session on the wire (endpoints 1 and 2) is the stored `SessionDoc` (data-model 3.4) plus two derived fields of the right panel ([agent-panel](../capabilities/agent-panel/spec.md), never stored as such): `panelItems: PanelItem[]` (always present, newest shown last as stored; the stored items, without any of the retired kind `phases`, plus a synthesized `visual:<id>` item for every visual without one, [data-model.md](data-model.md) 3.4.4) and `workflow?: WorkflowView` (present when the session's agent is workflow-backed (`insights-analyst`, [agents.md](agents.md) 5.11), its prompt has a `## Workflow` section or the agent has defined its own steps with `update_workflow`; the extended view of [data-model.md](data-model.md) 3.4.4: `source`, `skipped`, `waiting?`, `note?`, `failed?` besides the phases and the saved progress; the `done` event carries it too), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (past-chats R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. For a session with an `agentKey` (bound to a built-in agent, ADR-0028), `agent` is `{ id: <agentKey>, name: <the registered agent's name>, deleted: false, description: <its description>, starterQuestions: <its built-in starters> }`. A stored `agentKey: "rfp"` (the removed RFP Builder) does not resolve: such a session reads as a plain one. It is computed on every read, never stored.
 
@@ -209,13 +211,13 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
   The slug is the item's title as in #14 (fallback `panel-<first 8 of the item id>`).
 - Errors (Style B): as #106 for the session, the item and (for a file) the file; `400 "Panel item \"<itemId>\" can't be downloaded"` for a `visual` item (a visual downloads through #14); `400 "Panel item \"<itemId>\" can't be downloaded as PDF"` for `format=pdf` on any other item; `400 "Unknown download format \"<format>\": use pdf, md or csv"` for any other `format`. Capability: [agent-panel](../capabilities/agent-panel/spec.md).
 
-#### Query evidence of a past chat (144-148)
+#### Query evidence of a past chat (144-148, 154, 155)
 
-The query inspector over a session's assistant message (1.25.9; plan `docs/plans/m1-25-query-inspector.md` section 5). Each mirrors 139-143 (2.6.3) on the same engine (`AnswerEvidenceService`, `sessions/query-evidence/answer-evidence.service.ts`), with `message` in place of `run`. `:message` is the message's index in `messages` (0-based); `:index` is an `evidence[].index` of that message, as in 140-143. Capability: [past-chats](../capabilities/past-chats/spec.md).
+The query inspector over a session's assistant message (1.25.9; plan `docs/plans/m1-25-query-inspector.md` section 5). Each mirrors 139-143, 152 and 153 (2.6.3) on the same engine (`AnswerEvidenceService`, `sessions/query-evidence/answer-evidence.service.ts`), with `message` in place of `run`. `:message` is the message's index in `messages` (0-based); `:index` is an `evidence[].index` of that message, as in 140-143. Capability: [past-chats](../capabilities/past-chats/spec.md).
 - Who may call: whoever may read the session through 2 (the same read, `SessionsService.get`); anything else answers 2's 404.
 - Errors (Style B), in this order: `404 "Session <id> not found"`; `400 "Message <message> has no answer with queries"` (no message at that index, not an assistant message, a message without `data`, or a `:message` that is not a whole number); `400 "Query <index> not found in the message's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). A message stored without `evidence` has it derived from `data` for these checks. There is no `Wait for the run to finish`: a past chat does not run.
 - Every write goes into the stored message (`messages[<message>]`: its `evidence`, nothing else), under the engine's lock keyed by session and message, and each write re-reads the session first, one write per session at a time. The session's `updatedAt` does not change.
-- Statements and the datasource of a query: as 139-143 over the session's `datasets` (the datasource rule's two 400s keep their text, which names the run).
+- Statements and the datasource of a query: as 139-143 and 152 over the session's `datasets` (the datasource rule's two 400s keep their text, which names the run).
 
 #### 144. `POST /sessions/:id/messages/:message/answer/evidence`
 - Body: none. As 139 on the message: builds `evidence`, sizes the tables (one `SELECT COUNT(*)` per distinct table, at most 3 at a time); with nothing missing it runs no query and writes nothing.
@@ -241,6 +243,16 @@ The query inspector over a session's assistant message (1.25.9; plan `docs/plans
 - As 143: the checks of 147 before any header, up to 50 000 rows.
 - Response `200`: `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="query-<Q>-<first 8 of the session id>-<message>.csv"`, `X-Rows-Cut: 50000` when more rows existed; the body as 143.
 - Errors: as 147.
+
+#### 154. `POST /sessions/:id/messages/:message/answer/queries/:index/page`
+- Body: `PageRequest` (152). As 152 on the message's query. **Nothing is stored.** Roadmap 1.28.2; decision: [architecture.md](architecture.md) ADR-0050.
+- Success `201`: `{ ok: true, result: PageResult }` (152).
+- Errors: the shared ones; then as 152.
+
+#### 155. `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter`
+- Body: `{ text: string; view?: ResultView }` (153). As 153 on the message's query: one call to `result-explorer`, the query its only candidate. **Nothing runs and nothing is stored.** Roadmap 1.28.4.
+- Success `201`: `{ ok: true, interpretation: FilterInterpretation }` (153).
+- Errors: the body's 400s of 153 first; then the shared ones; then as 153.
 
 ### 2.2 Datasources
 
@@ -841,6 +853,8 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 141 | `POST /workflow-runs/:id/answer/queries/:index/stage-counts` | Count the rows after each step of an explained query, checked | yes |
 | 142 | `POST /workflow-runs/:id/answer/queries/:index/rerun` | Run one of the answer's queries again; nothing stored | yes |
 | 143 | `GET /workflow-runs/:id/answer/queries/:index/csv` | One query's rows as CSV, up to 50,000 | yes |
+| 152 | `POST /workflow-runs/:id/answer/queries/:index/page` | One page of one of the answer's queries, filtered and sorted; nothing stored | no |
+| 153 | `POST /workflow-runs/:id/answer/queries/:index/interpret-filter` | The user's words read as a view (filters, sort, page) of one of the answer's queries; nothing stored | no |
 | 149 | `GET /workflow-runs/:id/events/stream` | Follow a run that runs on the server again: its events so far, then live (SSE) | yes |
 | 150 | `POST /workflow-runs/:id/stop` | Stop a run | yes |
 | 151 | `GET /workflow-runs/:id/input-image` | One image of the run's input, by its stored path | yes |
@@ -980,12 +994,12 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Errors (Style B): `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no image \"<path>\""` when the path is not in the run's input, is invalid, or its file is gone.
 - Auth: as 146 (section 1.9); an `<img src>` cannot send a header, so the thumbnails use the same mode as the artifact image.
 
-#### Query evidence (139-143)
+#### Query evidence (139-143, 152, 153)
 
-The query inspector's endpoints over a run's stored answer and its `evidence` (3.6, [data-model.md](data-model.md) 3.4.2a; plan `docs/plans/m1-25-query-inspector.md`). `:index` is an `evidence[].index`: the position of the query's record in `answer.data`. Since 1.25.9 their logic is the engine `AnswerEvidenceService` (`sessions/query-evidence/answer-evidence.service.ts`), shared with 144-148, and `:id` may also be a **draft run** held in memory (129): a stored run is looked up first, then a held draft run whose agent still exists (the rule of 129, `Agent "<id>" not found`, read as this 404). Rules for all five:
+The query inspector's endpoints over a run's stored answer and its `evidence` (3.6, [data-model.md](data-model.md) 3.4.2a; plan `docs/plans/m1-25-query-inspector.md`). `:index` is an `evidence[].index`: the position of the query's record in `answer.data`. Since 1.25.9 their logic is the engine `AnswerEvidenceService` (`sessions/query-evidence/answer-evidence.service.ts`), shared with 144-148, 154 and 155, and `:id` may also be a **draft run** held in memory (129): a stored run is looked up first, then a held draft run whose agent still exists (the rule of 129, `Agent "<id>" not found`, read as this 404). Rules for all seven:
 - Errors (Style B), in this order: `404 "Run \"<id>\" not found"` (also a draft run past its 30 minutes, dropped, or whose agent is gone); `404 "Run \"<id>\" has no answer"`; `400 "Wait for the run to finish"` (the run is `running` or `suspended`); `400 "Query <index> not found in the run's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). An answer stored without `evidence` has it derived from `data` for these checks.
 - Every write to a run's `answer` goes through **one lock per run**, so two writes cannot overwrite each other: each re-reads the run inside the lock, patches it and writes `answer`. This includes 128. A held draft run is written in memory, under the same lock.
-- Every statement runs through the datasource's `runReadOnlySql` directly (its read-only guard, and PostgreSQL's READ ONLY transaction), never through the SQL repair: a re-run executes the same statement.
+- Every statement runs through the datasource's `runReadOnlySql` directly (its read-only guard, and PostgreSQL's READ ONLY transaction), never through the SQL repair: a re-run executes the same statement. A page (152) runs through the datasource's `runPagedSql` instead (datasources R52, ADR-0050): the same stored statement, guarded, wrapped in an outer query; no repair either.
 - The datasource of a query (as 133): the record's `evidence.datasourceId` when the run's datasets use it, else the run's only datasource; `400 "Several datasources are in scope for this run; this query cannot be re-run"` when there are several, `400 "No datasource is bound to this run's datasets"` when there is none.
 
 #### 139. `POST /workflow-runs/:id/answer/evidence`
@@ -1024,6 +1038,53 @@ The query inspector's endpoints over a run's stored answer and its `evidence` (3
 - The checks of 142, before any header is written. Raises the statement's top-level `LIMIT` (or `FETCH FIRST n`) to 50 001, or appends `LIMIT 50001` when there is none (a trailing `;` or comment is dropped first), runs it with the row clamp raised to 50 001, and keeps 50 000 rows. A `sample_rows` record is sampled again at its size.
 - Response `200`: `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="query-<Q>-<first 8 of the run id>.csv"` (`<Q>` is the query's 1-based position in `evidence`), and `X-Rows-Cut: 50000` when more rows existed. Body: a header row of the columns, then one line per row, CRLF line ends, quoted per RFC 4180 (a field holding `"`, `,`, CR or LF is quoted, `"` doubled); `null` is empty, an object is its JSON.
 - Errors: as 142.
+
+#### 152. `POST /workflow-runs/:id/answer/queries/:index/page`
+- Body: `PageRequest`; every field optional. Roadmap 1.28.2; decision: [architecture.md](architecture.md) ADR-0050; types: `backend/src/modules/datasources/connectors/paged-sql.types.ts`.
+  ```ts
+  type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'between' | 'in' | 'not_in'
+    | 'contains' | 'not_contains' | 'starts_with' | 'is_null' | 'not_null';
+  type FilterValue = string | number | boolean;
+  type FilterSpec = { column: string; op: FilterOp;
+    value?: FilterValue;      // every op but in, not_in, is_null, not_null
+    valueTo?: FilterValue;    // the upper bound of between
+    values?: FilterValue[] }; // in and not_in, at most 50
+  type SortSpec = { column: string; direction: 'asc' | 'desc' };
+  type PageRequest = { page?: number; pageSize?: number; filters?: FilterSpec[]; sort?: SortSpec[] };
+  ```
+- Reads one page of the query's **full** result: the record's stored SQL (for a repaired query, the corrected one, as 142 and 143 run) over the record's stored `columns`, its filters AND-ed, sorted by `sort` (empty: the default order, the stored query's top-level `ORDER BY` when it names output columns, else the first column; every column follows as a tie-breaker), `page` 1-based (default 1), `pageSize` default 50, 1 to 100. Rows past the 50,000th cannot be reached. Each column's kind (`number`, `text`, `boolean`, `date`, `unknown`) is inferred from the record's stored rows, and each filter value is made that kind (`contains`, `not_contains` and `starts_with` read it as text) before any query; `is_null` and `not_null` drop any value. The statement re-runs under its datasource's timeout ([non-functional.md](../product/non-functional.md) N72). **Nothing is stored.**
+- Success `201`: `{ ok: true, result: PageResult }`.
+  ```ts
+  type ColumnKind = 'number' | 'text' | 'boolean' | 'date' | 'unknown';
+  type ResultView = { filters: FilterSpec[]; sort: SortSpec[]; page: number; pageSize: number;
+    matchedRows?: number; capped?: boolean };
+  type PageResult = {
+    columns: string[];
+    columnKinds: Record<string, ColumnKind>;
+    rows: Record<string, unknown>[];
+    page: number;
+    pageSize: number;
+    pageCount: number;      // max(1, ceil(matchedRows / pageSize))
+    matchedRows: number;    // rows matching the filters, at most 50,000
+    capped: boolean;        // more than 50,000 rows matched
+    view: ResultView;       // the checked request; sort [] for the default order
+    ranAt: string;          // ISO
+  };
+  ```
+- Errors (400 unless stated): the shared ones; `"Query <index> has no SQL to run"` (a failed record); `"Query <index> is a sample; it has no full result to page"` (a `sample_rows` record); then, before any query: `"Page must be a whole number of at least 1"`; `"Page size must be a whole number from 1 to 100"`; `"Page <n> is past the 50,000-row limit"` (`(page - 1) × pageSize ≥ 50,000`); `"A view takes at most 10 filters"`; `"A view sorts by at most 3 columns"`; `"Unknown column \"<c>\""`; `"Column \"<c>\" appears more than once in the result; it cannot be filtered or sorted"`; `"Filter on <c>: <op> needs a value"`; `"Filter on <c>: <op> takes at most 50 values"`; `"Filter on <c>: \"<v>\" is not a number"` (or `is not true or false`, `is not a date`); a body of the wrong shape: `"The body must be a JSON object"`, `"filters must be a list"`, `"sort must be a list"`, `"Each filter names a column"`, `"Each sort key names a column"`, `"Filter on <c>: unknown operator \"<op>\""`, `"Filter on <c>: values must be a list"`, `"Sort on <c>: the direction is asc or desc"`. Then the datasource rule's two 400s; `"This warehouse does not support query parameters; filtering is unavailable"` (Databricks); the connector's own message as a 400 otherwise.
+
+#### 153. `POST /workflow-runs/:id/answer/queries/:index/interpret-filter`
+- Body: `{ text: string; view?: ResultView }`: the user's words (trimmed, not blank, at most 500 characters) and the view they see now (152's `ResultView`; omitted or `null` for the answer's stored rows). `view.filters` and `view.sort` are read as 152 reads a body's; a missing or invalid `view.page` is 1, `view.pageSize` 50. Roadmap 1.28.4; decision: [architecture.md](architecture.md) ADR-0050.
+- Reads the words as a view of this query's full result with one call to `result-explorer` ([agents.md](agents.md) 2.16, `MastraService.interpretResult`): the query is the only candidate, `Q<n>` with its rationale, its stored columns, each column's kind (inferred from the stored rows as 152 infers it) and at most 5 distinct stored values per column (text cut to 60 characters). The model never sees the SQL or whole rows. Its reply is turned into a `PageRequest` by code (`specOf`): columns matched exactly, then without case; a filter or sort key on a column the query does not have, or with a value its column's kind cannot take, is left out and listed in `rejected`; at most 10 filters and 3 sort keys; the page move (keep, first, next, previous, last, to) resolved to an absolute page from 1 to the view's page count (`ceil(view.matchedRows / view.pageSize)`, when `matchedRows` is given). The request is then checked as 152 checks it. **Nothing runs and nothing is stored**: the client pages with 152.
+- Success `201`: `{ ok: true, interpretation: FilterInterpretation }`.
+  ```ts
+  type FilterInterpretation = {
+    request: PageRequest;   // the complete new view: page, pageSize (the view's), filters, sort
+    understood: string;     // one line, business words: "Country is Brazil · Goals at least 3"
+    rejected?: string[];    // parts that named no known column: "Continent is Europe", "sorted by Stadium"
+  };
+  ```
+- Errors (400 unless stated): a body of the wrong shape first: `"The body must be a JSON object"`, `"Write what to filter, sort or page"` (no `text`, or blank), `"The text is longer than 500 characters"`, `"view must be a JSON object"`, and 152's shape errors for `view.filters` and `view.sort`; then the shared ones; `"Query <index> has no SQL to run"`; `"Query <index> is a sample; it has no full result to page"`; `"The filter could not be understood: <model error>"` (the model call failed, or its reply held no JSON object); `"That asks a new question, not a filter on this result"` (the agent's `action` is `new-question`: a new measure, grouping or question); then any of 152's checks the request fails.
 
 ### 2.6.4 Artifacts
 
@@ -1581,7 +1642,7 @@ type WorkflowRun = {
   // Answer a Business Question runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text (a run stored before 2026-11-13 may hold a clarifying question with its `clarification`); absent while it waits, and when it stopped or failed before answering
-                                   // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql or sample_rows record of answer.data, failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
+                                   // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql, sample_rows or explore_result record of answer.data (an explore_result entry carries its view: ResultView), failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;
   agent?: SessionAgentRef;         // as a session's (2.1)

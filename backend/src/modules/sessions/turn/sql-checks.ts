@@ -62,6 +62,30 @@ export interface SqlChecksDeps {
 export class SqlChecks {
   constructor(private readonly deps: SqlChecksDeps) {}
 
+  /**
+   * A statement the app built itself (the rows behind a readiness finding,
+   * roadmap 1.28.11), on the guarded read-only path with no repair: it
+   * never calls a model, and its failure is the caller's to record.
+   * `truncated` as `runSqlWithRepair` sets it; `totalRows` stays on the
+   * result for the caller's query facts.
+   */
+  async runBuiltSql(
+    datasourceId: string,
+    sql: string,
+    limit: number,
+  ): Promise<SqlRunResult> {
+    const result = await this.deps.datasourcesService.runReadOnlySql(
+      datasourceId,
+      sql,
+      limit,
+    );
+    const truncated =
+      typeof result.totalRows === 'number'
+        ? result.totalRows > result.rows.length
+        : result.rows.length >= limit;
+    return { ...result, ...(truncated ? { truncated: true } : {}) };
+  }
+
   // ----------------------------------------------------- SQL self-correction
 
   /**

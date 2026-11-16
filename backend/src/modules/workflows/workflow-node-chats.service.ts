@@ -17,6 +17,7 @@ import {
   NODE_CHAT_HISTORY_LIMIT,
   nodeChatContextBlock,
   nodeChatHostRunId,
+  nodeChatQueries,
   type NodeChatMessage,
 } from './node-chat-context';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
@@ -186,6 +187,7 @@ export class WorkflowNodeChatsService {
     let text = '';
     let error: string | undefined;
     let hostId: string | undefined;
+    const contextQueries = nodeChatQueries(run, earlier);
     try {
       const host = await this.sessions.createRunHost({
         runId: nodeChatHostRunId(run.id, step.id),
@@ -194,6 +196,7 @@ export class WorkflowNodeChatsService {
         datasets: run.datasets,
         transcript,
         contextBlock: nodeChatContextBlock(run, step.id),
+        ...(contextQueries.length ? { contextQueries } : {}),
       });
       hostId = host.id;
       // A chat's first turn about the step that ran on the run's own host

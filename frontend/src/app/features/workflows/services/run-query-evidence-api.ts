@@ -1,8 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, tap, throwError } from 'rxjs';
 import {
+  FilterInterpretation,
+  PageRequest,
+  PageResult,
   QueryEvidenceApi,
   QueryRerunResult,
+  ResultView,
 } from '../../../shared/query-evidence/query-evidence.model';
 import { WorkflowRun } from '../models/workflow.model';
 import { WorkflowDesigner } from './workflow-designer.service';
@@ -49,6 +53,26 @@ export abstract class RunEvidenceApi implements QueryEvidenceApi {
 
   downloadCsv(index: number): Observable<Blob> {
     return this.withRun((id) => this.runs.queryCsv(id, index));
+  }
+
+  page(index: number, request: PageRequest): Observable<PageResult> {
+    return this.withRun((id) =>
+      this.runs
+        .pageQuery(id, index, request)
+        .pipe(map((response) => response.result)),
+    );
+  }
+
+  interpretFilter(
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<FilterInterpretation> {
+    return this.withRun((id) =>
+      this.runs
+        .interpretFilter(id, index, text, view)
+        .pipe(map((response) => response.interpretation)),
+    );
   }
 
   private withRun<T>(call: (id: string) => Observable<T>): Observable<T> {

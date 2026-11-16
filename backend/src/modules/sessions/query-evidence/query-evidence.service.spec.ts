@@ -6,6 +6,7 @@ jest.mock('../../datasets/repositories/datasets.repository', () => ({
 }));
 
 import type { DatasetsRepository } from '../../datasets/repositories/datasets.repository';
+import type { PagedStatement } from '../../datasources/connectors/paged-sql.types';
 import type { DatasourcesService } from '../../datasources/datasources.service';
 import type { ChatMessage } from '../entities/session.entity';
 import { QueryEvidenceService } from './query-evidence.service';
@@ -43,8 +44,16 @@ function build(
       });
     },
   );
+  const runPagedSql = jest.fn((_id: string, stmt: PagedStatement) =>
+    Promise.resolve({
+      columns: stmt.columns,
+      rows: [{ product: 'p0', n: 9 }],
+      matchedRows: 1870,
+    }),
+  );
   const datasources = {
     runReadOnlySql,
+    runPagedSql,
     sampleRows: jest
       .fn()
       .mockResolvedValue({ columns: ['id'], rows: [{ id: 1 }] }),
@@ -56,7 +65,7 @@ function build(
     repository as unknown as DatasetsRepository,
     datasources as unknown as DatasourcesService,
   );
-  return { service, runReadOnlySql };
+  return { service, runReadOnlySql, runPagedSql };
 }
 
 const answer: ChatMessage = {
@@ -189,6 +198,70 @@ describe('QueryEvidenceService.rerun and exportRows (api.md 142, 143)', () => {
     );
     expect(exported.rows).toHaveLength(50_000);
     expect(exported.cut).toBe(true);
+  });
+});
+
+describe('QueryEvidenceService.page (api.md 152, 154)', () => {
+  it('pages the stored SQL over its stored columns, with nothing stored', async () => {
+    const { service, runPagedSql, runReadOnlySql } = build();
+    const record = {
+      ...answer.data![0],
+      rows: [{ product: 'p0', n: 9 }],
+    };
+    const before = JSON.stringify(record);
+
+    const result = await service.page(record, { index: 0 }, ['shop'], {
+      page: 2,
+      sort: [{ column: 'n', direction: 'asc' }],
+    });
+
+    expect(runPagedSql).toHaveBeenCalledWith('ds-1', {
+      sql: RANKED,
+      columns: ['product', 'n'],
+      filters: [],
+      sort: [{ column: 'n', direction: 'asc' }],
+      limit: 50,
+      offset: 50,
+      kinds: { product: 'text', n: 'number' },
+    });
+    expect(runReadOnlySql).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      page: 2,
+      pageSize: 50,
+      pageCount: 38,
+      matchedRows: 1870,
+      capped: false,
+      rows: [{ product: 'p0', n: 9 }],
+    });
+    expect(JSON.stringify(record)).toBe(before);
+  });
+
+  it('refuses a sample, and a bad request before any query', async () => {
+    const { service, runPagedSql } = build();
+
+    await expect(
+      service.page(
+        { tool: 'sample_rows', input: 'shop.public.returns' },
+        { index: 3 },
+        ['shop'],
+        {},
+      ),
+    ).rejects.toThrow('Query 3 is a sample; it has no full result to page');
+    await expect(
+      service.page(answer.data![0], { index: 0 }, ['shop'], {
+        filters: [{ column: 'nope', op: 'eq', value: 1 }],
+      }),
+    ).rejects.toThrow('Unknown column "nope"');
+    expect(runPagedSql).not.toHaveBeenCalled();
+  });
+
+  it("answers the connector's failure as a 400 with its message", async () => {
+    const { service, runPagedSql } = build();
+    runPagedSql.mockRejectedValueOnce(new Error('Postgres — timeout'));
+
+    await expect(
+      service.page(answer.data![0], { index: 0 }, ['shop'], {}),
+    ).rejects.toMatchObject({ status: 400, message: 'Postgres — timeout' });
   });
 });
 

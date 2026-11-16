@@ -44,6 +44,11 @@ import {
 } from '../../modules/sessions/turn-data';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
 import type { SessionsService } from '../../modules/sessions/sessions.service';
+import {
+  EVAL_CASE_CONTEXT_KEY,
+  evalDetailsOf,
+  type EvalRunDetails,
+} from './eval-details';
 
 /**
  * Eval suite for the Questions to Insights assistant.
@@ -102,6 +107,13 @@ export interface AssistantEvalCase {
    * the ones the tools see), for cases that stage what the model is told.
    */
   orientationSnapshots?: (snapshots: DatasetSnapshot[]) => DatasetSnapshot[];
+  /**
+   * The frozen input of a case whose target calls one model function
+   * (`isolatedCallTarget`, agents.md 8.1): exactly what the call receives,
+   * typed by the target's input type. The target reads it from the case,
+   * not from `question` (which is then only the case's label).
+   */
+  input?: unknown;
 }
 
 /** One tool call as the agent made it, with its parsed input and output. */
@@ -121,6 +133,14 @@ export interface EvalCustomCheckInput {
   datasets: string[];
   /** Values the target's setup produced for the case (e.g. a draft's id). */
   vars: Record<string, string>;
+  /**
+   * Structured facts of the run (agents.md 8.1, "Run details"): an
+   * isolated call's whole `output`, a workflow's step outputs (`steps`),
+   * the readiness report and Rows behind findings' sources. The runner
+   * always sets it (`{}` when the target sets none); optional only so a
+   * spec can call a check without it.
+   */
+  details?: EvalRunDetails;
 }
 
 /**
@@ -174,6 +194,13 @@ export interface AssistantEvalSet {
    * means the `assistant`.
    */
   agentKey?: string;
+  /**
+   * The eval target its cases run on, when its agent has more than one
+   * (`eval-sets.ts` `EVAL_TARGET_FACTORIES`): `data-readiness:check-data-quality`
+   * or `data-readiness:assessment-workflow`. Absent means the agent's own
+   * target (its `agentKey`).
+   */
+  target?: string;
   cases: AssistantEvalCase[];
 }
 
@@ -1384,6 +1411,14 @@ async function runJudgeCheck(
  * keys and averages scores across the data items of a single call — one call
  * for all ten questions would collapse them into one set of numbers.
  */
+/**
+ * The scorer of a case with custom checks only: it passes every answer, so
+ * the verdict is the custom checks' (Mastra's runEvals needs one scorer).
+ */
+function anyAnswer() {
+  return checks.includes('');
+}
+
 export async function runAssistantEvalCase(
   evalCase: AssistantEvalCase,
   datasets: string[],
@@ -1408,6 +1443,7 @@ export async function runAssistantEvalCase(
   let rawToolCalls: EvalRawToolCall[] = [];
   let history: EvalHistoryMessage[] = [];
   let vars: Record<string, string> = {};
+  let details: EvalRunDetails = {};
   let scorerPayloads: Record<string, any> = {};
   // Populated live via onStepFinish as the run executes — the same records a
   // real turn would have threaded through TURN_RECORDS_CONTEXT_KEY.
@@ -1436,6 +1472,8 @@ export async function runAssistantEvalCase(
       question,
       evalCase.agentTools,
     );
+    // The case itself, for a target that reads its frozen `input`.
+    requestContext.set(EVAL_CASE_CONTEXT_KEY, evalCase);
     target.configureContext?.(requestContext);
     const orientation = await target.orientation({
       datasets,
@@ -1455,7 +1493,9 @@ export async function runAssistantEvalCase(
           requestContext,
         },
       ],
-      scorers: evalCase.scorers,
+      // Mastra wants one scorer at least: a case judged only by custom
+      // checks (the isolated-call sets) gets one that any answer passes.
+      scorers: evalCase.scorers.length ? evalCase.scorers : [anyAnswer()],
       target: target.runTarget ?? target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from TurnOptions.agentContext — without this the model
@@ -1479,6 +1519,7 @@ export async function runAssistantEvalCase(
           failed: call.failed,
         }));
         scorerPayloads = scorerResults ?? {};
+        details = evalDetailsOf(targetResult);
       },
     });
 
@@ -1543,6 +1584,7 @@ export async function runAssistantEvalCase(
           toolCalls: rawToolCalls,
           datasets,
           vars,
+          details,
         }),
       );
     }

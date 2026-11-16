@@ -1,5 +1,6 @@
 // The turn engine (agents.md 5.1): one turn of a session or run host, from
 // the user's question to the persisted answer and the `done` event.
+import { randomUUID } from 'crypto';
 import type { Logger } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
 import {
@@ -14,10 +15,12 @@ import {
   DATA_MAPPER_AGENT_KEY,
   DATA_READINESS_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
+import { pageExplorableQuery } from '../../../mastra/tools/explore-result.tool';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
   READINESS_REPORT_EVENT,
@@ -113,6 +116,14 @@ import {
   toolRecords,
 } from '../turn-data';
 import { evidenceOf } from '../query-evidence/query-evidence';
+import { recordFindingSources } from '../finding-sources';
+import type { ReadinessReport } from '../../data-readiness/engine/types';
+import {
+  EXPLORABLE_QUERIES_CONTEXT_KEY,
+  explorableQueryOf,
+  sessionExplorableQueries,
+  type ExplorableQuery,
+} from '../query-evidence/explorable-queries';
 import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
@@ -162,6 +173,9 @@ import {
 } from './turn-workflow';
 import type { TurnOptions } from './turn-options';
 import type { SqlChecks } from './sql-checks';
+
+/** The count columns of the rows behind a readiness finding (1.28.11). */
+const FINDING_COUNT_COLUMNS = new Set(['matching_rows', 'occurrences']);
 
 /**
  * What a turn runs on: the session service's dependencies and the session
@@ -305,6 +319,17 @@ export class TurnEngine {
     const factsOf = (record: ToolDataRecord) =>
       recordFacts.get(record) ??
       queryFacts.get(queryFactsKey(record.tool, record.input));
+    // What `explore_result` may page (agents.md 3.15, 4.2): the host's
+    // context queries and the session's earlier answers' queries, then each
+    // successful query of this turn as it is captured.
+    const explorable: ExplorableQuery[] = sessionExplorableQueries(
+      session.contextQueries,
+      session.messages,
+    );
+    options.requestContext.set(EXPLORABLE_QUERIES_CONTEXT_KEY, explorable);
+    // What v2's Interpret follow-up may page (roadmap 1.28.8): the earlier
+    // queries as the turn starts, before it runs any of its own.
+    const followUp: readonly ExplorableQuery[] = [...explorable];
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
@@ -333,6 +358,29 @@ export class TurnEngine {
     const workflow = turnWorkflowOf(session);
     // v2's answer is its Write answer step's only (agents.md 5.11).
     const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
+    // A query record of the turn: kept for the answer with its facts,
+    // explorable from then on, and shown as its call's result.
+    const captureRecord = (record: ToolDataRecord, callId?: string) => {
+      data.push(record);
+      const facts = callId ? queryFacts.get(callId) : undefined;
+      if (facts) recordFacts.set(record, facts);
+      const known = factsOf(record);
+      const query = explorableQueryOf(record, `Q${explorable.length + 1}`, {
+        datasourceId: known?.datasourceId,
+        view: known?.view,
+      });
+      if (query) explorable.push(query);
+      emit({
+        type: 'tool-result',
+        content: JSON.stringify({
+          tool: record.tool,
+          input: record.input,
+          rowCount: record.rowCount,
+          error: record.error,
+          rationale: record.rationale,
+        }),
+      });
+    };
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
       agentStream: Awaited<ReturnType<typeof agent.stream>>,
@@ -527,23 +575,7 @@ export class TurnEngine {
               continue;
             }
             const record = toolDataRecord(toolName, args, payload.result);
-            if (record) {
-              data.push(record);
-              const facts = payload.toolCallId
-                ? queryFacts.get(payload.toolCallId)
-                : undefined;
-              if (facts) recordFacts.set(record, facts);
-              emit({
-                type: 'tool-result',
-                content: JSON.stringify({
-                  tool: record.tool,
-                  input: record.input,
-                  rowCount: record.rowCount,
-                  error: record.error,
-                  rationale: record.rationale,
-                }),
-              });
-            }
+            if (record) captureRecord(record, payload.toolCallId);
           }
         }
       } catch (error) {
@@ -552,6 +584,8 @@ export class TurnEngine {
     };
     // Assess Data Readiness's assessment, once Resolve dataset started it.
     let assessment: ReadinessAssessment | undefined;
+    // Its stored report, once Save report stored it (roadmap 1.28.11).
+    let savedReport: ReadinessReport | undefined;
     const startedAssessment = (): ReadinessAssessment => {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
@@ -836,6 +870,74 @@ export class TurnEngine {
               };
             }
           },
+          // v2's follow-up branch (roadmap 1.28.8): the earlier queries,
+          // Nathan's reading of the words, the page and the answer.
+          followUp,
+          interpretFollowUp: async (request) => {
+            try {
+              const spec = await this.deps.mastra.interpretResult(request, {
+                abortSignal: turn.signal,
+                onExchange: stepModelOf(RESULT_EXPLORER_AGENT_KEY).onExchange,
+              });
+              return { spec, stopped: turn.signal.aborted };
+            } catch (error) {
+              if (turn.signal.aborted) return { spec: null, stopped: true };
+              // The step plans the question instead; the reason is logged.
+              this.deps.logger.warn(
+                `Could not read the follow-up of ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+              throw error;
+            }
+          },
+          // The page is an `explore_result` call of the turn: its record
+          // (the source SQL, the page's rows) and its view as evidence, so
+          // the answer's query opens the inspector on that view.
+          pageResult: async ({ query, request, understood }) => {
+            const target = followUp[query];
+            if (!target)
+              throw new Error('The earlier query is no longer known');
+            const args = {
+              query: target.sql,
+              // Named as the reader saw it (agent-answers R69): `Source 5`.
+              rationale: `${understood.toLowerCase() === 'all rows' ? 'The rows' : understood} of the earlier answer's ${target.source ? `Source ${target.source}` : 'query'}.`,
+            };
+            calledTools.add('explore_result');
+            emit({
+              type: 'tool',
+              content: JSON.stringify({
+                name: 'explore_result',
+                rationale: args.rationale,
+                input: toolCallInput('explore_result', args),
+              }),
+            });
+            const callId = `follow-up-${randomUUID()}`;
+            const result = await pageExplorableQuery(
+              target,
+              request,
+              understood,
+              options.requestContext,
+              callId,
+            );
+            const record = toolDataRecord('explore_result', args, result);
+            if (record) captureRecord(record, callId);
+            if ('error' in result) throw new Error(result.error);
+            return {
+              title: target.rationale ?? target.ref,
+              columns: result.columns,
+              rows: result.rows,
+              page: result.page,
+              pageCount: result.pageCount,
+              matchedRows: result.matchedRows,
+              capped: result.capped,
+              view: result.view,
+              understood: result.understood,
+            };
+          },
+          deliverAnswer: (answer) => {
+            text = answer;
+            emit({ type: 'text', content: answer });
+            return Promise.resolve();
+          },
           writeAnswer: async (written) => {
             try {
               // Zoe's notes only when the run has images (agents.md 5.11).
@@ -921,11 +1023,51 @@ export class TurnEngine {
           },
           save: async () => {
             const saved = await startedAssessment().save();
+            savedReport = saved.report;
             // The answer carries the report: its card, and the scorecard
             // (data-readiness R5).
             const shown = await this.showReadinessReport(id, saved, emit);
             if (shown) readinessReport = shown;
             return { reportId: saved.report.id };
+          },
+          // Rows behind findings (roadmap 1.28.11; data-readiness R34): the
+          // rows behind each top finding become the answer's first sources,
+          // each shown as a SQL call and its result. Nothing reaches the
+          // agent's prompt: the records only add sources to the answer.
+          findingRows: async () => {
+            if (!savedReport) throw new Error('The report has not been saved');
+            return recordFindingSources({
+              report: savedReport,
+              run: (datasourceId, sql, limit) =>
+                this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+              signal: turn.signal,
+              record: (args, result, facts) => {
+                emit({
+                  type: 'tool',
+                  content: JSON.stringify({
+                    name: 'run_readonly_sql',
+                    rationale: args.rationale,
+                    input: toolCallInput('run_readonly_sql', args),
+                  }),
+                });
+                const callId = `finding-rows-${randomUUID()}`;
+                queryFacts.set(callId, facts);
+                const record = toolDataRecord('run_readonly_sql', args, result);
+                if (record) {
+                  // Only its count links a figure (agent-answers R69): the
+                  // raw cells would match the report's numbers by chance.
+                  const counts = (record.columns ?? []).filter((c) =>
+                    FINDING_COUNT_COLUMNS.has(c),
+                  );
+                  captureRecord(
+                    record.error
+                      ? record
+                      : { ...record, figureColumns: counts },
+                    callId,
+                  );
+                }
+              },
+            });
           },
           explain: async ({ dataset, reportId, imageNotes }) => {
             // The run has assessed: the agent reads the stored report and
@@ -1332,7 +1474,15 @@ export class TurnEngine {
     question: string,
     emit: (event: StreamEvent) => void,
     runtime: AnswerBusinessQuestionRuntime &
-      Required<Pick<AnswerBusinessQuestionRuntime, 'checkDataQuality'>> &
+      Required<
+        Pick<
+          AnswerBusinessQuestionRuntime,
+          | 'checkDataQuality'
+          | 'interpretFollowUp'
+          | 'pageResult'
+          | 'deliverAnswer'
+        >
+      > &
       AgentTurnRuntime &
       DataReadinessAssessmentRuntime &
       RecreateDashboardRuntime &
@@ -1375,6 +1525,7 @@ export class TurnEngine {
           }
         },
         save: () => captured(() => runtime.save()),
+        findingRows: () => captured(() => runtime.findingRows()),
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
     } else if (recreate) {
@@ -1416,6 +1567,12 @@ export class TurnEngine {
         checkDataQuality: (input) =>
           captured(() => runtime.checkDataQuality(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
+        // A follow-up over an earlier result (roadmap 1.28.8). Nathan's
+        // failure is no step's: the run plans the question instead.
+        ...(runtime.followUp ? { followUp: runtime.followUp } : {}),
+        interpretFollowUp: (input) => runtime.interpretFollowUp(input),
+        pageResult: (input) => captured(() => runtime.pageResult(input)),
+        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
       } satisfies AnswerBusinessQuestionRuntime);
     }
     // Read images, the optional first step of every workflow but the

@@ -9,9 +9,12 @@
   <div data-testid="workflow-node-chat" class="flex min-h-0 flex-1 flex-col gap-2">
     <p
       data-testid="workflow-node-chat-note"
-      class="m-0 text-[12px] text-fg-muted"
+      class="m-0 flex flex-wrap items-center gap-x-1 text-[12px] text-fg-muted"
     >
-      {{ note() }}
+      <span>{{ note() }}&#32;</span>
+      @if (runId(); as id) {
+        <app-execution-id [id]="id" />
+      }
     </p>
 
     <div

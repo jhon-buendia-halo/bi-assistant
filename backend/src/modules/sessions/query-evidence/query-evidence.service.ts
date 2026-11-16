@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DatasetsRepository } from '../../datasets/repositories/datasets.repository';
 import { mapWithConcurrency } from '../../datasources/connectors/connector';
+import type {
+  PageRequest,
+  PageResult,
+} from '../../datasources/connectors/paged-sql.types';
 import { DatasourcesService } from '../../datasources/datasources.service';
 import type { DatasourceKind } from '../../datasources/entities/datasource.entity';
 import type { ChatMessage, ToolDataRecord } from '../entities/session.entity';
@@ -13,6 +17,7 @@ import type {
   QueryTableSize,
 } from './query-evidence.types';
 import { countStatement, tablesOfQuery } from './query-tables';
+import { pageResultOf, preparePage, type PageSource } from './result-view';
 
 /** Table counts in flight at once (api.md 139). */
 export const TABLE_COUNT_CONCURRENCY = 3;
@@ -193,7 +198,7 @@ export class QueryEvidenceService {
    * datasource. 400 when there are several, or none.
    */
   async datasourceFor(
-    evidence: QueryEvidence | undefined,
+    evidence: Pick<QueryEvidence, 'datasourceId'> | undefined,
     datasetNames: string[],
   ): Promise<QueryDatasource> {
     return this.resolve(evidence, await this.datasets(datasetNames));
@@ -280,6 +285,75 @@ export class QueryEvidenceService {
   }
 
   /**
+   * One page of a stored query's full result (api.md 152, 154): the stored
+   * SQL (the corrected one, for a repaired query) over its stored columns,
+   * filtered, sorted and paged by the connector under its datasource's
+   * timeout. The request is checked before any query; a sample has no full
+   * result to page. Nothing is stored.
+   */
+  async page(
+    record: ToolDataRecord,
+    evidence: QueryEvidence,
+    datasetNames: string[],
+    request: PageRequest,
+  ): Promise<PageResult> {
+    if (record.tool === 'sample_rows') {
+      throw new BadRequestException(
+        `Query ${evidence.index} is a sample; it has no full result to page`,
+      );
+    }
+    const { result } = await this.pageRun(
+      {
+        sql: record.input ?? '',
+        columns: record.columns,
+        rows: record.rows,
+        datasourceId: evidence.datasourceId,
+      },
+      datasetNames,
+      request,
+    );
+    return result;
+  }
+
+  /**
+   * One page of a query known by its SQL, columns and kinds (api.md 152,
+   * 154; the `explore_result` tool, agents.md 3.15): the same checks, caps
+   * and datasource choice as `page`, and the datasource it ran on. Nothing
+   * is stored.
+   */
+  async pageOf(
+    source: PageSource & { datasourceId?: string },
+    datasetNames: string[],
+    request: PageRequest,
+  ): Promise<PageResult & { datasourceId: string }> {
+    const { result, datasourceId } = await this.pageRun(
+      source,
+      datasetNames,
+      request,
+    );
+    return { ...result, datasourceId };
+  }
+
+  private async pageRun(
+    source: PageSource & { datasourceId?: string },
+    datasetNames: string[],
+    request: PageRequest,
+  ): Promise<{ result: PageResult; datasourceId: string }> {
+    const prepared = preparePage(source, request);
+    const datasource = await this.datasourceFor(
+      { datasourceId: source.datasourceId },
+      datasetNames,
+    );
+    const paged = await this.guarded(() =>
+      this.datasources.runPagedSql(datasource.id, prepared.statement),
+    );
+    return {
+      result: pageResultOf(prepared, paged),
+      datasourceId: datasource.id,
+    };
+  }
+
+  /**
    * One count statement's result (table sizes here, the step counts of
    * 1.25.3): a single integer of 0 or more, else it throws.
    */
@@ -297,7 +371,7 @@ export class QueryEvidenceService {
   }
 
   private async resolve(
-    evidence: QueryEvidence | undefined,
+    evidence: Pick<QueryEvidence, 'datasourceId'> | undefined,
     datasets: BoundDataset[],
   ): Promise<QueryDatasource> {
     const kinds = new Map<string, DatasourceKind | undefined>();

@@ -22,13 +22,17 @@ import { worldCupKey } from './helpers/world-cup-db';
 const V2 = 'Answer a Business Question';
 const V2_ID = 'answer-business-question';
 /**
- * Its steps in catalogue order: Plan, then a branch (Clarify waits for the answer),
- * then Analyse and Validate (retried once), Write answer and Wrap up.
+ * Its steps in catalogue order: Read images (only with images), Receive
+ * question, Load catalog, Interpret follow-up, Plan, then a branch (Clarify
+ * waits for the answer), then Analyse and Validate (retried once), Write
+ * answer and Wrap up; last the follow-up branch (Page result, Page answer,
+ * roadmap 1.28.8).
  */
 const V2_STEP_IDS = [
   ['read-images', 'Read images'],
   ['receive-question', 'Receive question'],
   ['load-catalog', 'Load catalog'],
+  ['interpret-follow-up', 'Interpret follow-up'],
   ['plan', 'Plan'],
   ['clarify', 'Clarify'],
   ['analyse', 'Analyse'],
@@ -36,22 +40,32 @@ const V2_STEP_IDS = [
   ['check-data-quality', 'Check data quality'],
   ['write-answer', 'Write answer'],
   ['wrap-up', 'Wrap up'],
+  ['page-result', 'Page result'],
+  ['page-answer', 'Page answer'],
 ] as const;
+/** The branches off the main path, drawn after it: Clarify, then the follow-up branch. */
+const V2_OFF_PATH = ['clarify', 'page-result', 'page-answer'] as const;
 /**
  * The steps a clear question runs: the canvas's main path, left to right.
- * Read images (only when the run has images), Clarify and Check data
- * quality (ticked only) are branches off it.
+ * Read images (only when the run has images), Clarify, Check data quality
+ * (ticked only) and the follow-up branch are branches off it.
  */
 const V2_MAIN_STEP_IDS = V2_STEP_IDS.filter(
   ([id]) =>
-    id !== 'read-images' && id !== 'clarify' && id !== 'check-data-quality',
+    id !== 'read-images' &&
+    id !== 'check-data-quality' &&
+    !(V2_OFF_PATH as readonly string[]).includes(id),
 );
 /** The steps a question that needs clarification skips. */
 const V2_ANALYSIS_STEP_IDS = ['analyse', 'validate', 'write-answer'] as const;
-/** The step titles as the canvas lists them: the main path, then Clarify below it. */
+/** The step titles as the canvas lists them: the main path, then Clarify and the follow-up branch. */
 const V2_STEPS = [
-  ...V2_STEP_IDS.filter(([id]) => id !== 'clarify').map(([, title]) => title),
+  ...V2_STEP_IDS.filter(([id]) => !(V2_OFF_PATH as readonly string[]).includes(id)).map(
+    ([, title]) => title,
+  ),
   'Clarify',
+  'Page result',
+  'Page answer',
 ];
 const V2_STEP_COUNT = `${V2_STEP_IDS.length} steps`;
 const READINESS_ID = 'data-readiness-assessment';
@@ -304,7 +318,7 @@ test.describe('Feature: Workflows', () => {
             V2_STEP_COUNT,
           );
           await expect(official.getByTestId(`workflow-kind-${READINESS_ID}`)).toHaveText(
-            '7 steps',
+            '8 steps',
           );
           await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(
             OFFICIAL.length,
@@ -317,13 +331,14 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its ten steps on the canvas and the agents Michael, Zoe, Olivia, Sarah and Jessica under Agents in its Start node',
+        'Then I see its thirteen steps on the canvas and the agents Michael, Zoe, Nathan, Olivia, Sarah and Jessica under Agents in its Start node',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
           const start = await openNode(page, 'start', 'Start');
           await expect(start.getByTestId('workflow-agent-insights-analyst')).toContainText('Michael');
           await expect(start.getByTestId('workflow-agent-image-reader')).toContainText('Zoe');
+          await expect(start.getByTestId('workflow-agent-result-explorer')).toContainText('Nathan');
           await closeNode(page);
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -447,7 +462,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question" with "10 steps" and no Start chat',
+        'Then I see "Answer a Business Question" with "13 steps" and no Start chat',
         async () => {
           const card = page.getByTestId(`workflow-card-${V2_ID}`);
           await expect(card).toBeVisible();
@@ -467,7 +482,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its ten steps on the canvas, Execute and no Start chat',
+        'Then I see its thirteen steps on the canvas, Execute and no Start chat',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
@@ -687,7 +702,9 @@ test.describe('Feature: Workflows (run workflows)', () => {
           const runs = (await storedRuns(page)) as { id: string; status: string }[];
           expect(runs.map((run) => run.status)).toEqual(['suspended']);
           runId = runs[0].id;
-          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
         },
       );
       await scenarioStep(page, `When I pick "${clarification.options[0]}"`, async () => {
@@ -703,7 +720,9 @@ test.describe('Feature: Workflows (run workflows)', () => {
             await expect(nodeStatus(page, id)).toHaveText('Done');
             await expect(canvasNode(page, id)).toHaveAttribute('data-status', 'success');
           }
-          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
           const runs = (await storedRuns(page)) as { id: string; status: string }[];
           expect(runs.map((run) => [run.id, run.status])).toEqual([[runId, 'success']]);
           await expect(page.getByTestId('run-answer')).toBeVisible();
@@ -788,7 +807,9 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
           await expect(page.getByTestId('workflow-run-input-required')).toHaveCount(0);
           await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
-          await expect(page.getByTestId('workflow-state-run-id')).toHaveText(runId);
+          await expect(
+            page.getByTestId('workflow-state-run-id').getByTestId('execution-id'),
+          ).toHaveAttribute('data-execution-id', runId);
           for (const id of ['analyse', 'validate', 'write-answer']) {
             await expect(nodeStatus(page, id)).toHaveText('Done');
           }
@@ -985,9 +1006,12 @@ test.describe('Feature: Workflows (the designer)', () => {
             'CODE',
             'LLM',
             'LLM',
+            'LLM',
             'CODE',
             'LLM',
             'LLM',
+            'CODE',
+            'CODE',
             'CODE',
             'CODE',
           ]);
@@ -1088,7 +1112,7 @@ test.describe('Feature: Workflows (the designer)', () => {
           await showArtifactView(page, 'config');
           await expect(dialog.getByTestId('workflow-step-field-model')).toBeVisible();
           await expect(dialog.getByTestId('workflow-step-field-tools')).toHaveText(
-            'list_entities, describe_entity, sample_rows, run_readonly_sql, ask_clarification',
+            'list_entities, describe_entity, sample_rows, run_readonly_sql, explore_result, ask_clarification',
           );
           await expect(dialog.getByText('Max steps', { exact: true })).toBeVisible();
           await expect(dialog.getByTestId('workflow-step-field-max-steps')).toHaveText('15');
@@ -1187,11 +1211,11 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       });
       await test.step(
-        'Then every connector of the main path is done, the branches to "Read images" and "Clarify" are muted, and the Run panel reads "9 of 12 nodes ran"',
+        'Then every connector of the main path is done, the branches to "Read images" and "Clarify" are muted, and the Run panel reads "10 of 15 nodes ran"',
         async () => {
           const canvas = page.getByTestId('workflow-canvas');
           const connectors = canvas.locator('path[data-testid^="workflow-connector-"]');
-          await expect(connectors).toHaveCount(15);
+          await expect(connectors).toHaveCount(19);
           const main = ['start', ...V2_MAIN_STEP_IDS.map(([id]) => id), 'end'];
           for (const [i, from] of main.slice(0, -1).entries()) {
             await expect(canvas.getByTestId(`workflow-connector-${from}-${main[i + 1]}`)).toHaveAttribute(
@@ -1209,7 +1233,7 @@ test.describe('Feature: Workflows (the designer)', () => {
             'false',
           );
           await expect(page.getByTestId('workflow-state-progress')).toHaveText(
-            '9 of 12 nodes ran',
+            '10 of 15 nodes ran',
           );
           await expect(page.getByTestId('workflow-state-status')).toHaveText('success');
         },
@@ -1264,13 +1288,14 @@ test.describe('Feature: Workflows (the designer)', () => {
     });
     await test.step('When I open the Tools sub-node under "Analyse" and pick "run_readonly_sql"', async () => {
       const tools = page.getByTestId('workflow-subnode-analyse-tools');
-      await expect(tools).toHaveAccessibleName('Tools of Analyse: 5 tools');
+      await expect(tools).toHaveAccessibleName('Tools of Analyse: 6 tools');
       const menu = await openToolsMenu(page, 'analyse');
       await expect(menu.getByRole('menuitem')).toHaveText([
         'list_entities',
         'describe_entity',
         'sample_rows',
         'run_readonly_sql',
+        'explore_result',
         'ask_clarification',
       ]);
       // Keyboard: down to the fourth tool, then Enter.
@@ -1400,7 +1425,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(dialog.getByTestId('workflow-ndv-chat-intro')).toBeVisible();
         await expect(dialog.getByTestId('workflow-step-story-headline')).toContainText('Ran ');
         await expect(dialog.getByTestId('workflow-node-chat-note')).toHaveText(
-          /^\s*Chatting about run \S{8}: this step's input, output and tool calls\.\s*$/,
+          /^\s*Chatting about this run: this step's input, output and tool calls\.\s*Execution ID \S{8}\s*$/,
         );
         await expect(dialog.getByRole('log')).toBeVisible();
         await expect(dialog.getByTestId('workflow-node-chat-message')).toHaveCount(0);

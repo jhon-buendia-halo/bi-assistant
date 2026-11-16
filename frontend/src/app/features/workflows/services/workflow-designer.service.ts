@@ -18,7 +18,7 @@ import {
 import { ToastService } from '../../../core/toast/toast.service';
 import { MessageFeedback } from '../../sessions/models/session.model';
 import {
-  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  answerHasQueries,
   LiveToolCall,
   NodeChatAvailability,
   RunStepView,
@@ -648,9 +648,9 @@ export class WorkflowDesigner {
     this.openNodeId.set(null);
   }
 
-  /** The shown run is of Answer a Business Question: its answers get the query inspector. */
-  readonly inspectsQueries = computed(
-    () => this.workflow()?.id === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  /** The shown run's answer ran queries (any workflow): it gets the query inspector. */
+  readonly inspectsQueries = computed(() =>
+    answerHasQueries(this.runResult()?.answer),
   );
 
   /**
@@ -681,13 +681,12 @@ export class WorkflowDesigner {
 
   /**
    * Build the evidence of the shown stored answer and size its tables (api.md
-   * 139). Fired once per run id, in the background, when a stored answer of
-   * Answer a Business Question with data is shown; a failure is silent.
+   * 139). Fired once per run id, in the background, when a stored answer
+   * with data is shown; a failure is silent.
    */
   private prepareEvidence(run: WorkflowRun): void {
     if (
-      run.workflowId !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID ||
-      !run.answer?.data?.length ||
+      !answerHasQueries(run.answer) ||
       run.status === 'running' ||
       run.status === 'suspended' ||
       this.preparedRuns.has(run.id)

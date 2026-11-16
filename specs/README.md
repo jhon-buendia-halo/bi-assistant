@@ -85,6 +85,8 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | M1-25 Query inspector: every figure links to its query | [epics/M1-25](epics/M1-25/spec.md) |
 | M1-26 Background tasks survive navigation | [epics/M1-26](epics/M1-26/spec.md) |
 | M1-27 Review a Website: measured visual QA of every page | [epics/M1-27](epics/M1-27/spec.md) |
+| M1-28 Explore a query's full result: page, filter, sort | [epics/M1-28](epics/M1-28/spec.md) |
+| M1-29 Border-case evals for every agent of the two workflows | [epics/M1-29](epics/M1-29/spec.md) |
 | M0-5 Faster workflow, repo-only planning | [epics/M0-5](epics/M0-5/spec.md) |
 | M0-6 Workflow modes: Strict and Free style | [epics/M0-6](epics/M0-6/spec.md) |
 

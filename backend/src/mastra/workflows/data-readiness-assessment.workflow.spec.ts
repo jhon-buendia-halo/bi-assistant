@@ -92,6 +92,14 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
       calls.push('save');
       return Promise.resolve({ reportId: 'r-1' });
     }),
+    findingRows: jest.fn(() => {
+      calls.push('finding-rows');
+      return Promise.resolve({
+        sourceCount: 2,
+        failedSourceCount: 0,
+        stopped: false,
+      });
+    }),
     explain: jest.fn((input: { question: string; reportId: string }) => {
       calls.push(`explain:${input.reportId}:${input.question}`);
       return Promise.resolve({
@@ -129,13 +137,14 @@ async function run(
 }
 
 describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
-  it('runs its six steps in order (Read images is the optional branch) and never persists a snapshot', () => {
+  it('runs its seven steps in order (Read images is the optional branch) and never persists a snapshot', () => {
     expect(workflow.id).toBe(DATA_READINESS_ASSESSMENT_WORKFLOW_ID);
     expect(workflow.steps.map((s) => [s.id, s.description])).toEqual([
       ['resolve-dataset', 'Resolve dataset'],
       ['profile-source', 'Profile source'],
       ['score-readiness', 'Score readiness'],
       ['save-report', 'Save report'],
+      ['finding-rows', 'Rows behind findings'],
       ['explain-report', 'Explain report'],
       ['wrap-up', 'Wrap up'],
     ]);
@@ -170,6 +179,7 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       'profile',
       'score',
       'save',
+      'finding-rows',
       'explain:r-1:Worst problems?',
     ]);
     // No images: Read images is skipped and the notes are ''.
@@ -187,6 +197,7 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       'profile-source:success',
       'score-readiness:success',
       'save-report:success',
+      'finding-rows:success',
       'explain-report:success',
       'wrap-up:success',
     ]);
@@ -256,6 +267,54 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
     expect(result).toMatchObject({
       status: 'success',
       result: { stopped: true },
+    });
+  });
+
+  // Roadmap 1.28.11: the rows behind the report's top findings become the
+  // answer's sources before the agent explains the report.
+  it('looks up the rows behind the findings after Save report and before Explain report', async () => {
+    const given = runtime();
+    const { events } = await run(given);
+    expect(given.calls.slice(-3)).toEqual([
+      'save',
+      'finding-rows',
+      expect.stringMatching(/^explain:r-1:/),
+    ]);
+    expect(given.findingRows).toHaveBeenCalledTimes(1);
+    expect(events).toContain('finding-rows:success');
+  });
+
+  it('goes on to Explain report when some finding queries failed', async () => {
+    const given = runtime({
+      findingRows: jest.fn().mockResolvedValue({
+        sourceCount: 3,
+        failedSourceCount: 2,
+        stopped: false,
+      }),
+    });
+    const { events, result } = await run(given);
+    expect(events).toContain('finding-rows:success');
+    expect(given.explain).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      status: 'success',
+      result: { reportId: 'r-1', answer: 'The dataset is Managed (84).' },
+    });
+  });
+
+  it('ends at Rows behind findings when the run is stopped there: the agent never runs', async () => {
+    const given = runtime({
+      findingRows: jest.fn().mockResolvedValue({
+        sourceCount: 1,
+        failedSourceCount: 0,
+        stopped: true,
+      }),
+    });
+    const { events, result } = await run(given);
+    expect(given.explain).not.toHaveBeenCalled();
+    expect(events).not.toContain('explain-report:success');
+    expect(result).toMatchObject({
+      status: 'success',
+      result: { reportId: 'r-1', stopped: true },
     });
   });
 

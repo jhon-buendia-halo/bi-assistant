@@ -4,8 +4,19 @@ import {
   foreignTable,
   sampleExplanation,
 } from '../../../mastra/agents/query-explainer.prompts';
+import {
+  explorerCandidateOf,
+  pageCountOf,
+} from '../../../mastra/agents/result-explorer.prompts';
 import { MastraService } from '../../../mastra/mastra.service';
 import { runErrorMessage } from '../../../mastra/workflows/workflow-run';
+import type {
+  FilterInterpretation,
+  PageRequest,
+  PageResult,
+  ResultView,
+} from '../../datasources/connectors/paged-sql.types';
+import { columnKindsOf, preparePage } from './result-view';
 import type { ChatMessage, ToolDataRecord } from '../entities/session.entity';
 import { evidenceOf } from './query-evidence';
 import type {
@@ -47,8 +58,8 @@ function evidenceIn(answer: ChatMessage): QueryEvidence[] {
 }
 
 /**
- * The query inspector's engine (api.md 139-148): the lock per answer, the
- * single flight, prepare, explain, count the steps, re-run and export, on
+ * The query inspector's engine (api.md 139-148, 152, 154): the lock per answer, the
+ * single flight, prepare, explain, count the steps, re-run, page and export, on
  * any answer host. Queries go through `QueryEvidenceService`, the explainer
  * through `MastraService.explainQuery`. It stores nothing itself: every
  * write goes through the host's `save`, under the host's lock.
@@ -268,6 +279,75 @@ export class AnswerEvidenceService {
   ): Promise<QueryRerunResult> {
     const { record, entry, datasets } = await this.runnableQuery(host, index);
     return this.queryEvidence.rerun(record, entry, datasets);
+  }
+
+  /**
+   * One page of one of the answer's queries, filtered and sorted (api.md
+   * 152, 154); the checks of 142 first. Nothing is stored.
+   */
+  async page<V>(
+    host: AnswerHost<V>,
+    index: number,
+    request: PageRequest,
+  ): Promise<PageResult> {
+    const { record, entry, datasets } = await this.runnableQuery(host, index);
+    return this.queryEvidence.page(record, entry, datasets, request);
+  }
+
+  /**
+   * The user's words read as a view of one of the answer's queries (api.md
+   * 153, 155): one `result-explorer` call over that query alone, as a
+   * candidate built from its stored columns and rows (never its SQL); the
+   * checks of 142 first, a sample refused. The view is checked as 152
+   * checks it; nothing runs and nothing is stored.
+   */
+  async interpretFilter<V>(
+    host: AnswerHost<V>,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Promise<FilterInterpretation> {
+    const { record, entry, evidence } = await this.runnableQuery(host, index);
+    if (record.tool === 'sample_rows') {
+      throw new BadRequestException(
+        `Query ${index} is a sample; it has no full result to page`,
+      );
+    }
+    const rows = record.rows ?? [];
+    const columns = record.columns?.length
+      ? record.columns
+      : Object.keys(rows[0] ?? {});
+    const candidate = explorerCandidateOf(
+      `Q${evidence.indexOf(entry) + 1}`,
+      columns,
+      rows,
+      columnKindsOf(columns, rows),
+      record.rationale,
+    );
+    let spec: Awaited<ReturnType<MastraService['interpretResult']>>;
+    try {
+      spec = await this.mastra.interpretResult({
+        text,
+        candidates: [candidate],
+        view,
+        pageCount: pageCountOf(view),
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        `The filter could not be understood: ${runErrorMessage(error)}`,
+      );
+    }
+    if (spec.action === 'new-question') {
+      throw new BadRequestException(
+        'That asks a new question, not a filter on this result',
+      );
+    }
+    // The request a page (152) will take: its 400 now, not on the page.
+    preparePage(
+      { sql: record.input ?? '', columns, rows },
+      spec.interpretation.request,
+    );
+    return spec.interpretation;
   }
 
   /**

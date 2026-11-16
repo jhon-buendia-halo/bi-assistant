@@ -26,6 +26,8 @@ jest.mock('../../mastra/model-resolver', () => ({
     typeof c === 'object' && c !== null && 'kind' in c,
   resolveAgentModelConfig: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
+// The query inspector's page path a follow-up pages through (roadmap 1.28.8).
+const mockPageQuery = jest.fn();
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
   // v2's Load catalog step reads the datasets as the dataset tools do.
@@ -41,6 +43,7 @@ jest.mock('../../mastra/tool-services', () => ({
           },
         ].filter((d) => names.includes(d.name)),
       ),
+    pageQuery: (...args: unknown[]) => mockPageQuery(...args) as unknown,
   }),
 }));
 jest.mock('../../mastra/tools/dataset.tools', () => ({
@@ -172,6 +175,7 @@ const V2_WORKFLOW = {
   agents: [{ key: 'insights-analyst', name: 'Insights Analyst' }],
   steps: ANSWER_BUSINESS_QUESTION_STEPS,
   edges: CODE_WORKFLOWS[0].edges,
+  contractHash: CODE_WORKFLOWS[0].contractHash,
 };
 
 /** The workflow detail the fake catalogue answers for Assess Data Readiness. */
@@ -264,6 +268,8 @@ interface BuildOptions {
   session?: Partial<SessionDoc>;
   /** The data-readiness service, for Assess Data Readiness runs. */
   readiness?: object;
+  /** The datasources service's guarded read-only SQL (roadmap 1.28.11). */
+  runReadOnlySql?: jest.Mock;
 }
 
 /** v2's Analyse turn: one successful query, then its note. */
@@ -404,6 +410,20 @@ function build(options: BuildOptions = {}) {
         return Promise.resolve({ plan: planOf({}, question), stopped: false });
       },
     ),
+    // Nathan's reading of a follow-up (roadmap 1.28.8): a new question
+    // unless a test says otherwise.
+    interpretResult: jest.fn((input: unknown, opts?: unknown) => {
+      void input;
+      void opts;
+      return Promise.resolve({
+        action: 'new-question',
+        query: 0,
+        interpretation: {
+          request: {},
+          understood: '',
+        },
+      });
+    }),
     writeAnswer: jest.fn(
       (_input: unknown, opts: { onText?: (delta: string) => void }) => {
         opts.onText?.('Brazil won.');
@@ -454,7 +474,12 @@ function build(options: BuildOptions = {}) {
     repository as never,
     mastra as never,
     datasetsRepository as never,
-    { get: jest.fn().mockResolvedValue({ id: 'ds', name: 'DS' }) } as never,
+    {
+      get: jest.fn().mockResolvedValue({ id: 'ds', name: 'DS' }),
+      runReadOnlySql:
+        options.runReadOnlySql ??
+        jest.fn().mockResolvedValue({ columns: [], rows: [], totalRows: 0 }),
+    } as never,
     {
       getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
     } as never,
@@ -1010,6 +1035,8 @@ describe('the run host (agents.md 5.14)', () => {
       'receive-question:success',
       'load-catalog:running',
       'load-catalog:success',
+      'interpret-follow-up:running',
+      'interpret-follow-up:success',
       'plan:running',
       'plan:success',
       'analyse:running',
@@ -1025,11 +1052,14 @@ describe('the run host (agents.md 5.14)', () => {
       'clarify:skipped',
       // Not asked for (agents.md 5.11).
       'check-data-quality:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toEqual([
       'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success',
       'clarify:skipped',
       'analyse:success',
@@ -1037,6 +1067,8 @@ describe('the run host (agents.md 5.14)', () => {
       'check-data-quality:skipped',
       'write-answer:success',
       'wrap-up:success',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // The loops' steps carry their attempt (api.md 3.6): Plan (Clarify
     // loops back to it) and the analysis's.
@@ -1278,6 +1310,7 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       'profile-source:success',
       'score-readiness:success',
       'save-report:success',
+      'finding-rows:success',
       'explain-report:success',
       'wrap-up:success',
     ]);
@@ -1316,6 +1349,116 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       findingCount: 1,
       answer: 'World Cup is Managed (84).',
     });
+  });
+
+  // Roadmap 1.28.11; data-readiness R34: the rows behind each top finding
+  // are a source of the answer, ahead of the agent's own records.
+  it("records the rows behind each top finding as the answer's sources, a failed query as a failed one, and leaves the agent's input as it was", async () => {
+    const readiness = readinessService();
+    const report: ReadinessReport = {
+      ...READINESS_REPORT,
+      findings: [
+        ...READINESS_REPORT.findings,
+        {
+          dimension: 'uniqueness',
+          level: 'entity',
+          namespace: 'public',
+          entity: 'matches',
+          field: 'match_id',
+          severity: 'high',
+          measured: '2 duplicate row(s)',
+          description: 'The primary key (match_id) has 2 duplicate row(s).',
+          recommendation: 'De-duplicate.',
+        },
+        {
+          dimension: 'accessibility',
+          level: 'source',
+          severity: 'medium',
+          measured: '1 of 2 table(s) not readable',
+          description: 'One table cannot be read.',
+          recommendation: 'Grant access.',
+        },
+      ],
+    };
+    readiness.scoreProfile.mockReturnValue({ ...report });
+    const runReadOnlySql = jest.fn((datasourceId: string, sql: string) =>
+      sql.includes('IS NULL')
+        ? Promise.resolve({
+            columns: ['winner', 'matching_rows'],
+            rows: [{ winner: null, matching_rows: 1 }],
+            totalRows: 1,
+          })
+        : Promise.reject(new Error('relation "public.matches" is locked')),
+    );
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness, runReadOnlySql });
+    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
+
+    expect(run.status).toBe('success');
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
+      'finding-rows:success',
+    );
+    // Most severe first (the summary's order), at most 20; nothing for
+    // accessibility. Each on the report's datasource, capped at 200 rows.
+    expect(runReadOnlySql.mock.calls.map((call) => call[0])).toEqual([
+      'ds-pg',
+      'ds-pg',
+    ]);
+    expect((runReadOnlySql.mock.calls as unknown[][]).map((c) => c[2])).toEqual(
+      [200, 200],
+    );
+    expect(run.answer?.data?.slice(0, 2)).toEqual([
+      {
+        tool: 'run_readonly_sql',
+        input:
+          'SELECT "match_id", COUNT(*) AS occurrences FROM "public"."matches" GROUP BY "match_id" HAVING COUNT(*) > 1 ORDER BY occurrences DESC, "match_id"',
+        error: 'relation "public.matches" is locked',
+        rationale: 'Values of match_id that repeat in public.matches',
+      },
+      {
+        tool: 'run_readonly_sql',
+        input:
+          'SELECT *, CAST(COUNT(*) OVER () AS INTEGER) AS matching_rows FROM "public"."matches" WHERE "winner" IS NULL',
+        columns: ['winner', 'matching_rows'],
+        rows: [{ winner: null, matching_rows: 1 }],
+        rowCount: 1,
+        rationale: 'Rows where winner is empty in public.matches',
+        // Only its count links a figure (agent-answers R69).
+        figureColumns: ['matching_rows'],
+      },
+    ]);
+    expect(run.answer?.evidence?.slice(0, 2)).toEqual([
+      { index: 0, datasourceId: 'ds-pg', rowLimit: 200 },
+      expect.objectContaining({
+        index: 1,
+        datasourceId: 'ds-pg',
+        totalRows: 1,
+        rowLimit: 200,
+        coverage: expect.any(String) as unknown,
+      }),
+    ]);
+    // Each source shows in the run's stream as a SQL call and its result.
+    const shown = events
+      .filter((e) => e.type === 'tool-result')
+      .map((e) => JSON.parse((e as { content: string }).content) as object);
+    expect(shown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: 'run_readonly_sql',
+          rationale: 'Rows where winner is empty in public.matches',
+          rowCount: 1,
+        }),
+      ]),
+    );
+    // The agent's input is unchanged: the same question and no block that
+    // carries the finding queries (out of scope of 1.28.11).
+    const [call] = ctx.calls['data-readiness'];
+    expect(call.input).toEqual([
+      { role: 'user', content: 'Assess the readiness of this dataset' },
+    ]);
+    expect(
+      call.options.context.some((block) => block.content.includes('SELECT')),
+    ).toBe(false);
+    expect(run.answer?.content).toBe('World Cup is Managed (84).');
   });
 
   it('fails at Profile source with the datasource named when it cannot be reached, storing nothing', async () => {
@@ -1468,6 +1611,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'clarify:suspended#1',
     ]);
@@ -1520,6 +1664,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:success',
       'read-images:skipped',
       'check-data-quality:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     expect(events.at(-1)).toMatchObject({ type: 'done' });
     expect(events.some((e) => e.type === 'input-required')).toBe(false);
@@ -1531,6 +1677,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'plan:success#2',
       'clarify:success#1',
@@ -1539,6 +1686,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'check-data-quality:skipped',
       'write-answer:success',
       'wrap-up:success',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // Plan planned again with its question and the trimmed answer.
     expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
@@ -1583,6 +1732,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     expect(started.run.steps.map(stepLine)).toEqual([
       'receive-question:success',
       'load-catalog:success',
+      'interpret-follow-up:success',
       'plan:success#1',
       'analyse:suspended#1',
     ]);
@@ -1613,6 +1763,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'read-images:skipped',
       'clarify:skipped',
       'check-data-quality:skipped',
+      'page-result:skipped',
+      'page-answer:skipped',
     ]);
     // The agent runs again (no memory thread) with the conversation so far:
     // the question, its clarifying question and the user's answer.
@@ -1717,6 +1869,35 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     }
   });
 
+  it('answers 410 to a run stored under another contract (the Clarify path moved, roadmap 1.28.8): stopped with waitingFor expired, its turn dropped', async () => {
+    const ctx = build();
+    ctx.mastra.planAnalysis.mockResolvedValueOnce({
+      plan: ASKING_PLAN,
+      stopped: false,
+    });
+    const waiting = await runOf(ctx, V2_INPUT);
+    await ctx.runsRepository.update(waiting.run.id, {
+      contractHash: 'before-1278',
+    });
+    await expect(
+      ctx.runs.prepareResume(waiting.run.id, {
+        stepId: 'clarify',
+        answer: 'Matches won',
+      }),
+    ).rejects.toMatchObject({
+      status: 410,
+      message:
+        'This run can no longer continue — run it again with your answer',
+    });
+    const stored = await ctx.runs.get(waiting.run.id);
+    expect(stored.status).toBe('stopped');
+    expect(stored.waitingFor).toMatchObject({
+      stepId: 'clarify',
+      expired: true,
+    });
+    expect(ctx.discards.count).toBe(1);
+  });
+
   it('"Run again with my answer": a run whose context is the expired run plans with its question and clarifying question', async () => {
     const ctx = build();
     ctx.mastra.planAnalysis.mockResolvedValueOnce({
@@ -1802,6 +1983,110 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       },
     });
     expect(ctx.discards.count).toBe(1);
+  });
+});
+
+describe('a follow-up run over an earlier result (roadmap 1.28.8; workflows R36)', () => {
+  const PAGE_2 = {
+    columns: ['winner'],
+    columnKinds: { winner: 'text' },
+    rows: [{ winner: 'Italy' }],
+    page: 2,
+    pageSize: 1,
+    pageCount: 3,
+    matchedRows: 3,
+    capped: false,
+    view: { filters: [], sort: [], page: 2, pageSize: 1, matchedRows: 3 },
+    ranAt: '2026-11-16T10:00:00.000Z',
+    datasourceId: 'ds-pg',
+  };
+
+  beforeEach(() => mockPageQuery.mockReset());
+
+  it("pages the earlier answer's query instead of planning: one result-explorer call, the page recorded as explore_result with its view, the answer written by code", async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    // A first run has no earlier result: no extra model call.
+    expect(ctx.mastra.interpretResult).not.toHaveBeenCalled();
+    ctx.mastra.interpretResult.mockResolvedValueOnce({
+      action: 'explore',
+      query: 0,
+      interpretation: { request: { page: 2 }, understood: 'page 2' },
+    });
+    mockPageQuery.mockResolvedValueOnce(PAGE_2);
+    const { events, run } = await runOf(
+      ctx,
+      { question: 'next page', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
+    expect(ctx.mastra.interpretResult.mock.calls[0][0]).toMatchObject({
+      text: 'next page',
+      candidates: [
+        { ref: 'Q1', columns: [{ name: 'winner', values: ['Brazil'] }] },
+      ],
+      view: null,
+    });
+    expect(mockPageQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: 'SELECT winner FROM matches',
+        columns: ['winner'],
+      }),
+      ['World Cup'],
+      { page: 2 },
+    );
+    // No planning, no analysis, no Write answer on the follow-up.
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(1);
+    expect(ctx.calls['insights-analyst']).toHaveLength(1);
+    expect(ctx.mastra.writeAnswer).toHaveBeenCalledTimes(1);
+    expect(run.status).toBe('success');
+    expect(
+      run.steps
+        .filter((step) => step.status !== 'skipped')
+        .map((step) => step.id),
+    ).toEqual([
+      'receive-question',
+      'load-catalog',
+      'interpret-follow-up',
+      'page-result',
+      'page-answer',
+    ]);
+    expect(run.answer?.content.split('\n')[0]).toBe('Rows 2–2 of 3');
+    expect(run.answer?.content).toContain('| Italy |');
+    // The page is the answer's query: its source SQL and the page's rows,
+    // its view as evidence, so the inspector opens on page 2.
+    expect(run.answer?.data).toEqual([
+      expect.objectContaining({
+        tool: 'explore_result',
+        input: 'SELECT winner FROM matches',
+        rows: [{ winner: 'Italy' }],
+        truncated: true,
+      }),
+    ]);
+    expect(run.answer?.evidence?.[0]).toMatchObject({
+      index: 0,
+      view: PAGE_2.view,
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'tool',
+        content: expect.stringContaining('"name":"explore_result"') as string,
+      }),
+    );
+  });
+
+  it('plans the follow-up as a new question when result-explorer reads one', async () => {
+    const ctx = build();
+    const first = await runOf(ctx, V2_INPUT);
+    const { run } = await runOf(
+      ctx,
+      { question: 'And in 2014?', datasets: ['World Cup'] },
+      { context: { fromRunId: first.run.id } },
+    );
+    expect(ctx.mastra.interpretResult).toHaveBeenCalledTimes(1);
+    expect(mockPageQuery).not.toHaveBeenCalled();
+    expect(ctx.mastra.planAnalysis).toHaveBeenCalledTimes(2);
+    expect(run.answer?.content).toBe('Brazil won.');
   });
 });
 

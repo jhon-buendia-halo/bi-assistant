@@ -1,6 +1,7 @@
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { Maturity } from '../../data-readiness/engine/types';
 import type { QueryEvidence } from '../query-evidence/query-evidence.types';
+import type { ExplorableQuery } from '../query-evidence/explorable-queries';
 
 export type { KnowledgeUse };
 
@@ -37,6 +38,13 @@ export interface ToolDataRecord {
    * anyone reads the SQL.
    */
   warnings?: string[];
+  /**
+   * When set, the only columns whose values are figures a reader looks up
+   * (agent-answers R69): the rows behind a readiness finding (roadmap
+   * 1.28.11) carry their count in `matching_rows` or `occurrences`, and
+   * their other cells are raw data that must not link a figure by chance.
+   */
+  figureColumns?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */
@@ -336,6 +344,11 @@ export interface SessionDoc {
    * only, like the host.
    */
   contextBlock?: string;
+  /**
+   * A run host's earlier queries, which its turn may explore with
+   * `explore_result` (agents.md 3.15, 4.2). In memory only, like the host.
+   */
+  contextQueries?: ExplorableQuery[];
   /**
    * A follow-up run's host whose memory threads are copies of the earlier
    * run's (agents.md 5.14): its turn's input replays the earlier run's

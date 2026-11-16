@@ -18,6 +18,7 @@ import {
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_MAX_STEPS,
   IMAGE_READER_AGENT_KEY,
+  RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
@@ -210,11 +211,13 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         CHECK_DATA_QUALITY_FIELD,
       ],
       steps: ANSWER_BUSINESS_QUESTION_STEPS,
-      // Zoe reads the reference images when there are some; Olivia plans
-      // and Jessica writes the answer; Michael analyses; Sarah checks the
-      // data quality when the run asks for it.
+      // Zoe reads the reference images when there are some; Nathan reads a
+      // follow-up over an earlier result; Olivia plans and Jessica writes
+      // the answer; Michael analyses; Sarah checks the data quality when the
+      // run asks for it.
       stepAgents: {
         [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY,
+        'interpret-follow-up': RESULT_EXPLORER_AGENT_KEY,
         plan: ANALYSIS_PLANNER_AGENT_KEY,
         'check-data-quality': DATA_READINESS_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,

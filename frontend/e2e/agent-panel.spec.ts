@@ -196,8 +196,10 @@ const STAGE_TURN: TurnScript = {
 
 /** Its steps in catalogue order: Clarify is the other way after Plan. */
 const V2_STEP_TITLES = [
+  'Read images',
   'Receive question',
   'Load catalog',
+  'Interpret follow-up',
   'Plan',
   'Clarify',
   'Analyse',
@@ -205,6 +207,8 @@ const V2_STEP_TITLES = [
   'Check data quality',
   'Write answer',
   'Wrap up',
+  'Page result',
+  'Page answer',
 ];
 
 // --------------------------------------------------------------- scenarios
@@ -281,6 +285,7 @@ test("a v2 run's workflow never appears among its panel items", async ({
 const V2_STEPS = [
   'receive-question',
   'load-catalog',
+  'interpret-follow-up',
   'plan',
   'analyse',
   'validate',
@@ -294,6 +299,7 @@ const V2_TOOLS = [
   'sample_rows',
   'run_readonly_sql',
   'ask_clarification',
+  'explore_result',
   'skill',
   'skill_search',
   'skill_read',
@@ -340,9 +346,10 @@ test('Insights Analyst shows its code-defined steps advancing', async ({
   expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
     V2_STEP_TITLES,
   );
-  // Every step but Clarify (4) and Check data quality (7), the branches a
-  // clear question without the data-quality box skips.
-  expect(run.workflow?.done).toEqual([1, 2, 3, 5, 6, 8, 9]);
+  // Every step but Read images (1, no image), Clarify (6), Check data
+  // quality (9) and the explore path (12, 13): the branches a first, clear
+  // question without images or the data-quality box skips.
+  expect(run.workflow?.done).toEqual([2, 3, 4, 5, 7, 8, 10, 11]);
   expect(stepStatuses(result, 'clarify').at(-1)).toBe('skipped');
   expect(stepStatuses(result, 'check-data-quality').at(-1)).toBe('skipped');
 });

@@ -159,6 +159,20 @@ All values are the ones in the code today.
 - N38. A Databricks query MAY take up to 120 seconds, because a cold warehouse can take minutes to start. The timeout SHALL produce a clear message such as "Databricks connection timed out after 120s".
 - N39. Dataset save SHALL sample at most 50 rows per table, with 4 tables in flight at once, and SHALL NOT fail the save when a sample fails.
 
+### Result paging
+
+A page of a stored query's full result ([api.md](../system/api.md) 152, 154; ADR-0050).
+
+| Item | Value |
+|---|---|
+| Rows per page | default 50, max 100 |
+| Rows a page can reach | 50,000 (as the CSV download) |
+| Filters per view | 10 |
+| Values per `is one of` / `is not one of` filter | 50 |
+| Sort keys per view | 3 |
+
+- N72. A page SHALL re-run the stored statement under its datasource's timeout (the read-only query limits above); paging SHALL NOT raise or bypass it. Nothing a page reads SHALL be stored.
+
 ### Visuals
 
 | Item | Value |

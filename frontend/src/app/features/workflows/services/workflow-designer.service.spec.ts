@@ -1216,6 +1216,26 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       expect(runs.prepareEvidence).toHaveBeenCalledTimes(2);
     });
 
+    it('turns the inspector on, and prepares evidence, for a run of any workflow whose answer holds data', () => {
+      const readiness = { ...ASSISTANT, id: 'assess-data-readiness' };
+      designer.showRunOnLoad({
+        ...withData(),
+        workflowId: 'assess-data-readiness',
+      });
+      designer.load(readiness.id);
+      http
+        .expectOne((r) => r.url.endsWith('/workflows/assess-data-readiness'))
+        .flush(readiness);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+      expect(designer.inspectsQueries()).toBeTrue();
+      expect(runs.prepareEvidence).toHaveBeenCalledOnceWith('run-1');
+    });
+
+    it('leaves the inspector off for a run whose answer holds no data', () => {
+      openStored(storedRun());
+      expect(designer.inspectsQueries()).toBeFalse();
+    });
+
     it('does not prepare an answer with no data, and a failure is silent', () => {
       openStored(storedRun());
       expect(runs.prepareEvidence).not.toHaveBeenCalled();
