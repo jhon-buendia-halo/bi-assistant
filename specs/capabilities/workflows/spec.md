@@ -288,7 +288,8 @@ Feature: Review a Website
   @demo @story-1.27.1
   Scenario: I review a website and every defect comes with its evidence
     When I open "Review a Website" from Workflows, enter the site's URL and click Execute
-    Then the run succeeds with no model call
+    Then I see the running step and its progress, page by page
+    And the run succeeds with no model call
     And the answer names the covered "Buy now" button as critical, then the broken image on the 2 pages of "/items/:id"
     And the answer's coverage says 1 link was not followed and 1 page failed to load
     And the sign-out link was never opened

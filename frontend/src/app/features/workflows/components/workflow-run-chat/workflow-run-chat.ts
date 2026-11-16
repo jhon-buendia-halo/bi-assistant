@@ -364,6 +364,31 @@ export class WorkflowRunChat {
         .some((step) => step.kind === 'agent' && step.status === 'running'),
   );
 
+  /**
+   * A code step running with progress of its own (Review a Website's pages,
+   * agents.md 5.19): its title, its latest progress line and the five
+   * before it, newest first.
+   * Its progress arrives as the run's reasoning; an agent step shows it as
+   * Thinking instead. Null when no code step reports progress.
+   */
+  protected readonly liveCodeProgress = computed(() => {
+    if (!this.designer.running() || this.liveAgentStep()) return null;
+    const step = this.designer
+      .runPanelSteps()
+      .find((s) => s.kind === 'code' && s.status === 'running');
+    const lines = this.designer
+      .reasoning()
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!step || !lines.length) return null;
+    return {
+      title: step.title,
+      latest: lines[lines.length - 1],
+      recent: lines.slice(-6, -1).reverse(),
+    };
+  });
+
   /** Under a stored answer that asks nothing: the composer follows up on it. */
   protected readonly followUpMode = computed(
     () =>

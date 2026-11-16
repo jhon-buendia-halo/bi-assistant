@@ -91,6 +91,10 @@ function stopIfAborted(signal: AbortSignal): void {
 }
 
 /** A page's path for progress lines. */
+function screenLabel(screen: SiteScreenName): string {
+  return SITE_SCREENS.find((entry) => entry.name === screen)?.label ?? screen;
+}
+
 function shortPath(url: string): string {
   try {
     const parsed = new URL(url);
@@ -374,7 +378,7 @@ export class SiteReviewService implements OnApplicationShutdown {
         }
         pages.push(record);
         io.progress(
-          `Found ${shortPath(next.url)}${record.error ? ' (did not load)' : ''}`,
+          `Found ${pages.length} of at most ${session.maxPages} pages · ${shortPath(next.url)}${record.error ? ' (did not load)' : ''}`,
         );
         if (record.error || next.depth >= session.maxDepth) continue;
         if (pageUrlOf(record.finalUrl, session.origin) === undefined) continue;
@@ -424,6 +428,12 @@ export class SiteReviewService implements OnApplicationShutdown {
       'utf8',
     );
     const targets = site.pages.filter((page) => !page.error);
+    // Progress: every page once per screen.
+    const checkTotal = targets.length * site.screens.length;
+    let checkedCount = 0;
+    io.progress(
+      `Checking ${targets.length} page${targets.length === 1 ? '' : 's'} on ${site.screens.map(screenLabel).join(' and ')}`,
+    );
     const captures: Capture[] = [];
     const raw: (RawFinding & { crop: string | null })[] = [];
     const browser = await launchSiteBrowser({ headless: true });
@@ -457,8 +467,9 @@ export class SiteReviewService implements OnApplicationShutdown {
               }
               captures.push(result.capture);
               raw.push(...result.findings);
+              checkedCount += 1;
               io.progress(
-                `Checked ${shortPath(target.url)} on ${screen}: ${result.findings.length} finding${result.findings.length === 1 ? '' : 's'}`,
+                `Checked ${checkedCount} of ${checkTotal} · ${shortPath(target.url)} on ${screenLabel(screen)} · ${result.findings.length} finding${result.findings.length === 1 ? '' : 's'}`,
               );
             } finally {
               await page.close().catch(() => undefined);

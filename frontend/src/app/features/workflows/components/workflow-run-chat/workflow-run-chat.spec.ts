@@ -668,6 +668,50 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(text('workflow-run-requirement')).toBe("None of this agent's datasets exist");
     });
 
+    it("shows a code step's own progress live, newest line first, and nothing once the run ends (agents.md 5.19)", () => {
+      const REVIEW: WorkflowDetail = {
+        ...ASSISTANT,
+        id: 'review-website',
+        name: 'Review a Website',
+        input: [{ name: 'url', label: 'Entry URL', type: 'text', required: true }],
+        steps: ASSISTANT.steps.map((step) => ({
+          ...step,
+          id: 'capture-and-check',
+          title: 'Capture and check',
+          kind: 'code' as const,
+        })),
+      };
+      openAssistant(REVIEW);
+      const url = q('workflow-input-url') as HTMLInputElement;
+      url.value = 'https://shop.example.com/';
+      url.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      click('workflow-run');
+      const h = runs.last.handlers;
+      h.onRun!({ runId: 'run-1', workflowId: 'review-website' });
+      h.onStep!({ id: 'capture-and-check', title: 'Capture and check', status: 'running' });
+      fixture.detectChanges();
+      // No progress yet: no block.
+      expect(q('workflow-run-progress')).toBeNull();
+      h.onReasoning!('Checking 2 pages on Mobile\n');
+      h.onReasoning!('Checked 1 of 2 · / on Mobile · 3 findings\n');
+      h.onReasoning!('Checked 2 of 2 · /about on Mobile · 0 findings\n');
+      fixture.detectChanges();
+      const progress = q('workflow-run-progress')!;
+      expect(progress.textContent).toContain('Capture and check');
+      expect(text('workflow-run-progress-latest')).toBe(
+        'Checked 2 of 2 · /about on Mobile · 0 findings',
+      );
+      expect(
+        Array.from(progress.querySelectorAll('li')).map((li) => li.textContent?.trim()),
+      ).toEqual(['Checked 1 of 2 · / on Mobile · 3 findings', 'Checking 2 pages on Mobile']);
+      expect(q('workflow-run-live')).toBeNull();
+
+      h.onDone!(assistantRun({ workflowId: 'review-website', workflowName: 'Review a Website' }));
+      fixture.detectChanges();
+      expect(q('workflow-run-progress')).toBeNull();
+    });
+
     it('shows the agent step live (Thinking, tool rows, the answer forming), then the answer and Follow up', () => {
       openAssistant();
       typeQuestion('Which team scored the most goals?');

@@ -1418,11 +1418,11 @@ specs/capabilities/workflows/spec.md:83-88  R34 Map a Dashboard to Data SHALL ru
 specs/capabilities/workflows/spec.md:90-107  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:109-113  ## Contracts
 specs/capabilities/workflows/spec.md:115-122  ## UI
-specs/capabilities/workflows/spec.md:124-297  ## Flows
+specs/capabilities/workflows/spec.md:124-298  ## Flows
 specs/capabilities/workflows/spec.md:126-225  ### Feature: Workflows
 specs/capabilities/workflows/spec.md:227-276  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:278-297  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:299-316  ## Acceptance
+specs/capabilities/workflows/spec.md:278-298  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:300-317  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope

@@ -117,6 +117,42 @@
         />
       }
 
+      @if (liveCodeProgress(); as progress) {
+        <!-- A running code step's own progress (Review a Website's pages) -->
+        <div
+          class="flex flex-col gap-1.5"
+          data-testid="workflow-run-progress"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="flex min-w-0 items-center gap-2">
+            <lucide-angular
+              [img]="Loader2"
+              [size]="14"
+              class="shrink-0 animate-spin text-fg-muted"
+            />
+            <span class="text-[13px] font-medium text-fg">{{
+              progress.title
+            }}</span>
+          </div>
+          <p
+            class="m-0 min-w-0 truncate rounded bg-surface-muted px-2 py-1 text-[12px] text-fg"
+            data-testid="workflow-run-progress-latest"
+          >
+            {{ progress.latest }}
+          </p>
+          @if (progress.recent.length) {
+            <ul class="m-0 flex list-none flex-col gap-0.5 p-0 pl-2">
+              @for (line of progress.recent; track $index) {
+                <li class="min-w-0 truncate text-[12px] text-fg-muted">
+                  {{ line }}
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+
       @if (liveAgentStep()) {
         <!-- The running agent step, live: Thinking, its tool calls and the answer forming -->
         <div class="flex flex-col gap-2" data-testid="workflow-run-live">

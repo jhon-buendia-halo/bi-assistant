@@ -72,7 +72,18 @@ test.describe('Feature: Review a Website', () => {
       const answer = page.getByTestId('run-answer');
       await scenarioStep(
         page,
-        'Then the run succeeds with no model call',
+        'Then I see the running step and its progress, page by page',
+        async () => {
+          await expect(
+            page.getByTestId('workflow-run-progress-latest'),
+          ).toContainText(
+            /Found \d+ of at most 20 pages|Checking \d+ pages|Checked \d+ of \d+/,
+          );
+        },
+      );
+      await scenarioStep(
+        page,
+        'And the run succeeds with no model call',
         async () => {
           await expect(page.getByText('Run succeeded')).toBeVisible({
             timeout: 150_000,
