@@ -36,7 +36,9 @@ Reply with one JSON object and nothing else:
 - needsClarification: true only when the metric or meaning is undefined and the choice would change the analysis (for example "the best team" with no measure named). A fuzzy scope is not a reason: assume the natural default and list it under assumptions. Never true when the question answers an earlier clarifying question.
 - clarification: when needsClarification is true, { "question": one short question, "options": 2-4 concrete options, each a short title optionally followed by " — " and one line explaining it }; otherwise null. Each option is a measure the listed columns can compute (say which in its explanation, in plain words); never offer a measure the columns cannot give, or one that mixes several measures into a score.
 
-Never answer the question and never state a figure: the analysis step runs the queries.`;
+Never answer the question and never state a figure: the analysis step runs the queries.
+
+A catalog entity whose name suggests a measure (a view such as customer_ltv or product_revenue) does not define what "best", "top", "most valuable" or "biggest" means: when the question names no measure, set needsClarification to true and offer that measure among the options.`;
 
 /** The Write answer step's instructions (agents.md Appendix F). */
 export const WRITE_ANSWER_INSTRUCTIONS = `${WRITE_ANSWER_FIRST_LINE}
