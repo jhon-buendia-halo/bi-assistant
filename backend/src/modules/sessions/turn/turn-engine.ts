@@ -102,6 +102,8 @@ import {
   toolRecords,
 } from '../turn-data';
 import { evidenceOf } from '../query-evidence/query-evidence';
+import { recordFindingSources } from '../finding-sources';
+import type { ReadinessReport } from '../../data-readiness/engine/types';
 import {
   EXPLORABLE_QUERIES_CONTEXT_KEY,
   explorableQueryOf,
@@ -561,6 +563,8 @@ export class TurnEngine {
     };
     // Assess Data Readiness's assessment, once Resolve dataset started it.
     let assessment: ReadinessAssessment | undefined;
+    // Its stored report, once Save report stored it (roadmap 1.27.11).
+    let savedReport: ReadinessReport | undefined;
     const startedAssessment = (): ReadinessAssessment => {
       if (!assessment) throw new Error('No assessment has been started');
       return assessment;
@@ -995,11 +999,39 @@ export class TurnEngine {
           },
           save: async () => {
             const saved = await startedAssessment().save();
+            savedReport = saved.report;
             // The answer carries the report: its card, and the scorecard
             // (data-readiness R5).
             const shown = await this.showReadinessReport(id, saved, emit);
             if (shown) readinessReport = shown;
             return { reportId: saved.report.id };
+          },
+          // Rows behind findings (roadmap 1.27.11; data-readiness R34): the
+          // rows behind each top finding become the answer's first sources,
+          // each shown as a SQL call and its result. Nothing reaches the
+          // agent's prompt: the records only add sources to the answer.
+          findingRows: async () => {
+            if (!savedReport) throw new Error('The report has not been saved');
+            return recordFindingSources({
+              report: savedReport,
+              run: (datasourceId, sql, limit) =>
+                this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+              signal: turn.signal,
+              record: (args, result, facts) => {
+                emit({
+                  type: 'tool',
+                  content: JSON.stringify({
+                    name: 'run_readonly_sql',
+                    rationale: args.rationale,
+                    input: toolCallInput('run_readonly_sql', args),
+                  }),
+                });
+                const callId = `finding-rows-${randomUUID()}`;
+                queryFacts.set(callId, facts);
+                const record = toolDataRecord('run_readonly_sql', args, result);
+                if (record) captureRecord(record, callId);
+              },
+            });
           },
           explain: async ({ dataset, reportId, imageNotes }) => {
             // The run has assessed: the agent reads the stored report and
@@ -1363,6 +1395,7 @@ export class TurnEngine {
           }
         },
         save: () => captured(() => runtime.save()),
+        findingRows: () => captured(() => runtime.findingRows()),
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
     } else if (recreate) {

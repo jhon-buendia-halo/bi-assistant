@@ -268,6 +268,8 @@ interface BuildOptions {
   session?: Partial<SessionDoc>;
   /** The data-readiness service, for Assess Data Readiness runs. */
   readiness?: object;
+  /** The datasources service's guarded read-only SQL (roadmap 1.27.11). */
+  runReadOnlySql?: jest.Mock;
 }
 
 /** v2's Analyse turn: one successful query, then its note. */
@@ -472,7 +474,12 @@ function build(options: BuildOptions = {}) {
     repository as never,
     mastra as never,
     datasetsRepository as never,
-    { get: jest.fn().mockResolvedValue({ id: 'ds', name: 'DS' }) } as never,
+    {
+      get: jest.fn().mockResolvedValue({ id: 'ds', name: 'DS' }),
+      runReadOnlySql:
+        options.runReadOnlySql ??
+        jest.fn().mockResolvedValue({ columns: [], rows: [], totalRows: 0 }),
+    } as never,
     {
       getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
     } as never,
@@ -1303,6 +1310,7 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       'profile-source:success',
       'score-readiness:success',
       'save-report:success',
+      'finding-rows:success',
       'explain-report:success',
       'wrap-up:success',
     ]);
@@ -1341,6 +1349,114 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
       findingCount: 1,
       answer: 'World Cup is Managed (84).',
     });
+  });
+
+  // Roadmap 1.27.11; data-readiness R34: the rows behind each top finding
+  // are a source of the answer, ahead of the agent's own records.
+  it("records the rows behind each top finding as the answer's sources, a failed query as a failed one, and leaves the agent's input as it was", async () => {
+    const readiness = readinessService();
+    const report: ReadinessReport = {
+      ...READINESS_REPORT,
+      findings: [
+        ...READINESS_REPORT.findings,
+        {
+          dimension: 'uniqueness',
+          level: 'entity',
+          namespace: 'public',
+          entity: 'matches',
+          field: 'match_id',
+          severity: 'high',
+          measured: '2 duplicate row(s)',
+          description: 'The primary key (match_id) has 2 duplicate row(s).',
+          recommendation: 'De-duplicate.',
+        },
+        {
+          dimension: 'accessibility',
+          level: 'source',
+          severity: 'medium',
+          measured: '1 of 2 table(s) not readable',
+          description: 'One table cannot be read.',
+          recommendation: 'Grant access.',
+        },
+      ],
+    };
+    readiness.scoreProfile.mockReturnValue({ ...report });
+    const runReadOnlySql = jest.fn((datasourceId: string, sql: string) =>
+      sql.includes('IS NULL')
+        ? Promise.resolve({
+            columns: ['winner', 'matching_rows'],
+            rows: [{ winner: null, matching_rows: 1 }],
+            totalRows: 1,
+          })
+        : Promise.reject(new Error('relation "public.matches" is locked')),
+    );
+    const ctx = build({ chunks: EXPLAIN_CHUNKS, readiness, runReadOnlySql });
+    const { events, run } = await readinessRun(ctx, { dataset: 'World Cup' });
+
+    expect(run.status).toBe('success');
+    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
+      'finding-rows:success',
+    );
+    // Most severe first (the summary's order), at most 20; nothing for
+    // accessibility. Each on the report's datasource, capped at 200 rows.
+    expect(runReadOnlySql.mock.calls.map((call) => call[0])).toEqual([
+      'ds-pg',
+      'ds-pg',
+    ]);
+    expect((runReadOnlySql.mock.calls as unknown[][]).map((c) => c[2])).toEqual(
+      [200, 200],
+    );
+    expect(run.answer?.data?.slice(0, 2)).toEqual([
+      {
+        tool: 'run_readonly_sql',
+        input:
+          'SELECT "match_id", COUNT(*) AS occurrences FROM "public"."matches" GROUP BY "match_id" HAVING COUNT(*) > 1 ORDER BY occurrences DESC, "match_id"',
+        error: 'relation "public.matches" is locked',
+        rationale: 'Values of match_id that repeat in public.matches',
+      },
+      {
+        tool: 'run_readonly_sql',
+        input:
+          'SELECT *, CAST(COUNT(*) OVER () AS INTEGER) AS matching_rows FROM "public"."matches" WHERE "winner" IS NULL',
+        columns: ['winner', 'matching_rows'],
+        rows: [{ winner: null, matching_rows: 1 }],
+        rowCount: 1,
+        rationale: 'Rows where winner is empty in public.matches',
+      },
+    ]);
+    expect(run.answer?.evidence?.slice(0, 2)).toEqual([
+      { index: 0, datasourceId: 'ds-pg', rowLimit: 200 },
+      expect.objectContaining({
+        index: 1,
+        datasourceId: 'ds-pg',
+        totalRows: 1,
+        rowLimit: 200,
+        coverage: expect.any(String) as unknown,
+      }),
+    ]);
+    // Each source shows in the run's stream as a SQL call and its result.
+    const shown = events
+      .filter((e) => e.type === 'tool-result')
+      .map((e) => JSON.parse((e as { content: string }).content) as object);
+    expect(shown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: 'run_readonly_sql',
+          rationale: 'Rows where winner is empty in public.matches',
+          rowCount: 1,
+        }),
+      ]),
+    );
+    // The agent's input is unchanged: the same question and no block that
+    // carries the finding queries (out of scope of 1.27.11).
+    const [call] = ctx.calls['data-readiness'];
+    expect(call.input).toEqual([
+      { role: 'user', content: 'Assess the readiness of this dataset' },
+    ]);
+    expect(
+      call.options.context.some((block) => block.content.includes('SELECT')),
+    ).toBe(false);
+    expect(run.answer?.content).toBe('World Cup is Managed (84).');
   });
 
   it('fails at Profile source with the datasource named when it cannot be reached, storing nothing', async () => {

@@ -12,6 +12,7 @@ import type {
   assessmentSummarySchema,
   assessmentTargetSchema,
   explainedReportSchema,
+  findingRowsSchema,
   profiledSourceSchema,
   scoredSourceSchema,
 } from './data-readiness-assessment.schemas';
@@ -107,6 +108,17 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
   ),
   contractStepEntry(
     {
+      id: 'finding-rows',
+      title: 'Rows behind findings',
+      kind: 'code',
+      summary:
+        "Runs a read-only query of the rows behind each of the report's top findings (at most 20) and adds each as a source of the answer. A query that fails stays a failed source. No LLM.",
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
+    },
+    SCHEMAS['finding-rows'],
+  ),
+  contractStepEntry(
+    {
       id: 'explain-report',
       title: 'Explain report',
       kind: 'agent',
@@ -138,7 +150,8 @@ export const DATA_READINESS_ASSESSMENT_EDGES: readonly WorkflowEdge[] = [
   { from: 'resolve-dataset', to: 'profile-source', kind: 'next' },
   { from: 'profile-source', to: 'score-readiness', kind: 'next' },
   { from: 'score-readiness', to: 'save-report', kind: 'next' },
-  { from: 'save-report', to: 'explain-report', kind: 'next' },
+  { from: 'save-report', to: 'finding-rows', kind: 'next' },
+  { from: 'finding-rows', to: 'explain-report', kind: 'next' },
   { from: 'explain-report', to: 'wrap-up', kind: 'next' },
   { from: 'wrap-up', to: 'end', kind: 'next' },
 ];
@@ -154,6 +167,10 @@ export type ProfileOutcome = Pick<
 export type ScoreOutcome = Pick<
   z.output<typeof scoredSourceSchema>,
   'overallScore' | 'maturity' | 'findingCount' | 'dimensionScores'
+>;
+export type FindingRowsOutcome = Pick<
+  z.output<typeof findingRowsSchema>,
+  'sourceCount' | 'failedSourceCount' | 'stopped'
 >;
 export type ExplainedReport = z.output<typeof explainedReportSchema>;
 export type AssessmentSummary = z.output<typeof assessmentSummarySchema>;
@@ -172,6 +189,13 @@ export interface DataReadinessAssessmentRuntime {
   score(): ScoreOutcome;
   /** Save report: stores it and shows its readiness card. */
   save(): Promise<{ reportId: string }>;
+  /**
+   * Rows behind findings (roadmap 1.27.11): one read-only query per top
+   * finding of the saved report, each recorded as a source of the answer;
+   * a failed query is a failed source, never a failed run. `stopped` when
+   * the run was stopped meanwhile.
+   */
+  findingRows(): Promise<FindingRowsOutcome>;
   /** Explain report: the agent's turn over the stored report. */
   explain(input: {
     question: string;

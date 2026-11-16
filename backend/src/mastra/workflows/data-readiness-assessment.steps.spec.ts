@@ -17,6 +17,7 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
       ['profile-source', 'code'],
       ['score-readiness', 'code'],
       ['save-report', 'code'],
+      ['finding-rows', 'code'],
       ['explain-report', 'agent'],
       ['wrap-up', 'code'],
     ]);
@@ -32,7 +33,8 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
       ['resolve-dataset', 'profile-source', 'next'],
       ['profile-source', 'score-readiness', 'next'],
       ['score-readiness', 'save-report', 'next'],
-      ['save-report', 'explain-report', 'next'],
+      ['save-report', 'finding-rows', 'next'],
+      ['finding-rows', 'explain-report', 'next'],
       ['explain-report', 'wrap-up', 'next'],
       ['wrap-up', 'end', 'next'],
     ]);
