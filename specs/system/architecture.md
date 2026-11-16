@@ -1319,3 +1319,96 @@ flowchart TB
 
 
 <!-- Code-level decisions (patterns, conventions with architectural weight) go here. -->
+
+#### ADR-0050 — Cross-session memory: Mastra's own memory first, behind a `LearningStore` port; Hindsight only if a three-arm eval shows it is better
+- **Status:** Proposed
+- **Date:** 2026-10-29 (numbered ADR-0031 until 2026-11-04, when `main` took ADR-0031 for BA-251 and ADR-0032 for BA-281, ADR-0033 until 2026-11-10 and ADR-0038 until 2026-11-16 (when `main` took ADR-0038 to ADR-0048 and open PR #126 claimed ADR-0049), when `main` took ADR-0033 for BA-323 and ADR-0034 to ADR-0036 for BA-320 and PR #91 claimed ADR-0037 for BA-159)
+- **Context:**
+  - The assistant's only memory today is Mastra's message history: the last 40 messages of a thread, with `thread = resource = session id` on every call, stored in `mastra.sqlite` ([agents.md](agents.md) 2.1). Nothing crosses sessions. An approval or a correction made in one session is lost in the next, and verified queries are matched by word overlap, so a paraphrase or a question in another language finds nothing.
+  - The research ([docs/research/BA-4.md](../../docs/research/BA-4.md) section 3.5) and the branch `feat/hindsight-memory` (its ADR-0013, never merged) chose Hindsight behind a `LearningStore` port. Its smoke test of 2026-10-05 reused an English approval for a Spanish question in a new session and applied a reviewer's correction. It also stored the corrected SQL as a plain fact, and later consolidated an observation that mixed it with the correction.
+  - Since then, the installed `@mastra/memory` 1.29.0 offers working memory and semantic recall across the threads of one resource, with no new server. Hindsight reached 1.1.0 (2026-10-21) and is still a separate server (Python, Postgres with pgvector, a model call to extract facts from each signal) with no Mastra integration. The branch is at Hindsight 0.10.2 and app v0.20.6.
+  - The eval sets run every question in a new session with no memory ([agents.md](agents.md) section 8), so they cannot show what a memory does.
+- **Decision:**
+  - **One port.** Cross-session memory sits behind a `LearningStore` port (`retain`, `recall`, `mentalModels`, `forget`); the rest of the app depends on the port only. The rules of the research stay:
+    - Only verified signals are retained: an approval, a rejection with a note, a reviewer's note, a cross-check disagreement, a Knowledge edit. They go through a persisted outbox, so a click never waits for the memory.
+    - A signal carries the question, the SQL with its literal values redacted, and schema names; never row values. A correction labels the corrected SQL as not to be reused.
+    - Recalled items enter the turn in their own block marked "not curated; curated knowledge wins on conflict", and are recorded in the answer's provenance with `source: 'memory'`.
+    - Memory never writes to Knowledge; promoting a memory to Knowledge stays a person's decision.
+    - Everything sits behind a `memory` lever, off by default.
+  - **First implementation, "Mastra only".** One learning thread per datasource or per dataset (decided before the code, the same for every arm), apart from the chat threads. Signals are saved as messages with `saveMessages`, with no model call. Recall is Mastra's semantic recall over that thread, with a relevance filter of our own. Working memory holds the summary (known pitfalls, table guide, learned glossary), rewritten by a background step.
+  - **Hypothesis.** "Hindsight + Mastra" (Hindsight as a second `LearningStore` implementation, Mastra keeping the chat) applies what was learned in earlier sessions better than "Mastra only", mainly when a later correction replaces an earlier approval, without adding memory to unrelated questions, at an acceptable extra cost. If it does not, the difference stays within the noise and Mastra only is enough.
+  - **The eval that tests it.** A memory set where each case teaches (signals injected through the port, with no assistant turn) and then asks in a new session (a real turn). Memory is empty at the start of each attempt.
+    - Three arms with the same questions, model, signals, block format and embedding model: no memory (the control), Mastra only, Hindsight + Mastra.
+    - Six categories of six cases each, split into dev and held-out like the other sets. Four are learning categories (`memory-reuse`, `memory-correction`, `memory-update`, `memory-rejected`); the other two are `memory-abstain` (what was learned stays out of unrelated questions) and `memory-vs-curated` (curated knowledge wins).
+    - Deterministic checks only: the result matches the reference SQL's, the final SQL is not the rejected one, no row value was retained. Three attempts per case. Cost per case and recall time are recorded.
+  - **Decision rule, fixed before the first run.**
+    1. An A/A run of each arm built so far measures the noise.
+    2. Memory may be on by default only if Mastra only beats no memory beyond the A/A noise on the learning categories, and neither `memory-abstain` nor the existing sets get worse.
+    3. The Hindsight + Mastra arm is built only if Mastra only stays below 80% on the learning categories. Above that, this set cannot show a gain from Hindsight.
+    4. Hindsight + Mastra replaces Mastra only if it beats it beyond the A/A noise on the learning categories, nothing gets worse, the cost per case rises by 25% at most, and the team accepts running and upgrading the server. A tie goes to Mastra only.
+    5. The winner is measured again on a Claude model before it is on by default.
+  - The result moves this ADR to Accepted with the outcome written in, or a new ADR supersedes it.
+- **Consequences:**
+  - No new container unless Hindsight wins. If it does, a new ADR at Level 2 records where its server runs (each machine or a team server).
+  - Semantic recall needs an embedding model, and Anthropic offers none: with a Claude model the app needs an OpenAI key for embeddings or a local model. Decided before the code of [BA-81](https://halo-powered.atlassian.net/browse/BA-81).
+  - 36 cases show only a large difference (about 25 points). That is the size of gain that would justify running a server.
+  - Work: the arm option and the two-part cases in [BA-190](https://halo-powered.atlassian.net/browse/BA-190); the cases, the Mastra-only implementation and the decision in BA-81. The runs cost about 5 to 10 USD on the improvement loop's model, more on Claude.
+  - ADR-0013 on `feat/hindsight-memory` stays the record of the October design; that branch is not merged as it is.
+  - Stack-neutral: any rebuild needs the port, the outbox, one learning store per datasource or dataset, the recall block, and the three-arm eval.
+
+## Level 4 — Code
+
+```mermaid
+flowchart TB
+  subgraph fe["Frontend (features/sessions)"]
+    chat["SessionChat<br/>(session-chat.ts)"]
+    api["SessionsApiService<br/>(fetch stream reader)"]
+    shell["App shell<br/>(app.ts onVisualUpdated)"]
+    panel["InteractiveVisualPanel<br/>(interactive-visual-panel.ts)"]
+    iframe["sandboxed iframe<br/>(srcdoc, sandbox=allow-scripts)"]
+  end
+
+  subgraph be["Backend (modules/sessions)"]
+    ctrl["SessionsController<br/>POST /sessions/:id/messages/stream<br/>(text/event-stream)"]
+    svc["SessionsService.streamMessage<br/>(requestContext: session-id, active-visual-id, turn-data-records)"]
+    bridge["tool-services bridge<br/>(createVisual / updateVisual)"]
+    vis["VisualizationService<br/>(create, update, revert, load)"]
+    validate["validation<br/>(spec check, or new Function parse + 1 retry)"]
+    frame["visualization-document.ts<br/>(qti- frame from transcript: contextFor)"]
+  end
+
+  subgraph ma["mastra/"]
+    assistant["assistant agent"]
+    tool["create_visual / update_visual<br/>(tools/visual.tools.ts)"]
+    designer["visualization agent<br/>(designer sub-call)"]
+  end
+
+  files[("session workspace<br/>visuals/id/vN/: index.html, body.html,<br/>styles.css, script.js, manifest.json, data.json")]
+
+  chat -->|"user message + activeVisualizationId"| api
+  api -->|"HTTP POST, SSE response"| ctrl
+  ctrl --> svc
+  svc -->|"agent.stream()"| assistant
+  assistant -->|"tool call"| tool
+  tool -->|"getDatasetToolServices()"| bridge
+  bridge --> vis
+  vis -->|"bundle + captured rows + instruction"| designer
+  designer -->|"spec or HTML/CSS/JS"| validate
+  validate --> vis
+  vis --> frame
+  vis -->|"writeVersion, currentVersion = N"| files
+  tool -->|"visualId, version, title"| svc
+  svc -->|"SSE event: visual-updated"| api
+  api --> chat
+  chat -->|"visualUpdated output"| shell
+  shell -->|"open visual id + version"| panel
+  panel -->|"GET /sessions/:id/visualizations/:vid?version=N"| api
+  ctrl -->|"load(version)"| vis
+  panel -->|"framed index.html as srcdoc"| iframe
+  iframe -.->|"postMessage visual-error (panel shows banner)"| panel
+```
+
+*Visual tailoring loop: a chat turn's `create_visual`/`update_visual` tool call runs the designer agent through `VisualizationService`, writes a new `visuals/<id>/v<N>/` version in the session workspace, and the `visual-updated` SSE event makes the panel reload it into a sandboxed iframe that reports runtime errors back via `postMessage`.*
+
+
+<!-- Code-level decisions (patterns, conventions with architectural weight) go here. -->

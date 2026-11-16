@@ -117,7 +117,7 @@ Not yet sequenced into a release. The detailed phase plans below predate this ro
   - Retrieval is logged per turn.
 - **Out of scope:** UI for provenance (1.3.4).
 - **Acceptance:** a golden-dataset eval (1.1.1) runs with knowledge on and off, with per-concept attribution, and shows the accuracy difference with no category getting worse.
-- **Notes:** depends on 1.3.2 and 1.1.1.
+- **Notes:** depends on 1.3.2 and 1.1.1. Plan: Step 2 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md). The relevance ranking and the categorised eval suite it reuses are on the local branch `feat/engine-eval-loop`, not on `main`.
 
 #### 1.3.4 — Curation UI, feedback learning and provenance ([BA-81](https://halo-powered.atlassian.net/browse/BA-81))  `📋 Planned`
 - **Intent:** analysts curate the ontology, corrections feed back into it, and users see what shaped each answer.
@@ -128,7 +128,7 @@ Not yet sequenced into a release. The detailed phase plans below predate this ro
   - The answer panel shows which concepts and definitions were used.
 - **Out of scope:** —
 - **Acceptance:** an analyst can fix a wrong answer by editing a concept, and the next answer cites it.
-- **Notes:** a new UI surface, so it needs Gherkin scenarios and E2E specs first. The provenance display ties into 1.4.1.
+- **Notes:** a new UI surface, so it needs Gherkin scenarios and E2E specs first. The provenance display ties into 1.4.1. Plan: Step 3 in [docs/plans/BA-4.md](docs/plans/BA-4.md) and [docs/plans/BA-4-technical.md](docs/plans/BA-4-technical.md). Memory: the provider is chosen by the three-arm eval of [ADR-0050](specs/system/architecture.md); its cases, the Mastra-only implementation and the decision belong here, the eval option to [BA-190](https://halo-powered.atlassian.net/browse/BA-190).
 
 ### Moved from Milestone 1.4 — Response Reliability Signals (2026-11-12)
 
