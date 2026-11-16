@@ -36,6 +36,13 @@ import {
   type CollapsedSpan,
 } from './span-collapse';
 import { buildTraceTree } from './span-tree';
+import { parseUsageQuery, type UsageQuery } from './dto/usage-query';
+import type { UsageSummary } from './entities/usage.entity';
+import {
+  RUN_HOST_ID_PREFIX,
+  summarizeUsage,
+  type RunWorkflow,
+} from './usage-summary';
 import { durationMs, iso, messages, num, usage } from './span-values';
 
 const EMPTY_FACETS: LlmCallFacets = {
@@ -95,6 +102,39 @@ export class MonitoringService {
           .sort(byLabel((s) => s.name ?? s.id)),
       },
     };
+  }
+
+  /**
+   * `GET /monitoring/usage`: the Costs page's cost summary. Reads the calls of
+   * the period and of the last 12 calendar months (the monthly series and
+   * this month), and the stored runs to name each run's workflow.
+   */
+  async getUsage(
+    query: UsageQuery = {},
+    now: Date = new Date(),
+  ): Promise<UsageSummary> {
+    const { from, to, timeZone } = parseUsageQuery(query, now);
+    // 13 months back covers the 12 calendar months in any time zone.
+    const yearAgo = new Date(now);
+    yearAgo.setUTCMonth(yearAgo.getUTCMonth() - 13);
+    const since = from === null ? null : from < yearAgo ? from : yearAgo;
+    const [rows, runs] = await Promise.all([
+      this.spans
+        .hasSpanEvents()
+        .then((has) => (has ? this.spans.usageRows(since) : [])),
+      this.runs.list(),
+    ]);
+    const workflows = new Map<string, RunWorkflow>(
+      runs.map((run) => [
+        run.id,
+        {
+          workflowId: run.workflowId,
+          workflowName: run.workflowName,
+          title: runTitle(run, []),
+        },
+      ]),
+    );
+    return summarizeUsage({ rows, from, to, now, timeZone, runs: workflows });
   }
 
   /** `GET /monitoring/llm-calls/:id`. */
@@ -294,9 +334,6 @@ export class MonitoringService {
     };
   }
 }
-
-/** A run's temporary host id prefix (`RUN_HOST_ID_PREFIX`, sessions.service). */
-const RUN_HOST_ID_PREFIX = 'run-';
 
 /** What a thread id resolves to: a chat's name, or a run's name and id. */
 interface ThreadName {

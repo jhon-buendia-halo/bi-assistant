@@ -21,6 +21,7 @@ export type MainView =
   | 'runs'
   | 'run-detail'
   | 'session-chat'
+  | 'costs'
   | 'monitoring'
   | 'monitoring-session'
   | 'llm-call';
@@ -32,6 +33,7 @@ export type Area =
   | 'agents'
   | 'artifacts'
   | 'runs'
+  | 'costs'
   | 'monitoring'
   | 'settings';
 
@@ -42,6 +44,7 @@ export const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   agents: 'agents',
   artifacts: 'artifacts',
   runs: 'runs',
+  costs: 'costs',
   monitoring: 'monitoring',
 };
 
@@ -61,6 +64,7 @@ export const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   runs: 'runs',
   'run-detail': 'runs',
   'session-chat': 'runs',
+  costs: 'costs',
   monitoring: 'monitoring',
   'monitoring-session': 'monitoring',
   'llm-call': 'monitoring',

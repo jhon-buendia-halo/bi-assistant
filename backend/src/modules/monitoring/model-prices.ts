@@ -129,6 +129,31 @@ export function estimateCostUsd(
   model: string | null | undefined,
   usage: CallUsage,
 ): number | null {
+  const parts = costParts(model, usage);
+  return parts === null
+    ? null
+    : parts.input + parts.cacheRead + parts.cacheWrite + parts.output;
+}
+
+/** A call's estimated cost split by token kind, in USD. */
+export interface CostParts {
+  /** Uncached input tokens at the input price. */
+  input: number;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
+  /** What the cache reads would have cost more at the input price. */
+  cacheSaved: number;
+}
+
+/**
+ * The parts `estimateCostUsd` adds up, plus what the cache reads saved.
+ * Null when the model has no price or the usage is not known.
+ */
+export function costParts(
+  model: string | null | undefined,
+  usage: CallUsage,
+): CostParts | null {
   const price = findModelPrice(model);
   if (!price || usage.inputTokens === null || usage.outputTokens === null) {
     return null;
@@ -136,10 +161,11 @@ export function estimateCostUsd(
   const cacheRead = usage.cacheReadTokens ?? 0;
   const cacheWrite = usage.cacheWriteTokens ?? 0;
   const uncached = Math.max(0, usage.inputTokens - cacheRead - cacheWrite);
-  const micro =
-    uncached * price.input +
-    cacheRead * price.cacheRead +
-    cacheWrite * price.input * CACHE_WRITE_MULTIPLIER +
-    usage.outputTokens * price.output;
-  return micro / MILLION;
+  return {
+    input: (uncached * price.input) / MILLION,
+    cacheRead: (cacheRead * price.cacheRead) / MILLION,
+    cacheWrite: (cacheWrite * price.input * CACHE_WRITE_MULTIPLIER) / MILLION,
+    output: (usage.outputTokens * price.output) / MILLION,
+    cacheSaved: (cacheRead * (price.input - price.cacheRead)) / MILLION,
+  };
 }
