@@ -15,6 +15,7 @@ const {
   clearBackendPid,
   stopStaleBackend,
 } = require("./stale-backend.cjs");
+const { createLineGrouper } = require("./log-lines.cjs");
 
 // The brand is chosen at build time (ADR-0045): `scripts/brand.mjs
 // electron-prepare` copies brands/<id>/brand.json next to this file. Dev runs
@@ -222,49 +223,40 @@ function recordDiagnostic(level, source, message, details) {
   return entry;
 }
 
-function diagnosticLevelFromLine(line, fallbackLevel) {
-  if (/\b(ERROR|FATAL)\b/i.test(line)) return "error";
-  if (/\bWARN(?:ING)?\b|[A-Za-z]+Warning\b/i.test(line)) return "warn";
-  if (/\bDEBUG\b/i.test(line)) return "debug";
-  return fallbackLevel;
-}
-
-function recordBackendLine(rawLine, fallbackLevel) {
-  const line = rawLine.replace(ANSI_ESCAPE, "").trim();
-  if (!line) return;
-  try {
-    const parsed = JSON.parse(line);
-    if (parsed && typeof parsed === "object" && parsed.message) {
-      const { message, level, ...details } = parsed;
-      recordDiagnostic(
-        typeof level === "string" ? level : fallbackLevel,
-        "backend:mastra",
-        message,
-        details,
-      );
-      return;
-    }
-  } catch {
-    // Most Nest output is human-readable rather than JSON.
+// One entry per log event, not per line: a stack trace stays with the line
+// that started it, as the entry's `details` string (log-lines.cjs).
+function recordBackendEntry(fallbackLevel, entry) {
+  if (entry.kind === "json") {
+    const { message, level, ...details } = entry.parsed;
+    recordDiagnostic(
+      typeof level === "string" ? level : fallbackLevel,
+      "backend:mastra",
+      message,
+      details,
+    );
+    return;
   }
-  recordDiagnostic(
-    diagnosticLevelFromLine(line, fallbackLevel),
-    "backend",
-    line,
-  );
+  recordDiagnostic(entry.level, "backend", entry.message, entry.details);
 }
 
 function captureBackendStream(stream, output, fallbackLevel) {
   let pending = "";
+  const grouper = createLineGrouper({
+    fallbackLevel,
+    onEntry: (entry) => recordBackendEntry(fallbackLevel, entry),
+  });
+  const pushLine = (rawLine) => grouper.push(rawLine.replace(ANSI_ESCAPE, ""));
   stream.on("data", (chunk) => {
     output.write(chunk);
     pending += chunk.toString("utf8");
     const lines = pending.split(/\r?\n/);
     pending = lines.pop() ?? "";
-    for (const line of lines) recordBackendLine(line, fallbackLevel);
+    for (const line of lines) pushLine(line);
   });
   stream.on("end", () => {
-    if (pending.trim()) recordBackendLine(pending, fallbackLevel);
+    if (pending.trim()) pushLine(pending);
+    pending = "";
+    grouper.end();
   });
 }
 
