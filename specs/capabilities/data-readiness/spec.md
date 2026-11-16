@@ -110,7 +110,7 @@ Capability-local vocabulary:
   Each dialect writes the pattern in its own regex flavour.
 - R10. A readable `text` column with between 2 and 1,000 distinct values SHALL also get a **normalized distinct count**: the distinct count of its values lower-cased and trimmed.
 - R11. The profile's relationships SHALL be:
-  - **declared:** every declared foreign key whose child entity is in scope; the parent may lie outside the scope (it is still a valid join target), as in the reference engine;
+  - **declared:** every declared foreign key whose child entity is in scope; the parent may lie outside the scope (it is still a valid join target), as in the reference engine; on Databricks, a scoped assessment's join targets are the tables of the scope's schemas (R28);
   - **inferred:** join candidates found by name in the same namespace, at most 20 per assessment. A column named `<base>_id` or `<base>Id`, whose (namespace, entity, column) is not already a declared foreign key, points to the first entity named `<base>`, `<base>s`, `dim_<base>`, `<base>_dim` or `dim<base>` (case-insensitive, never the entity itself). The target column is that entity's column named `id`, or else its column with the same name. With neither, there is no candidate.
 
   Each relationship's **orphan count** SHALL be the number of child rows whose non-null value has no matching parent row.
@@ -210,6 +210,8 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 - R28. **One pooled session per assessment.** An assessment SHALL profile through one connection and session per worker, reused for every statement of that assessment, and SHALL read the inventory once.
   - It profiles 8 tables at a time on Databricks and 4 on PostgreSQL.
   - Each statement keeps the 15 s timeout (R6) and the read-only guard.
+  - On Databricks, an assessment of a dataset (or of named entities) SHALL read the inventory, keys and foreign keys of the scope's `catalog.schema` namespaces only, never every catalog of the workspace: one large unrelated catalog must not time out the inventory and leave the dataset's tables out. When a namespace's inventory statement fails, the profiler SHALL read the scope's own tables in it alone, so they are still assessed. A whole-datasource assessment reads every catalog the user can list.
+  - A catalogue read that has to skip catalogs (no privilege, timed out) SHALL log one warning per read naming how many it skipped, the first ten with their reason on one line, not one warning per catalog.
 - R29. **Per-table statistics.** A readable entity's statistics statement SHALL also hold the normalized distinct counts (R10) and the invalid-format counts (R9) of its text columns.
   - When that statement fails, the profiler SHALL fall back to separate per-column statements for the same statistics.
   - Statistics SHALL be exact aggregates. No approximate count and no sampling is used.
