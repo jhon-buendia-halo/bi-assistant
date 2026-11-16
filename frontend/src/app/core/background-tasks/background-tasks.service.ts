@@ -92,8 +92,11 @@ export interface StartBackgroundTask<T> {
   open?: () => void;
   /** Runs after the task ends, whatever the screen shown (refresh a list…). */
   onFinish?: (task: BackgroundTask) => void;
-  /** Toast the end of the task. Default true. */
-  toast?: boolean;
+  /**
+   * Toast the end of the task. Default true. A function decides at the end,
+   * e.g. only when the screen that started the task is no longer shown.
+   */
+  toast?: boolean | ((task: BackgroundTask) => boolean);
   /** Called by Stop (cancel); the subscription is dropped either way. */
   onCancel?: () => void;
 }
@@ -334,7 +337,11 @@ export class BackgroundTasksService {
     this.trimFinished();
     if (this.runningCount() === 0) this.stopClock();
     const spec = entry.spec;
-    if (toast && spec.toast !== false) {
+    const wantsToast =
+      typeof spec.toast === 'function'
+        ? spec.toast(ended)
+        : spec.toast !== false;
+    if (toast && wantsToast) {
       if (status === 'done') {
         this.toast.success(
           message,
