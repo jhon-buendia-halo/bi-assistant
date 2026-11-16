@@ -88,6 +88,8 @@ import {
   WorkflowPhase,
   WorkflowView,
 } from './entities/session.entity';
+import { QueryEvidenceService } from './query-evidence/query-evidence.service';
+import type { ExplorableQuery } from './query-evidence/explorable-queries';
 import { SessionDatasets } from './turn/session-datasets';
 import { SqlChecks } from './turn/sql-checks';
 import { TurnEngine } from './turn/turn-engine';
@@ -161,6 +163,12 @@ export interface RunHostSpec {
   transcript?: { role: 'user' | 'assistant'; content: string }[];
   /** A system block every turn of the host gets (agents.md 5.16). */
   contextBlock?: string;
+  /**
+   * The earlier queries the host's turn may explore with `explore_result`
+   * (agents.md 3.15, 4.2): a follow-up run's earlier answer's, a node chat's
+   * run's and earlier turns'.
+   */
+  contextQueries?: ExplorableQuery[];
   /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
   checkDataQuality?: true;
   /**
@@ -217,6 +225,10 @@ export class SessionsService implements OnModuleInit {
     // The turn engine (agents.md 5.1) lives in `./turn/`, built on this
     // service's own dependencies and its session reads and writes.
     this.turnDatasets = new SessionDatasets(
+      datasetsRepository,
+      datasourcesService,
+    );
+    this.queryEvidence = new QueryEvidenceService(
       datasetsRepository,
       datasourcesService,
     );
@@ -294,6 +306,8 @@ export class SessionsService implements OnModuleInit {
 
   /** The session's datasets, bound to their datasources. */
   private readonly turnDatasets: SessionDatasets;
+  /** The query inspector's page path, which `explore_result` pages through. */
+  private readonly queryEvidence: QueryEvidenceService;
   /** SQL repair, careful mode's cross-check and the Verified badge. */
   private readonly sqlChecks: SqlChecks;
   /** What reaches the model on a turn. */
@@ -312,6 +326,10 @@ export class SessionsService implements OnModuleInit {
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
       runReadOnlySql: (datasourceId, sql, limit, datasets) =>
         this.sqlChecks.runSqlWithRepair(datasourceId, sql, limit, datasets),
+      // `explore_result` (agents.md 3.15): the inspector's own page path.
+      pageQuery: (source, datasets, request) =>
+        this.queryEvidence.pageOf(source, datasets, request),
+      interpretResult: (input) => this.mastra.interpretResult(input),
       createVisual: async (
         sessionId,
         sourceMessageAt,
@@ -529,6 +547,9 @@ export class SessionsService implements OnModuleInit {
             ]
           : [],
       ...(spec.contextBlock ? { contextBlock: spec.contextBlock } : {}),
+      ...(spec.contextQueries?.length
+        ? { contextQueries: spec.contextQueries }
+        : {}),
       ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
@@ -597,6 +618,9 @@ export class SessionsService implements OnModuleInit {
       preview: true,
       run: true,
       messages: [],
+      ...(spec.contextQueries?.length
+        ? { contextQueries: spec.contextQueries }
+        : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,

@@ -2,7 +2,9 @@ import {
   NODE_CHAT_CONTEXT_CAP,
   SHORTENED_NOTE,
   nodeChatContextBlock,
+  nodeChatQueries,
 } from './node-chat-context';
+import { TOOL_CALL_INPUT_CAP } from './workflow-run-steps';
 import type { WorkflowRunDoc } from './workflow-run-steps';
 
 const run = (overrides: Partial<WorkflowRunDoc> = {}): WorkflowRunDoc => ({
@@ -164,5 +166,69 @@ describe('nodeChatContextBlock (agents.md 5.16)', () => {
     expect(() => nodeChatContextBlock(run(), 'nope')).toThrow(
       'Step "nope" is not in run "r-1"',
     );
+  });
+});
+
+describe('nodeChatQueries (agents.md 3.15, 5.16)', () => {
+  it("gives the run's answer queries, then earlier chat queries whose SQL is whole, each once", () => {
+    const answered = run({
+      answer: {
+        role: 'assistant',
+        content: '172 goals.',
+        at: 't',
+        data: [
+          {
+            tool: 'run_readonly_sql',
+            input: 'SELECT team, goals FROM world_cup.goals',
+            columns: ['team', 'goals'],
+            rows: [{ team: 'Brazil', goals: 3 }],
+          },
+        ],
+        evidence: [{ index: 0, datasourceId: 'ds-1' }],
+      },
+    });
+    const queries = nodeChatQueries(answered, [
+      { id: 'm1', role: 'user', content: 'Per year?', createdAt: 't' },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: 'Here.',
+        createdAt: 't',
+        toolCalls: [
+          { tool: 'describe_entity', input: 'world_cup.goals' },
+          { tool: 'run_readonly_sql', input: 'SELECT year FROM g' },
+          { tool: 'run_readonly_sql', input: 'SELECT broken', error: 'x' },
+          // The same statement as the answer's: listed once.
+          {
+            tool: 'explore_result',
+            input: 'SELECT team, goals\nFROM world_cup.goals;',
+          },
+          // Clipped when stored: its SQL is not known.
+          {
+            tool: 'run_readonly_sql',
+            input: 'S'.repeat(TOOL_CALL_INPUT_CAP),
+          },
+        ],
+      },
+    ]);
+    expect(queries).toEqual([
+      expect.objectContaining({
+        ref: 'Q1',
+        sql: 'SELECT team, goals FROM world_cup.goals',
+        datasourceId: 'ds-1',
+        columns: ['team', 'goals'],
+      }),
+      {
+        ref: 'Q2',
+        sql: 'SELECT year FROM g',
+        columns: [],
+        kinds: {},
+        sampleValues: {},
+      },
+    ]);
+  });
+
+  it('is empty for a run with no answer and a new chat', () => {
+    expect(nodeChatQueries(run(), [])).toEqual([]);
   });
 });

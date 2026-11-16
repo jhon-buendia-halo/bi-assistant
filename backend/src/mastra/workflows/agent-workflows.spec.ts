@@ -5,6 +5,7 @@ const V2_TOOLS = [
   'describe_entity',
   'sample_rows',
   'run_readonly_sql',
+  'explore_result',
   'ask_clarification',
 ];
 
@@ -120,6 +121,6 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     first.steps[4].agent!.tools.push('y');
     const second = agentWorkflow('insights-analyst')!;
     expect(second.steps[0].input).toEqual(['question', 'datasets']);
-    expect(second.steps[4].agent!.tools).toHaveLength(5);
+    expect(second.steps[4].agent!.tools).toHaveLength(6);
   });
 });
