@@ -7,11 +7,14 @@
 import { HttpException } from '@nestjs/common';
 import type { DatasourceKind } from '../datasources/entities/datasource.entity';
 import type {
+  ReadinessFindingsPage,
   ReadinessReportList,
   ReadinessToolReport,
   ReadinessToolServices,
 } from '../../mastra/readiness-tool-services';
+import { dimensions } from '../data-readiness/engine/dimensions';
 import type {
+  Dimension,
   Finding,
   ReadinessReport,
   ReadinessReportSummary,
@@ -43,6 +46,8 @@ export const READINESS_REPORT_TOOLS: ReadonlySet<string> = new Set([
 ]);
 /** `topFindings` cap of the model-facing summary (agents.md 3.13). */
 export const SUMMARY_TOP_FINDINGS = 20;
+/** Findings a page of `get_readiness_report` with `dimension` (agents.md 3.13). */
+export const FINDINGS_PAGE_SIZE = 50;
 /** Reports remembered for the stream event, newest kept. */
 const REPORT_CACHE_SIZE = 50;
 
@@ -173,6 +178,11 @@ export function readinessSummary(report: ReadinessReport): ReadinessSummary {
 
 /** At most 20 findings, most severe first, then in report order. */
 export function topFindings(findings: readonly Finding[]): Finding[] {
+  return bySeverity(findings).slice(0, SUMMARY_TOP_FINDINGS);
+}
+
+/** Findings most severe first, then in report order. */
+function bySeverity(findings: readonly Finding[]): Finding[] {
   return findings
     .map((finding, index) => ({ finding, index }))
     .sort(
@@ -180,8 +190,61 @@ export function topFindings(findings: readonly Finding[]): Finding[] {
         SEVERITY_RANK[b.finding.severity] - SEVERITY_RANK[a.finding.severity] ||
         a.index - b.index,
     )
-    .slice(0, SUMMARY_TOP_FINDINGS)
     .map(({ finding }) => finding);
+}
+
+/** The engine's dimension id a name stands for, ignoring case and spaces. */
+function dimensionOf(name: string): Dimension {
+  const ids = dimensions().map((d) => d.id);
+  const wanted = name.trim().toLowerCase();
+  const id = ids.find((d) => d === wanted);
+  if (!id) {
+    throw new Error(
+      `Unknown dimension "${name.trim()}". Use one of: ${ids.join(', ')}.`,
+    );
+  }
+  return id;
+}
+
+/**
+ * One page of every finding of `dimension` in a stored report
+ * (`get_readiness_report` with `dimension`, agents.md 3.13, story 1.27.12):
+ * most severe first, then in report order, `FINDINGS_PAGE_SIZE` a page. Read
+ * from the report, never recomputed. Throws the text the model sees for an
+ * unknown dimension or a page past the last.
+ */
+export function dimensionFindingsPage(
+  report: ReadinessReport,
+  dimension: string,
+  page = 1,
+): ReadinessFindingsPage {
+  const id = dimensionOf(dimension);
+  if (!Number.isInteger(page) || page < 1) {
+    throw new Error('Page must be a whole number from 1.');
+  }
+  const all = bySeverity(report.findings.filter((f) => f.dimension === id));
+  const pageCount = Math.max(1, Math.ceil(all.length / FINDINGS_PAGE_SIZE));
+  if (page > pageCount) {
+    throw new Error(
+      `Page ${page} is past the last page (${pageCount}) of the ${id} findings.`,
+    );
+  }
+  const start = (page - 1) * FINDINGS_PAGE_SIZE;
+  return {
+    dimension: id,
+    total: all.length,
+    page,
+    pageCount,
+    pageSize: FINDINGS_PAGE_SIZE,
+    items: all.slice(start, start + FINDINGS_PAGE_SIZE).map((f) => ({
+      severity: f.severity,
+      entity: f.entity,
+      field: f.field,
+      measured: f.measured,
+      description: f.description,
+      recommendation: f.recommendation,
+    })),
+  };
 }
 
 /** The `readiness` panel item of a report (data-model 3.4.4). */
@@ -447,6 +510,28 @@ export class ReadinessBridge implements ReadinessToolServices {
   }
 
   async getReadinessReport(input: {
+    sessionId: string;
+    reportId?: string;
+    datasetName?: string;
+    dimension?: string;
+    page?: number;
+  }): Promise<ReadinessToolReport> {
+    const { dimension, page, ...which } = input;
+    // An unknown dimension is refused before any report is read.
+    if (dimension !== undefined) dimensionOf(dimension);
+    const result = await this.storedReport(which);
+    if (dimension === undefined) return result;
+    return {
+      report: result.report,
+      summary: {
+        ...result.summary,
+        findings: dimensionFindingsPage(result.report, dimension, page),
+      },
+    };
+  }
+
+  /** The stored report `get_readiness_report` names (agents.md 3.13). */
+  private async storedReport(input: {
     sessionId: string;
     reportId?: string;
     datasetName?: string;

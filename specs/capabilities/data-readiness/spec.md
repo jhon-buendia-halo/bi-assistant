@@ -72,7 +72,7 @@ Capability-local vocabulary:
   - in a chat, show that report's **scorecard** in the right panel and open the panel (R25);
   - in a run, show the scorecard, with Past assessments, in the Run tab under the answer when **Open scorecard** on the card is clicked, with a Close button. A new run closes it.
 
-  The model sees only a compact summary (overall score, band, the ten dimension scores, the finding count and up to 20 findings, most severe first, and the not-profiled entities, R31), never the full finding list.
+  The model sees only a compact summary (overall score, band, the ten dimension scores, the finding count and up to 20 findings, most severe first, and the not-profiled entities, R31), never the full finding list. Every finding of one dimension reaches it only when it asks for that dimension, a page at a time (R35).
 
 ### Profiling
 
@@ -240,6 +240,13 @@ These rules refine R6 to R11 without changing any statistic, check or score form
   - Accessibility findings, findings with no table or column, and a timeliness finding read from the table's last change SHALL have no query.
   - A query that fails SHALL be a failed source of the answer, with its error; it SHALL NOT fail the run. A stop SHALL end the run at that step.
   - The Data Readiness Agent's input SHALL NOT change: the sources reach no prompt.
+
+### Every finding of a dimension
+
+- R35. **The agent lists a dimension's findings from the stored report** (since 2026-11-16, roadmap 1.27.12). Asked for all, every or the full list of the findings or issues of a dimension ("what are all the completeness issues"), the agent SHALL call `get_readiness_report` with that `dimension` and read every page, 1 to `pageCount` ([agents.md](../../system/agents.md) 2.10 D15, 3.13).
+  - The tool SHALL return every finding of that dimension from the stored report, most severe first, then in report order, 50 a page, with the dimension's `total`. It SHALL never recompute a finding; without `dimension` its result is unchanged.
+  - The agent SHALL list them from the report and give the total the report states. It SHALL never recount findings with `run_readonly_sql` (no null counts, no `information_schema` scan): the engine profiles views as well as base tables, so a recount over base tables gives another number.
+  - An unknown dimension, or a page past the last, SHALL come back as `{ error }` text the agent can fix.
 
 ## Edge cases and errors
 

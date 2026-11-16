@@ -16,7 +16,10 @@ import {
   calledWithInput,
   firstDataCall,
   namesScriptInPanel,
+  noFindingRecount,
   profileCoversTable,
+  quotesDimensionTotal,
+  readsEveryPage,
   sampleNeverAScore,
   sampleNumbersFromTool,
   namesWeakestDimension,
@@ -286,6 +289,20 @@ const DATA_READINESS_EVAL_CASES: AssistantEvalCase[] = [
       'claims the data was written to or run against the datasource, offers ' +
       'to run the script itself, or states counts the tool result does not ' +
       'hold.',
+  },
+  {
+    id: 'dr-all-completeness-findings',
+    question: 'What are all the completeness issues?',
+    intent:
+      'D15, story 1.27.12 (execution 129ad364): every completeness finding is read from the stored report with get_readiness_report and dimension "completeness", page by page; the answer gives the total the report states and never recounts nulls with run_readonly_sql.',
+    scorers: [checks.calledTool('get_readiness_report'), checks.noToolErrors()],
+    customChecks: [
+      calledWithInput('get_readiness_report', 'dimension', 'completeness'),
+      readsEveryPage('completeness'),
+      noFindingRecount(),
+      quotesDimensionTotal('completeness'),
+      quotedNumbersFromTools(),
+    ],
   },
 ];
 

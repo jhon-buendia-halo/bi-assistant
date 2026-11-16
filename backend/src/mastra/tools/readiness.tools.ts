@@ -1,7 +1,11 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import type { ReadinessProgressListener } from '../../modules/data-readiness/progress';
-import type { ReadinessReport } from '../../modules/data-readiness/engine/types';
+import { dimensions } from '../../modules/data-readiness/engine/dimensions';
+import type {
+  Dimension,
+  ReadinessReport,
+} from '../../modules/data-readiness/engine/types';
 import {
   ASSESSED_REPORT_CONTEXT_KEY,
   alreadyAssessed,
@@ -36,7 +40,9 @@ import { SESSION_ID_CONTEXT_KEY } from './visual.tools';
  * - The model never sees `report`: each tool's `toModelOutput` hands it only
  *   the `summary` (`ReadinessSummary`, agents.md 3.13). Mastra stores that
  *   projection with the message (`providerMetadata.mastra.modelOutput`), so
- *   memory replay on later turns sends the summary too, never the findings.
+ *   memory replay on later turns sends the summary too, never the full
+ *   report. `get_readiness_report` with `dimension` adds one page of that
+ *   dimension's findings to the summary (story 1.27.12).
  * - Anything else that shows a tool result to a model (the tool-only
  *   synthesis pass, an eval judge) uses `readinessModelOutput` to get the
  *   same projection.
@@ -194,10 +200,16 @@ export const assessDataReadinessTool = createTool({
   toModelOutput: toModelJson,
 });
 
+/** The engine's dimension ids, in display order (data-readiness R12). */
+const DIMENSION_IDS = dimensions().map((d) => d.id) as [
+  Dimension,
+  ...Dimension[],
+];
+
 export const getReadinessReportTool = createTool({
   id: 'get_readiness_report',
   description:
-    "Read a stored readiness report: the newest for a dataset's datasource, or one by id. Pass reportId from list_readiness_reports for an earlier report; it returns the same summary as assess_data_readiness and runs nothing.",
+    "Read a stored readiness report: the newest for a dataset's datasource, or one by id. Pass reportId from list_readiness_reports for an earlier report; it returns the same summary as assess_data_readiness and runs nothing. When the user asks for all, every or the full list of a dimension's findings or issues, pass that dimension: the result adds findings, every finding of that dimension from the stored report (total, page, pageCount, items, 50 a page, most severe first); call it again with page 2 up to pageCount.",
   inputSchema: z.object({
     reportId: z
       .string()
@@ -206,13 +218,30 @@ export const getReadinessReportTool = createTool({
         'Id of a stored report, from list_readiness_reports; leave it out for the newest',
       ),
     dataset: datasetInput(),
+    dimension: z
+      .enum(DIMENSION_IDS)
+      .optional()
+      .describe(
+        'A dimension whose every finding the result should list, from the stored report; leave it out for the summary only',
+      ),
+    page: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe(
+        'Page of those findings, from 1 up to the pageCount the first page gave; leave it out for the first',
+      ),
   }),
-  execute: ({ reportId, dataset }, { requestContext }) =>
+  execute: ({ reportId, dataset, dimension, page }, { requestContext }) =>
     withSession<ReadinessToolReport>(requestContext, (sessionId) =>
       getReadinessToolServices().getReadinessReport({
         sessionId,
         reportId: optional(reportId),
         datasetName: optional(dataset),
+        // Left out when absent, so the call is as before (story 1.27.12).
+        ...(dimension ? { dimension } : {}),
+        ...(dimension && page !== undefined ? { page } : {}),
       }),
     ),
   toModelOutput: toModelJson,
