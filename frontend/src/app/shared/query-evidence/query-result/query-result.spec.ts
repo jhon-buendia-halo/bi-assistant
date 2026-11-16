@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import {
   PageRequest,
+  FilterInterpretation,
   PageResult,
   QUERY_EVIDENCE_API,
   QueryEvidenceApi,
@@ -34,6 +35,7 @@ class FakeApi implements QueryEvidenceApi {
   countStages = jasmine.createSpy('countStages');
   rerun = jasmine.createSpy('rerun');
   downloadCsv = jasmine.createSpy('downloadCsv');
+  interpretFilter = jasmine.createSpy('interpretFilter');
   page = jasmine
     .createSpy('page')
     .and.callFake(
@@ -267,6 +269,111 @@ describe('QueryResult (ui.md 4.12.2; agent-answers R76, R79 to R81)', () => {
     expect(root.querySelector('tbody td')?.textContent?.trim()).toBe('s0');
     expect(all('query-filter-chip').length).toBe(0);
     expect(el('query-result-show-stored')).toBeNull();
+  });
+
+  describe('filter in words (R82)', () => {
+    const interpretation: FilterInterpretation = {
+      request: {
+        page: 1,
+        filters: [{ column: 'country', op: 'eq', value: 'Brazil' }],
+        sort: [{ column: 'goals', direction: 'desc' }],
+      },
+      understood: 'Country is Brazil · newest first',
+    };
+
+    it('interprets the words, then pages with the interpreted request', () => {
+      api.interpretFilter.and.returnValue(of(interpretation));
+      setup();
+      type('query-filter-text', 'only Brazil');
+      click('query-filter-text-apply');
+      expect(api.interpretFilter).toHaveBeenCalledOnceWith(0, 'only Brazil', null);
+      expect(api.page).toHaveBeenCalledOnceWith(0, {
+        page: 1,
+        pageSize: 50,
+        filters: interpretation.request.filters,
+        sort: interpretation.request.sort,
+      });
+      expect(text('query-filter-understood')).toBe(
+        'Understood as: Country is Brazil · newest first',
+      );
+      expect(all('query-filter-chip').length).toBe(1);
+      expect(el('query-filter-rejected')).toBeNull();
+    });
+
+    it('passes the current view to the next interpretation', () => {
+      api.interpretFilter.and.returnValue(of(interpretation));
+      setup();
+      addFilter('country', 'eq', 'Peru');
+      type('query-filter-text', 'and goals over 3');
+      click('query-filter-text-apply');
+      expect(api.interpretFilter.calls.mostRecent().args[2]?.filters).toEqual([
+        { column: 'country', op: 'eq', value: 'Peru' },
+      ]);
+    });
+
+    it('lists what was ignored', () => {
+      api.interpretFilter.and.returnValue(
+        of({ ...interpretation, rejected: ['colour', 'mood'] }),
+      );
+      setup();
+      type('query-filter-text', 'x');
+      click('query-filter-text-apply');
+      expect(text('query-filter-rejected')).toContain('colour');
+      expect(text('query-filter-rejected')).toContain('mood');
+    });
+
+    it('shows the server message and keeps the view when it fails', () => {
+      api.interpretFilter.and.returnValue(
+        throwError(() => ({ error: { message: 'No such column' } })),
+      );
+      setup();
+      type('query-filter-text', 'x');
+      click('query-filter-text-apply');
+      expect(text('query-filter-text-error')).toBe(
+        'Could not turn that into a filter: No such column',
+      );
+      expect(el('query-filter-text-error')?.getAttribute('role')).toBe('alert');
+      expect(api.page).not.toHaveBeenCalled();
+    });
+
+    it('disables Apply while waiting', () => {
+      const wait = new Subject<FilterInterpretation>();
+      api.interpretFilter.and.returnValue(wait);
+      setup();
+      type('query-filter-text', 'x');
+      click('query-filter-text-apply');
+      expect((el('query-filter-text-apply') as HTMLButtonElement).disabled).toBeTrue();
+      wait.next(interpretation);
+      wait.complete();
+      fixture.detectChanges();
+      expect((el('query-filter-text-apply') as HTMLButtonElement).disabled).toBeFalse();
+    });
+
+    it('is not offered for a sample', () => {
+      setup({ pageable: false });
+      expect(el('query-filter-text')).toBeNull();
+    });
+  });
+
+  it('opens on a preset view and notes it (R83)', () => {
+    api.page.and.returnValue(of(pageOf({ page: 2 })));
+    setup({
+      view: {
+        filters: [{ column: 'Country', op: 'eq', value: 'Brazil' }],
+        sort: [{ column: 'Goals', direction: 'desc' }],
+        page: 2,
+        pageSize: 50,
+      },
+    });
+    expect(api.page).toHaveBeenCalledOnceWith(0, {
+      page: 2,
+      pageSize: 50,
+      filters: [{ column: 'Country', op: 'eq', value: 'Brazil' }],
+      sort: [{ column: 'Goals', direction: 'desc' }],
+    });
+    expect(text('query-result-view-note')).toBe(
+      'Page 2 of 41 · Country is Brazil · sorted by Goals, high to low',
+    );
   });
 
   it('does not offer paging for a sample', () => {

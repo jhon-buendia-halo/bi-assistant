@@ -1,9 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import {
+  FilterInterpretation,
   PageRequest,
   PageResult,
   QueryEvidenceApi,
   QueryRerunResult,
+  ResultView,
 } from '../../../shared/query-evidence/query-evidence.model';
 import { queryEvidenceApiOver } from '../../../shared/query-evidence/evidence-calls';
 import { Observable, map } from 'rxjs';
@@ -58,6 +60,8 @@ export class SessionQueryEvidenceApi implements QueryEvidenceApi {
       downloadCsv: (t, i) => this.sessions.queryCsv(t.sessionId, t.message, i),
       page: (t, i, request) =>
         this.sessions.pageQuery(t.sessionId, t.message, i, request),
+      interpretFilter: (t, i, text, view) =>
+        this.sessions.interpretFilter(t.sessionId, t.message, i, text, view),
     },
   );
 
@@ -72,6 +76,13 @@ export class SessionQueryEvidenceApi implements QueryEvidenceApi {
 
   page = (index: number, request: PageRequest): Observable<PageResult> =>
     this.api.page(index, request);
+
+  interpretFilter = (
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<FilterInterpretation> =>
+    this.api.interpretFilter(index, text, view);
 
   private withRef(
     ref: SessionMessageRef,

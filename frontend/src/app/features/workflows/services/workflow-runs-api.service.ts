@@ -13,7 +13,9 @@ import {
   readEventStream,
 } from '../../sessions/services/sessions-api.service';
 import {
+  FilterInterpretation,
   PageRequest,
+  ResultView,
   PageResult,
   QueryRerunResult,
 } from '../../../shared/query-evidence/query-evidence.model';
@@ -325,6 +327,19 @@ export class WorkflowRunsApiService {
     return this.http.post<{ ok: boolean; result: PageResult }>(
       `${this.answerUrl(id)}/queries/${index}/page`,
       request,
+    );
+  }
+
+  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 152). */
+  interpretFilter(
+    id: string,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<{ ok: boolean; interpretation: FilterInterpretation }> {
+    return this.http.post<{ ok: boolean; interpretation: FilterInterpretation }>(
+      `${this.answerUrl(id)}/queries/${index}/interpret-filter`,
+      view === null ? { text } : { text, view },
     );
   }
 

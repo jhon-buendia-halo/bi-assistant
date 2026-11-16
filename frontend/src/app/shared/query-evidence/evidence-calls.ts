@@ -1,9 +1,11 @@
 import { Observable, map, tap, throwError } from 'rxjs';
 import {
+  FilterInterpretation,
   PageRequest,
   PageResult,
   QueryEvidenceApi,
   QueryRerunResult,
+  ResultView,
 } from './query-evidence.model';
 
 /**
@@ -22,6 +24,12 @@ export interface EvidenceCalls<T, U> {
     index: number,
     request: PageRequest,
   ): Observable<{ result: PageResult }>;
+  interpretFilter(
+    target: T,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<{ interpretation: FilterInterpretation }>;
 }
 
 /**
@@ -60,6 +68,12 @@ export function queryEvidenceApiOver<T, U>(
     page: (i, request) =>
       withTarget((t) =>
         calls.page(t, i, request).pipe(map((response) => response.result)),
+      ),
+    interpretFilter: (i, text, view) =>
+      withTarget((t) =>
+        calls
+          .interpretFilter(t, i, text, view)
+          .pipe(map((response) => response.interpretation)),
       ),
   };
 }

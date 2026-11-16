@@ -28,6 +28,35 @@ export type V2Step = 'plan' | 'answer' | 'quality';
 export const V2_QUALITY_LINE =
   'Check the data quality behind an answer from Questions to Insights.';
 
+/**
+ * The first line of `result-explorer`'s instructions (roadmap 1.27.4,
+ * backend `result-explorer.prompts.ts`): the structured call that turns a
+ * reader's words into a view of a query result. Keep it equal to that file.
+ */
+export const RESULT_EXPLORER_LINE =
+  'You turn a reader\'s words into a view of a query result for Questions to Insights.';
+
+/** Whether one of these system texts starts `result-explorer`'s instructions. */
+export function isResultExplorerCall(systemTexts: string[]): boolean {
+  return systemTexts.some((text) => firstLine(text) === RESULT_EXPLORER_LINE);
+}
+
+/** `result-explorer`'s reply (plan 1.27, 0.3). */
+export interface ExplorerReply {
+  action: 'explore' | 'new-question';
+  query: number | null;
+  filters: {
+    column: string;
+    op: string;
+    value: string | number | boolean | null;
+    valueTo: string | number | boolean | null;
+    values: (string | number | boolean)[] | null;
+  }[];
+  sort: { column: string; direction: 'asc' | 'desc' }[];
+  page: { move: 'keep' | 'first' | 'next' | 'previous' | 'last' | 'to'; to: number | null };
+  understood: string;
+}
+
 /** Plan's output (`PlanOutput`). */
 export interface V2Plan {
   question: string;

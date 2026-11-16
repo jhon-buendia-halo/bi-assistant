@@ -70,6 +70,8 @@ export interface QueryEvidence {
   rowLimit?: number;
   tables?: QueryTableSize[];
   explanation?: QueryExplanation;
+  /** Set on an `explore_result` record: the view the answer showed (roadmap 1.27.7). */
+  view?: ResultView;
 }
 
 /** What a re-run returned. It is shown, never stored. */
@@ -194,6 +196,12 @@ export interface QueryEvidenceApi {
   downloadCsv(index: number): Observable<Blob>;
   /** One page of the query's full result, filtered and sorted; stores nothing. */
   page(index: number, request: PageRequest): Observable<PageResult>;
+  /** Turns words into a page request through the result-explorer agent; stores nothing. */
+  interpretFilter(
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<FilterInterpretation>;
 }
 
 export const QUERY_EVIDENCE_API = new InjectionToken<QueryEvidenceApi>(

@@ -3,7 +3,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
+  FilterInterpretation,
   PageRequest,
+  ResultView,
   PageResult,
   QueryRerunResult,
 } from '../../../shared/query-evidence/query-evidence.model';
@@ -316,6 +318,20 @@ export class SessionsApiService {
     return this.http.post<{ ok: boolean; result: PageResult }>(
       `${this.answerUrl(id, message)}/queries/${index}/page`,
       request,
+    );
+  }
+
+  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 154). */
+  interpretFilter(
+    id: string,
+    message: number,
+    index: number,
+    text: string,
+    view: ResultView | null,
+  ): Observable<{ ok: boolean; interpretation: FilterInterpretation }> {
+    return this.http.post<{ ok: boolean; interpretation: FilterInterpretation }>(
+      `${this.answerUrl(id, message)}/queries/${index}/interpret-filter`,
+      view === null ? { text } : { text, view },
     );
   }
 
