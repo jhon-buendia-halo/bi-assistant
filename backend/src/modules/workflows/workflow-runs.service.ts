@@ -37,6 +37,10 @@ import type {
   InteractiveVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
+import type {
+  PageRequest,
+  PageResult,
+} from '../datasources/connectors/paged-sql.types';
 import {
   AnswerEvidenceService,
   type AnswerHost,
@@ -846,6 +850,18 @@ export class WorkflowRunsService implements OnModuleInit {
   /** Run one of the answer's queries again; nothing is stored (api.md 142). */
   async rerunQuery(id: string, index: number): Promise<QueryRerunResult> {
     return this.answers.rerun(this.answerHost(id), index);
+  }
+
+  /**
+   * One page of one of the answer's queries, filtered and sorted (api.md
+   * 151); nothing is stored.
+   */
+  async pageQuery(
+    id: string,
+    index: number,
+    request: PageRequest,
+  ): Promise<PageResult> {
+    return this.answers.page(this.answerHost(id), index, request);
   }
 
   /**

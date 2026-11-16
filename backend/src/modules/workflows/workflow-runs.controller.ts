@@ -18,6 +18,8 @@ import type {
 import { EXPORT_ROWS } from '../sessions/query-evidence/query-coverage';
 import { csvOf } from '../sessions/query-evidence/query-evidence';
 import type { QueryRerunResult } from '../sessions/query-evidence/query-evidence.service';
+import { parsePageRequest } from '../sessions/query-evidence/result-view';
+import type { PageResult } from '../datasources/connectors/paged-sql.types';
 import type { NodeChatMessage } from './node-chat-context';
 import { WorkflowNodeChatsService } from './workflow-node-chats.service';
 import type { WorkflowRun, WorkflowRunSummary } from './workflow-run-steps';
@@ -157,6 +159,23 @@ export class WorkflowRunsController {
     return {
       ok: true,
       result: await this.runs.rerunQuery(id, parseQueryIndex(index)),
+    };
+  }
+
+  /**
+   * One page of one of the answer's queries, filtered and sorted (api.md
+   * 151); the body is a `PageRequest`. Nothing is stored.
+   */
+  @Post(':id/answer/queries/:index/page')
+  async pageQuery(
+    @Param('id') id: string,
+    @Param('index') index: string,
+    @Body() body: unknown,
+  ): Promise<{ ok: true; result: PageResult }> {
+    const at = parseQueryIndex(index);
+    return {
+      ok: true,
+      result: await this.runs.pageQuery(id, at, parsePageRequest(body)),
     };
   }
 

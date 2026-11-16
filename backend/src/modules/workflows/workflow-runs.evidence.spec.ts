@@ -20,6 +20,7 @@ import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import type { PagedStatement } from '../datasources/connectors/paged-sql.types';
 import type { DatasourcesService } from '../datasources/datasources.service';
 import type { ChatMessage } from '../sessions/entities/session.entity';
 import { QueryEvidenceService } from '../sessions/query-evidence/query-evidence.service';
@@ -86,8 +87,16 @@ function build() {
       });
     },
   );
+  const runPagedSql = jest.fn((_id: string, stmt: PagedStatement) =>
+    Promise.resolve({
+      columns: stmt.columns,
+      rows: [{ product: 'z', n: 1 }],
+      matchedRows: 120_000,
+    }),
+  );
   const datasources = {
     runReadOnlySql,
+    runPagedSql,
     sampleRows: jest.fn(),
     get: jest.fn(),
     defaultDatasource: jest.fn(),
@@ -143,10 +152,10 @@ function build() {
     // No stored artifact: no workflow here takes one.
     { list: () => Promise.resolve([]) } as never,
   );
-  return { service, repository, runReadOnlySql, sessions };
+  return { service, repository, runReadOnlySql, runPagedSql, sessions };
 }
 
-describe('Workflow runs: the query evidence (api.md 139-143)', () => {
+describe('Workflow runs: the query evidence (api.md 139-143, 151)', () => {
   it('139 builds the evidence and sizes each table once, then runs nothing', async () => {
     const ctx = build();
     await ctx.repository.insert(runDoc());
@@ -218,6 +227,59 @@ describe('Workflow runs: the query evidence (api.md 139-143)', () => {
     expect(await ctx.repository.get(RUN_ID)).toEqual(before);
   });
 
+  it('151 pages the stored query and stores nothing; a sample is refused', async () => {
+    const ctx = build();
+    await ctx.repository.insert(
+      runDoc({
+        answer: {
+          ...ANSWER,
+          data: [
+            ...ANSWER.data!,
+            { tool: 'sample_rows', input: 'shop.public.returns', rows: [] },
+          ],
+        },
+      }),
+    );
+    const before = await ctx.repository.get(RUN_ID);
+
+    const result = await ctx.service.pageQuery(RUN_ID, 0, {
+      page: 3,
+      pageSize: 10,
+      filters: [{ column: 'n', op: 'gte', value: '2' }],
+    });
+
+    expect(ctx.runPagedSql).toHaveBeenCalledWith('ds-1', {
+      sql: RANKED,
+      columns: ['product', 'n'],
+      filters: [{ column: 'n', op: 'gte', value: 2 }],
+      sort: [],
+      limit: 10,
+      offset: 20,
+      kinds: { product: 'text', n: 'number' },
+    });
+    expect(result).toMatchObject({
+      page: 3,
+      pageSize: 10,
+      matchedRows: 50_000,
+      capped: true,
+      pageCount: 5000,
+      view: { sort: [], page: 3, pageSize: 10 },
+    });
+    expect(ctx.runReadOnlySql).not.toHaveBeenCalled();
+    expect(await ctx.repository.get(RUN_ID)).toEqual(before);
+
+    await expect(ctx.service.pageQuery(RUN_ID, 2, {})).rejects.toThrow(
+      'Query 2 is a sample; it has no full result to page',
+    );
+    await expect(ctx.service.pageQuery(RUN_ID, 1, {})).rejects.toThrow(
+      'Query 1 has no SQL to run',
+    );
+    await expect(ctx.service.pageQuery('missing', 0, {})).rejects.toThrow(
+      'Run "missing" not found',
+    );
+    expect(ctx.runPagedSql).toHaveBeenCalledTimes(1);
+  });
+
   it('128 rates the answer through the lock, keeping evidence written meanwhile', async () => {
     const ctx = build();
     await ctx.repository.insert(runDoc());
@@ -287,6 +349,36 @@ describe('Workflow runs: the query evidence (api.md 139-143)', () => {
             'Query 1 has no SQL to run',
           ),
         );
+      const page = await request(server)
+        .post(`/workflow-runs/${RUN_ID}/answer/queries/0/page`)
+        .send({ page: 2, sort: [{ column: 'n', direction: 'desc' }] });
+      expect({ status: page.status, body: page.body as unknown }).toMatchObject(
+        { status: 201 },
+      );
+      expect(page.body).toMatchObject({
+        ok: true,
+        result: {
+          page: 2,
+          pageSize: 50,
+          view: { sort: [{ column: 'n', direction: 'desc' }] },
+        },
+      });
+      for (const [body, message] of [
+        [{ sort: 'n' }, 'sort must be a list'],
+        [{ page: 1001 }, 'Page 1001 is past the 50,000-row limit'],
+        [
+          { filters: [{ column: 'n', op: 'gt' }] },
+          'Filter on n: gt needs a value',
+        ],
+      ] as const) {
+        await request(server)
+          .post(`/workflow-runs/${RUN_ID}/answer/queries/0/page`)
+          .send(body)
+          .expect(400)
+          .expect(({ body: error }) =>
+            expect((error as { message: string }).message).toBe(message),
+          );
+      }
       await request(server)
         .post(`/workflow-runs/${RUN_ID}/answer/evidence`)
         .expect(201)
