@@ -1297,44 +1297,44 @@ specs/capabilities/synthetic-data/spec.md:337-440  ## Flows
 specs/capabilities/synthetic-data/spec.md:442-457  ## Acceptance
 
 specs/capabilities/testing-data/spec.md:5-13  ## Concepts
-specs/capabilities/testing-data/spec.md:15-134  ## Rules
-specs/capabilities/testing-data/spec.md:17-33  ### The catalogue
+specs/capabilities/testing-data/spec.md:15-138  ## Rules
+specs/capabilities/testing-data/spec.md:17-37  ### The catalogue
 specs/capabilities/testing-data/spec.md:19-19  R1 The catalogue SHALL be the single definition of every sample: the pane
-specs/capabilities/testing-data/spec.md:20-31  R2 The system SHALL ship these fixtures, in this panel order:
-specs/capabilities/testing-data/spec.md:32-32  R3 The default connection of the PostgreSQL samples SHALL be host `127.0.
-specs/capabilities/testing-data/spec.md:33-33  R4 The seed files are data assets: `001_world_cup.sql` (a transaction tha
-specs/capabilities/testing-data/spec.md:35-39  ### Status
-specs/capabilities/testing-data/spec.md:37-37  R5 The system SHALL report, for every fixture: its id, name, description,
-specs/capabilities/testing-data/spec.md:38-38  R6 A fixture SHALL be considered **loaded** only when a datasource named
-specs/capabilities/testing-data/spec.md:39-39  R7 Status SHALL never fail the caller: if the stores cannot be read the s
-specs/capabilities/testing-data/spec.md:41-52  ### Loading
-specs/capabilities/testing-data/spec.md:43-43  R8 Loading a fixture SHALL accept a connection (host, port, database, use
-specs/capabilities/testing-data/spec.md:44-44  R9 The World Cup REST sample (`world-cup-rest`) SHALL NOT be loadable fro
-specs/capabilities/testing-data/spec.md:45-45  R10 The loader SHALL connect to the named database. If it does not exist (
-specs/capabilities/testing-data/spec.md:46-46  R11 A connection that cannot be established SHALL answer with an actionabl
-specs/capabilities/testing-data/spec.md:47-47  R12 For a seedable fixture the loader SHALL drop the fixture's schema if i
-specs/capabilities/testing-data/spec.md:48-48  R13 A seeding failure SHALL answer `Could not seed the <name> fixture into
-specs/capabilities/testing-data/spec.md:49-49  R14 After a successful seed (or immediately, for a register-only fixture)
-specs/capabilities/testing-data/spec.md:50-50  R15 If any required entity is missing from the inventory the loader SHALL
-specs/capabilities/testing-data/spec.md:51-51  R16 Otherwise the loader SHALL save the dataset named as the fixture's dat
-specs/capabilities/testing-data/spec.md:52-52  R17 Seeding SHALL be destructive by design (it drops the sample's schema o
-specs/capabilities/testing-data/spec.md:54-57  ### Removing
-specs/capabilities/testing-data/spec.md:56-56  R18 Removing a fixture SHALL delete its dataset (first) and its datasource
-specs/capabilities/testing-data/spec.md:57-57  R19 Because fixtures are matched to records by **name**, a datasource or d
-specs/capabilities/testing-data/spec.md:59-61  ### Availability
-specs/capabilities/testing-data/spec.md:61-61  R20 Every testing-data action SHALL be available to the user; the app has
-specs/capabilities/testing-data/spec.md:63-65  ### Background task
-specs/capabilities/testing-data/spec.md:65-65  R23 Loading a fixture SHALL run as a background task of kind `testing-data
-specs/capabilities/testing-data/spec.md:67-130  ### The Edge Cases sample
-specs/capabilities/testing-data/spec.md:69-130  R24 The Edge Cases sample SHALL hold every edge case below, at the place a
-specs/capabilities/testing-data/spec.md:132-134  ### Retired
-specs/capabilities/testing-data/spec.md:134-134  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
-specs/capabilities/testing-data/spec.md:136-145  ## Edge cases and errors
-specs/capabilities/testing-data/spec.md:147-153  ## Contracts
-specs/capabilities/testing-data/spec.md:155-167  ## UI
-specs/capabilities/testing-data/spec.md:169-260  ## Flows
-specs/capabilities/testing-data/spec.md:171-260  ### Feature: Testing data
-specs/capabilities/testing-data/spec.md:262-273  ## Acceptance
+specs/capabilities/testing-data/spec.md:20-32  R2 The system SHALL ship these fixtures, in this panel order:
+specs/capabilities/testing-data/spec.md:33-33  R3 The default connection of the PostgreSQL samples SHALL be host `127.0.
+specs/capabilities/testing-data/spec.md:34-37  R4 The seed files are data assets: `001_world_cup.sql` (a transaction tha
+specs/capabilities/testing-data/spec.md:39-43  ### Status
+specs/capabilities/testing-data/spec.md:41-41  R5 The system SHALL report, for every fixture: its id, name, description,
+specs/capabilities/testing-data/spec.md:42-42  R6 A fixture SHALL be considered **loaded** only when a datasource named
+specs/capabilities/testing-data/spec.md:43-43  R7 Status SHALL never fail the caller: if the stores cannot be read the s
+specs/capabilities/testing-data/spec.md:45-56  ### Loading
+specs/capabilities/testing-data/spec.md:47-47  R8 Loading a fixture SHALL accept a connection (host, port, database, use
+specs/capabilities/testing-data/spec.md:48-48  R9 The World Cup REST sample (`world-cup-rest`) SHALL NOT be loadable fro
+specs/capabilities/testing-data/spec.md:49-49  R10 The loader SHALL connect to the named database. If it does not exist (
+specs/capabilities/testing-data/spec.md:50-50  R11 A connection that cannot be established SHALL answer with an actionabl
+specs/capabilities/testing-data/spec.md:51-51  R12 For a seedable fixture the loader SHALL drop every schema the fixture
+specs/capabilities/testing-data/spec.md:52-52  R13 A seeding failure SHALL answer `Could not seed the <name> fixture into
+specs/capabilities/testing-data/spec.md:53-53  R14 After a successful seed (or immediately, for a register-only fixture)
+specs/capabilities/testing-data/spec.md:54-54  R15 If any required entity is missing from the inventory the loader SHALL
+specs/capabilities/testing-data/spec.md:55-55  R16 Otherwise the loader SHALL save the dataset named as the fixture's dat
+specs/capabilities/testing-data/spec.md:56-56  R17 Seeding SHALL be destructive by design (it drops the sample's schemas
+specs/capabilities/testing-data/spec.md:58-61  ### Removing
+specs/capabilities/testing-data/spec.md:60-60  R18 Removing a fixture SHALL delete its dataset (first) and its datasource
+specs/capabilities/testing-data/spec.md:61-61  R19 Because fixtures are matched to records by **name**, a datasource or d
+specs/capabilities/testing-data/spec.md:63-65  ### Availability
+specs/capabilities/testing-data/spec.md:65-65  R20 Every testing-data action SHALL be available to the user; the app has
+specs/capabilities/testing-data/spec.md:67-69  ### Background task
+specs/capabilities/testing-data/spec.md:69-69  R23 Loading a fixture SHALL run as a background task of kind `testing-data
+specs/capabilities/testing-data/spec.md:71-134  ### The Edge Cases sample
+specs/capabilities/testing-data/spec.md:73-134  R24 The Edge Cases sample SHALL hold every edge case below, at the place a
+specs/capabilities/testing-data/spec.md:136-138  ### Retired
+specs/capabilities/testing-data/spec.md:138-138  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
+specs/capabilities/testing-data/spec.md:140-149  ## Edge cases and errors
+specs/capabilities/testing-data/spec.md:151-157  ## Contracts
+specs/capabilities/testing-data/spec.md:159-171  ## UI
+specs/capabilities/testing-data/spec.md:173-264  ## Flows
+specs/capabilities/testing-data/spec.md:175-264  ### Feature: Testing data
+specs/capabilities/testing-data/spec.md:266-277  ## Acceptance
 
 specs/capabilities/verified-queries/spec.md:5-7  ## Concepts
 specs/capabilities/verified-queries/spec.md:9-39  ## Rules

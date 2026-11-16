@@ -15,6 +15,7 @@ import type { LoadTestingDataDto } from './dto/testing-data.dto';
 import {
   SAMPLE_FIXTURES,
   findFixture,
+  ownedSchemas,
   requiredEntityKeys,
   type SampleFixture,
 } from './fixtures/registry';
@@ -248,7 +249,9 @@ export class TestingDataService {
           `Seeding ${fixture.schema} on ${target}/${config.database} as "${config.user}"` +
             (createdDatabase ? ' (database created)' : ''),
         );
-        await client.query(`DROP SCHEMA IF EXISTS "${fixture.schema}" CASCADE`);
+        for (const schema of ownedSchemas(fixture)) {
+          await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+        }
         await seedInBatches(client, readFixtureSql(fixture));
       } else {
         this.logger.log(
@@ -305,6 +308,16 @@ export class TestingDataService {
       tables: entities.map((entity) => entity.key),
       entities,
       datasourceId: datasource.id,
+      // Only a multi-schema sample carries notes; otherwise leave them as they are.
+      ...(fixture.layerSchemas
+        ? {
+            schemas: fixture.layerSchemas.map((entry) => ({
+              key: `${config.database}.${entry.name}`,
+              layer: entry.layer,
+              description: entry.description,
+            })),
+          }
+        : {}),
     });
 
     return {
@@ -644,7 +657,9 @@ function collectEntities(
 function presentTables(fixture: SampleFixture, tables: string[]): string[] {
   const keys = new Set(tables.map((table) => qualify(table)));
   return fixture.requiredTables.filter((table) =>
-    keys.has(qualify(`${fixture.schema}.${table}`)),
+    keys.has(
+      qualify(fixture.layerSchemas ? table : `${fixture.schema}.${table}`),
+    ),
   );
 }
 
