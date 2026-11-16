@@ -227,13 +227,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same guards and the tools its *tool selection* gives it, and it has a *draft* and, once published, a *Live* version.
 
-**User persona.** A short profile of a kind of person who asks the questions: a name, role, description, goals, typical questions, an expertise and a preferred answer style. Kept in the Context area under "User personas". Manage-only today: agents and sessions do not use personas yet. Not a login or an account. The **expertise** is `novice`, `intermediate` (the default) or `expert`; a **typical question** is one question the persona would ask (up to 10, 300 characters each); the **answer style** is how they like answers (up to 500 characters). See [user-personas](../capabilities/user-personas/spec.md).
-
 **Verified answer.** An answer whose final SQL matches a stored *verified query*, or that the user thumbed up. Shown with a "Verified" badge.
 
 **Verified query.** A question and SQL pair saved when the user thumbs up an answer. The last successful SQL statement of the answer is stored, with the datasource and entities. Similar questions later get the closest pairs as reference. Can be promoted to a *metric*.
-
-**Visuals library.** A catalog of chart types for data visualization, grouped by category (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables). Each **chart** has a name, category, preview thumbnail, description, when to use, when to avoid, the data shape it needs, an enabled flag and a **renderer form**: the visual-spec form the app draws it with (`bar`, `line`, `scatter`, `heatmap`, `metric-cards`, `table`, `donut`), or none when the app does not draw it. 30 default charts are seeded once and are editable and deletable. Kept in the Context area under "Visuals". Manage-only today: agents, the visual designer and sessions do not use it yet. Not the *visuals* a session creates. See [visuals-library](../capabilities/visuals-library/spec.md).
 
 **Visual / visualization.** An interactive, sandboxed chart document created from an answer's data. Has a title, a description (the takeaway), a *visual version* history and files in the session's workspace. Framed with the question, the analysis, a data provenance section and a footer. The code and API say "visualization"; the UI says "visual".
 

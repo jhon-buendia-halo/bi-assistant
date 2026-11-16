@@ -42,24 +42,8 @@ test('moves between areas from the rail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
 
-  await railItem(page, 'Context').click();
-  await expectCurrent(page, 'Context');
-  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
-  await expect(page.getByTestId('context-section-knowledge')).toHaveCount(0);
-  await expect(page.getByTestId('context-section-ontologies')).toBeVisible();
-  await expect(page.getByTestId('context-section-personas')).toBeVisible();
-  await page.getByTestId('context-section-visuals').click();
-  await expect(
-    page.getByRole('heading', { name: 'Visuals', exact: true }),
-  ).toBeVisible();
-  await expectCurrent(page, 'Context');
-  await page.getByTestId('context-back').click();
-  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
-  await page.getByTestId('context-section-personas').click();
-  await expect(
-    page.getByRole('heading', { name: 'User personas' }),
-  ).toBeVisible();
-  await expectCurrent(page, 'Context');
+  // The Context area is gone; ontologies live in the dataset editor (app-shell R3).
+  await expect(railItem(page, 'Context')).toHaveCount(0);
 
   await railItem(page, 'Runs').click();
   await expectCurrent(page, 'Runs');
@@ -285,7 +269,6 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   for (const label of [
     'Datasets',
     'Agents',
-    'Context',
     'Runs',
     'Monitoring',
   ]) {
@@ -384,7 +367,14 @@ test('the app opens straight into the shell', async ({ page }) => {
   });
 
   // The identity and admin routes are gone (api.md; ADR-0030).
-  for (const route of ['/me', '/admin/overview', '/auth/local/personas']) {
+  // So are the user personas and the visuals library (removed 2026-11-15).
+  for (const route of [
+    '/me',
+    '/admin/overview',
+    '/auth/local/personas',
+    '/personas',
+    '/visuals',
+  ]) {
     expect((await apiFetch(page, 'GET', route)).status(), route).toBe(404);
   }
 
@@ -392,7 +382,6 @@ test('the app opens straight into the shell', async ({ page }) => {
   for (const [area, heading] of [
     ['Datasets', 'Datasets'],
     ['Agents', 'Agents'],
-    ['Context', 'Context'],
   ]) {
     await railItem(page, area).click();
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();
