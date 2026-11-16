@@ -865,7 +865,8 @@ describe('data-readiness eval set', () => {
       agentKey: 'data-readiness',
     });
     expect(EVAL_SETS).toContain(DATA_READINESS_EVAL_SET);
-    expect(evalSetsFor('data-readiness')).toEqual([DATA_READINESS_EVAL_SET]);
+    // Sarah's page also lists her Check data quality set (story 1.28.4).
+    expect(evalSetsFor('data-readiness')).toContain(DATA_READINESS_EVAL_SET);
     expect(hasEvals('data-readiness')).toBe(true);
     expect(agentForCases(['dr-assess', 'dr-no-sql'])).toEqual({
       agentKey: 'data-readiness',
@@ -969,6 +970,9 @@ describe('data-readiness eval set', () => {
   });
 
   it('evalTargetFor gives the data-readiness target', () => {
-    expect(evalTargetFor('data-readiness').agentKey).toBe('data-readiness');
+    // Her sets use two targets: a run picks one through its cases.
+    expect(
+      evalTargetFor('data-readiness', ['dr-assess', 'dr-no-sql']).agentKey,
+    ).toBe('data-readiness');
   });
 });

@@ -1,4 +1,40 @@
+// The registry imports every agent: stand them in (as eval-sets.spec.ts does).
+jest.mock('@mastra/evals/checks', () => ({
+  checks: new Proxy(
+    {},
+    {
+      get: (_target, kind: string) => () => ({
+        id: `check-${kind.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`,
+      }),
+    },
+  ),
+}));
 jest.mock('@mastra/core/evals', () => ({ runEvals: jest.fn() }));
+jest.mock('../agents/assistant.agent', () => ({ assistantAgent: {} }));
+jest.mock('../agents/data-readiness.agent', () => ({
+  dataReadinessAgent: { id: 'data-readiness' },
+  dataReadinessStepAgent: { id: 'data-readiness-step' },
+}));
+jest.mock('../agents/insights-analyst.agent', () => ({
+  insightsAnalystAgent: { id: 'insights-analyst' },
+}));
+jest.mock('../agents/query-explainer.agent', () => ({
+  queryExplainerAgent: { id: 'query-explainer' },
+  explainQueryWithModel: jest.fn(),
+}));
+jest.mock('../agents/result-explorer.agent', () => ({
+  resultExplorerAgent: { id: 'result-explorer' },
+  interpretResultWithModel: jest.fn(),
+}));
+jest.mock('../agents/eval-judge.agent', () => ({
+  evalJudgeAgent: {},
+  evalJudgeOutputSchema: {},
+}));
+jest.mock('../model-resolver', () => ({ resolveAgentModel: jest.fn() }));
+jest.mock('../../modules/sessions/turn-data', () => ({
+  synthesizeToolOnlyTurn: jest.fn(),
+  toolDataRecord: jest.fn(),
+}));
 
 import { dataQualityRequest } from '../workflows/answer-business-question.prompts';
 import {
