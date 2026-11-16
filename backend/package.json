@@ -1,6 +1,6 @@
 {
   "name": "@jhon-buendia-halo/questions-to-insights",
-  "version": "0.71.0",
+  "version": "0.73.0",
   "description": "Ask questions of your data in plain language and get answers, SQL and interactive visuals. Runs locally: npx @jhon-buendia-halo/questions-to-insights",
   "license": "UNLICENSED",
   "repository": {
@@ -87,12 +87,14 @@
     "@opentelemetry/sdk-logs": "0.222.0",
     "@opentelemetry/sdk-metrics": "2.11.0",
     "@opentelemetry/sdk-node": "0.222.0",
+    "axe-core": "4.13.0",
     "better-sqlite3": "13.0.3",
     "exceljs": "4.4.0",
     "fflate": "0.8.3",
     "marked": "18.0.13",
     "pdfkit": "0.17.2",
     "pg": "8.23.0",
+    "playwright-core": "1.63.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sanitize-html": "2.17.7",

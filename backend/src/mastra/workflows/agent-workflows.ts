@@ -19,6 +19,8 @@ import {
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_AGENT_NAME,
   DATA_READINESS_MAX_STEPS,
+  SITE_REVIEWER_AGENT_KEY,
+  SITE_REVIEWER_AGENT_NAME,
 } from '../agent-constants';
 import { builtinAgentPersona } from '../agent-personas';
 import type { WorkflowStepExit } from './answer-business-question.steps';
@@ -88,6 +90,12 @@ const STEP_AGENTS: Record<
   },
   [DATA_MAPPER_AGENT_KEY]: {
     name: DATA_MAPPER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+  // Review a Website (agents.md 5.19): no step calls the agent in phase 1.
+  [SITE_REVIEWER_AGENT_KEY]: {
+    name: SITE_REVIEWER_AGENT_NAME,
     tools: [],
     maxSteps: 1,
   },
