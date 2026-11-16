@@ -21,7 +21,9 @@ import {
   queryOpenerOf,
 } from '../../../../shared/query-evidence/query-opener';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
+import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
 import {
+  IMAGES_FIELD,
   runOutputEntries,
   runStatusLine,
   runStepStatusLabel,
@@ -37,16 +39,22 @@ import { WorkflowRun } from '../../../workflows/models/workflow.model';
 export interface RunInputEntry {
   name: string;
   value: string;
+  /** The stored paths of a run's reference images (`images`), shown as thumbnails. */
+  images?: string[];
 }
 
 /** A run's input, field by field: lists joined, anything else as text. */
 export function runInputEntries(
   input: Record<string, unknown>,
 ): RunInputEntry[] {
-  return Object.entries(input).map(([name, value]) => ({
-    name,
-    value: Array.isArray(value) ? value.join(', ') : String(value),
-  }));
+  return Object.entries(input).map(([name, value]) =>
+    name === IMAGES_FIELD && Array.isArray(value)
+      ? { name, value: '', images: value.map(String) }
+      : {
+          name,
+          value: Array.isArray(value) ? value.join(', ') : String(value),
+        },
+  );
 }
 
 /**
@@ -68,6 +76,7 @@ export function runInputEntries(
 export class RunDetail {
   protected readonly state = inject(RunsState);
   protected readonly visuals = inject(RunVisualsState);
+  private readonly runsApi = inject(WorkflowRunsApiService);
 
   /** A visual action stored the run: show it as it is now. */
   protected readonly applyRun = (run: WorkflowRun): void =>
@@ -153,6 +162,10 @@ export class RunDetail {
   protected readonly inputs = computed(() =>
     runInputEntries(this.state.activeRun()?.input ?? {}),
   );
+  /** The URL of one of the run's input images (api.md 151). */
+  protected inputImageUrl(path: string): string {
+    return this.runsApi.inputImageUrl(this.state.activeRun()?.id ?? '', path);
+  }
   /** A run without an answer (code-only): its output, field by field. */
   protected readonly output = computed(() => {
     const run = this.state.activeRun();

@@ -768,6 +768,31 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()?.status).toBe('running');
   });
 
+  it('Follow up sends the composer images: the kept paths and the new ones', () => {
+    executeQuestion();
+    runs.last.handlers.onDone!(
+      storedRun({
+        input: {
+          question: 'Which team scored the most goals?',
+          datasets: ['World Cup Core'],
+          images: ['inputs/images/1.png', 'inputs/images/2.png'],
+        },
+      }),
+    );
+    designer.followUp('And the fewest?', [
+      'inputs/images/2.png',
+      'data:image/png;base64,AAAA',
+    ]);
+    expect(runs.last.body).toEqual({
+      input: {
+        question: 'And the fewest?',
+        datasets: ['World Cup Core'],
+        images: ['inputs/images/2.png', 'data:image/png;base64,AAAA'],
+      },
+      context: { fromRunId: 'run-1' },
+    });
+  });
+
   it('a clarification answer is a follow-up whose question is the picked option', () => {
     executeQuestion();
     runs.last.handlers.onDone!(

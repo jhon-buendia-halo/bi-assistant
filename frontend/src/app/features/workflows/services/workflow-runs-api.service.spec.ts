@@ -4,6 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { API_BASE_URL } from '../../../core/config/api.config';
 import {
   NodeChatMessage,
   WorkflowRun,
@@ -715,5 +716,17 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['a,b\r\n']));
     expect(size).toBe(5);
+  });
+});
+
+describe('WorkflowRunsApiService, a run input image (api.md 151)', () => {
+  it('builds the endpoint URL from the run id and the stored path', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(WorkflowRunsApiService);
+    expect(service.inputImageUrl('run 1', 'inputs/images/1.png')).toBe(
+      `${API_BASE_URL}/workflow-runs/run%201/input-image?path=inputs%2Fimages%2F1.png`,
+    );
   });
 });

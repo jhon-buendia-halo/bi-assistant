@@ -24,6 +24,11 @@ export type WorkflowInputFieldType =
    * stored run holds the path of the file instead.
    */
   | 'image'
+  /**
+   * Up to `max` reference images (PNG, JPEG or WebP, at most 5 MB each), sent
+   * as `data:` URLs; a stored run holds their paths (`inputs/images/<n>.<ext>`).
+   */
+  | 'images'
   /** One stored artifact, sent as its id. */
   | 'artifact';
 
@@ -58,7 +63,7 @@ export interface WorkflowInputField {
   maxLength?: number;
   /** 'number': the smallest value accepted. */
   min?: number;
-  /** 'number': the largest value accepted. */
+  /** 'number': the largest value accepted; 'images': the most images. */
   max?: number;
 }
 
