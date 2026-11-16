@@ -662,6 +662,12 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 - **Out of scope:** changing `analysis-planner`.
 - **Acceptance:** stub workflow tests for both paths; `frontend/e2e/result-follow-up.spec.ts`; insights-analyst evals against base.
 
+#### 1.27.9 — Sources a reader can understand: numbered, described, one per table  `🚧 In progress`
+- **Intent:** the `Q1`, `Q3` chips meant nothing to a reader, and every cell of a table carried one. A figure's source now reads like a footnote and says what it is.
+- **Scope:** requested on 2026-11-16 with a screenshot (an answer's table with `Q3` in every cell); the user picked "numbered sources + card + one source per table". The chip becomes a superscript number with a card on hover and focus (the query's purpose, its rows, its coverage, "Click to see how it was computed"); table cells get no chip and each table gets one source line under it; the query list is titled Sources and its rows read `1 · <purpose>`; the coverage line names `Source 2`; `explore_result` and the follow-up use the numbers the reader sees. agent-answers R69–R71; ui.md 4.12.2; agents.md 3.15.
+- **Out of scope:** what the agents write; the inspector itself.
+- **Acceptance:** Karma tests for the chip, the card, the table source line and the labels; the Playwright specs that click a chip updated; a reader's "source 3" pages the query shown as Source 3.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
