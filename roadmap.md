@@ -676,9 +676,9 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 
 #### 1.27.11 — Each readiness finding opens the rows behind it  `🚧 In progress`
 - **Intent:** a readiness report says "92% null"; the reader can open and page the rows that make it so.
-- **Scope:** option B part 2; the approach is picked among three (mastra-workflows) before building.
-- **Out of scope:** changing how findings are scored.
-- **Acceptance:** to be set with the approach.
+- **Scope:** option B part 2; approach A of three picked by the user on 2026-11-16 (rejected: B, rows on demand behind a "See rows" button and a new route; C, a tool the agent calls): a code step `finding-rows` between Save report and Explain report builds, for the top findings (at most 20), a read-only query of the rows behind each one from its check kind (completeness, uniqueness, integrity, reasonability, timeliness, validity where the dialect allows; none for accessibility), with `COUNT(*) OVER ()` as `matching_rows`, runs it with the stored-row cap, and records it as a `run_readonly_sql` source of the answer, so the inspector pages and filters it; workflows spec, agents.md 5.13, data-readiness spec.
+- **Out of scope:** changing how findings are scored; what the Data Readiness agent receives.
+- **Acceptance:** Jest tests of the SQL builder per check kind and dialect and of the step on the stub; a Playwright check that an Assess Data Readiness run lists a source per finding and opens it on its rows.
 
 ## Release 2 — Multi-user  (no target date yet)
 
