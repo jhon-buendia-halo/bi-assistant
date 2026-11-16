@@ -1,9 +1,15 @@
+import { pickDataset } from './helpers/run-ui';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
-import { LlmStub, StubRequest, messageText, startLlmStub } from './helpers/llm-stub';
+import {
+  LlmStub,
+  StubRequest,
+  messageText,
+  startLlmStub,
+} from './helpers/llm-stub';
 import { isResultExplorerCall } from './helpers/v2-steps';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 
@@ -39,7 +45,11 @@ function lastUserText(request: StubRequest): string {
 }
 
 function isTurn(request: StubRequest, text: string): boolean {
-  return request.stream && request.step === undefined && lastUserText(request) === text;
+  return (
+    request.stream &&
+    request.step === undefined &&
+    lastUserText(request) === text
+  );
 }
 
 function afterToolResult(request: StubRequest): boolean {
@@ -47,7 +57,9 @@ function afterToolResult(request: StubRequest): boolean {
 }
 
 function toolName(request: StubRequest, name: string): string {
-  return request.tools.find((tool) => tool === name || tool.endsWith(name)) ?? name;
+  return (
+    request.tools.find((tool) => tool === name || tool.endsWith(name)) ?? name
+  );
 }
 
 function isExplorerCall(request: StubRequest): boolean {
@@ -62,19 +74,28 @@ function railItem(page: Page, name: string): Locator {
     .getByRole('button', { name, exact: true });
 }
 
-async function openWorkflowPage(page: Page, id: string, name: string): Promise<void> {
+async function openWorkflowPage(
+  page: Page,
+  id: string,
+  name: string,
+): Promise<void> {
   await railItem(page, 'Workflows').click();
-  await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
 
-async function fillRun(page: Page, question: string, dataset: string): Promise<void> {
+async function fillRun(
+  page: Page,
+  question: string,
+  dataset: string,
+): Promise<void> {
   await page.getByTestId('workflow-execute').click();
   await expect(page.getByTestId('workflow-run')).toBeVisible();
-  const card = page.getByTestId('workflow-input-datasets').getByRole('button', { name: dataset });
-  await card.click();
-  await expect(card).toHaveAttribute('aria-pressed', 'true');
+  // The searchable dataset picker of the run form (ui.md 4.4b).
+  await pickDataset(page, dataset);
   await page.getByTestId('workflow-input-question').fill(question);
 }
 
@@ -86,18 +107,24 @@ test.describe('Feature: A follow-up over an earlier result', () => {
       // The fixture's tables are small (16 matches): every match with every
       // squad member gives a result of over a thousand rows.
       const from = `${worldCupKey('matches')} m CROSS JOIN ${worldCupKey('squad_members')} s`;
-      const total = Number(await worldCupScalar(`SELECT COUNT(*) FROM ${from}`));
+      const total = Number(
+        await worldCupScalar(`SELECT COUNT(*) FROM ${from}`),
+      );
       expect(total).toBeGreaterThan(100);
       const rows = `Rows 51–100 of ${total.toLocaleString('en-US')}`;
       const sql = `SELECT m.id AS match_id, m.stage, s.player_id, s.shirt_number FROM ${from}`;
       stub.reply = (request) => {
-        if (!isTurn(request, QUESTION)) return { text: 'The stub model answered this question.' };
+        if (!isTurn(request, QUESTION))
+          return { text: 'The stub model answered this question.' };
         return afterToolResult(request)
           ? { text: 'These are the matches with their squad members.' }
           : {
               toolCall: {
                 name: toolName(request, 'run_readonly_sql'),
-                arguments: { sql, rationale: 'Listing each match with its squad members.' },
+                arguments: {
+                  sql,
+                  rationale: 'Listing each match with its squad members.',
+                },
               },
             };
       };
@@ -121,37 +148,65 @@ test.describe('Feature: A follow-up over an earlier result', () => {
           await openWorkflowPage(page, V2_ID, V2);
           await fillRun(page, QUESTION, WORLD_CUP_DATASET);
           await page.getByTestId('workflow-run').click();
-          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+          await expect(page.getByTestId('workflow-run-status')).toHaveText(
+            'Run succeeded',
+          );
           // A first run has no earlier result: Nathan is not asked.
           expect(stub.requests.filter(isExplorerCall)).toHaveLength(0);
           before = stub.requests.length;
         },
       );
-      await scenarioStep(page, `When I follow up with "${FOLLOW_UP}"`, async () => {
-        await page.getByTestId('workflow-follow-up-input').fill(FOLLOW_UP);
-        await page.getByTestId('workflow-run-follow-up').click();
-        await expect(page.getByTestId('workflow-run-question')).toHaveText(FOLLOW_UP);
-        await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-      });
-      await scenarioStep(page, 'Then the answer shows rows 51–100 of the earlier result', async () => {
-        await expect(answer).toContainText(rows);
-        await expect(answer).toContainText('Understood as: Page 2');
-        await expect(answer.getByRole('table')).toBeVisible();
-      });
-      await scenarioStep(page, 'And no new analysis was planned or run', async () => {
-        const sent = stub.requests.slice(before);
-        expect(sent.filter(isExplorerCall)).toHaveLength(1);
-        expect(sent.filter((request) => request.step === 'plan')).toHaveLength(0);
-        expect(sent.filter((request) => isTurn(request, FOLLOW_UP))).toHaveLength(0);
-      });
+      await scenarioStep(
+        page,
+        `When I follow up with "${FOLLOW_UP}"`,
+        async () => {
+          await page.getByTestId('workflow-follow-up-input').fill(FOLLOW_UP);
+          await page.getByTestId('workflow-run-follow-up').click();
+          await expect(page.getByTestId('workflow-run-question')).toHaveText(
+            FOLLOW_UP,
+          );
+          await expect(page.getByTestId('workflow-run-status')).toHaveText(
+            'Run succeeded',
+          );
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then the answer shows rows 51–100 of the earlier result',
+        async () => {
+          await expect(answer).toContainText(rows);
+          await expect(answer).toContainText('Understood as: Page 2');
+          await expect(answer.getByRole('table')).toBeVisible();
+        },
+      );
+      await scenarioStep(
+        page,
+        'And no new analysis was planned or run',
+        async () => {
+          const sent = stub.requests.slice(before);
+          expect(sent.filter(isExplorerCall)).toHaveLength(1);
+          expect(
+            sent.filter((request) => request.step === 'plan'),
+          ).toHaveLength(0);
+          expect(
+            sent.filter((request) => isTurn(request, FOLLOW_UP)),
+          ).toHaveLength(0);
+        },
+      );
       await scenarioStep(page, "When I open the answer's query", async () => {
         await answer.getByTestId('query-row-0').click();
         await expect(inspector).toBeVisible();
         await inspector.getByTestId('query-inspector-tab-result').click();
       });
-      await scenarioStep(page, 'Then the inspector opens on page 2 of the full result', async () => {
-        await expect(inspector.getByTestId('query-result-page-label')).toHaveText(rows);
-      });
+      await scenarioStep(
+        page,
+        'Then the inspector opens on page 2 of the full result',
+        async () => {
+          await expect(
+            inspector.getByTestId('query-result-page-label'),
+          ).toHaveText(rows);
+        },
+      );
     },
   );
 });

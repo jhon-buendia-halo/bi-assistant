@@ -1,9 +1,15 @@
+import { pickDataset } from './helpers/run-ui';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
-import { LlmStub, StubRequest, messageText, startLlmStub } from './helpers/llm-stub';
+import {
+  LlmStub,
+  StubRequest,
+  messageText,
+  startLlmStub,
+} from './helpers/llm-stub';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
 
 /**
@@ -35,7 +41,11 @@ function lastUserText(request: StubRequest): string {
 
 /** A streamed call of the analysis turn whose latest user message is `text`. */
 function isTurn(request: StubRequest, text: string): boolean {
-  return request.stream && request.step === undefined && lastUserText(request) === text;
+  return (
+    request.stream &&
+    request.step === undefined &&
+    lastUserText(request) === text
+  );
 }
 
 function afterToolResult(request: StubRequest): boolean {
@@ -43,7 +53,9 @@ function afterToolResult(request: StubRequest): boolean {
 }
 
 function toolName(request: StubRequest, name: string): string {
-  return request.tools.find((tool) => tool === name || tool.endsWith(name)) ?? name;
+  return (
+    request.tools.find((tool) => tool === name || tool.endsWith(name)) ?? name
+  );
 }
 
 function railItem(page: Page, name: string): Locator {
@@ -52,19 +64,28 @@ function railItem(page: Page, name: string): Locator {
     .getByRole('button', { name, exact: true });
 }
 
-async function openWorkflowPage(page: Page, id: string, name: string): Promise<void> {
+async function openWorkflowPage(
+  page: Page,
+  id: string,
+  name: string,
+): Promise<void> {
   await railItem(page, 'Workflows').click();
-  await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Workflows', exact: true }),
+  ).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
 
-async function fillRun(page: Page, question: string, dataset: string): Promise<void> {
+async function fillRun(
+  page: Page,
+  question: string,
+  dataset: string,
+): Promise<void> {
   await page.getByTestId('workflow-execute').click();
   await expect(page.getByTestId('workflow-run')).toBeVisible();
-  const card = page.getByTestId('workflow-input-datasets').getByRole('button', { name: dataset });
-  await card.click();
-  await expect(card).toHaveAttribute('aria-pressed', 'true');
+  // The searchable dataset picker of the run form (ui.md 4.4b).
+  await pickDataset(page, dataset);
   await page.getByTestId('workflow-input-question').fill(question);
 }
 
@@ -76,11 +97,14 @@ test.describe("Feature: Page, sort and filter a query's result", () => {
       // The fixture's tables are small (16 matches): every match with every
       // squad member gives a result of over a thousand rows.
       const from = `${worldCupKey('matches')} m CROSS JOIN ${worldCupKey('squad_members')} s`;
-      const total = Number(await worldCupScalar(`SELECT COUNT(*) FROM ${from}`));
+      const total = Number(
+        await worldCupScalar(`SELECT COUNT(*) FROM ${from}`),
+      );
       expect(total).toBeGreaterThan(200);
       const sql = `SELECT m.id AS match_id, m.stage, s.player_id, s.shirt_number FROM ${from}`;
       stub.reply = (request) => {
-        if (!isTurn(request, QUESTION)) return { text: 'The stub model answered this question.' };
+        if (!isTurn(request, QUESTION))
+          return { text: 'The stub model answered this question.' };
         return afterToolResult(request)
           ? { text: 'These are the first matches of the data.' }
           : {
@@ -100,36 +124,69 @@ test.describe("Feature: Page, sort and filter a query's result", () => {
           await openWorkflowPage(page, V2_ID, V2);
           await fillRun(page, QUESTION, WORLD_CUP_DATASET);
           await page.getByTestId('workflow-run').click();
-          await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-          await page.getByTestId('run-answer').getByTestId('query-row-0').click();
+          await expect(page.getByTestId('workflow-run-status')).toHaveText(
+            'Run succeeded',
+          );
+          await page
+            .getByTestId('run-answer')
+            .getByTestId('query-row-0')
+            .click();
           await expect(inspector).toBeVisible();
           await inspector.getByTestId('query-inspector-tab-result').click();
-          await expect(inspector.getByTestId('query-result-table')).toBeVisible();
+          await expect(
+            inspector.getByTestId('query-result-table'),
+          ).toBeVisible();
         },
       );
       await scenarioStep(page, 'When I click Next', async () => {
         await inspector.getByTestId('query-result-next-page').click();
       });
-      await scenarioStep(page, 'Then the label reads Rows 51 to 100 of all the rows', async () => {
-        await expect(label).toHaveText(`Rows 51–100 of ${total.toLocaleString('en-US')}`);
-      });
+      await scenarioStep(
+        page,
+        'Then the label reads Rows 51 to 100 of all the rows',
+        async () => {
+          await expect(label).toHaveText(
+            `Rows 51–100 of ${total.toLocaleString('en-US')}`,
+          );
+        },
+      );
       await scenarioStep(page, 'When I sort a column', async () => {
         await inspector.getByTestId('query-result-sort').first().click();
       });
-      await scenarioStep(page, 'Then that column is sorted ascending', async () => {
-        await expect(inspector.locator('th[aria-sort="ascending"]')).toHaveCount(1);
-        await expect(label).toContainText('Rows 1–50 of');
-      });
-      await scenarioStep(page, 'When I add a filter on the stage column', async () => {
-        await inspector.getByTestId('query-filter-add').click();
-        await inspector.getByTestId('query-filter-column').selectOption('stage');
-        await inspector.getByTestId('query-filter-op').selectOption('not_null');
-        await inspector.getByTestId('query-filter-apply').click();
-      });
-      await scenarioStep(page, 'Then a chip shows and the label says matching', async () => {
-        await expect(inspector.getByTestId('query-filter-chip')).toContainText('stage is not empty');
-        await expect(label).toContainText('matching');
-      });
+      await scenarioStep(
+        page,
+        'Then that column is sorted ascending',
+        async () => {
+          await expect(
+            inspector.locator('th[aria-sort="ascending"]'),
+          ).toHaveCount(1);
+          await expect(label).toContainText('Rows 1–50 of');
+        },
+      );
+      await scenarioStep(
+        page,
+        'When I add a filter on the stage column',
+        async () => {
+          await inspector.getByTestId('query-filter-add').click();
+          await inspector
+            .getByTestId('query-filter-column')
+            .selectOption('stage');
+          await inspector
+            .getByTestId('query-filter-op')
+            .selectOption('not_null');
+          await inspector.getByTestId('query-filter-apply').click();
+        },
+      );
+      await scenarioStep(
+        page,
+        'Then a chip shows and the label says matching',
+        async () => {
+          await expect(
+            inspector.getByTestId('query-filter-chip'),
+          ).toContainText('stage is not empty');
+          await expect(label).toContainText('matching');
+        },
+      );
     },
   );
 });
