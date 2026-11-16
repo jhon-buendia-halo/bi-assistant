@@ -1115,13 +1115,17 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(WRITE_ANSWER_INSTRUCTIONS).toContain(
         "when a query's line says that only its first rows are shown",
       );
-      // Last, so the rules before it read in the order they always had.
-      expect(
-        WRITE_ANSWER_INSTRUCTIONS.trimEnd()
-          .split('\n')
-          .pop()
-          ?.startsWith('- Long lists:'),
-      ).toBe(true);
+      // The last rule of the list, so the rules before it read in the order
+      // they always had; only the exact-counts paragraph follows (1.28.8).
+      const lines = WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n');
+      const lastRule = lines.filter((line) => line.startsWith('- ')).pop();
+      expect(lastRule?.startsWith('- Long lists:')).toBe(true);
+    });
+
+    it('ends Write answer with the exact-counts rule (roadmap 1.28.8)', () => {
+      expect(WRITE_ANSWER_INSTRUCTIONS.trimEnd().split('\n').pop()).toMatch(
+        /^Counts stay exact even when you describe a spread/,
+      );
     });
 
     it('hands a retry of Analyse the failed checks of the previous attempt', () => {
