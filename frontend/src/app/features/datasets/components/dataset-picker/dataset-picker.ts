@@ -69,6 +69,11 @@ interface PopoverPosition {
       font-size: 12px;
       color: var(--qti-on-primary-soft);
     }
+    .picker-chip-missing {
+      border-color: var(--qti-on-warning-soft);
+      background-color: var(--qti-warning-soft);
+      color: var(--qti-on-warning-soft);
+    }
     .picker-chip-remove {
       display: inline-flex;
       border-radius: 9999px;
@@ -264,6 +269,13 @@ export class DatasetPicker {
   private readonly datasourceNames = signal<ReadonlyMap<string, string>>(new Map());
   private datasourcesRequested = false;
 
+  private readonly knownNames = computed(() => new Set(this.datasets().map((d) => d.name)));
+
+  /** A picked name no dataset has any more (deleted since it was picked). */
+  protected isMissing(name: string): boolean {
+    return !this.knownNames().has(name);
+  }
+
   /** The few datasets offered as one-click chips while nothing is picked. */
   protected readonly quickPicks = computed(() => {
     const all = this.datasets();
@@ -385,8 +397,9 @@ export class DatasetPicker {
   private placement(): PopoverPosition {
     const field = this.field().nativeElement;
     const rect = field.getBoundingClientRect();
-    // Opening upward, clear the field's label too (the group that holds it).
-    const topEdge = (field.closest('[role="group"]') ?? field).getBoundingClientRect().top;
+    // Opening upward, clear the field's label too (the group or fieldset that holds it).
+    const topEdge = (field.closest('[role="group"], fieldset') ?? field).getBoundingClientRect()
+      .top;
     const gap = 6;
     const margin = 8;
     const above = topEdge - gap - margin;

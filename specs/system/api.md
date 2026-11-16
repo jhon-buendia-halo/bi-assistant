@@ -303,6 +303,7 @@ Controller prefix `/datasets`. Capability: datasets. Datasets are keyed by `name
 | 23 | `DELETE /datasets/:name` | Delete a dataset | yes |
 
 #### 21. `GET /datasets`
+- Query: `view=summary` (optional) answers each dataset without its `entities` snapshot and `schemas` notes (`{ name, datasourceId?, datasourceKind?, tables, createdAt?, updatedAt? }`), for pickers over hundreds of datasets (the run form's and the agent editor's dataset picker, ui.md 4.4b, 4.5); any other value, or none, answers whole datasets.
 - Response `200`: `{ datasets: DatasetDoc[] }`, most recently updated first. Legacy single-selection documents in the same table are skipped. Each dataset carries `schemas` (the schema notes) when it has any.
 
 #### 22. `POST /datasets`

@@ -2,8 +2,15 @@ jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
 
-import { DatasetsService, withSampleValues } from './datasets.service';
-import type { DatasetEntitySnapshot } from './repositories/datasets.repository';
+import {
+  DatasetsService,
+  toDatasetSummary,
+  withSampleValues,
+} from './datasets.service';
+import type {
+  DatasetDoc,
+  DatasetEntitySnapshot,
+} from './repositories/datasets.repository';
 
 const claims: DatasetEntitySnapshot = {
   key: 'main.health.claims',
@@ -265,5 +272,35 @@ describe('DatasetsService.save schema notes', () => {
 
     const arg = savedSchemas(repository);
     expect(arg).toEqual([]);
+  });
+});
+
+describe('toDatasetSummary', () => {
+  it('keeps the name, datasource, table names and dates and drops the snapshot and notes', () => {
+    const doc = {
+      name: 'World Cup',
+      datasourceId: 'pg',
+      datasourceKind: 'postgres' as const,
+      tables: ['public.matches', 'public.teams'],
+      entities: [{ name: 'public.matches' } as DatasetEntitySnapshot],
+      schemas: [{ schema: 'public', layer: 'gold', description: 'Curated' }],
+      createdAt: '2026-11-01T00:00:00.000Z',
+      updatedAt: '2026-11-16T00:00:00.000Z',
+    } as unknown as DatasetDoc;
+    expect(toDatasetSummary(doc)).toEqual({
+      name: 'World Cup',
+      datasourceId: 'pg',
+      datasourceKind: 'postgres',
+      tables: ['public.matches', 'public.teams'],
+      createdAt: '2026-11-01T00:00:00.000Z',
+      updatedAt: '2026-11-16T00:00:00.000Z',
+    });
+  });
+
+  it('adds no field a legacy dataset lacks', () => {
+    expect(toDatasetSummary({ name: 'Old', tables: [] })).toEqual({
+      name: 'Old',
+      tables: [],
+    });
   });
 });

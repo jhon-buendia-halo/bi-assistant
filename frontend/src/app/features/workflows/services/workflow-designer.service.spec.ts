@@ -190,7 +190,10 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       .expectOne((r) => r.url.endsWith('/workflows/answer-business-question'))
       .flush(ASSISTANT);
     http
-      .expectOne((r) => r.url.endsWith('/datasets'))
+      // The light listing (api.md 21): the run form's picker needs no snapshots.
+      .expectOne(
+        (r) => r.url.endsWith('/datasets') && r.params.get('view') === 'summary',
+      )
       .flush({
         datasets: [
           {
