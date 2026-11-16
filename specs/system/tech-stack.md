@@ -55,7 +55,7 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | `@mastra/duckdb` | 1.8.0 | DuckDB storage for observability: traces, metrics, logs (`<APP_DATA_DIR>/observability.duckdb`; limits: 512MB memory, 2 threads). |
 | `@mastra/observability` | 1.17.8 | Tracing / observability wiring. |
 | `@opentelemetry/sdk-node` | 0.222.0 | Developer observability only (ADR-0006): the OpenTelemetry Node SDK, started by the entry points when the developer setting is on. It is never imported when the setting is off. |
-| `@opentelemetry/auto-instrumentations-node` | 0.80.0 | Developer observability: HTTP, Express, NestJS, `pg` and undici (fetch) instrumentation. fs, dns and net are disabled. |
+| `@opentelemetry/auto-instrumentations-node` | 0.80.0 | Developer observability: HTTP, Express, NestJS, `pg` and undici (fetch) instrumentation. fs, dns and net are disabled. In the packaged desktop app the backend is one bundled file ([delivery.md](delivery.md) section 3), so only the instrumentations of Node built-ins (HTTP) and of the packages kept outside the bundle (undici, Pino) produce data there; Express, NestJS and `pg` are instrumented in the CLI and the npm package only. |
 | `@opentelemetry/exporter-trace-otlp-proto`, `@opentelemetry/exporter-metrics-otlp-proto` | 0.222.0 | Developer observability: OTLP protobuf exporters for traces and metrics. |
 | `@opentelemetry/sdk-metrics`, `@opentelemetry/resources` | 2.11.0 | Developer observability: periodic metric reader and the `service.name` resource. |
 | `@opentelemetry/api` | 1.9.1 | OpenTelemetry API shared by the SDK and the instrumentations. |
@@ -76,6 +76,7 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | Jest | ^30.0.0 (`ts-jest` ^29.2.5, `@types/jest` ^30.0.0) | Backend unit tests and the API-level e2e specs. |
 | supertest | ^7.0.0 | HTTP assertions in backend e2e specs. |
 | ESLint 9 + `typescript-eslint` ^8.20.0 + Prettier ^3.4.2 | | Lint and format (the `lint` script runs with `--fix`). |
+| esbuild | 0.28.2, pinned exactly | Bundles the staged backend into one file for the desktop installer (`frontend/scripts/bundle-backend.mjs`, [delivery.md](delivery.md) section 2). Not used by `nest build`, the CLI or the npm package. |
 | `@nestjs/cli` | ^11.0.0 | `nest build` / `nest start`. `nest-cli.json` copies non-TS assets: `mastra/skills/**/*` and `modules/testing-data/fixtures/**/*.sql*`. |
 
 The LLM providers (OpenAI-compatible endpoints including LenAI, Anthropic) are reached through Mastra's model router; there is no direct provider SDK dependency. See [agents.md](agents.md) for model resolution.
