@@ -35,6 +35,8 @@ import { agentForCases, EVAL_SETS, evalTargetFor } from './eval-sets';
 import {
   explorerInputOfWords,
   RESULT_EXPLORER_CASES,
+  RESULT_EXPLORER_EDGE_CASES,
+  RESULT_EXPLORER_EDGE_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
   resultExplorerEvalTarget,
 } from './result-explorer.evals';
@@ -58,8 +60,24 @@ describe('result-explorer eval set (agents.md 8.1, 2.16)', () => {
     expect(evalTargetFor('result-explorer').agentKey).toBe('result-explorer');
   });
 
+  it('has an Edge Cases set on the same target, its words distinct (story 1.28.6)', () => {
+    expect(RESULT_EXPLORER_EDGE_EVAL_SET).toMatchObject({
+      fixtureId: 'edge-cases',
+      agentKey: 'result-explorer',
+    });
+    expect(EVAL_SETS).toContain(RESULT_EXPLORER_EDGE_EVAL_SET);
+    const words = [...RESULT_EXPLORER_CASES, ...RESULT_EXPLORER_EDGE_CASES].map(
+      (c) => c.words,
+    );
+    expect(new Set(words).size).toBe(words.length);
+    expect(explorerInputOfWords('descuento mayor a 10')).toBeDefined();
+    expect(resultExplorerEvalTarget().sets).toContain(
+      RESULT_EXPLORER_EDGE_EVAL_SET,
+    );
+  });
+
   it('every expected column exists in the candidate the case expects', () => {
-    for (const c of RESULT_EXPLORER_CASES) {
+    for (const c of [...RESULT_EXPLORER_CASES, ...RESULT_EXPLORER_EDGE_CASES]) {
       const names = c.candidates[c.expect.query].columns.map((x) => x.name);
       const columns = [
         ...c.expect.filters.flat().map((f) => f.column),

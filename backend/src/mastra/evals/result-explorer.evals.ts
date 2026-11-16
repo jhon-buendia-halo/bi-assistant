@@ -437,11 +437,169 @@ export const RESULT_EXPLORER_EVAL_SET: AssistantEvalSet = {
   cases: RESULT_EXPLORER_EVAL_CASES,
 };
 
+/** Edge Cases orders with awkward column names (testing-data R24). */
+const EDGE_ORDER_KINDS: Record<string, ColumnKind> = {
+  id: 'number',
+  'Order Notes': 'text',
+  año: 'number',
+  'discount_%': 'number',
+  'ship-to': 'text',
+  status: 'text',
+};
+const EDGE_ORDER_ROWS: Record<string, unknown>[] = [
+  {
+    id: 1,
+    'Order Notes': 'Leave at door; 100% sure',
+    año: 2024,
+    'discount_%': 7.5,
+    'ship-to': 'Calle 1 #1-1, Medellín',
+    status: 'pending',
+  },
+  {
+    id: 2,
+    'Order Notes': 'Use code SAVE_10 (snake_case)',
+    año: 2023,
+    'discount_%': 12,
+    'ship-to': 'Av. 2 #2-2, Bogotá',
+    status: 'cancelled',
+  },
+  {
+    id: 3,
+    'Order Notes': null,
+    año: 2024,
+    'discount_%': 0,
+    'ship-to': 'Cra 3 #3-3, Cali',
+    status: 'returned',
+  },
+  {
+    id: 4,
+    'Order Notes': 'Path C:\\Users\\new folder',
+    año: 2022,
+    'discount_%': 25,
+    'ship-to': 'Calle 4 #4-4, Medellín',
+    status: 'delivered',
+  },
+  {
+    id: 5,
+    'Order Notes': 'Ring twice',
+    año: 2024,
+    'discount_%': 10,
+    'ship-to': 'Cra 5 #5-5, Pasto',
+    status: 'shipped',
+  },
+];
+const edgeOrders = (ref = 'Q1') =>
+  explorerCandidateOf(
+    ref,
+    Object.keys(EDGE_ORDER_KINDS),
+    EDGE_ORDER_ROWS,
+    EDGE_ORDER_KINDS,
+    'Edge Cases orders with their notes, year, discount, address and status',
+  );
+
+/** Nathan on awkward column names (roadmap 1.28.6). */
+export const RESULT_EXPLORER_EDGE_CASES: ExplorerCase[] = [
+  {
+    id: 'rxe-notes-with-percent',
+    intent:
+      'A filter on a column with a space, the value holding a percent sign.',
+    words: 'only the orders whose notes mention 100%',
+    candidates: [edgeOrders()],
+    view: null,
+    expect: {
+      action: 'explore',
+      query: 0,
+      filters: [[{ column: 'Order Notes', op: 'contains', value: '100%' }]],
+      sort: [],
+      page: 1,
+    },
+  },
+  {
+    id: 'rxe-ano-2024',
+    intent: 'A column named with an ñ, in Spanish words.',
+    words: 'solo los pedidos del año 2024',
+    candidates: [edgeOrders()],
+    view: null,
+    expect: {
+      action: 'explore',
+      query: 0,
+      filters: [[{ column: 'año', op: 'eq', value: 2024 }]],
+      sort: [],
+      page: 1,
+    },
+  },
+  {
+    id: 'rxe-discount-over-10',
+    intent: 'A column named with a percent sign, a comparison in Spanish.',
+    words: 'descuento mayor a 10',
+    candidates: [edgeOrders()],
+    view: null,
+    expect: {
+      action: 'explore',
+      query: 0,
+      filters: [[{ column: 'discount_%', op: 'gt', value: 10 }]],
+      sort: [],
+      page: 1,
+    },
+  },
+  {
+    id: 'rxe-cancelled-or-returned',
+    intent: 'A list of enum values.',
+    words: 'only cancelled or returned orders',
+    candidates: [edgeOrders()],
+    view: null,
+    expect: {
+      action: 'explore',
+      query: 0,
+      filters: [
+        [{ column: 'status', op: 'in', values: ['cancelled', 'returned'] }],
+        [{ column: 'status', op: 'in', values: ['returned', 'cancelled'] }],
+      ],
+      sort: [],
+      page: 1,
+    },
+  },
+  {
+    id: 'rxe-sort-ship-to',
+    intent: 'A sort on a column named with a hyphen.',
+    words: 'sort by ship-to',
+    candidates: [edgeOrders()],
+    view: null,
+    expect: {
+      action: 'explore',
+      query: 0,
+      filters: [[]],
+      sort: [{ column: 'ship-to', direction: 'asc' }],
+      page: 1,
+    },
+  },
+];
+
+export const RESULT_EXPLORER_EDGE_EVAL_SET: AssistantEvalSet = {
+  id: 'result-explorer-edge',
+  name: 'Result Explorer: Edge Cases',
+  description:
+    'Words about an Edge Cases orders result for Nathan, Result Explorer: ' +
+    'columns named with a space, an ñ, a percent sign and a hyphen, an enum ' +
+    'list, words in Spanish. Stored rows are in the cases; code checks only.',
+  fixtureId: 'edge-cases',
+  agentKey: RESULT_EXPLORER_EVAL_AGENT_KEY,
+  cases: RESULT_EXPLORER_EDGE_CASES.map((c): AssistantEvalCase => ({
+    id: c.id,
+    question: c.words,
+    intent: c.intent,
+    scorers: [checks.includes('"action"')],
+    customChecks: checksOf(c.expect),
+  })),
+};
+
 /** What the explorer reads for a case, by its words (the case's question). */
 export function explorerInputOfWords(
   words: string,
 ): ExplorerEvalInput | undefined {
-  const found = RESULT_EXPLORER_CASES.find((c) => c.words === words);
+  const found = [...RESULT_EXPLORER_CASES, ...RESULT_EXPLORER_EDGE_CASES].find(
+    (c) => c.words === words,
+  );
   return found
     ? explorerInputOf(found.words, found.candidates, found.view)
     : undefined;
@@ -482,7 +640,7 @@ export function resultExplorerEvalTarget(
       );
       return run;
     },
-    sets: [RESULT_EXPLORER_EVAL_SET],
+    sets: [RESULT_EXPLORER_EVAL_SET, RESULT_EXPLORER_EDGE_EVAL_SET],
     sendsKnowledge: false,
     orientation: () => '',
   };

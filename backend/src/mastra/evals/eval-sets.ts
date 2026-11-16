@@ -15,6 +15,7 @@ import {
 } from './data-readiness.evals';
 import {
   RESULT_EXPLORER_EVAL_AGENT_KEY,
+  RESULT_EXPLORER_EDGE_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
   resultExplorerEvalTarget,
 } from './result-explorer.evals';
@@ -62,6 +63,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   INSIGHTS_ANALYST_EVAL_SET,
   QUERY_EXPLAINER_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
+  RESULT_EXPLORER_EDGE_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
