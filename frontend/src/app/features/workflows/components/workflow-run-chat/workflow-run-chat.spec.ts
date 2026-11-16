@@ -475,20 +475,28 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       const picker = q('workflow-input-datasets')!;
       expect(picker.getAttribute('role')).toBe('group');
       expect(picker.textContent).toContain('Datasets');
-      const cards = Array.from(picker.querySelectorAll('button'));
+      const suggestions = Array.from(
+        picker.querySelectorAll<HTMLElement>('[data-testid="dataset-picker-suggestion"]'),
+      );
       expect(
-        cards.map((b) =>
+        suggestions.map((b) =>
           Array.from(b.querySelectorAll('span')).map((span) => span.textContent?.trim()),
         ),
       ).toEqual([
         ['World Cup Core', ', 2 entities'],
         ['Sales', ', 1 entities'],
       ]);
-      expect(cards[0].getAttribute('aria-pressed')).toBe('false');
-      cards[0].click();
+      expect(picker.querySelector('[data-testid="dataset-picker-open"]')?.textContent?.trim()).toBe(
+        'Add dataset',
+      );
+      suggestions[0].click();
       fixture.detectChanges();
-      expect(cards[0].getAttribute('aria-pressed')).toBe('true');
       expect(designer.picked('datasets')).toEqual(['World Cup Core']);
+      const chip = picker.querySelector('[data-testid="dataset-picker-chip"]')!;
+      expect(chip.textContent).toContain('World Cup Core');
+      expect(chip.querySelector('button')!.getAttribute('aria-label')).toBe(
+        'Remove World Cup Core',
+      );
 
       const verbose = q('workflow-input-verbose') as HTMLInputElement;
       expect(verbose.type).toBe('checkbox');
@@ -526,9 +534,9 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       });
       const picker = q('workflow-input-datasets')!;
       expect(
-        Array.from(picker.querySelectorAll('button')).map((b) =>
-          b.querySelector('span')?.textContent?.trim(),
-        ),
+        Array.from(
+          picker.querySelectorAll('[data-testid="dataset-picker-suggestion"]'),
+        ).map((b) => b.querySelector('span')?.textContent?.trim()),
       ).toEqual(['World Cup Core']);
     });
 

@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleCheck,
-  Database,
   Loader2,
   LucideAngularModule,
   MessageSquare,
@@ -30,6 +29,7 @@ import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.s
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
 import { WorkflowsNavState } from '../../services/workflows-nav-state';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
+import { DatasetPicker } from '../../../datasets/components/dataset-picker/dataset-picker';
 import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import {
   ReadinessPanelItem,
@@ -88,6 +88,7 @@ const FORM_CONTROLS =
   selector: 'app-workflow-run-chat',
   imports: [
     AnswerView,
+    DatasetPicker,
     LucideAngularModule,
     MarkdownPipe,
     PanelReadinessView,
@@ -144,30 +145,6 @@ const FORM_CONTROLS =
     .composer-input-invalid {
       box-shadow: inset 0 -1px 0 var(--qti-on-danger-soft);
     }
-    .dataset-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.375rem;
-      border: 1px solid var(--qti-border);
-      border-radius: 9999px;
-      background-color: var(--qti-surface-muted);
-      padding: 0.125rem 0.625rem;
-      font-size: 12px;
-      color: var(--qti-fg);
-      cursor: pointer;
-    }
-    .dataset-pill:hover {
-      border-color: var(--qti-border-strong);
-    }
-    .dataset-pill[aria-pressed='true'] {
-      border-color: var(--qti-border-selected);
-      background-color: var(--qti-surface-selected);
-      color: var(--qti-on-primary-soft);
-    }
-    .dataset-pill:focus-visible {
-      outline: 2px solid var(--qti-focus);
-      outline-offset: 2px;
-    }
   `,
   host: {
     class: 'flex min-h-0 flex-col',
@@ -179,7 +156,6 @@ export class WorkflowRunChat {
   protected readonly ChevronDown = ChevronDown;
   protected readonly ChevronRight = ChevronRight;
   protected readonly CircleCheck = CircleCheck;
-  protected readonly Database = Database;
   protected readonly Loader2 = Loader2;
   protected readonly MessageSquare = MessageSquare;
   protected readonly MessageSquareReply = MessageSquareReply;
