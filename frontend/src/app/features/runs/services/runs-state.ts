@@ -73,10 +73,11 @@ export class RunsState {
   }
 
   /**
-   * A row of the Runs list, or a Monitoring run, opens its stored run
-   * (workflows R19): on its workflow's page, drawn with that run, while the
-   * workflow is in the catalogue and the run has ended; read-only here
-   * otherwise (a removed workflow's run, R23, or one still running).
+   * A row of the Runs list, a Monitoring run, or a run's background task
+   * opens its stored run (workflows R19): on its workflow's page, drawn with
+   * that run, while the workflow is in the catalogue (a run still running is
+   * followed there live, ADR-0048); read-only here otherwise (a removed
+   * workflow's run, R23).
    */
   openRun(id: string): void {
     if (!this.shell.confirmLeaveAgentEditor()) return;
@@ -90,8 +91,7 @@ export class RunsState {
     this.api.getRun(id).subscribe({
       next: (run) => {
         if (!this.stillOpening(id)) return;
-        if (run.status === 'running') this.showReadOnly(run);
-        else this.openInWorkflow(run);
+        this.openInWorkflow(run);
       },
       error: (err) => {
         if (!this.stillOpening(id)) return;

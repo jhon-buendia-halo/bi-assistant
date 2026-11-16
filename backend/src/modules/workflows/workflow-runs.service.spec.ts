@@ -32,6 +32,7 @@ import type { SessionsService } from '../sessions/sessions.service';
 import type { QueryEvidenceService } from '../sessions/query-evidence/query-evidence.service';
 import type { WorkflowRun, WorkflowRunDoc } from './workflow-run-steps';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
+import { LiveRuns } from './live-runs';
 import {
   WorkflowRunsService,
   type RunStreamEvent,
@@ -1015,6 +1016,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
 describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () => {
   it('answers a refusal with its status before any stream, and streams SSE frames otherwise', async () => {
     const run = { id: 'r1', status: 'success' };
+    const live = new LiveRuns();
     const runs = {
       prepare: jest.fn((id: string, body: { input?: { question?: string } }) =>
         id !== 'answer-business-question'
@@ -1023,15 +1025,19 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
             ? Promise.resolve({ id })
             : Promise.reject(new BadRequestException('Question is required')),
       ),
-      stream: jest.fn((_prepared: unknown, emit: (event: unknown) => void) => {
-        emit({
+      live,
+      // The run starts detached (ADR-0048); the request follows its log.
+      launch: jest.fn(() => {
+        live.begin('r1');
+        live.publish('r1', {
           type: 'run',
           runId: 'r1',
           workflowId: 'answer-business-question',
         });
-        emit({ type: 'text', content: 'Hi' });
-        emit({ type: 'done', run });
-        return Promise.resolve(run);
+        live.publish('r1', { type: 'text', content: 'Hi' });
+        live.publish('r1', { type: 'done', run });
+        live.end('r1');
+        return Promise.resolve('r1');
       }),
     };
     const moduleRef = await Test.createTestingModule({
@@ -1061,7 +1067,7 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
             message: 'Workflow "agent:assistant" not found',
           }),
         );
-      expect(runs.stream).not.toHaveBeenCalled();
+      expect(runs.launch).not.toHaveBeenCalled();
       const res = await request(server)
         .post('/workflows/answer-business-question/runs/stream')
         .send({ input: { question: 'Hi' } })
@@ -1071,9 +1077,9 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
       );
       expect(res.text).toBe(
         [
-          'data: {"type":"run","runId":"r1","workflowId":"answer-business-question"}',
-          'data: {"type":"text","content":"Hi"}',
-          'data: {"type":"done","run":{"id":"r1","status":"success"}}',
+          'data: {"seq":1,"type":"run","runId":"r1","workflowId":"answer-business-question"}',
+          'data: {"seq":2,"type":"text","content":"Hi"}',
+          'data: {"seq":3,"type":"done","run":{"id":"r1","status":"success"}}',
         ]
           .map((frame) => `${frame}\n\n`)
           .join(''),
@@ -2208,5 +2214,270 @@ describe('WorkflowRunsService: a draft run (api.md R12; agents-evals R60)', () =
         `Run "${run.id}" not found`,
       );
     });
+  });
+});
+
+describe('WorkflowRunsService: runs detached from their request (api.md 119, 138, 149, 150; ADR-0048)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+
+  /** The next turn streams "Bra", then waits until released or stopped. */
+  function holdTurn(): () => void {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const original = ctx.sessions.streamRunTurn.getMockImplementation()!;
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (hostId, question, emit, signal, careful, onStep) => {
+        emit({ type: 'text', content: 'Bra' });
+        if (!signal?.aborted) {
+          await Promise.race([
+            released,
+            new Promise<void>((resolve) =>
+              signal?.addEventListener('abort', () => resolve()),
+            ),
+          ]);
+        }
+        if (signal?.aborted) return;
+        await original(hostId, question, emit, signal, careful, onStep);
+      },
+    );
+    return release;
+  }
+
+  /** What a follower from `after` gets: `<seq>:<type>`, and whether it ended. */
+  function follow(id: string, after = 0) {
+    const got: string[] = [];
+    const state = { ended: false };
+    const leave = ctx.service.live.subscribe(id, after, {
+      event: ({ seq, event }) => got.push(`${seq}:${event.type}`),
+      end: () => (state.ended = true),
+    });
+    return { got, state, leave };
+  }
+
+  const launch = async () =>
+    ctx.service.launch(
+      await ctx.service.prepare('answer-business-question', { input: ASK }),
+    );
+
+  it('keeps running when its follower leaves: the run ends success and a later follower replays it from seq 0', async () => {
+    ctx = build();
+    const release = holdTurn();
+    const id = await launch();
+    const first = follow(id);
+    expect(first.got[0]).toBe('1:run');
+    first.leave!();
+    expect((await ctx.service.get(id)).status).toBe('running');
+    // The turn runs on the registry's signal, never the request's.
+    const signal = ctx.sessions.streamRunTurn.mock.calls[0]?.[3];
+    release();
+    await ctx.service.live.whenEnded(id);
+    expect(signal?.aborted).toBe(false);
+    expect((await ctx.service.get(id)).status).toBe('success');
+    const later = follow(id);
+    expect(later.got[0]).toBe('1:run');
+    // What streamed while nobody followed is in the log.
+    expect(later.got.some((frame) => frame.endsWith(':text'))).toBe(true);
+    expect(later.got.at(-1)).toMatch(/:done$/);
+    expect(later.state.ended).toBe(true);
+  });
+
+  it('Stop (150) aborts a live run, stored stopped; a second Stop answers it as it is; an unknown run is 404', async () => {
+    ctx = build();
+    holdTurn();
+    const id = await launch();
+    const done: unknown[] = [];
+    const watcher = follow(id);
+    ctx.service.live.subscribe(id, 0, {
+      event: ({ event }) => {
+        if (event.type === 'done') done.push(event['run']);
+      },
+      end: () => undefined,
+    });
+    const stopped = await ctx.service.stop(id);
+    expect(stopped.status).toBe('stopped');
+    // A client still following sees the end: done with the stopped run.
+    expect(watcher.state.ended).toBe(true);
+    expect(watcher.got.at(-1)).toMatch(/:done$/);
+    expect(done).toEqual([
+      expect.objectContaining({ id, status: 'stopped' }) as unknown,
+    ]);
+    expect((await ctx.service.stop(id)).status).toBe('stopped');
+    await expect(ctx.service.stop('nope')).rejects.toThrow(
+      'Run "nope" not found',
+    );
+  });
+
+  it('a failing turn logs error { content } and ends the log', async () => {
+    ctx = build(DATASETS, { throws: new Error('The provider failed') });
+    const id = await launch();
+    await ctx.service.live.whenEnded(id);
+    const replay = follow(id);
+    expect(replay.got.at(-1)).toMatch(/:error$/);
+    expect(replay.state.ended).toBe(true);
+    expect((await ctx.service.get(id)).status).toBe('failed');
+  });
+
+  it('checks a run can be followed (149): 404 unknown, 404 "has no live events" for a run not held', async () => {
+    ctx = build();
+    await expect(ctx.service.checkLive('nope')).rejects.toThrow(
+      'Run "nope" not found',
+    );
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    await expect(ctx.service.checkLive(run.id)).rejects.toThrow(
+      `Run "${run.id}" has no live events`,
+    );
+    const id = await launch();
+    await expect(ctx.service.checkLive(id)).resolves.toBeUndefined();
+    await ctx.service.live.whenEnded(id);
+  });
+
+  describe('a run that waits for the user (138)', () => {
+    function suspendingTurn() {
+      const suspension = {
+        stepId: 'clarify',
+        question: 'Which measure?',
+        options: ['Goals', 'Wins'],
+        resume: jest.fn(
+          (_answer: string, io: { emit: (event: unknown) => void }) => {
+            io.emit({ type: 'text', content: 'Brazil won.' });
+            return Promise.resolve(undefined);
+          },
+        ),
+        discard: jest.fn(() => Promise.resolve()),
+      };
+      ctx.sessions.streamRunTurn.mockImplementationOnce(() =>
+        Promise.resolve(suspension as never),
+      );
+      Object.assign(ctx.sessions, {
+        runHostView: jest.fn(() =>
+          Promise.resolve({ datasets: ['World Cup Core'] }),
+        ),
+      });
+      return suspension;
+    }
+
+    it('resumes detached on the same run: a fresh log whose numbers go on', async () => {
+      ctx = build();
+      suspendingTurn();
+      const id = await launch();
+      await ctx.service.live.whenEnded(id);
+      const waiting = follow(id);
+      expect(waiting.got.slice(-2).map((f) => f.split(':')[1])).toEqual([
+        'input-required',
+        'done',
+      ]);
+      const last = Number(waiting.got.at(-1)!.split(':')[0]);
+      const prepared = await ctx.service.prepareResume(id, {
+        stepId: 'clarify',
+        answer: 'Goals',
+      });
+      expect(ctx.service.resumeDetached(prepared)).toBe(id);
+      await ctx.service.live.whenEnded(id);
+      const resumed = follow(id);
+      expect(resumed.got[0]).toBe(`${last + 1}:run`);
+      expect(resumed.got.at(-1)).toMatch(/:done$/);
+      expect((await ctx.service.get(id)).status).toBe('success');
+    });
+
+    it('Stop drops a waiting run: stored stopped with waitingFor expired, its turn discarded', async () => {
+      ctx = build();
+      const suspension = suspendingTurn();
+      const id = await launch();
+      await ctx.service.live.whenEnded(id);
+      expect((await ctx.service.get(id)).status).toBe('suspended');
+      const run = await ctx.service.stop(id);
+      expect(run.status).toBe('stopped');
+      expect(run.waitingFor?.expired).toBe(true);
+      expect(suspension.discard).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('WorkflowRunsController /workflow-runs/:id/events/stream and /stop (api.md 149, 150)', () => {
+  it('replays a held run after a seq and ends with it; 404 before any frame otherwise; Stop answers the stored run', async () => {
+    const live = new LiveRuns();
+    live.begin('r1');
+    live.publish('r1', { type: 'run', runId: 'r1' });
+    live.publish('r1', { type: 'text', content: 'Hi' });
+    live.publish('r1', { type: 'done', run: { id: 'r1' } });
+    live.end('r1');
+    const runs = {
+      live,
+      checkLive: jest.fn((id: string) =>
+        id === 'r1'
+          ? Promise.resolve()
+          : Promise.reject(
+              new NotFoundException(`Run "${id}" has no live events`),
+            ),
+      ),
+      stop: jest.fn((id: string) =>
+        id === 'nope'
+          ? Promise.reject(new NotFoundException(`Run "${id}" not found`))
+          : Promise.resolve({
+              id,
+              status: id === 'r1' ? 'stopped' : 'success',
+            }),
+      ),
+    };
+    const moduleRef = await Test.createTestingModule({
+      controllers: [WorkflowRunsController],
+      providers: [
+        { provide: WorkflowRunsService, useValue: runs },
+        { provide: WorkflowNodeChatsService, useValue: {} },
+      ],
+    }).compile();
+    const app = moduleRef.createNestApplication();
+    await app.init();
+    try {
+      const server = app.getHttpServer() as Parameters<typeof request>[0];
+      const res = await request(server)
+        .get('/workflow-runs/r1/events/stream?after=1')
+        .expect(200);
+      expect(res.headers['content-type']).toBe(
+        'text/event-stream; charset=utf-8',
+      );
+      expect(res.text).toBe(
+        [
+          'data: {"seq":2,"type":"text","content":"Hi"}',
+          'data: {"seq":3,"type":"done","run":{"id":"r1"}}',
+        ]
+          .map((frame) => `${frame}\n\n`)
+          .join(''),
+      );
+      const all = await request(server)
+        .get('/workflow-runs/r1/events/stream?after=nonsense')
+        .expect(200);
+      expect(all.text.startsWith('data: {"seq":1,"type":"run"')).toBe(true);
+      await request(server)
+        .get('/workflow-runs/gone/events/stream')
+        .expect(404)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            message: 'Run "gone" has no live events',
+          }),
+        );
+      await request(server)
+        .post('/workflow-runs/r1/stop')
+        .expect(200, {
+          ok: true,
+          message: 'Run stopped',
+          run: { id: 'r1', status: 'stopped' },
+        });
+      await request(server)
+        .post('/workflow-runs/r2/stop')
+        .expect(200, {
+          ok: true,
+          message: 'Run already ended',
+          run: { id: 'r2', status: 'success' },
+        });
+      await request(server).post('/workflow-runs/nope/stop').expect(404);
+    } finally {
+      await app.close();
+    }
   });
 });

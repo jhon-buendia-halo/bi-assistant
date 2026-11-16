@@ -66,6 +66,12 @@ export interface NodeChatStreamHandlers extends AgentStreamHandlers {
   onError?: (message: string) => void;
 }
 
+/** What any streamed request reports beside its own frames. */
+type StreamRequestHandlers = AgentStreamHandlers & {
+  onError?: (message: string, errors?: WorkflowInputError[]) => void;
+  onRefused?: (status: number) => void;
+};
+
 /** A refusal's `errors[]` (api.md 118, 119): the well-formed entries; undefined without any. */
 function refusalErrors(raw: unknown): WorkflowInputError[] | undefined {
   if (!Array.isArray(raw)) return undefined;
@@ -146,6 +152,20 @@ export class WorkflowRunsApiService {
   getRun(id: string): Observable<WorkflowRun> {
     return this.http.get<WorkflowRun>(
       `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}`,
+    );
+  }
+
+  /**
+   * Stop a run (api.md 150): the server stores it `stopped` with any partial
+   * answer and answers it as stored. Idempotent: a run that ended answers
+   * as it is.
+   */
+  stopRun(
+    id: string,
+  ): Observable<{ ok: boolean; message: string; run: WorkflowRun }> {
+    return this.http.post<{ ok: boolean; message: string; run: WorkflowRun }>(
+      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/stop`,
+      {},
     );
   }
 
@@ -304,8 +324,30 @@ export class WorkflowRunsApiService {
   }
 
   /**
-   * Run a workflow once, streamed. Aborting `signal` is Stop (api.md 3.6):
-   * nothing more is reported, and the run is stored `stopped`.
+   * Follow a run that runs on the server again (api.md 149; ADR-0048): its
+   * events after `after` (0: all of them, to rebuild the live view), then
+   * the live ones, ending with its `done` or `error`. A run the server no
+   * longer holds reports `onRefused(404)` then `onError(message)`: read it
+   * with 121. Aborting `signal` only stops following.
+   */
+  async attachRun(
+    runId: string,
+    handlers: RunStreamHandlers,
+    signal?: AbortSignal,
+    after = 0,
+  ): Promise<void> {
+    await this.readStream(
+      `${API_BASE_URL}/workflow-runs/${encodeURIComponent(runId)}/events/stream?after=${after}`,
+      { method: 'GET' },
+      handlers,
+      signal,
+      this.runFrames('', handlers),
+    );
+  }
+
+  /**
+   * Run a workflow once, streamed. Aborting `signal` stops only the stream
+   * (ADR-0048): the run goes on on the server; Stop is `stopRun` (150).
    */
   async streamRun(
     workflowId: string,
@@ -461,27 +503,37 @@ export class WorkflowRunsApiService {
    * stream's own failure go to `handlers`; every other frame goes to
    * `onFrame`, which answers whether it was the terminal one.
    */
-  private async postStream(
+  private postStream(
     url: string,
     body: unknown,
-    handlers: AgentStreamHandlers & {
-      onError?: (message: string, errors?: WorkflowInputError[]) => void;
-      onRefused?: (status: number) => void;
-    },
+    handlers: StreamRequestHandlers,
+    signal: AbortSignal | undefined,
+    onFrame: (event: StreamFrame) => boolean,
+  ): Promise<void> {
+    return this.readStream(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      handlers,
+      signal,
+      onFrame,
+    );
+  }
+
+  /** Request `url` and read its SSE answer, as `postStream` describes. */
+  private async readStream(
+    url: string,
+    init: RequestInit,
+    handlers: StreamRequestHandlers,
     signal: AbortSignal | undefined,
     onFrame: (event: StreamFrame) => boolean,
   ): Promise<void> {
     let res: Response;
     try {
-      res = await fetch(
-        url,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          signal,
-        },
-      );
+      res = await fetch(url, { ...init, signal });
     } catch (error) {
       if (
         signal?.aborted ||

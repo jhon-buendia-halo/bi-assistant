@@ -4,7 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { EMPTY, of, throwError } from 'rxjs';
+import { EMPTY, Subject, of, throwError } from 'rxjs';
 import {
   WorkflowDetail,
   WorkflowRun,
@@ -13,9 +13,38 @@ import {
 import { WorkflowDesigner } from './workflow-designer.service';
 import { GRAPH_RETRY_RUN, GRAPH_WORKFLOW } from './workflow-graph.testing';
 import { RunStreamHandlers, WorkflowRunsApiService } from './workflow-runs-api.service';
+import { WorkflowRunTasks } from './workflow-run-tasks';
+
+/** The runs' background tasks (ADR-0048): what the designer asks of them. */
+class FakeRunTasks {
+  track = jasmine.createSpy('track');
+  stop = jasmine.createSpy('stop').and.returnValue(EMPTY);
+  watchShown = jasmine.createSpy('watchShown');
+  markSeen = jasmine.createSpy('markSeen');
+}
 
 /** A run stream the test drives: each call is recorded with its handlers. */
 class FakeRunsApi {
+  tasks = new FakeRunTasks();
+
+  /** The runs followed again (api.md 149), with their handlers. */
+  attaches: {
+    runId: string;
+    handlers: RunStreamHandlers;
+    signal?: AbortSignal;
+    end: () => void;
+  }[] = [];
+
+  attachRun(
+    runId: string,
+    handlers: RunStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return new Promise<void>((end) => {
+      this.attaches.push({ runId, handlers, signal, end });
+    });
+  }
+
   calls: {
     workflowId: string;
     body: WorkflowRunRequest;
@@ -133,6 +162,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: WorkflowRunsApiService, useValue: runs },
+        { provide: WorkflowRunTasks, useValue: runs.tasks },
       ],
     });
     designer = TestBed.inject(WorkflowDesigner);
@@ -516,38 +546,78 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()?.finishedAt).toEqual(jasmine.any(String));
   });
 
-  it('Stop aborts the stream, shows the run stopped, then reads back the stored run with its partial answer', fakeAsync(() => {
+  it('Stop asks the server to stop the run (api.md 150), drops the stream and shows the stored run with its partial answer', () => {
     executeQuestion();
     const h = runs.last.handlers;
     h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
-    runs.getRun.and.returnValues(
-      of(storedRun({ status: 'running', answer: undefined })),
-      of(
-        storedRun({
-          status: 'stopped',
-          steps: [{ id: 'answer', title: 'Answer', status: 'stopped' }],
-          answer: { role: 'assistant', content: 'Brazil', at: 'x' },
-        }),
-      ),
-    );
+    const stopped = new Subject<{ ok: boolean; message: string; run: WorkflowRun }>();
+    runs.tasks.stop.and.returnValue(stopped);
 
     designer.stop();
+    expect(runs.tasks.stop).toHaveBeenCalledOnceWith('run-1');
     expect(runs.last.signal?.aborted).toBe(true);
     expect(designer.running()).toBe(false);
     expect(designer.runResult()?.status).toBe('stopped');
     expect(designer.nodeStatuses()).toEqual({ start: 'success', answer: 'stopped', end: 'stopped' });
-    // Events of the stopped stream are ignored.
+    // Events of the dropped stream are ignored.
     h.onText!('late');
     expect(designer.streamingText()).toBe('');
 
-    tick(300);
-    expect(runs.getRun).toHaveBeenCalledTimes(2);
-    expect(runs.getRun).toHaveBeenCalledWith('run-1');
+    stopped.next({
+      ok: true,
+      message: 'Run stopped',
+      run: storedRun({
+        status: 'stopped',
+        steps: [{ id: 'answer', title: 'Answer', status: 'stopped' }],
+        answer: { role: 'assistant', content: 'Brazil', at: 'x' },
+      }),
+    });
     expect(designer.run()?.status).toBe('stopped');
     expect(designer.runResult()?.answer?.content).toBe('Brazil');
     expect(designer.canFollowUp()).toBe(false);
+  });
+
+  it('Stop reads the run back when the stop request fails', fakeAsync(() => {
+    executeQuestion();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
+    runs.tasks.stop.and.returnValue(throwError(() => new Error('offline')));
+    runs.getRun.and.returnValues(
+      of(storedRun({ status: 'running', answer: undefined })),
+      of(storedRun({ status: 'stopped', answer: undefined })),
+    );
+    designer.stop();
+    tick(300);
+    expect(runs.getRun).toHaveBeenCalledTimes(2);
+    expect(designer.run()?.status).toBe('stopped');
   }));
+
+  it('Stop before the run has its id stops it as soon as the run says it started', () => {
+    executeQuestion();
+    designer.stop();
+    expect(designer.runResult()?.status).toBe('stopped');
+    expect(designer.running()).toBe(false);
+    // The stream stays until the run has an id, so it can be stopped.
+    expect(runs.last.signal?.aborted).toBe(false);
+    expect(runs.tasks.stop).not.toHaveBeenCalled();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
+    expect(runs.tasks.stop).toHaveBeenCalledOnceWith('run-1');
+    expect(runs.last.signal?.aborted).toBe(true);
+  });
+
+  it('a run becomes a background task as soon as it has its id, titled by its question', () => {
+    executeQuestion();
+    expect(runs.tasks.track).not.toHaveBeenCalled();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
+    expect(runs.tasks.track).toHaveBeenCalledOnceWith({
+      id: 'run-1',
+      workflowName: 'Insights Analyst',
+      title: 'Which team scored the most goals?',
+    });
+    // The page tells the tasks which run it shows (its end is not toasted).
+    const shown = runs.tasks.watchShown.calls.mostRecent().args[0] as () => string | null;
+    expect(shown()).toBe('run-1');
+  });
 
   it('Follow up runs on the same input with the new question and this run as its context', () => {
     executeQuestion();
@@ -592,13 +662,111 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     });
   });
 
-  it('leaving the page stops the stream and discards the run shown', () => {
+  it('leaving the page drops the stream and the run shown but never stops the run (ADR-0048)', () => {
     executeQuestion();
+    runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
     const signal = runs.last.signal!;
     designer.clear();
     expect(signal.aborted).toBe(true);
+    expect(runs.tasks.stop).not.toHaveBeenCalled();
     expect(designer.runResult()).toBeNull();
     expect(designer.running()).toBe(false);
+  });
+
+  describe('coming back to a run that runs on the server (api.md 149)', () => {
+    const RUNNING = storedRun({
+      status: 'running',
+      steps: [],
+      answer: undefined,
+    });
+
+    /** Leave the page with run-1 running, then open the workflow again. */
+    function leaveAndComeBack(): void {
+      executeQuestion();
+      runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
+      runs.last.handlers.onText!('Bra');
+      designer.clear();
+      runs.getRun.and.returnValue(of(RUNNING));
+      designer.load(ASSISTANT.id);
+      http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+    }
+
+    it('opening its workflow again follows it from its first event and rebuilds the live view', () => {
+      leaveAndComeBack();
+      expect(runs.getRun).toHaveBeenCalledWith('run-1');
+      expect(runs.attaches.length).toBe(1);
+      expect(runs.attaches[0].runId).toBe('run-1');
+      expect(designer.running()).toBe(true);
+      expect(designer.runResult()?.runId).toBe('run-1');
+      expect(designer.inputValue('question')).toBe('Which team scored the most goals?');
+      // The replay: the run, its step, Thinking, a tool call, the answer forming.
+      const h = runs.attaches[0].handlers;
+      h.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
+      h.onStep!({ id: 'answer', title: 'Answer', status: 'running' });
+      h.onReasoning!('Looking at goals');
+      h.onTool!({ name: 'run_readonly_sql', input: 'SELECT 1' } as never);
+      h.onText!('Bra');
+      h.onText!('zil');
+      expect(designer.nodeStatuses()['answer']).toBe('running');
+      expect(designer.reasoning()).toBe('Looking at goals');
+      expect(designer.toolCalls().map((call) => call.name)).toEqual(['run_readonly_sql']);
+      expect(designer.streamingText()).toBe('Brazil');
+      expect(runs.tasks.track).toHaveBeenCalledWith({
+        id: 'run-1',
+        workflowName: 'Insights Analyst',
+        title: 'Which team scored the most goals?',
+      });
+      // It goes on live to its end.
+      h.onDone!(storedRun());
+      expect(designer.running()).toBe(false);
+      expect(designer.run()?.status).toBe('success');
+      // Its end showed here: its task does not toast it.
+      expect(runs.tasks.markSeen).toHaveBeenCalledWith('run-1');
+    });
+
+    it('a run opened from Runs (or its task) while running is followed too', () => {
+      designer.showRunOnLoad(RUNNING);
+      designer.load(ASSISTANT.id);
+      http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+      expect(runs.attaches.map((a) => a.runId)).toEqual(['run-1']);
+      expect(designer.runResult()?.status).toBe('running');
+    });
+
+    it('a run the server no longer holds is read back and shown as stored', fakeAsync(() => {
+      leaveAndComeBack();
+      const h = runs.attaches[0].handlers;
+      runs.getRun.and.returnValue(of(storedRun()));
+      h.onRefused!(404);
+      h.onError!('Run "run-1" has no live events');
+      expect(designer.run()?.status).toBe('success');
+      expect(designer.runResult()?.answer?.content).toBe('Brazil scored the most.');
+      tick(300);
+    }));
+
+    it('shows it only once: the next visit starts with no run', () => {
+      leaveAndComeBack();
+      runs.attaches[0].handlers.onDone!(storedRun());
+      designer.clear();
+      runs.getRun.calls.reset();
+      designer.load(ASSISTANT.id);
+      http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+      expect(runs.getRun).not.toHaveBeenCalled();
+      expect(designer.runResult()).toBeNull();
+    });
+
+    it('a stopped run is not followed again', () => {
+      executeQuestion();
+      runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'answer-business-question' });
+      designer.stop();
+      designer.clear();
+      designer.load(ASSISTANT.id);
+      http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(ASSISTANT);
+      http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
+      expect(runs.attaches.length).toBe(0);
+    });
   });
 
   it('an old stored run that still carries an rfpId is shown as a plain run', () => {
@@ -802,6 +970,7 @@ describe('WorkflowDesigner, a run that retries a step (a loop)', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: WorkflowRunsApiService, useValue: runs },
+        { provide: WorkflowRunTasks, useValue: runs.tasks },
       ],
     });
     designer = TestBed.inject(WorkflowDesigner);
@@ -913,6 +1082,7 @@ describe('WorkflowDesigner, a run that waits for an answer (api.md 138)', () => 
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: WorkflowRunsApiService, useValue: runs },
+        { provide: WorkflowRunTasks, useValue: runs.tasks },
       ],
     });
     designer = TestBed.inject(WorkflowDesigner);

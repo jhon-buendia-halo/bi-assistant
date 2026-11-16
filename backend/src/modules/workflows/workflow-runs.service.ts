@@ -59,6 +59,7 @@ import {
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { nodeChatHostRunId } from './node-chat-context';
 import { HeldDraftRuns } from './held-draft-runs';
+import { LiveRuns, type LiveRunEvent } from './live-runs';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import { SuspendedRuns } from './suspended-runs';
 import {
@@ -252,6 +253,13 @@ export class WorkflowRunsService implements OnModuleInit {
   readonly drafts = new HeldDraftRuns();
 
   /**
+   * The runs started (119) or resumed (138) detached from their request
+   * (ADR-0048): their stop signal and the log of their events, which the
+   * request and any later client (149) follow; Stop is 150.
+   */
+  readonly live = new LiveRuns();
+
+  /**
    * Start-up recovery (plan 5.1 step 5): a run still `running` was cut off
    * when the app stopped, so it becomes `failed` (its workspace and memory
    * threads kept, as any finished run's); a run workspace no stored run
@@ -409,6 +417,116 @@ export class WorkflowRunsService implements OnModuleInit {
     emit: (event: RunStreamEvent) => void,
     abortSignal?: AbortSignal,
   ): Promise<WorkflowRun> {
+    return this.runOpened(await this.open(prepared), emit, abortSignal);
+  }
+
+  /**
+   * Start a prepared run detached from the request (api.md 119; ADR-0048):
+   * stored `running`, then run on the live runs' signal, every event logged
+   * there, until it ends or Stop (150) aborts it. Answers its id; the
+   * request follows it like any client (149), and closing the connection
+   * stops only the following.
+   */
+  async launch(prepared: PreparedRun): Promise<string> {
+    const held = await this.open(prepared);
+    const id = held.base.id;
+    const signal = this.live.begin(id);
+    this.detach(id, signal, (emit) => this.runOpened(held, emit, signal));
+    return id;
+  }
+
+  /**
+   * Resume a prepared run detached from the request (api.md 138; ADR-0048),
+   * as `launch` starts one: its events go to a fresh log of the same run.
+   */
+  resumeDetached(prepared: PreparedResume): string {
+    const id = prepared.held.base.id;
+    const signal = this.live.begin(id);
+    this.detach(id, signal, (emit) => this.resume(prepared, emit, signal));
+    return id;
+  }
+
+  /**
+   * Stop a run (api.md 150): a live run is aborted and stored `stopped` with
+   * any partial answer, as a closed connection did before ADR-0048; a run
+   * waiting for the user is dropped and stored `stopped` as an expired one
+   * (138). Idempotent: a run that already ended answers as it is. Answers
+   * the stored run; 404 for an unknown one.
+   */
+  async stop(id: string): Promise<WorkflowRun> {
+    const run = await this.stored(id);
+    if (this.live.stop(id)) {
+      await this.settled(this.live.whenEnded(id));
+    } else if (run.status === 'suspended') {
+      const held = this.waiting.remove(id);
+      await this.expire(id, held);
+    }
+    return this.get(id);
+  }
+
+  /**
+   * Check that a run's events can be followed (api.md 149) before any SSE
+   * frame: 404 `Run "<id>" not found` for no stored run, and 404 `Run
+   * "<id>" has no live events` for one the live runs no longer hold (it
+   * ended more than 10 minutes ago, or before a restart: read it with 121).
+   */
+  async checkLive(id: string): Promise<void> {
+    if (this.live.has(id)) return;
+    await this.stored(id);
+    throw new NotFoundException(`Run "${id}" has no live events`);
+  }
+
+  /**
+   * Run `work` in the background, its events logged for `id`: a throw that
+   * is not a stop is sent as `error { content }` (as `streamSse` sends it);
+   * a stopped run, which sends nothing more, ends its log with `done { run
+   * }` as stored (`stopped`), so a client still following it sees the end.
+   * The run's log ends either way.
+   */
+  private detach(
+    id: string,
+    signal: AbortSignal,
+    work: (emit: (event: RunStreamEvent) => void) => Promise<unknown>,
+  ): void {
+    const emit = (event: RunStreamEvent) =>
+      this.live.publish(id, event as LiveRunEvent);
+    const background = async () => {
+      try {
+        await work(emit);
+      } catch (failure) {
+        if (!signal.aborted) {
+          const message =
+            failure instanceof Error ? failure.message : String(failure);
+          emit({ type: 'error', content: message });
+        }
+      }
+      if (signal.aborted) {
+        try {
+          emit({ type: 'done', run: await this.get(id) });
+        } catch (failure) {
+          this.logger.warn(
+            `Could not read stopped run ${id}: ${runErrorMessage(failure)}`,
+          );
+        }
+      }
+    };
+    void background().finally(() => this.live.end(id));
+  }
+
+  /** Wait for a stopped run to be stored, at most 10 seconds. */
+  private async settled(ended: Promise<void> | undefined): Promise<void> {
+    if (!ended) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const limit = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, 10_000);
+      (timer as { unref?: () => void }).unref?.();
+    });
+    await Promise.race([ended, limit]);
+    clearTimeout(timer);
+  }
+
+  /** Store a prepared run as it starts, with its step tracker. */
+  private async open(prepared: PreparedRun): Promise<HeldRun> {
     const { workflow } = prepared;
     // Steps inside a loop keep one entry per attempt (api.md 3.6).
     const repeats = loopStepIds(workflow.edges);
@@ -421,7 +539,17 @@ export class WorkflowRunsService implements OnModuleInit {
       })),
     );
     const base = await this.start(prepared);
-    const held: HeldRun = { prepared, base, tracker };
+    return { prepared, base, tracker };
+  }
+
+  /** Run an opened run's turn and report it on `emit` (as `stream`). */
+  private runOpened(
+    held: HeldRun,
+    emit: (event: RunStreamEvent) => void,
+    abortSignal?: AbortSignal,
+  ): Promise<WorkflowRun> {
+    const { prepared, base } = held;
+    const { workflow } = prepared;
     const live = liveEmit(emit, abortSignal);
     live({ type: 'run', runId: base.id, workflowId: workflow.id });
     return this.drive(held, live, abortSignal, async (io) => {

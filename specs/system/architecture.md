@@ -1106,7 +1106,7 @@ flowchart LR
   - **Stack-neutral:** a rebuild needs one stored, streamed run workflow, an agent library with a draft preview, and read-only legacy runs.
 
 #### ADR-0043 — Human in the loop: a run that needs the user is suspended with Mastra's suspend/resume and continued in place; its runtime stays in memory, with a snapshot only while it waits
-- **Status:** Accepted (2026-11-13).
+- **Status:** Accepted (2026-11-13); amended by ADR-0048 (a running run's runtime is held in memory too, detached from its connection).
 - **Date:** 2026-11-13
 - **Context:**
   - Questions to Insights v2 asks the user in two places: Clarify (Plan decided the question is ambiguous) and Analyse (the agent called `ask_clarification` because the data was). Until now both **ended** the run with the question, and the user's pick started a **new** run with the old one as context: two runs, the steps run twice, and the run page lost the thread.
@@ -1206,7 +1206,7 @@ flowchart LR
   - **One place to see it:** a Background tasks button in the rail above System logs, with the count of running tasks, and its panel (ui.md 3.7). The rail exists in both brands; the header crumb does not exist in `mercer`.
   - **One outcome message:** the service toasts the end once, with **Open** (back to the result) or **Retry** (the same work again); `ToastService` gains one optional action per toast.
   - **No backend change for these tasks:** a root subscription keeps the HTTP request open, so the backend sees no closed connection. Kept in memory only; nothing is stored.
-  - **Workflow runs are a separate decision:** their stream is closed by the page and the backend stops a run when its connection closes (api.md 3.6); keeping them alive needs the backend change chosen in roadmap 1.26.5.
+  - **Workflow runs are a separate decision:** their stream is closed by the page and the backend stopped a run when its connection closed (api.md 3.6); keeping them alive needed the backend change of roadmap 1.26.5, ADR-0048.
 - **Consequences:**
   - Each long operation is wired to the service once (roadmap 1.26.2–1.26.4); new long work starts there instead of in a component.
   - Components lose their own toasts for that work, and the E2E specs that waited for a component toast keep working because the copy is the server's message.
@@ -1216,6 +1216,29 @@ flowchart LR
   - **Keep each component's state in its own feature service:** rejected; twenty ad-hoc stores and no single place to see what runs.
   - **Header indicator:** rejected by the user in favour of the rail; the `mercer` banner has no crumb.
   - **Backend job queue for every operation:** rejected for now; the requests already complete if the client keeps the connection, so a queue would add endpoints and storage for no visible gain.
+
+#### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Context:**
+  - A run's stream (api.md 119, 138) was its lifetime: the backend aborted the run when the connection closed, and the workflow page closed it when it was left (the renderer has no router, ADR-0047). Leaving the page, reloading or closing the window stopped the run; the user asked for runs to keep going and show in Background tasks (roadmap 1.26.5).
+  - ADR-0043 keeps a suspended run's runtime in server memory (`SuspendedRuns`); the same pattern holds a running one. The installed Mastra 1.66 exposes `watch`/`cancel` only as internal run API, and our agent steps run through the session turn path, not Mastra's stream.
+  - Chromium allows 6 connections per origin, so one SSE connection per background run would starve the app.
+- **Decision:**
+  - **The run is detached.** 119 and 138 start (or resume) the run on the signal of an in-memory registry, `LiveRuns` (`backend/src/modules/workflows/live-runs.ts`, no framework import), keyed by run id: its `AbortController`, a numbered log of its events (consecutive `text` and `reasoning` deltas merged, at most 5,000 entries), its followers and its end; an ended run's log is dropped 10 minutes after its end. The HTTP response is one follower: it replays the log from the start, then goes on live; closing it only unsubscribes. Each frame carries its `seq`.
+  - **Two new routes.** `GET /workflow-runs/:id/events/stream?after=<seq>` (149) follows a held run again from any client; `POST /workflow-runs/:id/stop` (150) aborts it (stored `stopped` as before, the log ending with `done`), is idempotent, and drops a waiting run as expired.
+  - **The page follows; it never owns the run.** Leaving the workflow page drops the stream only; opening the workflow again, or the run from Runs or its task, follows it with 149 from `seq` 0, rebuilding the live view (steps, Thinking, tool calls, the answer forming). Stop calls 150.
+  - **Background tasks poll.** Each run is a `workflow-run` task (ADR-0047) whose work reads the run (121) every 3 s until it ends, so background runs hold no SSE connection; at start-up the runs the server reports `running` or `suspended` (120) get their task back.
+  - **Unchanged:** Try it (129) and a step's chat (137) stay tied to their connection; 118 runs inline.
+  - **Amends ADR-0043:** a run's runtime stays in server memory, now while it runs too, not only while it waits.
+- **Consequences:**
+  - A backend restart still ends a running run: it is stored `failed` at start-up (workflows R20), and a waiting one `stopped`, as before; nothing of the registry is persisted.
+  - The stream's frames gain `seq` (api.md 3.6); a stopped run's stream ends with `done` rather than nothing; a client must call 150 to stop.
+  - Memory: one log per live run and per run ended in the last 10 minutes, bounded by the cap.
+  - **Stack-neutral:** a rebuild needs a server-side run that outlives its request, a replayable event log per run, a follow endpoint and a stop endpoint.
+- **Alternatives considered:**
+  - **B — Mastra's `watch`/`cancel` on the workflow run:** rejected; internal API, every agent step would be rewritten off the session turn path, and the evals would change.
+  - **C — Keep the stream open from a root frontend service:** rejected; a reload or closed window still stops the run, and each background run holds one of 6 connections per origin.
 
 ## Level 4 — Code
 

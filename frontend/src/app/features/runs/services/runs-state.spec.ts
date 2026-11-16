@@ -126,13 +126,14 @@ describe('RunsState (plan 1.24.11)', () => {
     expect(state.runError()).toBeNull();
   });
 
-  it('opens a run still running read-only, without asking for its workflow', () => {
+  it('opens a run still running on its workflow page, which follows it live (ADR-0048)', () => {
     state.openRun('r1');
     http
       .expectOne((r) => r.url.endsWith('/workflow-runs/r1'))
       .flush({ ...RUN, status: 'running' });
-    expect(shell.mainView()).toBe('run-detail');
-    expect(state.activeRun()?.status).toBe('running');
+    http.expectOne((r) => r.url.endsWith('/workflows/answer-business-question')).flush(V2_DETAIL);
+    expect(shell.mainView()).toBe('workflow-detail');
+    expect(state.activeRun()).toBeNull();
     expect(state.loadingRun()).toBeFalse();
   });
 
