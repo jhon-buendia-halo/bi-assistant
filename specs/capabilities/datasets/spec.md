@@ -31,7 +31,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - R5. The catalog browser SHALL present the datasource's inventory as an expandable tree: catalog → schema → entity. Each row shows its name and a count (schemas per catalog, entities per schema, columns per entity).
 - R6. The browser SHALL let the user choose the datasource from every saved datasource, labelled "<name> · <kind>".
 - R7. Opening the browser to create a dataset when **more than one** datasource exists SHALL NOT contact any datasource: it shows the stored inventory snapshot if one exists, otherwise a prompt "Pick the datasource you want to browse, then load its entities." with a "Load entities from <kind>" button. With exactly one datasource, or when editing an existing dataset, the inventory loads immediately (from the snapshot when present). Choosing another datasource in the picker loads it immediately.
-- R8. While loading the user SHALL be able to cancel and return to the picker, and to switch datasource at any time.
+- R8. While loading the user SHALL be able to cancel and return to the picker, and to switch datasource at any time. Loading an inventory from the datasource (not the stored-snapshot probe) runs as a background task, `inventory-refresh`, keyed by the datasource id (R54); Cancel stops that task.
 - R9. The browser SHALL show when the inventory was last read ("Updated <date and time>") and SHALL offer a refresh that re-reads the datasource live and replaces the snapshot.
 - R10. The user SHALL be able to filter the tree by typing: a catalog whose name matches keeps all its schemas and entities; otherwise only schemas whose name matches (with all their entities) or entities whose name matches survive. Matching is a case-insensitive substring. While a filter is active every surviving node is expanded.
 - R11. Selecting a row SHALL show its details in the right panel (R20). Clicking a catalog or schema row also toggles its expansion; clicking an entity row only selects it.
@@ -41,12 +41,12 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 ### Saving
 
-- R15. "Save dataset (N)" — N being the number of included entities — SHALL be enabled only when a datasource is selected, the Dataset name is not empty, N ≥ 1, and no save is running.
+- R15. "Save dataset (N)" — N being the number of included entities — SHALL be enabled only when a datasource is selected, the Dataset name is not empty, N ≥ 1, and no save of that name is running.
 - R16. The system SHALL reject a save with `Dataset name is required`, `Include at least one entity`, `datasourceId is required`, `Datasource <id> not found`, or `Datasource kind must be <kind>` (when the supplied kind differs from the datasource's real kind).
 - R17. On save the system SHALL store the schema snapshot the browser sent (columns of the included entities only, since the browser sends only those). The backend does not re-read the columns; an included key with no snapshot entry is kept in the dataset without columns.
 - R18. On save the system SHALL enrich each snapshotted entity with sample values: it reads up to 50 rows per entity (four entities in flight, one shared connection where the kind allows), and for each column keeps up to five distinct non-empty values, each trimmed and cut to 40 characters plus `…`. Enrichment is best effort: an entity that cannot be sampled keeps its snapshot as is and the failure is logged; a sampling failure SHALL NOT fail the save.
 - R19. On save the system SHALL attach relationships to the snapshot (R23–R29) and persist the dataset. Datasets saved before enrichment existed are not back-filled until they are saved again; the same applies to schema drift on the datasource — the snapshot is only refreshed by re-saving.
-- R20. A successful save SHALL toast `Dataset "<name>" saved — <n> entities`, close the browser and return to the dataset list; a failure toasts the message and stays in the browser.
+- R20. Saving SHALL run as a background task, `dataset-save`, keyed by the trimmed dataset name ([app-shell](../app-shell/spec.md), background tasks) and SHALL return the user to the dataset list at once, without waiting for the request. The end is toasted by the task service: success `Dataset "<name>" saved — <n> entities` with **Open** (the list, then the saved dataset in the editor), failure with the message and **Retry**. A missing name or datasource is still toasted by the browser, before any request, and the user stays in it.
 
 ### Entity details
 
@@ -99,6 +99,13 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - R49. The Ontology tab SHALL act on the dataset it was opened from, by name. Saving the dataset under another name starts that dataset with an empty ontology and leaves the original's items where they are ([dataset-ontology](../dataset-ontology/spec.md) R16). Deleting a dataset deletes its ontology items (R36).
 - R50. The Profile & synthesize tab SHALL act on the **saved** dataset it was opened from, by name, as the Ontology tab does (R49): the tables it lists and profiles are the saved dataset's entities, not the unsaved edits of the Schema tab. It SHALL read the dataset and its datasource and SHALL NOT change either. Deleting a dataset leaves nothing behind for it, because sampled profiles are kept in memory only ([synthetic-data](../synthetic-data/spec.md) R12).
 
+### Background saves and loads
+
+- R51. While a `dataset-save` task runs, the dataset list SHALL show a **pending row** for its name when the list does not have that name yet (`data-testid="dataset-row-pending"`): a spinner, the name, the datasource name and entity count, and a `Saving… <m:ss>` chip. The row is not openable. The row stays until the list has been re-read after the save ends, so it does not blink out.
+- R52. The list row of a dataset being saved again SHALL show the same `Saving… <m:ss>` chip. When any `dataset-save` ends, the list SHALL re-read the datasets.
+- R53. A failed save SHALL leave a row in the list with the error text and **Retry** and **Dismiss** buttons (`data-testid="dataset-row-failed"`), the same actions as in the Background tasks panel. Retry starts the save again; Dismiss removes the row.
+- R54. Leaving the catalog browser SHALL NOT cancel an inventory load; only the stored-snapshot probe is cancelled. The browser's loading state SHALL follow the active `inventory-refresh` task of the selected datasource, so a browser shown again while the load runs shows loading, and applies the result when the task ends. The task service toasts the end only for a failure, or when the browser is not showing that datasource; **Open** shows a new dataset on that datasource. Save reflects a running `dataset-save` of the same name, so Save dataset stays disabled for it.
+
 ## Edge cases and errors
 
 - **No datasource configured:** the browser shows `No datasource configured. Add one in Datasource Configuration first.`
@@ -106,7 +113,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - **Inventory is empty:** `No accessible catalogs found.`
 - **Filter matches nothing:** `No catalogs, schemas or entities match “<term>”.`
 - **Datasource asleep (Databricks):** loading shows `Loading inventory from <kind>…` with "The first load can take a while if the Databricks warehouse is starting up. You can switch datasource above at any time."
-- **Dataset list:** loading `Loading datasets…`; empty `No datasets yet — create one with “New dataset”.`; error shows the backend message.
+- **Dataset list:** loading `Loading datasets…`; empty `No datasets yet — create one with “New dataset”.` (not shown while a save is pending or failed); error shows the backend message.
 - **A column cannot be sampled** (permissions, timeout): the dataset still saves, without sample values for that entity.
 - **Datasource kind label:** the dataset list and the datasource picker should show "Databricks", "PostgreSQL" or "REST API". Open question: in the current UI a REST datasource is labelled "Databricks" in the picker, and a REST dataset shows no kind in the list.
 - **Inert controls:** the list's search and layout icons do nothing today.

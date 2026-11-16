@@ -3,11 +3,13 @@ import {
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   input,
   output,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import {
   LucideAngularModule,
@@ -31,6 +33,7 @@ import { DatasourcesApiService } from '../../../datasources/services/datasources
 import {
   CatalogInfo,
   Datasource,
+  InventoryResult,
   kindLabel,
   SchemaInfo,
   TableInfo,
@@ -43,10 +46,10 @@ import {
 import {
   Dataset,
   DatasetSchemaNote,
-  DatasetsApiService,
   schemaLayerLabel,
 } from '../../services/datasets-api.service';
 import { DatasetSchemaNotesService } from '../../services/dataset-schema-notes.service';
+import { DatasetTasksService } from '../../services/dataset-tasks.service';
 import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { OntologyPanel } from '../../../ontology/components/ontology-panel/ontology-panel';
@@ -57,7 +60,12 @@ export type DatasetTab = 'schema' | 'ontology' | 'synthesize';
 
 @Component({
   selector: 'app-catalog-browser',
-  imports: [LucideAngularModule, MetricsPanel, OntologyPanel, SyntheticDataPanel],
+  imports: [
+    LucideAngularModule,
+    MetricsPanel,
+    OntologyPanel,
+    SyntheticDataPanel,
+  ],
   templateUrl: './catalog-browser.html',
   styleUrl: './catalog-browser.scss',
 })
@@ -78,11 +86,24 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   private readonly api = inject(DatasourcesApiService);
   private readonly selectionService = inject(DatasetSelectionService);
   private readonly inclusionService = inject(DatasetInclusionService);
-  private readonly datasetApi = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
+  private readonly datasetTasks = inject(DatasetTasksService);
   readonly schemaNotes = inject(DatasetSchemaNotesService);
   readonly schemaLayerLabel = schemaLayerLabel;
-  readonly loading = signal(true);
+  /**
+   * The datasource list or the cached-snapshot probe is in flight (a normal,
+   * cancellable request). The inventory load itself is a background task.
+   */
+  private readonly probing = signal(true);
+  /** Loading: the probe, or the inventory task of the selected datasource. */
+  readonly loading = computed(
+    () =>
+      this.probing() ||
+      !!this.datasetTasks.tasks.active(
+        'inventory-refresh',
+        this.datasourceId(),
+      ),
+  );
   /**
    * A datasource is picked but its inventory has not been requested yet. The
    * first pull waits for the user so a slow datasource (a cold Databricks
@@ -131,9 +152,35 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     }
     return result;
   });
-  readonly saving = signal(false);
   readonly datasetName = signal('');
+  /** This name is being saved in the background (still true if the user comes back). */
+  readonly saving = computed(
+    () =>
+      !!this.datasetTasks.tasks.active(
+        'dataset-save',
+        this.datasetName().trim(),
+      ),
+  );
   readonly saved = output<void>();
+
+  constructor() {
+    // Tell the task service which datasource is on screen, so a load that
+    // ends here is not toasted.
+    effect(() =>
+      this.datasetTasks.shownDatasourceId.set(this.datasourceId() || null),
+    );
+    this.datasetTasks.tasks.finished$
+      .pipe(takeUntilDestroyed())
+      .subscribe((task) => {
+        if (task.kind !== 'inventory-refresh') return;
+        if (task.key !== this.datasourceId()) return;
+        if (task.status === 'done')
+          this.applyInventory(task.result as InventoryResult);
+        else if (task.status === 'failed')
+          this.error.set(task.detail ?? 'Failed to load the inventory');
+        else if (this.catalogs().length === 0) this.awaitingChoice.set(true);
+      });
+  }
   /** When set, the browser opens in edit mode with this dataset's data. */
   readonly initial = input<Dataset | null>(null);
 
@@ -148,7 +195,9 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   selectTab(tab: DatasetTab, focus = false): void {
     this.activeTab.set(tab);
     if (focus) {
-      queueMicrotask(() => document.getElementById(`dataset-tab-${tab}`)?.focus());
+      queueMicrotask(() =>
+        document.getElementById(`dataset-tab-${tab}`)?.focus(),
+      );
     }
   }
 
@@ -202,12 +251,17 @@ export class CatalogBrowser implements OnInit, OnDestroy {
           this.error.set(
             'No datasource configured. Add one in Datasource Configuration first.',
           );
-          this.loading.set(false);
+          this.probing.set(false);
           return;
         }
         const editingId = editing?.datasourceId;
+        // Open on a task's datasource, or on one whose inventory is loading.
+        const preferredId =
+          this.datasetTasks.preferredDatasourceId() ??
+          this.datasetTasks.tasks.active('inventory-refresh')?.key;
         const selected =
           datasources.find((d) => d.id === editingId) ??
+          datasources.find((d) => d.id === preferredId) ??
           datasources.find((d) => d.kind === 'databricks') ??
           datasources[0];
         if (editingId && selected.id !== editingId) {
@@ -223,17 +277,24 @@ export class CatalogBrowser implements OnInit, OnDestroy {
         // user has settled on a datasource: a cached snapshot renders straight
         // away, otherwise the picker waits for an explicit load. A single
         // datasource leaves nothing to choose, so it loads as before.
-        if (editing || datasources.length === 1) {
+        this.probing.set(false);
+        if (
+          editing ||
+          datasources.length === 1 ||
+          this.datasetTasks.preferredDatasourceId() === selected.id ||
+          this.datasetTasks.tasks.active('inventory-refresh', selected.id)
+        ) {
           this.loadInventory(selected.id);
         } else {
           this.loadCachedInventory(selected.id);
         }
+        this.datasetTasks.preferredDatasourceId.set(null);
       },
       error: (err) => {
         this.error.set(
           err?.error?.message ?? 'Could not load configured datasources',
         );
-        this.loading.set(false);
+        this.probing.set(false);
       },
     });
   }
@@ -268,7 +329,12 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   cancelLoad(): void {
     if (!this.loading()) return;
     this.cancelInventoryRequest();
-    this.loading.set(false);
+    this.probing.set(false);
+    const task = this.datasetTasks.tasks.active(
+      'inventory-refresh',
+      this.datasourceId(),
+    );
+    if (task) this.datasetTasks.tasks.cancel(task.id);
     this.awaitingChoice.set(true);
   }
 
@@ -293,7 +359,7 @@ export class CatalogBrowser implements OnInit, OnDestroy {
    */
   private loadCachedInventory(id: string): void {
     this.cancelInventoryRequest();
-    this.loading.set(true);
+    this.probing.set(true);
     this.error.set(null);
     this.inventorySub = this.api
       .getInventory(id, { cachedOnly: true })
@@ -306,12 +372,12 @@ export class CatalogBrowser implements OnInit, OnDestroy {
           } else {
             this.awaitingChoice.set(true);
           }
-          this.loading.set(false);
+          this.probing.set(false);
         },
         error: () => {
           // A failed probe is not worth an error banner — offer the load.
           this.awaitingChoice.set(true);
-          this.loading.set(false);
+          this.probing.set(false);
         },
       });
   }
@@ -322,27 +388,26 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    // Only the cached-snapshot probe is cancelled; the inventory load is a
+    // background task and keeps running.
     this.cancelInventoryRequest();
+    this.datasetTasks.shownDatasourceId.set(null);
   }
 
   private loadInventory(id: string, refresh = false): void {
     this.cancelInventoryRequest();
-    this.loading.set(true);
+    this.probing.set(false);
     this.error.set(null);
-    this.inventorySub = this.api.getInventory(id, { refresh }).subscribe({
-      next: (res) => {
-        if (res.ok) {
-          this.catalogs.set(res.catalogs ?? []);
-          this.fetchedAt.set(res.fetchedAt ?? null);
-          this.cached.set(res.cached === true);
-        } else this.error.set(res.message ?? 'Failed to load the inventory');
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.error.set(err?.error?.message ?? 'Backend unreachable');
-        this.loading.set(false);
-      },
-    });
+    const name = this.datasources().find((d) => d.id === id)?.name ?? id;
+    this.datasetTasks.loadInventory(id, name, refresh);
+  }
+
+  private applyInventory(res: InventoryResult | undefined): void {
+    if (res?.ok) {
+      this.catalogs.set(res.catalogs ?? []);
+      this.fetchedAt.set(res.fetchedAt ?? null);
+      this.cached.set(res.cached === true);
+    } else this.error.set(res?.message ?? 'Failed to load the inventory');
   }
 
   isExpanded(key: string): boolean {
@@ -427,7 +492,6 @@ export class CatalogBrowser implements OnInit, OnDestroy {
       this.toast.error('Give the dataset a name first');
       return;
     }
-    this.saving.set(true);
     // Schema snapshot for the included entities (we already have the
     // inventory in hand) — spares the backend live datasource round-trips.
     const included = this.inclusionService.included();
@@ -445,32 +509,22 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     }
     const datasource = this.selectedDatasource();
     if (!datasource) {
-      this.saving.set(false);
       this.toast.error('Select a datasource first');
       return;
     }
-    this.datasetApi
-      .createDataset(
-        name,
-        Array.from(included),
-        entities,
-        { id: datasource.id, kind: datasource.kind },
-        this.schemaNotes.toSave(included),
-      )
-      .subscribe({
-        next: (res) => {
-          this.saving.set(false);
-          if (res.ok) {
-            this.toast.success(res.message);
-            this.saved.emit();
-          } else {
-            this.toast.error(res.message);
-          }
-        },
-        error: (err) => {
-          this.toast.error(err?.error?.message ?? 'Backend unreachable');
-          this.saving.set(false);
-        },
-      });
+    // The save runs as a background task (the service toasts its end), so
+    // the user is back on the Datasets list at once.
+    this.datasetTasks.save({
+      name,
+      tables: Array.from(included),
+      entities,
+      datasource: {
+        id: datasource.id,
+        kind: datasource.kind,
+        name: datasource.name,
+      },
+      schemas: this.schemaNotes.toSave(included),
+    });
+    this.saved.emit();
   }
 }
