@@ -1,11 +1,14 @@
 import {
   Component,
+  DestroyRef,
   OnInit,
   computed,
   inject,
   output,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { catchError, of, switchMap, timer } from 'rxjs';
 import {
   BookOpen,
   Loader2,
@@ -23,7 +26,13 @@ import {
   hubFilters,
 } from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
+import { WorkflowRunSummary } from '../../../workflows/models/workflow.model';
+import { AgentActivity, agentActivity } from '../../services/agent-activity';
 import { AgentCard } from '../agent-card/agent-card';
+
+/** How often the hub re-reads the run history for the agents' status. */
+export const ACTIVITY_REFRESH_MS = 15_000;
 
 /**
  * The Agents screen (agents-evals R1-R4, R53, ui.md 4.4): one section per
@@ -45,6 +54,8 @@ export class AgentHub implements OnInit {
 
   private readonly api = inject(AgentsApiService);
   private readonly toast = inject(ToastService);
+  private readonly runsApi = inject(WorkflowRunsApiService);
+  private readonly destroyRef = inject(DestroyRef);
   readonly openAgent = output<Agent>();
   /** New agent; the shell opens the agent editor (R54). */
   readonly newAgent = output<void>();
@@ -57,6 +68,22 @@ export class AgentHub implements OnInit {
   readonly query = signal('');
   readonly filter = signal<HubFilter>('all');
   readonly owner = signal<OwnerFilter>('any');
+  /** The run history; null until it loads or when it cannot be read. */
+  readonly runs = signal<WorkflowRunSummary[] | null>(null);
+
+  /**
+   * Each agent's status, by key (ui.md 4.4). Empty while the run history is
+   * unknown, so a card never claims an agent is available without knowing.
+   */
+  readonly activities = computed(() => {
+    const runs = this.runs();
+    const map = new Map<string, AgentActivity>();
+    if (!runs) return map;
+    for (const agent of this.agents()) {
+      map.set(agent.key, agentActivity(agent, runs));
+    }
+    return map;
+  });
 
   /** All, Pinned and the domains that have agents (R2). */
   readonly filters = computed(() => hubFilters(this.agents()));
@@ -70,6 +97,14 @@ export class AgentHub implements OnInit {
   );
 
   ngOnInit(): void {
+    timer(0, ACTIVITY_REFRESH_MS)
+      .pipe(
+        switchMap(() =>
+          this.runsApi.list().pipe(catchError(() => of({ runs: null }))),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((res) => this.runs.set(res.runs));
     this.api.getAgents().subscribe({
       next: (res) => {
         this.agents.set(res.agents);

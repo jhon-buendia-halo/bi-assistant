@@ -17,6 +17,16 @@ describe('built-in agent personas (agents.md 1.1)', () => {
     }
   });
 
+  it('gives every built-in agent a short first-person intro', () => {
+    for (const key of keys) {
+      const intro = builtinAgentPersona(key)?.intro ?? '';
+      // Speaks as the agent ("I …", "I'm …"), not about it.
+      expect(intro).toMatch(/\b(I|I'm|I'll|me)\b/);
+      expect(intro.length).toBeGreaterThan(40);
+      expect(intro.length).toBeLessThanOrEqual(160);
+    }
+  });
+
   it('lists no persona for an agent that is not registered', () => {
     expect(Object.keys(BUILTIN_AGENT_PERSONAS).sort()).toEqual(
       [...keys].sort(),

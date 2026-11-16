@@ -25,6 +25,7 @@ Versions are taken from `frontend/package.json` and `backend/package.json`. A ba
 | RxJS | ~7.8.0 | HTTP and stream plumbing alongside signals. |
 | Tailwind CSS + `@tailwindcss/postcss` | 4.3.3 (both) | Styling (v4, via PostCSS). `postcss` is 8.5.28. |
 | lucide-angular | 1.0.0 | Icons. |
+| DiceBear (`@dicebear/core`, `@dicebear/notionists`) | ^9.4.3 / ^9.4.2 | The agents' illustrated portraits (ui.md 4.4). The library is MIT; the Notionists art is by Zoish, CC0 1.0. Loaded lazily with a dynamic `import()`, so it stays out of the initial bundle. |
 | `@fontsource/inter-tight` | 5.3.0 | The bundled Inter Tight webfont (OFL-1.1), weights 300 to 700, the UI sans of the halo brand (replaces Noto Sans there, ADR-0044), listed in the `styles` of `angular.json` so the font files ship with the renderer ([ui.md](ui.md) §6.2). |
 | `@fontsource/noto-sans` | 5.3.0 | The bundled Noto Sans webfont, the UI sans of the mercer brand only (ADR-0045); listed in the `mercer` configuration's `styles`, so a halo build does not ship it. |
 | `@fontsource/fraunces` | 5.3.0 | The bundled Fraunces webfont (OFL-1.1), weight 800, the display serif for the accent word of a display title ([ui.md](ui.md) §6.2). |

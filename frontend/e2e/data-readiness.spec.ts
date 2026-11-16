@@ -69,8 +69,6 @@ const AGENT = 'Data Readiness Agent';
 const AGENT_KEY = 'data-readiness';
 const SESSION = 'Data Readiness';
 const DATASET = 'World Cup';
-const DESCRIPTION =
-  'Assesses how ready a PostgreSQL or Databricks dataset is for analysis, scoring it on the DMBOK data-quality dimensions with a deterministic engine and explaining the findings.';
 const ASSESS_QUESTION = 'Assess the readiness of this dataset';
 const ASSESS_ANSWER =
   'The World Cup dataset has been assessed: the scorecard is in the panel.';
@@ -369,7 +367,10 @@ test('the Data Readiness Agent is an Official library agent used by Assess Data 
     'Data Quality Analyst',
   );
   await expect(card).toContainText('Owner: Official');
-  await expect(card).toContainText(DESCRIPTION.slice(0, 60));
+  // It introduces itself in the first person instead of its description.
+  await expect(card.getByTestId(`agent-intro-${AGENT_KEY}`)).toContainText(
+    'I check whether a dataset is ready for analysis.',
+  );
   // The agent card never starts a chat, and chats cannot start at all.
   await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
 

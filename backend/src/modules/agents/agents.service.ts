@@ -79,6 +79,9 @@ export interface AgentSummary {
   name: string;
   /** The persona's job title; empty when a user agent has none. */
   role: string;
+  /** A built-in persona's first-person intro (agents.md 1.1); '' for a
+   * user agent, whose card shows its description instead. */
+  intro: string;
   /** The specialty the hub groups the agent under (agents.md 1.2): a
    * built-in's from its persona, a user agent's as chosen, else `general`. */
   domain: AgentDomain;
@@ -98,6 +101,12 @@ export interface AgentSummary {
   /** Effective configuration (Live, else draft); empty for built-ins. */
   datasets: string[];
   starterQuestions: string[];
+  /**
+   * The catalogue workflows whose steps call this agent (api.md 33-34):
+   * `answer-business-question` for `insights-analyst`, none for a user agent.
+   * The hub reads it to say when an agent is busy in a run.
+   */
+  usedInWorkflows: { id: string; name: string }[];
 }
 
 export interface AgentToolDetail {
@@ -186,11 +195,6 @@ export interface AgentDetail extends AgentSummary {
   prompt?: AgentPromptView;
   /** Workflow-backed built-in agents only: their turn's steps (api.md 34). */
   workflow?: AgentWorkflow;
-  /**
-   * The catalogue workflows whose steps call this agent (api.md 34):
-   * `answer-business-question` for `insights-analyst`, none for any other agent.
-   */
-  usedInWorkflows: { id: string; name: string }[];
 }
 
 @Injectable()
@@ -245,7 +249,6 @@ export class AgentsService {
         llm: await this.llmDetail(),
         ...(prompt ? { prompt } : {}),
         ...(workflow ? { workflow } : {}),
-        usedInWorkflows: workflowsUsingAgent(key),
       };
     }
     const doc = await this.userAgents.get(key);
@@ -273,8 +276,6 @@ export class AgentsService {
       model: assistant?.model ?? null,
       toolLinks: toolLinks(doc, skills),
       llm: await this.llmDetail(effectiveConfig(doc)),
-      // A user agent is a library entry: no workflow runs it (1.23.35).
-      usedInWorkflows: [],
     };
   }
 
@@ -465,7 +466,7 @@ export class AgentsService {
   private async builtinDetail(
     key: string,
     requestContext?: RequestContext,
-  ): Promise<Omit<AgentDetail, 'llm' | 'usedInWorkflows'> | null> {
+  ): Promise<Omit<AgentDetail, 'llm'> | null> {
     const agent = this.mastra.listAgents()[key];
     if (!agent) return null;
 
@@ -534,6 +535,7 @@ export class AgentsService {
       id: agent.id ?? key,
       name: persona?.name ?? agent.name ?? key,
       role: persona?.role ?? '',
+      intro: persona?.intro ?? '',
       domain: persona?.domain ?? DEFAULT_AGENT_DOMAIN,
       description: (await safe(() => agent.getDescription())) ?? '',
       tools: Object.keys((await safe(() => agent.listTools())) ?? {}).sort(),
@@ -549,6 +551,7 @@ export class AgentsService {
         builtinSession && 'datasourceKinds' in builtinSession
           ? [...builtinSession.starterQuestions]
           : [],
+      usedInWorkflows: workflowsUsingAgent(key),
     };
   }
 }
@@ -566,6 +569,7 @@ function summarizeUserAgent(
     id: doc.id,
     name: config.name,
     role: config.role ?? '',
+    intro: '',
     domain: config.domain ?? DEFAULT_AGENT_DOMAIN,
     description: config.description,
     tools: [...assistantTools],
@@ -577,6 +581,8 @@ function summarizeUserAgent(
     missingDatasets: missingDatasets(config, datasetNames),
     datasets: [...config.datasets],
     starterQuestions: [...config.starterQuestions],
+    // A user agent is a library entry: no workflow runs it (1.23.35).
+    usedInWorkflows: [],
   };
 }
 

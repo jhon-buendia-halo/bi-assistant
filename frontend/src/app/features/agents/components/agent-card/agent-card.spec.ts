@@ -85,4 +85,44 @@ describe('AgentCard', () => {
     expect(general?.getAttribute('data-domain')).toBe('general');
     expect(general?.getAttribute('title')).toBe('General');
   });
+
+  it('shows a portrait, and the initial until it is drawn', () => {
+    const avatar = render(historian).querySelector(
+      '[data-testid="agent-avatar"]',
+    );
+    expect(avatar).not.toBeNull();
+    expect(avatar?.getAttribute('aria-hidden')).toBe('true');
+    expect(['initial', 'portrait']).toContain(
+      avatar?.getAttribute('data-state') ?? '',
+    );
+  });
+
+  it('lets a built-in agent introduce itself instead of its description', () => {
+    const el = render({
+      ...assistant,
+      intro: "Ask me a business question and I'll answer it.",
+    });
+    expect(
+      el.querySelector('[data-testid="agent-intro-assistant"]')?.textContent,
+    ).toBe("“Ask me a business question and I'll answer it.”");
+    expect(el.textContent).not.toContain('Answers questions');
+    // A user agent has no intro: its description shows.
+    expect(render(historian).textContent).toContain(
+      'Answers questions about World Cup history',
+    );
+  });
+
+  it('shows what the agent is doing once the run history is known', () => {
+    const el = render(assistant);
+    expect(el.querySelector('[data-testid^="agent-activity-"]')).toBeNull();
+    fixture.componentRef.setInput('activity', {
+      state: 'working',
+      label: 'Working on “Top scorers”',
+      runId: 'r1',
+    });
+    fixture.detectChanges();
+    const status = el.querySelector('[data-testid="agent-activity-assistant"]');
+    expect(status?.getAttribute('data-state')).toBe('working');
+    expect(status?.textContent?.trim()).toBe('Working on “Top scorers”');
+  });
 });

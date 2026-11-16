@@ -12,7 +12,6 @@ import {
   LucideAngularModule,
   ArrowLeft,
   BookOpen,
-  Bot,
   Brain,
   CircleCheck,
   CircleX,
@@ -56,6 +55,10 @@ import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
 import { AgentTryIt } from '../agent-try-it/agent-try-it';
 import { AgentSkillsInline } from '../agent-skills-inline/agent-skills-inline';
 import { AgentSystemPrompt } from '../agent-system-prompt/agent-system-prompt';
+import { AgentAvatar } from '../agent-avatar/agent-avatar';
+import { agentActivity } from '../../services/agent-activity';
+import { WorkflowRunsApiService } from '../../../workflows/services/workflow-runs-api.service';
+import { WorkflowRunSummary } from '../../../workflows/models/workflow.model';
 import { AgentPageState } from '../../services/agent-page-state.service';
 import {
   AGENT_TAB_ORDER,
@@ -91,6 +94,7 @@ type EvalTab = 'questions' | 'runs';
     AgentTryIt,
     AgentSkillsInline,
     AgentSystemPrompt,
+    AgentAvatar,
   ],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
@@ -98,7 +102,6 @@ type EvalTab = 'questions' | 'runs';
 export class AgentDetail implements OnDestroy {
   readonly ArrowLeft = ArrowLeft;
   readonly BookOpen = BookOpen;
-  readonly Bot = Bot;
   readonly Brain = Brain;
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
@@ -124,6 +127,7 @@ export class AgentDetail implements OnDestroy {
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
   private readonly pageState = inject(AgentPageState);
+  private readonly runsApi = inject(WorkflowRunsApiService);
 
   readonly selectedEvalCaseId = computed(
     () => this.evalSelection.selection()?.evalCase.id ?? null,
@@ -154,6 +158,15 @@ export class AgentDetail implements OnDestroy {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly agent = signal<AgentDetailModel | null>(null);
+  /** The run history, for the header's status; null until it loads. */
+  private readonly runs = signal<WorkflowRunSummary[] | null>(null);
+
+  /** What the agent is doing now (ui.md 4.5); null while unknown. */
+  readonly activity = computed(() => {
+    const agent = this.agent();
+    const runs = this.runs();
+    return agent && runs ? agentActivity(agent, runs) : null;
+  });
   readonly activeTab = signal<AgentTab>('prompt');
   /** Try it mounts the first time it is shown, then stays. */
   readonly chatMounted = signal(false);
@@ -340,6 +353,12 @@ export class AgentDetail implements OnDestroy {
   }
 
   private loadAgent(key: string, initial = false): void {
+    if (initial) {
+      this.runsApi.list().subscribe({
+        next: (res) => this.runs.set(res.runs),
+        error: () => this.runs.set(null),
+      });
+    }
     this.api.getAgent(key).subscribe({
       next: (agent) => {
         if (this.agentKey() !== key) return;

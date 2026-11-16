@@ -47,10 +47,14 @@ export interface Agent {
   name: string;
   /** The persona's job title; empty when a user agent has none. */
   role?: string;
+  /** A built-in persona's first-person intro; empty for a user agent (api.md 33). */
+  intro?: string;
   /** The specialty the hub groups the agent under; absent reads as General. */
   domain?: AgentDomain;
   description: string;
   tools: string[];
+  /** The workflows whose steps call the agent (api.md 33-34). */
+  usedInWorkflows?: { id: string; name: string }[];
   kind?: AgentKind;
   status?: AgentStatus;
   pinned?: boolean;
