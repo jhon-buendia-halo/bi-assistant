@@ -92,7 +92,7 @@ Its request holds the dialect, the rationale, the tables with their sizes, the c
   | top-n | `Show the first 100` | `(LIMIT 100: only the list is shortened)` |
   | sample (a LIMIT with no sort) | `Show 100 rows in no set order` | `(LIMIT 100 without a sort: a sample, not the top 100)` |
   | partial | `Show the first 500` | `(the query tool stops at 500 rows: the rest of the result was not read)` |
-  | whole-table | `Show all 37 rows` | none |
+  | whole-table | `Show all 37 rows` (`Show the 1 row` for one) | none |
   | the `sample_rows` tool | `Show 10 sample rows` | `(a sample to see what the data looks like: no figure should come from it)` |
 
   Its count reads `100 of 1,870` only once the counts are verified; before that, `100 rows`.

@@ -276,7 +276,9 @@ export class QueryInspector {
     const record = this.record();
     const known = this.evidence()?.totalRows ?? (record?.truncated ? undefined : record?.rowCount);
     return known !== undefined
-      ? `Download all ${formatCount(known)} rows (CSV)`
+      ? known === 1
+        ? 'Download the row (CSV)'
+        : `Download all ${formatCount(known)} rows (CSV)`
       : 'Download all rows (CSV)';
   });
   protected readonly coverageLabel = computed(() => {

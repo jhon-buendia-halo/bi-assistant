@@ -789,7 +789,7 @@ Capability: [agent-answers](../capabilities/agent-answers/spec.md) R67 to R78; p
   | top-n | `Show the first 100` | `(LIMIT 100: only the list is shortened)` |
   | sample (a LIMIT with no sort) | `Show 100 rows in no set order` | `(LIMIT 100 without a sort: a sample, not the top 100)` |
   | partial | `Show the first 500` | `(the query tool stops at 500 rows: the rest of the result was not read)` |
-  | whole-table | `Show all 37 rows` | none |
+  | whole-table | `Show all 37 rows` (`Show the 1 row` for one) | none |
   | the `sample_rows` tool | `Show 10 sample rows` | `(a sample to see what the data looks like: no figure should come from it)` |
 
   Its count reads `100 of 1,870` only once `stageCounts.status` is `verified`; before that, `100 rows`. Only the start and show counts are known before the steps are counted. The button `query-count-steps` reads `Count rows at each step`, then `Counting rows…`, and calls `countStages(index)`. When the result is `unverified`, `query-counts-unverified` reads `The row counts could not be verified, so they are not shown.`

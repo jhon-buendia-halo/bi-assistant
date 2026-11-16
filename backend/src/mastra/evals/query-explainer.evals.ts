@@ -144,7 +144,7 @@ const STATEMENTS: ExplainerStatement[] = [
     sql: 'SELECT home.common_name AS team FROM world_cup.matches m JOIN world_cup.teams home ON home.id = m.home_team_id UNION SELECT away.common_name FROM world_cup.matches m JOIN world_cup.teams away ON away.id = m.away_team_id',
     reads: ['world_cup.matches', 'world_cup.teams'],
     steps:
-      'start from the matches; add the home team of each match; separately the away team of each match; combine the two lists into one (a combine step) without repeats. The steps may follow either branch first.',
+      'start from the matches; bring in the teams that played at home and the teams that played away (in one step or in two, in either order); put the two lists into one without repeats.',
   },
 ];
 
