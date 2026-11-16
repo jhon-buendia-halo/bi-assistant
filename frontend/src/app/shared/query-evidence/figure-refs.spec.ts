@@ -80,30 +80,30 @@ describe('figure-refs', () => {
       const root = document.createElement('div');
       root.innerHTML = linkFigures('<p>Total <strong>1,204</strong> units</p>', figureIndex(data));
       const chip = root.querySelector('strong > sup > button.figure-ref') as HTMLButtonElement;
-      expect(chip.textContent).toBe('Q1');
+      expect(chip.textContent).toBe('1');
       expect(chip.getAttribute('data-query-index')).toBe('0');
-      expect(chip.getAttribute('aria-label')).toBe('Open query Q1, the source of 1,204');
+      expect(chip.getAttribute('aria-label')).toBe('Source 1: Query 1, the source of 1,204');
     });
 
-    it('adds no chip inside code, pre, a or th, and chips td and headings', () => {
+    it('adds no chip inside code, pre, a, th or td, and chips headings', () => {
       const html =
         '<h2>1,204 returns</h2><p><code>1,204</code> <a href="#">1,204</a></p><pre>1,204</pre>' +
         '<table><thead><tr><th>1,204</th></tr></thead><tbody><tr><td>1,204</td></tr></tbody></table>';
       const root = document.createElement('div');
       root.innerHTML = linkFigures(html, figureIndex(data));
-      expect(root.querySelectorAll('.figure-ref').length).toBe(2);
+      expect(root.querySelectorAll('.figure-ref').length).toBe(1);
       expect(root.querySelector('h2 .figure-ref')).not.toBeNull();
-      expect(root.querySelector('td .figure-ref')).not.toBeNull();
+      expect(root.querySelector('td .figure-ref')).toBeNull();
     });
 
     it('gives a figure two queries hold one chip, of the query that holds most of the answer', () => {
       const both = [rec([{ n: 1204 }]), rec([{ n: 1204 }, { n: 987 }, { n: 912 }])];
       const root = document.createElement('div');
-      root.innerHTML = linkFigures('<p>1,204 then 987 and 912</p>', figureIndex(both));
+      root.innerHTML = linkFigures('<p>1,204</p><p>987</p><p>912</p>', figureIndex(both));
       const chips = [...root.querySelectorAll('.figure-ref')] as HTMLElement[];
-      expect(chips.map((c) => c.textContent)).toEqual(['Q2', 'Q2', 'Q2']);
-      expect(chips[0].title).toBe('Also in Q1');
-      expect(chips[1].title).toBe('');
+      expect(chips.map((c) => c.textContent)).toEqual(['2', '2', '2']);
+      expect(chips[0].getAttribute('data-also')).toBe('0');
+      expect(chips[1].hasAttribute('data-also')).toBeFalse();
     });
 
     it('prefers a query that is not a sample, and the earliest on a tie', () => {
@@ -111,19 +111,62 @@ describe('figure-refs', () => {
       const root = document.createElement('div');
       root.innerHTML = linkFigures('<p>1,204</p>', figureIndex(both), new Set([0]));
       const chip = root.querySelector('.figure-ref') as HTMLElement;
-      expect(chip.textContent).toBe('Q2');
+      expect(chip.textContent).toBe('2');
       expect(chip.classList.contains('figure-ref--sample')).toBeFalse();
       root.innerHTML = linkFigures('<p>1,204</p>', figureIndex(both));
       expect(root.querySelectorAll('.figure-ref').length).toBe(1);
-      expect(root.querySelector('.figure-ref')?.textContent).toBe('Q1');
+      expect(root.querySelector('.figure-ref')?.textContent).toBe('1');
     });
 
-    it('marks a figure whose only match is a sample, with the warning title', () => {
+    it('marks a figure whose only match is a sample, with the sample flag', () => {
       const root = document.createElement('div');
       root.innerHTML = linkFigures('<p>1,204</p>', figureIndex(data), new Set([0]));
       const chip = root.querySelector('.figure-ref') as HTMLElement;
       expect(chip.classList.contains('figure-ref--sample')).toBeTrue();
-      expect(chip.title).toBe('From a sample: not a reliable figure');
+      expect(chip.getAttribute('data-sample')).toBe('true');
+    });
+
+    it('puts the source purpose in the chip label', () => {
+      const root = document.createElement('div');
+      const sources = [{ index: 0, label: 'Source 1', purpose: 'Returns per product', rows: '1 row', coverage: null }];
+      root.innerHTML = linkFigures('<p>1,204</p>', figureIndex(data), new Set(), [], sources);
+      expect(root.querySelector('.figure-ref')?.getAttribute('aria-label')).toBe(
+        'Source 1: Returns per product, the source of 1,204',
+      );
+    });
+
+    it('chips only the first figure of each source in a paragraph or list item', () => {
+      const many = [rec([{ n: 1204 }, { n: 987 }]), rec([{ n: 55 }])];
+      const root = document.createElement('div');
+      root.innerHTML = linkFigures('<p>1,204 and 987, with 55 more</p><ul><li>987</li><li>1,204</li></ul>', figureIndex(many));
+      expect(root.querySelectorAll('p .figure-ref').length).toBe(2);
+      expect(root.querySelectorAll('li .figure-ref').length).toBe(2);
+    });
+
+    it('adds one source line after a table and none for a table with no matched figures', () => {
+      const table = (cell: string) =>
+        `<table><thead><tr><th>1,204</th></tr></thead><tbody><tr><td>${cell}</td></tr><tr><td>${cell}</td></tr></tbody></table>`;
+      const sources = [{ index: 0, label: 'Source 1', purpose: 'Returns per product', rows: '12 rows', coverage: null }];
+      const root = document.createElement('div');
+      root.innerHTML = linkFigures(table('1,204') + table('no figure'), figureIndex(data), new Set(), [], sources);
+      const lines = root.querySelectorAll('[data-testid="table-source"]');
+      expect(lines.length).toBe(1);
+      expect(lines[0].textContent).toBe('Source 1 · Returns per product · 12 rows');
+      expect(lines[0].getAttribute('data-query-index')).toBe('0');
+      expect(root.querySelector('table + p [data-testid="table-source"], table + [data-testid="table-source"]')).not.toBeNull();
+      expect(root.querySelector('td .figure-ref')).toBeNull();
+    });
+
+    it('lists every source of a table whose figures come from several queries', () => {
+      const both = [rec([{ n: 1204 }]), rec([{ n: 987 }])];
+      const root = document.createElement('div');
+      root.innerHTML = linkFigures(
+        '<table><tbody><tr><td>1,204</td><td>987</td></tr></tbody></table>',
+        figureIndex(both),
+      );
+      const line = root.querySelector('[data-testid="table-source"]') as HTMLElement;
+      expect(line.textContent).toBe('Sources 1, 2');
+      expect([...line.querySelectorAll('button')].map((b) => b.getAttribute('data-query-index'))).toEqual(['0', '1']);
     });
 
     it('keeps the sanitized html as it is and never creates markup from text', () => {

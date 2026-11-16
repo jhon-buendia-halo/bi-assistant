@@ -30,7 +30,7 @@ import {
   QueryStep,
   QueryStepVerb,
 } from '../query-evidence.model';
-import { coverageChip, formatCount, queryLabel } from '../query-labels';
+import { coverageChip, formatCount, sourceLabel } from '../query-labels';
 import { QueryResult } from '../query-result/query-result';
 import { csvBlob, saveBlob } from '../rows-csv';
 
@@ -150,9 +150,9 @@ export class QueryInspector {
     () => this.message().evidence?.find((e) => e.index === this.index()) ?? null,
   );
   protected readonly failed = computed(() => !!this.record()?.error);
-  protected readonly label = computed(() => queryLabel(this.index()));
+  protected readonly label = computed(() => sourceLabel(this.index()));
   protected readonly position = computed(
-    () => `Query ${this.index() + 1} of ${this.total()}`,
+    () => `${sourceLabel(this.index())} of ${this.total()}`,
   );
   readonly title = computed(
     () => this.record()?.rationale?.trim() || `Query ${this.index() + 1}`,
@@ -397,7 +397,7 @@ export class QueryInspector {
   protected download(): void {
     const record = this.record();
     if (record === null) return;
-    const fileName = `query-${this.label()}.csv`;
+    const fileName = `query-${this.index() + 1}.csv`;
     const rows = record.rows ?? [];
     const complete =
       this.evidence()?.coverage === 'whole-table' &&

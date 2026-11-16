@@ -32,7 +32,8 @@
         (click)="inspect.emit(row.index)"
         class="flex w-full items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2 text-left hover:border-border-strong hover:bg-surface-muted"
       >
-        <span class="chip chip-info shrink-0">{{ row.label }}</span>
+        <span class="chip chip-info shrink-0" [attr.title]="row.label">{{ row.number }}</span>
+        <span class="shrink-0 text-fg-muted" aria-hidden="true">·</span>
         <span
           class="min-w-0 flex-1 truncate text-[13px] text-fg"
           [title]="row.title"
