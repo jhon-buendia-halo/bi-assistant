@@ -82,7 +82,7 @@ Sessions area
 - R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon. Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
 - R49. In the Runs area the page SHALL start with a header: an icon, then the title — the open past chat's name, or "Runs" — with the past chat's context under the title while one is open (its agent, when it was started from one, then its datasources; past-chats R57). It has no button that starts a conversation (the **Start New Conversation** button is gone since 1.23.22).
 - R50. Clicking **Expand navigation** or **Collapse navigation** SHALL remember the new state in the backend's `ui-preferences` document (ADR-0009), with a browser-local copy under `questions-to-insights:nav-expanded` (`true` / `false`) applied before the first paint. Nothing remembered means expanded; the backend wins over the copy.
-- R51. The home view (R2) SHALL welcome the user and explain how the product works (asked by the user on 2026-10-14; BA-230; steps 2 and 3 replaced in 1.23.22): the heading "Welcome to Halo Workbench" ("Welcome to Agentic Hub" in a `mercer` build, R56), the line "Run a workflow on your data and read the result, with the steps and agents behind it.", and four numbered steps, each opening the place it names: 1 "Pick your data" (button "Datasets", opens the Datasets area), 2 "Run a workflow" (button "Workflows", opens the Workflows area), 3 "Agents are the building blocks" (button "Agents", opens the Agents area), 4 "Read, refine, download" (no button). Below the steps, a primary "Explore agents" button opens the Agents area. It replaces the earlier decorative empty composer box.
+- R51. The home view (R2) SHALL put the question first (asked by the user on 2026-10-14; BA-230; steps 2 and 3 replaced in 1.23.22; rebuilt question-first on 2026-11-16, replacing the four numbered steps): the heading "Welcome to Halo Workbench" ("Welcome to Agentic Hub" in a `mercer` build, R56) and the line "Ask a question about your data. An analyst plans it, runs read-only queries and shows the query behind every figure."; then a question box labelled "What do you want to know?" with a Datasets picker and **Ask**. Ask SHALL open Answer a Business Question on its page (workflows R7) and run it there on the question and the picked datasets, as its own Execute would (the Run panel and the query inspector show it; nothing runs on the home itself). An empty question is refused with "Type a question first." and no picked dataset with "Pick at least one dataset to ask about.", marking only that field. With exactly one dataset it is picked already. When no model is configured, or there are no datasets, a "Before your first question" notice above the box SHALL name each gap with the button that fixes it (**LLM settings**, which opens Settings on LLM Configuration; **Datasets**) and Ask SHALL be disabled. Below the box, **Recent runs** lists the five newest runs (title, workflow, how long ago, status chip; a row opens its run as Runs does, R46; **All runs** opens Runs; with none, "No runs yet. Your questions and workflow runs show up here.") and **Other workflows** lists every other workflow of the catalogue (a row opens its page; **All workflows** opens Workflows). Last, a line on agents with **Explore agents**, which opens the Agents area.
 
 Single user
 - R52. The shell SHALL appear at once on launch, with no sign-in page, and every control SHALL be shown: the Settings area offers **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** and **Appearance** to the one user (the built-in super admin).
@@ -204,16 +204,18 @@ Feature: Navigation rail
     When I click "Costs" on the rail
     Then I see the "Costs" heading, "Costs" is the current rail item, $0.00 today and this month, the monthly chart, "Last 30 days" chosen and, on a new data dir, "No LLM calls in this period."
 
-  Scenario: The start page explains how the product works
+  Scenario: The start page asks a question first and links runs, workflows and agents
     When I open the app
-    Then I see "Welcome to Halo Workbench" and the four steps "Pick your data", "Run a workflow", "Agents are the building blocks" and "Read, refine, download"
-    When I click "Datasets" in the first step
-    Then I see the "Datasets" page
+    Then I see "Welcome to Halo Workbench", the question box "What do you want to know?" with Ask, "Recent runs" with no runs yet, and "Other workflows" without Answer a Business Question
+    When I click "All workflows"
+    Then I see the "Workflows" page
+    When I go home and click "Explore agents"
+    Then I see the "Agents" page
 
   @demo @story-1.23.22
   Scenario: Chats can no longer be started: home points to workflows, and nothing offers a chat
     Given I open the app on its home page
-    Then home shows "Run a workflow"
+    Then home offers to ask a question and lists the workflows
     When I open Workflows
     Then every workflow has "Run" and none has "Start chat"
     When I open Runs, then there is no "Start New Conversation"

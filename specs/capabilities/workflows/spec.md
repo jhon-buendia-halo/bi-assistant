@@ -259,6 +259,13 @@ Feature: Workflow runs
     Then I see "Answer saved as a verified query" and the Verified badge
     When I run the same question again, then its answer shows Verified
 
+  Scenario: Asking on home runs Answer a Business Question on its page
+    Given I am on home with "World Cup Core" as the only dataset
+    Then that dataset is already picked
+    When I type "Which team scored the most goals?" and press Enter
+    Then "Answer a Business Question" opens, runs on my question and I see the answer
+    And home lists the run under Recent runs
+
   Scenario: A run needs its datasets
     Given I am on the Run tab of "Answer a Business Question"
     When I type "Which team scored the most goals?" and click Execute with no dataset picked
