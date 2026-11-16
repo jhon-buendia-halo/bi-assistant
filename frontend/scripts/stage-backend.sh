@@ -17,7 +17,10 @@ cp package.json package-lock.json "$STAGING_DIR/"
 cd "$STAGING_DIR"
 npm ci --omit=dev --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 
-# Fewer files = a faster Windows install and uninstall (roadmap 1.7.22).
+# Fewer files = a faster Windows install and uninstall. First bundle dist/
+# into one file and keep only the packages that can't be bundled (roadmap
+# 1.7.23), then strip build-time leftovers from those (roadmap 1.7.22).
+node "$SCRIPT_DIR/bundle-backend.mjs" "$STAGING_DIR"
 node "$SCRIPT_DIR/prune-node-modules.mjs" "$STAGING_DIR/node_modules"
 
 echo "Backend staged at $STAGING_DIR"

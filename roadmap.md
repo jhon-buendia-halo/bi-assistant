@@ -249,6 +249,13 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
 - **Acceptance:** the staged backend has at least 40% fewer files; every production dependency still loads and the staged backend answers its API under Electron-as-Node; unit tests cover what is pruned and what is kept.
 - **Notes:** measured 2026-11-11 on a local `--win nsis` build of 0.48.1: 46,955 files, 45,804 of them in `resources/backend/node_modules`. The first upgrade still runs the old uninstaller over the old file set.
 
+#### 1.7.23 — Windows install still takes over 5 minutes: bundle the backend  `🚧 In progress`
+- **Intent:** after 1.7.22 the installer still writes about 21,300 files, 20,176 of them the backend's pruned `node_modules` (839 packages). Bundling the backend into one file leaves only the packages that cannot be bundled.
+- **Scope:** `frontend/scripts/bundle-backend.mjs`, run by `stage-backend.sh` before the prune: esbuild bundles `dist/main.js` with its pure-JS dependencies, keeps first-party `__dirname` paths and assets working, keeps native addons and packages that read their own files outside the bundle (with their dependency closure), keeps the data files `@mastra/core` and `@mastra/observability` resolve at runtime, and writes `THIRD_PARTY_LICENSES.txt`. esbuild becomes an exact-pinned backend devDependency.
+- **Out of scope:** the CLI and the npm package (unbundled as before); trimming `@github/copilot-sdk` (919 files, left whole); code signing; NSIS settings.
+- **Acceptance:** the installed app has at least 80% fewer files than with pruning alone; the staged backend answers its API under Electron-as-Node, loads every Testing Data fixture, runs Answer a Business Question end to end with a real LLM, and exports XLSX and PDF; the build fails when a native addon is left inside the bundle; unit tests cover the closure, the prune, the path rewrite, the asset copy and the licence file.
+- **Notes:** measured 2026-11-15 on a local `--win nsis --x64` build of 0.61.0 (mercer, macOS host): 2,844 installed files, 2,765 of them in `resources/backend`. Install time on Windows is not measured yet. Developer observability in the packaged app loses the Express, NestJS and `pg` instrumentations (bundled code can't be patched); HTTP, undici and Pino keep theirs. The first upgrade still runs the old uninstaller over the old file set.
+
 ### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) — archived, see roadmap-archive.md
 
 ### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) — archived, see roadmap-archive.md
