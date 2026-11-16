@@ -162,9 +162,21 @@ test('shows the built-in agents and mine in sections by domain', async ({
   );
 
   for (const [id, heading, keys] of [
-    ['data-foundations', 'Data Foundations', ['data-readiness', 'data-mapper', 'knowledge-bootstrap']],
-    ['sql', 'SQL Engineering', ['sql-fixer', 'query-explainer', 'sql-verifier']],
-    ['storytelling', 'Storytelling', ['dashboard-reader', 'answer-writer', 'visualization']],
+    [
+      'data-foundations',
+      'Data Foundations',
+      ['data-readiness', 'data-mapper', 'knowledge-bootstrap'],
+    ],
+    [
+      'sql',
+      'SQL Engineering',
+      ['sql-fixer', 'query-explainer', 'sql-verifier'],
+    ],
+    [
+      'storytelling',
+      'Storytelling',
+      ['dashboard-reader', 'answer-writer', 'visualization'],
+    ],
     ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {
     await expect(
@@ -618,7 +630,7 @@ test("Insights Analyst's page shows its prompt, five tools and three skills", as
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(page.getByText('Recent messages replayed')).toBeVisible();
-  await expect(page.getByText('40 messages')).toBeVisible();
+  await expect(page.getByText('40 messages', { exact: true })).toBeVisible();
 });
 
 test('saving an Insights Analyst prompt that loses its identity line is refused', async ({
@@ -685,9 +697,9 @@ test(
     await scenarioStep(page, `Then I see "Used in" "${V2}"`, async () => {
       const usedIn = page.getByTestId('agent-used-in');
       await expect(usedIn).toContainText('Used in');
-      await expect(usedIn.getByTestId('agent-used-in-answer-business-question')).toHaveText(
-        V2,
-      );
+      await expect(
+        usedIn.getByTestId('agent-used-in-answer-business-question'),
+      ).toHaveText(V2);
       await expect(button(page, 'Start chat')).toHaveCount(0);
     });
     await scenarioStep(page, `When I click the "${V2}" chip`, async () => {
@@ -735,7 +747,9 @@ test(
         const usedIn = page.getByTestId('agent-used-in');
         await expect(usedIn).toContainText('Used in');
         await expect(usedIn).not.toContainText(NOT_USED);
-        await expect(usedIn.getByTestId('agent-used-in-answer-business-question')).toHaveText(V2);
+        await expect(
+          usedIn.getByTestId('agent-used-in-answer-business-question'),
+        ).toHaveText(V2);
         await expect(
           usedIn.getByTestId('agent-used-in-data-readiness-assessment'),
         ).toHaveText('Assess Data Readiness');
@@ -771,9 +785,9 @@ test('a user agent is used in no workflow, even once published', async ({
   await expect(page.getByText(`Agent "${CLAIMS}" is Live`)).toBeVisible();
   // Agents are a library: publishing gives it no workflow.
   await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
-  await expect(
-    page.getByTestId(`agent-used-in-agent:${claimsId}`),
-  ).toHaveCount(0);
+  await expect(page.getByTestId(`agent-used-in-agent:${claimsId}`)).toHaveCount(
+    0,
+  );
   await expect(
     page.getByTestId('agent-used-in').getByRole('button'),
   ).toHaveCount(0);
@@ -808,7 +822,9 @@ test('the agent detail has no detectable accessibility violations in either them
 
   await openHub(page);
   await openAgent(page, V2_KEY, V2_AGENT);
-  await expect(page.getByTestId('agent-used-in-answer-business-question')).toBeVisible();
+  await expect(
+    page.getByTestId('agent-used-in-answer-business-question'),
+  ).toBeVisible();
   await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
   await scan('Official agent');
 

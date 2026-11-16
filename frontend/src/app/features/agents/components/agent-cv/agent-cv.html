@@ -1,0 +1,144 @@
+@let a = agent();
+<div class="@container mt-3" data-testid="agent-cv">
+  <div
+    class="grid overflow-hidden rounded-xl border border-border bg-surface @3xl:grid-cols-[220px_minmax(0,1fr)]"
+  >
+    <!-- The agent's details, as a CV's side column. -->
+    <aside
+      data-testid="agent-cv-facts"
+      aria-label="Agent details"
+      class="flex flex-col gap-5 border-b border-border bg-surface-muted p-5 @3xl:border-r @3xl:border-b-0"
+    >
+      <div class="flex items-center gap-3 @3xl:flex-col @3xl:items-start">
+        <app-agent-avatar [agentKey]="a.key" [name]="a.name" [size]="80" />
+        <div class="flex min-w-0 flex-col">
+          <span class="text-[18px] leading-6 font-light text-fg-strong">{{
+            a.name
+          }}</span>
+          @if (a.role) {
+            <span class="text-[13px] text-fg-muted">{{ a.role }}</span>
+          }
+        </div>
+      </div>
+
+      <dl
+        class="m-0 grid grid-cols-2 gap-4 text-[13px] @xl:grid-cols-3 @3xl:flex @3xl:flex-col"
+      >
+        <div class="flex flex-col gap-1.5">
+          <dt class="cv-label">Team</dt>
+          <dd class="m-0">
+            <span class="chip chip-neutral">{{ team() }}</span>
+          </dd>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <dt class="cv-label">Works on</dt>
+          <dd class="m-0 flex flex-wrap gap-1">
+            @for (workflow of a.usedInWorkflows; track workflow.id) {
+              <span class="chip chip-info">{{ workflow.name }}</span>
+            } @empty {
+              <span class="text-fg-muted">No workflow</span>
+            }
+          </dd>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <dt class="cv-label">Tools</dt>
+          <dd class="m-0 flex flex-wrap gap-1">
+            @for (tool of tools(); track tool) {
+              <span class="chip chip-neutral font-mono text-[11px]">{{
+                tool
+              }}</span>
+            } @empty {
+              <span class="text-fg-muted">None</span>
+            }
+          </dd>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <dt class="cv-label">Model</dt>
+          <dd class="m-0 break-all text-fg">{{ model() }}</dd>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <dt class="cv-label">Memory</dt>
+          <dd class="m-0 text-fg">{{ memory() }}</dd>
+        </div>
+      </dl>
+    </aside>
+
+    <!-- The job description's own words, in CV sections. -->
+    <div [attr.data-testid]="bodyTestId()" class="min-w-0 px-6 py-5">
+      @for (section of sections(); track section.id) {
+        <section
+          [attr.data-testid]="'agent-cv-section-' + section.id"
+          [attr.aria-labelledby]="'agent-cv-heading-' + section.id"
+          class="grid gap-x-6 gap-y-2 border-t border-border py-4 first:border-t-0 first:pt-0 last:pb-0 @2xl:grid-cols-[132px_minmax(0,1fr)]"
+        >
+          <h4
+            [id]="'agent-cv-heading-' + section.id"
+            class="m-0 pt-0.5 text-[12px] font-semibold tracking-wider text-on-primary-soft uppercase"
+          >
+            {{ section.title }}
+          </h4>
+          <div class="flex min-w-0 flex-col gap-2">
+            @for (block of section.blocks; track $index) {
+              @switch (block.kind) {
+                @case ("heading") {
+                  <h5 class="m-0 mt-1 text-[13px] font-semibold text-fg-strong">
+                    {{ block.text }}
+                  </h5>
+                }
+                @case ("paragraph") {
+                  @if (section.id === "profile" && $first) {
+                    <!-- The opening line reads as the CV's summary. -->
+                    <p
+                      class="m-0 text-[16px] leading-relaxed font-light text-fg-strong"
+                    >
+                      <app-linked-text [text]="block.text" [known]="known()" />
+                    </p>
+                  } @else {
+                    <p class="m-0 text-[14px] leading-relaxed text-fg">
+                      <app-linked-text [text]="block.text" [known]="known()" />
+                    </p>
+                  }
+                }
+                @case ("list") {
+                  @if (block.ordered) {
+                    <ol class="cv-list m-0 list-decimal">
+                      @for (item of block.items; track $index) {
+                        <li>
+                          @if (item.key) {
+                            <strong class="font-semibold text-fg-strong">{{
+                              item.key + ": "
+                            }}</strong>
+                          }
+                          <app-linked-text
+                            [text]="item.text"
+                            [known]="known()"
+                          />
+                        </li>
+                      }
+                    </ol>
+                  } @else {
+                    <ul class="cv-list m-0 list-disc">
+                      @for (item of block.items; track $index) {
+                        <li>
+                          @if (item.key) {
+                            <strong class="font-semibold text-fg-strong">{{
+                              item.key + ": "
+                            }}</strong>
+                          }
+                          <app-linked-text
+                            [text]="item.text"
+                            [known]="known()"
+                          />
+                        </li>
+                      }
+                    </ul>
+                  }
+                }
+              }
+            }
+          </div>
+        </section>
+      }
+    </div>
+  </div>
+</div>

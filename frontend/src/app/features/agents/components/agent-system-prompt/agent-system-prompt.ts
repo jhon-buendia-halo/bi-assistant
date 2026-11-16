@@ -43,6 +43,8 @@ import {
   officialPromptCopy,
 } from '../../services/official-links';
 import { LinkedText } from '../linked-text/linked-text';
+import { AgentCv } from '../agent-cv/agent-cv';
+import { NgTemplateOutlet } from '@angular/common';
 import { PromptEditor } from '../prompt-editor/prompt-editor';
 
 /**
@@ -53,7 +55,13 @@ import { PromptEditor } from '../prompt-editor/prompt-editor';
  */
 @Component({
   selector: 'app-agent-system-prompt',
-  imports: [LucideAngularModule, LinkedText, PromptEditor],
+  imports: [
+    LucideAngularModule,
+    LinkedText,
+    PromptEditor,
+    AgentCv,
+    NgTemplateOutlet,
+  ],
   templateUrl: './agent-system-prompt.html',
 })
 export class AgentSystemPrompt implements OnDestroy {
@@ -89,6 +97,8 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly builtInLimit = 20000;
 
   readonly editing = signal(false);
+  /** How the read-only job description shows: as a CV or as stored (ui.md 4.5). */
+  readonly view = signal<'cv' | 'text'>('cv');
   readonly showShipped = signal(false);
   readonly resetting = signal(false);
   readonly draft = signal('');

@@ -3,10 +3,7 @@ import path from 'node:path';
 import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import {
-  WORLD_CUP_DATASET,
-  followOsTheme,
-} from './helpers/app-actions';
+import { WORLD_CUP_DATASET, followOsTheme } from './helpers/app-actions';
 import { DatabaseSync } from 'node:sqlite';
 import {
   apiBase,
@@ -734,8 +731,9 @@ test('editing the Job Description in place saves a draft with the link', async (
     'Assistant core prompt (fixed)',
   );
   await expect(core).not.toHaveAttribute('open', /.*/);
-  await expect(page.getByTestId('agent-instructions')).toHaveText(
-    'Answer in one sentence.',
+  // The job description reads as a CV first: its words under Profile.
+  await expect(page.getByTestId('agent-cv-section-profile')).toHaveText(
+    /Profile\s*Answer in one sentence\./,
   );
 
   await page.getByTestId('prompt-edit').click();
@@ -1014,7 +1012,7 @@ test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query 
     await answer.getByTestId('query-row-0').click();
     await expect(sheet).toBeVisible();
   });
-  await test.step("Then the sheet is in the main column and does not overlap the Details panel", async () => {
+  await test.step('Then the sheet is in the main column and does not overlap the Details panel', async () => {
     const box = await sheet.boundingBox();
     const panel = await detailsPanel(page).boundingBox();
     expect(box).not.toBeNull();

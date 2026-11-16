@@ -76,7 +76,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(page.getByText('Recent messages replayed')).toBeVisible();
-  await expect(page.getByText('40 messages')).toBeVisible();
+  await expect(page.getByText('40 messages', { exact: true })).toBeVisible();
 
   await page.getByTestId('agent-tab-model').click();
   await expect(page.getByText('Provider')).toBeVisible();
