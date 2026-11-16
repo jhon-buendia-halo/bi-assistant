@@ -214,3 +214,71 @@ describe('PostgresConnector error reporting', () => {
     ).rejects.toThrow(new Error('Postgres — syntax error at or near "FROM"'));
   });
 });
+
+describe('PostgresConnector runPagedSql (datasources R52)', () => {
+  const stmt = {
+    sql: 'SELECT country, goals FROM world_cup.scorers;',
+    columns: ['country', 'goals'],
+    filters: [{ column: 'country', op: 'eq' as const, value: 'Brazil' }],
+    sort: [{ column: 'goals', direction: 'desc' as const }],
+    limit: 2,
+    offset: 0,
+    kinds: { country: 'text' as const, goals: 'number' as const },
+  };
+
+  it('runs the wrapper with $n parameters inside a READ ONLY transaction', async () => {
+    respond = (sql) =>
+      sql.includes('_qti')
+        ? [
+            { country: 'Brazil', goals: 8, __qti_total: '3' },
+            { country: 'Brazil', goals: 5, __qti_total: '3' },
+          ]
+        : [];
+
+    const page = await new PostgresConnector().runPagedSql(config, stmt);
+
+    expect(page).toEqual({
+      columns: ['country', 'goals'],
+      rows: [
+        { country: 'Brazil', goals: 8 },
+        { country: 'Brazil', goals: 5 },
+      ],
+      matchedRows: 3,
+    });
+    const sent = queries();
+    expect(sent.map((q) => q.sql.split('\n')[0])).toEqual([
+      'BEGIN READ ONLY',
+      'SELECT _qti.*, COUNT(*) OVER () AS "__qti_total"',
+      'ROLLBACK',
+    ]);
+    expect(sent[1].sql).toContain(
+      'WHERE LOWER(CAST("country" AS TEXT)) = LOWER(CAST($1 AS TEXT))',
+    );
+    expect(sent[1].params).toEqual(['Brazil']);
+    expect(clients[0].ended).toBe(true);
+  });
+
+  it('counts once more for an empty page past the end', async () => {
+    respond = (sql) =>
+      sql.startsWith('SELECT COUNT(*)') ? [{ __qti_total: '3' }] : [];
+
+    const page = await new PostgresConnector().runPagedSql(config, {
+      ...stmt,
+      offset: 10,
+    });
+
+    expect(page.rows).toEqual([]);
+    expect(page.matchedRows).toBe(3);
+    expect(queries()[2]).toMatchObject({ params: ['Brazil'] });
+  });
+
+  it('refuses a bad filter before connecting', async () => {
+    await expect(
+      new PostgresConnector().runPagedSql(config, {
+        ...stmt,
+        filters: [{ column: 'team', op: 'is_null' }],
+      }),
+    ).rejects.toThrow('Unknown column "team"');
+    expect(clients).toHaveLength(0);
+  });
+});

@@ -5,6 +5,7 @@ import type {
   QueryResult,
 } from '../entities/datasource.entity';
 import type { PagedRows, PagedStatement } from './paged-sql.types';
+import { withoutTrailingFraming } from './sql-text';
 
 /** A declared foreign key between two entities. Keys are `catalog.schema.table`. */
 export interface ForeignKeyEdge {
@@ -57,9 +58,8 @@ export interface DatasourceConnector<
    * query (datasources R52, ADR-0049): the stored SQL is checked read-only as
    * `runReadOnlySql` checks it, the wrapper is built from `stmt` with bound
    * parameters. An empty `stmt.sort` means the default order (plan 1.27.1).
-   * Optional until 1.27.1 gives every connector one.
    */
-  runPagedSql?(config: TConfig, stmt: PagedStatement): Promise<PagedRows>;
+  runPagedSql(config: TConfig, stmt: PagedStatement): Promise<PagedRows>;
   /**
    * Declared foreign keys among the given `catalog.schema.table` entities.
    * Optional: platforms that cannot report them simply omit it, and callers
@@ -168,6 +168,17 @@ export function assertReadOnlySql(sql: string): string {
     );
   }
   return trimmed;
+}
+
+/**
+ * The stored statement made ready to wrap (datasources R52): leading fences
+ * and comments peeled, a trailing comment and semicolon dropped, then the
+ * read-only guard of `runReadOnlySql`. Only this text is guarded; the
+ * connector's wrapper around it is code (ADR-0049).
+ */
+export function cleanReadOnlySql(sql: string): string {
+  const framed = stripSqlFraming((sql ?? '').trim());
+  return assertReadOnlySql(withoutTrailingFraming(framed));
 }
 
 export const MASKED = '••••••••';

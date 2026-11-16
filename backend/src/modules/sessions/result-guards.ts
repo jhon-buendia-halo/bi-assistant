@@ -7,6 +7,10 @@
  * negatives: a spurious warning on a correct answer costs more trust than a
  * missed one. Heuristics only — no SQL parser, no schema knowledge.
  */
+import { maskLiterals } from '../datasources/connectors/sql-text';
+
+// Moved next to the connectors' SQL scanning; re-exported for its callers.
+export { maskLiterals };
 
 export type DataWarningCode =
   | 'degenerate-ratio'
@@ -399,63 +403,4 @@ function columnsOf(rows: Record<string, unknown>[]): string[] {
     }
   }
   return columns;
-}
-
-/**
- * Blanks out string literals and comments while preserving every character
- * offset, so keyword scanning cannot trip over a `'... LIMIT ...'` inside a
- * label while expression text is still sliced from the original SQL.
- */
-export function maskLiterals(sql: string): string {
-  let out = '';
-  let i = 0;
-  while (i < sql.length) {
-    const ch = sql[i];
-    if (ch === "'" || ch === '"') {
-      const quote = ch;
-      out += ' ';
-      i += 1;
-      while (i < sql.length) {
-        if (sql[i] === '\\' && i + 1 < sql.length) {
-          out += '  ';
-          i += 2;
-          continue;
-        }
-        if (sql[i] === quote) {
-          if (sql[i + 1] === quote) {
-            out += '  ';
-            i += 2;
-            continue;
-          }
-          out += ' ';
-          i += 1;
-          break;
-        }
-        out += sql[i] === '\n' ? '\n' : ' ';
-        i += 1;
-      }
-      continue;
-    }
-    if (ch === '-' && sql[i + 1] === '-') {
-      while (i < sql.length && sql[i] !== '\n') {
-        out += ' ';
-        i += 1;
-      }
-      continue;
-    }
-    if (ch === '/' && sql[i + 1] === '*') {
-      while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) {
-        out += sql[i] === '\n' ? '\n' : ' ';
-        i += 1;
-      }
-      if (i < sql.length) {
-        out += '  ';
-        i += 2;
-      }
-      continue;
-    }
-    out += ch;
-    i += 1;
-  }
-  return out;
 }

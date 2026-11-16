@@ -271,13 +271,7 @@ export class DatasourcesService {
   /** One page of a stored statement's result (datasources R52, ADR-0049). */
   async runPagedSql(id: string, stmt: PagedStatement): Promise<PagedRows> {
     const ds = await this.get(id);
-    const connector = this.connector(ds.kind);
-    if (!connector.runPagedSql) {
-      throw new BadRequestException(
-        `A ${ds.kind} datasource cannot page a result`,
-      );
-    }
-    return connector.runPagedSql(ds.config, stmt);
+    return this.connector(ds.kind).runPagedSql(ds.config, stmt);
   }
 
   view(ds: Datasource): DatasourceView {
