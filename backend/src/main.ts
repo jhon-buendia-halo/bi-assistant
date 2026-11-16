@@ -1,5 +1,9 @@
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
 import {
+  PortInUseError,
+  bootstrapExitCode,
+} from './infrastructure/process/exit-codes';
+import {
   parseParentPid,
   watchParentProcess,
 } from './infrastructure/process/parent-watchdog';
@@ -30,4 +34,12 @@ async function bootstrap() {
     instanceId: process.env.BACKEND_INSTANCE_ID || undefined,
   });
 }
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  if (error instanceof PortInUseError) {
+    // One clear line and a dedicated code: the shell does not retry (api.md 4.3).
+    console.error(error.message);
+  } else {
+    console.error(error);
+  }
+  process.exit(bootstrapExitCode(error));
+});
