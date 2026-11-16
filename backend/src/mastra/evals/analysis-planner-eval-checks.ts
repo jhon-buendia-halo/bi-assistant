@@ -26,7 +26,7 @@ function textOf(value: unknown): string {
 
 function listOf(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((v) => typeof v === 'string')
-    ? (value as string[])
+    ? value
     : undefined;
 }
 
@@ -105,8 +105,12 @@ export function planText(plan: PlanView): string {
 
 /** The plan's own statements about the data: scope, assumptions, measures. */
 function statements(plan: PlanView): string {
-  return [plan.question, ...plan.measures, plan.scope, ...plan.assumptions]
-    .join('\n');
+  return [
+    plan.question,
+    ...plan.measures,
+    plan.scope,
+    ...plan.assumptions,
+  ].join('\n');
 }
 
 /** The plan parses, with the shape `planSchema` asks for. */
@@ -236,10 +240,7 @@ export function namedColumnsExist(catalog: PlannerCatalog): EvalCustomCheck {
 }
 
 /** The plan names an entity or a measure the catalog cannot hold (matched case-blind). */
-export function noInvented(
-  words: RegExp,
-  label: string,
-): EvalCustomCheck {
+export function noInvented(words: RegExp, label: string): EvalCustomCheck {
   return planCheck(
     'no-invented-entity-or-measure',
     `The plan's entities and measures do not include ${label}`,
@@ -354,8 +355,7 @@ export function namesEntities(): EvalCustomCheck {
   return planCheck(
     'names-entities',
     'The plan names at least one entity to read',
-    (plan) =>
-      plan.entities.length ? undefined : 'the plan names no entity',
+    (plan) => (plan.entities.length ? undefined : 'the plan names no entity'),
   );
 }
 
