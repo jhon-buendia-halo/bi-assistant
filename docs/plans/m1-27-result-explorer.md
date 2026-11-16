@@ -85,7 +85,7 @@ Explicit `filters`/`sort`/`page` override what `filterText` produced. Full resul
 One pure module `paged-sql.ts`: `buildPagedSql(dialect, stmt) → { text, params }`.
 
 1. `cleanReadOnlySql` (exported from `connector.ts`): `assertReadOnlySql` on the stored SQL only, without fences, comments or a trailing `;`.
-2. `withExportLimit(sql, PAGE_MAX_ROWS + 1)` raises the top-level LIMIT, as the CSV does.
+2. When the stored SQL has its own top-level LIMIT, `withExportLimit(sql, PAGE_MAX_ROWS + 1)` raises it, as the CSV does; without one it stays unlimited, so filters and sort see the whole result (changed at the wave 1 merge: appending 50,001 made filters see only an arbitrary first 50,001 rows). Columns of unknown kind are no tie-breakers (JSON, MAP).
 3. Wrapper; the stored SQL is never scanned again, the rest is code, validated identifiers and bound parameters:
 
    ```sql
@@ -160,4 +160,4 @@ Ownership: only 1.27.0 edits `paged-sql.types.ts`; only 1.27.3 creates the `quer
 - A top-N answer pages the whole result (as the CSV does): the top-N note says so.
 - Every page re-runs the query (REST re-fetches its endpoints): measure; timeouts unchanged.
 - Wrong routing of a follow-up: the instructions say explore only when the answer is the earlier rows filtered, sorted or paged; negative eval cases.
-- Text filters bypass indexes (`LOWER(CAST(…))`): acceptable over a result capped at 50,001 rows.
+- Text filters bypass indexes (`LOWER(CAST(…))`); the database does the work, a page returns at most 100 rows.

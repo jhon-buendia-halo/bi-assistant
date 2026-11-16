@@ -66,7 +66,7 @@ function rejection(run: () => unknown): string {
 }
 
 describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
-  it('wraps the stored SQL with the total, the order and the page window', () => {
+  it('wraps the stored SQL, unlimited when it has no LIMIT of its own, with the total, the order and the page window', () => {
     const built = buildPagedSql('postgres', stmt({ offset: 100 }));
 
     expect(built.text).toBe(
@@ -74,7 +74,6 @@ describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
         'SELECT _qti.*, COUNT(*) OVER () AS "__qti_total"',
         'FROM (',
         'SELECT country, goals, year FROM t',
-        'LIMIT 50001',
         ') AS _qti',
         'ORDER BY 1 ASC NULLS LAST, 2, 3',
         'LIMIT 50 OFFSET 100',
@@ -86,7 +85,6 @@ describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
         'SELECT COUNT(*) AS "__qti_total"',
         'FROM (',
         'SELECT country, goals, year FROM t',
-        'LIMIT 50001',
         ') AS _qti',
       ].join('\n'),
     );
@@ -96,7 +94,7 @@ describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
     const sql = 'WITH x AS (SELECT 1 AS a) SELECT a FROM x';
     const built = buildPagedSql('sqlite', stmt({ sql, columns: ['a'] }));
 
-    expect(built.text).toContain(`FROM (\n${sql}\nLIMIT 50001\n) AS _qti`);
+    expect(built.text).toContain(`FROM (\n${sql}\n) AS _qti`);
   });
 
   it('drops a trailing comment and semicolon before wrapping', () => {
@@ -111,7 +109,7 @@ describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
 
     for (const built of [one, two]) {
       expect(built.text).toContain(
-        'FROM (\nSELECT country, goals, year FROM t\nLIMIT 50001\n) AS _qti',
+        'FROM (\nSELECT country, goals, year FROM t\n) AS _qti',
       );
     }
   });
@@ -122,7 +120,7 @@ describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
       stmt({ sql: '```sql\n-- top scorers\nSELECT country FROM t\n```' }),
     );
 
-    expect(built.text).toContain('FROM (\nSELECT country FROM t\nLIMIT 50001');
+    expect(built.text).toContain('FROM (\nSELECT country FROM t\n) AS _qti');
   });
 
   it('raises the stored top-level LIMIT to 50,001 and leaves an inner one', () => {
@@ -136,6 +134,15 @@ describe('buildPagedSql: the wrapper (plan 1.27.1)', () => {
     expect(built.text).toContain(
       'SELECT country, goals, year FROM (SELECT * FROM t LIMIT 3) s ORDER BY goals DESC LIMIT 50001\n',
     );
+  });
+
+  it('skips a column of unknown kind as a tie-breaker', () => {
+    const built = buildPagedSql(
+      'postgres',
+      stmt({ kinds: { country: 'text', goals: 'unknown', year: 'number' } }),
+    );
+
+    expect(built.text).toContain('ORDER BY 1 ASC NULLS LAST, 3\n');
   });
 
   it('refuses a stored statement that is not read-only', () => {

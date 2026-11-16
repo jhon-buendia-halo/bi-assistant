@@ -21,7 +21,13 @@ import {
   type PagedRows,
   type PagedStatement,
 } from './paged-sql.types';
-import { maskLiterals, topLevel, withExportLimit } from './sql-text';
+import {
+  maskLiterals,
+  outerLimit,
+  topLevel,
+  withExportLimit,
+  withoutTrailingFraming,
+} from './sql-text';
 
 export type SqlDialect = 'postgres' | 'databricks' | 'sqlite';
 
@@ -330,8 +336,11 @@ function orderBy(d: Dialect, stmt: PagedStatement, sql: string): string {
       used.add(key.ordinal);
     }
   }
+  // Every other column breaks ties, except those of unknown kind (a JSON
+  // or MAP column cannot be ordered).
   for (let ordinal = 1; ordinal <= columns.length; ordinal += 1) {
-    if (!used.has(ordinal)) keys.push(String(ordinal));
+    const kind = stmt.kinds[columns[ordinal - 1]];
+    if (!used.has(ordinal) && kind !== 'unknown') keys.push(String(ordinal));
   }
   return keys.join(', ');
 }
@@ -341,7 +350,7 @@ function orderBy(d: Dialect, stmt: PagedStatement, sql: string): string {
  *
  *   SELECT _qti.*, COUNT(*) OVER () AS "__qti_total"
  *   FROM (
- *   <stored SQL, guarded, its top-level LIMIT raised to 50,001>
+ *   <stored SQL, guarded; its own top-level LIMIT raised to 50,001>
  *   ) AS _qti
  *   WHERE <predicates> ORDER BY <keys>, <remaining ordinals>
  *   LIMIT n OFFSET m
@@ -373,7 +382,13 @@ export function buildPagedSql(
   const predicates = stmt.filters.map((f) => compiler.predicate(f));
   const order = orderBy(d, stmt, sql);
   const total = d.quote(TOTAL_COLUMN);
-  const from = `FROM (\n${withExportLimit(sql, PAGE_MAX_ROWS + 1)}\n) AS _qti`;
+  // A stored LIMIT is raised to 50,001, as the CSV does; a statement without
+  // one stays unlimited, so filters and sort see its whole result and only
+  // the outer LIMIT/OFFSET cap the page (datasources R52).
+  const inner = outerLimit(sql)
+    ? withExportLimit(sql, PAGE_MAX_ROWS + 1)
+    : withoutTrailingFraming(sql);
+  const from = `FROM (\n${inner}\n) AS _qti`;
   const where = predicates.length ? `\nWHERE ${predicates.join(' AND ')}` : '';
   return {
     text:
