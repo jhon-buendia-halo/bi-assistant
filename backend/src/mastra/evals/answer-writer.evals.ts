@@ -175,7 +175,7 @@ export const ANSWER_WRITER_EVAL_SET: AssistantEvalSet = {
         ...BASE(),
         figuresFromRows(WEIGHTS),
         neverSays(
-          /\b(average|mean)[^.]{0,40}\b(NaN|Infinity)\b/i,
+          /\b(average|mean)\s*(?:weight\s*)?(?:is|was|=|:|of)\s*\**\s*-?(NaN|Infinity)\b/i,
           'gives NaN or Infinity as the average',
           'no-nan-figure',
         ),

@@ -60,7 +60,9 @@ Rules:
 - Nothing from general knowledge anywhere, assumptions and caveats included: no remark about what the domain usually is (how many matches a tournament normally has, how a rule usually counts), and nothing about values that did not appear in the results (do not say how own goals count when no own goal appears).
 - No usable rows (every query failed, or none ran): say the analysis could not get the data and give no figure.
 - Never dump a schema, a table list or SQL.
-- Long lists: when a query's line says that only its first rows are shown (for example "102 rows, the first 50 shown") and the answer must list that result, write no table for it; put, alone on a line where the table goes, [[rows:<n>]] (n is the query's number in the request), optionally with the columns to show and their headers: [[rows:2 | name=Driver, total_race_starts=Race starts]]. The table of every row is put there for you. Never say that rows are missing or were cut because only some were shown to you.`;
+- Long lists: when a query's line says that only its first rows are shown (for example "102 rows, the first 50 shown") and the answer must list that result, write no table for it; put, alone on a line where the table goes, [[rows:<n>]] (n is the query's number in the request), optionally with the columns to show and their headers: [[rows:2 | name=Driver, total_race_starts=Race starts]]. The table of every row is put there for you. Never say that rows are missing or were cut because only some were shown to you.
+
+Counts stay exact even when you describe a spread: never round a count into a range ("about 37,000 to 38,000"); give the exact smallest and largest counts the rows hold.`;
 
 /** The most result rows of one query Write answer reads. */
 export const ANSWER_ROWS_CAP = 50;

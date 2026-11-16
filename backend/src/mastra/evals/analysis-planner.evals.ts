@@ -17,7 +17,6 @@ import {
   readsTables,
   restatesAnswer,
   scopeOrAssumptionsMention,
-  statementsMention,
   statesGap,
 } from './analysis-planner-eval-checks';
 
@@ -200,16 +199,9 @@ export const ANALYSIS_PLANNER_EVAL_SET: AssistantEvalSet = {
       id: 'ap-top-five-ties',
       question: 'What are the top 5 products by revenue?',
       intent:
-        'Five products tie on revenue: the plan reads the revenue view or order lines and says how ties are handled.',
+        'The measure is named (revenue): Plan does not ask, even with a product_revenue view in the catalog (the rule for unnamed measures must not over-fire). Ties are the writer’s to state, not the plan’s.',
       scorers: [],
-      customChecks: [
-        ...BASE(),
-        statementsMention(
-          /\btie|\btied|same revenue|ties\b/i,
-          'how ties are handled',
-          'mentions-ties',
-        ),
-      ],
+      customChecks: [...BASE(), clarificationDecision(false), hasMeasures(1)],
       input: input('What are the top 5 products by revenue?'),
     }),
     isolatedCase<PlannerEvalInput>({

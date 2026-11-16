@@ -122,6 +122,26 @@ describe('answer-writer checks (story 1.28.3)', () => {
     );
   });
 
+  it('reads Spanish thousands and does not take "excludes the NaN" for a NaN figure (round 2)', async () => {
+    const check = figuresFromRows([{ returned: 37941 }]);
+    expect(
+      await run(check, written('Se devolvieron 37.941 pedidos.')),
+    ).toBeUndefined();
+    expect(await run(check, written('Se devolvieron 38.000 pedidos.'))).toMatch(
+      /38\.000/,
+    );
+    const nan = ANSWER_WRITER_EVAL_SET.cases
+      .find((c) => c.id === 'aw-nan-weights')!
+      .customChecks!.find((k) => k.id === 'aw-no-nan-figure')!;
+    expect(
+      await run(
+        nan,
+        written('The average excludes the NaN weights: 25.18 kg.'),
+      ),
+    ).toBeUndefined();
+    expect(await run(nan, written('The average weight is NaN.'))).toBeDefined();
+  });
+
   it('says and neverSays', async () => {
     const tie = says(/\btie/i, 'says they tie', 'says-tie');
     expect(

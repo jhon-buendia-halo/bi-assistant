@@ -113,9 +113,14 @@ export function figuresFromRows(
     'figures-from-rows',
     'Every figure of the answer is in the rows it was given',
     (w) => {
-      const stray = numbersIn(textOf(w)).filter(({ value, decimals }) => {
+      const stray = numbersIn(textOf(w)).filter(({ raw, value, decimals }) => {
         if (Number.isInteger(value) && Math.abs(value) < 10) return false;
-        return !matchesRounded(value, decimals, known);
+        if (matchesRounded(value, decimals, known)) return false;
+        // Spanish thousands: "37.941" is 37,941.
+        return !(
+          /^-?\d{1,3}(?:\.\d{3})+$/.test(raw) &&
+          matchesRounded(Number(raw.replace(/\./g, '')), 0, known)
+        );
       });
       return stray.length
         ? `figures not in the rows: ${stray.map((s) => s.raw).join(', ')}`
