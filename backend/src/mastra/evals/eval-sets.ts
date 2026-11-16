@@ -36,6 +36,7 @@ import {
 import { DATA_QUALITY_CHECK_EVAL_SET } from './data-quality-check.evals';
 import { READINESS_WORKFLOW_EVAL_SET } from './readiness-workflow.evals';
 import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
+import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
 import {
   READINESS_WORKFLOW_EVAL_TARGET,
   readinessWorkflowEvalTarget,
@@ -53,6 +54,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   DATA_QUALITY_CHECK_EVAL_SET,
   READINESS_WORKFLOW_EVAL_SET,
   ANALYSIS_PLANNER_EVAL_SET,
+  ANSWER_WRITER_EVAL_SET,
   INSIGHTS_ANALYST_EVAL_SET,
   QUERY_EXPLAINER_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
