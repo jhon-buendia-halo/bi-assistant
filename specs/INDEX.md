@@ -649,7 +649,7 @@ specs/capabilities/app-shell/spec.md:393-397  ## Acceptance
 specs/capabilities/app-shell/spec.md:399-406  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
-specs/capabilities/data-readiness/spec.md:24-224  ## Rules
+specs/capabilities/data-readiness/spec.md:24-226  ## Rules
 specs/capabilities/data-readiness/spec.md:26-53  ### The agent on the hub
 specs/capabilities/data-readiness/spec.md:28-36  R1 The Data Readiness Agent SHALL be a built-in agent shown on the Agent
 specs/capabilities/data-readiness/spec.md:37-53  R2 Since 2026-11-13 the **Assess Data Readiness** workflow (`data-readine
@@ -684,19 +684,19 @@ specs/capabilities/data-readiness/spec.md:190-197  R25 The **scorecard** SHALL s
 specs/capabilities/data-readiness/spec.md:198-198  R26 The scorecard SHALL offer **Past assessments**. It lists the stored re
 specs/capabilities/data-readiness/spec.md:200-204  ### Fidelity
 specs/capabilities/data-readiness/spec.md:202-204  R27 A golden suite SHALL run the engine over labelled source profiles copi
-specs/capabilities/data-readiness/spec.md:206-224  ### Speed, not-profiled entities and progress (ADR-0033)
-specs/capabilities/data-readiness/spec.md:210-212  R28 **One pooled session per assessment.** An assessment SHALL profile thr
-specs/capabilities/data-readiness/spec.md:213-215  R29 **Per-table statistics.** A readable entity's statistics statement SHA
-specs/capabilities/data-readiness/spec.md:216-218  R30 **Row-count gate.** The profiler SHALL count an entity's rows first. A
-specs/capabilities/data-readiness/spec.md:219-221  R31 **Not-profiled entities in the report.** A stored report SHALL list it
-specs/capabilities/data-readiness/spec.md:222-223  R32 **Live progress.** While `assess_data_readiness` runs, the app SHALL s
-specs/capabilities/data-readiness/spec.md:224-224  R33 **Stop and reload cancel the assessment.** Stopping the turn or reload
-specs/capabilities/data-readiness/spec.md:226-238  ## Edge cases and errors
-specs/capabilities/data-readiness/spec.md:240-246  ## Contracts
-specs/capabilities/data-readiness/spec.md:248-256  ## UI
-specs/capabilities/data-readiness/spec.md:258-313  ## Flows
-specs/capabilities/data-readiness/spec.md:260-313  ### Feature: Data readiness
-specs/capabilities/data-readiness/spec.md:315-327  ## Acceptance
+specs/capabilities/data-readiness/spec.md:206-226  ### Speed, not-profiled entities and progress (ADR-0033)
+specs/capabilities/data-readiness/spec.md:210-214  R28 **One pooled session per assessment.** An assessment SHALL profile thr
+specs/capabilities/data-readiness/spec.md:215-217  R29 **Per-table statistics.** A readable entity's statistics statement SHA
+specs/capabilities/data-readiness/spec.md:218-220  R30 **Row-count gate.** The profiler SHALL count an entity's rows first. A
+specs/capabilities/data-readiness/spec.md:221-223  R31 **Not-profiled entities in the report.** A stored report SHALL list it
+specs/capabilities/data-readiness/spec.md:224-225  R32 **Live progress.** While `assess_data_readiness` runs, the app SHALL s
+specs/capabilities/data-readiness/spec.md:226-226  R33 **Stop and reload cancel the assessment.** Stopping the turn or reload
+specs/capabilities/data-readiness/spec.md:228-240  ## Edge cases and errors
+specs/capabilities/data-readiness/spec.md:242-248  ## Contracts
+specs/capabilities/data-readiness/spec.md:250-258  ## UI
+specs/capabilities/data-readiness/spec.md:260-315  ## Flows
+specs/capabilities/data-readiness/spec.md:262-315  ### Feature: Data readiness
+specs/capabilities/data-readiness/spec.md:317-329  ## Acceptance
 
 specs/capabilities/dataset-ontology/spec.md:5-9  ## Concepts
 specs/capabilities/dataset-ontology/spec.md:11-72  ## Rules
@@ -1929,19 +1929,19 @@ specs/system/api.md:1480-1488  ### 3.3 Eval runs
 specs/system/api.md:1490-1502  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
 specs/system/api.md:1504-1513  ### 3.5 Other long-running calls (no progress channel)
 specs/system/api.md:1515-1603  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1605-1670  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1605-1671  ## 4. Desktop bridge (IPC)
 specs/system/api.md:1609-1626  ### 4.1 Globals exposed on `window`
 specs/system/api.md:1628-1644  ### 4.2 IPC channels
-specs/system/api.md:1646-1662  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1664-1670  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1672-1715  ## 5. CLI contract
-specs/system/api.md:1717-1763  ## 6. Environment variables
-specs/system/api.md:1719-1736  ### 6.1 Backend (server process)
-specs/system/api.md:1738-1742  ### 6.2 CLI-only
-specs/system/api.md:1744-1753  ### 6.3 Electron main process
-specs/system/api.md:1755-1757  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1759-1763  ### 6.5 Frontend build/runtime
-specs/system/api.md:1765-1781  ## 7. Gaps and open questions
+specs/system/api.md:1646-1663  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1665-1671  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1673-1716  ## 5. CLI contract
+specs/system/api.md:1718-1764  ## 6. Environment variables
+specs/system/api.md:1720-1737  ### 6.1 Backend (server process)
+specs/system/api.md:1739-1743  ### 6.2 CLI-only
+specs/system/api.md:1745-1754  ### 6.3 Electron main process
+specs/system/api.md:1756-1758  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1760-1764  ### 6.5 Frontend build/runtime
+specs/system/api.md:1766-1782  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-256  ## Level 2 — Containers

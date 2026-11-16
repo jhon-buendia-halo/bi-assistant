@@ -13,6 +13,7 @@ import type { DatasourcesService } from '../../datasources/datasources.service';
 import type { LlmService } from '../../llm/llm.service';
 import type { VerifiedQueriesService } from '../../verified-queries/verified-queries.service';
 import { compareResults } from '../result-compare';
+import { logSql } from './log-text';
 import { STORED_ROWS_CAP } from '../turn-data';
 import type {
   CrossCheck,
@@ -32,8 +33,6 @@ const limitReachedNote = (limit: number) =>
   `row limit ${limit} reached — results may be incomplete; aggregate or narrow the query for exact totals`;
 /** Character budget for the schema block handed to the fixer. */
 const FIXER_SCHEMA_CHARS = 4_000;
-/** Character budget for a failed statement written into the warn log (ships in diagnostics reports). */
-const SQL_LOG_CHARS = 500;
 /** Character budget for the richer (sample-value bearing) verifier schema. */
 const VERIFIER_SCHEMA_CHARS = 6_000;
 /** Sample values shown per column to the verifier — value matching, not data. */
@@ -124,10 +123,10 @@ export class SqlChecks {
         );
         if (!corrected || corrected === statement) throw error;
         // `statement`, not `sql`: attempt 2 is repairing the fixer's own
-        // rewrite from attempt 1. Flattened/capped — this ships in
+        // rewrite from attempt 1. Message and SQL both flattened/capped — this ships in
         // diagnostics reports and must stay one line per failure.
         this.deps.logger.warn(
-          `Repairing failed SQL (attempt ${attempt + 1}): ${message} — SQL: ${logSql(statement)}`,
+          `Repairing failed SQL (attempt ${attempt + 1}): ${logSql(message)} — SQL: ${logSql(statement)}`,
         );
         statement = corrected;
       }
@@ -432,14 +431,6 @@ function isRepairableSqlError(error: unknown): boolean {
   if (error instanceof BadRequestException) return false;
   const message = error instanceof Error ? error.message : String(error);
   return !TRANSPORT_OR_AUTH_ERROR.test(message);
-}
-
-/** One-line, length-capped rendering of a SQL statement for warn-level logs. */
-function logSql(sql: string): string {
-  const flat = sql.replace(/\s+/g, ' ').trim();
-  return flat.length > SQL_LOG_CHARS
-    ? `${flat.slice(0, SQL_LOG_CHARS - 1)}…`
-    : flat;
 }
 
 /**

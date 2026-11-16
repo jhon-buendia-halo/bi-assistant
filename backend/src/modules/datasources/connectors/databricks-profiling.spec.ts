@@ -1,5 +1,10 @@
+import { Logger } from '@nestjs/common';
 import { DBSQLClient } from '@databricks/sql';
-import { DatabricksProfiler } from './databricks-profiling';
+import {
+  DatabricksProfiler,
+  catalogReads,
+  skippedCatalogsMessage,
+} from './databricks-profiling';
 
 jest.mock('@databricks/sql', () => ({ DBSQLClient: jest.fn() }));
 
@@ -560,5 +565,156 @@ describe('DatabricksProfiler', () => {
       }
       expect(seen.filter((q) => q === 'SHOW CATALOGS')).toHaveLength(1);
     });
+
+    describe('with a reach (data-readiness R28)', () => {
+      const reach = {
+        namespaces: ['big_cat.mkt'],
+        entities: [{ namespace: 'big_cat.mkt', name: 'vw_policy' }],
+      };
+
+      it('reads only the reached schemas, never listing every catalog', async () => {
+        const seen: string[] = [];
+        behaviour = (sql) => {
+          seen.push(sql);
+          if (sql.includes('.tables'))
+            return Promise.resolve([
+              { table_schema: 'mkt', table_name: 'vw_policy' },
+            ]);
+          return Promise.resolve([]);
+        };
+        const out = await profiler.withSessions(
+          config,
+          2,
+          undefined,
+          async (p) => {
+            const tables = await p.tables(config);
+            await p.keys(config);
+            await p.foreignKeys(config);
+            return tables;
+          },
+          reach,
+        );
+        expect(out.map((t) => `${t.schema}.${t.table}`)).toEqual([
+          'big_cat.mkt.vw_policy',
+        ]);
+        expect(seen).not.toContain('SHOW CATALOGS');
+        const catalogueReads = seen.filter((q) =>
+          q.includes('information_schema'),
+        );
+        expect(catalogueReads).toHaveLength(4);
+        for (const q of catalogueReads) {
+          expect(q).toContain('`big_cat`.information_schema');
+          expect(q).toMatch(/table_schema IN \('mkt'\)/);
+        }
+      });
+
+      it('reads the scoped tables alone when their schema is too large to list', async () => {
+        const seen: string[] = [];
+        behaviour = (sql) => {
+          seen.push(sql);
+          if (sql.includes('table_schema IN'))
+            return Promise.reject(
+              new Error('Databricks query timed out after 15s'),
+            );
+          if (sql.includes('.tables'))
+            return Promise.resolve([
+              { table_schema: 'mkt', table_name: 'vw_policy' },
+            ]);
+          return Promise.resolve([]);
+        };
+        const out = await profiler.withSessions(
+          config,
+          1,
+          undefined,
+          (p) => p.tables(config),
+          reach,
+        );
+        expect(out.map((t) => t.table)).toEqual(['vw_policy']);
+        expect(seen.some((q) => q.includes("table_name = 'vw_policy'"))).toBe(
+          true,
+        );
+      });
+
+      it('without a reach still lists every catalog', async () => {
+        const seen: string[] = [];
+        behaviour = (sql) => {
+          seen.push(sql);
+          return Promise.resolve(
+            sql === 'SHOW CATALOGS' ? [{ catalog: 'main' }] : [],
+          );
+        };
+        await profiler.withSessions(config, 1, undefined, (p) =>
+          p.tables(config),
+        );
+        expect(seen).toContain('SHOW CATALOGS');
+        expect(seen.some((q) => q.includes('table_schema IN'))).toBe(false);
+      });
+    });
+  });
+
+  it('logs the catalogs it could not read once, not once per catalog', async () => {
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      responder = (sql) => {
+        if (sql === 'SHOW CATALOGS')
+          return [{ catalog: 'a' }, { catalog: 'b' }, { catalog: 'ok' }];
+        if (sql.includes('`ok`.')) return [];
+        return new Error(
+          '[INSUFFICIENT_PERMISSIONS] Insufficient privileges:\nUser does not have USE CATALOG.',
+        );
+      };
+      await profiler.tables(config);
+      const lines = warn.mock.calls.map((c) => String(c[0]));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toBe(
+        '[tables] skipped 2 of 3 catalog(s): "a" ([INSUFFICIENT_PERMISSIONS] Insufficient privileges: User does not have USE CATALOG.); "b" ([INSUFFICIENT_PERMISSIONS] Insufficient privileges: User does not have USE CATALOG.)',
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('catalogReads', () => {
+  it('groups a reach by catalog, in name order, with its schemas and tables', () => {
+    expect(
+      catalogReads({
+        namespaces: ['z.s1', 'a.s2', 'z.s0', 'not-a-namespace'],
+        entities: [
+          { namespace: 'z.s1', name: 't1' },
+          { namespace: 'z.s1', name: 't1' },
+          { namespace: 'a.s2', name: 't2' },
+        ],
+      }),
+    ).toEqual([
+      {
+        catalog: 'a',
+        schemas: ['s2'],
+        tables: [{ schema: 's2', name: 't2' }],
+      },
+      {
+        catalog: 'z',
+        schemas: ['s0', 's1'],
+        tables: [{ schema: 's1', name: 't1' }],
+      },
+    ]);
+  });
+});
+
+describe('skippedCatalogsMessage', () => {
+  it('names the first ten and counts the rest', () => {
+    const skipped = Array.from({ length: 12 }, (_, i) => ({
+      catalog: `c${i}`,
+      error: new Error('denied'),
+    }));
+    const message = skippedCatalogsMessage('keys', skipped, 20);
+    expect(message.startsWith('[keys] skipped 12 of 20 catalog(s): "c0"')).toBe(
+      true,
+    );
+    expect(message).toContain('"c9" (denied)');
+    expect(message).not.toContain('"c10"');
+    expect(message.endsWith('; and 2 more')).toBe(true);
   });
 });
