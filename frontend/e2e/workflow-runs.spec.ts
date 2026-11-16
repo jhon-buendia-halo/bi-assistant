@@ -13,6 +13,7 @@ import {
   startLlmStub,
 } from './helpers/llm-stub';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
+import { fillRun, pickDataset, pickedDataset } from './helpers/run-ui';
 
 /**
  * Mirrors the Feature "Workflow runs" in specs/capabilities/workflows/spec.md:
@@ -126,17 +127,6 @@ async function openRunTab(page: Page): Promise<void> {
   await expect(page.getByTestId('workflow-run')).toBeVisible();
 }
 
-function datasetCard(page: Page, name: string): Locator {
-  return page.getByTestId('workflow-input-datasets').getByRole('button', { name });
-}
-
-async function fillRun(page: Page, question: string, dataset?: string): Promise<void> {
-  if (dataset !== undefined) {
-    await datasetCard(page, dataset).click();
-    await expect(datasetCard(page, dataset)).toHaveAttribute('aria-pressed', 'true');
-  }
-  await page.getByTestId('workflow-input-question').fill(question);
-}
 
 /** A step's node on the canvas; its status in the run shown is `data-status`. */
 function runStep(page: Page, id: string): Locator {
@@ -178,7 +168,7 @@ test.describe('Feature: Workflow runs', () => {
             'placeholder',
             'Ask a question about your data',
           );
-          await expect(datasetCard(page, WORLD_CUP_DATASET)).toHaveAttribute('aria-pressed', 'false');
+          await expect(pickedDataset(page, WORLD_CUP_DATASET)).toHaveCount(0);
           await expect(panel.getByLabel(/^Careful/)).toHaveCount(0);
         },
       );
@@ -506,8 +496,7 @@ test.describe('Feature: Workflow runs', () => {
     await test.step(`Given I am on the Run panel of "${V2}" with "${WORLD_CUP_DATASET}" picked`, async () => {
       await openWorkflowPage(page, V2_ID, V2);
       await openRunTab(page);
-      await datasetCard(page, WORLD_CUP_DATASET).click();
-      await expect(datasetCard(page, WORLD_CUP_DATASET)).toHaveAttribute('aria-pressed', 'true');
+      await pickDataset(page, WORLD_CUP_DATASET);
     });
     await test.step('When I type the question and press Enter', async () => {
       const question = page.getByTestId('workflow-input-question');
@@ -537,8 +526,40 @@ test.describe('Feature: Workflow runs', () => {
       await expect(page.getByTestId('workflow-follow-up-input')).toHaveCount(0);
       await expect(page.getByTestId('workflow-input-question')).toHaveValue('');
       await expect(page.getByTestId('workflow-input-question')).toBeFocused();
-      await expect(datasetCard(page, WORLD_CUP_DATASET)).toHaveAttribute('aria-pressed', 'true');
+      await expect(pickedDataset(page, WORLD_CUP_DATASET)).toBeVisible();
       await expect(page.getByTestId('workflow-run-new')).toHaveCount(0);
+    });
+  });
+
+  test('Asking on home runs Answer a Business Question on its page', async ({ page }) => {
+    stub.reply = answerWithSql({ [QUESTION]: ANSWER });
+    const ask = page.getByTestId('welcome-ask');
+    await test.step(`Given I am on home with "${WORLD_CUP_DATASET}" as the only dataset`, async () => {
+      await page.reload();
+      await expect(ask.getByLabel('What do you want to know?')).toBeVisible();
+      await expect(page.getByTestId('welcome-setup')).toHaveCount(0);
+    });
+    await test.step('Then that dataset is already picked', async () => {
+      await expect(
+        ask.getByRole('button', { name: `Remove ${WORLD_CUP_DATASET}`, exact: true }),
+      ).toBeVisible();
+    });
+    await test.step('When I type the question and press Enter', async () => {
+      const question = page.getByTestId('welcome-question');
+      await question.fill(QUESTION);
+      await question.press('Enter');
+    });
+    await test.step(`Then "${V2}" opens, runs on my question and I see the answer`, async () => {
+      await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
+      await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+      await expect(runAnswer(page)).toContainText(ANSWER);
+      await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+    });
+    await test.step('And home lists the run under Recent runs', async () => {
+      await page.reload();
+      await expect(
+        page.getByTestId('welcome-runs').getByRole('button', { name: new RegExp(V2) }),
+      ).toBeVisible();
     });
   });
 

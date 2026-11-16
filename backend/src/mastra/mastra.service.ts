@@ -22,6 +22,7 @@ import {
   readDashboardWithModel,
 } from './workflows/recreate-dashboard.agents';
 import { readImagesWithModel } from './workflows/read-images.agents';
+import { reviewTemplateWithModel } from './workflows/review-website.agents';
 import {
   createSessionWorkspace,
   deleteSessionWorkspaceDirectory,
@@ -160,6 +161,17 @@ export class MastraService {
     ...args: Parameters<typeof readImagesWithModel>
   ): ReturnType<typeof readImagesWithModel> {
     return readImagesWithModel(...args);
+  }
+
+  /**
+   * The Review templates step model call of Review a Website (agents.md
+   * 2.16, 5.19): Iris over one page template's screenshots, clean and
+   * marked, in one call. A model error rejects.
+   */
+  reviewTemplate(
+    ...args: Parameters<typeof reviewTemplateWithModel>
+  ): ReturnType<typeof reviewTemplateWithModel> {
+    return reviewTemplateWithModel(...args);
   }
 
   /**

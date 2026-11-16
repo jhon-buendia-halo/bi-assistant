@@ -199,6 +199,8 @@ export class WorkflowDesigner {
   private pendingRun: WorkflowRun | null = null;
   /** Form values to hold once the workflow has loaded (an artifact's "Use in"). */
   private pendingValues: Record<string, WorkflowInputValue> | null = null;
+  /** Run the workflow on the held values once it has loaded (the home's Ask). */
+  private pendingExecute = false;
 
   /**
    * The run the page showed running (or waiting) when it was left: opening
@@ -499,10 +501,16 @@ export class WorkflowDesigner {
   /**
    * The next workflow opened starts with these form values over its initial
    * ones (an artifact opened in Dashboard Image to Artifact). A name the workflow
-   * has no field for is ignored.
+   * has no field for is ignored. With `execute`, the workflow then runs on
+   * them as Execute would (the home's Ask, app-shell R51), once its datasets
+   * have loaded; not when the page shows a stored or still-running run.
    */
-  prefillOnLoad(values: Record<string, WorkflowInputValue>): void {
+  prefillOnLoad(
+    values: Record<string, WorkflowInputValue>,
+    options: { execute?: boolean } = {},
+  ): void {
     this.pendingValues = values;
+    this.pendingExecute = options.execute === true;
   }
 
   /** Open a workflow: everything of the previous one is discarded. */
@@ -518,6 +526,9 @@ export class WorkflowDesigner {
         const left =
           this.leftRun?.workflowId === workflow.id ? this.leftRun : null;
         if (left !== null) this.leftRun = null;
+        const runNow =
+          this.pendingExecute && this.pendingRun === null && left === null;
+        this.pendingExecute = false;
         if (this.pendingRun !== null) {
           const pending = this.pendingRun;
           this.pendingRun = null;
@@ -548,7 +559,9 @@ export class WorkflowDesigner {
               (field.type === 'datasets' || field.type === 'dataset'),
           )
         ) {
-          this.loadDatasets();
+          this.loadDatasets(runNow);
+        } else if (runNow) {
+          this.execute();
         }
       },
       error: (err) => {
@@ -558,13 +571,18 @@ export class WorkflowDesigner {
     });
   }
 
-  private loadDatasets(): void {
-    this.datasetsSubscription = this.datasetsApi.getDatasets().subscribe({
+  /** The datasets a `datasets` field offers; then, with `thenExecute`, the run starts. */
+  private loadDatasets(thenExecute = false): void {
+    this.datasetsSubscription = this.datasetsApi.getDatasetSummaries().subscribe({
       next: (response) => {
         this.datasets.set(response.datasets ?? []);
         this.datasetsLoaded.set(true);
+        if (thenExecute) this.execute();
       },
-      error: () => this.datasets.set([]),
+      error: () => {
+        this.datasets.set([]);
+        if (thenExecute) this.execute();
+      },
     });
   }
 

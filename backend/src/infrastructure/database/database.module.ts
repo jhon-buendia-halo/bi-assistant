@@ -22,6 +22,7 @@ import {
   WORKFLOW_RUNS_STORE,
   WORKFLOW_RUN_NODE_CHATS_STORE,
   ARTIFACTS_STORE,
+  SITE_SIGNINS_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
 import { SqliteTransactions } from './sqlite-transactions';
@@ -55,6 +56,7 @@ const COLLECTIONS = [
   { token: WORKFLOW_RUNS_STORE, table: 'workflow_runs' },
   { token: WORKFLOW_RUN_NODE_CHATS_STORE, table: 'workflow_run_node_chats' },
   { token: ARTIFACTS_STORE, table: 'artifacts' },
+  { token: SITE_SIGNINS_STORE, table: 'site_signins' },
 ];
 
 const sqliteDbProvider: Provider = {

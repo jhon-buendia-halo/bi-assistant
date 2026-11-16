@@ -44,11 +44,16 @@ import {
   READINESS_WORKFLOW_EVAL_TARGET,
   readinessWorkflowEvalTarget,
 } from './readiness-workflow-target';
+import {
+  SITE_REVIEWER_EVAL_AGENT_KEY,
+  SITE_REVIEWER_EVAL_SET,
+  siteReviewerEvalTarget,
+} from './site-reviewer.evals';
 
 /**
  * Every eval set, of every agent that has evals (agents.md 8.1): the
  * assistant's, the Data Readiness Agent's, Insights Analyst's, the Query
- * Explainer's and the Result Explorer's. A set runs on the agent its
+ * Explainer's, the Result Explorer's and the Site Reviewer's. A set runs on the agent its
  * `agentKey` names, the `assistant` when it names none.
  */
 export const EVAL_SETS: AssistantEvalSet[] = [
@@ -64,6 +69,7 @@ export const EVAL_SETS: AssistantEvalSet[] = [
   QUERY_EXPLAINER_EVAL_SET,
   RESULT_EXPLORER_EVAL_SET,
   RESULT_EXPLORER_EDGE_EVAL_SET,
+  SITE_REVIEWER_EVAL_SET,
 ];
 
 /** The registry key a set runs on. */
@@ -173,6 +179,8 @@ export function evalTargetOf(targetId: string, agentKey: string): EvalTarget {
     return queryExplainerEvalTarget();
   if (agentKey === RESULT_EXPLORER_EVAL_AGENT_KEY)
     return resultExplorerEvalTarget();
+  if (agentKey === SITE_REVIEWER_EVAL_AGENT_KEY)
+    return siteReviewerEvalTarget();
   throw new Error(`Agent "${agentKey}" has no evals to run`);
 }
 

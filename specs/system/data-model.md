@@ -80,7 +80,7 @@ A **collection** is an unordered-by-contract set of JSON documents (plain object
 
 ### 2.3 Secret handling (`CryptoService`)
 
-Only one persisted value is encrypted: the LLM API key in the settings document (section 3.2), whatever the provider. For the `custom` provider the key is optional: a keyless endpoint stores no `apiKeyCiphertext` at all (never an encrypted empty string). The `copilot` provider never stores a key or any GitHub credential (it uses the machine's GitHub login, [ADR-0037](architecture.md)). Keys are never written to logs or desktop diagnostics in any form, and `Authorization` / `x-api-key` header values are redacted wherever requests are logged ([api.md](api.md) 2.5). Scheme:
+Two persisted values are encrypted: the LLM API key in the settings document (section 3.2), whatever the provider, and, since 2026-11-16, each website sign-in Review a Website saved (`site_signins.storageStateCiphertext`, section 3.19). For the `custom` provider the key is optional: a keyless endpoint stores no `apiKeyCiphertext` at all (never an encrypted empty string). The `copilot` provider never stores a key or any GitHub credential (it uses the machine's GitHub login, [ADR-0037](architecture.md)). Keys are never written to logs or desktop diagnostics in any form, and `Authorization` / `x-api-key` header values are redacted wherever requests are logged ([api.md](api.md) 2.5). Scheme:
 
 - Algorithm AES-256-GCM. Key = SHA-256 of the string `APP_SECRET` (the value of the env var; if unset, the contents of `<APP_DATA_DIR>/.app-secret`, generated and written there first if missing, section 1).
 - Ciphertext string format `base64(iv):base64(authTag):base64(data)`: a fresh 12-byte random IV per encryption, the 16-byte GCM tag, then the encrypted UTF-8 plaintext. Decryption splits on `:`.
@@ -697,6 +697,20 @@ One document per artifact ([workflows](../capabilities/workflows/spec.md) R33; [
 No `ownerId`: the collection is newer than ownership (3.14). Nothing refers to an artifact by a stored key: a run that used one keeps the blueprint in its own `output`, and its `input.artifact` id may dangle.
 
 > Implementation note: `modules/artifacts/repositories/artifacts.repository.ts` (`ArtifactsRepository`, token `ARTIFACTS_STORE`); `ArtifactsService` writes and deletes the image file.
+
+### 3.19 `site_signins` — saved website sign-ins
+
+One document per website origin (since 2026-11-16; [agents.md](agents.md) 5.19, ADR-0049). Written by the Prepare session step of a Review a Website run once the user has signed in in the window it opened; replaced by the next sign-in for the same origin. Read by the same step (to check it still works) and by the crawl and capture steps of a run that uses it.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `origin` | string | yes | The site's origin (`https://portal.example.com`): the key. |
+| `storageStateCiphertext` | string | yes | The browser's storage state (cookies and local storage, Playwright's `storageState` JSON), encrypted (2.3). Equivalent to the user's signed-in session on that site: never logged, never in a run's input, output, snapshot or stream, never sent by the API. |
+| `capturedAt` | ISO | yes | When the sign-in was saved. |
+
+No `ownerId` (3.14) and no API yet: a saved sign-in cannot be listed or cleared from the app (a failed check opens the sign-in window again). An unreadable ciphertext (another secret) counts as no sign-in.
+
+> Implementation note: `modules/site-review/site-signins.repository.ts` (`SiteSignInsRepository`, token `SITE_SIGNINS_STORE`); `SiteReviewService` encrypts and decrypts with `CryptoService`.
 
 ## 4. Files on disk
 

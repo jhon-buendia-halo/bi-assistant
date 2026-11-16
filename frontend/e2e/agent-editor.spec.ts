@@ -14,6 +14,7 @@ import {
   seedWorldCupDataset,
 } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
+import { pickDatasetIn } from './helpers/run-ui';
 import { worldCupKey } from './helpers/world-cup-db';
 import {
   LlmStub,
@@ -82,10 +83,15 @@ async function openEditor(page: Page, id: string, name: string) {
 const nameField = (page: Page) => page.getByLabel('Name', { exact: true });
 const instructionsField = (page: Page) =>
   page.getByLabel('Job description', { exact: true });
-const datasetBox = (page: Page, label: string) =>
-  page
-    .getByRole('group', { name: 'Datasets' })
-    .getByRole('checkbox', { name: label, exact: true });
+const datasetsGroup = (page: Page) =>
+  page.getByRole('group', { name: 'Datasets' });
+/** A picked dataset's chip, by its text (`<name> (missing)` when it no longer exists). */
+const datasetChip = (page: Page, text: string) =>
+  datasetsGroup(page)
+    .getByTestId('dataset-picker-chip')
+    .filter({ hasText: new RegExp(`^\\s*${text.replace(/[()]/g, '\\$&')}\\s*$`) });
+const pickAgentDataset = (page: Page, name: string) =>
+  pickDatasetIn(datasetsGroup(page), name);
 const editorStatus = (page: Page) => page.getByTestId('agent-editor-status');
 const detailsPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Details panel' });
@@ -139,7 +145,7 @@ test('creates an agent, tries it, publishes it and deletes it', async ({
 
   await nameField(page).fill(HISTORIAN);
   await instructionsField(page).fill('Always name the tournament year.');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await button(page, 'Add starter question').click();
   await page.getByLabel('Starter question 1').fill('Who won in 2014?');
   await page.getByTestId('agent-save').click();
@@ -303,13 +309,15 @@ test('a dataset that no longer exists stays visible in the editor', async ({
     datasets: [WORLD_CUP_DATASET, 'Gone'],
   });
   await openEditor(page, id, HISTORIAN);
-  await expect(datasetBox(page, WORLD_CUP_DATASET)).toBeChecked();
-  await expect(datasetBox(page, 'Gone (missing)')).toBeChecked();
+  await expect(datasetChip(page, WORLD_CUP_DATASET)).toBeVisible();
+  await expect(datasetChip(page, 'Gone (missing)')).toBeVisible();
 
-  await datasetBox(page, 'Gone (missing)').uncheck();
+  await datasetsGroup(page)
+    .getByRole('button', { name: 'Remove Gone', exact: true })
+    .click();
   await page.getByTestId('agent-save').click();
   await expect(page.getByText('Draft saved')).toBeVisible();
-  await expect(datasetBox(page, 'Gone (missing)')).toHaveCount(0);
+  await expect(datasetChip(page, 'Gone (missing)')).toHaveCount(0);
 
   await openHub(page);
   await expect(page.getByTestId(`agent-card-${id}`)).not.toContainText(
@@ -448,7 +456,7 @@ async function evidence(page: Page, folder: string, name: string) {
 test('only linked tools are offered to the model', async ({ page }) => {
   await openNewAgent(page);
   await nameField(page).fill('KPI lookup');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await page.getByTestId('link-tool').click();
   await linkMenu(page)
     .getByRole('option', { name: /^sample_rows\b/ })
@@ -496,7 +504,7 @@ test('a linked skill reaches Try it, and editing the skill leaves the Live agent
   });
   await openNewAgent(page);
   await nameField(page).fill('Finance helper');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await linkFromMenu(page, instructionsEditor(page), '/fis', FISCAL);
   await page.getByTestId('agent-save').click();
   await expect(
@@ -543,7 +551,7 @@ test("a linked skill's tools come with it", async ({ page }) => {
   });
   await openNewAgent(page);
   await nameField(page).fill('Chart helper');
-  await datasetBox(page, WORLD_CUP_DATASET).check();
+  await pickAgentDataset(page, WORLD_CUP_DATASET);
   await linkFromMenu(page, instructionsEditor(page), '/char', CHART_STYLE);
   await page.getByTestId('agent-save').click();
   await expect(

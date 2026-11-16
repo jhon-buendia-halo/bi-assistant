@@ -10,8 +10,9 @@ import {
 } from '@angular/core';
 import {
   Brain,
+  ChevronDown,
+  ChevronRight,
   CircleCheck,
-  Database,
   Loader2,
   LucideAngularModule,
   MessageSquare,
@@ -28,6 +29,7 @@ import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.s
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
 import { WorkflowsNavState } from '../../services/workflows-nav-state';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
+import { DatasetPicker } from '../../../datasets/components/dataset-picker/dataset-picker';
 import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import {
   ReadinessPanelItem,
@@ -90,6 +92,7 @@ const FORM_CONTROLS =
   selector: 'app-workflow-run-chat',
   imports: [
     AnswerView,
+    DatasetPicker,
     LucideAngularModule,
     MarkdownPipe,
     PanelReadinessView,
@@ -113,6 +116,19 @@ const FORM_CONTROLS =
     .composer-dragging {
       border-color: var(--qti-border-selected);
     }
+    /* A long input (Review a Website has eleven fields) scrolls inside the
+       composer, so the chat above keeps its room; Execute stays in view. */
+    .composer-form {
+      max-height: 35vh;
+      overflow-y: auto;
+    }
+    .composer-actions {
+      position: sticky;
+      bottom: -0.5rem;
+      margin-bottom: -0.5rem;
+      padding-bottom: 0.5rem;
+      background-color: var(--qti-surface);
+    }
     .composer-dragging {
       background-color: var(--qti-surface-selected);
     }
@@ -133,30 +149,6 @@ const FORM_CONTROLS =
     .composer-input-invalid {
       box-shadow: inset 0 -1px 0 var(--qti-on-danger-soft);
     }
-    .dataset-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.375rem;
-      border: 1px solid var(--qti-border);
-      border-radius: 9999px;
-      background-color: var(--qti-surface-muted);
-      padding: 0.125rem 0.625rem;
-      font-size: 12px;
-      color: var(--qti-fg);
-      cursor: pointer;
-    }
-    .dataset-pill:hover {
-      border-color: var(--qti-border-strong);
-    }
-    .dataset-pill[aria-pressed='true'] {
-      border-color: var(--qti-border-selected);
-      background-color: var(--qti-surface-selected);
-      color: var(--qti-on-primary-soft);
-    }
-    .dataset-pill:focus-visible {
-      outline: 2px solid var(--qti-focus);
-      outline-offset: 2px;
-    }
   `,
   host: {
     class: 'flex min-h-0 flex-col',
@@ -166,8 +158,9 @@ const FORM_CONTROLS =
 export class WorkflowRunChat {
   protected readonly hasQueries = answerHasQueries;
   protected readonly Brain = Brain;
+  protected readonly ChevronDown = ChevronDown;
+  protected readonly ChevronRight = ChevronRight;
   protected readonly CircleCheck = CircleCheck;
-  protected readonly Database = Database;
   protected readonly Loader2 = Loader2;
   protected readonly MessageSquare = MessageSquare;
   protected readonly MessageSquareReply = MessageSquareReply;
@@ -386,6 +379,48 @@ export class WorkflowRunChat {
       this.designer
         .runPanelSteps()
         .some((step) => step.kind === 'agent' && step.status === 'running'),
+  );
+
+  /**
+   * A code step running with progress of its own (Review a Website's pages,
+   * agents.md 5.19): its title, its latest progress line and the five
+   * before it, newest first.
+   * Its progress arrives as the run's reasoning; an agent step shows it as
+   * Thinking instead. Null when no code step reports progress.
+   */
+  protected readonly liveCodeProgress = computed(() => {
+    if (!this.designer.running() || this.liveAgentStep()) return null;
+    const step = this.designer
+      .runPanelSteps()
+      .find((s) => s.kind === 'code' && s.status === 'running');
+    const lines = this.designer
+      .reasoning()
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!step || !lines.length) return null;
+    return {
+      title: step.title,
+      latest: lines[lines.length - 1],
+      recent: lines.slice(-6, -1).reverse(),
+    };
+  });
+
+  /**
+   * The input form folds away while a run is shown that is neither running
+   * nor waiting (a workflow with many fields, Review a Website, would hide
+   * the result); `inputOpen` unfolds it. Running again starts unfolded.
+   */
+  protected readonly inputOpen = signal(false);
+  protected readonly inputFoldable = computed(
+    () =>
+      this.designer.runResult() !== null &&
+      !this.designer.running() &&
+      this.designer.waitingFor() === null &&
+      this.composerFields().length > 3,
+  );
+  protected readonly inputFolded = computed(
+    () => this.inputFoldable() && !this.inputOpen(),
   );
 
   /** Under a stored answer that asks nothing: the composer follows up on it. */

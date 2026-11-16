@@ -379,6 +379,12 @@ export interface SessionDoc {
    * 5.17): the artifact's id. In memory only, like the host.
    */
   inputArtifact?: string;
+  /**
+   * A run host's whole checked input, field by field, for a workflow whose
+   * steps read more than the question (Review a Website, agents.md 5.19).
+   * In memory only, like the host.
+   */
+  inputValues?: Record<string, string | number | boolean | string[]>;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */

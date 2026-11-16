@@ -14,7 +14,7 @@ import {
   turnRequests,
 } from './helpers/llm-stub';
 import { clarifyingPlan, clearPlan } from './helpers/v2-steps';
-import { fillRun } from './helpers/run-ui';
+import { fillRun, pickedDataset } from './helpers/run-ui';
 import { worldCupKey } from './helpers/world-cup-db';
 
 /** Mirrors the Feature "Workflows" in specs/capabilities/workflows/spec.md. */
@@ -76,6 +76,7 @@ const OFFICIAL = [
   [READINESS_ID, READINESS],
   ['recreate-dashboard', 'Dashboard Image to Artifact'],
   ['map-dashboard-data', 'Map a Dashboard to Data'],
+  ['review-website', 'Review a Website'],
 ] as const;
 
 const QUESTION = 'How many matches were played in each stage?';
@@ -299,7 +300,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact" and "Map a Dashboard to Data" under Official, and no Mine section',
+        'Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact", "Map a Dashboard to Data" and "Review a Website" under Official, and no Mine section',
         async () => {
           await expect(railItem(page, 'Workflows')).toHaveAttribute(
             'aria-current',
@@ -396,7 +397,14 @@ test.describe('Feature: Workflows', () => {
           page.getByTestId('workflow-run-chat'),
         ]) {
           await expect(scope).toBeVisible();
-          await expect(scope.getByRole('button', { name: editing })).toHaveCount(0);
+          // The run form's dataset picker (Add dataset, Remove <name>) fills the run's
+          // input; it does not edit the workflow, so it is left out of this check.
+          const outsideRunInput = page.locator(
+            ':not([data-testid="workflow-input-datasets"] *)',
+          );
+          await expect(
+            scope.getByRole('button', { name: editing }).and(outsideRunInput),
+          ).toHaveCount(0);
           await expect(scope.locator('[draggable="true"]')).toHaveCount(0);
           await expect(scope.locator('[contenteditable="true"]')).toHaveCount(0);
         }
@@ -500,9 +508,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveCount(0);
           await expect(question).toHaveAttribute('placeholder', 'Ask a question about your data');
           await expect(question).toHaveAttribute('aria-required', 'true');
-          await expect(
-            page.getByTestId('workflow-input-datasets').getByRole('button', { name: WORLD_CUP_DATASET }),
-          ).toHaveAttribute('aria-pressed', 'false');
+          await expect(pickedDataset(page, WORLD_CUP_DATASET)).toHaveCount(0);
         },
       );
       await scenarioStep(
@@ -881,9 +887,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         'And I leave the question blank (only spaces), pick no dataset and click Execute',
         async () => {
           await question.fill('   ');
-          await expect(
-            picker.getByRole('button', { name: WORLD_CUP_DATASET }),
-          ).toHaveAttribute('aria-pressed', 'false');
+          await expect(pickedDataset(page, WORLD_CUP_DATASET)).toHaveCount(0);
           await page.getByTestId('workflow-run').click();
         },
       );

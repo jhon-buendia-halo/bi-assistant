@@ -69,7 +69,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
         'image-reader',
         'visualization',
       ],
-      quality: ['assistant-eval-judge'],
+      quality: ['assistant-eval-judge', 'site-reviewer'],
     });
   });
 

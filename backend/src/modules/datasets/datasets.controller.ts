@@ -1,5 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
-import { DatasetsService } from './datasets.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { DatasetsService, toDatasetSummary } from './datasets.service';
+import type { DatasetSummary } from './datasets.service';
 import type { DatasetDoc } from './repositories/datasets.repository';
 import type { DatasetEntitySnapshot } from './repositories/datasets.repository';
 
@@ -7,9 +16,15 @@ import type { DatasetEntitySnapshot } from './repositories/datasets.repository';
 export class DatasetsController {
   constructor(private readonly datasets: DatasetsService) {}
 
+  /** Every dataset; `?view=summary` drops the entity snapshots and schema notes. */
   @Get()
-  async list(): Promise<{ datasets: DatasetDoc[] }> {
-    return { datasets: await this.datasets.list() };
+  async list(
+    @Query('view') view?: string,
+  ): Promise<{ datasets: DatasetDoc[] | DatasetSummary[] }> {
+    const datasets = await this.datasets.list();
+    return {
+      datasets: view === 'summary' ? datasets.map(toDatasetSummary) : datasets,
+    };
   }
 
   @Post()

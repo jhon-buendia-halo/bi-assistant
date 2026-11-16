@@ -30,10 +30,41 @@ export async function openRunTab(page: Page): Promise<void> {
   await expect(page.getByTestId('workflow-run')).toBeVisible();
 }
 
-export function datasetCard(page: Page, name: string): Locator {
-  return page
-    .getByTestId('workflow-input-datasets')
-    .getByRole('button', { name });
+/** The run form's Datasets field (ui.md 4.4b). */
+export function datasetsField(page: Page): Locator {
+  return page.getByTestId('workflow-input-datasets');
+}
+
+/** A picked dataset's Remove button: there only while the dataset is picked. */
+export function pickedDataset(page: Page, name: string): Locator {
+  return datasetsField(page).getByRole('button', {
+    name: `Remove ${name}`,
+    exact: true,
+  });
+}
+
+/** Picks a dataset through Add dataset: search it, tick it, Done. */
+export async function pickDataset(page: Page, name: string): Promise<void> {
+  await pickDatasetIn(datasetsField(page), name);
+  await expect(pickedDataset(page, name)).toBeVisible();
+}
+
+/** Picks a dataset in any dataset picker held by `field` (a run form, the agent editor). */
+export async function pickDatasetIn(field: Locator, name: string): Promise<void> {
+  const page = field.page();
+  await field.getByTestId('dataset-picker-open').click();
+  await field.getByTestId('dataset-picker-search').fill(name);
+  const exactName = new RegExp(
+    `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+  );
+  await field
+    .getByRole('option')
+    .filter({ has: page.locator('.picker-label', { hasText: exactName }) })
+    .click();
+  await field.getByTestId('dataset-picker-done').click();
+  await expect(
+    field.getByRole('button', { name: `Remove ${name}`, exact: true }),
+  ).toBeVisible();
 }
 
 /** Types the question (and picks the dataset, when given) in the Run tab. */
@@ -43,11 +74,7 @@ export async function fillRun(
   dataset?: string,
 ): Promise<void> {
   if (dataset !== undefined) {
-    await datasetCard(page, dataset).click();
-    await expect(datasetCard(page, dataset)).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await pickDataset(page, dataset);
   }
   await page.getByTestId('workflow-input-question').fill(question);
 }

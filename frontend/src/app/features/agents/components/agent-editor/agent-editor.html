@@ -185,26 +185,24 @@
 
       <fieldset class="flex flex-col gap-2">
         <legend class="field-label mb-1.5">Datasets</legend>
-        @for (option of editor.datasetOptions(); track option.name) {
-          <label class="flex w-fit items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              [checked]="option.checked"
-              (change)="onDataset(option.name, $event)"
-              class="h-3.5 w-3.5 accent-primary"
-            />
-            @if (option.missing) {
-              <span class="text-on-warning-soft"
-                >{{ option.name }} (missing)</span
-              >
-            } @else {
-              <span>{{ option.name }}</span>
-            }
-          </label>
-        } @empty {
+        @if (
+          editor.datasets().length === 0 && editor.form().datasets.length === 0
+        ) {
           <p class="text-[13px] text-fg-muted">
             No datasets yet — create one in Datasets first.
           </p>
+        } @else {
+          <!-- Deferred: the editor is in the initial bundle, the picker need not be. -->
+          @defer (on idle) {
+            <app-dataset-picker
+              data-testid="agent-editor-datasets"
+              [datasets]="editor.datasets()"
+              [selected]="editor.form().datasets"
+              (selectedChange)="editor.setDatasets($event)"
+            />
+          } @placeholder {
+            <div class="h-[34px]" aria-hidden="true"></div>
+          }
         }
       </fieldset>
 

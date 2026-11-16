@@ -16,6 +16,7 @@ import {
   DATA_READINESS_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
+  SITE_REVIEWER_AGENT_KEY,
 } from '../../../mastra/agent-constants';
 import type { AgentExchange } from '../../../mastra/agent-threads';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../../mastra/tools/visual.tools';
@@ -42,6 +43,19 @@ import {
   type MockBundle,
   type RecreateDashboardRuntime,
 } from '../../../mastra/workflows/recreate-dashboard.steps';
+import {
+  REVIEW_WEBSITE_RUNTIME_KEY,
+  REVIEW_WEBSITE_WORKFLOW_ID,
+  IrisTimeoutError,
+  reviewWebsiteInputOf,
+  withIrisTimeout,
+  type ReviewWebsiteRuntime,
+} from '../../../mastra/workflows/review-website.steps';
+import type { ReviewWebsiteInput } from '../../../mastra/workflows/review-website.schemas';
+import type {
+  SiteReviewRunIo,
+  SiteReviewWork,
+} from '../../site-review/site-review.service';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
   DATA_QUALITY_CHECK,
@@ -209,6 +223,10 @@ export interface TurnEngineDeps {
     bundle: MockBundle,
     instruction: string,
   ): Promise<SessionVisualization>;
+  /** Review a Website's browser work for one run (agents.md 5.19). */
+  siteReview(io: SiteReviewRunIo): SiteReviewWork;
+  /** Write a file of the session's workspace (Review a Website's findings). */
+  writeFile(sessionId: string, path: string, data: string): Promise<void>;
 }
 
 /**
@@ -578,6 +596,8 @@ export class TurnEngine {
       dashboardImage ??= await this.deps.readImage(id, path);
       return dashboardImage;
     };
+    // Review a Website's browser work, once a step asks for it (agents.md 5.19).
+    let siteWork: SiteReviewWork | undefined;
     // The answer carries a stored dashboard, as a turn's visual does.
     const showVisual = (metadata: SessionVisualization) => {
       visualEvent = {
@@ -1174,6 +1194,72 @@ export class TurnEngine {
             emit({ type: 'text', content: text });
             return { visualId: metadata.id, title: metadata.title };
           },
+          // Review a Website (agents.md 5.19): the browser work, its
+          // progress shown as the run's thinking, then the report.
+          ...this.siteReviewRuntime({
+            work: () =>
+              (siteWork ??= this.deps.siteReview({
+                sessionId: id,
+                signal: turn.signal,
+                progress: (line) =>
+                  emit({ type: 'reasoning', content: `${line}\n` }),
+              })),
+            saveReport: async ({ bundle, findings, answer }) => {
+              const metadata = await this.deps.saveMock(id, bundle, trimmed);
+              const reportFile = 'site-review/findings.json';
+              await this.deps.writeFile(id, reportFile, findings);
+              showVisual(metadata);
+              text = answer;
+              emit({ type: 'text', content: text });
+              return { visualId: metadata.id, reportFile };
+            },
+            showAnswer: (answer) => {
+              text = answer;
+              emit({ type: 'text', content: text });
+              return Promise.resolve();
+            },
+            // Review templates (agents.md 5.19): Iris over one template's
+            // shots, on the app's model, recorded as text only.
+            reviewTemplate: async ({ template, shots, measured }) => {
+              const work = (siteWork ??= this.deps.siteReview({
+                sessionId: id,
+                signal: turn.signal,
+                progress: (line) =>
+                  emit({ type: 'reasoning', content: `${line}\n` }),
+              }));
+              const images = await work.shotImages(shots);
+              try {
+                // At most two minutes per call: a rate-limited model would
+                // otherwise hold the run with no word (agents.md 5.19).
+                const reviewed = await withIrisTimeout(
+                  template.id,
+                  turn.signal,
+                  (signal) =>
+                    this.deps.mastra.reviewTemplate(
+                      {
+                        url: template.representative,
+                        template,
+                        shots: images,
+                        measured,
+                      },
+                      {
+                        ...stepModelOf(SITE_REVIEWER_AGENT_KEY),
+                        abortSignal: signal,
+                      },
+                    ),
+                );
+                return {
+                  ...reviewed,
+                  stopped: reviewed.stopped || turn.signal.aborted,
+                };
+              } catch (error) {
+                if (error instanceof IrisTimeoutError) throw error;
+                throw await stepError(error);
+              }
+            },
+            progress: (line) =>
+              emit({ type: 'reasoning', content: `${line}\n` }),
+          }),
         },
         (event) => onStepEvent?.(event),
       );
@@ -1356,6 +1442,32 @@ export class TurnEngine {
    * hands every step event to `onStepEvent`, whatever the bar (agents.md
    * 5.14).
    */
+  /**
+   * Review a Website's runtime (agents.md 5.19): the browser work of the
+   * run, taken when a step first asks for it, and the run's report and
+   * answer.
+   */
+  private siteReviewRuntime(parts: {
+    work: () => SiteReviewWork;
+    saveReport: ReviewWebsiteRuntime['saveReport'];
+    showAnswer: ReviewWebsiteRuntime['showAnswer'];
+    reviewTemplate: ReviewWebsiteRuntime['reviewTemplate'];
+    progress: ReviewWebsiteRuntime['progress'];
+  }): ReviewWebsiteRuntime {
+    return {
+      checkSignIn: (input) => parts.work().checkSignIn(input),
+      openSignIn: (input) => parts.work().openSignIn(input),
+      finishSignIn: (input) => parts.work().finishSignIn(input),
+      discoverPages: (input) => parts.work().discoverPages(input),
+      captureAndCheck: (input) => parts.work().captureAndCheck(input),
+      loadReportImages: (paths) => parts.work().loadReportImages(paths),
+      saveReport: parts.saveReport,
+      showAnswer: parts.showAnswer,
+      reviewTemplate: parts.reviewTemplate,
+      progress: parts.progress,
+    };
+  }
+
   private async runTurnWorkflow(
     session: SessionDoc,
     workflow: TurnWorkflow,
@@ -1375,7 +1487,8 @@ export class TurnEngine {
       DataReadinessAssessmentRuntime &
       RecreateDashboardRuntime &
       MapDashboardDataRuntime &
-      ReadImagesRuntime,
+      ReadImagesRuntime &
+      ReviewWebsiteRuntime,
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
     // The agent step's own failure, kept so the turn reports it as is.
@@ -1393,6 +1506,7 @@ export class TurnEngine {
       workflow.engineId === DATA_READINESS_ASSESSMENT_WORKFLOW_ID;
     const recreate = workflow.engineId === RECREATE_DASHBOARD_WORKFLOW_ID;
     const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
+    const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
@@ -1427,6 +1541,23 @@ export class TurnEngine {
         saveMappedDashboard: (input) =>
           captured(() => runtime.saveMappedDashboard(input)),
       } satisfies MapDashboardDataRuntime);
+    } else if (review) {
+      requestContext.set(REVIEW_WEBSITE_RUNTIME_KEY, {
+        checkSignIn: (input) => captured(() => runtime.checkSignIn(input)),
+        openSignIn: (input) => captured(() => runtime.openSignIn(input)),
+        finishSignIn: (input) => captured(() => runtime.finishSignIn(input)),
+        discoverPages: (input) => captured(() => runtime.discoverPages(input)),
+        captureAndCheck: (input) =>
+          captured(() => runtime.captureAndCheck(input)),
+        loadReportImages: (paths) =>
+          captured(() => runtime.loadReportImages(paths)),
+        saveReport: (input) => captured(() => runtime.saveReport(input)),
+        showAnswer: (text) => captured(() => runtime.showAnswer(text)),
+        reviewTemplate: (input) =>
+          captured(() => runtime.reviewTemplate(input)),
+        // Synchronous and never throws: a progress line only.
+        progress: (line) => runtime.progress(line),
+      } satisfies ReviewWebsiteRuntime);
     } else {
       requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, {
         plan: (input) => captured(() => runtime.plan(input)),
@@ -1471,18 +1602,22 @@ export class TurnEngine {
           artifact: string;
           datasets: string[];
           images?: string[];
-        } = recreate
-      ? { question, image: session.inputImage ?? '' }
-      : mapping
-        ? {
-            question,
-            artifact: session.inputArtifact ?? '',
-            datasets: session.datasets,
-            ...images,
-          }
-        : readiness
-          ? { question, dataset: session.datasets[0] ?? '', ...images }
-          : { question, datasets: session.datasets, ...images };
+        }
+      | ReviewWebsiteInput = review
+      ? // Review a Website reads the whole form (agents.md 5.19).
+        reviewWebsiteInputOf(session.inputValues ?? { url: question })
+      : recreate
+        ? { question, image: session.inputImage ?? '' }
+        : mapping
+          ? {
+              question,
+              artifact: session.inputArtifact ?? '',
+              datasets: session.datasets,
+              ...images,
+            }
+          : readiness
+            ? { question, dataset: session.datasets[0] ?? '', ...images }
+            : { question, datasets: session.datasets, ...images };
     let state = session.workflowState;
     // A new run starts the bar over at its first step event, whichever step
     // that is: Read images, step 1, is optional, so a run without images

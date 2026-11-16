@@ -1,0 +1,195 @@
+<div
+  #field
+  class="picker-field"
+  [class.picker-field-open]="open()"
+  [class.picker-field-invalid]="invalid() && !open()"
+  data-testid="dataset-picker"
+>
+  @for (name of selected(); track name) {
+    <span
+      class="picker-chip"
+      [class.picker-chip-missing]="isMissing(name)"
+      data-testid="dataset-picker-chip"
+    >
+      <lucide-angular [img]="Database" [size]="12" class="shrink-0" />
+      <span class="truncate"
+        >{{ name }}@if (isMissing(name)) {
+          (missing)
+        }</span
+      >
+      <button
+        type="button"
+        class="picker-chip-remove"
+        [attr.aria-label]="'Remove ' + name"
+        [attr.title]="'Remove ' + name"
+        (click)="remove(name)"
+      >
+        <lucide-angular [img]="X" [size]="12" />
+      </button>
+    </span>
+  }
+  @for (dataset of quickPicks(); track dataset.name) {
+    <button
+      type="button"
+      class="picker-quick"
+      data-testid="dataset-picker-suggestion"
+      [attr.title]="dataset.tables.length + ' entities'"
+      (click)="add(dataset.name)"
+    >
+      <lucide-angular [img]="Plus" [size]="12" class="shrink-0" />
+      <span class="max-w-[200px] truncate">{{ dataset.name }}</span>
+      <span class="sr-only">, {{ dataset.tables.length }} entities</span>
+    </button>
+  }
+  @if (selected().length === 0 && quickPicks().length === 0) {
+    <span class="picker-placeholder">No datasets picked</span>
+  }
+  <button
+    #trigger
+    type="button"
+    class="picker-add"
+    data-testid="dataset-picker-open"
+    aria-haspopup="listbox"
+    [attr.aria-expanded]="open()"
+    [attr.aria-controls]="open() ? listboxId : null"
+    (click)="toggleOpen()"
+  >
+    <lucide-angular [img]="Plus" [size]="13" />
+    <span>Add dataset</span>
+  </button>
+</div>
+
+@if (open()) {
+  @if (position(); as pos) {
+    <!-- A click outside closes the list. -->
+    <div class="fixed inset-0 z-40" (click)="close(false)"></div>
+    <div
+      class="menu picker-pop"
+      role="dialog"
+      aria-label="Choose datasets"
+      data-testid="dataset-picker-popover"
+      [style.left.px]="pos.left"
+      [style.width.px]="pos.width"
+      [style.top.px]="pos.top"
+      [style.bottom.px]="pos.bottom"
+      [style.max-height.px]="pos.maxHeight"
+      (keydown.escape)="$event.stopPropagation(); close(true)"
+    >
+      <div class="picker-search">
+        <lucide-angular [img]="Search" [size]="14" class="shrink-0" />
+        <input
+          #search
+          type="text"
+          role="combobox"
+          aria-label="Search datasets or tables"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          [attr.aria-controls]="listboxId"
+          [attr.aria-activedescendant]="activeId()"
+          placeholder="Search datasets or tables…"
+          autocomplete="off"
+          data-testid="dataset-picker-search"
+          [value]="query()"
+          (input)="onQuery($event)"
+          (keydown)="onKey($event)"
+        />
+      </div>
+      <div
+        #list
+        class="picker-list"
+        role="listbox"
+        aria-label="Datasets"
+        aria-multiselectable="true"
+        [id]="listboxId"
+      >
+        @for (section of view().sections; track section.id) {
+          <div
+            role="group"
+            [attr.aria-labelledby]="section.title ? uid + '-' + section.id : null"
+          >
+            @if (section.title) {
+              <div class="picker-group" [id]="uid + '-' + section.id">
+                {{ section.title }}
+              </div>
+            }
+            @for (option of section.options; track option.name) {
+              <div
+                role="option"
+                class="picker-option"
+                [class.picker-option-active]="isActive(option)"
+                [id]="optionId(option)"
+                [attr.aria-selected]="option.selected"
+                (click)="toggle(option.name)"
+                (mousemove)="hover(option)"
+              >
+                <span class="picker-box" [class.picker-box-on]="option.selected">
+                  @if (option.selected) {
+                    <lucide-angular [img]="Check" [size]="10" [strokeWidth]="3" />
+                  }
+                </span>
+                <span class="min-w-0 flex-1">
+                  <!-- One element per part, so no whitespace splits a highlighted word. -->
+                  <span class="picker-label block truncate">
+                    @for (part of option.label; track $index) {
+                      <span [class.picker-mark]="part.match">{{ part.text }}</span>
+                    }
+                  </span>
+                  @if (option.detail) {
+                    <span class="picker-detail">
+                      @if (option.byTable) {
+                        <lucide-angular [img]="Table" [size]="11" class="shrink-0" />
+                      }
+                      <span class="truncate">
+                        @for (part of option.detail; track $index) {
+                          <span [class.picker-mark]="part.match">{{ part.text }}</span>
+                        }
+                      </span>
+                    </span>
+                  }
+                </span>
+                <span class="picker-meta">{{ option.entities }} entities</span>
+              </div>
+            }
+            @if (section.hidden > 0) {
+              <p class="picker-note" data-testid="dataset-picker-group-more">
+                {{ section.hidden }} more — search to find them.
+              </p>
+            }
+          </div>
+        } @empty {
+          <p class="picker-note" data-testid="dataset-picker-empty">
+            No datasets match “{{ query().trim() }}”.
+          </p>
+        }
+        @if (view().matches > view().flat.length) {
+          <p class="picker-note" data-testid="dataset-picker-more">
+            Showing {{ view().flat.length }} of {{ view().matches }} — type to narrow the list.
+          </p>
+        }
+      </div>
+      <div class="picker-foot">
+        <span data-testid="dataset-picker-count"
+          >{{ selected().length }} selected · {{ datasets().length }} datasets</span
+        >
+        <span class="flex-1"></span>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          data-testid="dataset-picker-clear"
+          [disabled]="selected().length === 0"
+          (click)="clear()"
+        >
+          Clear
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-testid="dataset-picker-done"
+          (click)="close(true)"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  }
+}

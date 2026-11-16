@@ -58,6 +58,13 @@ import {
   type RecreateDashboardRuntime,
 } from './recreate-dashboard.steps';
 import { recreateDashboardWorkflow } from './recreate-dashboard.workflow';
+import { REVIEW_WEBSITE_STEP_SCHEMAS } from './review-website.schemas';
+import {
+  REVIEW_WEBSITE_RUNTIME_KEY,
+  REVIEW_WEBSITE_WORKFLOW_ID,
+  type ReviewWebsiteRuntime,
+} from './review-website.steps';
+import { reviewWebsiteWorkflow } from './review-website.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
 interface StubRun {
@@ -247,6 +254,146 @@ const FIXTURES: Record<string, ContractFixture> = {
       return context;
     },
   },
+  [REVIEW_WEBSITE_WORKFLOW_ID]: {
+    workflow: reviewWebsiteWorkflow as unknown as ContractFixture['workflow'],
+    schemas: REVIEW_WEBSITE_STEP_SCHEMAS,
+    input: {
+      url: 'https://shop.example.com/',
+      maxPages: 10,
+      maxDepth: 2,
+      mobile: true,
+      tablet: false,
+      laptop: true,
+      desktop: false,
+      exclude: '',
+      needsSignIn: false,
+      loginUrl: '',
+      visualReview: true,
+    },
+    requestContext: () => {
+      const context = new RequestContext();
+      // The stubbed run: two pages found, one finding on one of them, and
+      // the stored report.
+      const unused = () => Promise.reject(new Error('not used'));
+      context.set(REVIEW_WEBSITE_RUNTIME_KEY, {
+        checkSignIn: unused,
+        openSignIn: unused,
+        finishSignIn: unused,
+        discoverPages: () =>
+          Promise.resolve({
+            pages: [
+              {
+                url: 'https://shop.example.com/',
+                finalUrl: 'https://shop.example.com/',
+                status: 200,
+                title: 'Shop',
+                depth: 0,
+                parent: null,
+                group: '/',
+                fingerprint: 'a1b2c3d4',
+                error: null,
+              },
+              {
+                url: 'https://shop.example.com/items/12',
+                finalUrl: 'https://shop.example.com/items/12',
+                status: 200,
+                title: 'Item 12',
+                depth: 1,
+                parent: 'https://shop.example.com/',
+                group: '/items/:id',
+                fingerprint: 'e5f6a7b8',
+                error: null,
+              },
+            ],
+            skippedLinks: ['https://shop.example.com/logout'],
+            capped: false,
+            sessionLost: null,
+          }),
+        captureAndCheck: () =>
+          Promise.resolve({
+            captures: [
+              {
+                url: 'https://shop.example.com/items/12',
+                screen: 'mobile',
+                group: '/items/:id',
+                screenshot: 'site-review/mobile/items-12.jpg',
+                thumbnail: null,
+                status: 200,
+                error: null,
+              },
+            ],
+            findings: [
+              {
+                id: 'f-00000001',
+                rule: 'overflow-x',
+                severity: 'major',
+                title: 'Page scrolls sideways',
+                screen: 'mobile',
+                group: '/items/:id',
+                selector: 'table.lines',
+                measured: 'Content is 512 px wide in a 390 px screen',
+                expected:
+                  'No sideways scrolling at 390 px (WCAG 1.4.10 Reflow)',
+                rect: { x: 0, y: 200, width: 512, height: 300 },
+                helpUrl: null,
+                pages: ['https://shop.example.com/items/12'],
+                crop: null,
+                source: 'measured',
+                context: null,
+              },
+            ],
+            // The item template's page, marked for Iris.
+            reviewShots: [
+              {
+                template: '/items/:id',
+                url: 'https://shop.example.com/items/12',
+                screen: 'mobile',
+                clean: 'site-review/review/mobile/items-12.clean.jpg',
+                marked: 'site-review/review/mobile/items-12.marked.jpg',
+                clip: { x: 0, y: 0, width: 390, height: 1688 },
+                marks: [
+                  {
+                    n: 1,
+                    selector: 'button.buy',
+                    tag: 'button',
+                    text: 'Buy',
+                    rect: { x: 16, y: 300, width: 80, height: 32 },
+                    crop: null,
+                  },
+                ],
+              },
+            ],
+          }),
+        reviewTemplate: () =>
+          Promise.resolve({
+            review: {
+              findings: [
+                {
+                  mark: 1,
+                  screen: 'mobile',
+                  severity: 'minor',
+                  category: 'consistency',
+                  title: 'Buy button differs from the home page buttons',
+                  observed: 'Square corners here, rounded elsewhere.',
+                  suggestion: 'Use the shared button style.',
+                },
+              ],
+              summary: 'Clean layout; one inconsistent button.',
+            },
+            stopped: false,
+          }),
+        progress: () => undefined,
+        loadReportImages: () => Promise.resolve({}),
+        saveReport: () =>
+          Promise.resolve({
+            visualId: 'v-1',
+            reportFile: 'site-review/findings.json',
+          }),
+        showAnswer: () => Promise.resolve(),
+      } satisfies ReviewWebsiteRuntime);
+      return context;
+    },
+  },
 };
 
 describe('every catalogued workflow keeps its data contract at run time (agents.md 5.12)', () => {
@@ -279,9 +426,13 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
       // follow-up branch (a first run has no earlier result).
       const ran = source.steps.filter(
         (step) =>
-          !['clarify', 'read-images', 'page-result', 'page-answer'].includes(
-            step.id,
-          ),
+          ![
+            'clarify',
+            'read-images',
+            'page-result',
+            'page-answer',
+            'confirm-review',
+          ].includes(step.id),
       );
       expect([...outputs.keys()]).toEqual(ran.map((step) => step.id));
       for (const step of ran) {

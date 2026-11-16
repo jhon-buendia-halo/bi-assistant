@@ -610,6 +610,27 @@ Saving a dataset disappeared when the user opened another screen, and the datase
 - **Acceptance:** Jest tests for the registry and the two routes; Karma tests for the designer (leaving does not abort, Stop calls the endpoint, re-attach rebuilds the live view); a Playwright scenario: start a run, leave, the rail counts it, return, the live view is there, the answer lands.
 - **Notes:** rejected: B (Mastra's `watch`/`cancel`, internal API, every agent step rewritten, evals), C (frontend-only, a reload stops the run, 6 connections per origin).
 
+### Milestone 1.27 — Review a Website: measured visual QA of every page (M1-27)
+
+Brings the goal of the `site-mapping-agent` prototype into the app as a workflow: map a website and find the visual and usability defects of every page on each screen size, signed-in pages included. Different design, agreed in chat on 2026-11-16 (Free style) with two wireframes: **measure first** (axe and DOM rules in a real browser, each finding with its element, measured value and crop), **review by template** with a vision model (phase 2), **compare with the last run** (phase 3). Plan: [docs/plans/m1-27-site-review.md](docs/plans/m1-27-site-review.md). ADR-0049. agents.md 2.16, 5.19.
+
+#### 1.27.1 — Phase 1: crawl, measure and report, with the site's sign-in  `🚧 In progress`
+- **Intent:** a measured, evidenced review of a whole site from one URL, with no model call.
+- **Scope:** the `review-website` workflow (Prepare session with the sign-in wait, Discover pages, Capture and check, Save report); `SiteReviewService` on the machine's Edge or Chrome (`playwright-core`, `axe-core`); the `site_signins` collection, encrypted; the `site-reviewer` agent (Iris) as the workflow's agent; the report visual and the answer; agents.md 2.16, 5.19, data-model 2.3, 3.19, api.md 116, workflows R1, R2; ADR-0049.
+- **Out of scope:** the vision review and template fingerprints (phase 2); comparing runs (phase 3); listing or clearing saved sign-ins in the app; dismissing overlays; design references.
+- **Acceptance:** Jest: the rules, grouping and merge, the collector (real browser when `SITE_REVIEW_BROWSER_PATH` is set), the report and answers, the workflow on the stub (public run, sign-in wait and resume, asking again, session lost, bad input), the contract snapshot, and `SiteReviewService` against a local fixture site in a real browser; a run in the app on a fixture site.
+
+#### 1.27.2 — Phase 2: page templates and Iris's vision review  `🚧 In progress`
+- **Intent:** what measuring cannot see (hierarchy, alignment, consistency, imagery, legibility), one model call per template instead of per page.
+- **Scope:** approach A of three (picked by the user on 2026-11-16): Group templates (URL pattern or structure fingerprint), Confirm review in a `.branch` when Iris would review more than ten templates (all / the ten biggest / measured only), review shots with numbered marks on the narrowest and widest screen, Review templates (Iris, two at a time, measured findings as context), her findings in the report and the answer; the `Visual review with Iris` input (on); agents.md 2.16, 5.19, api.md 116; her eval set.
+- **Out of scope:** comparing runs (1.27.3); reviewing more than the top two screens of a page.
+- **Acceptance:** Jest: grouping and plan, the skeleton and marks in a real browser, Iris's reader and request, the workflow on the stub (review, ask and choose, measured only, off, stop), the contract snapshot, the service's review shots in a real browser; E2E `review-website.spec.ts` with the stub model as Iris; the `site-reviewer` eval set.
+- **Notes:** rejected: B (`.foreach` over a nested workflow: the stub cannot run it and the canvas shows one node), C (a second workflow on an earlier run: a new input type and two runs for one result).
+
+#### 1.27.3 — Phase 3: compare with the last run  `📋 Planned`
+- **Intent:** a second review leads with what changed: new, fixed and changed-look findings.
+- **Scope:** findings matched by template, rule and selector; a pixel diff per page against the previous run's `site-review/findings.json` and screenshots.
+
 ### Milestone 1.28 — Explore a query's full result: page, filter, sort (M1-28)
 
 A query that returns thousands of rows showed at most 200 of them; the rest was reachable only as a CSV. The query inspector now pages, sorts and filters any agent query's full result on the server, a new auxiliary agent, `result-explorer`, turns the user's words ("only Brazil, newest first", "next page") into that view, chat agents get an `explore_result` tool, and a follow-up of Answer a Business Question over the earlier result pages it instead of planning a new analysis. Requested on 2026-11-15 (Free style); approach B of three picked by the user. Epic spec: [specs/epics/M1-28/spec.md](specs/epics/M1-28/spec.md). Plan and contract: [docs/plans/m1-28-result-explorer.md](docs/plans/m1-28-result-explorer.md). ADR-0050.
