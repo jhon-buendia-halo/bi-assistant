@@ -181,6 +181,11 @@ export const requirementSchema = z.object({
     .string()
     .describe("'Question 3', or '<dashboard name> · <widget kind>'."),
   dashboardId: z.string().describe("'D1'…; '' for a question."),
+  ref: z
+    .string()
+    .describe(
+      "The widget's or filter's id in its blueprint; '' for a question.",
+    ),
   fields: z.array(requirementFieldSchema),
   grain: z.string().describe("e.g. 'team × tournament'; '' when unknown."),
   periodValues: z
