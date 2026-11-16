@@ -47,6 +47,7 @@ import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
+import { WorkflowRunStory } from '../workflow-run-story/workflow-run-story';
 import { WorkflowRunAttachments } from './workflow-run-attachments';
 import {
   addImageFiles,
@@ -77,8 +78,8 @@ const FORM_CONTROLS =
  * The Chat column of a workflow's Run panel, under the canvas (workflows
  * R13, R21; ui.md 4.4b): the question asked, the waiting card, the agent
  * working live and the answer, then the composer: the run's input with
- * Execute and Stop, or, under a stored answer, Follow up. The steps are in
- * the Logs column beside it. It shares its state with the page through the
+ * Execute and Stop, or, under a stored answer, Follow up; How it ran under
+ * an ended run's answer. Each step's state is on the canvas beside it. It shares its state with the page through the
  * designer.
  */
 @Component({
@@ -92,6 +93,7 @@ const FORM_CONTROLS =
     RunVisual,
     WorkflowRunAttachments,
     WorkflowRunInputRequired,
+    WorkflowRunStory,
     WorkflowRunTeam,
   ],
   templateUrl: './workflow-run-chat.html',

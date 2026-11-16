@@ -655,6 +655,13 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       endedAt: expect.any(String) as string,
       // The turn's `tool` event is the step's call; no result came for it.
       toolCalls: [{ tool: 'run_readonly_sql' }],
+      // Its story is told as it ends (ui.md 4.4b, Logs Story).
+      story: {
+        headline: 'Ran 1 query on the data.',
+        brief: '1 query',
+        stats: [{ value: '1', label: 'query' }],
+        source: 'step',
+      },
     });
     expect(events.at(-1)).toEqual({ type: 'done', run });
     expect(run).toMatchObject({
@@ -857,8 +864,19 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'text',
     ]);
     expect(run.status).toBe('stopped');
+    // A step the stop kept from running says so (ui.md 4.4b, the node Story).
+    const notReached = {
+      headline: 'Did not run: the run was stopped before it got here.',
+      brief: 'Not reached',
+      source: 'generic',
+    };
     expect(run.steps.slice(4)).toEqual([
-      { id: 'clarify', title: 'Clarify', status: 'skipped' },
+      {
+        id: 'clarify',
+        title: 'Clarify',
+        status: 'skipped',
+        story: expect.objectContaining({ source: 'step' }) as unknown,
+      },
       {
         id: 'analyse',
         title: 'Analyse',
@@ -867,15 +885,36 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         input: { question: 'Who won in 2002?' },
         startedAt: expect.any(String) as string,
         endedAt: expect.any(String) as string,
+        story: {
+          headline: 'You stopped the analysis before it ran a query.',
+          brief: 'No queries',
+          stats: [{ value: '0', label: 'queries' }],
+          source: 'step',
+        },
       },
-      { id: 'validate', title: 'Validate', status: 'skipped' },
+      {
+        id: 'validate',
+        title: 'Validate',
+        status: 'skipped',
+        story: notReached,
+      },
       {
         id: 'check-data-quality',
         title: 'Check data quality',
         status: 'skipped',
+        story: {
+          headline: 'Skipped: the data quality check was off for this run.',
+          brief: 'Off for this run',
+          source: 'step',
+        },
       },
-      { id: 'write-answer', title: 'Write answer', status: 'skipped' },
-      { id: 'wrap-up', title: 'Wrap up', status: 'skipped' },
+      {
+        id: 'write-answer',
+        title: 'Write answer',
+        status: 'skipped',
+        story: notReached,
+      },
+      { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
     ]);
     expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);

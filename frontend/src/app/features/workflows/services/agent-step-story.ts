@@ -42,8 +42,10 @@ export interface AgentStepStory {
   title: string;
   agent: StepAgent;
   state: AgentStepState;
-  /** The canvas line: `Running my 3rd query`, `Done · 1.2 s`, `Waiting for Michael`; '' when idle. */
+  /** The canvas line: `Running my 3rd query`, `3 queries · 1.2 s`, `Waiting for Michael`; '' when idle. */
   line: string;
+  /** Its story left something to look at: the canvas line reads as a warning. */
+  concern: boolean;
   /** The Run panel's first-person sentence; null when idle, waiting or skipped. */
   sentence: string | null;
   /** From start to end; null while running or unknown. */
@@ -95,6 +97,7 @@ export function agentStepStories(
       agent,
       state,
       line: '',
+      concern: state === 'done' && run?.story?.concern === true,
       doing,
       sentence: sentenceFor(state, run, live, doing),
       durationMs: durationOf(run),
@@ -189,16 +192,19 @@ function lineFor(
       return capitalise(story.doing);
     case 'asking':
       return 'Waiting for your answer';
-    case 'done':
+    case 'done': {
+      // What its story says in a few words (`3 queries`), else `Done`.
+      const what = run?.story?.brief ?? 'Done';
       return story.durationMs !== null
-        ? `Done · ${seconds(story.durationMs)}`
-        : 'Done';
+        ? `${what} · ${seconds(story.durationMs)}`
+        : what;
+    }
     case 'failed':
       return run?.error ? `Failed · ${clip(run.error, 60)}` : 'Failed';
     case 'stopped':
       return 'Stopped';
     case 'skipped':
-      return 'Not needed this time';
+      return run?.story?.brief ?? 'Not needed this time';
     case 'waiting':
       return busy && busy !== story
         ? `Waiting for ${busy.agent.name}`

@@ -32,8 +32,8 @@ import {
 } from './workflow-run-dock.util';
 
 /**
- * The Run panel on the right of a workflow's page, beside the canvas and the
- * Logs under it (ui.md 4.4b): a header with the run's summary and live
+ * The Run panel on the right of a workflow's page, beside the canvas
+ * (ui.md 4.4b): a header with the run's summary and live
  * activity, then the Chat (question, answer, composer) at full height. It is
  * resizable by dragging its left edge (or the arrow keys on it), maximizable,
  * and folds to a narrow strip; its width is kept as a share of the page. The

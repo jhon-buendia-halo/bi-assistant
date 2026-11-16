@@ -54,6 +54,37 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
     await page.getByTestId('query-inspector-tab-sql').click();
     await expect(page.getByTestId('query-sql')).toHaveText(SQL);
     await page.getByTestId('query-inspector-close').click();
+
+    // Analyse's Story names the query and opens it in the same inspector.
+    await page.getByTestId('workflow-node-analyse').dblclick();
+    const dialog = page.getByTestId('workflow-ndv');
+    await expect(
+      dialog.getByTestId('workflow-step-story-headline'),
+    ).toContainText('Ran 1 query on the data.');
+    await dialog.getByTestId('workflow-step-story-query-0').click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId('query-inspector-sheet')).toBeVisible();
+    await page.getByTestId('query-inspector-tab-sql').click();
+    await expect(page.getByTestId('query-sql')).toHaveText(SQL);
+    await page.getByTestId('query-inspector-close').click();
+    await expect(page.getByTestId('workflow-node-analyse')).toBeFocused();
+
+    // The canvas tells each code step in a few words, and How it ran, under
+    // the answer, reads the run step by step.
+    await expect(
+      page
+        .getByTestId('workflow-node-load-catalog')
+        .getByTestId('workflow-node-run-line'),
+    ).toContainText(/\d+ tables? · /);
+    const howItRan = page.getByTestId('workflow-run-story');
+    await expect(
+      howItRan.getByTestId('workflow-run-story-summary'),
+    ).toContainText('to run');
+    await howItRan.getByTestId('workflow-run-story-toggle').click();
+    await expect(
+      howItRan.getByTestId('workflow-run-story-step-analyse'),
+    ).toContainText('Ran 1 query on the data.');
+
     const toolResult = stub.requests
       .flatMap((request) => request.messages)
       .filter((message) => message.role === 'tool')
@@ -81,7 +112,9 @@ test('creates a PostgreSQL datasource, dataset, and run using the real World Cup
     await expect(row).toBeVisible();
     await row.click();
     await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
-    await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+    await expect(page.getByTestId('workflow-run-question')).toHaveText(
+      QUESTION,
+    );
   } finally {
     await stub.close();
   }

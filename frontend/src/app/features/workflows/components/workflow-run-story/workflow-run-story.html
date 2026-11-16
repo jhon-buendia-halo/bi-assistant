@@ -1,0 +1,119 @@
+<section
+  data-testid="workflow-run-story"
+  aria-labelledby="workflow-run-story-toggle"
+  class="rounded-lg border border-border"
+>
+  <h3 class="m-0">
+    <button
+      type="button"
+      id="workflow-run-story-toggle"
+      data-testid="workflow-run-story-toggle"
+      class="flex w-full items-center gap-2 px-3 py-2 text-left"
+      [attr.aria-expanded]="open()"
+      aria-controls="workflow-run-story-body"
+      (click)="open.set(!open())"
+    >
+      <lucide-angular
+        [img]="ChevronRight"
+        [size]="14"
+        class="shrink-0 text-fg-muted transition-transform"
+        [class.rotate-90]="open()"
+        aria-hidden="true"
+      />
+      <span class="text-[13px] font-semibold text-fg-strong">How it ran</span>
+      <span
+        class="min-w-0 flex-1 truncate text-right text-[12px] font-normal text-fg-muted"
+        data-testid="workflow-run-story-summary"
+        >{{ summary() || counted() }}</span
+      >
+    </button>
+  </h3>
+  <div
+    id="workflow-run-story-body"
+    class="border-t border-border px-3 pt-2.5 pb-3"
+    [hidden]="!open()"
+  >
+    @if (stats().length) {
+      <ul
+        data-testid="workflow-run-story-stats"
+        aria-label="Run figures"
+        class="m-0 mb-3 flex list-none flex-wrap gap-x-5 gap-y-1.5 rounded-md bg-surface-muted px-3 py-2"
+      >
+        @for (stat of stats(); track $index) {
+          <li class="flex flex-col">
+            <span class="text-[14px] font-semibold text-fg-strong">{{
+              stat.value
+            }}</span>
+            <span class="text-[11px] text-fg-muted">{{ stat.label }}</span>
+          </li>
+        }
+      </ul>
+    }
+    <ol
+      data-testid="workflow-run-story-steps"
+      aria-label="Steps"
+      class="m-0 ml-1.5 list-none border-l-2 border-border p-0 pl-4"
+    >
+      @for (entry of timeline(); track entry.node.nodeId) {
+        <li
+          class="relative pb-2.5 text-[12px]"
+          [attr.data-testid]="'workflow-run-story-step-' + entry.node.nodeId"
+          [attr.data-state]="entry.state"
+        >
+          <span
+            class="absolute top-1 -left-[23px] h-2.5 w-2.5 rounded-full border-2"
+            [class.bg-surface]="entry.state !== 'done'"
+            [class.bg-success-soft]="entry.state === 'done' && !entry.concern"
+            [class.border-on-success-soft]="
+              entry.state === 'done' && !entry.concern
+            "
+            [class.bg-warning-soft]="entry.state === 'done' && entry.concern"
+            [class.border-on-warning-soft]="
+              (entry.state === 'done' && entry.concern) ||
+              entry.state === 'waiting' ||
+              entry.state === 'stopped'
+            "
+            [class.border-on-danger-soft]="entry.state === 'failed'"
+            [class.border-primary]="entry.state === 'current'"
+            [class.border-border-strong]="
+              entry.state === 'skipped' || entry.state === 'pending'
+            "
+            aria-hidden="true"
+          ></span>
+          <div class="flex items-baseline gap-2">
+            <button
+              type="button"
+              class="text-left font-semibold hover:underline"
+              [class.text-fg-strong]="
+                entry.state !== 'skipped' && entry.state !== 'pending'
+              "
+              [class.text-fg-muted]="
+                entry.state === 'skipped' || entry.state === 'pending'
+              "
+              (click)="openNode.emit(entry.node.nodeId)"
+            >
+              {{ entry.node.title
+              }}{{ entry.state === "skipped" ? " (skipped)" : "" }}
+            </button>
+            @if (entry.time) {
+              <span class="ml-auto shrink-0 text-[11px] text-fg-muted">{{
+                entry.time
+              }}</span>
+            }
+          </div>
+          <p
+            class="m-0"
+            [class.text-fg]="
+              entry.state !== 'skipped' && entry.state !== 'pending'
+            "
+            [class.text-fg-muted]="
+              entry.state === 'skipped' || entry.state === 'pending'
+            "
+          >
+            {{ entry.line }}
+          </p>
+        </li>
+      }
+    </ol>
+  </div>
+</section>

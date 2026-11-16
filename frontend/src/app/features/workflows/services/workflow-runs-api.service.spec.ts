@@ -156,7 +156,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     });
   });
 
-  it('copies the input, timestamps and tool calls of a step event', async () => {
+  it('copies the input, timestamps, tool calls and story of a step event', async () => {
     const full = {
       id: 'answer',
       title: 'Answer',
@@ -174,6 +174,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
           durationMs: 40,
         },
       ],
+      story: { headline: 'Ran 1 query on the data.', source: 'step' },
     };
     fetchSpy.and.resolveTo(
       sseResponse({ type: 'step', ...full }, { type: 'done', run: RUN }),

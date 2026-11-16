@@ -93,7 +93,7 @@ export function progressSteps(
 }
 
 /**
- * How a node of the Logs list reads (ui.md 4.4b): its status in the run
+ * How a node reads in How it ran (ui.md 4.4b): its status in the run
  * shown as a progress state; a node that has not run is `pending`.
  */
 export function nodeProgressState(

@@ -124,6 +124,7 @@ function stepOf(event: StreamFrame): WorkflowRunStep {
     ...(e.endedAt !== undefined ? { endedAt: e.endedAt } : {}),
     ...(e.toolCalls !== undefined ? { toolCalls: e.toolCalls } : {}),
     ...(typeof e.attempt === 'number' ? { attempt: e.attempt } : {}),
+    ...(e.story !== undefined ? { story: e.story } : {}),
   };
 }
 

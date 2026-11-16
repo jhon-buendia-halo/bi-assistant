@@ -73,12 +73,27 @@ import {
   runAnswerOf,
   runHostDoc,
   runSummaryOf,
+  withStepStories,
+  type StepTeller,
   type WorkflowRun,
   type WorkflowRunDoc,
   type WorkflowRunSummary,
   type WorkflowRunWaitingFor,
 } from './workflow-run-steps';
 import { WorkflowsService, type WorkflowDefinition } from './workflows.service';
+import { tellRunStep } from '../../mastra/workflows/workflow-stories';
+
+/**
+ * The storyteller of a run's steps (ui.md 4.4b, Logs *Story*): its
+ * workflow's, reading the run's input and steps so far.
+ */
+function runStepTeller(
+  workflowId: string,
+  runInput: Record<string, unknown>,
+): StepTeller {
+  return (step, steps, runStatus) =>
+    tellRunStep(workflowId, step, { runInput, steps, runStatus });
+}
 
 /** What a visual action on a run answers (api.md 130-134). */
 export interface RunVisualResult {
@@ -546,6 +561,8 @@ export class WorkflowRunsService implements OnModuleInit {
         kind: step.kind,
         repeats: repeats.has(step.id),
       })),
+      undefined,
+      runStepTeller(workflow.id, prepared.values),
     );
     const base = await this.start(prepared);
     return { prepared, base, tracker };
@@ -1186,7 +1203,15 @@ export class WorkflowRunsService implements OnModuleInit {
    */
   private async wire(stored: WorkflowRunDoc): Promise<WorkflowRun> {
     // A run of the removed RFP Builder may still carry its `rfpId`: dropped.
-    const run: WorkflowRunDoc & { rfpId?: unknown } = { ...stored };
+    const run: WorkflowRunDoc & { rfpId?: unknown } = {
+      ...stored,
+      // A run stored before step stories gets them told as it is read.
+      steps: withStepStories(
+        stored.steps ?? [],
+        runStepTeller(stored.workflowId, stored.input ?? {}),
+        stored.status,
+      ),
+    };
     delete run.rfpId;
     if (run.question === undefined) return run;
     const view = await this.sessions.toView(runHostDoc(run));
