@@ -196,8 +196,10 @@ const STAGE_TURN: TurnScript = {
 
 /** Its steps in catalogue order: Clarify is the other way after Plan. */
 const V2_STEP_TITLES = [
+  'Read images',
   'Receive question',
   'Load catalog',
+  'Interpret follow-up',
   'Plan',
   'Clarify',
   'Analyse',
@@ -205,6 +207,8 @@ const V2_STEP_TITLES = [
   'Check data quality',
   'Write answer',
   'Wrap up',
+  'Page result',
+  'Page answer',
 ];
 
 // --------------------------------------------------------------- scenarios
@@ -281,6 +285,7 @@ test("a v2 run's workflow never appears among its panel items", async ({
 const V2_STEPS = [
   'receive-question',
   'load-catalog',
+  'interpret-follow-up',
   'plan',
   'analyse',
   'validate',
@@ -294,6 +299,7 @@ const V2_TOOLS = [
   'sample_rows',
   'run_readonly_sql',
   'ask_clarification',
+  'explore_result',
   'skill',
   'skill_search',
   'skill_read',

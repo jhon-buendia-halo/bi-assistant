@@ -30,6 +30,7 @@ const V2_TOOLS = [
   'sample_rows',
   'run_readonly_sql',
   'ask_clarification',
+  'explore_result',
 ];
 /** Its built-in skills, on demand (agents.md 7.4), sorted by name. */
 const V2_SKILLS = ['curated-knowledge', 'result-validation', 'sql-analysis'];
@@ -597,7 +598,7 @@ test('Insights Analyst is an Official card', async ({ page }) => {
   expect(keys.indexOf(V2_KEY)).toBe(keys.indexOf('assistant') + 1);
 });
 
-test("Insights Analyst's page shows its prompt, five tools and three skills", async ({
+test("Insights Analyst's page shows its prompt, six tools and three skills", async ({
   page,
 }) => {
   await openHub(page);
@@ -615,7 +616,7 @@ test("Insights Analyst's page shows its prompt, five tools and three skills", as
     'You are Questions to Insights',
   );
 
-  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(5\)/);
+  await expect(page.getByTestId('agent-tab-tools')).toHaveText(/Tools \(6\)/);
   await page.getByTestId('agent-tab-tools').click();
   for (const tool of V2_TOOLS) {
     await expect(

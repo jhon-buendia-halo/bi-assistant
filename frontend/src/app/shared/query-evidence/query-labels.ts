@@ -151,6 +151,25 @@ function tableName(entity: string): string {
   return entity.split('.').pop() ?? entity;
 }
 
+/** Source numbers as ranges: `4–7, 9 and 11–20`. */
+export function sourceRanges(numbers: readonly number[]): string {
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < sorted.length;) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    parts.push(
+      j - i >= 2
+        ? `${sorted[i]}–${sorted[j]}`
+        : j > i
+          ? `${sorted[i]}, ${sorted[j]}`
+          : `${sorted[i]}`,
+    );
+    i = j + 1;
+  }
+  return joinNames(parts);
+}
+
 function joinNames(names: string[]): string {
   if (names.length <= 1) return names.join('');
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
@@ -164,6 +183,9 @@ export function coverageLine(message: ChatMessage): CoverageLine | null {
   if (rows.every((row) => row.coverage === 'failed')) return null;
 
   const sentences: string[] = [];
+  // Cut sources by their cap, and where their sentence goes.
+  const cut = new Map<number, number[]>();
+  const cutAt = new Map<number, number>();
   for (const row of rows) {
     const e = evidenceOf(message, row.index);
     if (e?.view) {
@@ -183,18 +205,36 @@ export function coverageLine(message: ChatMessage): CoverageLine | null {
       continue;
     }
     if (row.coverage === 'partial') {
+      // Grouped below by their cap: twenty cut sources read as one line.
       const cap = e?.rowLimit ?? message.data?.[row.index]?.rowCount;
-      sentences.push(
-        cap !== undefined
-          ? `${row.label} was cut at ${formatCount(cap)} rows, so figures from it may be incomplete.`
-          : `${row.label} was cut, so figures from it may be incomplete.`,
-      );
+      const key = cap ?? -1;
+      cut.set(key, [...(cut.get(key) ?? []), row.index + 1]);
+      if (!cutAt.has(key)) cutAt.set(key, sentences.length);
     } else if (row.coverage === 'sample') {
       sentences.push(
         `${row.label} is a sample of rows, not a ranking: no figure should come from it.`,
       );
     }
   }
+
+  // One sentence per cap, in the place of its first cut source.
+  [...cutAt.entries()]
+    .sort((x, y) => y[1] - x[1])
+    .forEach(([key, at]) => {
+      const numbers = cut.get(key) ?? [];
+      const one = numbers.length === 1;
+      const who = one
+        ? sourceLabel(numbers[0] - 1)
+        : `Sources ${sourceRanges(numbers)}`;
+      const how = key >= 0 ? ` at ${formatCount(key)} rows` : '';
+      sentences.splice(
+        at,
+        0,
+        one
+          ? `${who} was cut${how}, so figures from it may be incomplete.`
+          : `${who} were cut${how}, so figures from them may be incomplete.`,
+      );
+    });
 
   // Only pages of earlier results: nothing is missing, it is a view.
   const onlyPages = rows.every((row) => evidenceOf(message, row.index)?.view);

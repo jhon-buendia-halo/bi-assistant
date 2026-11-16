@@ -53,9 +53,13 @@ export function figureIndex(
     if (record.error || !record.rows?.length) return;
     const numbers: number[] = [];
     const dates = new Set<string>();
+    // A record that names its figure columns (the rows behind a readiness
+    // finding) links only those: its other cells are raw data.
+    const only = record.figureColumns ? new Set(record.figureColumns) : null;
     for (const row of record.rows) {
       for (const [column, cell] of Object.entries(row)) {
         if (IDENTIFIER_COLUMN.test(column)) continue;
+        if (only && !only.has(column)) continue;
         if (typeof cell === 'number') {
           if (Number.isFinite(cell)) numbers.push(cell);
         } else if (typeof cell === 'bigint') {

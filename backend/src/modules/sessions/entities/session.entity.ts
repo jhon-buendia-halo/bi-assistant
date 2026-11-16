@@ -38,6 +38,13 @@ export interface ToolDataRecord {
    * anyone reads the SQL.
    */
   warnings?: string[];
+  /**
+   * When set, the only columns whose values are figures a reader looks up
+   * (agent-answers R69): the rows behind a readiness finding (roadmap
+   * 1.27.11) carry their count in `matching_rows` or `occurrences`, and
+   * their other cells are raw data that must not link a figure by chance.
+   */
+  figureColumns?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */

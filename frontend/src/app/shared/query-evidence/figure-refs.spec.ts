@@ -10,6 +10,18 @@ function queriesFor(text: string, data: ToolDataRecord[]): number[][] {
 }
 
 describe('figure-refs', () => {
+  it('links only the figure columns a record names (the rows behind a finding)', () => {
+    const finding = rec(
+      [
+        { race_id: 3, laps: null, points: 92, matching_rows: 647 },
+        { race_id: 4, laps: null, points: 62, matching_rows: 647 },
+      ],
+      { figureColumns: ['matching_rows'] },
+    );
+    // The report's 92 and 62 are not this record's figures; 647 is.
+    expect(queriesFor('Overall 92, completeness 62, 647 nulls.', [finding])).toEqual([[0]]);
+  });
+
   it('matches 1,204 with the string cell "1204"', () => {
     expect(queriesFor('Returns: 1,204.', [rec([{ n: '1204' }])])).toEqual([[0]]);
   });

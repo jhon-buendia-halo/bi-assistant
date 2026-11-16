@@ -160,6 +160,9 @@ import {
 import type { TurnOptions } from './turn-options';
 import type { SqlChecks } from './sql-checks';
 
+/** The count columns of the rows behind a readiness finding (1.27.11). */
+const FINDING_COUNT_COLUMNS = new Set(['matching_rows', 'occurrences']);
+
 /**
  * What a turn runs on: the session service's dependencies and the session
  * reads and writes it owns (in-memory hosts included).
@@ -1030,7 +1033,19 @@ export class TurnEngine {
                 const callId = `finding-rows-${randomUUID()}`;
                 queryFacts.set(callId, facts);
                 const record = toolDataRecord('run_readonly_sql', args, result);
-                if (record) captureRecord(record, callId);
+                if (record) {
+                  // Only its count links a figure (agent-answers R69): the
+                  // raw cells would match the report's numbers by chance.
+                  const counts = (record.columns ?? []).filter((c) =>
+                    FINDING_COUNT_COLUMNS.has(c),
+                  );
+                  captureRecord(
+                    record.error
+                      ? record
+                      : { ...record, figureColumns: counts },
+                    callId,
+                  );
+                }
               },
             });
           },

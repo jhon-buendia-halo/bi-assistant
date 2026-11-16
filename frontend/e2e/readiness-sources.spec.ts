@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/app.fixture';
+import type { Page } from '@playwright/test';
 import { scenarioStep } from './support/demo-captions';
 import { WORLD_CUP_DATASET } from './helpers/app-actions';
 import { saveLenaiSettings, seedWorldCupDataset } from './helpers/agents-api';
@@ -24,6 +25,11 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async () => {
   await stub.close();
 });
+
+/** The answer's source rows, in order. */
+function sources(page: Page) {
+  return runAnswer(page).locator('[data-testid^="query-row-"]');
+}
 
 test.describe('Feature: Every workflow whose answer ran queries gets the query inspector', () => {
   test(
@@ -70,10 +76,12 @@ test.describe('Feature: Every workflow whose answer ran queries gets the query i
         },
       );
       await scenarioStep(page, 'Then the answer lists the query as a source', async () => {
-        await expect(runAnswer(page).getByTestId('query-row-0')).toBeVisible();
+        // The rows behind the findings come first (1.27.11); the agent's
+        // drill-down query is the last source.
+        await expect(sources(page).last()).toBeVisible();
       });
       await scenarioStep(page, 'When I open the source', async () => {
-        await runAnswer(page).getByTestId('query-row-0').click();
+        await sources(page).last().click();
         await expect(inspector).toBeVisible();
         await inspector.getByTestId('query-inspector-tab-result').click();
       });

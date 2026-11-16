@@ -1422,6 +1422,8 @@ describe('an Assess Data Readiness run (agents.md 5.13; data-readiness R2)', () 
         rows: [{ winner: null, matching_rows: 1 }],
         rowCount: 1,
         rationale: 'Rows where winner is empty in public.matches',
+        // Only its count links a figure (agent-answers R69).
+        figureColumns: ['matching_rows'],
       },
     ]);
     expect(run.answer?.evidence?.slice(0, 2)).toEqual([

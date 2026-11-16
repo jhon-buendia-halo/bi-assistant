@@ -26,6 +26,8 @@ export interface ToolDataRecord {
    * so a questionable figure is visible even when nobody reviews the SQL.
    */
   warnings?: string[];
+  /** When set, the only columns holding figures a reader looks up (R69). */
+  figureColumns?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */

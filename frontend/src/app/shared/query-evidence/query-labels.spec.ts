@@ -5,6 +5,7 @@ import {
   queryRows,
   sourceInfos,
   sourceLabel,
+  sourceRanges,
 } from './query-labels';
 
 function message(
@@ -140,6 +141,33 @@ describe('query-labels', () => {
     );
     expect(line?.tone).toBe('success');
     expect(line?.text).toBe('Source 1 shows page 2 of 8 of an earlier result.');
+  });
+
+  it('groups the sources cut at the same row limit into one sentence', () => {
+    const data = Array.from({ length: 6 }, () => ({
+      tool: 'run_readonly_sql',
+      rowCount: 200,
+      truncated: true,
+    }));
+    const line = coverageLine(
+      message(
+        [
+          ...[0, 1, 2, 3, 5].map(
+            (index): QueryEvidence => ({
+              index,
+              coverage: 'partial',
+              rowLimit: 200,
+            }),
+          ),
+          { index: 4, coverage: 'whole-table', rowLimit: 200 },
+        ],
+        data,
+      ),
+    );
+    expect(line?.text).toBe(
+      'Sources 1–4 and 6 were cut at 200 rows, so figures from them may be incomplete.',
+    );
+    expect(sourceRanges([9, 4, 5, 6, 7, 11, 12])).toBe('4–7, 9 and 11, 12');
   });
 
   it('shows rows with no coverage chip and no line when evidence is missing', () => {
