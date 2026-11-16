@@ -97,7 +97,10 @@ const READINESS_WORKFLOW_EVAL_CASES: AssistantEvalCase[] = [
       'Scope rule: general analysis is declined in one sentence and Questions to Insights is named; no query runs and no revenue figure appears.',
     scorers: [...BASE],
     customChecks: [
-      answerStates(['Questions to Insights'], 'points to Questions to Insights'),
+      answerStates(
+        ['Questions to Insights'],
+        'points to Questions to Insights',
+      ),
       noMoneyAmount(),
       answerExcludes(/\brevenue (?:is|was|of) \d/i, 'states no revenue figure'),
       calledAtMost('run_readonly_sql', 0),
@@ -124,7 +127,7 @@ export const READINESS_WORKFLOW_EVAL_SET: AssistantEvalSet = {
   name: 'Assess Data Readiness: Explain report',
   description:
     'Questions put to the whole Assess Data Readiness workflow over the Edge ' +
-    'Sample: it assesses and saves the report, then Sarah explains it. Load the ' +
+    'Cases sample: it assesses and saves the report, then Sarah explains it. Load the ' +
     '"Edge Cases" sample in Settings → Testing Data. The checks compare the ' +
     'answer with the saved report and the planted problems.',
   fixtureId: READINESS_WORKFLOW_EVAL_FIXTURE_ID,
