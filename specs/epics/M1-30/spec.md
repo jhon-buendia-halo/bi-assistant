@@ -18,11 +18,11 @@ Given a medallion model (schemas tagged Landing, Normalized, Consumption), the b
 
 | Story | What | Status |
 |---|---|---|
-| 1.30.1 | World Cup Medallion sample | In progress |
-| 1.30.2 | Lineage inference and gap tracing | In progress |
-| 1.30.3 | Requirements Analyst, Layer Mapper and Gap Advisor | In progress |
-| 1.30.4 | The gap report | In progress |
-| 1.30.5 | The workflow | In progress |
+| 1.30.1 | World Cup Medallion sample | Done |
+| 1.30.2 | Lineage inference and gap tracing | Done |
+| 1.30.3 | Requirements Analyst, Layer Mapper and Gap Advisor | Done |
+| 1.30.4 | The gap report | Done |
+| 1.30.5 | The workflow | Done |
 
 ## Specs touched
 

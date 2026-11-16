@@ -37,7 +37,7 @@ export const CONSUMPTION_GAP_WORKFLOW_NAME = 'Consumption Gap Analysis';
 
 /** What the catalogue says the workflow does. */
 export const CONSUMPTION_GAP_DESCRIPTION =
-  'Checks whether the Consumption layer of a medallion model (Landing, Normalized, Consumption) supports your business questions and reference dashboards, traces every gap through inferred lineage, and recommends where to fix it.';
+  'Checks whether the Consumption layer of a medallion model (Landing, Normalized, Consumption) can answer your questions and feed your reference dashboards, traces every gap through inferred lineage, and recommends where to fix it.';
 
 /** The RequestContext key of a run's runtime. */
 export const CONSUMPTION_GAP_RUNTIME_KEY = 'consumption-gap-analysis-runtime';

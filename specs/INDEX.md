@@ -345,11 +345,11 @@ roadmap.md:750-754  #### 1.29.6 — insights-analyst and result-explorer evals o
 roadmap.md:756-760  #### 1.29.7 — Explain report evals inside Assess Data Readiness  `✅ Done`
 roadmap.md:762-766  #### 1.29.8 — Baseline, inconsistency report and fixes  `✅ Done`
 roadmap.md:768-797  ### Milestone 1.30 — Consumption Gap Analysis: does the medallion's Consumption layer support the business? (M1-30)
-roadmap.md:772-776  #### 1.30.1 — World Cup Medallion sample  `🚧 In progress`
-roadmap.md:778-781  #### 1.30.2 — Lineage inference and gap tracing  `🚧 In progress`
-roadmap.md:783-786  #### 1.30.3 — Requirements Analyst, Layer Mapper and Gap Advisor  `🚧 In progress`
-roadmap.md:788-791  #### 1.30.4 — The gap report  `🚧 In progress`
-roadmap.md:793-797  #### 1.30.5 — The Consumption Gap Analysis workflow  `🚧 In progress`
+roadmap.md:772-776  #### 1.30.1 — World Cup Medallion sample  `✅ Done`
+roadmap.md:778-781  #### 1.30.2 — Lineage inference and gap tracing  `✅ Done`
+roadmap.md:783-786  #### 1.30.3 — Requirements Analyst, Layer Mapper and Gap Advisor  `✅ Done`
+roadmap.md:788-791  #### 1.30.4 — The gap report  `✅ Done`
+roadmap.md:793-797  #### 1.30.5 — The Consumption Gap Analysis workflow  `✅ Done`
 roadmap.md:799-803  ## Release 2 — Multi-user  (no target date yet)
 roadmap.md:803-803  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
 roadmap.md:805-807  ## Backlog
