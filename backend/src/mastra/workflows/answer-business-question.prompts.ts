@@ -180,6 +180,19 @@ function queryLines(query: AnalyseQuery, index: number): string {
  * Read images' notes, when not empty, follow the plan, set off by blank
  * lines; without them the request is what it was before Read images.
  */
+/**
+ * How a Validate finding reads to the writer: a warning-only check that did
+ * not pass is a `warning`, not a `failed` check, so it never becomes a
+ * caveat (roadmap 1.28.8, known issue D).
+ */
+export function findingStatus(finding: {
+  passed: boolean;
+  check: string;
+}): 'passed' | 'failed' | 'warning' {
+  if (finding.passed) return 'passed';
+  return /\(warning only\)/i.test(finding.check) ? 'warning' : 'failed';
+}
+
 export function writeAnswerRequest(input: {
   question: string;
   plan: Plan;
@@ -202,7 +215,7 @@ export function writeAnswerRequest(input: {
     'Validation findings:',
     ...(input.findings.length
       ? input.findings.map(
-          (f) => `- ${f.passed ? 'passed' : 'failed'}: ${f.check}. ${f.detail}`,
+          (f) => `- ${findingStatus(f)}: ${f.check}. ${f.detail}`,
         )
       : ['- none']),
   ].join('\n');
