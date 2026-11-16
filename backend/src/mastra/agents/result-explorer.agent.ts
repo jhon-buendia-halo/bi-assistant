@@ -17,7 +17,7 @@ import {
  * Nathan, Result Explorer (agents.md 1.1, 2.15): turns a user's words into a
  * view (filters, sort, page) of a stored query's result, over its known
  * columns only, in one model call with no tools and no memory. A System
- * agent: the query inspector's filter in words (api.md 152, 154) calls him
+ * agent: the query inspector's filter in words (api.md 153, 155) calls him
  * through `interpretResultWithModel`; his job description is the shipped
  * instructions or their in-app override (ADR-0026).
  */
@@ -43,7 +43,7 @@ export interface InterpretResultInput {
 }
 
 /**
- * The model call (api.md 152, 154): the request holds no SQL and no whole
+ * The model call (api.md 153, 155): the request holds no SQL and no whole
  * rows. A model error, or a reply that is no JSON object, throws; the
  * reply is read by `specOf`.
  */

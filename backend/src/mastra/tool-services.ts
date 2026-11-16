@@ -213,7 +213,7 @@ export interface DatasetToolServices {
   ): Promise<SqlRunResult>;
   /**
    * One page of an earlier query's full result (`explore_result`, agents.md
-   * 3.15) through the query inspector's own page path (api.md 151, 153):
+   * 3.15) through the query inspector's own page path (api.md 152, 154):
    * the same checks and caps. Throws the message the model should see.
    */
   pageQuery?(
@@ -223,7 +223,7 @@ export interface DatasetToolServices {
   ): Promise<PageResult & { datasourceId: string }>;
   /**
    * `result-explorer`'s reading of the user's words as a view of one of the
-   * candidates (api.md 152, 154 use the same call).
+   * candidates (api.md 153, 155 use the same call).
    */
   interpretResult?(input: {
     text: string;

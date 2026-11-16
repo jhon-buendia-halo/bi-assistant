@@ -317,7 +317,7 @@ How much data one query of an answer stands for (the query inspector, roadmap 1.
 | `rowLimit` | number | no | The tool's cap for the call: `run_readonly_sql` `limit` ?? 100, `sample_rows` `limit` ?? 10. |
 | `tables` | `QueryTableSize[]` | no | Filled by api.md 139: `{entity, rows: number \| null, error?}` per table the query reads, an exact `COUNT(*)`; `rows: null` with the error when the count failed. |
 | `explanation` | `QueryExplanation` | no | Filled when the inspector first opens the query (api.md 140, 141): `{steps: QueryStep[], fallback?: true, at, stageCounts?: {status: 'verified' \| 'unverified', at, reason?}}`. |
-| `view` | `ResultView` | no | Set on an `explore_result` record only ([agents.md](agents.md) 3.15): the filters, sort, page, page size, matched rows and cap its rows were read with (api.md 151's `ResultView`); the inspector opens the query on it. Never on the record itself, which models read. |
+| `view` | `ResultView` | no | Set on an `explore_result` record only ([agents.md](agents.md) 3.15): the filters, sort, page, page size, matched rows and cap its rows were read with (api.md 152's `ResultView`); the inspector opens the query on it. Never on the record itself, which models read. |
 
 Every write to a run's `answer.evidence` goes through the run's answer lock (api.md 139-143), and to a past chat message's `evidence` through the lock of that session and message (144-146). A re-run (142, 147) never changes it.
 

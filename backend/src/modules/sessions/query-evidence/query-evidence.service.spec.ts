@@ -201,7 +201,7 @@ describe('QueryEvidenceService.rerun and exportRows (api.md 142, 143)', () => {
   });
 });
 
-describe('QueryEvidenceService.page (api.md 151, 153)', () => {
+describe('QueryEvidenceService.page (api.md 152, 154)', () => {
   it('pages the stored SQL over its stored columns, with nothing stored', async () => {
     const { service, runPagedSql, runReadOnlySql } = build();
     const record = {

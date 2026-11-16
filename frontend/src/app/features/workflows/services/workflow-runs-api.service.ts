@@ -318,7 +318,7 @@ export class WorkflowRunsApiService {
     );
   }
 
-  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 151). */
+  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 152). */
   pageQuery(
     id: string,
     index: number,
@@ -330,7 +330,7 @@ export class WorkflowRunsApiService {
     );
   }
 
-  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 152). */
+  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 153). */
   interpretFilter(
     id: string,
     index: number,

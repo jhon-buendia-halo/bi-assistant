@@ -170,7 +170,7 @@ export class WorkflowRunsController {
 
   /**
    * One page of one of the answer's queries, filtered and sorted (api.md
-   * 151); the body is a `PageRequest`. Nothing is stored.
+   * 152); the body is a `PageRequest`. Nothing is stored.
    */
   @Post(':id/answer/queries/:index/page')
   async pageQuery(
@@ -187,7 +187,7 @@ export class WorkflowRunsController {
 
   /**
    * The user's words read as a view of one of the answer's queries (api.md
-   * 152); the body is `{ text, view? }`. Nothing is stored.
+   * 153); the body is `{ text, view? }`. Nothing is stored.
    */
   @Post(':id/answer/queries/:index/interpret-filter')
   async interpretFilter(

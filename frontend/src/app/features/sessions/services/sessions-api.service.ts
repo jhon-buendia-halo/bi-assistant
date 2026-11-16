@@ -308,7 +308,7 @@ export class SessionsApiService {
     );
   }
 
-  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 153). */
+  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 154). */
   pageQuery(
     id: string,
     message: number,
@@ -321,7 +321,7 @@ export class SessionsApiService {
     );
   }
 
-  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 154). */
+  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 155). */
   interpretFilter(
     id: string,
     message: number,

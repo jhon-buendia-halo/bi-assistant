@@ -18,7 +18,7 @@ import type {
 import { SessionsService } from './sessions.service';
 
 /**
- * The query inspector on a past chat (api.md 144-148, 153): a session's
+ * The query inspector on a past chat (api.md 144-148, 154): a session's
  * assistant message with `data` is an answer host. Who may call is who may
  * read the session (`SessionsService.get`, as `GET /sessions/:id`: 404
  * `Session <id> not found`). What 144-146 find is written into the stored
@@ -51,7 +51,7 @@ export class SessionEvidenceService {
     return this.answers.rerun(this.host(id, message), index);
   }
 
-  /** 153: one page of one query's full result, filtered and sorted; nothing is stored. */
+  /** 154: one page of one query's full result, filtered and sorted; nothing is stored. */
   page(
     id: string,
     message: number,
@@ -61,7 +61,7 @@ export class SessionEvidenceService {
     return this.answers.page(this.host(id, message), index, request);
   }
 
-  /** 154: the user's words read as a view of one query; nothing is stored. */
+  /** 155: the user's words read as a view of one query; nothing is stored. */
   interpretFilter(
     id: string,
     message: number,

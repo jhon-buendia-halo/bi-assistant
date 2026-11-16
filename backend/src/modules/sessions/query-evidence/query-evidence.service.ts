@@ -285,7 +285,7 @@ export class QueryEvidenceService {
   }
 
   /**
-   * One page of a stored query's full result (api.md 151, 153): the stored
+   * One page of a stored query's full result (api.md 152, 154): the stored
    * SQL (the corrected one, for a repaired query) over its stored columns,
    * filtered, sorted and paged by the connector under its datasource's
    * timeout. The request is checked before any query; a sample has no full
@@ -316,8 +316,8 @@ export class QueryEvidenceService {
   }
 
   /**
-   * One page of a query known by its SQL, columns and kinds (api.md 151,
-   * 153; the `explore_result` tool, agents.md 3.15): the same checks, caps
+   * One page of a query known by its SQL, columns and kinds (api.md 152,
+   * 154; the `explore_result` tool, agents.md 3.15): the same checks, caps
    * and datasource choice as `page`, and the datasource it ran on. Nothing
    * is stored.
    */

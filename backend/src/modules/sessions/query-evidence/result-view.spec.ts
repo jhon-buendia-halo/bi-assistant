@@ -75,7 +75,7 @@ describe('result-view: kinds inferred from the stored rows', () => {
   });
 });
 
-describe('result-view: parsePageRequest (the body of api.md 151, 153)', () => {
+describe('result-view: parsePageRequest (the body of api.md 152, 154)', () => {
   it('takes an empty body as the first page in the default order', () => {
     expect(parsePageRequest(undefined)).toEqual({});
     expect(parsePageRequest({})).toEqual({});

@@ -622,7 +622,7 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 
 #### 1.27.2 — Page engine and the page routes  `🚧 In progress`
 - **Intent:** one server endpoint per host kind that answers a `PageRequest` for any stored query.
-- **Scope:** per plan 1.27.2: `result-view.ts`, `page()` in the query-evidence services, api.md 151 and 153; data-model, non-functional (Result paging, N72).
+- **Scope:** per plan 1.27.2: `result-view.ts`, `page()` in the query-evidence services, api.md 152 and 154; data-model, non-functional (Result paging, N72).
 - **Out of scope:** the natural-language filter (1.27.4).
 - **Acceptance:** Jest tests for validation, default order, samples refused, nothing stored.
 
@@ -634,7 +634,7 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 
 #### 1.27.4 — The result-explorer agent and the interpret-filter routes  `🚧 In progress`
 - **Intent:** the user's words become a structured view (filters, sort, page) over the result's known columns, never free SQL.
-- **Scope:** per plan 1.27.4: `result-explorer` (one model call, no tools), `specOf`, api.md 152 and 154; agents.md 1.1, 2.15.
+- **Scope:** per plan 1.27.4: `result-explorer` (one model call, no tools), `specOf`, api.md 153 and 155; agents.md 1.1, 2.15.
 - **Out of scope:** routing a follow-up (1.27.8).
 - **Acceptance:** `result-explorer.prompts.spec.ts`; route tests with a stubbed model.
 

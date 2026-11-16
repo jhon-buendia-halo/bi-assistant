@@ -21,7 +21,7 @@ import {
 } from '../../datasources/connectors/paged-sql.types';
 
 /**
- * The page engine (roadmap 1.27.2, api.md 151, 153): a `PageRequest` checked
+ * The page engine (roadmap 1.27.2, api.md 152, 154): a `PageRequest` checked
  * against one stored query and turned into the connector's `PagedStatement`,
  * and the connector's rows into a `PageResult`. Pure: no query, no store.
  * Every refusal is a 400, raised before any query runs.
@@ -119,7 +119,7 @@ export function columnKindsOf(
 }
 
 /**
- * The body of 151 and 153 read as a `PageRequest`: its shape only (an
+ * The body of 152 and 154 read as a `PageRequest`: its shape only (an
  * object, lists where lists go, known operators and directions). The limits
  * and the columns are checked by `preparePage`, against the stored query.
  */
@@ -140,10 +140,10 @@ export function parsePageRequest(body: unknown): PageRequest {
   return request;
 }
 
-/** The longest text 152 and 154 read. */
+/** The longest text 153 and 155 read. */
 export const INTERPRET_TEXT_MAX = 500;
 
-/** The body of 152 and 154: the user's words and the view they see now. */
+/** The body of 153 and 155: the user's words and the view they see now. */
 export interface InterpretFilterRequest {
   text: string;
   /** Null when the user sees the answer's stored rows. */
@@ -151,9 +151,9 @@ export interface InterpretFilterRequest {
 }
 
 /**
- * The body of 152 and 154 read: `text` the user's words (not blank, at
+ * The body of 153 and 155 read: `text` the user's words (not blank, at
  * most 500 characters), `view` the current view, its filters and sort
- * read as 151 reads them.
+ * read as 152 reads them.
  */
 export function parseInterpretRequest(body: unknown): InterpretFilterRequest {
   if (!isRecord(body)) bad('The body must be a JSON object');
@@ -380,7 +380,7 @@ export function preparePage(
 }
 
 /**
- * The connector's rows as the page answered (api.md 151): the matched rows
+ * The connector's rows as the page answered (api.md 152): the matched rows
  * capped at 50,000 (`capped` when more matched), at least one page.
  */
 export function pageResultOf(

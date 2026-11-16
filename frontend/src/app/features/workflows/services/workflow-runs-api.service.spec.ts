@@ -659,7 +659,7 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
 
   afterEach(() => http.verify());
 
-  it('posts words to the interpret-filter route and unwraps (api.md 152)', () => {
+  it('posts words to the interpret-filter route and unwraps (api.md 153)', () => {
     const view = { filters: [], sort: [], page: 1, pageSize: 50 };
     let understood = '';
     service
@@ -675,7 +675,7 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
     expect(understood).toBe('Country is Brazil');
   });
 
-  it('posts a page request to the page route (api.md 151)', () => {
+  it('posts a page request to the page route (api.md 152)', () => {
     const request = { page: 2, filters: [{ column: 'a', op: 'eq' as const, value: 'x' }] };
     let matched = -1;
     service

@@ -117,7 +117,7 @@ export class MastraService {
   }
 
   /**
-   * A user's words read as a view of a query's result (api.md 152, 154;
+   * A user's words read as a view of a query's result (api.md 153, 155;
    * agents.md 2.15): one `result-explorer` call, no tools, the reply turned
    * into `{ action, query, interpretation }` by `specOf`.
    */

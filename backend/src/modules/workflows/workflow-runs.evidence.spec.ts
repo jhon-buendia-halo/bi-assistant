@@ -184,7 +184,7 @@ function build() {
   };
 }
 
-describe('Workflow runs: the query evidence (api.md 139-143, 151)', () => {
+describe('Workflow runs: the query evidence (api.md 139-143, 152)', () => {
   it('139 builds the evidence and sizes each table once, then runs nothing', async () => {
     const ctx = build();
     await ctx.repository.insert(runDoc());
@@ -256,7 +256,7 @@ describe('Workflow runs: the query evidence (api.md 139-143, 151)', () => {
     expect(await ctx.repository.get(RUN_ID)).toEqual(before);
   });
 
-  it('151 pages the stored query and stores nothing; a sample is refused', async () => {
+  it('152 pages the stored query and stores nothing; a sample is refused', async () => {
     const ctx = build();
     await ctx.repository.insert(
       runDoc({
@@ -309,7 +309,7 @@ describe('Workflow runs: the query evidence (api.md 139-143, 151)', () => {
     expect(ctx.runPagedSql).toHaveBeenCalledTimes(1);
   });
 
-  it('152 reads the words as a view of the stored query and stores nothing', async () => {
+  it('153 reads the words as a view of the stored query and stores nothing', async () => {
     const ctx = build();
     await ctx.repository.insert(
       runDoc({

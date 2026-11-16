@@ -1850,14 +1850,14 @@ specs/system/api.md:191-195  #### 14. `GET /sessions/:id/visualizations/:vid/dow
 specs/system/api.md:197-198  #### 105. `GET /sessions/:id/rfp-packages/:rfpId/download`
 specs/system/api.md:200-203  #### 106. `GET /sessions/:id/panel-items/:itemId/file`
 specs/system/api.md:205-212  #### 107. `GET /sessions/:id/panel-items/:itemId/download`
-specs/system/api.md:214-220  #### Query evidence of a past chat (144-148, 153, 154)
+specs/system/api.md:214-220  #### Query evidence of a past chat (144-148, 154, 155)
 specs/system/api.md:222-225  #### 144. `POST /sessions/:id/messages/:message/answer/evidence`
 specs/system/api.md:227-230  #### 145. `POST /sessions/:id/messages/:message/answer/queries/:index/explanation`
 specs/system/api.md:232-235  #### 146. `POST /sessions/:id/messages/:message/answer/queries/:index/stage-counts`
 specs/system/api.md:237-240  #### 147. `POST /sessions/:id/messages/:message/answer/queries/:index/rerun`
 specs/system/api.md:242-245  #### 148. `GET /sessions/:id/messages/:message/answer/queries/:index/csv`
-specs/system/api.md:247-250  #### 153. `POST /sessions/:id/messages/:message/answer/queries/:index/page`
-specs/system/api.md:252-255  #### 154. `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter`
+specs/system/api.md:247-250  #### 154. `POST /sessions/:id/messages/:message/answer/queries/:index/page`
+specs/system/api.md:252-255  #### 155. `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter`
 specs/system/api.md:257-305  ### 2.2 Datasources
 specs/system/api.md:274-275  #### 15. `GET /datasources`
 specs/system/api.md:277-280  #### 16. `POST /datasources/test-connection`
@@ -1936,14 +1936,14 @@ specs/system/api.md:955-961  #### 137. `POST /workflow-runs/:id/node-chats/:step
 specs/system/api.md:963-969  #### 138. `POST /workflow-runs/:id/resume/stream`
 specs/system/api.md:971-976  #### 149. `GET /workflow-runs/:id/events/stream`
 specs/system/api.md:978-983  #### 150. `POST /workflow-runs/:id/stop`
-specs/system/api.md:985-991  #### Query evidence (139-143, 151, 152)
+specs/system/api.md:985-991  #### Query evidence (139-143, 152, 153)
 specs/system/api.md:993-997  #### 139. `POST /workflow-runs/:id/answer/evidence`
 specs/system/api.md:999-1003  #### 140. `POST /workflow-runs/:id/answer/queries/:index/explanation`
 specs/system/api.md:1005-1008  #### 141. `POST /workflow-runs/:id/answer/queries/:index/stage-counts`
 specs/system/api.md:1010-1023  #### 142. `POST /workflow-runs/:id/answer/queries/:index/rerun`
 specs/system/api.md:1025-1028  #### 143. `GET /workflow-runs/:id/answer/queries/:index/csv`
-specs/system/api.md:1030-1062  #### 151. `POST /workflow-runs/:id/answer/queries/:index/page`
-specs/system/api.md:1064-1075  #### 152. `POST /workflow-runs/:id/answer/queries/:index/interpret-filter`
+specs/system/api.md:1030-1062  #### 152. `POST /workflow-runs/:id/answer/queries/:index/page`
+specs/system/api.md:1064-1075  #### 153. `POST /workflow-runs/:id/answer/queries/:index/interpret-filter`
 specs/system/api.md:1077-1115  ### 2.6.4 Artifacts
 specs/system/api.md:1100-1101  #### 144. `GET /artifacts`
 specs/system/api.md:1103-1104  #### 145. `GET /artifacts/:id`
