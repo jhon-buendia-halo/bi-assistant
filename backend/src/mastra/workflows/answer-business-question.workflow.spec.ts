@@ -1208,7 +1208,9 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         followUp: null,
       });
       expect(
-        outputs.get('question-path.analysis-path.answer-path.check-data-quality'),
+        outputs.get(
+          'question-path.analysis-path.answer-path.check-data-quality',
+        ),
       ).toMatchObject({ imageNotes: NOTES });
       expect(turn.writeAnswer).toHaveBeenCalledWith(
         expect.objectContaining({ imageNotes: NOTES }),

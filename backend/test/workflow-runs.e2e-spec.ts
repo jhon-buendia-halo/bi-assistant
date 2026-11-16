@@ -102,9 +102,11 @@ const V2_STEP_TRAIL = [
   'write-answer:success',
   'wrap-up:running',
   'wrap-up:success',
-  // The branches not taken, once the run ended: Clarify, Check data
-  // quality, which the input did not ask for (agents.md 5.11), and the
-  // follow-up branch a first run never takes (roadmap 1.27.8).
+  // The branches not taken, once the run ended: Read images (no images),
+  // Clarify, Check data quality, which the input did not ask for
+  // (agents.md 5.11), and the follow-up branch a first run never takes
+  // (roadmap 1.27.8).
+  'read-images:skipped',
   'clarify:skipped',
   'check-data-quality:skipped',
   'page-result:skipped',
@@ -363,6 +365,7 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(stored.steps).toEqual(done.run!.steps);
     // Catalogue order, a retried step's attempts one after the other.
     expect(stored.steps.map(trail)).toEqual([
+      'read-images:skipped',
       'receive-question:success',
       'load-catalog:success',
       'interpret-follow-up:success',
@@ -473,7 +476,13 @@ describe('Streamed runs of agent workflows (API)', () => {
     // were skipped.
     expect(
       run.steps.filter((step) => step.status === 'skipped').map((s) => s.id),
-    ).toEqual(['clarify', 'check-data-quality', 'page-result', 'page-answer']);
+    ).toEqual([
+      'read-images',
+      'clarify',
+      'check-data-quality',
+      'page-result',
+      'page-answer',
+    ]);
     for (const step of run.steps.filter((s) => s.status !== 'skipped')) {
       const declared = detail.steps.find((entry) => entry.id === step.id)!;
       expect({ id: step.id, status: step.status }).toEqual({
@@ -848,6 +857,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         });
         expect(done.run).not.toHaveProperty('waitingFor');
         expect(done.run!.steps.map(trail)).toEqual([
+          'read-images:skipped',
           'receive-question:success',
           'load-catalog:success',
           'interpret-follow-up:success',
@@ -956,6 +966,7 @@ describe('Streamed runs of agent workflows (API)', () => {
         // The resumed attempt is the same attempt 1; the stub's agent never
         // queries, so Validate retries once.
         expect(end.run!.steps.map(trail)).toEqual([
+          'read-images:skipped',
           'receive-question:success',
           'load-catalog:success',
           'interpret-follow-up:success',
