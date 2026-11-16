@@ -123,6 +123,13 @@ function build(
       '',
       'You write the final answer.',
     ),
+    // The agent of Read images (agents.md 2.15).
+    'image-reader': fakeAgent(
+      'Image Reader',
+      [],
+      '',
+      'You describe the reference images.',
+    ),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
   const llm = options.llmView
@@ -156,7 +163,8 @@ const READINESS_SUMMARY = expect.objectContaining({
   name: 'Assess Data Readiness',
   kind: 'code',
   owner: 'Official',
-  stepCount: 6,
+  // Read images first (workflows R35), then its six steps.
+  stepCount: 7,
   bar: 'steps',
   trigger: 'run',
   starterQuestions: [
@@ -173,15 +181,16 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
   description: V2_DESCRIPTION,
   kind: 'code',
   owner: 'Official',
-  // Every agent its steps run: Michael, then Olivia (Plan), Sarah (Check
-  // data quality) and Jessica (Write answer).
+  // Every agent its steps run: Michael, then Zoe (Read images), Olivia
+  // (Plan), Sarah (Check data quality) and Jessica (Write answer).
   agents: [
     { key: 'insights-analyst', name: 'Michael' },
+    { key: 'image-reader', name: 'Zoe' },
     { key: 'analysis-planner', name: 'Olivia' },
     { key: 'data-readiness', name: 'Sarah' },
     { key: 'answer-writer', name: 'Jessica' },
   ],
-  stepCount: 12,
+  stepCount: 13,
   bar: 'steps',
   trigger: 'run',
   input: [
@@ -192,7 +201,17 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
       required: true,
       placeholder: 'Ask a question about your data',
       maxLength: 4000,
-      usedBy: ['receive-question'],
+      usedBy: ['read-images', 'receive-question'],
+    },
+    {
+      // Only Read images reads them (workflows R35; api.md 116).
+      name: 'images',
+      label: 'Reference images',
+      type: 'images',
+      required: false,
+      max: 4,
+      help: 'Paste, drop or attach up to 4 PNG, JPEG or WebP images, 5 MB each.',
+      usedBy: ['read-images'],
     },
     {
       name: 'datasets',
@@ -239,10 +258,12 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     const [, readiness] = await ctx.service.list();
     expect(readiness.agents.map((agent) => agent.key)).toEqual([
       'data-readiness',
+      'image-reader',
     ]);
     expect(readiness.input.map((field) => field.name)).toEqual([
       'dataset',
       'question',
+      'images',
     ]);
     expect(readiness.input[0]).toMatchObject({
       type: 'dataset',
@@ -271,12 +292,14 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
     it("answer-business-question's steps are agentWorkflow('insights-analyst')'s, with their declared schemas", async () => {
       ctx = build();
       const detail = await ctx.service.get('answer-business-question');
-      // Its agent steps name their own agent's key (Olivia plans, Michael
-      // analyses, Jessica writes), and every step carries its declared input
-      // and output schema (api.md 117; agents.md 5.11, 5.12).
+      // Its agent steps name their own agent's key (Zoe reads the images,
+      // Olivia plans, Michael analyses, Jessica writes), and every step
+      // carries its declared input and output schema (api.md 117; agents.md
+      // 5.11, 5.12).
       expect(
         detail.steps.flatMap((step) => (step.agent ? [step.agent.key] : [])),
       ).toEqual([
+        'image-reader',
         'result-explorer',
         'analysis-planner',
         'insights-analyst',
@@ -293,18 +316,21 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       expect(detail.steps.some((step) => step.agent)).toBe(true);
       expect(detail).toMatchObject({
         id: 'answer-business-question',
-        stepCount: 12,
+        stepCount: 13,
         contractHash: CODE_WORKFLOWS[0].contractHash,
       });
       expect(detail.contractHash).toMatch(/^[0-9a-f]{12}$/);
-      // Plan receives the question (a string) and the catalog.
-      expect(detail.steps[3]).toMatchObject({ id: 'plan' });
-      expect(detail.steps[3].inputSchema).toMatchObject({
+      // Plan receives the question (a string), the catalog and Read
+      // images' notes ('' without images; optional, so a run stored before
+      // Read images existed resumes with none).
+      expect(detail.steps[4]).toMatchObject({ id: 'plan' });
+      expect(detail.steps[4].inputSchema).toMatchObject({
         type: 'object',
         properties: {
           question: { type: 'string' },
           catalog: { type: 'array', items: { type: 'object' } },
           columns: { type: 'array', items: { type: 'object' } },
+          imageNotes: { type: 'string', default: '' },
         },
         required: ['question', 'catalog', 'columns'],
       });
@@ -352,7 +378,15 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
             },
           ],
         },
-        // Olivia and Jessica: one model call each, on their own job description.
+        // Zoe, Olivia and Jessica: one model call each, on their own job
+        // description (Zoe's only when the run has images).
+        {
+          key: 'image-reader',
+          name: 'Zoe',
+          model: null,
+          systemPrompt: 'You describe the reference images.',
+          toolDetails: [],
+        },
         {
           key: 'analysis-planner',
           name: 'Olivia',
@@ -402,6 +436,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       const [v2] = await ctx.service.list();
       expect(v2.agents).toEqual([
         { key: 'insights-analyst', name: 'Michael' },
+        { key: 'image-reader', name: 'Zoe' },
         { key: 'analysis-planner', name: 'Olivia' },
         { key: 'data-readiness', name: 'Sarah' },
         { key: 'answer-writer', name: 'Jessica' },

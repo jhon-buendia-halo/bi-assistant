@@ -414,6 +414,34 @@ describe('Streamed runs of agent workflows (API)', () => {
     expect(stored).toEqual(run);
   });
 
+  it('GET /workflow-runs/:id/input-image (151) answers 404 for a path the run input does not hold, and for an unknown run', async () => {
+    const run = (
+      await http()
+        .post('/workflows/answer-business-question/runs')
+        .send({
+          input: { question: 'Who won in 1998?', datasets: ['World Cup Core'] },
+        })
+        .expect(200)
+    ).body as { id: string };
+    const path = 'inputs/images/1.png';
+    await http()
+      .get(`/workflow-runs/${run.id}/input-image`)
+      .query({ path })
+      .expect(404)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({
+          message: `Run "${run.id}" has no image "${path}"`,
+        }),
+      );
+    await http()
+      .get('/workflow-runs/gone/input-image')
+      .query({ path })
+      .expect(404)
+      .expect(({ body }) =>
+        expect(body).toMatchObject({ message: 'Run "gone" not found' }),
+      );
+  });
+
   it("a v2 run stores the workflow's contractHash (117), and every step's output keeps its declared contract", async () => {
     const detail = (
       await http().get('/workflows/answer-business-question').expect(200)

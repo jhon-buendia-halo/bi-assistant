@@ -58,7 +58,7 @@ function evidenceIn(answer: ChatMessage): QueryEvidence[] {
 }
 
 /**
- * The query inspector's engine (api.md 139-148, 151, 153): the lock per answer, the
+ * The query inspector's engine (api.md 139-148, 152, 154): the lock per answer, the
  * single flight, prepare, explain, count the steps, re-run, page and export, on
  * any answer host. Queries go through `QueryEvidenceService`, the explainer
  * through `MastraService.explainQuery`. It stores nothing itself: every
@@ -283,7 +283,7 @@ export class AnswerEvidenceService {
 
   /**
    * One page of one of the answer's queries, filtered and sorted (api.md
-   * 151, 153); the checks of 142 first. Nothing is stored.
+   * 152, 154); the checks of 142 first. Nothing is stored.
    */
   async page<V>(
     host: AnswerHost<V>,
@@ -296,9 +296,9 @@ export class AnswerEvidenceService {
 
   /**
    * The user's words read as a view of one of the answer's queries (api.md
-   * 152, 154): one `result-explorer` call over that query alone, as a
+   * 153, 155): one `result-explorer` call over that query alone, as a
    * candidate built from its stored columns and rows (never its SQL); the
-   * checks of 142 first, a sample refused. The view is checked as 151
+   * checks of 142 first, a sample refused. The view is checked as 152
    * checks it; nothing runs and nothing is stored.
    */
   async interpretFilter<V>(
@@ -342,7 +342,7 @@ export class AnswerEvidenceService {
         'That asks a new question, not a filter on this result',
       );
     }
-    // The request a page (151) will take: its 400 now, not on the page.
+    // The request a page (152) will take: its 400 now, not on the page.
     preparePage(
       { sql: record.input ?? '', columns, rows },
       spec.interpretation.request,

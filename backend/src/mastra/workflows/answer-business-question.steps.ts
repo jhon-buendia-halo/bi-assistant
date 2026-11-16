@@ -34,14 +34,15 @@ import {
   type catalogEntitySchema,
   type clarifyingQuestionSchema,
   type dataQualitySummarySchema,
+  type answerBusinessQuestionInputSchema,
   type entityColumnsSchema,
   type followUpSchema,
   type pagedResultSchema,
-  type turnInputSchema,
   type turnSummarySchema,
   type validateOutcomeSchema,
   type validationFindingSchema,
 } from './answer-business-question.schemas';
+import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
 import {
   contractJsonSchema,
   schemaFieldNames,
@@ -143,6 +144,9 @@ const MODEL_EXITS: readonly WorkflowStepExit[] = [
  * ./answer-business-question.schemas.ts; how they connect is `ANSWER_BUSINESS_QUESTION_EDGES`.
  */
 export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
+  // Optional (the run's reference images, workflows R35): Zoe describes
+  // them; Plan, Analyse and Write answer get her notes as text.
+  readImagesStepEntry(),
   contractStepEntry(
     {
       id: 'receive-question',
@@ -288,7 +292,8 @@ export const ANSWER_BUSINESS_QUESTION_STEPS: readonly ContractStepEntry[] = [
 
 /** The edges of the workflow (api.md 117), from Start to End. */
 export const ANSWER_BUSINESS_QUESTION_EDGES: readonly WorkflowEdge[] = [
-  { from: 'start', to: 'receive-question', kind: 'next' },
+  // Start → Receive question, or through Read images when the run has images.
+  ...readImagesEdges('receive-question'),
   { from: 'receive-question', to: 'load-catalog', kind: 'next' },
   { from: 'load-catalog', to: 'interpret-follow-up', kind: 'next' },
   {
@@ -334,8 +339,13 @@ export const ANALYSE_MAX_ATTEMPTS = 2;
 export const ANSWER_BUSINESS_QUESTION_RUNTIME_KEY =
   'answer-business-question-runtime';
 
-/** The workflow's input: the question and the session's dataset names. */
-export type AnswerBusinessQuestionInput = z.output<typeof turnInputSchema>;
+/**
+ * The workflow's input: the question, the session's dataset names and,
+ * only when the run has any, its reference images' stored paths.
+ */
+export type AnswerBusinessQuestionInput = z.output<
+  typeof answerBusinessQuestionInputSchema
+>;
 
 /** One entity of the session's datasets, as the Load catalog step lists it. */
 export type CatalogEntity = z.output<typeof catalogEntitySchema>;
@@ -436,6 +446,8 @@ export interface AnswerBusinessQuestionRuntime {
     catalog: CatalogEntity[];
     catalogBlock: string;
     clarification?: AnsweredClarification;
+    /** Read images' notes (agents.md 2.15); absent or `''` without images. */
+    imageNotes?: string;
   }): Promise<{ plan: AnalysisPlan; stopped: boolean }>;
   /**
    * One attempt of the Analyse step: the agent turn with its tools. When
@@ -450,6 +462,8 @@ export interface AnswerBusinessQuestionRuntime {
     attempt: number;
     planBlock: string;
     answered?: AnsweredClarification;
+    /** Read images' notes (agents.md 2.15); absent or `''` without images. */
+    imageNotes?: string;
   }): Promise<AnalyseAttempt>;
   /**
    * Whether the run checks data quality (its input's `checkDataQuality`):
@@ -472,6 +486,8 @@ export interface AnswerBusinessQuestionRuntime {
     plan: AnalysisPlan;
     queries: AnalyseQuery[];
     findings: ValidationFinding[];
+    /** Read images' notes (agents.md 2.15); absent or `''` without images. */
+    imageNotes?: string;
   }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
   /**
    * The run's earlier queries (roadmap 1.27.8): an earlier run's answer's

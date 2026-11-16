@@ -622,7 +622,7 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 
 #### 1.27.2 — Page engine and the page routes  `🚧 In progress`
 - **Intent:** one server endpoint per host kind that answers a `PageRequest` for any stored query.
-- **Scope:** per plan 1.27.2: `result-view.ts`, `page()` in the query-evidence services, api.md 151 and 153; data-model, non-functional (Result paging, N72).
+- **Scope:** per plan 1.27.2: `result-view.ts`, `page()` in the query-evidence services, api.md 152 and 154; data-model, non-functional (Result paging, N72).
 - **Out of scope:** the natural-language filter (1.27.4).
 - **Acceptance:** Jest tests for validation, default order, samples refused, nothing stored.
 
@@ -634,7 +634,7 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 
 #### 1.27.4 — The result-explorer agent and the interpret-filter routes  `🚧 In progress`
 - **Intent:** the user's words become a structured view (filters, sort, page) over the result's known columns, never free SQL.
-- **Scope:** per plan 1.27.4: `result-explorer` (one model call, no tools), `specOf`, api.md 152 and 154; agents.md 1.1, 2.15.
+- **Scope:** per plan 1.27.4: `result-explorer` (one model call, no tools), `specOf`, api.md 153 and 155; agents.md 1.1, 2.16.
 - **Out of scope:** routing a follow-up (1.27.8).
 - **Acceptance:** `result-explorer.prompts.spec.ts`; route tests with a stubbed model.
 
@@ -661,6 +661,12 @@ A query that returns thousands of rows showed at most 200 of them; the rest was 
 - **Scope:** per plan 1.27.8: `interpret-follow-up`, the nested `explore-result` (`page-result`, `page-answer`), the catalogue and contract snapshot; workflows R1, R2, R27, R35; agents.md 5.11, 5.12.
 - **Out of scope:** changing `analysis-planner`.
 - **Acceptance:** stub workflow tests for both paths; `frontend/e2e/result-follow-up.spec.ts`; insights-analyst evals against base.
+
+#### 1.27.9 — Sources a reader can understand: numbered, described, one per table  `🚧 In progress`
+- **Intent:** the `Q1`, `Q3` chips meant nothing to a reader, and every cell of a table carried one. A figure's source now reads like a footnote and says what it is.
+- **Scope:** requested on 2026-11-16 with a screenshot (an answer's table with `Q3` in every cell); the user picked "numbered sources + card + one source per table". The chip becomes a superscript number with a card on hover and focus (the query's purpose, its rows, its coverage, "Click to see how it was computed"); table cells get no chip and each table gets one source line under it; the query list is titled Sources and its rows read `1 · <purpose>`; the coverage line names `Source 2`; `explore_result` and the follow-up use the numbers the reader sees. agent-answers R69–R71; ui.md 4.12.2; agents.md 3.15.
+- **Out of scope:** what the agents write; the inspector itself.
+- **Acceptance:** Karma tests for the chip, the card, the table source line and the labels; the Playwright specs that click a chip updated; a reader's "source 3" pages the query shown as Source 3.
 
 ## Release 2 — Multi-user  (no target date yet)
 

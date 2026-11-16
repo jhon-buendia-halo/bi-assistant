@@ -28,18 +28,19 @@ A dataset query can return thousands of rows, but an answer kept at most 200 and
 | Story | What | Status |
 |---|---|---|
 | 1.27.1 | Paged SQL builder and the connectors' paged read | In progress |
-| 1.27.2 | Page engine and the page routes (api.md 151, 153) | In progress |
+| 1.27.2 | Page engine and the page routes (api.md 152, 154) | In progress |
 | 1.27.3 | Query inspector: pager, sort and column filters | In progress |
-| 1.27.4 | The result-explorer agent and the interpret-filter routes (api.md 152, 154) | In progress |
+| 1.27.4 | The result-explorer agent and the interpret-filter routes (api.md 153, 155) | In progress |
 | 1.27.5 | Query inspector: filter in words and explore records | In progress |
 | 1.27.6 | result-explorer evals | In progress |
 | 1.27.7 | The explore_result tool for chat agents | In progress |
 | 1.27.8 | A follow-up over an earlier result pages it in Answer a Business Question | In progress |
+| 1.27.9 | Sources a reader can understand: numbered, described, one per table (added 2026-11-16 at the user's request) | In progress |
 
 ## Specs touched
 
 - [datasources](../../capabilities/datasources/spec.md) R37, R52; [agent-answers](../../capabilities/agent-answers/spec.md) R76, R79–R84; [workflows](../../capabilities/workflows/spec.md) R1, R2, R27, R35.
-- [api.md](../../system/api.md) 151–154; [data-model.md](../../system/data-model.md) 3.4.2a; [non-functional.md](../../product/non-functional.md) §5; [agents.md](../../system/agents.md) 1.1, 2.1, 2.11, 2.15, 3.15, 4.2, 5.11, 5.12, 8.1; [ui.md](../../system/ui.md) 4.12.2.
+- [api.md](../../system/api.md) 152–155; [data-model.md](../../system/data-model.md) 3.4.2a; [non-functional.md](../../product/non-functional.md) §5; [agents.md](../../system/agents.md) 1.1, 2.1, 2.11, 2.16, 3.15, 4.2, 5.11, 5.12, 8.1; [ui.md](../../system/ui.md) 4.12.2.
 - [architecture.md](../../system/architecture.md) ADR-0049.
 
 ## Acceptance

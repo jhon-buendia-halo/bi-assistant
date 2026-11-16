@@ -54,8 +54,8 @@ const ANALYSIS_KEYS = [
   'result-explorer',
   'analysis-planner',
 ];
-/** Every card under All: 14 built-in agents and the Background's 2. */
-const ALL_CARDS = 16;
+/** Every card under All: 15 built-in agents and the Background's 2. */
+const ALL_CARDS = 17;
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -182,7 +182,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
     [
       'storytelling',
       'Storytelling',
-      ['dashboard-reader', 'answer-writer', 'visualization'],
+      ['dashboard-reader', 'answer-writer', 'visualization', 'image-reader'],
     ],
     ['quality', 'Quality & Evals', ['assistant-eval-judge']],
   ] as const) {

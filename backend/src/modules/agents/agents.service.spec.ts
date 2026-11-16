@@ -206,6 +206,7 @@ describe('AgentsService (built-in and user agents)', () => {
       // Its turn workflow, for the Graph tab (api.md 34, R108).
       expect(detail?.workflow?.id).toBe('answer-business-question');
       expect(detail?.workflow?.steps.map((step) => step.title)).toEqual([
+        'Read images',
         'Receive question',
         'Load catalog',
         'Interpret follow-up',

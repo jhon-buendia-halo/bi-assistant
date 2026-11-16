@@ -166,6 +166,37 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     ]);
   });
 
+  it('shows the reference images of the input as thumbnails read through the run image endpoint', () => {
+    const el = mount({
+      ...RUN,
+      input: {
+        question: 'Why?',
+        images: ['inputs/images/1.png', 'inputs/images/2.jpg'],
+      },
+    });
+    const first = el.querySelector<HTMLImageElement>(
+      '[data-testid="run-detail-input-image-0"]',
+    )!;
+    expect(first.alt).toBe('Reference image 1');
+    expect(first.src).toContain(
+      '/workflow-runs/r1/input-image?path=inputs%2Fimages%2F1.png',
+    );
+    expect(
+      el
+        .querySelector<HTMLImageElement>('[data-testid="run-detail-input-image-1"]')!
+        .alt,
+    ).toBe('Reference image 2');
+    expect(el.querySelector('[data-testid="run-detail-input"]')!.textContent).not.toContain(
+      'inputs/images',
+    );
+  });
+
+  it('turns the images of an input into one entry holding their paths', () => {
+    expect(runInputEntries({ images: ['inputs/images/1.png'] })).toEqual([
+      { name: 'images', value: '', images: ['inputs/images/1.png'] },
+    ]);
+  });
+
   describe('the query inspector (workflows R31; plan 1.25.5)', () => {
     const WITH_QUERIES: WorkflowRun = {
       ...RUN,
@@ -206,7 +237,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       expect(el.querySelector('[data-testid="query-coverage-line"]')).not.toBeNull();
       const row = el.querySelector<HTMLElement>('[data-testid="query-row-0"]')!;
       expect(row.textContent).toContain('Counting the matches.');
-      expect(el.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('Q1');
+      expect(el.querySelector('[data-testid="figure-ref"]')?.textContent).toBe('1');
       expect(el.querySelector('[data-testid="query-inspector"]')).toBeNull();
 
       row.click();
@@ -216,7 +247,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       fixture.detectChanges();
       const sheet = el.querySelector('[data-testid="query-inspector-sheet"]')!;
       expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain(
-        'Query 1 of 1',
+        'Source 1 of 1',
       );
       // Showing the run again builds nothing a second time.
       fixture.detectChanges();

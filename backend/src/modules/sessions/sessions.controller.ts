@@ -140,7 +140,7 @@ export class SessionsController {
 
   /**
    * One page of one of a message's queries, filtered and sorted (api.md
-   * 153); the body is a `PageRequest`. Nothing is stored.
+   * 154); the body is a `PageRequest`. Nothing is stored.
    */
   @Post(':id/messages/:message/answer/queries/:index/page')
   async pageQuery(
@@ -159,7 +159,7 @@ export class SessionsController {
 
   /**
    * The user's words read as a view of one of a message's queries (api.md
-   * 154); the body is `{ text, view? }`. Nothing is stored.
+   * 155); the body is `{ text, view? }`. Nothing is stored.
    */
   @Post(':id/messages/:message/answer/queries/:index/interpret-filter')
   async interpretFilter(

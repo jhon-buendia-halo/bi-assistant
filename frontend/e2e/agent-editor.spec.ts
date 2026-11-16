@@ -952,8 +952,8 @@ test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query 
     await tryInPanel(page, question);
     await expect(answer).toContainText('The data holds 4,321');
   });
-  await test.step('Then the answer shows a figure chip, the coverage line and the query row with its coverage chip', async () => {
-    await expect(answer.getByTestId('figure-ref').first()).toHaveText('Q1');
+  await test.step('Then the answer shows a numbered source on a figure, the coverage line and the query row with its coverage chip', async () => {
+    await expect(answer.getByTestId('figure-ref').first()).toHaveText('1');
     await expect(answer.getByTestId('query-coverage-line')).toBeVisible();
     await expect(answer.getByTestId('query-row-0')).toBeVisible();
     await expect(answer.getByTestId('query-coverage-chip')).toHaveCount(1);
@@ -970,9 +970,9 @@ test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query 
     expect(box!.x + box!.width).toBeLessThanOrEqual(panel!.x + 1);
     expect(box!.width).toBeLessThanOrEqual(720);
   });
-  await test.step("And the inspector's header shows Query 1 of 1 and its steps start from a table and end with Show", async () => {
+  await test.step("And the inspector's header shows Source 1 of 1 and its steps start from a table and end with Show", async () => {
     await expect(page.getByTestId('query-inspector-position')).toHaveText(
-      'Query 1 of 1',
+      'Source 1 of 1',
     );
     const steps = page.getByTestId('query-funnel-step');
     await expect(steps.first()).toHaveAttribute('data-verb', 'start');

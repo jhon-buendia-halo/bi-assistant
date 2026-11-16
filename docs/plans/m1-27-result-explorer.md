@@ -30,18 +30,18 @@ Additional type changes, each owned by one story:
 - `QueryFacts.view?: ResultView`; `EVIDENCE_TOOLS` gains `'explore_result'` (1.27.7).
 - Frontend `QueryEvidenceApi` gains `page(index, request: PageRequest): Observable<PageResult>` (1.27.3) and `interpretFilter(index, text, view: ResultView | null): Observable<FilterInterpretation>` (1.27.5). Every host implements both.
 
-### 0.2 Routes (api.md 151–154)
+### 0.2 Routes (api.md 152–155)
 
 All `POST`, store nothing, answer `201`, the same errors as 142/147 plus the ones below.
 
 | # | Route | Body → success | Story |
 |---|---|---|---|
-| 151 | `POST /workflow-runs/:id/answer/queries/:index/page` | `PageRequest` → `{ ok: true, result: PageResult }` | 1.27.2 |
-| 152 | `POST /workflow-runs/:id/answer/queries/:index/interpret-filter` | `{ text: string, view?: ResultView }` → `{ ok: true, interpretation: FilterInterpretation }` | 1.27.4 |
-| 153 | `POST /sessions/:id/messages/:message/answer/queries/:index/page` | as 151 | 1.27.2 |
-| 154 | `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter` | as 152 | 1.27.4 |
+| 152 | `POST /workflow-runs/:id/answer/queries/:index/page` | `PageRequest` → `{ ok: true, result: PageResult }` | 1.27.2 |
+| 153 | `POST /workflow-runs/:id/answer/queries/:index/interpret-filter` | `{ text: string, view?: ResultView }` → `{ ok: true, interpretation: FilterInterpretation }` | 1.27.4 |
+| 154 | `POST /sessions/:id/messages/:message/answer/queries/:index/page` | as 152 | 1.27.2 |
+| 155 | `POST /sessions/:id/messages/:message/answer/queries/:index/interpret-filter` | as 153 | 1.27.4 |
 
-Errors (400 unless stated): `Query <index> is a sample; it has no full result to page` · `Unknown column "<c>"` · `Column "<c>" appears more than once in the result; it cannot be filtered or sorted` · `Filter on <c>: <op> needs a value` · `Page <n> is past the 50,000-row limit` · `This warehouse does not support query parameters; filtering is unavailable`. 152/154 only: `That asks a new question, not a filter on this result` · `The filter could not be understood: <model error>`. Draft runs (Try it) answer 404 as they already do. Each story updates the api.md header counts for the handlers it adds.
+Errors (400 unless stated): `Query <index> is a sample; it has no full result to page` · `Unknown column "<c>"` · `Column "<c>" appears more than once in the result; it cannot be filtered or sorted` · `Filter on <c>: <op> needs a value` · `Page <n> is past the 50,000-row limit` · `This warehouse does not support query parameters; filtering is unavailable`. 153/155 only: `That asks a new question, not a filter on this result` · `The filter could not be understood: <model error>`. Draft runs (Try it) answer 404 as they already do. Each story updates the api.md header counts for the handlers it adds.
 
 ### 0.3 `result-explorer` reply
 
@@ -129,9 +129,9 @@ receive-question → load-catalog → interpret-follow-up
 |---|---|---|---|---|
 | 1.27.0 Contract (lead) | Opus | `paged-sql.types.ts`, frontend type copy, this plan, epic spec, ADR-0049, roadmap | – | – |
 | 1.27.1 Paged SQL builder and connectors | Opus | new `connectors/paged-sql.ts` + spec; `connector.ts` (`cleanReadOnlySql`, interface); postgres, databricks, rest connectors; `datasources.service.ts`; datasources spec R37, new R52 | 1.27.0 | `paged-sql.spec.ts` (quoting per dialect, `$n`/`:pn`/`?`, CTE, trailing `--` and `;`, raised LIMIT, a forbidden word inside a column name passes, NULLS LAST, ordinals); `rest.connector.spec.ts` on real better-sqlite3 (boolean binding); `databricks.connector.spec.ts` (`namedParameters`) |
-| 1.27.2 Page engine and routes 151/153 | Opus | new `query-evidence/result-view.ts` + spec; `query-evidence.service.ts` `page()`; `answer-evidence.service.ts`; `session-evidence.service.ts`; workflow-runs service and controller; `sessions.controller.ts`; api.md; data-model; non-functional §5 (Result paging table, N72) | 1.27.0 (mocks `runPagedSql`) | `result-view.spec.ts` (unknown/duplicate column, op without value, page past 50,000, coercion, default order); service spec (page stores nothing; a sample is refused) |
+| 1.27.2 Page engine and routes 152/154 | Opus | new `query-evidence/result-view.ts` + spec; `query-evidence.service.ts` `page()`; `answer-evidence.service.ts`; `session-evidence.service.ts`; workflow-runs service and controller; `sessions.controller.ts`; api.md; data-model; non-functional §5 (Result paging table, N72) | 1.27.0 (mocks `runPagedSql`) | `result-view.spec.ts` (unknown/duplicate column, op without value, page past 50,000, coercion, default order); service spec (page stores nothing; a sample is refused) |
 | 1.27.3 Inspector: pager, sort, column filters | Sonnet | new `shared/query-evidence/query-result/query-result.{ts,html,spec.ts}`; `query-inspector.html`; `run-query-evidence-api.ts`; `session-query-evidence-api.ts`; the two API services; ui.md 4.12.2; agent-answers R76, new R79–R81 | 1.27.0 | `query-result.spec.ts` (Next requests page 2; sort cycles `aria-sort`; chip shows and removes; cap note; error and Retry). E2E `frontend/e2e/query-result-paging.spec.ts` |
-| 1.27.4 `result-explorer` agent and routes 152/154 | Opus | `agents/result-explorer.prompts.ts`, `agents/result-explorer.agent.ts`; `index.ts`; agent constants, personas, shipped prompts; `mastra.service.ts` `interpretResult`; evidence services and controllers; agents.md 1.1, 2.15 | 1.27.2 | `result-explorer.prompts.spec.ts` (`specOf` drops unknown columns, `next` → absolute page, `new-question` → 400 in inspector mode) |
+| 1.27.4 `result-explorer` agent and routes 153/155 | Opus | `agents/result-explorer.prompts.ts`, `agents/result-explorer.agent.ts`; `index.ts`; agent constants, personas, shipped prompts; `mastra.service.ts` `interpretResult`; evidence services and controllers; agents.md 1.1, 2.15 | 1.27.2 | `result-explorer.prompts.spec.ts` (`specOf` drops unknown columns, `next` → absolute page, `new-question` → 400 in inspector mode) |
 | 1.27.5 Inspector: filter in words, explore preset | Sonnet | `query-result.*`; both API adapters (`interpretFilter`); opening an explore record on its `view`; ui.md; agent-answers R82–R83 | 1.27.3 | `query-result.spec.ts` (understood line, rejected part, preset view). E2E `frontend/e2e/query-result-filter-text.spec.ts` |
 | 1.27.6 result-explorer evals | Sonnet | `evals/result-explorer.evals.ts`, `-eval-target.ts`, `-eval-checks.ts` + specs; `eval-sets.ts`; agents.md 8.1 | 1.27.4 | checks unit-tested on one real reply |
 | 1.27.7 `explore_result` tool | Opus | `tools/explore-result.tool.ts`; `dataset.tools.ts`; `tool-services.ts` (`pageQuery`, `interpretResult`); `sessions.service.ts` (`RunHostSpec.contextQueries`); `turn-data.ts`; `query-evidence.ts` (`EVIDENCE_TOOLS`, coverage `partial`); turn-engine (`explorable-queries` request-context key, facts `view`); `assistant.agent.ts`; insights-analyst catalogue and agent; `agent-workflows.ts`; workflow-runs and node-chats services (`contextQueries`); agents.md 2.1, 2.11, 3.15, 4.2; agent-answers R84 | 1.27.2, 1.27.4 | `explore-result.tool.spec.ts` (latest by default, unknown SQL lists candidates, `toModelOutput` hides `sourceSql`); `turn-data.spec` (record `input` is the source SQL); `query-evidence.spec` (evidence `view`) |
@@ -139,14 +139,14 @@ receive-question → load-catalog → interpret-follow-up
 
 Waves: **1** = 1.27.1 ∥ 1.27.2 ∥ 1.27.3 (no agent input changes, no evals). **2** = 1.27.4 ∥ 1.27.5, then 1.27.7 (assistant and insights-analyst evals). **3** = 1.27.8 ∥ 1.27.6 (insights-analyst evals once for 1.27.7 and 1.27.8; result-explorer set first run).
 
-Ownership: only 1.27.0 edits `paged-sql.types.ts`; only 1.27.3 creates the `query-result` component; only 1.27.7 adds `RunHostSpec.contextQueries`; 1.27.2 owns api.md 151 and 153, 1.27.4 owns 152 and 154.
+Ownership: only 1.27.0 edits `paged-sql.types.ts`; only 1.27.3 creates the `query-result` component; only 1.27.7 adds `RunHostSpec.contextQueries`; 1.27.2 owns api.md 152 and 154, 1.27.4 owns 153 and 155.
 
 ## 4. Specs
 
 - datasources: R37 gains "except a paged read of a stored query's result (R52, ADR-0049)"; new R52.
 - agent-answers: R76 (stored rows first; paging, sorting or filtering asks the server); new R79 pager, R80 sort, R81 column filters, R82 filter in words, R83 explore records open on their view, R84 `explore_result` answers link through the shared layer.
 - workflows: R1, R2, R27; new R35.
-- api.md 151–154 and header counts, `QueryEvidence.view`; data-model 3.4.2a `view`; non-functional §5 Result paging and N72; agents.md 1.1, 2.15, 3.15, 4.2, 5.11, 5.12, 8.1; ui.md 4.12.2.
+- api.md 152–155 and header counts, `QueryEvidence.view`; data-model 3.4.2a `view`; non-functional §5 Result paging and N72; agents.md 1.1, 2.16, 3.15, 4.2, 5.11, 5.12, 8.1; ui.md 4.12.2.
 
 ## 5. Evals
 

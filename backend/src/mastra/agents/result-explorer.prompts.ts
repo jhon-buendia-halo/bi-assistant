@@ -1,5 +1,5 @@
 /**
- * The result explorer's catalogue data (agents.md 2.15; plan
+ * The result explorer's catalogue data (agents.md 2.16; plan
  * docs/plans/m1-27-result-explorer.md 0.3): its job description, its reply
  * schema, the candidates and the request it reads, and `specOf`, the pure
  * code that turns its reply into a `FilterInterpretation` over the known
@@ -75,7 +75,8 @@ You are given the user's words, the current view (its filters, its sort, its pag
 - understood: one short line in business words for the whole new view, for example "Country is Brazil · Goals at least 3 · sorted by Goals, high to low".
 - Use only the columns listed for the candidate, spelled as listed. Never invent a column: leave out what no listed column holds.
 - Reply with one JSON object in the schema, nothing else: {"action","query","filters","sort","page":{"move","to"},"understood"}.
-- action is "explore" only when the answer is the same rows filtered, sorted or paged. A new measure (an average, a total, a count, a share), a new grouping, data from another table or any other question is "new-question": then keep the current filters and sort, and move keep.`;
+- action is "explore" only when the answer is the same rows filtered, sorted or paged. A new measure (an average, a total, a count, a share), a new grouping, data from another table or any other question is "new-question": then keep the current filters and sort, and move keep.
+- Words that need something no listed column holds (a continent, a region, a category, a type) are "new-question" too, even when you could pick some matching values from the listed ones: the listed values are only a few examples of each column, never all of them, so a filter built from them would silently drop rows.`;
 
 const valueSchema = z.union([z.string(), z.number(), z.boolean()]);
 

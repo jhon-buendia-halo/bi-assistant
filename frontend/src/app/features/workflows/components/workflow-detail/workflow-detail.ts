@@ -18,7 +18,7 @@ import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { workflowKindLabel } from '../../services/workflows.util';
 import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
 import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog';
-import { WorkflowLogsDock } from '../workflow-logs-dock/workflow-logs-dock';
+import { StoryQueryOpen } from '../workflow-step-story/workflow-step-story';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 
 /**
@@ -26,7 +26,7 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
  * R12; ui.md 4.4b): a one-line header (the breadcrumb ending in the name, the
  * kind and the id); the
  * canvas, left to right, with Execute workflow at its top-right; the Run
- * panel under it (Chat, Logs and the selected node's data); and a node's
+ * panel on its right (the Chat, then How it ran); and a node's
  * dialog over the page. The app's right panel is not used on this page.
  * Read-only (R3).
  */
@@ -37,7 +37,6 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
     QueryInspector,
     WorkflowCanvas,
     WorkflowNodeDialog,
-    WorkflowLogsDock,
     WorkflowRunDock,
   ],
   templateUrl: './workflow-detail.html',
@@ -116,7 +115,9 @@ export class WorkflowDetailPage {
   readonly openQuery = computed(() => {
     const index = this.designer.openQueryIndex();
     const answer = this.answer();
-    return index !== null && answer !== null && answer.data?.[index] !== undefined
+    return index !== null &&
+      answer !== null &&
+      answer.data?.[index] !== undefined
       ? { index, answer }
       : null;
   });
@@ -127,6 +128,27 @@ export class WorkflowDetailPage {
    */
   closeQuery(): void {
     focusQueryOpener(this.designer.closeQuery());
+  }
+
+  /** The answer's records a node's Story links its queries to; null when the page does not inspect queries. */
+  readonly storyAnswerData = computed(() =>
+    this.designer.inspectsQueries() ? (this.answer()?.data ?? null) : null,
+  );
+
+  /**
+   * A query picked in a node's Story: the dialog closes and the query opens
+   * in the inspector sheet; closing the sheet returns the focus to the node.
+   */
+  openStoryQuery(open: StoryQueryOpen): void {
+    const id = this.designer.openNodeId();
+    this.designer.closeNode();
+    const node =
+      id === null
+        ? null
+        : this.host.nativeElement.querySelector<HTMLElement>(
+            `[data-testid="workflow-node-${CSS.escape(id)}"]`,
+          );
+    this.designer.openQuery(open.index, node);
   }
 
   /** The dialog's agent link: the dialog closes and the agent's page opens. */

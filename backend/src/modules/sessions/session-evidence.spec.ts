@@ -204,7 +204,7 @@ const bodyOf = (res: { body: unknown }) => res.body as Body;
 const errorOf = (res: { body: unknown }) =>
   (res.body as { message: string }).message;
 
-describe('A past chat hosts the query inspector (api.md 144-148, 153)', () => {
+describe('A past chat hosts the query inspector (api.md 144-148, 154)', () => {
   let ctx: Awaited<ReturnType<typeof build>>;
   beforeEach(async () => {
     ctx = await build();
@@ -288,7 +288,7 @@ describe('A past chat hosts the query inspector (api.md 144-148, 153)', () => {
     expect(ctx.sessions.saveMessage).not.toHaveBeenCalled();
   });
 
-  it('153 pages one query and stores nothing; a sample is refused', async () => {
+  it('154 pages one query and stores nothing; a sample is refused', async () => {
     const server = ctx.app.getHttpServer() as Server;
     const res = await request(server)
       .post(`${base}/1/answer/queries/0/page`)
@@ -330,7 +330,7 @@ describe('A past chat hosts the query inspector (api.md 144-148, 153)', () => {
     expect(ctx.runPagedSql).toHaveBeenCalledTimes(1);
   });
 
-  it('154 reads the words as a view of one query and stores nothing; a new question, a sample and blank text are refused', async () => {
+  it('155 reads the words as a view of one query and stores nothing; a new question, a sample and blank text are refused', async () => {
     const server = ctx.app.getHttpServer() as Server;
     const path = `${base}/1/answer/queries/0/interpret-filter`;
     const view = {

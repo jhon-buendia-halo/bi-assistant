@@ -41,6 +41,11 @@ import {
   type AnswerBusinessQuestionRuntime,
 } from './answer-business-question.steps';
 import {
+  READ_IMAGES_OUTCOME_ID,
+  READ_IMAGES_RUNTIME_KEY,
+  type ReadImagesRuntime,
+} from './read-images.steps';
+import {
   ContractViolationError,
   contractJsonSchema,
 } from './workflow-contract';
@@ -211,15 +216,45 @@ async function run(
   question: string,
   turn: ScriptedTurn | AnswerBusinessQuestionRuntime | undefined,
   datasets: unknown = ['World Cup'],
+  images?: { paths: string[]; reader: ReadImagesRuntime },
 ) {
   const requestContext = new RequestContext();
   if (turn) requestContext.set(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY, turn);
+  if (images) requestContext.set(READ_IMAGES_RUNTIME_KEY, images.reader);
   const engineRun = await workflow.createRun();
   const drained = await drain(
-    engineRun.stream({ inputData: { question, datasets }, requestContext }),
+    engineRun.stream({
+      inputData: {
+        question,
+        datasets,
+        ...(images ? { images: images.paths } : {}),
+      },
+      requestContext,
+    }),
   );
   return { ...drained, engineRun, requestContext };
 }
+
+/** Read images' notes on one reference image, as a runtime returns them. */
+const NOTES = '## Reference images\nA bar chart of goals per team.';
+
+/** A Read images runtime that describes the images as `NOTES`. */
+function reader(): { readImages: jest.Mock } {
+  return {
+    readImages: jest.fn(() =>
+      Promise.resolve({ imageNotes: NOTES, imageCount: 1, stopped: false }),
+    ),
+  };
+}
+
+/** A run with one reference image. */
+const ONE_IMAGE = () => ({ paths: ['inputs/images/1.png'], reader: reader() });
+
+/** The events of a run without images: Read images' branch is not taken. */
+const NO_IMAGES = [
+  `${READ_IMAGES_OUTCOME_ID}:running`,
+  `${READ_IMAGES_OUTCOME_ID}:success`,
+];
 
 /** A stream's step events (`<id>:<status>`), step outputs and result. */
 async function drain(output: StubStream) {
@@ -262,9 +297,10 @@ const CLEAR_PLAN_ROUND = [
 ];
 
 describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
-  it('builds the twelve catalogue steps, in order, with their titles', () => {
+  it('builds the thirteen catalogue steps, in order, with their titles', () => {
     expect(workflow.id).toBe(ANSWER_BUSINESS_QUESTION_WORKFLOW_ID);
     expect(leafSteps(workflow).map((s) => [s.id, s.description])).toEqual([
+      ['read-images', 'Read images'],
       ['receive-question', 'Receive question'],
       ['load-catalog', 'Load catalog'],
       ['interpret-follow-up', 'Interpret follow-up'],
@@ -280,14 +316,16 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     ]);
   });
 
-  it('is built with Interpret follow-up, then a .branch() to the question path (.dountil() around the plan round, a .branch() to the analysis, .dountil() around the analysis attempt) or to the explore path', () => {
+  it('is built with a .branch() to Read images and its outcome map first, then Interpret follow-up and a .branch() to the question path (.dountil() around the plan round, a .branch() to the analysis, .dountil() around the analysis attempt) or to the explore path', () => {
     expect(workflow.entries.map((entry) => entry.type)).toEqual([
+      'branch',
+      'map',
       'step',
       'step',
       'step',
       'branch',
     ]);
-    const top = workflow.entries[3] as Extract<StubEntry, { type: 'branch' }>;
+    const top = workflow.entries[5] as Extract<StubEntry, { type: 'branch' }>;
     expect(top.pairs.map(([, step]) => step.id)).toEqual([
       'question-path',
       'explore-result',
@@ -298,6 +336,14 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'dountil',
       'branch',
     ]);
+    const readImages = workflow.entries[0] as Extract<
+      StubEntry,
+      { type: 'branch' }
+    >;
+    expect(readImages.pairs.map(([, step]) => step.id)).toEqual([
+      'read-images',
+    ]);
+    expect(workflow.entries[1]).toMatchObject({ id: READ_IMAGES_OUTCOME_ID });
     const planLoop = questionPath.entries![1] as Extract<
       StubEntry,
       { type: 'dountil' }
@@ -360,28 +406,32 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         ]),
       ),
     ).toEqual({
+      'read-images': [
+        ['question', 'images'],
+        ['imageNotes', 'imageCount'],
+      ],
       'receive-question': [
-        ['question', 'datasets'],
-        ['question', 'datasets'],
+        ['question', 'datasets', 'imageNotes'],
+        ['question', 'datasets', 'imageNotes'],
       ],
       'load-catalog': [
-        ['question', 'datasets'],
-        ['question', 'catalog', 'columns'],
+        ['question', 'datasets', 'imageNotes'],
+        ['question', 'catalog', 'columns', 'imageNotes'],
       ],
       'interpret-follow-up': [
-        ['question', 'catalog', 'columns'],
-        ['question', 'catalog', 'columns', 'followUp', 'stopped'],
+        ['question', 'catalog', 'columns', 'imageNotes'],
+        ['question', 'catalog', 'columns', 'imageNotes', 'followUp', 'stopped'],
       ],
       plan: [
-        ['question', 'catalog', 'columns', 'clarification'],
-        ['question', 'catalog', 'plan', 'stopped'],
+        ['question', 'catalog', 'columns', 'imageNotes', 'clarification'],
+        ['question', 'catalog', 'plan', 'stopped', 'imageNotes'],
       ],
       clarify: [
-        ['question', 'catalog', 'plan', 'stopped'],
-        ['question', 'catalog', 'columns', 'clarification'],
+        ['question', 'catalog', 'plan', 'stopped', 'imageNotes'],
+        ['question', 'catalog', 'columns', 'imageNotes', 'clarification'],
       ],
       analyse: [
-        ['question', 'catalog', 'plan', 'attempt', 'findings'],
+        ['question', 'catalog', 'plan', 'attempt', 'findings', 'imageNotes'],
         [
           'question',
           'catalog',
@@ -391,6 +441,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
           'queries',
           'text',
           'stopped',
+          'imageNotes',
         ],
       ],
       validate: [
@@ -403,6 +454,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
           'queries',
           'text',
           'stopped',
+          'imageNotes',
         ],
         [
           'ok',
@@ -413,14 +465,31 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
           'plan',
           'calls',
           'queries',
+          'imageNotes',
         ],
       ],
       'check-data-quality': [
-        ['question', 'plan', 'queries', 'findings', 'calls', 'catalog'],
-        ['question', 'plan', 'queries', 'findings', 'calls', 'dataQuality'],
+        [
+          'question',
+          'plan',
+          'queries',
+          'findings',
+          'calls',
+          'imageNotes',
+          'catalog',
+        ],
+        [
+          'question',
+          'plan',
+          'queries',
+          'findings',
+          'calls',
+          'imageNotes',
+          'dataQuality',
+        ],
       ],
       'write-answer': [
-        ['question', 'plan', 'queries', 'findings', 'calls'],
+        ['question', 'plan', 'queries', 'findings', 'calls', 'imageNotes'],
         ['headline', 'answer', 'calls'],
       ],
       'wrap-up': [
@@ -428,7 +497,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         ['sqlQueries', 'failedQueries', 'rows', 'answer'],
       ],
       'page-result': [
-        ['question', 'catalog', 'columns', 'followUp', 'stopped'],
+        ['question', 'catalog', 'columns', 'imageNotes', 'followUp', 'stopped'],
         [
           'title',
           'columns',
@@ -475,6 +544,8 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       turn,
     );
     expect(events).toEqual([
+      // No images: the branch to Read images is not taken (it is skipped).
+      ...NO_IMAGES,
       'receive-question:running',
       'receive-question:success',
       'load-catalog:running',
@@ -521,6 +592,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
           // The stand-in's columns have no type.
           '- wc.public.matches: id, year',
         ].join('\n'),
+        imageNotes: '',
       }),
     );
     expect(turn.analyse).toHaveBeenCalledTimes(1);
@@ -531,6 +603,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         plan: PLAN,
         attempt: 1,
         planBlock: `Analysis plan for this turn:\n${JSON.stringify(PLAN)}`,
+        imageNotes: '',
       }),
     );
     expect(
@@ -543,6 +616,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       findings: expect.arrayContaining([
         expect.objectContaining({ check: 'Ran a query', passed: true }),
       ]) as unknown,
+      imageNotes: '',
     });
     expect(result).toEqual({
       status: 'success',
@@ -635,6 +709,8 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       const turn = followUpTurn(NEXT_PAGE);
       const { events, result } = await run('  next page  ', turn);
       expect(events).toEqual([
+        `${READ_IMAGES_OUTCOME_ID}:running`,
+        `${READ_IMAGES_OUTCOME_ID}:success`,
         'receive-question:running',
         'receive-question:success',
         'load-catalog:running',
@@ -918,6 +994,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       question: 'Which team was dominant?',
       catalog: expect.any(Array) as unknown,
       columns: expect.any(Array) as unknown,
+      imageNotes: '',
       clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
     });
     expect(turn.plan).toHaveBeenCalledTimes(2);
@@ -1046,6 +1123,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     const turn = runtime();
     const { events, result } = await run('Go', turn, 'World Cup');
     expect(events).toEqual([
+      ...NO_IMAGES,
       'receive-question:running',
       'receive-question:failed',
     ]);
@@ -1057,7 +1135,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
 
   it('no longer fails Receive question on a blank question: the input node refuses it before the run', async () => {
     const { events, result } = await run('   ', runtime());
-    expect(events.slice(0, 2)).toEqual([
+    expect(events.slice(2, 4)).toEqual([
       'receive-question:running',
       'receive-question:success',
     ]);
@@ -1085,5 +1163,206 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     expect((result.error as Error).message).toBe(
       'The Plan step has no turn to run',
     );
+  });
+
+  // Reference images (agents.md 2.15, 5.11; workflows R35; plan D1-D3).
+  describe('reference images', () => {
+    it("reads the images first, then hands Zoe's notes to Plan, Analyse and Write answer", async () => {
+      const turn = runtime({ checksDataQuality: true });
+      const images = ONE_IMAGE();
+      const { events, outputs, result } = await run(
+        'How many matches?',
+        turn,
+        ['World Cup'],
+        images,
+      );
+      expect(events.slice(0, 6)).toEqual([
+        'read-images:running',
+        'read-images:success',
+        `${READ_IMAGES_OUTCOME_ID}:running`,
+        `${READ_IMAGES_OUTCOME_ID}:success`,
+        'receive-question:running',
+        'receive-question:success',
+      ]);
+      expect(images.reader.readImages).toHaveBeenCalledTimes(1);
+      expect(images.reader.readImages).toHaveBeenCalledWith({
+        question: 'How many matches?',
+        images: ['inputs/images/1.png'],
+      });
+      // Receive question gets the input with the notes, never the images.
+      expect(outputs.get('receive-question')).toEqual({
+        question: 'How many matches?',
+        datasets: ['World Cup'],
+        imageNotes: NOTES,
+      });
+      expect(turn.plan).toHaveBeenCalledWith(
+        expect.objectContaining({ imageNotes: NOTES }),
+      );
+      expect(turn.analyse).toHaveBeenCalledWith(
+        expect.objectContaining({ imageNotes: NOTES }),
+      );
+      // Interpret follow-up passes them on to the question path (roadmap
+      // 1.27.8), and Check data quality on to Write answer.
+      expect(outputs.get('interpret-follow-up')).toMatchObject({
+        imageNotes: NOTES,
+        followUp: null,
+      });
+      expect(
+        outputs.get('question-path.analysis-path.answer-path.check-data-quality'),
+      ).toMatchObject({ imageNotes: NOTES });
+      expect(turn.writeAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({ imageNotes: NOTES }),
+      );
+      expect(result.status).toBe('success');
+    });
+
+    it('keeps the notes through a retry of the analysis', async () => {
+      const turn = runtime({
+        analyse: jest
+          .fn()
+          .mockResolvedValueOnce(FAILED_ATTEMPT)
+          .mockResolvedValueOnce(GOOD_ATTEMPT),
+      });
+      await run('How many matches?', turn, ['World Cup'], ONE_IMAGE());
+      expect(turn.analyse).toHaveBeenCalledTimes(2);
+      expect(turn.analyse.mock.calls[1][0]).toMatchObject({
+        attempt: 2,
+        imageNotes: NOTES,
+      });
+    });
+
+    it('keeps the notes through a Clarify wait and its resume, without reading the images again', async () => {
+      const turn = runtime({
+        plan: jest
+          .fn()
+          .mockResolvedValueOnce({ plan: CLARIFYING, stopped: false })
+          .mockResolvedValueOnce({ plan: PLAN, stopped: false }),
+      });
+      const images = ONE_IMAGE();
+      const started = await run(
+        'Which team was dominant?',
+        turn,
+        ['World Cup'],
+        images,
+      );
+      expect(started.result.status).toBe('suspended');
+      const { outputs, result } = await resume(started, 'Matches won');
+      expect(outputs.get('question-path.plan-round.clarify')).toMatchObject({
+        imageNotes: NOTES,
+      });
+      expect(turn.plan).toHaveBeenCalledTimes(2);
+      expect(turn.plan.mock.calls[1][0]).toMatchObject({
+        clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
+        imageNotes: NOTES,
+      });
+      expect(turn.analyse.mock.calls[0][0]).toMatchObject({
+        imageNotes: NOTES,
+      });
+      expect(turn.writeAnswer.mock.calls[0][0]).toMatchObject({
+        imageNotes: NOTES,
+      });
+      expect(images.reader.readImages).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe('success');
+    });
+
+    it('resumes a run that waited at Clarify before Read images existed: its stored data has no notes, so they are empty (workflows R35)', async () => {
+      // What such a run's snapshot holds: Clarify's input (Plan's output)
+      // and the plan round's input, both without `imageNotes`.
+      const clarify = leafSteps(workflow).find(
+        (step) => step.id === 'clarify',
+      ) as unknown as {
+        execute(params: Record<string, unknown>): Promise<unknown>;
+      };
+      const stored = {
+        question: 'Which team was dominant?',
+        catalog: [],
+        plan: CLARIFYING,
+      };
+      const planRoundInput = {
+        question: 'Which team was dominant?',
+        catalog: [],
+        columns: [],
+      };
+      const output = await clarify.execute({
+        inputData: stored,
+        resumeData: { answer: 'Matches won' },
+        suspend: jest.fn(),
+        getInitData: () => planRoundInput,
+      });
+      expect(output).toEqual({
+        ...planRoundInput,
+        imageNotes: '',
+        clarification: { ...CLARIFYING.clarification, answer: 'Matches won' },
+      });
+    });
+
+    it("keeps the notes through Analyse's own clarifying question and its resume", async () => {
+      const asked = {
+        question: 'Which tournament?',
+        options: ['2018', '2022'],
+      };
+      const turn = runtime({
+        analyse: jest
+          .fn()
+          .mockResolvedValueOnce({ ...GOOD_ATTEMPT, clarification: asked })
+          .mockResolvedValueOnce(GOOD_ATTEMPT),
+      });
+      const started = await run(
+        'How many matches?',
+        turn,
+        ['World Cup'],
+        ONE_IMAGE(),
+      );
+      expect(started.result.status).toBe('suspended');
+      const { result } = await resume(started, '2022');
+      expect(turn.analyse.mock.calls[1][0]).toMatchObject({
+        answered: { ...asked, answer: '2022' },
+        imageNotes: NOTES,
+      });
+      expect(turn.writeAnswer.mock.calls[0][0]).toMatchObject({
+        imageNotes: NOTES,
+      });
+      expect(result.status).toBe('success');
+    });
+
+    it("fails the run with the model's own error when Read images fails, before Receive question", async () => {
+      const turn = runtime();
+      const { events, result } = await run('Go', turn, ['World Cup'], {
+        paths: ['inputs/images/1.png'],
+        reader: {
+          readImages: jest.fn(() =>
+            Promise.reject(new Error('This model does not accept images')),
+          ),
+        },
+      });
+      expect(events).toContain('read-images:failed');
+      expect(events.some((event) => event.startsWith('receive-question'))).toBe(
+        false,
+      );
+      expect(result.status).toBe('failed');
+      expect((result.error as Error).message).toBe(
+        'This model does not accept images',
+      );
+      expect(turn.plan).not.toHaveBeenCalled();
+    });
+
+    it('passes no notes on when the turn was stopped while Read images ran', async () => {
+      const turn = runtime();
+      await run('Go', turn, ['World Cup'], {
+        paths: ['inputs/images/1.png'],
+        reader: {
+          readImages: jest.fn(() =>
+            Promise.resolve({
+              imageNotes: NOTES,
+              imageCount: 1,
+              stopped: true,
+            }),
+          ),
+        },
+      });
+      expect(turn.plan).toHaveBeenCalledWith(
+        expect.objectContaining({ imageNotes: '' }),
+      );
+    });
   });
 });

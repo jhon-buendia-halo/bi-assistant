@@ -1,6 +1,6 @@
 import { ChatMessage } from '../../features/sessions/models/session.model';
 import { QueryEvidence } from './query-evidence.model';
-import { coverageLine, queryRows } from './query-labels';
+import { coverageLine, queryRows, sourceInfos, sourceLabel } from './query-labels';
 
 function message(
   evidence: QueryEvidence[] | undefined,
@@ -21,8 +21,8 @@ describe('query-labels', () => {
       ]),
     );
     expect(rows.map((r) => [r.label, r.title, r.chipLabel])).toEqual([
-      ['Q1', 'Dates the returns cover', 'Whole table'],
-      ['Q2', 'Query 2', 'Top 100 after ranking'],
+      ['Source 1', 'Dates the returns cover', 'Whole table'],
+      ['Source 2', 'Query 2', 'Top 100 after ranking'],
     ]);
   });
 
@@ -57,7 +57,7 @@ describe('query-labels', () => {
       ]),
     );
     expect(one?.text).toBe('The whole returns table was read (48,912 rows).');
-    expect(one?.linkLabel).toBe('Inspect the 2 queries');
+    expect(one?.linkLabel).toBe('Inspect the 2 sources');
     const two = coverageLine(
       message([
         {
@@ -83,8 +83,8 @@ describe('query-labels', () => {
     );
     expect(line?.tone).toBe('warning');
     expect(line?.text).toBe(
-      'Q1 is a sample of rows, not a ranking: no figure should come from it. ' +
-        'Q2 was cut at 500 rows, so figures from it may be incomplete.',
+      'Source 1 is a sample of rows, not a ranking: no figure should come from it. ' +
+        'Source 2 was cut at 500 rows, so figures from it may be incomplete.',
     );
   });
 
@@ -93,5 +93,28 @@ describe('query-labels', () => {
     expect(queryRows(msg).every((r) => r.chipLabel === undefined)).toBeTrue();
     expect(queryRows(msg).length).toBe(2);
     expect(coverageLine(msg)).toBeNull();
+  });
+
+  it('builds the number in one place and words the link for one or many sources', () => {
+    expect(sourceLabel(0)).toBe('Source 1');
+    expect(queryRows(message(undefined)).map((r) => r.number)).toEqual(['1', '2']);
+    const one = coverageLine(
+      message([{ index: 0, coverage: 'whole-table' }], [{ tool: 'run_readonly_sql', rowCount: 3 }]),
+    );
+    expect(one?.linkLabel).toBe('Inspect the source');
+  });
+
+  it('describes each source for the card: purpose, rows with + when cut, coverage', () => {
+    const infos = sourceInfos({
+      data: [
+        { tool: 'run_readonly_sql', rationale: 'Returns per product', rowCount: 1204 },
+        { tool: 'run_readonly_sql', rowCount: 500, truncated: true },
+      ],
+      evidence: [{ index: 0, coverage: 'whole-table' }],
+    });
+    expect(infos.map((i) => [i.label, i.purpose, i.rows, i.coverage])).toEqual([
+      ['Source 1', 'Returns per product', '1,204 rows', 'Whole table'],
+      ['Source 2', 'Query 2', '500+ rows', null],
+    ]);
   });
 });

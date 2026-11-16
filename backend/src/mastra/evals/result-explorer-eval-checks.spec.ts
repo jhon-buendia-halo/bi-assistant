@@ -28,7 +28,7 @@ const brazil = explorerAnswerText({
   },
 });
 
-describe('result-explorer eval checks (agents.md 8.1, 2.15)', () => {
+describe('result-explorer eval checks (agents.md 8.1, 2.16)', () => {
   it('reply-is-a-view passes on a view and fails on text or no action', async () => {
     expect(await run(replyIsAView(), brazil)).toBeUndefined();
     expect(await run(replyIsAView(), 'sorry')).toMatch(/not a JSON/);

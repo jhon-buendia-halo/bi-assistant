@@ -15,6 +15,7 @@ import {
   type ContractStepEntry,
   type EntityColumns,
 } from './answer-business-question.steps';
+import { readImagesEdges, readImagesStepEntry } from './read-images.steps';
 import { MAP_DASHBOARD_DATA_STEP_SCHEMAS } from './map-dashboard-data.schemas';
 import type { renderedDashboardSchema } from './map-dashboard-data.schemas';
 import {
@@ -50,6 +51,7 @@ const SCHEMAS = MAP_DASHBOARD_DATA_STEP_SCHEMAS;
  * `MAP_DASHBOARD_DATA_EDGES`.
  */
 export const MAP_DASHBOARD_DATA_STEPS: readonly ContractStepEntry[] = [
+  readImagesStepEntry(),
   contractStepEntry(
     {
       id: 'load-dashboard',
@@ -104,7 +106,7 @@ export const MAP_DASHBOARD_DATA_STEPS: readonly ContractStepEntry[] = [
 
 /** The edges of the workflow (api.md 117), from Start to End. */
 export const MAP_DASHBOARD_DATA_EDGES: readonly WorkflowEdge[] = [
-  { from: 'start', to: 'load-dashboard', kind: 'next' },
+  ...readImagesEdges('load-dashboard'),
   { from: 'load-dashboard', to: 'load-dashboard-catalog', kind: 'next' },
   { from: 'load-dashboard-catalog', to: 'map-data', kind: 'next' },
   { from: 'map-data', to: 'render-dashboard', kind: 'next' },
@@ -129,6 +131,11 @@ export interface MapDashboardDataRuntime {
     blueprint: DashboardBlueprint;
     catalog: CatalogEntity[];
     columns: EntityColumns[];
+    /**
+     * Read images' notes (agents.md 2.15): the request carries them only
+     * when not `''`; absent or `''` without images.
+     */
+    imageNotes?: string;
   }): Promise<{ mapping: DataMapping; stopped: boolean }>;
   /** Render dashboard: stores the drawn dashboard as a visual of the run. */
   saveMappedDashboard(input: {

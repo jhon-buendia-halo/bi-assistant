@@ -10,6 +10,7 @@ import {
   MAP_DATA_INSTRUCTIONS,
   READ_DASHBOARD_INSTRUCTIONS,
 } from './workflows/recreate-dashboard.prompts';
+import { READ_IMAGES_INSTRUCTIONS } from './workflows/read-images.prompts';
 import {
   INSIGHTS_ANALYST_PROMPT,
   DATA_READINESS_PROMPT,
@@ -39,6 +40,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
   'dashboard-reader': READ_DASHBOARD_INSTRUCTIONS,
   'data-mapper': MAP_DATA_INSTRUCTIONS,
+  'image-reader': READ_IMAGES_INSTRUCTIONS,
   'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
   'result-explorer': RESULT_EXPLORER_INSTRUCTIONS,
 };

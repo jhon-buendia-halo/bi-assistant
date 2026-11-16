@@ -24,6 +24,7 @@ import {
   inputFieldsWithUsage,
   validateWorkflowInput,
   withStoredImages,
+  type InputImageFile,
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
 import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
@@ -82,12 +83,27 @@ import {
   runAnswerOf,
   runHostDoc,
   runSummaryOf,
+  withStepStories,
+  type StepTeller,
   type WorkflowRun,
   type WorkflowRunDoc,
   type WorkflowRunSummary,
   type WorkflowRunWaitingFor,
 } from './workflow-run-steps';
 import { WorkflowsService, type WorkflowDefinition } from './workflows.service';
+import { tellRunStep } from '../../mastra/workflows/workflow-stories';
+
+/**
+ * The storyteller of a run's steps (ui.md 4.4b, Logs *Story*): its
+ * workflow's, reading the run's input and steps so far.
+ */
+function runStepTeller(
+  workflowId: string,
+  runInput: Record<string, unknown>,
+): StepTeller {
+  return (step, steps, runStatus) =>
+    tellRunStep(workflowId, step, { runInput, steps, runStatus });
+}
 
 /** What a visual action on a run answers (api.md 130-134). */
 export interface RunVisualResult {
@@ -172,6 +188,11 @@ export interface PreparedRun {
    * host stores it in its workspace at `path`, the field's value.
    */
   image?: { path: string; data: Buffer };
+  /**
+   * Every image file the input carried, in field then list order (the
+   * `image` field's and each `images` entry's): the host writes them all.
+   */
+  images: InputImageFile[];
   /** The earlier run given as context (plan 5.4). */
   context?: {
     fromRunId: string;
@@ -360,11 +381,13 @@ export class WorkflowRunsService implements OnModuleInit {
     }
     // An image never stays in the input: the run stores it as a file.
     const stored = withStoredImages(workflow, checked.input);
-    const image = stored.images[0];
+    // Recreate dashboard's single image is its `image` field's file.
+    const image = stored.images.find((file) => file.field === 'image');
     return {
       workflow,
       values: stored.input,
       turn,
+      images: stored.images,
       ...(image ? { image: { path: image.path, data: image.data } } : {}),
       ...(context ? { context } : {}),
     };
@@ -414,6 +437,7 @@ export class WorkflowRunsService implements OnModuleInit {
       },
       values: { question },
       turn: { question, careful: false },
+      images: [],
       draft: { agentId },
     };
   }
@@ -552,6 +576,8 @@ export class WorkflowRunsService implements OnModuleInit {
         kind: step.kind,
         repeats: repeats.has(step.id),
       })),
+      undefined,
+      runStepTeller(workflow.id, prepared.values),
     );
     const base = await this.start(prepared);
     return { prepared, base, tracker };
@@ -576,6 +602,15 @@ export class WorkflowRunsService implements OnModuleInit {
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
         ...(prepared.turn.checkDataQuality ? { checkDataQuality: true } : {}),
         ...(prepared.image ? { image: prepared.image } : {}),
+        ...(prepared.images.length
+          ? {
+              inputFiles: prepared.images.map(({ path, data }) => ({
+                path,
+                data,
+              })),
+              inputImages: prepared.images.map((file) => file.path),
+            }
+          : {}),
         ...(prepared.turn.artifact ? { artifact: prepared.turn.artifact } : {}),
         ...(prepared.context
           ? {
@@ -892,7 +927,7 @@ export class WorkflowRunsService implements OnModuleInit {
 
   /**
    * One page of one of the answer's queries, filtered and sorted (api.md
-   * 151); nothing is stored.
+   * 152); nothing is stored.
    */
   async pageQuery(
     id: string,
@@ -904,7 +939,7 @@ export class WorkflowRunsService implements OnModuleInit {
 
   /**
    * The user's words read as a view of one of the answer's queries (api.md
-   * 152); nothing is stored.
+   * 153); nothing is stored.
    */
   async interpretFilter(
     id: string,
@@ -1194,6 +1229,35 @@ export class WorkflowRunsService implements OnModuleInit {
     return run;
   }
 
+  /**
+   * One image of a run's input (api.md 151): `path` must be a string value, or
+   * an element of an array value, of the stored input that is an image path
+   * (`inputs/<...>.png|jpg|webp`); the file is read from the run's workspace.
+   * Any other path, or a file that is gone, is 404.
+   */
+  async inputImage(
+    id: string,
+    path: string,
+  ): Promise<{ data: Buffer; mediaType: string }> {
+    const run = await this.stored(id);
+    const missing = () =>
+      new NotFoundException(`Run "${id}" has no image "${path}"`);
+    const listed = Object.values(run.input).some((value) =>
+      Array.isArray(value) ? value.includes(path) : value === path,
+    );
+    if (!listed || !/^inputs\/.+\.(png|jpg|webp)$/.test(path)) {
+      throw missing();
+    }
+    try {
+      return await this.sessions.runHostImage(
+        `${RUN_HOST_ID_PREFIX}${run.id}`,
+        path,
+      );
+    } catch {
+      throw missing();
+    }
+  }
+
   /** A stored run's run-backed host (plan 5.2), or 404. */
   private async host(id: string) {
     return runHostDoc(await this.stored(id));
@@ -1206,7 +1270,15 @@ export class WorkflowRunsService implements OnModuleInit {
    */
   private async wire(stored: WorkflowRunDoc): Promise<WorkflowRun> {
     // A run of the removed RFP Builder may still carry its `rfpId`: dropped.
-    const run: WorkflowRunDoc & { rfpId?: unknown } = { ...stored };
+    const run: WorkflowRunDoc & { rfpId?: unknown } = {
+      ...stored,
+      // A run stored before step stories gets them told as it is read.
+      steps: withStepStories(
+        stored.steps ?? [],
+        runStepTeller(stored.workflowId, stored.input ?? {}),
+        stored.status,
+      ),
+    };
     delete run.rfpId;
     if (run.question === undefined) return run;
     const view = await this.sessions.toView(runHostDoc(run));
@@ -1231,7 +1303,9 @@ export class WorkflowRunsService implements OnModuleInit {
     input: unknown,
     context: unknown,
   ): Promise<unknown> {
-    const fields = workflow.input.filter((field) => field.type === 'image');
+    const fields = workflow.input.filter(
+      (field) => field.type === 'image' || field.type === 'images',
+    );
     const fromRunId = (context as { fromRunId?: unknown } | null | undefined)
       ?.fromRunId;
     if (
@@ -1244,22 +1318,36 @@ export class WorkflowRunsService implements OnModuleInit {
     }
     const earlier = await this.repository.get(fromRunId);
     if (!earlier || earlier.workflowId !== workflow.id) return input;
-    const values: Record<string, unknown> = { ...input };
-    for (const field of fields) {
-      const path = values[field.name];
-      if (typeof path !== 'string' || path !== earlier.input[field.name]) {
-        continue;
-      }
+    const hostId = `${RUN_HOST_ID_PREFIX}${earlier.id}`;
+    // A stored path as the file's `data:` URL; undefined when the file is gone.
+    const dataUrl = async (path: string): Promise<string | undefined> => {
       try {
-        const image = await this.sessions.runHostImage(
-          `${RUN_HOST_ID_PREFIX}${earlier.id}`,
-          path,
-        );
-        values[field.name] =
-          `data:${image.mediaType};base64,${image.data.toString('base64')}`;
+        const image = await this.sessions.runHostImage(hostId, path);
+        return `data:${image.mediaType};base64,${image.data.toString('base64')}`;
       } catch {
         // The file is gone: the input check asks for the image again.
+        return undefined;
       }
+    };
+    const values: Record<string, unknown> = { ...input };
+    for (const field of fields) {
+      const value = values[field.name];
+      const stored = earlier.input[field.name];
+      if (field.type === 'images') {
+        if (!Array.isArray(value) || !Array.isArray(stored)) continue;
+        values[field.name] = await Promise.all(
+          value.map(async (entry: unknown) => {
+            if (typeof entry !== 'string' || !stored.includes(entry)) {
+              return entry;
+            }
+            return (await dataUrl(entry)) ?? entry;
+          }),
+        );
+        continue;
+      }
+      if (typeof value !== 'string' || value !== stored) continue;
+      const url = await dataUrl(value);
+      if (url) values[field.name] = url;
     }
     return values;
   }

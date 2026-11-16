@@ -7,6 +7,9 @@ import {
 } from '../models/workflow.model';
 import { mainPath, workflowEdges } from './workflow-graph';
 
+/** The optional step that reads a run's reference images (workflows R35). */
+const READ_IMAGES_STEP_ID = 'read-images';
+
 /** How a step reads in the run progress (ui.md 4.4b). */
 export type ProgressState =
   | 'pending'
@@ -40,14 +43,20 @@ export function progressSteps(
 ): ProgressStep[] {
   const edges = workflowEdges(workflow);
   const ids = new Set(workflow.steps.map((s) => s.id));
-  const order = mainPath(edges).filter(
-    (id) => id !== START_NODE_ID && id !== END_NODE_ID && ids.has(id),
-  );
   const runEntries = new Map<string, RunStepView[]>();
   for (const step of run?.steps ?? []) {
     if (step.status === null) continue;
     runEntries.set(step.id, [...(runEntries.get(step.id) ?? []), step]);
   }
+  // Read images is optional (a run without images skips it): it is listed
+  // only once it ran, so the list does not open on a step that never starts.
+  const order = mainPath(edges).filter(
+    (id) =>
+      id !== START_NODE_ID &&
+      id !== END_NODE_ID &&
+      ids.has(id) &&
+      (id !== READ_IMAGES_STEP_ID || runEntries.has(id)),
+  );
   // Side steps that ran, after the step they branch from.
   for (const step of workflow.steps) {
     if (order.includes(step.id) || !runEntries.has(step.id)) continue;
@@ -84,7 +93,7 @@ export function progressSteps(
 }
 
 /**
- * How a node of the Logs list reads (ui.md 4.4b): its status in the run
+ * How a node reads in How it ran (ui.md 4.4b): its status in the run
  * shown as a progress state; a node that has not run is `pending`.
  */
 export function nodeProgressState(
@@ -131,6 +140,8 @@ export function activityLine(
   const current = steps.find((s) => s.state === 'current');
   if (current === undefined) return 'Starting…';
   switch (current.id) {
+    case 'read-images':
+      return 'Reading your images…';
     case 'plan':
       return 'Planning the analysis…';
     case 'analyse': {

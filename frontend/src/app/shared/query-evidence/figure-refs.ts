@@ -1,5 +1,6 @@
 import { ToolDataRecord } from '../../features/sessions/models/session.model';
 import { QueryEvidence } from './query-evidence.model';
+import { SourceInfo, sourceLabel } from './query-labels';
 
 /**
  * Links the figures of an answer to the queries whose rows hold them (plan
@@ -198,38 +199,45 @@ export function findFigures(
   return figures.sort((a, b) => a.start - b.start);
 }
 
-const SKIPPED_ANCESTORS = 'code, pre, a, th, .figure-ref';
+const BLOCK = 'p, li, h1, h2, h3, h4, h5, h6';
 
 /**
- * Adds one chip after each figure of already-sanitized HTML. The chips are
- * built with DOM APIs (labels through `textContent`); nothing is assembled as
- * a string, and text inside `code`, `pre`, `a`, `th` and existing chips is
- * left alone. A figure several queries hold gets the chip of one of them: a
- * query that is not a sample first, then the query that holds the most
- * figures of this answer, then the earliest; the chip's title names the
- * others. `sampleQueries` are the queries whose result is only a sample: a
- * figure whose every match is one gets the warning tone. `asked` are the
- * question's own numbers, which get no chip.
+ * Adds numbered source chips to already-sanitized HTML. The chips are built
+ * with DOM APIs (labels through `textContent`); nothing is assembled as a
+ * string, and text inside `code`, `pre`, `a`, `th`, `td` and existing chips
+ * is left alone. A figure several queries hold gets the chip of one of them:
+ * a query that is not a sample first, then the query that holds the most
+ * figures of this answer, then the earliest; the others go in `data-also`
+ * for the card. Within one paragraph, list item or heading only the first
+ * figure of each source gets a chip. A table gets one source line after it
+ * (`.table-source`) instead of a chip per cell. `sampleQueries` are the
+ * queries whose result is only a sample: a figure whose every match is one
+ * gets the warning tone. `asked` are the question's own numbers, which get
+ * no chip. `sources` give the chip and the table line their purpose and rows.
  */
 export function linkFigures(
   sanitizedHtml: string,
   index: FigureIndex,
   sampleQueries: ReadonlySet<number> = new Set(),
   asked: readonly number[] = [],
+  sources: readonly SourceInfo[] = [],
 ): string {
   if (!index.length) return sanitizedHtml;
   const template = document.createElement('template');
   template.innerHTML = sanitizedHtml;
   const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
+  const cells: Text[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const parent = node.parentElement;
-    if (parent && parent.closest(SKIPPED_ANCESTORS)) continue;
-    nodes.push(node as Text);
+    if (parent && parent.closest('code, pre, a, th, .figure-ref')) continue;
+    if (parent && parent.closest('td')) cells.push(node as Text);
+    else nodes.push(node as Text);
   }
   const found = nodes.map((node) => ({ node, figures: findFigures(node.data, index, asked) }));
+  const foundCells = cells.map((node) => ({ node, figures: findFigures(node.data, index, asked) }));
   const held = new Map<number, number>();
-  for (const { figures } of found) {
+  for (const { figures } of [...found, ...foundCells]) {
     for (const figure of figures) {
       for (const query of figure.queries) held.set(query, (held.get(query) ?? 0) + 1);
     }
@@ -241,27 +249,95 @@ export function linkFigures(
         (held.get(b) ?? 0) - (held.get(a) ?? 0) ||
         a - b,
     )[0];
+  const chipped = new Map<Element, Set<number>>();
   for (const { node, figures } of found) {
     if (!figures.length) continue;
+    const block = node.parentElement?.closest(BLOCK) ?? null;
     const fragment = document.createDocumentFragment();
     let cursor = 0;
     for (const figure of figures) {
+      const source = sourceOf(figure.queries);
+      if (block) {
+        const seen = chipped.get(block) ?? new Set<number>();
+        chipped.set(block, seen);
+        if (seen.has(source)) continue;
+        seen.add(source);
+      }
       fragment.append(document.createTextNode(node.data.slice(cursor, figure.end)));
       cursor = figure.end;
-      const source = sourceOf(figure.queries);
       fragment.append(
         chip(
           source,
           figure.text,
           figure.queries.every((q) => sampleQueries.has(q)),
           figure.queries.filter((q) => q !== source),
+          sources[source]?.purpose ?? `Query ${source + 1}`,
         ),
       );
     }
     fragment.append(document.createTextNode(node.data.slice(cursor)));
     node.replaceWith(fragment);
   }
+  const perTable = new Map<Element, Set<number>>();
+  for (const { node, figures } of foundCells) {
+    const table = node.parentElement?.closest('table');
+    if (!table) continue;
+    for (const figure of figures) {
+      const set = perTable.get(table) ?? new Set<number>();
+      perTable.set(table, set);
+      set.add(sourceOf(figure.queries));
+    }
+  }
+  for (const [table, set] of perTable) {
+    table.after(tableSource([...set].sort((a, b) => a - b), sources));
+  }
   return template.innerHTML;
+}
+
+function sourceButton(
+  query: number,
+  text: string,
+  testId?: string,
+): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'table-source';
+  button.setAttribute('data-query-index', String(query));
+  if (testId) button.setAttribute('data-testid', testId);
+  button.textContent = text;
+  return button;
+}
+
+/** The one line after a table: its source, or the few sources its figures come from. */
+function tableSource(queries: number[], sources: readonly SourceInfo[]): HTMLElement {
+  const info = (q: number): SourceInfo =>
+    sources[q] ?? {
+      index: q,
+      label: sourceLabel(q),
+      purpose: `Query ${q + 1}`,
+      rows: null,
+      coverage: null,
+    };
+  const line = document.createElement('p');
+  line.className = 'table-source-line';
+  if (queries.length === 1) {
+    const one = info(queries[0]);
+    line.append(
+      sourceButton(
+        one.index,
+        [one.label, one.purpose, one.rows].filter((part) => part).join(' · '),
+        'table-source',
+      ),
+    );
+    return line;
+  }
+  line.setAttribute('data-testid', 'table-source');
+  line.append(document.createTextNode('Sources '));
+  queries.forEach((q, i) => {
+    if (i > 0) line.append(document.createTextNode(', '));
+    line.append(sourceButton(q, String(q + 1)));
+  });
+  return line;
 }
 
 function chip(
@@ -269,23 +345,18 @@ function chip(
   figure: string,
   sample: boolean,
   others: number[],
+  purpose: string,
 ): HTMLElement {
-  const label = `Q${query + 1}`;
   const sup = document.createElement('sup');
   const button = document.createElement('button');
   button.type = 'button';
   button.className = sample ? 'figure-ref figure-ref--sample' : 'figure-ref';
   button.setAttribute('data-query-index', String(query));
   button.setAttribute('data-testid', 'figure-ref');
-  button.setAttribute('aria-label', `Open query ${label}, the source of ${figure}`);
-  const also = others.length
-    ? `Also in ${others.map((q) => `Q${q + 1}`).join(', ')}`
-    : '';
-  const title = [sample ? 'From a sample: not a reliable figure' : '', also]
-    .filter((part) => part !== '')
-    .join('. ');
-  if (title) button.title = title;
-  button.textContent = label;
+  button.setAttribute('aria-label', `${sourceLabel(query)}: ${purpose}, the source of ${figure}`);
+  if (sample) button.setAttribute('data-sample', 'true');
+  if (others.length) button.setAttribute('data-also', others.join(','));
+  button.textContent = String(query + 1);
   sup.append(button);
   return sup;
 }

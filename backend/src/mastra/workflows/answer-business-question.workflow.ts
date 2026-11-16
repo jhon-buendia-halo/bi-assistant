@@ -9,10 +9,10 @@ import { analysePlanBlock } from './answer-business-question.prompts';
 import {
   ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS,
   analyseInputSchema,
+  answerBusinessQuestionInputSchema,
   followedUpQuestionSchema,
   planInputSchema,
   answerBusinessQuestionResultSchema,
-  turnInputSchema,
   turnSummarySchema,
   dataQualityInputSchema,
 } from './answer-business-question.schemas';
@@ -35,6 +35,12 @@ import {
   wrapUp,
   type AnswerBusinessQuestionRuntime,
 } from './answer-business-question.steps';
+import {
+  READ_IMAGES_OUTCOME_ID,
+  hasReferenceImages,
+  readImagesOutcome,
+  readImagesStep,
+} from './read-images.workflow';
 import { engineInputSchema, withContract } from './workflow-contract';
 
 // The turn of Insights Analyst as a workflow defined in code
@@ -42,7 +48,8 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // (https://mastra.ai/docs/workflows/control-flow) and suspend/resume
 // (https://mastra.ai/docs/workflows/suspend-and-resume, ADR-0043):
 //
-//   receive-question → load-catalog → interpret-follow-up
+//   .branch(the input has images → read-images) → read-images-outcome
+//   → receive-question → load-catalog → interpret-follow-up
 //   → .branch(
 //       not stopped, no follow-up → question-path: question-input
 //         → .dountil(plan-round: plan → .branch(needs clarification → clarify)
@@ -67,10 +74,17 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // with the answer. A suspended run's path (`result.suspended`) is passed
 // back unchanged to `run.resumeStream`.
 //
+// Read images (agents.md 2.15; workflows R35) describes the run's reference
+// images once, before Receive question; its notes (`imageNotes`, `''`
+// without images) travel in every step's data, Interpret follow-up's and
+// the question path's included, to Plan, Analyse and Write answer, so they
+// survive a wait and a resume (the runtime is rebuilt empty on resume, and
+// nested workflows cannot read a parent's steps).
+//
 // The nested workflows (`question-path`, `plan-round`, `analysis-path`,
 // `analysis-attempt`, `answer-path`, `explore-result`) and the mapping steps
-// `question-input`, `plan-round-outcome` and `quality-outcome` are not
-// catalogue steps: the engine reports their steps as
+// `read-images-outcome`, `question-input`, `plan-round-outcome` and
+// `quality-outcome` are not catalogue steps: the engine reports their steps as
 // `<parent>.<child>.<step>`, and the session code reads the last segment.
 // A step's bail ends only the sequence it is in, so a stopped Analyse ends
 // its attempt, the loop's condition sees `stopped`, and the answer path is
@@ -144,6 +158,7 @@ const receiveQuestionStep = createStep({
       Promise.resolve({
         question: receiveQuestion(inputData.question),
         datasets: inputData.datasets,
+        imageNotes: inputData.imageNotes,
       }),
   ),
 });
@@ -159,6 +174,7 @@ const loadCatalogStep = createStep({
     async ({ inputData }: StepParams<(typeof SCHEMAS)['load-catalog']>) => ({
       question: inputData.question,
       ...(await loadCatalog(inputData.datasets)),
+      imageNotes: inputData.imageNotes,
     }),
   ),
 });
@@ -263,12 +279,14 @@ const planStep = createStep({
         // clarifying options rest on what the data can compute.
         catalogBlock: planCatalogBlock(inputData.catalog, inputData.columns),
         ...(answered ? { clarification: answered } : {}),
+        imageNotes: inputData.imageNotes,
       });
       const output = {
         question: inputData.question,
         catalog: inputData.catalog,
         // After an answer, Plan never asks again.
         plan: planAfterAnswer(plan, answered),
+        imageNotes: inputData.imageNotes,
       };
       // A stopped turn ends here: nothing after Plan runs.
       return stopped ? params.bail({ ...output, stopped: true }) : output;
@@ -303,6 +321,7 @@ const clarifyStep = createStep({
         question: planInput.question,
         catalog: planInput.catalog,
         columns: planInput.columns,
+        imageNotes: planInput.imageNotes,
         clarification: { ...asked, answer },
       };
     },
@@ -343,6 +362,7 @@ const analyseStep = createStep({
             : undefined,
         ),
         ...(asked && answer ? { answered: { ...asked, answer } } : {}),
+        imageNotes: inputData.imageNotes,
       });
       // The agent asked the user: the run waits for the answer (api.md 138).
       if (clarification && !attemptResult.stopped) {
@@ -357,6 +377,7 @@ const analyseStep = createStep({
         plan: inputData.plan,
         attempt,
         ...attemptResult,
+        imageNotes: inputData.imageNotes,
       };
       // A stopped turn ends the attempt: the loop ends, no answer is written.
       return outcome.stopped ? params.bail(outcome) : outcome;
@@ -383,6 +404,7 @@ const validateStep = createStep({
         plan: inputData.plan,
         calls: inputData.calls,
         queries: inputData.queries,
+        imageNotes: inputData.imageNotes,
       });
     },
   ),
@@ -427,6 +449,7 @@ const checkDataQualityStep = createStep({
           ? inputData.findings
           : [...inputData.findings, ...checked.findings],
         calls: inputData.calls,
+        imageNotes: inputData.imageNotes,
         dataQuality: checked.dataQuality,
       };
     },
@@ -451,6 +474,7 @@ const writeAnswerStep = createStep({
         plan: inputData.plan,
         queries: inputData.queries,
         findings: inputData.findings,
+        imageNotes: inputData.imageNotes,
       });
       const output = { ...answer, calls: inputData.calls };
       // A stopped turn ends here: Wrap up does not run.
@@ -576,13 +600,15 @@ const questionPathWorkflow = createWorkflow({
   outputSchema: passOn,
   options: { shouldPersistSnapshot: persistWhileWaiting },
 })
-  // Plan's input: the question, the catalog and its columns.
+  // Plan's input: the question, the catalog, its columns and Read images'
+  // notes.
   .map(
     async ({ inputData }) =>
       Promise.resolve({
         question: inputData.question,
         catalog: inputData.catalog,
         columns: inputData.columns,
+        imageNotes: inputData.imageNotes,
       }),
     { id: 'question-input' },
   )
@@ -634,12 +660,13 @@ function followedUp(inputData: unknown): {
 export const answerBusinessQuestionWorkflow = createWorkflow({
   id: ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
   description:
-    'One turn of Insights Analyst: receive the question, load the catalog, then either page an earlier result the follow-up asks for, or plan (asking the user first when the question is ambiguous), analyse and validate (retried once) and write the answer.',
-  inputSchema: turnInputSchema,
+    'One turn of Insights Analyst: read the reference images when there are some, receive the question, load the catalog, then either page an earlier result the follow-up asks for, or plan (asking the user first when the question is ambiguous), analyse and validate (retried once) and write the answer.',
+  inputSchema: answerBusinessQuestionInputSchema,
   outputSchema: answerBusinessQuestionResultSchema,
   options: {
-    // The run's input is validated against `turnInputSchema` before the
-    // first step (the input node has already checked it, api.md 118, 119).
+    // The run's input is validated against
+    // `answerBusinessQuestionInputSchema` before the first step (the input
+    // node has already checked it, api.md 118, 119).
     validateInputs: true,
     // The session document holds the turn's state. Only a suspended run is
     // snapshotted (for its resume); the run's runtime object on the
@@ -647,6 +674,10 @@ export const answerBusinessQuestionWorkflow = createWorkflow({
     shouldPersistSnapshot: persistWhileWaiting,
   },
 })
+  // Reference images (agents.md 2.15, 5.11): Read images runs first only
+  // when the run has images; the map passes the input on with its notes.
+  .branch([[hasReferenceImages, readImagesStep]])
+  .map(readImagesOutcome, { id: READ_IMAGES_OUTCOME_ID })
   .then(receiveQuestionStep)
   .then(loadCatalogStep)
   .then(interpretFollowUpStep)

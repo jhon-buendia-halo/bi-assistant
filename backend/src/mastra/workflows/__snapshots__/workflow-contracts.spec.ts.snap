@@ -2,10 +2,22 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "ed2bd570ce84",
+  "contractHash": "b563ef17a0ef",
   "edges": [
     {
       "from": "start",
+      "kind": "next",
+      "label": "No images",
+      "to": "receive-question",
+    },
+    {
+      "from": "start",
+      "kind": "branch",
+      "label": "Reference images",
+      "to": "read-images",
+    },
+    {
+      "from": "read-images",
       "kind": "next",
       "to": "receive-question",
     },
@@ -105,6 +117,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "type": "textarea",
     },
     {
+      "name": "images",
+      "required": false,
+      "type": "images",
+    },
+    {
       "name": "datasets",
       "required": true,
       "type": "datasets",
@@ -117,6 +134,47 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
   ],
   "steps": [
     {
+      "id": "read-images",
+      "inputSchema": {
+        "properties": {
+          "images": {
+            "default": [],
+            "description": "The paths of the run's reference images in its workspace (inputs/images/<n>.<ext>).",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "imageCount": {
+            "description": "How many images the notes describe.",
+            "type": "number",
+          },
+          "imageNotes": {
+            "description": "The Image Reader's notes on the reference images, as Markdown; empty when there are none.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "imageNotes",
+          "imageCount",
+        ],
+        "type": "object",
+      },
+    },
+    {
       "id": "receive-question",
       "inputSchema": {
         "properties": {
@@ -126,6 +184,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "string",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "default": "",
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "question": {
             "description": "The user's question.",
@@ -148,6 +211,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's question.",
             "type": "string",
@@ -156,6 +223,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
         "required": [
           "question",
           "datasets",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -171,6 +239,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's question.",
             "type": "string",
@@ -179,6 +251,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
         "required": [
           "question",
           "datasets",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -276,6 +349,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -285,6 +362,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "question",
           "catalog",
           "columns",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -381,6 +459,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -390,6 +472,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "question",
           "catalog",
           "columns",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -631,6 +714,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             ],
             "description": "The page of an earlier result the words ask for; null: a new question, planned.",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -644,6 +731,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "question",
           "catalog",
           "columns",
+          "imageNotes",
           "followUp",
         ],
         "type": "object",
@@ -767,6 +855,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "default": "",
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -827,6 +920,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "additionalProperties": false,
@@ -921,6 +1018,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "question",
           "catalog",
           "plan",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -973,6 +1071,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "default": "",
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "description": "The analysis plan.",
@@ -1189,6 +1292,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -1198,6 +1305,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "question",
           "catalog",
           "columns",
+          "imageNotes",
           "clarification",
         ],
         "type": "object",
@@ -1281,6 +1389,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "default": "",
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "description": "The analysis plan.",
@@ -1450,6 +1563,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "additionalProperties": false,
@@ -1600,6 +1717,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "queries",
           "text",
           "stopped",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -1681,6 +1799,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "description": "The analysis plan.",
@@ -1828,6 +1950,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "queries",
           "text",
           "stopped",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -1936,6 +2059,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "ok": {
             "description": "Every check passed (the measures check is a warning only).",
@@ -2082,6 +2209,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "plan",
           "calls",
           "queries",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -2185,6 +2313,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "description": "The analysis plan.",
@@ -2321,6 +2453,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "queries",
           "findings",
           "calls",
+          "imageNotes",
           "catalog",
         ],
         "type": "object",
@@ -2427,6 +2560,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "additionalProperties": false,
@@ -2566,6 +2703,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "queries",
           "findings",
           "calls",
+          "imageNotes",
           "dataQuality",
         ],
         "type": "object",
@@ -2625,6 +2763,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "object",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
           },
           "plan": {
             "description": "The analysis plan.",
@@ -2761,6 +2903,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "queries",
           "findings",
           "calls",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -3111,6 +3254,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             ],
             "description": "The page of an earlier result the words ask for; null: a new question, planned.",
           },
+          "imageNotes": {
+            "description": "Read images' notes on the run's reference images; '' when it has none.",
+            "type": "string",
+          },
           "question": {
             "description": "The trimmed question.",
             "type": "string",
@@ -3124,6 +3271,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "question",
           "catalog",
           "columns",
+          "imageNotes",
           "followUp",
         ],
         "type": "object",
@@ -3520,10 +3668,22 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) data-readiness-assessment's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "52f8e7f5d6a1",
+  "contractHash": "598146d8a207",
   "edges": [
     {
       "from": "start",
+      "kind": "next",
+      "label": "No images",
+      "to": "resolve-dataset",
+    },
+    {
+      "from": "start",
+      "kind": "branch",
+      "label": "Reference images",
+      "to": "read-images",
+    },
+    {
+      "from": "read-images",
       "kind": "next",
       "to": "resolve-dataset",
     },
@@ -3569,14 +3729,65 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "required": false,
       "type": "textarea",
     },
+    {
+      "name": "images",
+      "required": false,
+      "type": "images",
+    },
   ],
   "steps": [
+    {
+      "id": "read-images",
+      "inputSchema": {
+        "properties": {
+          "images": {
+            "default": [],
+            "description": "The paths of the run's reference images in its workspace (inputs/images/<n>.<ext>).",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "imageCount": {
+            "description": "How many images the notes describe.",
+            "type": "number",
+          },
+          "imageNotes": {
+            "description": "The Image Reader's notes on the reference images, as Markdown; empty when there are none.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "imageNotes",
+          "imageCount",
+        ],
+        "type": "object",
+      },
+    },
     {
       "id": "resolve-dataset",
       "inputSchema": {
         "properties": {
           "dataset": {
             "description": "The dataset to assess.",
+            "type": "string",
+          },
+          "imageNotes": {
+            "default": "",
+            "description": "Read images' notes; '' when the run has no images.",
             "type": "string",
           },
           "question": {
@@ -3609,6 +3820,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "The dataset's datasource.",
             "type": "string",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's question.",
             "type": "string",
@@ -3624,6 +3839,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -3648,6 +3864,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "The dataset's datasource.",
             "type": "string",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's question.",
             "type": "string",
@@ -3663,6 +3883,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -3688,6 +3909,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "entityCount": {
             "description": "Entities in the profile.",
             "type": "number",
+          },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
           },
           "notProfiledCount": {
             "description": "Entities not column-profiled (too large or timed out).",
@@ -3716,6 +3941,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
           "entityCount",
           "relationshipCount",
           "notProfiledCount",
@@ -3748,6 +3974,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "Entities in the profile.",
             "type": "number",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "notProfiledCount": {
             "description": "Entities not column-profiled (too large or timed out).",
             "type": "number",
@@ -3775,6 +4005,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
           "entityCount",
           "relationshipCount",
           "notProfiledCount",
@@ -3837,6 +4068,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "All findings.",
             "type": "number",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "maturity": {
             "description": "The maturity band.",
             "type": "string",
@@ -3860,6 +4095,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
           "overallScore",
           "maturity",
           "findingCount",
@@ -3923,6 +4159,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "All findings.",
             "type": "number",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "maturity": {
             "description": "The maturity band.",
             "type": "string",
@@ -3946,6 +4186,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
           "overallScore",
           "maturity",
           "findingCount",
@@ -4008,6 +4249,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "All findings.",
             "type": "number",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "maturity": {
             "description": "The maturity band.",
             "type": "string",
@@ -4035,6 +4280,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
           "overallScore",
           "maturity",
           "findingCount",
@@ -4099,6 +4345,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "description": "All findings.",
             "type": "number",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "maturity": {
             "description": "The maturity band.",
             "type": "string",
@@ -4126,6 +4376,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasourceName",
           "datasourceKind",
           "tableCount",
+          "imageNotes",
           "overallScore",
           "maturity",
           "findingCount",
@@ -4252,10 +4503,22 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) map-dashboard-data's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "3230b64c0a2f",
+  "contractHash": "5adb1f3d73d3",
   "edges": [
     {
       "from": "start",
+      "kind": "next",
+      "label": "No images",
+      "to": "load-dashboard",
+    },
+    {
+      "from": "start",
+      "kind": "branch",
+      "label": "Reference images",
+      "to": "read-images",
+    },
+    {
+      "from": "read-images",
       "kind": "next",
       "to": "load-dashboard",
     },
@@ -4296,8 +4559,54 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
       "required": false,
       "type": "textarea",
     },
+    {
+      "name": "images",
+      "required": false,
+      "type": "images",
+    },
   ],
   "steps": [
+    {
+      "id": "read-images",
+      "inputSchema": {
+        "properties": {
+          "images": {
+            "default": [],
+            "description": "The paths of the run's reference images in its workspace (inputs/images/<n>.<ext>).",
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "question": {
+            "description": "The user's question.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "question",
+        ],
+        "type": "object",
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "imageCount": {
+            "description": "How many images the notes describe.",
+            "type": "number",
+          },
+          "imageNotes": {
+            "description": "The Image Reader's notes on the reference images, as Markdown; empty when there are none.",
+            "type": "string",
+          },
+        },
+        "required": [
+          "imageNotes",
+          "imageCount",
+        ],
+        "type": "object",
+      },
+    },
     {
       "id": "load-dashboard",
       "inputSchema": {
@@ -4312,6 +4621,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "string",
             },
             "type": "array",
+          },
+          "imageNotes": {
+            "default": "",
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
           },
           "question": {
             "description": "The user's instructions; by default, map the dashboard.",
@@ -4634,6 +4948,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's instructions.",
             "type": "string",
@@ -4644,6 +4962,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasets",
           "artifactName",
           "blueprint",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -4952,6 +5271,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's instructions.",
             "type": "string",
@@ -4962,6 +5285,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasets",
           "artifactName",
           "blueprint",
+          "imageNotes",
         ],
         "type": "object",
       },
@@ -5365,6 +5689,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's instructions.",
             "type": "string",
@@ -5375,6 +5703,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasets",
           "artifactName",
           "blueprint",
+          "imageNotes",
           "catalog",
           "columns",
         ],
@@ -5773,6 +6102,10 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             },
             "type": "array",
           },
+          "imageNotes": {
+            "description": "Read images' notes; '' when the run has no images.",
+            "type": "string",
+          },
           "question": {
             "description": "The user's instructions.",
             "type": "string",
@@ -5783,6 +6116,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "datasets",
           "artifactName",
           "blueprint",
+          "imageNotes",
           "catalog",
           "columns",
         ],

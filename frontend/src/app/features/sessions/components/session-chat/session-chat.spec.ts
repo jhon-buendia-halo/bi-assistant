@@ -190,7 +190,7 @@ describe('SessionChat query inspector (past-chats R70; plan 1.25.10)', () => {
     fixture.detectChanges();
     const sheet = el.querySelector('[data-testid="query-inspector-sheet"]')!;
     expect(sheet.querySelector('[data-testid="query-inspector-title"]')?.textContent).toContain('First count.');
-    expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain('Query 1 of 1');
+    expect(sheet.querySelector('[data-testid="query-inspector-position"]')?.textContent).toContain('Source 1 of 1');
 
     sheet
       .querySelector('[data-testid="query-inspector"]')!

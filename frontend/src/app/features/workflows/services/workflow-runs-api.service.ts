@@ -130,6 +130,7 @@ function stepOf(event: StreamFrame): WorkflowRunStep {
     ...(e.endedAt !== undefined ? { endedAt: e.endedAt } : {}),
     ...(e.toolCalls !== undefined ? { toolCalls: e.toolCalls } : {}),
     ...(typeof e.attempt === 'number' ? { attempt: e.attempt } : {}),
+    ...(e.story !== undefined ? { story: e.story } : {}),
   };
 }
 
@@ -318,7 +319,7 @@ export class WorkflowRunsApiService {
     );
   }
 
-  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 151). */
+  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 152). */
   pageQuery(
     id: string,
     index: number,
@@ -330,7 +331,7 @@ export class WorkflowRunsApiService {
     );
   }
 
-  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 152). */
+  /** Words turned into a page request by the result-explorer agent; stores nothing (api.md 153). */
   interpretFilter(
     id: string,
     index: number,
@@ -348,6 +349,15 @@ export class WorkflowRunsApiService {
     return this.http.get(`${this.answerUrl(id)}/queries/${index}/csv`, {
       responseType: 'blob',
     });
+  }
+
+  /**
+   * The URL of one image a run was given (api.md 151): `path` is a stored
+   * path of the run's input (`inputs/images/1.png`). Used as an `img` source,
+   * like an artifact's image.
+   */
+  inputImageUrl(id: string, path: string): string {
+    return `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/input-image?path=${encodeURIComponent(path)}`;
   }
 
   private answerUrl(id: string): string {

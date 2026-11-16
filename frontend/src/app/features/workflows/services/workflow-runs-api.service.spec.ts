@@ -4,6 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { API_BASE_URL } from '../../../core/config/api.config';
 import {
   NodeChatMessage,
   WorkflowRun,
@@ -155,7 +156,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
     });
   });
 
-  it('copies the input, timestamps and tool calls of a step event', async () => {
+  it('copies the input, timestamps, tool calls and story of a step event', async () => {
     const full = {
       id: 'answer',
       title: 'Answer',
@@ -173,6 +174,7 @@ describe('WorkflowRunsApiService, the run stream (api.md 119, 3.6)', () => {
           durationMs: 40,
         },
       ],
+      story: { headline: 'Ran 1 query on the data.', source: 'step' },
     };
     fetchSpy.and.resolveTo(
       sseResponse({ type: 'step', ...full }, { type: 'done', run: RUN }),
@@ -659,7 +661,7 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
 
   afterEach(() => http.verify());
 
-  it('posts words to the interpret-filter route and unwraps (api.md 152)', () => {
+  it('posts words to the interpret-filter route and unwraps (api.md 153)', () => {
     const view = { filters: [], sort: [], page: 1, pageSize: 50 };
     let understood = '';
     service
@@ -675,7 +677,7 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
     expect(understood).toBe('Country is Brazil');
   });
 
-  it('posts a page request to the page route (api.md 151)', () => {
+  it('posts a page request to the page route (api.md 152)', () => {
     const request = { page: 2, filters: [{ column: 'a', op: 'eq' as const, value: 'x' }] };
     let matched = -1;
     service
@@ -747,5 +749,17 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['a,b\r\n']));
     expect(size).toBe(5);
+  });
+});
+
+describe('WorkflowRunsApiService, a run input image (api.md 151)', () => {
+  it('builds the endpoint URL from the run id and the stored path', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(WorkflowRunsApiService);
+    expect(service.inputImageUrl('run 1', 'inputs/images/1.png')).toBe(
+      `${API_BASE_URL}/workflow-runs/run%201/input-image?path=inputs%2Fimages%2F1.png`,
+    );
   });
 });

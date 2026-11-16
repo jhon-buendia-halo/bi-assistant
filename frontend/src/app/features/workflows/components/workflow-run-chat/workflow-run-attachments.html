@@ -1,0 +1,67 @@
+<div
+  role="group"
+  data-testid="workflow-input-images"
+  aria-labelledby="workflow-input-images-label"
+  [attr.aria-describedby]="error() ? 'workflow-input-error-images' : null"
+  class="flex flex-col gap-1"
+>
+  <span
+    id="workflow-input-images-label"
+    [class]="showLabel() ? 'text-[12px] font-medium text-fg-muted' : 'sr-only'"
+    >{{ label() }}</span
+  >
+  <div class="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      data-testid="workflow-input-images-attach"
+      aria-label="Attach images"
+      title="Attach images"
+      [disabled]="images().length >= max()"
+      (click)="openPicker()"
+      class="btn-icon"
+    >
+      <lucide-angular [img]="Paperclip" [size]="16" />
+    </button>
+    <input
+      #file
+      type="file"
+      multiple
+      hidden
+      tabindex="-1"
+      aria-hidden="true"
+      data-testid="workflow-input-images-file"
+      [attr.accept]="accept"
+      (change)="onFiles($event)"
+    />
+    @for (src of images(); track $index) {
+      <span class="thumb">
+        <img
+          [src]="src"
+          [alt]="'Reference image ' + ($index + 1)"
+          [attr.data-testid]="'workflow-input-images-thumb-' + $index"
+        />
+        <button
+          type="button"
+          class="thumb-remove"
+          [attr.data-testid]="'workflow-input-images-remove-' + $index"
+          [attr.aria-label]="'Remove reference image ' + ($index + 1)"
+          (click)="removed.emit($index)"
+        >
+          <lucide-angular [img]="X" [size]="12" />
+        </button>
+      </span>
+    }
+  </div>
+  @if (help()) {
+    <p class="m-0 text-[12px] text-fg-muted">{{ help() }}</p>
+  }
+  @if (error(); as message) {
+    <p
+      id="workflow-input-error-images"
+      data-testid="workflow-input-error-images"
+      class="m-0 text-[12px] text-on-danger-soft"
+    >
+      {{ message }}
+    </p>
+  }
+</div>

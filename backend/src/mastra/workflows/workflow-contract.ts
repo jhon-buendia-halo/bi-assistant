@@ -147,6 +147,8 @@ const FIELD_SCHEMAS: Record<WorkflowInputFieldType, JsonSchema> = {
   dataset: { type: 'string' },
   // The path the run stores the image at.
   image: { type: 'string' },
+  // The paths the run stores the reference images at (workflows R35).
+  images: { type: 'array', items: { type: 'string' } },
   // The artifact's id.
   artifact: { type: 'string' },
   number: { type: 'number' },
@@ -354,7 +356,7 @@ function providerOf(
  * R26): every required input property of every step must be given, by the
  * closest earlier step's output property of the same name, else by an input
  * field of that name (text, textarea and dataset are strings, number a
- * number, boolean a boolean, datasets an array of strings), with a
+ * number, boolean a boolean, datasets and images arrays of strings), with a
  * compatible type: the same JSON type, arrays of compatible items, objects
  * with every required property given, required and compatible; an
  * `unknown` input accepts anything. An optional input is type-checked when

@@ -170,7 +170,7 @@ export class WorkflowRunsController {
 
   /**
    * One page of one of the answer's queries, filtered and sorted (api.md
-   * 151); the body is a `PageRequest`. Nothing is stored.
+   * 152); the body is a `PageRequest`. Nothing is stored.
    */
   @Post(':id/answer/queries/:index/page')
   async pageQuery(
@@ -187,7 +187,7 @@ export class WorkflowRunsController {
 
   /**
    * The user's words read as a view of one of the answer's queries (api.md
-   * 152); the body is `{ text, view? }`. Nothing is stored.
+   * 153); the body is `{ text, view? }`. Nothing is stored.
    */
   @Post(':id/answer/queries/:index/interpret-filter')
   async interpretFilter(
@@ -311,6 +311,20 @@ export class WorkflowRunsController {
     await streamSse(res, (send, signal) =>
       this.nodeChats.stream(prepared, send, signal),
     );
+  }
+
+  /** One reference image of a run's input, by its stored path (api.md 151). */
+  @Get(':id/input-image')
+  async inputImage(
+    @Param('id') id: string,
+    @Query('path') path: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const image = await this.runs.inputImage(id, path ?? '');
+    res.setHeader('Content-Type', image.mediaType);
+    res.setHeader('Content-Length', image.data.length);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(image.data);
   }
 
   /** A run's visual (api.md 123). */

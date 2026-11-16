@@ -161,7 +161,7 @@ All values are the ones in the code today.
 
 ### Result paging
 
-A page of a stored query's full result ([api.md](../system/api.md) 151, 153; ADR-0049).
+A page of a stored query's full result ([api.md](../system/api.md) 152, 154; ADR-0049).
 
 | Item | Value |
 |---|---|
