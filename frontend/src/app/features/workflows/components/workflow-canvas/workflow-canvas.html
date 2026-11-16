@@ -206,7 +206,22 @@
                 >{{ node.title }}</span
               >
             }
-            @if (node.subtitle && node.kind !== "agent") {
+            @if (node.kind !== "agent" && runLine(node.id); as line) {
+              <!-- During a run, what the step did instead of its id: one line, its story's headline on hover. -->
+              <span
+                class="max-w-full truncate text-[11px] leading-[14px]"
+                data-testid="workflow-node-run-line"
+                [attr.data-tone]="line.tone"
+                [attr.title]="line.title || null"
+                [class.text-on-success-soft]="line.tone === 'success'"
+                [class.text-on-warning-soft]="line.tone === 'warning'"
+                [class.text-on-danger-soft]="line.tone === 'danger'"
+                [class.text-primary]="line.tone === 'active'"
+                [class.italic]="line.tone === 'active'"
+                [class.text-fg-muted]="line.tone === 'muted'"
+                >{{ line.text }}</span
+              >
+            } @else if (node.subtitle && node.kind !== "agent") {
               <span
                 class="node-subtitle line-clamp-3 max-w-full text-[11px] leading-[14px] [overflow-wrap:anywhere] text-fg-muted"
                 [class.font-mono]="node.step !== null"
@@ -238,9 +253,14 @@
                   [attr.data-state]="story.state"
                   [class.text-primary]="story.state === 'active'"
                   [class.italic]="story.state === 'active'"
-                  [class.text-on-success-soft]="story.state === 'done'"
+                  [attr.data-concern]="story.concern ? 'true' : null"
+                  [class.text-on-success-soft]="
+                    story.state === 'done' && !story.concern
+                  "
                   [class.text-on-danger-soft]="story.state === 'failed'"
-                  [class.text-on-warning-soft]="story.state === 'asking'"
+                  [class.text-on-warning-soft]="
+                    story.state === 'asking' || story.concern
+                  "
                   [class.text-fg-muted]="
                     story.state === 'waiting' ||
                     story.state === 'stopped' ||

@@ -50,6 +50,7 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
     ).toEqual({
       headline: 'Read the catalog: 2 tables and 10 columns.',
       facts: [{ label: 'Tables', values: ['goals', 'players'], code: true }],
+      brief: '2 tables',
     });
   });
 
@@ -86,7 +87,10 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
         step('clarify', { status: 'skipped' }),
         context({ steps: [planStep] }),
       ),
-    ).toEqual({ headline: 'Skipped: nothing in the plan needed your answer.' });
+    ).toEqual({
+      headline: 'Skipped: nothing in the plan needed your answer.',
+      brief: 'Nothing to clarify',
+    });
   });
 
   it('Analyse counts its queries, the failed ones and the last rows, one fact per query', () => {
@@ -129,6 +133,7 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
         },
         { label: 'Query 3', values: ['Top 10 scorers — 10 rows'], sql: 'c' },
       ],
+      brief: '3 queries · 1 failed',
       stats: [{ value: '3', label: 'queries · 1 failed' }],
     });
   });
@@ -179,6 +184,8 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
         },
       ],
       next: 'Analyse tried once more to fix it.',
+      brief: '1 of 2 checks failed',
+      concern: true,
       stats: [{ value: '1 / 2', label: 'checks passed' }],
     });
     expect(
@@ -197,6 +204,7 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
       tell(step('check-data-quality', { status: 'skipped' }), context()),
     ).toEqual({
       headline: 'Skipped: the data quality check was off for this run.',
+      brief: 'Off for this run',
     });
     // On but not reached: left to the generic story.
     expect(
@@ -221,6 +229,8 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
       headline:
         'Checked the quality of 1 table: 2 issues could affect this answer.',
       facts: [{ label: 'Tables checked', values: ['goals'], code: true }],
+      brief: '2 issues',
+      concern: true,
     });
   });
 
@@ -247,6 +257,7 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
     ).toEqual({
       headline: 'Finished: the answer rests on 126 rows from 3 queries.',
       stats: [{ value: '126', label: 'rows read' }],
+      brief: '126 rows',
     });
   });
 

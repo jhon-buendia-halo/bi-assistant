@@ -47,6 +47,7 @@ import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
+import { WorkflowRunStory } from '../workflow-run-story/workflow-run-story';
 import {
   IMAGE_ACCEPT,
   isImageDataUrl,
@@ -83,6 +84,7 @@ const FORM_CONTROLS =
     ReadinessHistory,
     RunVisual,
     WorkflowRunInputRequired,
+    WorkflowRunStory,
     WorkflowRunTeam,
   ],
   templateUrl: './workflow-run-chat.html',

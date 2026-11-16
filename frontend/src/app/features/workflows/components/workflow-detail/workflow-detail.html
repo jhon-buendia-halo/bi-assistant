@@ -81,6 +81,7 @@
           [violations]="designer.contractViolations()"
           [attempts]="designer.nodeAttempts()"
           [agents]="designer.agentStories()"
+          [runLines]="designer.runLines()"
           (selectNode)="designer.select($event)"
           (openNode)="designer.openNode($event)"
           (execute)="execute()"

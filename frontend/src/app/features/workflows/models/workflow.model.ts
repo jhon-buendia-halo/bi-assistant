@@ -291,6 +291,10 @@ export interface StepStory {
   /** What came next because of it (a branch taken, a retry). */
   next?: string;
   stats?: StoryStat[];
+  /** A few words for the canvas node: `9 tables`, `3 queries`, `Off for this run`. */
+  brief?: string;
+  /** It finished but left something to look at (a failed check, quality issues). */
+  concern?: true;
   source: 'step' | 'generic';
 }
 

@@ -14,6 +14,7 @@ function story(
     agent: { key: `k-${stepId}`, name, role: '' },
     state,
     line: '',
+    concern: false,
     doing: '',
     sentence: null,
     durationMs: null,

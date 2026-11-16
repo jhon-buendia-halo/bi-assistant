@@ -27,6 +27,11 @@ import { DataMode } from '../workflow-data-view/workflow-data-view.util';
 import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { WorkflowStepStory } from '../workflow-step-story/workflow-step-story';
+import {
+  RunTimelineEntry,
+  runStats,
+  runTimeline,
+} from '../../services/workflow-run-story';
 import { runStepStatusLabel } from '../../services/workflows.util';
 import { NodeInspection } from '../../models/workflow-node.model';
 import {
@@ -59,15 +64,6 @@ export interface LogRow {
   why: string | null;
   /** Its share of the run's step time, 0..1, for its bar; null when unknown. */
   share: number | null;
-}
-
-/** One step of the All nodes timeline (ui.md 4.4b). */
-export interface TimelineEntry {
-  node: NodeInspection;
-  state: ProgressState;
-  /** The first line of its story, else what its state says. */
-  line: string;
-  time: string;
 }
 
 /** A skipped step's reason as its row's second line: its story's headline, without `Skipped: `. */
@@ -169,54 +165,12 @@ export class WorkflowStatePanel {
   });
 
   /** The All nodes timeline: every step, in order, told in one line each. */
-  readonly timeline = computed<TimelineEntry[]>(() =>
-    this.rows()
-      .filter((row) => row.node.kind === 'code' || row.node.kind === 'agent')
-      .map((row) => ({
-        node: row.node,
-        state: row.state,
-        line:
-          row.node.run?.story?.headline ??
-          (row.state === 'pending'
-            ? 'Not run yet.'
-            : row.state === 'current'
-              ? 'Running…'
-              : row.state === 'waiting'
-                ? 'Waiting for your answer.'
-                : row.label + '.'),
-        time: row.state === 'skipped' ? '' : row.time,
-      })),
+  readonly timeline = computed<RunTimelineEntry[]>(() =>
+    runTimeline(this.nodes()),
   );
 
-  /**
-   * The run's figures above the timeline: how long it took, then the
-   * figures its steps' stories give (each step's last attempt), in order.
-   */
-  readonly stats = computed(() => {
-    const runs = this.nodes()
-      .filter((node) => node.kind === 'code' || node.kind === 'agent')
-      .flatMap((node) => node.attempts ?? (node.run ? [node.run] : []));
-    if (!runs.length) return [];
-    const starts = runs.flatMap((run) =>
-      run.startedAt ? [Date.parse(run.startedAt)] : [],
-    );
-    const ends = runs.flatMap((run) =>
-      run.endedAt ? [Date.parse(run.endedAt)] : [],
-    );
-    const took =
-      starts.length && ends.length
-        ? Math.max(...ends) - Math.min(...starts)
-        : null;
-    const fromStories = this.nodes().flatMap(
-      (node) => node.run?.story?.stats ?? [],
-    );
-    return [
-      ...(took !== null && took >= 0
-        ? [{ value: formatNodeDuration(took), label: 'to run' }]
-        : []),
-      ...fromStories,
-    ];
-  });
+  /** The run's figures above the timeline (`runStats`). */
+  readonly stats = computed(() => runStats(this.nodes()));
 
   readonly selected = computed(
     () => this.nodes().find((n) => n.nodeId === this.selectedId()) ?? null,

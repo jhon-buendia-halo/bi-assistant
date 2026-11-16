@@ -32,6 +32,7 @@ import {
   WorkflowWaitingFor,
 } from '../models/workflow.model';
 import { AgentStepStory, agentStepStories } from './agent-step-story';
+import { RunLine, stepRunLine } from './workflow-run-story';
 import {
   NodeInspection,
   WorkflowNodeStatus,
@@ -394,6 +395,20 @@ export class WorkflowDesigner {
       running: this.running() || status === 'running' || status === 'suspended',
       liveToolCalls: this.toolCalls(),
     });
+  });
+
+  /**
+   * Each code step's line on the canvas while a run is shown (ui.md 4.4b):
+   * its story's few words and its time, or its state; by step id.
+   */
+  readonly runLines = computed<Record<string, RunLine>>(() => {
+    const lines: Record<string, RunLine> = {};
+    for (const node of this.nodes()) {
+      if (node.kind !== 'code') continue;
+      const line = stepRunLine(node.run);
+      if (line) lines[node.nodeId] = line;
+    }
+    return lines;
   });
 
   /** How many times each step ran in the run shown (a loop's retry runs one twice); empty with no run. */

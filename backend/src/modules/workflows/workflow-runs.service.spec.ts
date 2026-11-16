@@ -648,6 +648,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       // Its story is told as it ends (ui.md 4.4b, Logs Story).
       story: {
         headline: 'Ran 1 query on the data.',
+        brief: '1 query',
         stats: [{ value: '1', label: 'query' }],
         source: 'step',
       },
@@ -854,6 +855,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
     // A step the stop kept from running says so (ui.md 4.4b, Logs Story).
     const notReached = {
       headline: 'Did not run: the run was stopped before it got here.',
+      brief: 'Not reached',
       source: 'generic',
     };
     expect(run.steps.slice(3)).toEqual([
@@ -873,6 +875,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         endedAt: expect.any(String) as string,
         story: {
           headline: 'You stopped the analysis before it ran a query.',
+          brief: 'No queries',
           stats: [{ value: '0', label: 'queries' }],
           source: 'step',
         },
@@ -889,6 +892,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         status: 'skipped',
         story: {
           headline: 'Skipped: the data quality check was off for this run.',
+          brief: 'Off for this run',
           source: 'step',
         },
       },

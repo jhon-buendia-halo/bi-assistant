@@ -1604,7 +1604,9 @@ type StepStory = {
   headline: string;     // one sentence: what the step did, or why it did not run
   facts?: { label: string; values: string[]; code?: true; verdict?: 'passed' | 'failed'; sql?: string }[];   // `sql`: a query fact's statement (at most 4 000 characters), to open it among the answer's queries
   next?: string;        // what came next because of it (a branch taken, a retry)
-  stats?: { value: string; label: string }[];   // the run's figures this step accounts for (the All nodes header)
+  stats?: { value: string; label: string }[];   // the run's figures this step accounts for (How it ran, the Logs' All nodes)
+  brief?: string;       // a few words for the canvas node: `9 tables`, `3 queries · 1 failed`, `1 of 5 checks failed`, `Off for this run`, `Not reached`
+  concern?: true;       // it finished but left something to look at: a failed check, quality issues, an analysis without a query
   source: 'step' | 'generic';  // `step`: the workflow's own storyteller; `generic`: its output fields labelled by their schema descriptions
 };
 

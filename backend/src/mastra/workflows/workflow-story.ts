@@ -41,6 +41,14 @@ export interface StepStory {
   next?: string;
   /** The run's figures this step accounts for (its last attempt's count). */
   stats?: StoryStat[];
+  /**
+   * A few words for the canvas node (ui.md 4.4b): `9 tables`, `3 queries`,
+   * `1 of 5 checks failed`, `Off for this run`; absent when the headline's
+   * state says it all.
+   */
+  brief?: string;
+  /** The step finished but left something to look at (a failed check, quality issues). */
+  concern?: true;
   source: 'step' | 'generic';
 }
 
@@ -189,6 +197,7 @@ export function genericStepStory(
   if (step.status === 'skipped') {
     return {
       headline: 'Skipped: the run took another path.',
+      brief: 'Another path taken',
       source: 'generic',
     };
   }
@@ -252,6 +261,7 @@ export function tellStep(
       headline: `Did not run: the run ${
         context.runStatus === 'stopped' ? 'was stopped' : 'failed'
       } before it got here.`,
+      brief: 'Not reached',
       source: 'generic',
     };
   }

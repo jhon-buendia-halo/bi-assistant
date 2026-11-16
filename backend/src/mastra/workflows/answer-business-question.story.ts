@@ -70,13 +70,18 @@ function loadCatalog(step: StoryStep): Told | undefined {
       ? known.reduce((sum, count) => sum + count, 0)
       : null;
   if (!names.length) {
-    return { headline: 'Found no tables in the datasets of this run.' };
+    return {
+      headline: 'Found no tables in the datasets of this run.',
+      brief: 'No tables',
+      concern: true,
+    };
   }
   return {
     headline: `Read the catalog: ${plural(names.length, 'table')}${
       columns !== null ? ` and ${plural(columns, 'column')}` : ''
     }.`,
     facts: [{ label: 'Tables', values: capList(names), code: true }],
+    brief: plural(names.length, 'table'),
   };
 }
 
@@ -111,10 +116,13 @@ function plan(step: StoryStep): Told | undefined {
   const ask = clarification?.['question'];
   const answered = record(step.input?.['clarification']);
   let next: string;
+  let brief: string | undefined;
   if (planned['needsClarification'] === true && typeof ask === 'string') {
     next = `Something in the question changes the analysis, so Clarify asks you: ${quoted(ask)}`;
+    brief = 'Needs your answer';
   } else if (answered && typeof answered['answer'] === 'string') {
     next = `It planned with your answer ${quoted(answered['answer'], 120)}, then Analyse ran.`;
+    brief = 'Planned with your answer';
   } else {
     next =
       'Nothing was ambiguous, so Clarify was skipped and Analyse ran next.';
@@ -123,6 +131,7 @@ function plan(step: StoryStep): Told | undefined {
     headline: `Read the question as ${quoted(restated)}`,
     ...(facts.length ? { facts } : {}),
     next,
+    ...(brief ? { brief } : {}),
   };
 }
 
@@ -132,7 +141,10 @@ function clarify(step: StoryStep, context: StoryContext): Told | undefined {
     if (!planned) return undefined;
     return planned['needsClarification'] === true
       ? undefined
-      : { headline: 'Skipped: nothing in the plan needed your answer.' };
+      : {
+          headline: 'Skipped: nothing in the plan needed your answer.',
+          brief: 'Nothing to clarify',
+        };
   }
   const clarification = record(step.output?.['clarification']);
   const question = clarification?.['question'];
@@ -143,6 +155,7 @@ function clarify(step: StoryStep, context: StoryContext): Told | undefined {
   return {
     headline: `Asked you ${quoted(question)} and you answered ${quoted(answer, 120)}.`,
     next: 'Plan planned again with your answer.',
+    brief: 'You answered',
   };
 }
 
@@ -263,6 +276,13 @@ function analyse(step: StoryStep): Told | undefined {
   return {
     headline: `${prefix}${headline}`,
     ...(facts.length ? { facts } : {}),
+    brief: queries.length
+      ? `${plural(queries.length, 'query', 'queries')}${failed ? ` · ${failed} failed` : ''}`
+      : 'No queries',
+    // An analysis that finished without querying the data is worth a look; a stopped one is not.
+    ...(!queries.length && step.status === 'success'
+      ? { concern: true as const }
+      : {}),
     stats: [
       {
         value: String(queries.length),
@@ -307,6 +327,10 @@ function validate(step: StoryStep): Told | undefined {
         check['passed'] === true ? ('passed' as const) : ('failed' as const),
     })),
     next,
+    brief: failedCount
+      ? `${failedCount} of ${plural(checks.length, 'check')} failed`
+      : `${passed}/${checks.length} checks passed`,
+    ...(failedCount ? { concern: true as const } : {}),
     stats: [{ value: `${passed} / ${checks.length}`, label: 'checks passed' }],
   };
 }
@@ -318,13 +342,20 @@ function checkDataQuality(
   if (step.status === 'skipped') {
     return context.runInput['checkDataQuality'] === true
       ? undefined
-      : { headline: 'Skipped: the data quality check was off for this run.' };
+      : {
+          headline: 'Skipped: the data quality check was off for this run.',
+          brief: 'Off for this run',
+        };
   }
   const summary = record(step.output?.['dataQuality']);
   if (!summary) return undefined;
   const error = summary['error'];
   if (typeof error === 'string' && error) {
-    return { headline: `Could not check the data quality: ${clip(error)}` };
+    return {
+      headline: `Could not check the data quality: ${clip(error)}`,
+      brief: 'Could not check',
+      concern: true,
+    };
   }
   const tables = strings(summary['tables']);
   const issues = typeof summary['issues'] === 'number' ? summary['issues'] : 0;
@@ -351,6 +382,8 @@ function checkDataQuality(
         : 'nothing found that affects this answer'
     }.`,
     ...(facts.length ? { facts } : {}),
+    brief: issues ? plural(issues, 'issue') : 'No issues',
+    ...(issues ? { concern: true as const } : {}),
   };
 }
 
@@ -388,6 +421,7 @@ function wrapUp(step: StoryStep): Told | undefined {
   return {
     headline: `Finished: the answer rests on ${plural(rows, 'row')} from ${plural(queries, 'query', 'queries')}.`,
     stats: [{ value: rows.toLocaleString('en-US'), label: 'rows read' }],
+    brief: plural(rows, 'row'),
   };
 }
 
