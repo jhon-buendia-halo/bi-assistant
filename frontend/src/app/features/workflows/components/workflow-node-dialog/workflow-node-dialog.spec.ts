@@ -331,6 +331,62 @@ describe('WorkflowNodeDialog', () => {
       ).toBe('true');
     });
 
+    describe('resizing the chat pane', () => {
+      const key = 'qti.workflow-ndv-chat.width';
+      beforeEach(() => localStorage.removeItem(key));
+      afterEach(() => localStorage.removeItem(key));
+
+      function handle(): HTMLElement {
+        return byId('workflow-ndv-chat-resize')!;
+      }
+      function press(k: string): void {
+        handle().dispatchEvent(
+          new KeyboardEvent('keydown', { key: k, bubbles: true }),
+        );
+        fixture.detectChanges();
+      }
+
+      /** Gives the dialog a fixed width, whatever the test browser's window. */
+      async function widenDialog(px: number): Promise<void> {
+        const dialog = byId('workflow-ndv')!;
+        dialog.style.right = 'auto';
+        dialog.style.width = `${px}px`;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        fixture.detectChanges();
+      }
+
+      it('opens at the kept width, as a labelled separator', async () => {
+        localStorage.setItem(key, '360');
+        openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
+        await widenDialog(1600);
+        expect(handle().getAttribute('role')).toBe('separator');
+        expect(handle().getAttribute('aria-label')).toBe('Resize chat');
+        expect(handle().getAttribute('aria-valuenow')).toBe('360');
+        expect(byId('workflow-ndv-chat-pane')!.style.width).toBe('360px');
+      });
+
+      it('never leaves the artifact less than 480 px', async () => {
+        localStorage.setItem(key, '1500');
+        openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
+        await widenDialog(1200);
+        const room = byId('workflow-ndv-artifact-layout')!.clientWidth;
+        const width = Number(handle().getAttribute('aria-valuenow'));
+        expect(width).toBe(Math.floor(Math.min(room * 0.6, room - 480)));
+        expect(handle().getAttribute('aria-valuemax')).toBe(String(width));
+      });
+
+      it('goes to its least width with Home, keeps it, and resets on double-click', () => {
+        openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
+        press('Home');
+        expect(handle().getAttribute('aria-valuenow')).toBe('320');
+        expect(localStorage.getItem(key)).toBe('320');
+
+        handle().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        fixture.detectChanges();
+        expect(localStorage.getItem(key)).toBe('400');
+      });
+    });
+
     it('stays mounted while the artifact changes view, so the conversation is kept', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
       const panel = byId('workflow-node-chat')!;
