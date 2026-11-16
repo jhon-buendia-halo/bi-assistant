@@ -62,6 +62,10 @@ export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 export const IMAGE_READER_AGENT_KEY = 'image-reader';
 /** Its name: the Read images step's agent. */
 export const IMAGE_READER_AGENT_NAME = 'Image Reader';
+/** The agent of Review a Website (agents.md 2.16, 5.19). */
+export const SITE_REVIEWER_AGENT_KEY = 'site-reviewer';
+/** Its name. */
+export const SITE_REVIEWER_AGENT_NAME = 'Site Reviewer';
 
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
@@ -71,6 +75,7 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   DATA_MAPPER_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
   QUERY_EXPLAINER_AGENT_KEY,
+  SITE_REVIEWER_AGENT_KEY,
   'visualization',
   'sql-fixer',
   'sql-verifier',

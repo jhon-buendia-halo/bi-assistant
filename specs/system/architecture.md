@@ -1240,6 +1240,29 @@ flowchart LR
   - **B — Mastra's `watch`/`cancel` on the workflow run:** rejected; internal API, every agent step would be rewritten off the session turn path, and the evals would change.
   - **C — Keep the stream open from a root frontend service:** rejected; a reload or closed window still stops the run, and each background run holds one of 6 connections per origin.
 
+#### ADR-0049 — Review a Website drives the computer's own browser from the backend, measures before it asks a model, and keeps site sign-ins encrypted
+- **Status:** Accepted
+- **Date:** 2026-11-16
+- **Context:**
+  - The `site-mapping-agent` prototype crawls a site with Playwright, screenshots every page per screen size and sends each full-page screenshot to a vision model for QA. The user asked to bring its goal into the app as a workflow (roadmap 1.27).
+  - The backend runs as Electron-as-Node (desktop) or plain Node (npm package): neither has a browser Playwright can drive. Bundling Chromium adds about 150 MB to the Windows installer; the only installer is Windows, where Microsoft Edge is always present.
+  - A vision model is costly per page and screen and imprecise on what can be measured (contrast ratios, overlap, sizes); its coordinates drift.
+  - Many sites to review need a sign-in, often SSO with MFA.
+- **Decision:**
+  - **Browser:** `playwright-core` (no bundled browser) in the backend launches the machine's Microsoft Edge (`channel: 'msedge'`), else Google Chrome; `SITE_REVIEW_BROWSER_PATH` names another executable (tests, CI). `playwright-core` and `axe-core` stay outside the backend bundle (they read their own files). No `sharp`: crops and thumbnails come from Playwright's own screenshots.
+  - **Measure first:** phase 1 has no model call; findings come from axe and a DOM snapshot read by pure rules, each with its element, measured value, rule and crop. A vision review per page template comes in phase 2, on top of these.
+  - **Sign-in:** captured by the user in a visible browser window the run opens while it waits (suspend, ADR-0043); the window's storage state is saved per origin in `site_signins`, encrypted with `CryptoService` (data-model 2.3, 3.19). The browser handle lives in the service, never in a snapshot.
+- **Consequences:**
+  - A machine with neither Edge nor Chrome cannot run the workflow; the step says so.
+  - The backend now starts a browser process per step of a run; GET navigation only, same origin, an exclusion pattern for sign-out and delete links.
+  - Screenshots of signed-in pages stay in the run's workspace on the user's computer.
+  - **Stack-neutral:** a rebuild needs a headless browser driver, an accessibility engine, a store for an encrypted session per site, and a run that can wait for the user.
+- **Alternatives considered:**
+  - **Bundle Chromium:** rejected, about 150 MB more per installer for a browser Windows already has.
+  - **A hidden Electron `BrowserWindow` in the main process:** rejected, desktop only (the npm package has no Electron) and a new IPC path.
+  - **Vision on every page, as the prototype:** rejected for phase 1, the cost and the imprecision above.
+  - **Username and password filled by the crawler:** rejected, breaks on SSO and MFA and stores passwords.
+
 ## Level 4 — Code
 
 ```mermaid

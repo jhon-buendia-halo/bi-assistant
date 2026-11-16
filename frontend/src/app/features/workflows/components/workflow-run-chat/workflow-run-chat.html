@@ -135,6 +135,42 @@
         />
       }
 
+      @if (liveCodeProgress(); as progress) {
+        <!-- A running code step's own progress (Review a Website's pages) -->
+        <div
+          class="flex flex-col gap-1.5"
+          data-testid="workflow-run-progress"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="flex min-w-0 items-center gap-2">
+            <lucide-angular
+              [img]="Loader2"
+              [size]="14"
+              class="shrink-0 animate-spin text-fg-muted"
+            />
+            <span class="text-[13px] font-medium text-fg">{{
+              progress.title
+            }}</span>
+          </div>
+          <p
+            class="m-0 min-w-0 truncate rounded bg-surface-muted px-2 py-1 text-[12px] text-fg"
+            data-testid="workflow-run-progress-latest"
+          >
+            {{ progress.latest }}
+          </p>
+          @if (progress.recent.length) {
+            <ul class="m-0 flex list-none flex-col gap-0.5 p-0 pl-2">
+              @for (line of progress.recent; track $index) {
+                <li class="min-w-0 truncate text-[12px] text-fg-muted">
+                  {{ line }}
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+
       @if (liveAgentStep()) {
         <!-- The running agent step, live: Thinking, its tool calls and the answer forming -->
         <div class="flex flex-col gap-2" data-testid="workflow-run-live">
@@ -389,7 +425,7 @@
         <form
           data-testid="workflow-run-composer"
           aria-label="Input"
-          class="composer flex flex-col gap-2"
+          class="composer composer-form flex flex-col gap-2"
           [class.composer-dragging]="dragging()"
           (submit)="$event.preventDefault(); designer.execute()"
           (paste)="onPaste($event)"
@@ -397,6 +433,27 @@
           (dragleave)="dragging.set(false)"
           (drop)="onDrop($event)"
         >
+          @if (inputFoldable()) {
+            <!-- A run is shown: its input folds away so the result keeps the room -->
+            <button
+              type="button"
+              data-testid="workflow-run-input-toggle"
+              [attr.aria-expanded]="!inputFolded()"
+              (click)="inputOpen.set(!inputOpen())"
+              class="flex items-center gap-1.5 self-start rounded-md px-1 py-0.5 text-[12px] text-fg-muted hover:bg-surface-muted hover:text-fg"
+            >
+              <lucide-angular
+                [img]="inputFolded() ? ChevronRight : ChevronDown"
+                [size]="13"
+              />
+              <span>{{
+                inputFolded()
+                  ? "Show input (" + composerFields().length + " fields)"
+                  : "Hide input"
+              }}</span>
+            </button>
+          }
+          @if (!inputFolded()) {
           @for (field of composerFields(); track field.name) {
             @switch (field.type) {
               @case ("boolean") {
@@ -452,50 +509,12 @@
                       No datasets yet — create one in Datasets first.
                     </p>
                   } @else {
-                    <ul
-                      class="m-0 flex max-h-[76px] list-none flex-wrap gap-1.5 overflow-y-auto p-0"
-                    >
-                      @for (
-                        dataset of datasetChoices(field);
-                        track dataset.name
-                      ) {
-                        <li>
-                          <button
-                            type="button"
-                            [attr.aria-pressed]="
-                              designer.picked(field.name).includes(dataset.name)
-                            "
-                            [attr.title]="dataset.tables.length + ' entities'"
-                            (click)="
-                              designer.toggleDataset(field.name, dataset.name)
-                            "
-                            class="dataset-pill"
-                          >
-                            @if (
-                              designer.picked(field.name).includes(dataset.name)
-                            ) {
-                              <lucide-angular
-                                [img]="CircleCheck"
-                                [size]="13"
-                                class="shrink-0 text-primary"
-                              />
-                            } @else {
-                              <lucide-angular
-                                [img]="Database"
-                                [size]="13"
-                                class="shrink-0 text-fg-muted"
-                              />
-                            }
-                            <span class="max-w-[200px] truncate">{{
-                              dataset.name
-                            }}</span>
-                            <span class="sr-only"
-                              >, {{ dataset.tables.length }} entities</span
-                            >
-                          </button>
-                        </li>
-                      }
-                    </ul>
+                    <app-dataset-picker
+                      [datasets]="datasetChoices(field)"
+                      [selected]="designer.picked(field.name)"
+                      [invalid]="fieldError(field.name) !== null"
+                      (selectedChange)="designer.setInput(field.name, $event)"
+                    />
                   }
                   @if (fieldError(field.name); as message) {
                     <p
@@ -740,6 +759,7 @@
               }
             }
           }
+          }
           @if (w.runRequirement) {
             <p
               data-testid="workflow-run-requirement"
@@ -757,7 +777,9 @@
               {{ message }}
             </p>
           }
-          <div class="flex flex-wrap items-center justify-end gap-2">
+          <div
+            class="composer-actions flex flex-wrap items-center justify-end gap-2"
+          >
             @if (designer.running()) {
               <button
                 type="button"
