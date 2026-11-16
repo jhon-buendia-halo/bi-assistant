@@ -610,6 +610,58 @@ Saving a dataset disappeared when the user opened another screen, and the datase
 - **Acceptance:** Jest tests for the registry and the two routes; Karma tests for the designer (leaving does not abort, Stop calls the endpoint, re-attach rebuilds the live view); a Playwright scenario: start a run, leave, the rail counts it, return, the live view is there, the answer lands.
 - **Notes:** rejected: B (Mastra's `watch`/`cancel`, internal API, every agent step rewritten, evals), C (frontend-only, a reload stops the run, 6 connections per origin).
 
+### Milestone 1.27 — Explore a query's full result: page, filter, sort (M1-27)
+
+A query that returns thousands of rows showed at most 200 of them; the rest was reachable only as a CSV. The query inspector now pages, sorts and filters any agent query's full result on the server, a new auxiliary agent, `result-explorer`, turns the user's words ("only Brazil, newest first", "next page") into that view, chat agents get an `explore_result` tool, and a follow-up of Answer a Business Question over the earlier result pages it instead of planning a new analysis. Requested on 2026-11-15 (Free style); approach B of three picked by the user. Epic spec: [specs/epics/M1-27/spec.md](specs/epics/M1-27/spec.md). Plan and contract: [docs/plans/m1-27-result-explorer.md](docs/plans/m1-27-result-explorer.md). ADR-0049.
+
+#### 1.27.1 — Paged SQL builder and the connectors' paged read  `🚧 In progress`
+- **Intent:** read any page of a stored query's result, filtered and sorted, without loading the whole result.
+- **Scope:** per plan 1.27.1: `paged-sql.ts` (wrapper, quoting and placeholders per dialect, predicates, default order), `runPagedSql` on the Postgres, Databricks and REST connectors and `DatasourcesService`; datasources R37 and R52; ADR-0049.
+- **Out of scope:** routes and UI; raw dataset browsing (datasets R22).
+- **Acceptance:** `paged-sql.spec.ts`, the REST connector on real SQLite, the Databricks named parameters.
+
+#### 1.27.2 — Page engine and the page routes  `🚧 In progress`
+- **Intent:** one server endpoint per host kind that answers a `PageRequest` for any stored query.
+- **Scope:** per plan 1.27.2: `result-view.ts`, `page()` in the query-evidence services, api.md 151 and 153; data-model, non-functional (Result paging, N72).
+- **Out of scope:** the natural-language filter (1.27.4).
+- **Acceptance:** Jest tests for validation, default order, samples refused, nothing stored.
+
+#### 1.27.3 — Query inspector: pager, sort and column filters  `🚧 In progress`
+- **Intent:** the Result tab of the query inspector pages, sorts and filters the full result, on every host.
+- **Scope:** per plan 1.27.3: the `query-result` component, `page()` on both evidence adapters; ui.md 4.12.2; agent-answers R76, R79–R81.
+- **Out of scope:** CSV of a filtered view.
+- **Acceptance:** Karma tests; `frontend/e2e/query-result-paging.spec.ts`.
+
+#### 1.27.4 — The result-explorer agent and the interpret-filter routes  `🚧 In progress`
+- **Intent:** the user's words become a structured view (filters, sort, page) over the result's known columns, never free SQL.
+- **Scope:** per plan 1.27.4: `result-explorer` (one model call, no tools), `specOf`, api.md 152 and 154; agents.md 1.1, 2.15.
+- **Out of scope:** routing a follow-up (1.27.8).
+- **Acceptance:** `result-explorer.prompts.spec.ts`; route tests with a stubbed model.
+
+#### 1.27.5 — Query inspector: filter in words and explore records  `🚧 In progress`
+- **Intent:** a "Filter in words" box in the Result tab, and an explore answer's query opening on the view it showed.
+- **Scope:** per plan 1.27.5: `interpretFilter` on both adapters; agent-answers R82, R83; ui.md.
+- **Out of scope:** the chat tool (1.27.7).
+- **Acceptance:** Karma tests; `frontend/e2e/query-result-filter-text.spec.ts`.
+
+#### 1.27.6 — result-explorer evals  `🚧 In progress`
+- **Intent:** measure that the agent reads paging, filtering and sorting requests right and refuses new questions.
+- **Scope:** per plan 1.27.6: the eval set (13 cases on the World Cup fixture), its checks; agents.md 8.1.
+- **Out of scope:** other agents' sets.
+- **Acceptance:** checks unit-tested on one real reply; a baseline run recorded.
+
+#### 1.27.7 — The explore_result tool for chat agents  `🚧 In progress`
+- **Intent:** in a chat (node chats, Try it, user agents) "next page" or "only Brazil" over an earlier query answers with that page, linked to the inspector.
+- **Scope:** per plan 1.27.7: `explore_result`, `contextQueries`, the captured record and its evidence `view`; agents.md 2.1, 2.11, 3.15, 4.2; agent-answers R84.
+- **Out of scope:** Answer a Business Question's own follow-up (1.27.8).
+- **Acceptance:** Jest tests; assistant and insights-analyst evals against base.
+
+#### 1.27.8 — A follow-up over an earlier result pages it in Answer a Business Question  `🚧 In progress`
+- **Intent:** a follow-up run that asks for another page, a filter or an order over the earlier answer's result answers with that page instead of planning a new analysis.
+- **Scope:** per plan 1.27.8: `interpret-follow-up`, the nested `explore-result` (`page-result`, `page-answer`), the catalogue and contract snapshot; workflows R1, R2, R27, R35; agents.md 5.11, 5.12.
+- **Out of scope:** changing `analysis-planner`.
+- **Acceptance:** stub workflow tests for both paths; `frontend/e2e/result-follow-up.spec.ts`; insights-analyst evals against base.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

@@ -82,6 +82,102 @@ export interface QueryRerunResult {
   ranAt: string;
 }
 
+// Paging, filtering and sorting a stored query's full result (roadmap 1.27,
+// ADR-0049). A copy of the wire types of the backend's
+// `datasources/connectors/paged-sql.types.ts`: change both together.
+
+export const FILTER_OPS = [
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'between',
+  'in',
+  'not_in',
+  'contains',
+  'not_contains',
+  'starts_with',
+  'is_null',
+  'not_null',
+] as const;
+export type FilterOp = (typeof FILTER_OPS)[number];
+
+/** The inspector's label of each operator (plan 1.27, 0.5). */
+export const FILTER_OP_LABELS: Record<FilterOp, string> = {
+  eq: 'is',
+  neq: 'is not',
+  gt: 'greater than',
+  gte: 'at least',
+  lt: 'less than',
+  lte: 'at most',
+  between: 'between',
+  in: 'is one of',
+  not_in: 'is not one of',
+  contains: 'contains',
+  not_contains: 'does not contain',
+  starts_with: 'starts with',
+  is_null: 'is empty',
+  not_null: 'is not empty',
+};
+
+export type FilterValue = string | number | boolean;
+
+export interface FilterSpec {
+  column: string;
+  op: FilterOp;
+  value?: FilterValue;
+  valueTo?: FilterValue;
+  values?: FilterValue[];
+}
+
+export interface SortSpec {
+  column: string;
+  direction: 'asc' | 'desc';
+}
+
+export interface PageRequest {
+  page?: number;
+  pageSize?: number;
+  filters?: FilterSpec[];
+  sort?: SortSpec[];
+}
+
+export type ColumnKind = 'number' | 'text' | 'boolean' | 'date' | 'unknown';
+
+export interface ResultView {
+  filters: FilterSpec[];
+  sort: SortSpec[];
+  page: number;
+  pageSize: number;
+  matchedRows?: number;
+  capped?: boolean;
+}
+
+/** One page of a stored query's result. It is shown, never stored. */
+export interface PageResult {
+  columns: string[];
+  columnKinds: Record<string, ColumnKind>;
+  rows: Record<string, unknown>[];
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  matchedRows: number;
+  capped: boolean;
+  view: ResultView;
+  ranAt: string;
+}
+
+export interface FilterInterpretation {
+  request: PageRequest;
+  understood: string;
+  rejected?: string[];
+}
+
+export const PAGE_SIZE_DEFAULT = 50;
+export const PAGE_MAX_ROWS = 50_000;
+
 /**
  * What the inspector needs from its host. The Run panel provides the adapter
  * over a stored run; a session chat can provide its own later. Each call that
