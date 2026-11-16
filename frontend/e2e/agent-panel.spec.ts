@@ -346,9 +346,10 @@ test('Insights Analyst shows its code-defined steps advancing', async ({
   expect(run.workflow?.phases.map((phase) => phase.title)).toEqual(
     V2_STEP_TITLES,
   );
-  // Every step but Clarify (4) and Check data quality (7), the branches a
-  // clear question without the data-quality box skips.
-  expect(run.workflow?.done).toEqual([1, 2, 3, 5, 6, 8, 9]);
+  // Every step but Read images (1, no image), Clarify (6), Check data
+  // quality (9) and the explore path (12, 13): the branches a first, clear
+  // question without images or the data-quality box skips.
+  expect(run.workflow?.done).toEqual([2, 3, 4, 5, 7, 8, 10, 11]);
   expect(stepStatuses(result, 'clarify').at(-1)).toBe('skipped');
   expect(stepStatuses(result, 'check-data-quality').at(-1)).toBe('skipped');
 });
