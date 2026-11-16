@@ -2,7 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { QueryRerunResult } from '../../../shared/query-evidence/query-evidence.model';
+import {
+  PageRequest,
+  PageResult,
+  QueryRerunResult,
+} from '../../../shared/query-evidence/query-evidence.model';
 import {
   ChatMessage,
   InteractiveVisualization,
@@ -299,6 +303,19 @@ export class SessionsApiService {
     return this.http.post<{ ok: boolean; result: QueryRerunResult }>(
       `${this.answerUrl(id, message)}/queries/${index}/rerun`,
       {},
+    );
+  }
+
+  /** One page of a query's full result, filtered and sorted; stores nothing (api.md 153). */
+  pageQuery(
+    id: string,
+    message: number,
+    index: number,
+    request: PageRequest,
+  ): Observable<{ ok: boolean; result: PageResult }> {
+    return this.http.post<{ ok: boolean; result: PageResult }>(
+      `${this.answerUrl(id, message)}/queries/${index}/page`,
+      request,
     );
   }
 

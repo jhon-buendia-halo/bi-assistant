@@ -188,43 +188,15 @@
             </button>
           </p>
         }
-        @if (resultNote(); as note) {
-          <p data-testid="query-result-note" class="m-0 mb-2 text-[12px] text-fg-muted">
-            {{ note }}
-          </p>
-        }
-        <div
-          class="max-h-full overflow-auto rounded-lg border border-border"
-          tabindex="0"
-          aria-label="Result rows"
-          role="region"
-        >
-          <table data-testid="query-result-table" class="w-full border-collapse text-left text-[12px]">
-            <thead>
-              <tr>
-                @for (column of columns(); track column) {
-                  <th
-                    scope="col"
-                    class="sticky top-0 border-b border-border bg-surface-muted px-2 py-1 font-semibold whitespace-nowrap text-fg-strong"
-                  >
-                    {{ column }}
-                  </th>
-                }
-              </tr>
-            </thead>
-            <tbody>
-              @for (row of shownRows(); track $index) {
-                <tr>
-                  @for (column of columns(); track column) {
-                    <td class="border-b border-border px-2 py-1 whitespace-nowrap text-fg">
-                      {{ cell(row[column]) }}
-                    </td>
-                  }
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        <app-query-result
+          [index]="index()"
+          [columns]="columns()"
+          [rows]="shownRows()"
+          [note]="resultNote()"
+          [pageable]="pageable()"
+          [total]="pagingTotal()"
+          [topN]="topN()"
+        />
       }
     }
     @case ('sql') {

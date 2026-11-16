@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, tap, throwError } from 'rxjs';
 import {
+  PageRequest,
+  PageResult,
   QueryEvidenceApi,
   QueryRerunResult,
 } from '../../../shared/query-evidence/query-evidence.model';
@@ -49,6 +51,14 @@ export abstract class RunEvidenceApi implements QueryEvidenceApi {
 
   downloadCsv(index: number): Observable<Blob> {
     return this.withRun((id) => this.runs.queryCsv(id, index));
+  }
+
+  page(index: number, request: PageRequest): Observable<PageResult> {
+    return this.withRun((id) =>
+      this.runs
+        .pageQuery(id, index, request)
+        .pipe(map((response) => response.result)),
+    );
   }
 
   private withRun<T>(call: (id: string) => Observable<T>): Observable<T> {

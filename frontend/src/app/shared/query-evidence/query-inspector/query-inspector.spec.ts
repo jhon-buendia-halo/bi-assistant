@@ -18,6 +18,7 @@ class FakeApi implements QueryEvidenceApi {
   countStages = jasmine.createSpy('countStages').and.returnValue(of(undefined));
   rerun = jasmine.createSpy('rerun');
   downloadCsv = jasmine.createSpy('downloadCsv').and.returnValue(of(new Blob(['x'])));
+  page = jasmine.createSpy('page');
 }
 
 const EXPLANATION = (status?: 'verified' | 'unverified'): QueryExplanation => ({
