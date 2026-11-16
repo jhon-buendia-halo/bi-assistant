@@ -195,17 +195,18 @@ async function start(
 }
 
 describe('review-website workflow (agents.md 5.19)', () => {
-  it('builds the catalogue steps in order, Confirm review inside the branch', () => {
+  it('builds the catalogue steps in order, Confirm review and Review templates inside branches', () => {
     expect(workflow.id).toBe(REVIEW_WEBSITE_WORKFLOW_ID);
+    const branched = ['confirm-review', 'review-templates'];
     expect(workflow.steps.map((step) => [step.id, step.description])).toEqual(
-      REVIEW_WEBSITE_STEPS.filter((step) => step.id !== 'confirm-review').map(
+      REVIEW_WEBSITE_STEPS.filter((step) => !branched.includes(step.id)).map(
         (step) => [step.id, step.title],
       ),
     );
-    const branch = workflow.entries.find((entry) => entry.type === 'branch');
-    expect(branch?.pairs?.map(([, step]) => step.id)).toEqual([
-      'confirm-review',
-    ]);
+    const branches = workflow.entries
+      .filter((entry) => entry.type === 'branch')
+      .map((entry) => entry.pairs?.map(([, step]) => step.id));
+    expect(branches).toEqual([['confirm-review'], ['review-templates']]);
   });
 
   it('snapshots only while the run waits for the sign-in', () => {
@@ -230,8 +231,9 @@ describe('review-website workflow (agents.md 5.19)', () => {
       'review-choice:success',
       'capture-and-check:running',
       'capture-and-check:success',
-      'review-templates:running',
-      'review-templates:success',
+      // No template to review: Review templates is skipped.
+      'review-outcome:running',
+      'review-outcome:success',
       'save-report:running',
       'save-report:success',
     ]);
@@ -569,7 +571,7 @@ describe('review-website workflow (agents.md 5.19)', () => {
       expect(given.reviewTemplate).not.toHaveBeenCalled();
     });
 
-    it('a stopped review ends the run early, nothing saved', async () => {
+    it('a stopped review saves nothing (the stop is passed on through the branch)', async () => {
       const given = reviewRuntime(2, {
         reviewTemplate: jest.fn(() =>
           Promise.resolve({
@@ -579,8 +581,11 @@ describe('review-website workflow (agents.md 5.19)', () => {
         ),
       });
       const { events, result } = await start(given, { visualReview: true });
-      expect(result.status).toBe('success');
-      expect(events).toContain('review-templates:bailed');
+      expect(events).toContain('review-templates:success');
+      // In the app the stopped run is stored stopped; here the step's
+      // refusal fails the stub's run.
+      expect(result.status).toBe('failed');
+      expect(String(result.error)).toContain('The review was stopped');
       expect(given.saveReport).not.toHaveBeenCalled();
     });
   });

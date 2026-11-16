@@ -1752,7 +1752,7 @@ specs/system/agents.md:1040-1176  ## 4. Per-turn context
 specs/system/agents.md:1042-1144  ### 4.1 System context blocks
 specs/system/agents.md:1146-1165  ### 4.2 requestContext keys
 specs/system/agents.md:1167-1176  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1178-1677  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1178-1678  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1180-1210  ### 5.1 Streamed chat turn
 specs/system/agents.md:1212-1216  ### 5.2 Read-only enforcement
 specs/system/agents.md:1218-1232  ### 5.3 Execution-guided repair
@@ -1771,40 +1771,40 @@ specs/system/agents.md:1519-1521  ### 5.15 Run workflows that call an agent: `de
 specs/system/agents.md:1523-1544  ### 5.16 Node chats: chatting with a run step's agent
 specs/system/agents.md:1546-1587  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
 specs/system/agents.md:1589-1620  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
-specs/system/agents.md:1622-1677  ### 5.19 Workflow: `review-website` (Review a Website)
-specs/system/agents.md:1679-1852  ## 6. Visual designer pipeline
-specs/system/agents.md:1683-1693  ### 6.1 Entry points
-specs/system/agents.md:1695-1697  ### 6.2 Data handed to the designer
-specs/system/agents.md:1699-1715  ### 6.3 Modes and loop
-specs/system/agents.md:1717-1752  ### 6.4 Designer prompt
-specs/system/agents.md:1754-1759  ### 6.5 Repair
-specs/system/agents.md:1761-1763  ### 6.6 Assembled files
-specs/system/agents.md:1765-1767  ### 6.7 Call options
-specs/system/agents.md:1769-1812  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1814-1852  ### 6.9 Chart runtime contract
-specs/system/agents.md:1854-2027  ## 7. Skills and workspaces
-specs/system/agents.md:1856-1865  ### 7.1 Session workspaces
-specs/system/agents.md:1867-1908  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:1910-1936  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:1938-2021  ### 7.4 Skills per agent
-specs/system/agents.md:2023-2027  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2029-2155  ## 8. Evals
-specs/system/agents.md:2033-2112  ### 8.1 Case and set format
-specs/system/agents.md:2114-2121  ### 8.2 Data preflight
-specs/system/agents.md:2123-2134  ### 8.3 Executing a case
-specs/system/agents.md:2136-2141  ### 8.4 Runs, regression and report
-specs/system/agents.md:2143-2155  ### 8.5 Other entry points
-specs/system/agents.md:2157-2161  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2163-2176  ## Open questions and gaps
-specs/system/agents.md:2178-2316  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2318-2354  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2356-2358  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2360-2437  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2439-2543  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2545-2593  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2551-2568  ### Plan
-specs/system/agents.md:2570-2593  ### Write answer
-specs/system/agents.md:2595-2611  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:1622-1678  ### 5.19 Workflow: `review-website` (Review a Website)
+specs/system/agents.md:1680-1853  ## 6. Visual designer pipeline
+specs/system/agents.md:1684-1694  ### 6.1 Entry points
+specs/system/agents.md:1696-1698  ### 6.2 Data handed to the designer
+specs/system/agents.md:1700-1716  ### 6.3 Modes and loop
+specs/system/agents.md:1718-1753  ### 6.4 Designer prompt
+specs/system/agents.md:1755-1760  ### 6.5 Repair
+specs/system/agents.md:1762-1764  ### 6.6 Assembled files
+specs/system/agents.md:1766-1768  ### 6.7 Call options
+specs/system/agents.md:1770-1813  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1815-1853  ### 6.9 Chart runtime contract
+specs/system/agents.md:1855-2028  ## 7. Skills and workspaces
+specs/system/agents.md:1857-1866  ### 7.1 Session workspaces
+specs/system/agents.md:1868-1909  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:1911-1937  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:1939-2022  ### 7.4 Skills per agent
+specs/system/agents.md:2024-2028  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:2030-2156  ## 8. Evals
+specs/system/agents.md:2034-2113  ### 8.1 Case and set format
+specs/system/agents.md:2115-2122  ### 8.2 Data preflight
+specs/system/agents.md:2124-2135  ### 8.3 Executing a case
+specs/system/agents.md:2137-2142  ### 8.4 Runs, regression and report
+specs/system/agents.md:2144-2156  ### 8.5 Other entry points
+specs/system/agents.md:2158-2162  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2164-2177  ## Open questions and gaps
+specs/system/agents.md:2179-2317  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2319-2355  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2357-2359  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2361-2438  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2440-2544  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2546-2594  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2552-2569  ### Plan
+specs/system/agents.md:2571-2594  ### Write answer
+specs/system/agents.md:2596-2612  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

@@ -43,7 +43,9 @@ import {
 import {
   REVIEW_WEBSITE_RUNTIME_KEY,
   REVIEW_WEBSITE_WORKFLOW_ID,
+  IrisTimeoutError,
   reviewWebsiteInputOf,
+  withIrisTimeout,
   type ReviewWebsiteRuntime,
 } from '../../../mastra/workflows/review-website.steps';
 import type { ReviewWebsiteInput } from '../../../mastra/workflows/review-website.schemas';
@@ -1085,20 +1087,31 @@ export class TurnEngine {
               }));
               const images = await work.shotImages(shots);
               try {
-                const reviewed = await this.deps.mastra.reviewTemplate(
-                  {
-                    url: template.representative,
-                    template,
-                    shots: images,
-                    measured,
-                  },
-                  stepModelOf(SITE_REVIEWER_AGENT_KEY),
+                // At most two minutes per call: a rate-limited model would
+                // otherwise hold the run with no word (agents.md 5.19).
+                const reviewed = await withIrisTimeout(
+                  template.id,
+                  turn.signal,
+                  (signal) =>
+                    this.deps.mastra.reviewTemplate(
+                      {
+                        url: template.representative,
+                        template,
+                        shots: images,
+                        measured,
+                      },
+                      {
+                        ...stepModelOf(SITE_REVIEWER_AGENT_KEY),
+                        abortSignal: signal,
+                      },
+                    ),
                 );
                 return {
                   ...reviewed,
                   stopped: reviewed.stopped || turn.signal.aborted,
                 };
               } catch (error) {
+                if (error instanceof IrisTimeoutError) throw error;
                 throw await stepError(error);
               }
             },

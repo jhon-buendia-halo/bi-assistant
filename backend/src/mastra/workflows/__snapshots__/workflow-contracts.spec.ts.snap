@@ -7637,7 +7637,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) review-website's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "065a42e928f6",
+  "contractHash": "a5df78788eda",
   "edges": [
     {
       "from": "start",
@@ -7674,6 +7674,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
     {
       "from": "capture-and-check",
       "kind": "next",
+      "label": "No visual review",
+      "to": "save-report",
+    },
+    {
+      "from": "capture-and-check",
+      "kind": "branch",
+      "label": "Templates to review",
       "to": "review-templates",
     },
     {
@@ -10327,7 +10334,8 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "array",
           },
           "reviewed": {
-            "description": "Each template Iris reviewed, with her one-line summary.",
+            "default": [],
+            "description": "Each template Iris reviewed, with her one-line summary; none when Review templates did not run.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -10380,6 +10388,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "string",
             },
             "type": "array",
+          },
+          "stopped": {
+            "default": false,
+            "description": "Whether the run was stopped during the review.",
+            "type": "boolean",
           },
           "templates": {
             "description": "The page templates, biggest first.",
@@ -10439,6 +10452,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "findings",
           "reviewShots",
           "reviewed",
+          "stopped",
         ],
         "type": "object",
       },
@@ -10881,7 +10895,8 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
             "type": "array",
           },
           "reviewed": {
-            "description": "Each template Iris reviewed, with her one-line summary.",
+            "default": [],
+            "description": "Each template Iris reviewed, with her one-line summary; none when Review templates did not run.",
             "items": {
               "properties": {
                 "findingCount": {
@@ -10933,6 +10948,11 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
               "type": "string",
             },
             "type": "array",
+          },
+          "stopped": {
+            "default": false,
+            "description": "Whether the run was stopped during the review.",
+            "type": "boolean",
           },
           "templates": {
             "description": "The page templates, biggest first.",
@@ -10990,7 +11010,6 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
           "captures",
           "findings",
           "reviewShots",
-          "reviewed",
         ],
         "type": "object",
       },

@@ -449,7 +449,14 @@ export const reviewedSiteSchema = checkedSiteSchema.extend({
         findingCount: z.number(),
       }),
     )
-    .describe('Each template Iris reviewed, with her one-line summary.'),
+    .default([])
+    .describe(
+      'Each template Iris reviewed, with her one-line summary; none when Review templates did not run.',
+    ),
+  stopped: z
+    .boolean()
+    .default(false)
+    .describe('Whether the run was stopped during the review.'),
 });
 export type ReviewedSite = z.output<typeof reviewedSiteSchema>;
 

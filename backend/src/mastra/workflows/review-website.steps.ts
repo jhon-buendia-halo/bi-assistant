@@ -134,9 +134,13 @@ export const REVIEW_WEBSITE_STEPS: readonly ContractStepEntry[] = [
       title: 'Review templates',
       kind: 'agent',
       summary:
-        'Iris looks at one page per template, the narrowest and the widest screen side by side, with the measured findings as context, and reports what measuring cannot see: hierarchy, alignment, spacing, consistency, imagery, legibility. One model call per template, two at a time.',
+        'Only when there are templates to review: Iris looks at one page per template, the narrowest and the widest screen side by side, with the measured findings as context, and reports what measuring cannot see: hierarchy, alignment, spacing, consistency, imagery, legibility. One model call per template, two at a time, at most two minutes each.',
       exits: [
         { label: 'the model returns an error', outcome: 'fails' },
+        {
+          label: 'Iris does not answer within two minutes',
+          outcome: 'fails',
+        },
         { label: 'you stop it', outcome: 'stops' },
       ],
       modelOnly: true,
@@ -174,7 +178,18 @@ export const REVIEW_WEBSITE_EDGES: readonly WorkflowEdge[] = [
     label: 'More than ten templates',
   },
   { from: 'confirm-review', to: 'capture-and-check', kind: 'next' },
-  { from: 'capture-and-check', to: 'review-templates', kind: 'next' },
+  {
+    from: 'capture-and-check',
+    to: 'save-report',
+    kind: 'next',
+    label: 'No visual review',
+  },
+  {
+    from: 'capture-and-check',
+    to: 'review-templates',
+    kind: 'branch',
+    label: 'Templates to review',
+  },
   { from: 'review-templates', to: 'save-report', kind: 'next' },
   { from: 'save-report', to: 'end', kind: 'next' },
 ];
@@ -275,6 +290,52 @@ export function reviewWebsiteInputOf(
 
 /** A run's input that cannot be used, said in the form's words. */
 export class ReviewWebsiteInputError extends Error {}
+
+/** How long one of Iris's calls may take, rate-limit retries included. */
+export const IRIS_CALL_TIMEOUT_MS = 2 * 60 * 1000;
+
+/** Iris's call took longer than `IRIS_CALL_TIMEOUT_MS`. */
+export class IrisTimeoutError extends Error {
+  constructor(template: string) {
+    super(
+      `Iris did not answer within two minutes while reviewing ${template}. The model may be busy or rate limited: run again later, or untick Visual review with Iris to keep to the measured checks.`,
+    );
+  }
+}
+
+/**
+ * Runs `call` with a signal that aborts when `parent` does (the run is
+ * stopped) or after `ms`. A timeout rejects with `IrisTimeoutError`, even
+ * when the call returns normally after the abort (a stopped model call
+ * resolves rather than throws); a stop resolves as the call does.
+ */
+export async function withIrisTimeout<T>(
+  template: string,
+  parent: AbortSignal,
+  call: (signal: AbortSignal) => Promise<T>,
+  ms = IRIS_CALL_TIMEOUT_MS,
+): Promise<T> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, ms);
+  const stop = () => controller.abort();
+  if (parent.aborted) controller.abort();
+  else parent.addEventListener('abort', stop, { once: true });
+  try {
+    const result = await call(controller.signal);
+    if (timedOut && !parent.aborted) throw new IrisTimeoutError(template);
+    return result;
+  } catch (error) {
+    if (timedOut && !parent.aborted) throw new IrisTimeoutError(template);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    parent.removeEventListener('abort', stop);
+  }
+}
 
 /** The site's origin, or an error naming the field. */
 export function siteOrigin(url: string, label = 'Entry URL'): string {

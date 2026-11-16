@@ -244,6 +244,19 @@ const captureAndCheckStep = createStep({
   ),
 });
 
+/** The branch's condition: Iris has templates to review, with their shots. */
+const hasTemplatesToReview = ({ inputData }: { inputData: unknown }) => {
+  const site = inputData as
+    { reviewTemplates?: unknown[]; reviewShots?: unknown[] } | undefined;
+  return Promise.resolve(
+    (site?.reviewTemplates?.length ?? 0) > 0 &&
+      (site?.reviewShots?.length ?? 0) > 0,
+  );
+};
+
+/** The map's id after Review templates' branch. */
+const REVIEW_OUTCOME_ID = 'review-outcome';
+
 /** How many templates Iris reviews at once. */
 const REVIEW_CONCURRENCY = 2;
 
@@ -262,7 +275,7 @@ const reviewTemplatesStep = createStep({
           site.reviewTemplates.includes(template.id) &&
           site.reviewShots.some((shot) => shot.template === template.id),
       );
-      if (!queue.length) return { ...site, reviewed: [] };
+      if (!queue.length) return { ...site, reviewed: [], stopped: false };
       const runtime = runtimeOf(params, STEP['review-templates'].title);
       const reviewed: ReviewedSite['reviewed'] = [];
       const found: Finding[] = [];
@@ -319,12 +332,14 @@ const reviewTemplatesStep = createStep({
       reviewed.sort(
         (a, b) => (order.get(a.template) ?? 0) - (order.get(b.template) ?? 0),
       );
-      const output = {
+      // A stop is passed on, not bailed: a bail inside the branch would end
+      // only this step, and Save report would still save.
+      return {
         ...site,
         findings: sortFindings([...site.findings, ...found]),
         reviewed,
+        stopped,
       };
-      return stopped ? params.bail(output) : output;
     },
   ),
 });
@@ -338,8 +353,10 @@ const saveReportStep = createStep({
     STEP['save-report'].title,
     SCHEMAS['save-report'],
     async (params: StepParams<(typeof SCHEMAS)['save-report']>) => {
-      const runtime = runtimeOf(params, STEP['save-report'].title);
       const site = params.inputData;
+      // Stopped during the review: nothing is saved.
+      if (site.stopped) throw new Error('The review was stopped');
+      const runtime = runtimeOf(params, STEP['save-report'].title);
       const paths = [
         ...site.findings.map((finding) => finding.crop),
         ...site.findings.map((finding) => finding.context?.image ?? null),
@@ -421,6 +438,27 @@ export const reviewWebsiteWorkflow = createWorkflow({
     { id: REVIEW_CHOICE_ID },
   )
   .then(captureAndCheckStep)
-  .then(reviewTemplatesStep)
+  // Iris runs only when there are templates to review; the map passes on
+  // her output, or Capture and check's with no review (a skipped branch
+  // passes `{}`).
+  .branch([[hasTemplatesToReview, reviewTemplatesStep]])
+  .map(
+    async (params) => {
+      const reviewed = (
+        params.inputData as Record<string, unknown> | undefined
+      )?.[STEP['review-templates'].id];
+      return Promise.resolve(
+        reviewed ?? {
+          ...(params.getStepResult(captureAndCheckStep) as Record<
+            string,
+            unknown
+          >),
+          reviewed: [],
+          stopped: false,
+        },
+      );
+    },
+    { id: REVIEW_OUTCOME_ID },
+  )
   .then(saveReportStep)
   .commit();
