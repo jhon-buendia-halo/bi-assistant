@@ -76,7 +76,7 @@ test.describe("Feature: Filter a query's result in words", () => {
     async ({ page }) => {
       const finals = Number(
         await worldCupScalar(
-          `SELECT COUNT(*) FROM ${worldCupKey('matches')} WHERE stage = 'Final'`,
+          `SELECT COUNT(*) FROM ${worldCupKey('matches')} WHERE stage = 'final'`,
         ),
       );
       expect(finals).toBeGreaterThan(0);
@@ -95,10 +95,10 @@ test.describe("Feature: Filter a query's result in words", () => {
       stub.explore = () => ({
         action: 'explore',
         query: null,
-        filters: [{ column: 'stage', op: 'eq', value: 'Final', valueTo: null, values: null }],
+        filters: [{ column: 'stage', op: 'eq', value: 'final', valueTo: null, values: null }],
         sort: [],
         page: { move: 'first', to: null },
-        understood: 'Stage is Final',
+        understood: 'Stage is final',
       });
       const inspector = page.getByTestId('query-inspector');
 
@@ -122,11 +122,11 @@ test.describe("Feature: Filter a query's result in words", () => {
       });
       await scenarioStep(page, 'Then it shows what it understood', async () => {
         await expect(inspector.getByTestId('query-filter-understood')).toHaveText(
-          'Understood as: Stage is Final',
+          'Understood as: Stage is final',
         );
       });
       await scenarioStep(page, 'And only the matching rows are listed', async () => {
-        await expect(inspector.getByTestId('query-filter-chip')).toContainText('stage is Final');
+        await expect(inspector.getByTestId('query-filter-chip')).toContainText('stage is final');
         await expect(inspector.getByTestId('query-result-page-label')).toContainText(
           `of ${finals.toLocaleString('en-US')} matching`,
         );

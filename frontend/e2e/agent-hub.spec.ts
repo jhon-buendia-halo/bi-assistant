@@ -518,7 +518,7 @@ test('the hub has no detectable accessibility violations in either theme', async
 }) => {
   await followOsTheme(page);
   await openHub(page);
-  await expect(cards(page)).toHaveCount(15);
+  await expect(cards(page)).toHaveCount(ALL_CARDS);
 
   await page.addScriptTag({ content: axe.source });
   for (const theme of ['light', 'dark'] as const) {
