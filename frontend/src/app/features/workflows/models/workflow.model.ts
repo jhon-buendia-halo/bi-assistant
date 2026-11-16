@@ -83,6 +83,17 @@ export interface WorkflowInputError {
  */
 export const ANSWER_BUSINESS_QUESTION_WORKFLOW_ID = 'answer-business-question';
 
+/**
+ * An answer (or follow-up event answer) that ran queries holds `data` records:
+ * it gets the query inspector, whichever workflow ran it (workflows R31). The
+ * same rule as past chats.
+ */
+export function answerHasQueries(
+  message: Pick<ChatMessage, 'data'> | null | undefined,
+): boolean {
+  return (message?.data?.length ?? 0) > 0;
+}
+
 export type WorkflowInputValue = string | number | boolean | string[];
 
 /**
@@ -92,8 +103,8 @@ export type WorkflowInputValue = string | number | boolean | string[];
  */
 export interface WorkflowSummary {
   /**
-   * `answer-business-question`, the catalogue's only workflow. Agents are a library and
-   * have no workflow of their own.
+   * The workflow id (`answer-business-question`, `assess-data-readiness`, …). Agents are a
+   * library and have no workflow of their own.
    */
   id: string;
   name: string;

@@ -28,7 +28,7 @@ import {
   runStatusLine,
   runStepStatusLabel,
 } from '../../../workflows/services/workflows.util';
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../../workflows/models/workflow.model';
+import { answerHasQueries } from '../../../workflows/models/workflow.model';
 import { RunDetailQueryEvidenceApi } from '../../services/run-detail-query-evidence-api';
 import { RunVisualsState } from '../../services/run-visuals-state';
 import { RunsState } from '../../services/runs-state';
@@ -87,11 +87,9 @@ export class RunDetail {
   private readonly prepared = new Set<string>();
   private opener: QueryOpener | null = null;
 
-  /** A run of Answer a Business Question shows its answer with the query inspector (workflows R31). */
-  protected readonly inspectsQueries = computed(
-    () =>
-      this.state.activeRun()?.workflowId ===
-      ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  /** A run whose answer ran queries shows it with the query inspector, any workflow (workflows R31). */
+  protected readonly inspectsQueries = computed(() =>
+    answerHasQueries(this.state.activeRun()?.answer),
   );
   /** The query open in the sheet: an index into the answer's `data`. */
   private readonly openIndex = signal<number | null>(null);
@@ -118,8 +116,7 @@ export class RunDetail {
         }
         if (
           run === null ||
-          run.workflowId !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID ||
-          !run.answer?.data?.length ||
+          !answerHasQueries(run.answer) ||
           run.status === 'running' ||
           run.status === 'suspended' ||
           this.prepared.has(run.id)

@@ -43,7 +43,11 @@ import { RunVisual } from '../../../runs/components/run-visual/run-visual';
 import { RunVisualsState } from '../../../runs/services/run-visuals-state';
 import { AnswerView } from '../../../sessions/components/answer-view/answer-view';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
-import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
+import {
+  answerHasQueries,
+  WorkflowInputField,
+  WorkflowRun,
+} from '../../models/workflow.model';
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
@@ -160,6 +164,7 @@ const FORM_CONTROLS =
   },
 })
 export class WorkflowRunChat {
+  protected readonly hasQueries = answerHasQueries;
   protected readonly Brain = Brain;
   protected readonly CircleCheck = CircleCheck;
   protected readonly Database = Database;
