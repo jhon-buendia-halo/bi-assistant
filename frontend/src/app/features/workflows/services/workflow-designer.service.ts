@@ -58,6 +58,7 @@ import { WorkflowRunTasks } from './workflow-run-tasks';
 import { WorkflowsApiService } from './workflows-api.service';
 import {
   RunFormValues,
+  IMAGES_FIELD,
   followUpRequest,
   initialInputValues,
   questionFieldName,
@@ -765,9 +766,11 @@ export class WorkflowDesigner {
   /**
    * Follow up on the answer shown, or answer its clarifying question: a new
    * run on the same input with this question, the shown run as its context
-   * (plan 5.4; workflows R17, R21). The form's question becomes it.
+   * (plan 5.4; workflows R17, R21). The form's question becomes it. `images`
+   * is the composer's attachments (the run's kept paths and new `data:`
+   * URLs); without it the earlier run's images carry over.
    */
-  followUp(question: string): void {
+  followUp(question: string, images?: readonly string[]): void {
     const workflow = this.workflow();
     const run = this.run();
     const field = this.questionField();
@@ -776,7 +779,7 @@ export class WorkflowDesigner {
     if (this.running()) return;
     this.setInput(field, text);
     this.followUpText.set('');
-    const request = followUpRequest(run, field, text);
+    const request = followUpRequest(run, field, text, images);
     this.start(workflow, request, {
       id: run.id,
       question: run.question ?? '',
@@ -817,6 +820,18 @@ export class WorkflowDesigner {
     this.inputValues.set(runAgainValues(workflow.input, input));
     this.requestRunForm();
   }
+
+  /**
+   * The reference images of the run shown, as its input holds them: stored
+   * paths (`inputs/images/1.png`), or `data:` URLs while a run started here
+   * is not stored yet; empty without any.
+   */
+  readonly shownImages = computed((): string[] => {
+    const value = this.shownInput()?.[IMAGES_FIELD];
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [];
+  });
 
   /**
    * The question of the run shown, as the user asked it: the question field

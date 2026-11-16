@@ -12,6 +12,7 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
     expect(
       DATA_READINESS_ASSESSMENT_STEPS.map((step) => [step.id, step.kind]),
     ).toEqual([
+      ['read-images', 'agent'],
       ['resolve-dataset', 'code'],
       ['profile-source', 'code'],
       ['score-readiness', 'code'],
@@ -21,19 +22,20 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
     ]);
   });
 
-  it('connects them in one line from Start to End', () => {
-    const order = [
-      'start',
-      ...DATA_READINESS_ASSESSMENT_STEPS.map((s) => s.id),
-      'end',
-    ];
-    expect(DATA_READINESS_ASSESSMENT_EDGES).toEqual(
-      order.slice(1).map((to, index) => ({
-        from: order[index],
-        to,
-        kind: 'next',
-      })),
-    );
+  it('connects them from Start to End, with Read images as an optional detour first', () => {
+    expect(
+      DATA_READINESS_ASSESSMENT_EDGES.map((e) => [e.from, e.to, e.kind]),
+    ).toEqual([
+      ['start', 'resolve-dataset', 'next'],
+      ['start', 'read-images', 'branch'],
+      ['read-images', 'resolve-dataset', 'next'],
+      ['resolve-dataset', 'profile-source', 'next'],
+      ['profile-source', 'score-readiness', 'next'],
+      ['score-readiness', 'save-report', 'next'],
+      ['save-report', 'explain-report', 'next'],
+      ['explain-report', 'wrap-up', 'next'],
+      ['wrap-up', 'end', 'next'],
+    ]);
   });
 
   it('derives each step input and output field from its schemas', () => {
@@ -44,13 +46,14 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
       ]),
     );
     expect(fields['resolve-dataset']).toEqual({
-      input: ['question', 'dataset'],
+      input: ['question', 'dataset', 'imageNotes'],
       output: [
         'question',
         'dataset',
         'datasourceName',
         'datasourceKind',
         'tableCount',
+        'imageNotes',
       ],
     });
     expect(fields['save-report'].output).toContain('reportId');

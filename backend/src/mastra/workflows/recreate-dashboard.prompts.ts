@@ -15,6 +15,7 @@ import {
   type CatalogEntity,
   type EntityColumns,
 } from './answer-business-question.steps';
+import { imageNotesBlock } from './read-images.steps';
 import {
   widgetFields,
   type DashboardBlueprint,
@@ -112,7 +113,14 @@ export function mapDataRequest(input: {
   blueprint: DashboardBlueprint;
   catalog: readonly CatalogEntity[];
   columns: readonly EntityColumns[];
+  /**
+   * Read images' notes (agents.md 2.15, 5.18): a `<reference-images>` block
+   * follows the instructions only when they are not empty, so a run without
+   * images sends what it sent before.
+   */
+  imageNotes?: string;
 }): string {
+  const notes = imageNotesBlock(input.imageNotes);
   return [
     'Map the dashboard to the datasets.',
     '',
@@ -120,6 +128,7 @@ export function mapDataRequest(input: {
     input.question,
     '</instructions>',
     '',
+    ...(notes ? ['<reference-images>', notes, '</reference-images>', ''] : []),
     '<dashboard>',
     mappingDashboardBlock(input.blueprint),
     '</dashboard>',

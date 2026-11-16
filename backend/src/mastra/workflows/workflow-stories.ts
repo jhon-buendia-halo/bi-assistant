@@ -1,10 +1,11 @@
 /**
- * Which storyteller tells a workflow's steps (ui.md 4.4b, Logs *Story*), and
- * the story of one step of a run: the workflow's own, else the generic one
- * from the step's declared output schema (agents.md 5.12). No framework
- * import.
+ * Which storyteller tells a workflow's steps (ui.md 4.4b, *Story*), and the
+ * story of one step of a run: a shared step's own (Read images), else the
+ * workflow's, else the generic one from the step's declared output schema
+ * (agents.md 5.12). No framework import.
  */
 import { answerBusinessQuestionStoryteller } from './answer-business-question.story';
+import { readImagesStory } from './read-images.story';
 import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from './answer-business-question.steps';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 import type { JsonSchema } from './workflow-contract';
@@ -37,10 +38,7 @@ export function tellRunStep(
   step: StoryStep,
   context: StoryContext,
 ): StepStory | undefined {
-  return tellStep(
-    step,
-    context,
-    STORYTELLERS[workflowId],
-    outputSchemaOf(workflowId, step.id),
-  );
+  const own = STORYTELLERS[workflowId];
+  const teller: StepStoryteller = (s, c) => readImagesStory(s) ?? own?.(s, c);
+  return tellStep(step, context, teller, outputSchemaOf(workflowId, step.id));
 }

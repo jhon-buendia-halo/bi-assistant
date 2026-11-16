@@ -9,6 +9,12 @@ jest.mock('@mastra/core/workflows', () =>
 import { RequestContext } from '@mastra/core/request-context';
 import { dataReadinessAssessmentWorkflow } from './data-readiness-assessment.workflow';
 import {
+  READ_IMAGES_OUTCOME_ID,
+  READ_IMAGES_RUNTIME_KEY,
+  READ_IMAGES_STEP_ID,
+  type ReadImagesRuntime,
+} from './read-images.steps';
+import {
   DATA_READINESS_ASSESSMENT_RUNTIME_KEY,
   DATA_READINESS_ASSESSMENT_STEPS,
   DATA_READINESS_ASSESSMENT_WORKFLOW_ID,
@@ -97,11 +103,20 @@ function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
   };
 }
 
-async function run(given: MockedRuntime | undefined, question = '') {
+async function run(
+  given: MockedRuntime | undefined,
+  question = '',
+  images?: { paths: string[]; reader: ReadImagesRuntime },
+) {
   const requestContext = new RequestContext();
   if (given) requestContext.set(DATA_READINESS_ASSESSMENT_RUNTIME_KEY, given);
+  if (images) requestContext.set(READ_IMAGES_RUNTIME_KEY, images.reader);
   const output = (await workflow.createRun()).stream({
-    inputData: { question, dataset: 'World Cup' },
+    inputData: {
+      question,
+      dataset: 'World Cup',
+      ...(images ? { images: images.paths } : {}),
+    },
     requestContext,
   });
   const events: string[] = [];
@@ -114,7 +129,7 @@ async function run(given: MockedRuntime | undefined, question = '') {
 }
 
 describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
-  it('runs its six steps in order and never persists a snapshot', () => {
+  it('runs its six steps in order (Read images is the optional branch) and never persists a snapshot', () => {
     expect(workflow.id).toBe(DATA_READINESS_ASSESSMENT_WORKFLOW_ID);
     expect(workflow.steps.map((s) => [s.id, s.description])).toEqual([
       ['resolve-dataset', 'Resolve dataset'],
@@ -137,7 +152,9 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
         output: Object.keys(step.outputSchema.shape),
       })),
     ).toEqual(
-      DATA_READINESS_ASSESSMENT_STEPS.map((step) => ({
+      DATA_READINESS_ASSESSMENT_STEPS.filter(
+        (step) => step.id !== READ_IMAGES_STEP_ID,
+      ).map((step) => ({
         id: step.id,
         input: [...step.input],
         output: [...step.output],
@@ -155,7 +172,17 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       'save',
       'explain:r-1:Worst problems?',
     ]);
-    expect(events.filter((e) => e.endsWith(':success'))).toEqual([
+    // No images: Read images is skipped and the notes are ''.
+    expect(events.filter((e) => e.startsWith('read-images:'))).toEqual([]);
+    expect(given.explain).toHaveBeenCalledWith(
+      expect.objectContaining({ imageNotes: '' }),
+    );
+    expect(
+      events.filter(
+        (e) =>
+          e.endsWith(':success') && !e.startsWith(`${READ_IMAGES_OUTCOME_ID}:`),
+      ),
+    ).toEqual([
       'resolve-dataset:success',
       'profile-source:success',
       'score-readiness:success',
@@ -182,7 +209,34 @@ describe('data-readiness-assessment workflow (agents.md 5.13)', () => {
       question: READINESS_DEFAULT_QUESTION,
       dataset: 'World Cup',
       reportId: 'r-1',
+      imageNotes: '',
     });
+  });
+
+  it("reads the reference images first and hands Zoe's notes to Explain report", async () => {
+    const given = runtime();
+    const notes = '## Reference images\nA scorecard screenshot.';
+    const readImages = jest.fn(() =>
+      Promise.resolve({ imageNotes: notes, imageCount: 1, stopped: false }),
+    );
+    const { events, result } = await run(given, '', {
+      paths: ['inputs/images/1.png'],
+      reader: { readImages },
+    });
+    expect(readImages).toHaveBeenCalledWith({
+      question: '',
+      images: ['inputs/images/1.png'],
+    });
+    expect(events.filter((e) => e.endsWith(':success')).slice(0, 3)).toEqual([
+      'read-images:success',
+      `${READ_IMAGES_OUTCOME_ID}:success`,
+      'resolve-dataset:success',
+    ]);
+    // The notes travel through every step's data to Explain report.
+    expect(given.explain).toHaveBeenCalledWith(
+      expect.objectContaining({ imageNotes: notes }),
+    );
+    expect(result.status).toBe('success');
   });
 
   it('ends at Profile source when the run is stopped there: nothing is scored or stored', async () => {

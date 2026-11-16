@@ -48,11 +48,19 @@ import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflo
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
 import { WorkflowRunStory } from '../workflow-run-story/workflow-run-story';
+import { WorkflowRunAttachments } from './workflow-run-attachments';
+import {
+  addImageFiles,
+  dragHasFiles,
+  imageFilesOf,
+} from './composer-images.util';
+import { WorkflowRunsApiService } from '../../services/workflow-runs-api.service';
 import {
   IMAGE_ACCEPT,
   isImageDataUrl,
 } from '../../services/workflow-input-validation';
 import {
+  IMAGES_FIELD,
   canRunFromPage,
   runOutputEntries,
   runStatusLine,
@@ -83,6 +91,7 @@ const FORM_CONTROLS =
     PanelReadinessView,
     ReadinessHistory,
     RunVisual,
+    WorkflowRunAttachments,
     WorkflowRunInputRequired,
     WorkflowRunStory,
     WorkflowRunTeam,
@@ -96,8 +105,12 @@ const FORM_CONTROLS =
       padding: 0.5rem 0.625rem;
       box-shadow: var(--qti-shadow-card);
     }
-    .composer:focus-within {
+    .composer:focus-within,
+    .composer-dragging {
       border-color: var(--qti-border-selected);
+    }
+    .composer-dragging {
+      background-color: var(--qti-surface-selected);
     }
     .composer-input {
       width: 100%;
@@ -163,6 +176,7 @@ export class WorkflowRunChat {
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
   private readonly artifactsApi = inject(ArtifactsApiService);
+  private readonly runsApi = inject(WorkflowRunsApiService);
   private readonly artifactsNav = inject(ArtifactsNavState);
   private readonly workflowsNav = inject(WorkflowsNavState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -205,6 +219,22 @@ export class WorkflowRunChat {
           error: () => this.artifacts.set([]),
         }),
       );
+    });
+    // Follow up starts with the images the run shown was given (kept paths);
+    // a different run, or a different stored list, starts it again.
+    effect(() => {
+      const run = this.designer.run();
+      const list = run?.input?.[IMAGES_FIELD];
+      const stored = Array.isArray(list)
+        ? list.filter((item): item is string => typeof item === 'string')
+        : [];
+      const key = `${run?.id ?? ''}|${stored.join(',')}`;
+      untracked(() => {
+        if (key === this.seededImages) return;
+        this.seededImages = key;
+        this.followUpImages.set([...stored]);
+        this.attachError.set(null);
+      });
     });
     // A refused Execute: focus the first field with an error.
     effect(() => {
@@ -358,6 +388,41 @@ export class WorkflowRunChat {
     () =>
       this.designer.canFollowUp() &&
       !this.designer.runResult()?.answer?.clarification,
+  );
+
+  /** The key of the run and images the Follow up attachments were last seeded from. */
+  private seededImages = '';
+
+  /** Follow up's attachments: the run's kept paths and the new `data:` URLs. */
+  protected readonly followUpImages = signal<string[]>([]);
+
+  /** The last file refused when adding images; cleared by the next add or remove. */
+  protected readonly attachError = signal<string | null>(null);
+
+  /** A file is being dragged over the composer. */
+  protected readonly dragging = signal(false);
+
+  /** The `images` field of the workflow (reference images), when it has one. */
+  protected readonly imagesField = computed(
+    () =>
+      this.designer
+        .workflow()
+        ?.input.find((f) => !f.hidden && f.type === 'images') ?? null,
+  );
+
+  /** The single `image` field, which paste and drop fill when there is no `images` field. */
+  private readonly imageField = computed(
+    () =>
+      this.designer
+        .workflow()
+        ?.input.find((f) => !f.hidden && f.type === 'image') ?? null,
+  );
+
+  /** Whether the shown composer takes pasted or dropped images. */
+  private readonly takesImages = computed(() =>
+    this.followUpMode()
+      ? this.imagesField() !== null
+      : this.imagesField() !== null || this.imageField() !== null,
   );
 
   /** The file name each image field shows, by field name. */
@@ -529,7 +594,11 @@ export class WorkflowRunChat {
    * which is what a run sends (api.md 118). Clearing the picker clears it.
    */
   protected onImage(name: string, event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    this.setImageFile(name, (event.target as HTMLInputElement).files?.[0]);
+  }
+
+  /** Holds `file` as an image field's value (nothing clears it). */
+  private setImageFile(name: string, file: File | undefined): void {
     if (!file) {
       this.imageNames.update((names) => ({ ...names, [name]: '' }));
       this.designer.setInput(name, '');
@@ -553,6 +622,99 @@ export class WorkflowRunChat {
       this.designer.setInput(name, '');
     };
     reader.readAsDataURL(file);
+  }
+
+  /** What a thumbnail shows: a new image as it is, a stored path through the run's endpoint. */
+  protected imageSrc(item: string): string | null {
+    if (isImageDataUrl(item)) return item;
+    const runId = this.designer.runId() ?? this.designer.run()?.id ?? null;
+    return runId === null ? null : this.runsApi.inputImageUrl(runId, item);
+  }
+
+  /** The thumbnails of the images the composer holds. */
+  protected readonly composerThumbs = computed(() =>
+    (this.followUpMode()
+      ? this.followUpImages()
+      : this.designer.picked(IMAGES_FIELD)
+    )
+      .map((item) => this.imageSrc(item))
+      .filter((src): src is string => src !== null),
+  );
+
+  /** The thumbnails of the shown run's images, under its question. */
+  protected readonly questionImages = computed(() =>
+    this.designer
+      .shownImages()
+      .map((item) => this.imageSrc(item))
+      .filter((src): src is string => src !== null),
+  );
+
+  /** The images the composer's list holds now. */
+  private heldImages(): string[] {
+    return this.followUpMode()
+      ? this.followUpImages()
+      : this.designer.picked(IMAGES_FIELD);
+  }
+
+  private setHeldImages(list: string[]): void {
+    if (this.followUpMode()) this.followUpImages.set(list);
+    else this.designer.setInput(IMAGES_FIELD, list);
+  }
+
+  /** Files picked, pasted or dropped into the reference images. */
+  protected async addImages(files: readonly File[]): Promise<void> {
+    const field = this.imagesField();
+    if (field !== null) {
+      const max = field.max ?? 4;
+      const { accepted, error } = await addImageFiles(
+        files,
+        this.heldImages().length,
+        field.label,
+        max,
+      );
+      this.setHeldImages([...this.heldImages(), ...accepted].slice(0, max));
+      this.attachError.set(error);
+      return;
+    }
+    // No `images` field: the one `image` field takes the first file (the
+    // run form then checks its type and size on Execute).
+    const image = this.imageField();
+    if (image === null || files.length === 0) return;
+    this.setImageFile(image.name, files[0]);
+  }
+
+  protected removeImage(index: number): void {
+    this.setHeldImages(this.heldImages().filter((_, i) => i !== index));
+    this.attachError.set(null);
+  }
+
+  /** The refusal shown under the attachments: a file refused, else the form's. */
+  protected imagesError(): string | null {
+    return this.attachError() ?? this.fieldError(IMAGES_FIELD);
+  }
+
+  /** Paste: only images are taken; a plain text paste is left alone. */
+  protected onPaste(event: ClipboardEvent): void {
+    if (!this.takesImages()) return;
+    const files = imageFilesOf(event.clipboardData);
+    if (files.length === 0) return;
+    event.preventDefault();
+    void this.addImages(files);
+  }
+
+  protected onDragOver(event: DragEvent): void {
+    if (!this.takesImages() || !dragHasFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    this.dragging.set(true);
+  }
+
+  protected onDrop(event: DragEvent): void {
+    this.dragging.set(false);
+    if (!this.takesImages() || !dragHasFiles(event.dataTransfer)) return;
+    // Files dropped on the box never navigate the window.
+    event.preventDefault();
+    const files = imageFilesOf(event.dataTransfer);
+    if (files.length > 0) void this.addImages(files);
   }
 
   protected onCheck(name: string, event: Event): void {
@@ -589,6 +751,9 @@ export class WorkflowRunChat {
   }
 
   protected sendFollowUp(): void {
-    this.designer.followUp(this.designer.followUpText());
+    this.designer.followUp(
+      this.designer.followUpText(),
+      this.imagesField() !== null ? this.followUpImages() : undefined,
+    );
   }
 }

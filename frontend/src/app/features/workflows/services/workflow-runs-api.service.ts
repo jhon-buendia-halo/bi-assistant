@@ -320,6 +320,15 @@ export class WorkflowRunsApiService {
     });
   }
 
+  /**
+   * The URL of one image a run was given (api.md 151): `path` is a stored
+   * path of the run's input (`inputs/images/1.png`). Used as an `img` source,
+   * like an artifact's image.
+   */
+  inputImageUrl(id: string, path: string): string {
+    return `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/input-image?path=${encodeURIComponent(path)}`;
+  }
+
   private answerUrl(id: string): string {
     return `${API_BASE_URL}/workflow-runs/${encodeURIComponent(id)}/answer`;
   }

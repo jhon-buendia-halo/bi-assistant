@@ -7,20 +7,70 @@
  * JSON Schema from it. Zod only, no framework import, so Jest and the
  * catalogue can load it without Mastra.
  *
- * The flow (agents.md 5.11): Receive question → Load catalog → Plan, then a
+ * The flow (agents.md 5.11): Read images when the run has reference images
+ * (its schemas are ./read-images.schemas.ts), Receive question → Load catalog → Plan, then a
  * branch: Clarify (the run waits for the user's answer, then goes back to
  * Plan with it), or the analysis loop (Analyse → Validate, retried once;
  * Analyse can wait for an answer too) → Write answer → Wrap up. A step
  * passes on what the steps after it read, so each carries the question, the
- * catalog and the plan forward: the engine hands a step only its previous
- * step's output.
+ * catalog, the plan and Read images' notes forward: the engine hands a step
+ * only its previous step's output.
  */
 import { z } from 'zod';
 
-/** The workflow's input, and what Receive question passes on. */
+/** A turn's question and datasets (the eval target's input, agents.md 8). */
 export const turnInputSchema = z.object({
   question: z.string().describe("The user's question."),
   datasets: z.array(z.string()).describe("The run's dataset names."),
+});
+
+/**
+ * Read images' notes (agents.md 2.15, 5.11; workflows R35), as every step
+ * after Receive question carries them in its data, so they survive a
+ * Clarify wait and a resume; `''` when the run has no images.
+ */
+const imageNotesSchema = z
+  .string()
+  .describe(
+    "Read images' notes on the run's reference images; '' when it has none.",
+  );
+
+/**
+ * The notes as a step that can be (re)entered on a resume reads them: a run
+ * that began waiting at Clarify or Analyse before Read images existed has no
+ * notes in its stored step data, and resumes with `''` (workflows R35).
+ */
+const resumableImageNotesSchema = imageNotesSchema.default('');
+
+/**
+ * The workflow's input: the turn's, and the reference images' stored paths,
+ * which only Read images reads (kept out of Receive question's input, so
+ * `usedBy(images)` names Read images alone).
+ */
+export const answerBusinessQuestionInputSchema = turnInputSchema.extend({
+  images: z
+    .array(z.string())
+    .optional()
+    .describe("The run's reference images: their stored paths."),
+});
+
+/**
+ * What Receive question receives: the input with Read images' notes, `''`
+ * by default (Read images is a branch from Start: no path through it is
+ * certain).
+ */
+export const receiveQuestionInputSchema = turnInputSchema.extend({
+  imageNotes: z
+    .string()
+    .default('')
+    .describe(
+      "Read images' notes on the run's reference images; '' when it has none.",
+    ),
+});
+
+/** What Receive question passes on, and what Load catalog receives. */
+export const receivedQuestionSchema = turnInputSchema.extend({
+  imageNotes: imageNotesSchema,
 });
 
 /** One entity of the run's datasets, as Load catalog lists it. */
@@ -62,6 +112,7 @@ export const catalogedQuestionSchema = z.object({
     .describe(
       'The columns of each entity, for Plan only: at most 40 per entity and 400 in all.',
     ),
+  imageNotes: imageNotesSchema,
 });
 
 /** The clarifying question a plan asks instead of analysing. */
@@ -101,6 +152,8 @@ export const answeredClarificationSchema = z.object({
 
 /** What Plan receives: Load catalog's output, or Clarify's with the answer. */
 export const planInputSchema = catalogedQuestionSchema.extend({
+  // Clarify re-parses the plan round's input on resume (see above).
+  imageNotes: resumableImageNotesSchema,
   clarification: answeredClarificationSchema
     .optional()
     .describe(
@@ -153,6 +206,12 @@ export const plannedQuestionSchema = z.object({
     .describe(
       'Set when the turn was stopped while Plan ran: nothing after Plan runs.',
     ),
+  imageNotes: imageNotesSchema,
+});
+
+/** What Clarify receives: Plan's output, which a resumed run may hold without notes. */
+export const clarifyInputSchema = plannedQuestionSchema.extend({
+  imageNotes: resumableImageNotesSchema,
 });
 
 /** One check Validate ran over an analysis attempt. */
@@ -177,6 +236,8 @@ export const analyseInputSchema = z.object({
     .array(validationFindingSchema)
     .optional()
     .describe("On a retry: the previous attempt's validation findings."),
+  // Analyse can be resumed from a run stored before Read images existed.
+  imageNotes: resumableImageNotesSchema,
 });
 
 /** One tool call of the turn, as Analyse reports it. */
@@ -216,6 +277,7 @@ export const analyseOutcomeSchema = z.object({
     .describe("The attempt's SQL queries, in order."),
   text: z.string().describe("The agent's own notes; never the run's answer."),
   stopped: z.boolean().describe('The turn ended early: the user stopped it.'),
+  imageNotes: imageNotesSchema,
 });
 
 /** What Validate passes on: its verdict, with what Write answer reads. */
@@ -238,6 +300,7 @@ export const validateOutcomeSchema = z.object({
   queries: z
     .array(analyseQuerySchema)
     .describe("The checked attempt's SQL queries."),
+  imageNotes: imageNotesSchema,
 });
 
 /** What Write answer receives. */
@@ -253,6 +316,7 @@ export const writeAnswerInputSchema = z.object({
   calls: z
     .array(analyseCallSchema)
     .describe("The last attempt's tool calls, for Wrap up."),
+  imageNotes: imageNotesSchema,
 });
 
 /**
@@ -365,13 +429,19 @@ export const answerBusinessQuestionResultSchema = z.object({
 
 /** Every step's input and output schema, by step id, in catalogue order. */
 export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
-  'receive-question': { input: turnInputSchema, output: turnInputSchema },
-  'load-catalog': { input: turnInputSchema, output: catalogedQuestionSchema },
+  'receive-question': {
+    input: receiveQuestionInputSchema,
+    output: receivedQuestionSchema,
+  },
+  'load-catalog': {
+    input: receivedQuestionSchema,
+    output: catalogedQuestionSchema,
+  },
   plan: { input: planInputSchema, output: plannedQuestionSchema },
   // Clarify and Analyse can wait for the user (api.md 138): what they
   // suspend with, and what resumes them.
   clarify: {
-    input: plannedQuestionSchema,
+    input: clarifyInputSchema,
     output: clarifiedQuestionSchema,
     suspend: clarifyingQuestionSchema,
     resume: clarificationAnswerSchema,

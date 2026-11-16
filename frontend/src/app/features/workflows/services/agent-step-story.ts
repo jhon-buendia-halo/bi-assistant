@@ -267,6 +267,11 @@ function doneSentence(
     const failNote = failed > 0 ? ` (${failed} failed)` : '';
     return `I ran ${queries.length} ${noun}${failNote} and got ${rows} ${rows === 1 ? 'row' : 'rows'} back.`;
   }
+  // Read images: how many images it described (its `imageCount`).
+  const described = output?.['imageCount'];
+  if (typeof described === 'number' && described > 0) {
+    return `I described ${described} reference ${described === 1 ? 'image' : 'images'} for the team.`;
+  }
   // Its own words: a headline or an answer.
   const words = firstText(output, [
     'headline',

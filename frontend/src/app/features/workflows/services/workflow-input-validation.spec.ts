@@ -268,3 +268,63 @@ describe('requiredWithout (an image or a saved artifact)', () => {
     ).toEqual([]);
   });
 });
+
+describe('an images field', () => {
+  const images: WorkflowInputField = {
+    name: 'images',
+    label: 'Reference images',
+    type: 'images',
+    required: false,
+    max: 4,
+  };
+  const png = 'data:image/png;base64,AAAA';
+  const errorOf = (value?: string[]) =>
+    validateRunForm(
+      [images],
+      value === undefined ? {} : { images: value },
+      null,
+    );
+
+  it('takes no images, and up to 4 of the allowed types', () => {
+    expect(errorOf()).toEqual([]);
+    expect(errorOf([])).toEqual([]);
+    expect(errorOf([png, png, png, png])).toEqual([]);
+    expect(
+      errorOf(['data:image/jpeg;base64,AAAA', 'data:image/webp;base64,AAAA']),
+    ).toEqual([]);
+  });
+
+  it('takes the stored paths a follow-up keeps beside new images', () => {
+    expect(errorOf(['inputs/images/1.png', png])).toEqual([]);
+  });
+
+  it('refuses another type, an image over 5 MB and a fifth image', () => {
+    expect(errorOf(['data:image/gif;base64,AAAA'])).toEqual([
+      {
+        field: 'images',
+        message: 'Reference images must be PNG, JPEG or WebP images',
+      },
+    ]);
+    const base64 = (bytes: number) => 'A'.repeat((bytes / 3) * 4);
+    expect(
+      errorOf([`data:image/png;base64,${base64(IMAGE_MAX_BYTES)}`]),
+    ).toEqual([]);
+    expect(
+      errorOf([`data:image/png;base64,${base64(IMAGE_MAX_BYTES + 3)}`]),
+    ).toEqual([
+      {
+        field: 'images',
+        message: 'Reference images must be at most 5 MB each',
+      },
+    ]);
+    expect(errorOf([png, png, png, png, png])).toEqual([
+      { field: 'images', message: 'Reference images must be at most 4 images' },
+    ]);
+  });
+
+  it('is required only when the field says so', () => {
+    expect(validateRunForm([{ ...images, required: true }], {}, null)).toEqual([
+      { field: 'images', message: 'Reference images is required' },
+    ]);
+  });
+});
