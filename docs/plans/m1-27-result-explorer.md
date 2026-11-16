@@ -25,7 +25,7 @@ Facts the design rests on (checked at `a07cb4e5`):
 
 Additional type changes, each owned by one story:
 
-- `DatasourceConnector.runPagedSql(config, stmt: PagedStatement): Promise<PagedRows>` and `DatasourcesService.runPagedSql(id, stmt)` (1.27.1).
+- `DatasourceConnector.runPagedSql?(config, stmt: PagedStatement): Promise<PagedRows>` and `DatasourcesService.runPagedSql(id, stmt)` are in the contract commit; 1.27.1 implements the method on every connector and makes it required. An empty `stmt.sort` means the default order, resolved by the connector (1 below, 7); `PageResult.view.sort` echoes the request, `[]` for the default.
 - `QueryEvidence.view?: ResultView` (backend type and frontend copy), set only on `explore_result` records, carried on evidence, never on `ToolDataRecord` (records are fed to models) (1.27.7; the frontend reads it in 1.27.5).
 - `QueryFacts.view?: ResultView`; `EVIDENCE_TOOLS` gains `'explore_result'` (1.27.7).
 - Frontend `QueryEvidenceApi` gains `page(index, request: PageRequest): Observable<PageResult>` (1.27.3) and `interpretFilter(index, text, view: ResultView | null): Observable<FilterInterpretation>` (1.27.5). Every host implements both.

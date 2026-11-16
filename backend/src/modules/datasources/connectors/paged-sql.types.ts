@@ -115,8 +115,9 @@ export interface PagedStatement {
   columns: string[];
   filters: FilterSpec[];
   /**
-   * Already resolved: when the client gave none, the caller passes
-   * `defaultSort(sql, columns)` from `paged-sql.ts` (plan 1.27.1, 7).
+   * The requested keys; empty = the default order, resolved by the
+   * connector (plan 1.27.1, 7: the stored outer ORDER BY when expressible,
+   * else the first column), always followed by every column as tie-breaker.
    */
   sort: SortSpec[];
   limit: number;

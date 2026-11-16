@@ -4,6 +4,7 @@ import type {
   DatasourceConfig,
   QueryResult,
 } from '../entities/datasource.entity';
+import type { PagedRows, PagedStatement } from './paged-sql.types';
 
 /** A declared foreign key between two entities. Keys are `catalog.schema.table`. */
 export interface ForeignKeyEdge {
@@ -51,6 +52,14 @@ export interface DatasourceConnector<
     rowLimit: number,
     maxRows?: number,
   ): Promise<QueryResult>;
+  /**
+   * One page of a stored statement's result, filtered and sorted in an outer
+   * query (datasources R52, ADR-0049): the stored SQL is checked read-only as
+   * `runReadOnlySql` checks it, the wrapper is built from `stmt` with bound
+   * parameters. An empty `stmt.sort` means the default order (plan 1.27.1).
+   * Optional until 1.27.1 gives every connector one.
+   */
+  runPagedSql?(config: TConfig, stmt: PagedStatement): Promise<PagedRows>;
   /**
    * Declared foreign keys among the given `catalog.schema.table` entities.
    * Optional: platforms that cannot report them simply omit it, and callers
