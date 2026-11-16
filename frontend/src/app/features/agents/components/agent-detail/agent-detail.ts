@@ -7,7 +7,18 @@ import {
   input,
   output,
   signal,
+  untracked,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  Observable,
+  concatMap,
+  filter,
+  of,
+  switchMap,
+  takeWhile,
+  timer,
+} from 'rxjs';
 import {
   LucideAngularModule,
   ArrowLeft,
@@ -44,6 +55,11 @@ import {
 import { EvalSelectionService } from '../../services/eval-selection.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
+  BackgroundTaskOutcome,
+  BackgroundTasksService,
+} from '../../../../core/background-tasks/background-tasks.service';
+import { AgentsNavState } from '../../services/agents-nav-state';
+import {
   Datasource,
   kindLabel,
 } from '../../../datasources/models/datasource.model';
@@ -74,6 +90,27 @@ import {
   SkillSummary,
   SkillsApiService,
 } from '../../services/skills-api.service';
+
+/** One answer of an eval run: the start refusal or a poll of the job. */
+type EvalRunTick = { ok: boolean; message: string } & Partial<EvalRunView>;
+
+/** A finished run with failing questions is still a finished task. */
+function evalRunOutcome(
+  last: EvalRunTick | undefined,
+  agentName: string,
+): BackgroundTaskOutcome {
+  if (!last) return { ok: false, message: 'The evals did not run' };
+  if (!last.ok) return { ok: false, message: last.message };
+  if (last.status === 'failed') {
+    return { ok: false, message: last.error ?? last.message };
+  }
+  const results = last.results ?? [];
+  const passed = results.filter((r) => r.passed).length;
+  return {
+    ok: true,
+    message: `Evals for ${agentName}: ${passed} of ${results.length} passed`,
+  };
+}
 
 type AgentTab = AgentTabId;
 /** Sub-tabs inside the evals tab. */
@@ -124,6 +161,9 @@ export class AgentDetail implements OnDestroy {
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
   private readonly pageState = inject(AgentPageState);
+  private readonly tasks = inject(BackgroundTasksService);
+  private readonly nav = inject(AgentsNavState);
+  private alive = true;
 
   readonly selectedEvalCaseId = computed(
     () => this.evalSelection.selection()?.evalCase.id ?? null,
@@ -216,6 +256,33 @@ export class AgentDetail implements OnDestroy {
       this.loadEvals(this.agentKey());
       this.loadDatasources();
     });
+
+    // A running task's Open asks for the Evals tab once the agent has loaded.
+    effect(() => {
+      const tab = this.pageState.requestedTab();
+      if (!tab || this.loading() || this.agent()?.key !== this.agentKey())
+        return;
+      this.pageState.requestedTab.set(null);
+      this.activeTab.set(tab);
+    });
+
+    // Keep the open question pointing at its latest result as polls land.
+    effect(() => {
+      this.runResults();
+      untracked(() => this.syncSelection());
+    });
+
+    // The finished run belongs in the history list.
+    this.tasks.finished$
+      .pipe(
+        filter(
+          (t) => t.kind === 'eval-run' && t.key === untracked(this.agentKey),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        if (this.evalTab() === 'runs') this.loadEvalRuns();
+      });
 
     // Try it mounts when first shown.
     effect(() => {
@@ -644,16 +711,46 @@ export class AgentDetail implements OnDestroy {
   readonly datasources = signal<Datasource[]>([]);
   readonly selectedDatasourceId = signal<string>('');
 
-  /** Live state of the current run. */
-  readonly runStarting = signal(false);
-  readonly runError = signal<string | null>(null);
-  readonly runStatus = signal<'idle' | 'running' | 'completed' | 'failed'>(
-    'idle',
+  /**
+   * Live state of the current run, read from the `eval-run` background task of
+   * this agent: the run goes on when the page is left and shows again when it
+   * is opened (ADR-0047). The task's last value is the latest poll.
+   */
+  private readonly runTask = computed(() =>
+    this.tasks.latest('eval-run', this.agentKey()),
   );
-  readonly runResults = signal<AgentEvalCaseResult[]>([]);
-  readonly runCurrentQuestion = signal<string | null>(null);
-  readonly runDatasets = signal<string[]>([]);
-  private pollTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly runView = computed(
+    () => this.runTask()?.result as EvalRunTick | undefined,
+  );
+  /** The run was asked for and its first answer has not come yet. */
+  readonly runStarting = computed(() => {
+    const task = this.runTask();
+    return task?.status === 'running' && task.result === undefined;
+  });
+  readonly runError = computed<string | null>(() => {
+    const task = this.runTask();
+    if (!task) return null;
+    if (task.status === 'failed') return task.detail;
+    return this.runView()?.error ?? null;
+  });
+  readonly runStatus = computed<'idle' | 'running' | 'completed' | 'failed'>(
+    () => {
+      const task = this.runTask();
+      if (!task || task.status === 'stopped') return 'idle';
+      if (task.status === 'running') {
+        return task.result === undefined ? 'idle' : 'running';
+      }
+      if (task.status === 'failed') return 'failed';
+      return this.runView()?.status ?? 'completed';
+    },
+  );
+  readonly runResults = computed<AgentEvalCaseResult[]>(
+    () => this.runView()?.results ?? [],
+  );
+  readonly runCurrentQuestion = computed(
+    () => this.runView()?.currentQuestion ?? null,
+  );
+  readonly runDatasets = computed(() => this.runView()?.datasets ?? []);
 
   readonly running = computed(() => this.runStatus() === 'running');
   readonly passedCount = computed(
@@ -687,58 +784,61 @@ export class AgentDetail implements OnDestroy {
     if (!datasourceId || caseIds.length === 0) return;
     if (this.running() || this.runStarting()) return;
 
-    this.runStarting.set(true);
-    this.runError.set(null);
-    this.runResults.set([]);
-    this.runCurrentQuestion.set(null);
-    this.syncSelection();
-
-    this.api.startEvalRun(this.agentKey(), datasourceId, caseIds).subscribe({
-      next: (res) => {
-        this.runStarting.set(false);
-        if (!res.ok || !res.jobId) {
-          this.runError.set(res.message);
-          this.runStatus.set('idle');
-          return;
-        }
-        this.runStatus.set('running');
-        this.pollRun(res.jobId);
+    const key = this.agentKey();
+    const name = this.agent()?.name ?? key;
+    // The task is subscribed at the root, so leaving this page neither stops
+    // the run nor its polling; `tasks.latest` shows it again on return.
+    this.tasks.start<EvalRunTick>({
+      kind: 'eval-run',
+      key,
+      title: `Running evals · ${name}`,
+      work: () => this.evalRunWork(key, datasourceId, caseIds),
+      onValue: (view, task) => {
+        const total = view.totalCases || caseIds.length;
+        const done = view.results?.length ?? 0;
+        if (!view.ok || !total) return;
+        this.tasks.update(task.id, {
+          progress: { done, total },
+          detail: `${done} of ${total} questions`,
+        });
       },
-      error: (err) => {
-        this.runStarting.set(false);
-        this.runStatus.set('idle');
-        this.runError.set(err?.error?.message ?? 'Backend unreachable');
-      },
+      outcome: (last) => evalRunOutcome(last, name),
+      open: () => this.openEvals(key),
+      // The page shows its own run state and errors; toast only when away.
+      toast: () => !(this.alive && this.agentKey() === key),
     });
   }
 
-  /** Poll until the job leaves `running`; each question lands as it finishes. */
-  private pollRun(jobId: string): void {
-    this.api.getEvalRun(this.agentKey(), jobId).subscribe({
-      next: (view) => {
-        if (!view.ok) {
-          this.runStatus.set('failed');
-          this.runError.set(view.message);
-          return;
+  /**
+   * Start the job, then poll it every 1.5 s until it leaves `running`; every
+   * poll is emitted, so each question lands as it finishes.
+   */
+  private evalRunWork(
+    key: string,
+    datasourceId: string,
+    caseIds: string[],
+  ): Observable<EvalRunTick> {
+    return this.api.startEvalRun(key, datasourceId, caseIds).pipe(
+      switchMap((res): Observable<EvalRunTick> => {
+        if (!res.ok || !res.jobId) {
+          return of({ ok: false, message: res.message });
         }
-        this.runResults.set(view.results ?? []);
-        this.syncSelection();
-        this.runCurrentQuestion.set(view.currentQuestion ?? null);
-        this.runDatasets.set(view.datasets ?? []);
-        if (view.status === 'running') {
-          this.pollTimer = setTimeout(() => this.pollRun(jobId), 1500);
-          return;
-        }
-        this.runStatus.set(view.status ?? 'completed');
-        if (view.error) this.runError.set(view.error);
-        // The finished run belongs in the history list.
-        if (this.evalTab() === 'runs') this.loadEvalRuns();
-      },
-      error: (err) => {
-        this.runStatus.set('failed');
-        this.runError.set(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
+        const jobId = res.jobId;
+        return timer(0, 1500).pipe(
+          concatMap(() => this.api.getEvalRun(key, jobId)),
+          takeWhile((view) => view.ok && view.status === 'running', true),
+        );
+      }),
+    );
+  }
+
+  /** The task's Open: this agent's page on its Evals tab. */
+  private openEvals(key: string): void {
+    this.pageState.requestedTab.set('evals');
+    this.nav.openAgentByKey(key);
+    // The shell refused (unsaved edits): don't leave the request for later.
+    if (this.nav.activeAgentKey() !== key)
+      this.pageState.requestedTab.set(null);
   }
 
   /** Re-point the panel at the selected question's latest result. */
@@ -752,8 +852,8 @@ export class AgentDetail implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.alive = false;
     this.pageState.reset();
-    clearTimeout(this.pollTimer);
     this.evalSelection.clear();
   }
 
