@@ -37,6 +37,50 @@
       </button>
     }
   </div>
+  <form
+    class="flex flex-wrap items-end gap-2"
+    (submit)="$event.preventDefault(); interpret()"
+  >
+    <label class="flex min-w-[16rem] flex-1 flex-col gap-1 text-[12px] text-fg-muted">
+      Filter in words
+      <input
+        type="text"
+        data-testid="query-filter-text"
+        class="field py-1 text-[12px]"
+        placeholder="e.g. only Brazil, goals over 3, newest first"
+        [value]="draftText()"
+        (input)="draftText.set($any($event.target).value)"
+      />
+    </label>
+    <button
+      type="submit"
+      data-testid="query-filter-text-apply"
+      class="btn btn-primary px-2.5 py-1 text-[12px]"
+      [disabled]="!canInterpret()"
+      [attr.aria-busy]="interpreting()"
+    >
+      Apply
+    </button>
+  </form>
+  @if (understood(); as understoodText) {
+    <p data-testid="query-filter-understood" class="m-0 text-[12px] text-fg-muted">
+      Understood as: {{ understoodText }}
+    </p>
+  }
+  @if (rejectedText(); as ignored) {
+    <p data-testid="query-filter-rejected" class="m-0 text-[12px] text-fg-muted">
+      {{ ignored }}
+    </p>
+  }
+  @if (textError(); as message) {
+    <div
+      data-testid="query-filter-text-error"
+      role="alert"
+      class="rounded-md bg-danger-soft px-3 py-2 text-[13px] text-on-danger-soft"
+    >
+      Could not turn that into a filter: {{ message }}
+    </div>
+  }
   @if (adding()) {
     <form
       class="flex flex-wrap items-end gap-2 rounded-md bg-surface-muted p-2"
@@ -132,6 +176,11 @@
 @if (result() === null && note(); as noteText) {
   <p data-testid="query-result-note" class="m-0 text-[12px] text-fg-muted">
     {{ noteText }}
+  </p>
+}
+@if (viewNote(); as viewText) {
+  <p data-testid="query-result-view-note" class="m-0 text-[12px] text-fg-muted">
+    {{ viewText }}
   </p>
 }
 @if (topNNote(); as topText) {

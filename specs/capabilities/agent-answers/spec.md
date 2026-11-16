@@ -134,6 +134,8 @@ The query inspector (M1-25) shows, for each figure of an answer, which query pro
 - R79. The `Result` tab SHALL have a pager: `Previous` and `Next` ask the server for the page before or after, with the current filters and sort, and a label reads `Rows 51–100 of 2,034`, `Rows 1–50 of 312 matching` once filtered, and `Rows 1–50 of 50,000+` when the result is capped, with the note `Paging stops at 50,000 rows. Add a filter to narrow the result.` A `top-n` query adds `Paging the full result, not only the top 100 the answer used`.
 - R80. Each column header of the `Result` tab SHALL be a button that sorts by that column on the server: a click cycles ascending, descending and none (`aria-sort` on the header), one column at a time, and the view returns to its first page.
 - R81. The `Result` tab SHALL let the reader add column filters (`Add filter`: a column, an operator named in words (is, is not, greater than, at least, less than, at most, between, is one of, is not one of, contains, does not contain, starts with, is empty, is not empty) and a value; two for between, a comma-separated list for the list operators, none for the empty operators). Each filter shows as a chip with a remove button, `Clear filters` removes them all, a view with no match says `No rows match these filters.`, and a failed request says `Could not load this page: <message>` with `Retry`. Every change returns to the first page.
+- R82. In a query that can be paged, the `Result` tab SHALL offer `Filter in words` (a text box and `Apply`; Enter applies). The words go to the `result-explorer` agent with the view being shown (api.md 152 and 154); the filters, sort and page it returns replace the current ones and the page is requested, and the tab says `Understood as: <what the agent understood>`, plus what it ignored when it left a part out. A request that is not a filter on this result, or that the agent cannot turn into one, says `Could not turn that into a filter: <reason>` and leaves the view as it was. Apply is disabled while the agent answers. A sample offers none of this.
+- R83. When the evidence of a query holds a `view` (an `explore_result` record of the assistant), the inspector SHALL open its `Result` tab on that view at once and say `Page 2 of 41 · Country is Brazil · sorted by Goals, high to low`.
 - R78. The explanation, the step counts and the evidence are written to the run's answer under one lock per run, so two writes cannot overwrite each other (this includes the rating of an answer).
 
 ### Verified badge and rating
@@ -409,6 +411,14 @@ E2E: `frontend/e2e/query-result-paging.spec.ts`
 Feature: Page, sort and filter a query's result (outside a `gherkin` fence: `check-specs` reads one E2E file per capability spec)
 
 - Scenario: I page, sort and filter the full result of an answer query
+
+### Feature: Filter a query's result in words
+
+E2E: `frontend/e2e/query-result-filter-text.spec.ts`
+
+Feature: Filter a query's result in words (outside a `gherkin` fence: `check-specs` reads one E2E file per capability spec)
+
+- Scenario: I filter the result of an answer query by typing what I want
 
 ### Feature: Skills the assistant is given
 

@@ -659,6 +659,22 @@ describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)',
 
   afterEach(() => http.verify());
 
+  it('posts words to the interpret-filter route and unwraps (api.md 152)', () => {
+    const view = { filters: [], sort: [], page: 1, pageSize: 50 };
+    let understood = '';
+    service
+      .interpretFilter('run 1', 3, 'only Brazil', view)
+      .subscribe((response) => (understood = response.interpretation.understood));
+    const call = http.expectOne(
+      (r) =>
+        r.method === 'POST' &&
+        r.url.endsWith('/workflow-runs/run%201/answer/queries/3/interpret-filter'),
+    );
+    expect(call.request.body).toEqual({ text: 'only Brazil', view });
+    call.flush({ ok: true, interpretation: { request: {}, understood: 'Country is Brazil' } });
+    expect(understood).toBe('Country is Brazil');
+  });
+
   it('posts a page request to the page route (api.md 151)', () => {
     const request = { page: 2, filters: [{ column: 'a', op: 'eq' as const, value: 'x' }] };
     let matched = -1;

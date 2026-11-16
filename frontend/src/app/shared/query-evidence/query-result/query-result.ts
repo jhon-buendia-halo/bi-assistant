@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   linkedSignal,
   signal,
+  untracked,
 } from '@angular/core';
 import {
   FILTER_OPS,
@@ -18,6 +20,7 @@ import {
   PageRequest,
   PageResult,
   QUERY_EVIDENCE_API,
+  ResultView,
   SortSpec,
 } from '../query-evidence.model';
 import { formatCount } from '../query-labels';
@@ -59,6 +62,9 @@ export class QueryResult {
   /** The row count of a `top-n` query (its LIMIT); null for other coverage. */
   readonly topN = input<number | null>(null);
 
+  /** The view an explore record opens on (agent-answers R83). */
+  readonly view = input<ResultView | null>(null);
+
   protected readonly ops = FILTER_OPS;
   protected readonly opLabels = FILTER_OP_LABELS;
 
@@ -82,6 +88,20 @@ export class QueryResult {
     source: this.source,
     computation: () => null,
   });
+  protected readonly textError = linkedSignal<string, string | null>({
+    source: this.source,
+    computation: () => null,
+  });
+  protected readonly understood = linkedSignal<string, string | null>({
+    source: this.source,
+    computation: () => null,
+  });
+  protected readonly rejected = linkedSignal<string, string[]>({
+    source: this.source,
+    computation: () => [],
+  });
+  protected readonly interpreting = signal(false);
+  protected readonly draftText = signal('');
   protected readonly loading = signal(false);
   protected readonly adding = signal(false);
   private lastRequest: PageRequest | null = null;
@@ -132,6 +152,35 @@ export class QueryResult {
       ? `Rows 1–${formatCount(shown)}`
       : `Rows 1–${formatCount(shown)} of ${formatCount(total)}`;
   });
+  protected readonly rejectedText = computed(() =>
+    this.rejected().length === 0
+      ? null
+      : `Ignored: ${this.rejected().join('; ')}`,
+  );
+  protected readonly canInterpret = computed(
+    () =>
+      !this.interpreting() && !this.loading() && this.draftText().trim() !== '',
+  );
+  /** "Page 2 of 41 · Country is Brazil · sorted by Goals, high to low" */
+  protected readonly viewNote = computed(() => {
+    const result = this.result();
+    if (this.view() === null || result === null) return null;
+    const parts = [`Page ${formatCount(result.page)} of ${formatCount(result.pageCount)}`];
+    for (const filter of this.filters()) parts.push(this.filterText(filter));
+    const sort = this.sort();
+    if (sort.length > 0) {
+      parts.push(
+        'sorted by ' +
+          sort
+            .map(
+              (s) =>
+                `${s.column}, ${s.direction === 'desc' ? 'high to low' : 'low to high'}`,
+            )
+            .join('; '),
+      );
+    }
+    return parts.join(' · ');
+  });
   protected readonly capNote = computed(() => this.result()?.capped === true);
   protected readonly topNNote = computed(() => {
     const n = this.topN();
@@ -159,6 +208,25 @@ export class QueryResult {
     if (this.draftValue().trim() === '') return false;
     return !this.needsValueTo() || this.draftValueTo().trim() !== '';
   });
+
+  constructor() {
+    // An explore record opens on its view: request that page at once.
+    effect(() => {
+      const view = this.view();
+      this.source();
+      untracked(() => {
+        if (view === null || !this.pageable()) return;
+        this.filters.set(view.filters);
+        this.sort.set(view.sort);
+        this.send({
+          page: view.page,
+          pageSize: view.pageSize,
+          filters: view.filters,
+          sort: view.sort,
+        });
+      });
+    });
+  }
 
   protected sortState(column: string): 'ascending' | 'descending' | 'none' {
     const sort = this.sort().find((s) => s.column === column);
@@ -233,6 +301,53 @@ export class QueryResult {
     this.load(1);
   }
 
+  protected interpret(): void {
+    if (!this.canInterpret()) return;
+    const index = this.index();
+    this.interpreting.set(true);
+    this.textError.set(null);
+    this.api
+      .interpretFilter(index, this.draftText().trim(), this.currentView())
+      .subscribe({
+        next: (interpretation) => {
+          this.interpreting.set(false);
+          if (this.index() !== index) return;
+          const request = interpretation.request;
+          this.filters.set(request.filters ?? []);
+          this.sort.set(request.sort ?? []);
+          this.understood.set(interpretation.understood);
+          this.rejected.set(interpretation.rejected ?? []);
+          this.send({
+            page: request.page ?? 1,
+            pageSize: request.pageSize ?? this.pageSize(),
+            filters: this.filters(),
+            sort: this.sort(),
+          });
+        },
+        error: (err) => {
+          this.interpreting.set(false);
+          if (this.index() === index) this.textError.set(errorText(err));
+        },
+      });
+  }
+
+  /** What the reader sees now, for the agent to build on; null before any change. */
+  private currentView(): ResultView | null {
+    if (
+      this.result() === null &&
+      this.filters().length === 0 &&
+      this.sort().length === 0
+    ) {
+      return null;
+    }
+    return {
+      filters: this.filters(),
+      sort: this.sort(),
+      page: this.page(),
+      pageSize: this.pageSize(),
+    };
+  }
+
   protected retry(): void {
     if (this.lastRequest !== null) this.send(this.lastRequest);
   }
@@ -243,6 +358,9 @@ export class QueryResult {
     this.filters.set([]);
     this.sort.set([]);
     this.error.set(null);
+    this.textError.set(null);
+    this.understood.set(null);
+    this.rejected.set([]);
     this.adding.set(false);
   }
 
