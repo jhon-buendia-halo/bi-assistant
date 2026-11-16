@@ -6,6 +6,10 @@ import {
 } from '../../../mastra/agents/query-explainer.prompts';
 import { MastraService } from '../../../mastra/mastra.service';
 import { runErrorMessage } from '../../../mastra/workflows/workflow-run';
+import type {
+  PageRequest,
+  PageResult,
+} from '../../datasources/connectors/paged-sql.types';
 import type { ChatMessage, ToolDataRecord } from '../entities/session.entity';
 import { evidenceOf } from './query-evidence';
 import type {
@@ -47,8 +51,8 @@ function evidenceIn(answer: ChatMessage): QueryEvidence[] {
 }
 
 /**
- * The query inspector's engine (api.md 139-148): the lock per answer, the
- * single flight, prepare, explain, count the steps, re-run and export, on
+ * The query inspector's engine (api.md 139-148, 151, 153): the lock per answer, the
+ * single flight, prepare, explain, count the steps, re-run, page and export, on
  * any answer host. Queries go through `QueryEvidenceService`, the explainer
  * through `MastraService.explainQuery`. It stores nothing itself: every
  * write goes through the host's `save`, under the host's lock.
@@ -268,6 +272,19 @@ export class AnswerEvidenceService {
   ): Promise<QueryRerunResult> {
     const { record, entry, datasets } = await this.runnableQuery(host, index);
     return this.queryEvidence.rerun(record, entry, datasets);
+  }
+
+  /**
+   * One page of one of the answer's queries, filtered and sorted (api.md
+   * 151, 153); the checks of 142 first. Nothing is stored.
+   */
+  async page<V>(
+    host: AnswerHost<V>,
+    index: number,
+    request: PageRequest,
+  ): Promise<PageResult> {
+    const { record, entry, datasets } = await this.runnableQuery(host, index);
+    return this.queryEvidence.page(record, entry, datasets, request);
   }
 
   /**

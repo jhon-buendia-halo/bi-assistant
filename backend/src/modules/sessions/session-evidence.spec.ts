@@ -14,6 +14,7 @@ import request from 'supertest';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import type { PagedStatement } from '../datasources/connectors/paged-sql.types';
 import type { DatasourcesService } from '../datasources/datasources.service';
 import type { ChatMessage, SessionDoc } from './entities/session.entity';
 import { AnswerEvidenceService } from './query-evidence/answer-evidence.service';
@@ -43,6 +44,7 @@ const ANSWER: ChatMessage = {
       rowCount: 100,
     },
     { tool: 'run_readonly_sql', input: 'SELECT nope', error: 'no column' },
+    { tool: 'sample_rows', input: 'shop.public.returns', rows: [] },
   ],
 };
 
@@ -107,6 +109,13 @@ async function build() {
           rows: [{ product: 'b', n: 1 }],
         }),
   );
+  const runPagedSql = jest.fn((_id: string, stmt: PagedStatement) =>
+    Promise.resolve({
+      columns: stmt.columns,
+      rows: [{ product: 'c', n: 2 }],
+      matchedRows: 61,
+    }),
+  );
   const queryEvidence = new QueryEvidenceService(
     {
       getByNames: jest.fn().mockResolvedValue([
@@ -118,7 +127,7 @@ async function build() {
         },
       ]),
     } as unknown as DatasetsRepository,
-    { runReadOnlySql } as unknown as DatasourcesService,
+    { runReadOnlySql, runPagedSql } as unknown as DatasourcesService,
   );
   const explainQuery = jest.fn(() => Promise.resolve(EXPLANATION));
   const engine = new AnswerEvidenceService(queryEvidence, {
@@ -142,6 +151,7 @@ async function build() {
     repository,
     sessions,
     runReadOnlySql,
+    runPagedSql,
     explainQuery,
     stored,
   };
@@ -154,13 +164,13 @@ type Server = Parameters<typeof request>[0];
 interface Body {
   ok?: boolean;
   message: ChatMessage;
-  result: { rows: unknown[] };
+  result: { rows: unknown[]; pageCount?: number; view?: unknown };
 }
 const bodyOf = (res: { body: unknown }) => res.body as Body;
 const errorOf = (res: { body: unknown }) =>
   (res.body as { message: string }).message;
 
-describe('A past chat hosts the query inspector (api.md 144-148)', () => {
+describe('A past chat hosts the query inspector (api.md 144-148, 153)', () => {
   let ctx: Awaited<ReturnType<typeof build>>;
   beforeEach(async () => {
     ctx = await build();
@@ -244,6 +254,48 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
     expect(ctx.sessions.saveMessage).not.toHaveBeenCalled();
   });
 
+  it('153 pages one query and stores nothing; a sample is refused', async () => {
+    const server = ctx.app.getHttpServer() as Server;
+    const res = await request(server)
+      .post(`${base}/1/answer/queries/0/page`)
+      .send({
+        pageSize: 20,
+        filters: [{ column: 'product', op: 'in', values: ['a', 'c'] }],
+      })
+      .expect(201);
+
+    expect(bodyOf(res).ok).toBe(true);
+    expect(bodyOf(res).result).toMatchObject({
+      rows: [{ product: 'c', n: 2 }],
+      pageCount: 4,
+      view: {
+        filters: [{ column: 'product', op: 'in', values: ['a', 'c'] }],
+        sort: [],
+        page: 1,
+        pageSize: 20,
+      },
+    });
+    expect(ctx.runPagedSql).toHaveBeenCalledWith(
+      'ds-1',
+      expect.objectContaining({ sql: SQL, columns: ['product', 'n'] }),
+    );
+    expect((await ctx.stored()).messages[1]).toEqual(ANSWER);
+    expect(ctx.sessions.saveMessage).not.toHaveBeenCalled();
+
+    const sample = await request(server)
+      .post(`${base}/1/answer/queries/2/page`)
+      .expect(400);
+    expect(errorOf(sample)).toBe(
+      'Query 2 is a sample; it has no full result to page',
+    );
+    const unknown = await request(server)
+      .post(`${base}/1/answer/queries/0/page`)
+      .send({ sort: [{ column: 'Product', direction: 'asc' }] })
+      .expect(400);
+    expect(errorOf(unknown)).toBe('Unknown column "Product"');
+    expect(ctx.runPagedSql).toHaveBeenCalledTimes(1);
+  });
+
   it('answers the checks of 140-143 with the message named', async () => {
     const server = ctx.app.getHttpServer() as Server;
     const message = async (path: string, method: 'get' | 'post' = 'post') =>
@@ -267,6 +319,12 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
     expect(await message('/1/answer/queries/1/rerun')).toBe(
       'Query 1 has no SQL to run',
     );
+    expect(await message('/1/answer/queries/1/page')).toBe(
+      'Query 1 has no SQL to run',
+    );
+    expect(await message('/1/answer/queries/x/page')).toBe(
+      "Query x not found in the message's answer",
+    );
     expect(await message('/1/answer/queries/1/explanation')).toBe(
       'Query 1 has no SQL to explain',
     );
@@ -283,6 +341,7 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
       ['post', `${unknown}/queries/0/explanation`],
       ['post', `${unknown}/queries/0/stage-counts`],
       ['post', `${unknown}/queries/0/rerun`],
+      ['post', `${unknown}/queries/0/page`],
       ['get', `${unknown}/queries/0/csv`],
       ['get', '/sessions/nope'],
     ] as const) {
@@ -302,6 +361,7 @@ describe('A past chat hosts the query inspector (api.md 144-148)', () => {
     expect(answer.evidence).toEqual([
       { index: 0, coverage: 'top-n', outerLimit: 100 },
       { index: 1 },
+      { index: 2, coverage: 'sample' },
     ]);
     expect(ctx.runReadOnlySql).not.toHaveBeenCalled();
     expect((await ctx.stored()).messages[1].evidence).toBeUndefined();

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
@@ -18,6 +19,8 @@ import type {
 import { EXPORT_ROWS } from './query-evidence/query-coverage';
 import { csvOf, withDerivedEvidence } from './query-evidence/query-evidence';
 import type { QueryRerunResult } from './query-evidence/query-evidence.service';
+import { parsePageRequest } from './query-evidence/result-view';
+import type { PageResult } from '../datasources/connectors/paged-sql.types';
 import type { Response } from 'express';
 
 /** The `:message` of 144-148: a whole number, else the 400 of a message with no answer. */
@@ -126,6 +129,25 @@ export class SessionsController {
     return {
       ok: true,
       result: await this.evidence.rerun(id, at, parseQueryIndex(index)),
+    };
+  }
+
+  /**
+   * One page of one of a message's queries, filtered and sorted (api.md
+   * 153); the body is a `PageRequest`. Nothing is stored.
+   */
+  @Post(':id/messages/:message/answer/queries/:index/page')
+  async pageQuery(
+    @Param('id') id: string,
+    @Param('message') message: string,
+    @Param('index') index: string,
+    @Body() body: unknown,
+  ): Promise<{ ok: true; result: PageResult }> {
+    const at = parseMessageIndex(message);
+    const query = parseQueryIndex(index);
+    return {
+      ok: true,
+      result: await this.evidence.page(id, at, query, parsePageRequest(body)),
     };
   }
 

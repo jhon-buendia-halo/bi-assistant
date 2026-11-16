@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DatasetsRepository } from '../../datasets/repositories/datasets.repository';
 import { mapWithConcurrency } from '../../datasources/connectors/connector';
+import type {
+  PageRequest,
+  PageResult,
+} from '../../datasources/connectors/paged-sql.types';
 import { DatasourcesService } from '../../datasources/datasources.service';
 import type { DatasourceKind } from '../../datasources/entities/datasource.entity';
 import type { ChatMessage, ToolDataRecord } from '../entities/session.entity';
@@ -13,6 +17,7 @@ import type {
   QueryTableSize,
 } from './query-evidence.types';
 import { countStatement, tablesOfQuery } from './query-tables';
+import { pageResultOf, preparePage } from './result-view';
 
 /** Table counts in flight at once (api.md 139). */
 export const TABLE_COUNT_CONCURRENCY = 3;
@@ -277,6 +282,35 @@ export class QueryEvidenceService {
       rows: rows.slice(0, EXPORT_ROWS),
       cut: rows.length > EXPORT_ROWS || (result.totalRows ?? 0) > EXPORT_ROWS,
     };
+  }
+
+  /**
+   * One page of a stored query's full result (api.md 151, 153): the stored
+   * SQL (the corrected one, for a repaired query) over its stored columns,
+   * filtered, sorted and paged by the connector under its datasource's
+   * timeout. The request is checked before any query; a sample has no full
+   * result to page. Nothing is stored.
+   */
+  async page(
+    record: ToolDataRecord,
+    evidence: QueryEvidence,
+    datasetNames: string[],
+    request: PageRequest,
+  ): Promise<PageResult> {
+    if (record.tool === 'sample_rows') {
+      throw new BadRequestException(
+        `Query ${evidence.index} is a sample; it has no full result to page`,
+      );
+    }
+    const prepared = preparePage(
+      { sql: record.input ?? '', columns: record.columns, rows: record.rows },
+      request,
+    );
+    const source = await this.datasourceFor(evidence, datasetNames);
+    const paged = await this.guarded(() =>
+      this.datasources.runPagedSql(source.id, prepared.statement),
+    );
+    return pageResultOf(prepared, paged);
   }
 
   /**
