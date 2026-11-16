@@ -9,6 +9,7 @@ import { OntologyModule } from '../ontology/ontology.module';
 import { UserAgentsModule } from '../user-agents/user-agents.module';
 import { DataReadinessModule } from '../data-readiness/data-readiness.module';
 import { SyntheticDataModule } from '../synthetic-data/synthetic-data.module';
+import { ArtifactsModule } from '../artifacts/artifacts.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
@@ -30,6 +31,7 @@ import { SessionEvidenceService } from './session-evidence.service';
     UserAgentsModule,
     DataReadinessModule,
     SyntheticDataModule,
+    ArtifactsModule,
   ],
   controllers: [SessionsController],
   providers: [

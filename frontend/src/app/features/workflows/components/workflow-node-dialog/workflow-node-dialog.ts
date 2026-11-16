@@ -58,6 +58,7 @@ import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
 import { WorkflowStepNarrative } from '../workflow-step-narrative/workflow-step-narrative';
+import { exitSentence } from '../../../agents/services/workflow-flow';
 import { formatNodeDuration, nodeStatusChip } from './workflow-node-format';
 
 type DialogTab = 'parameters' | 'settings';
@@ -121,6 +122,9 @@ const FOCUSABLE =
   },
 })
 export class WorkflowNodeDialog {
+  /** A step's exit as a sentence, the outcome first (ui.md 4.4b). */
+  protected readonly exitSentence = exitSentence;
+
   readonly X = X;
   readonly ChevronRight = ChevronRight;
   readonly Check = Check;

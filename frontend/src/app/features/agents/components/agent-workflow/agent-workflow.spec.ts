@@ -26,7 +26,7 @@ const WORKFLOW: AgentWorkflow = {
         tools: ['list_entities', 'run_readonly_sql'],
         maxSteps: 15,
       },
-      exits: [{ label: 'Stop', outcome: 'stops' }],
+      exits: [{ label: 'you stop it', outcome: 'stops' }],
     },
   ],
 };
@@ -77,7 +77,7 @@ describe('AgentWorkflowView (agents-evals R108)', () => {
       [...el.querySelectorAll('[data-testid="workflow-step-exit"]')].map((e) =>
         e.textContent?.trim(),
       ),
-    ).toEqual(['Stop → ends the turn here']);
+    ).toEqual(['Ends the turn if you stop it']);
   });
 
   it('shows a step’s details when selected and closes them on a second click', () => {

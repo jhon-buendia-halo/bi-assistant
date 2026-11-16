@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MastraModule } from '../../mastra/mastra.module';
 import { AgentsModule } from '../agents/agents.module';
+import { ArtifactsModule } from '../artifacts/artifacts.module';
 import { DatasetsModule } from '../datasets/datasets.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
@@ -24,7 +25,13 @@ import { WorkflowsService } from './workflows.service';
  * (api.md 120-137).
  */
 @Module({
-  imports: [AgentsModule, MastraModule, SessionsModule, DatasetsModule],
+  imports: [
+    AgentsModule,
+    MastraModule,
+    SessionsModule,
+    DatasetsModule,
+    ArtifactsModule,
+  ],
   controllers: [
     WorkflowsController,
     WorkflowRunsController,

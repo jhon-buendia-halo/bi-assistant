@@ -752,14 +752,7 @@
           <dd class="m-0 text-fg" data-testid="workflow-step-field-exits">
             @for (exit of step.exits; track $index; let last = $last) {
               <span [class.text-on-danger-soft]="exit.outcome === 'fails'"
-                >{{ exit.label }}
-                {{
-                  exit.outcome === "fails"
-                    ? "→ fails"
-                    : exit.outcome === "waits"
-                      ? "→ waits for you"
-                      : "→ ends here"
-                }}</span
+                >{{ exitSentence(exit) }}</span
               >
               @if (!last) {
                 <span> · </span>

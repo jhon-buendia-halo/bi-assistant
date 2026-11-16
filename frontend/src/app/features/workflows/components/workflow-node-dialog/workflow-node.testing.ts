@@ -59,8 +59,8 @@ export const FIXTURE_WORKFLOW: WorkflowDetail = {
         key: 'qti',
       },
       exits: [
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
       ],
     },
   ],

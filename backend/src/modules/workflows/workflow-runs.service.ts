@@ -23,10 +23,12 @@ import {
 import {
   inputFieldsWithUsage,
   validateWorkflowInput,
+  withStoredImages,
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
 import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
+import { ArtifactsService } from '../artifacts/artifacts.service';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { clarifyingQuestionText } from '../sessions/turn/turn-workflow';
 import type {
@@ -154,6 +156,11 @@ export interface PreparedRun {
   values: WorkflowInputValues;
   /** The agent turn the input asks for. */
   turn: AgentRunTurn;
+  /**
+   * The input's image (agents.md 5.17), taken out of `values`: the run's
+   * host stores it in its workspace at `path`, the field's value.
+   */
+  image?: { path: string; data: Buffer };
   /** The earlier run given as context (plan 5.4). */
   context?: {
     fromRunId: string;
@@ -226,6 +233,8 @@ export class WorkflowRunsService implements OnModuleInit {
     // The query inspector's queries (api.md 139-143).
     @Inject(QUERY_EVIDENCE_SERVICE)
     queryEvidence: QueryEvidenceService,
+    // The saved dashboards a run's input names.
+    private readonly artifacts: ArtifactsService,
     // The query inspector's engine (api.md 139-148), shared with the
     // sessions; built here from the two above when none is given.
     @Optional() answers?: AnswerEvidenceService,
@@ -302,9 +311,16 @@ export class WorkflowRunsService implements OnModuleInit {
     const needsDatasets = workflow.input.some(
       (field) => field.type === 'dataset' || field.type === 'datasets',
     );
-    const checked = validateWorkflowInput(workflow, request.input, {
-      datasets: needsDatasets ? await this.datasets.list() : [],
-    });
+    const checked = validateWorkflowInput(
+      workflow,
+      await this.withEarlierImages(workflow, request.input, request.context),
+      {
+        datasets: needsDatasets ? await this.datasets.list() : [],
+        artifacts: workflow.input.some((field) => field.type === 'artifact')
+          ? await this.artifacts.list()
+          : [],
+      },
+    );
     const errors: WorkflowInputError[] = checked.ok ? [] : checked.errors;
     let context: PreparedRun['context'];
     try {
@@ -319,10 +335,14 @@ export class WorkflowRunsService implements OnModuleInit {
       // A workflow whose input gives no question can't run an agent turn.
       throw inputRefusal([{ field: null, message: 'Question is required' }]);
     }
+    // An image never stays in the input: the run stores it as a file.
+    const stored = withStoredImages(workflow, checked.input);
+    const image = stored.images[0];
     return {
       workflow,
-      values: checked.input,
+      values: stored.input,
       turn,
+      ...(image ? { image: { path: image.path, data: image.data } } : {}),
       ...(context ? { context } : {}),
     };
   }
@@ -412,6 +432,8 @@ export class WorkflowRunsService implements OnModuleInit {
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
         ...(prepared.turn.checkDataQuality ? { checkDataQuality: true } : {}),
+        ...(prepared.image ? { image: prepared.image } : {}),
+        ...(prepared.turn.artifact ? { artifact: prepared.turn.artifact } : {}),
         ...(prepared.context
           ? {
               context: {
@@ -999,6 +1021,52 @@ export class WorkflowRunsService implements OnModuleInit {
       ...(view.workflow ? { workflow: view.workflow } : {}),
       ...(view.agent ? { agent: view.agent } : {}),
     };
+  }
+
+  /**
+   * A follow-up's input with the earlier run's image put back (agents.md
+   * 5.17): a stored run holds the path of its image, not the image, so a
+   * follow-up on the same input sends that path. Where an `image` field's
+   * value is the path the earlier run of the same workflow stored, it
+   * becomes that file as a `data:` URL; anything else is left for the
+   * input check to refuse.
+   */
+  private async withEarlierImages(
+    workflow: WorkflowDefinition,
+    input: unknown,
+    context: unknown,
+  ): Promise<unknown> {
+    const fields = workflow.input.filter((field) => field.type === 'image');
+    const fromRunId = (context as { fromRunId?: unknown } | null | undefined)
+      ?.fromRunId;
+    if (
+      !fields.length ||
+      typeof fromRunId !== 'string' ||
+      !input ||
+      typeof input !== 'object'
+    ) {
+      return input;
+    }
+    const earlier = await this.repository.get(fromRunId);
+    if (!earlier || earlier.workflowId !== workflow.id) return input;
+    const values: Record<string, unknown> = { ...input };
+    for (const field of fields) {
+      const path = values[field.name];
+      if (typeof path !== 'string' || path !== earlier.input[field.name]) {
+        continue;
+      }
+      try {
+        const image = await this.sessions.runHostImage(
+          `${RUN_HOST_ID_PREFIX}${earlier.id}`,
+          path,
+        );
+        values[field.name] =
+          `data:${image.mediaType};base64,${image.data.toString('base64')}`;
+      } catch {
+        // The file is gone: the input check asks for the image again.
+      }
+    }
+    return values;
   }
 
   /**

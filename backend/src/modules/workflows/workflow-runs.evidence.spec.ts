@@ -140,6 +140,8 @@ function build() {
       new SqliteDocStore(db, 'workflow_run_node_chats'),
     ),
     queryEvidence,
+    // No stored artifact: no workflow here takes one.
+    { list: () => Promise.resolve([]) } as never,
   );
   return { service, repository, runReadOnlySql, sessions };
 }

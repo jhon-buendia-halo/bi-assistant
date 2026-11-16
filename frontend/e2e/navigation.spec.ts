@@ -269,6 +269,7 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   for (const label of [
     'Datasets',
     'Agents',
+    'Artifacts',
     'Runs',
     'Monitoring',
   ]) {

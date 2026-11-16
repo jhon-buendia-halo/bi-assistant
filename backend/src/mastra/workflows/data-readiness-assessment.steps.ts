@@ -44,8 +44,8 @@ export const DATA_READINESS_ASSESSMENT_RUNTIME_KEY =
 const SCHEMAS = DATA_READINESS_ASSESSMENT_STEP_SCHEMAS;
 
 const SOURCE_EXITS: readonly WorkflowStepExit[] = [
-  { label: 'Datasource unreachable', outcome: 'fails' },
-  { label: 'Stop', outcome: 'stops' },
+  { label: 'the datasource cannot be reached', outcome: 'fails' },
+  { label: 'you stop it', outcome: 'stops' },
 ];
 
 /**
@@ -62,7 +62,10 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
       summary:
         "Finds the dataset's PostgreSQL or Databricks datasource and its tables, the assessment's scope. No LLM.",
       exits: [
-        { label: 'Not a PostgreSQL or Databricks dataset', outcome: 'fails' },
+        {
+          label: 'the dataset is not PostgreSQL or Databricks',
+          outcome: 'fails',
+        },
       ],
     },
     SCHEMAS['resolve-dataset'],
@@ -108,8 +111,8 @@ export const DATA_READINESS_ASSESSMENT_STEPS: readonly ContractStepEntry[] = [
       summary:
         "The Data Readiness Agent reads the stored report and answers the run's question from it. It never changes a score.",
       exits: [
-        { label: 'Model error', outcome: 'fails' },
-        { label: 'Stop', outcome: 'stops' },
+        { label: 'the model returns an error', outcome: 'fails' },
+        { label: 'you stop it', outcome: 'stops' },
       ],
     },
     SCHEMAS['explain-report'],

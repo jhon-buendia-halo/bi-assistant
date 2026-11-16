@@ -23,6 +23,10 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
+import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
+import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
+import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
+import { WorkflowsNavState } from '../../services/workflows-nav-state';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { ReadinessHistory } from '../../../data-readiness/components/readiness-history/readiness-history';
 import {
@@ -43,10 +47,18 @@ import { WorkflowInputField, WorkflowRun } from '../../models/workflow.model';
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import {
+  IMAGE_ACCEPT,
+  isImageDataUrl,
+} from '../../services/workflow-input-validation';
+import {
   canRunFromPage,
   runOutputEntries,
   runStatusLine,
 } from '../../services/workflows.util';
+
+/** The workflow a saved dashboard is mapped in, and its artifact field. */
+const MAP_WORKFLOW_ID = 'map-dashboard-data';
+const MAP_ARTIFACT_FIELD = 'artifact';
 
 /** The composer's controls Execute workflow may focus, in order. */
 const FORM_CONTROLS =
@@ -146,6 +158,9 @@ export class WorkflowRunChat {
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
+  private readonly artifactsApi = inject(ArtifactsApiService);
+  private readonly artifactsNav = inject(ArtifactsNavState);
+  private readonly workflowsNav = inject(WorkflowsNavState);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly log = viewChild<ElementRef<HTMLElement>>('log');
   /** The chat follows the run's newest text while the user stays near its end. */
@@ -172,6 +187,20 @@ export class WorkflowRunChat {
         this.designer.runFormRequest.set(0);
         setTimeout(() => this.focusRunForm());
       });
+    });
+    // A workflow with an artifact field: load the artifacts it offers.
+    effect(() => {
+      const workflow = this.designer.workflow();
+      const wants = workflow?.input.some(
+        (field) => !field.hidden && field.type === 'artifact',
+      );
+      if (!wants) return;
+      untracked(() =>
+        this.artifactsApi.list().subscribe({
+          next: (artifacts) => this.artifacts.set(artifacts),
+          error: () => this.artifacts.set([]),
+        }),
+      );
     });
     // A refused Execute: focus the first field with an error.
     effect(() => {
@@ -331,6 +360,64 @@ export class WorkflowRunChat {
       !this.designer.runResult()?.answer?.clarification,
   );
 
+  /** The file name each image field shows, by field name. */
+  private readonly imageNames = signal<Record<string, string>>({});
+
+  /** The stored artifacts an `artifact` field offers. */
+  private readonly artifacts = signal<ArtifactSummary[]>([]);
+
+  /** The artifacts of the field's kinds (every kind when it names none). */
+  protected artifactChoices(field: WorkflowInputField): ArtifactSummary[] {
+    const kinds = field.artifactKinds;
+    const all = this.artifacts();
+    if (!kinds || kinds.length === 0) return all;
+    return all.filter((artifact) => kinds.includes(artifact.kind));
+  }
+
+  /** An artifact was picked (or None): it replaces the field it is required without. */
+  protected onArtifact(field: WorkflowInputField, event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.designer.setInput(field.name, value);
+    if (value !== '') this.clearPeer(field);
+  }
+
+  /** Empties the field `field` is required without, and its file picker. */
+  private clearPeer(field: WorkflowInputField): void {
+    const peer = field.requiredWithout;
+    if (peer === undefined) return;
+    this.designer.setInput(peer, '');
+    this.imageNames.update((names) => ({ ...names, [peer]: '' }));
+    const control = this.host.nativeElement.querySelector<HTMLInputElement>(
+      `[id="${this.inputId(peer)}"]`,
+    );
+    if (control !== null && control.type === 'file') control.value = '';
+  }
+
+  /**
+   * The artifact the shown run saved (Dashboard Image to Artifact saves the
+   * dashboard it read); null for a run that saved none.
+   */
+  protected readonly savedArtifactId = computed(() => {
+    const result = this.designer.runResult();
+    const id = result?.output?.['artifactId'];
+    return result !== null &&
+      result.status === 'success' &&
+      typeof id === 'string' &&
+      id !== ''
+      ? id
+      : null;
+  });
+
+  protected openSavedArtifact(id: string): void {
+    this.artifactsNav.openArtifact(id);
+  }
+
+  /** Opens Map a Dashboard to Data with the saved dashboard picked. */
+  protected mapSavedArtifact(id: string): void {
+    this.designer.prefillOnLoad({ [MAP_ARTIFACT_FIELD]: id });
+    this.workflowsNav.openWorkflow(MAP_WORKFLOW_ID);
+  }
+
   /** The line under the workflow's name before a run. */
   protected readonly emptyHint = computed(() => {
     const workflow = this.designer.workflow();
@@ -338,6 +425,10 @@ export class WorkflowRunChat {
       (field) =>
         !field.hidden && (field.type === 'datasets' || field.type === 'dataset'),
     );
+    const image = workflow?.input.some(
+      (field) => !field.hidden && field.type === 'image',
+    );
+    if (image) return 'Upload an image below and press Execute.';
     if (this.designer.questionField() === null) {
       return 'Fill in the input below and press Execute.';
     }
@@ -359,17 +450,29 @@ export class WorkflowRunChat {
 
   /**
    * The composer's controls: every field the app does not set itself, the
-   * question first, then the others in order.
+   * prompt first (`isPrompt`), then the others in order.
    */
   protected readonly composerFields = computed(() => {
     const fields =
       this.designer.workflow()?.input.filter((field) => !field.hidden) ?? [];
-    const question = this.designer.questionField();
     return [
-      ...fields.filter((field) => field.name === question),
-      ...fields.filter((field) => field.name !== question),
+      ...fields.filter((field) => this.isPrompt(field)),
+      ...fields.filter((field) => !this.isPrompt(field)),
     ];
   });
+
+  /**
+   * Whether a field is the composer's prompt: the question the user types,
+   * shown first and bare, as a chat's message box. A question the workflow
+   * fills in itself (it has a `default`: optional instructions) is a form
+   * field like the others instead: labelled, boxed and in its own place.
+   */
+  protected isPrompt(field: WorkflowInputField): boolean {
+    return (
+      field.name === this.designer.questionField() &&
+      field.default === undefined
+    );
+  }
 
   /** The latest line of the agent's reasoning, for the Thinking block. */
   protected readonly reasoningSnippet = computed(() => {
@@ -402,6 +505,51 @@ export class WorkflowRunChat {
       event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     ).value;
     this.designer.setInput(name, value);
+  }
+
+  /** The file types an image field's picker offers. */
+  protected readonly imageAccept = IMAGE_ACCEPT;
+
+  /** The image a field holds, to preview it; null when it holds none. */
+  protected imagePreview(name: string): string | null {
+    const values = this.designer.inputValues();
+    const value = Object.hasOwn(values, name) ? values[name] : undefined;
+    return isImageDataUrl(value) ? value : null;
+  }
+
+  /** The name of the file an image field holds; '' when it holds none. */
+  protected imageName(name: string): string {
+    const names = this.imageNames();
+    return Object.hasOwn(names, name) ? names[name] : '';
+  }
+
+  /**
+   * An image field's file was picked: the form holds it as a `data:` URL,
+   * which is what a run sends (api.md 118). Clearing the picker clears it.
+   */
+  protected onImage(name: string, event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) {
+      this.imageNames.update((names) => ({ ...names, [name]: '' }));
+      this.designer.setInput(name, '');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.imageNames.update((names) => ({ ...names, [name]: file.name }));
+      this.designer.setInput(
+        name,
+        typeof reader.result === 'string' ? reader.result : '',
+      );
+      // An image picked replaces the field this one is required without.
+      const field = this.designer.workflow()?.input.find((f) => f.name === name);
+      if (field !== undefined) this.clearPeer(field);
+    };
+    reader.onerror = () => {
+      this.imageNames.update((names) => ({ ...names, [name]: '' }));
+      this.designer.setInput(name, '');
+    };
+    reader.readAsDataURL(file);
   }
 
   protected onCheck(name: string, event: Event): void {
