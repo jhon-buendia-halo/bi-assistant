@@ -92,6 +92,11 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     role: 'Data Mapping Analyst',
     domain: 'data-foundations',
   },
+  'query-explainer': {
+    name: 'Hannah',
+    role: 'Query Explainer',
+    domain: 'sql',
+  },
 };
 
 /** The persona of a built-in agent, or undefined for an unknown key. */

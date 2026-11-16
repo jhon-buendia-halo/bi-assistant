@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Frame, Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
+import { builtBrand } from './helpers/brand';
 import {
   WORLD_CUP_DATASET,
   followOsTheme,
@@ -37,11 +38,18 @@ const SQL =
 const VISUAL_TITLE = 'Matches by stage';
 const SKILL_TAG = '<interactive-visuals-skill>';
 
-/** The frame's tokens per theme (visuals R40), as computed colours. */
-const FRAME_COLOURS = {
-  light: { bg: 'rgb(255, 255, 255)', strong: 'rgb(0, 31, 82)' },
-  dark: { bg: 'rgb(18, 35, 58)', strong: 'rgb(238, 244, 252)' },
+/** The frame's tokens per theme (visuals R40) and brand (ADR-0045), as computed colours. */
+const BRAND_FRAME_COLOURS = {
+  halo: {
+    light: { bg: 'rgb(255, 255, 255)', strong: 'rgb(24, 24, 24)' },
+    dark: { bg: 'rgb(36, 36, 36)', strong: 'rgb(255, 255, 255)' },
+  },
+  mercer: {
+    light: { bg: 'rgb(255, 255, 255)', strong: 'rgb(0, 31, 82)' },
+    dark: { bg: 'rgb(18, 35, 58)', strong: 'rgb(238, 244, 252)' },
+  },
 } as const;
+const FRAME_COLOURS = BRAND_FRAME_COLOURS[builtBrand()];
 type Theme = keyof typeof FRAME_COLOURS;
 
 /** The frame's background before BA-230: always dark (#171717). */

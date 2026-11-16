@@ -16,12 +16,27 @@ const {
   stopStaleBackend,
 } = require("./stale-backend.cjs");
 
-const APP_DISPLAY_NAME = "Halo BI Assistant";
-// The window shows the Agentic Hub product name; the OS app name, installers
-// and data directory keep APP_DISPLAY_NAME (app-shell R33).
-const WINDOW_TITLE = "Agentic Hub";
-// The productName every release before the rename shipped with.
-const LEGACY_APP_NAME = "Questions to Insights";
+// The brand is chosen at build time (ADR-0045): `scripts/brand.mjs
+// electron-prepare` copies brands/<id>/brand.json next to this file. Dev runs
+// straight from the repo without that step fall back to the Halo brand.
+function loadBrand() {
+  const candidates = [
+    path.join(__dirname, "brand.json"),
+    path.join(__dirname, "../brands/halo/brand.json"),
+  ];
+  const file = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!file) throw new Error("No brand.json found next to the Electron main process.");
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+const BRAND = loadBrand();
+
+const APP_DISPLAY_NAME = BRAND.osName;
+// The window shows the brand's product name; the OS app name, installers and
+// data directory keep APP_DISPLAY_NAME (app-shell R33).
+const WINDOW_TITLE = BRAND.windowTitle;
+// The productName every release before a rename shipped with (null when the
+// brand never had another name, so there is nothing to migrate).
+const LEGACY_APP_NAME = BRAND.legacyOsName || null;
 const DEV_URL = process.env.ELECTRON_DEV_URL;
 const BACKEND_PORT = process.env.BACKEND_PORT || "3000";
 const BACKEND_READY_TIMEOUT_MS = 30_000;
@@ -52,7 +67,7 @@ if (process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR) {
   // keep theirs: prefer the current directory, fall back to the legacy one
   // when only that exists.
   const current = app.getPath("userData");
-  if (!fs.existsSync(current)) {
+  if (LEGACY_APP_NAME && !fs.existsSync(current)) {
     const legacy = path.join(path.dirname(current), LEGACY_APP_NAME);
     if (fs.existsSync(legacy)) app.setPath("userData", legacy);
   }
@@ -748,19 +763,19 @@ async function waitForBackend() {
   return false;
 }
 
-// The Halo BI mark lives in build resources (electron-builder turns it into the
+// The brand's mark lives in brands/<id>/ (electron-builder turns it into the
 // .icns/.ico) and is copied into the renderer bundle, which is the copy that
 // survives packaging.
 function resolveAppIcon() {
   const candidates = [
-    path.join(__dirname, "../build/icon.png"),
+    BRAND.icon ? path.join(__dirname, "..", BRAND.icon) : null,
     path.join(__dirname, "../dist/frontend/browser/brand/icon.png"),
-  ];
+  ].filter(Boolean);
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
-// Frame colour per theme, under the gradient (specs/system/ui.md §6.0).
-const THEME_CANVAS = { light: "#0077a0", dark: "#003a52" };
+// Canvas colour per theme (specs/system/ui.md §6.0), from the brand.
+const THEME_CANVAS = BRAND.canvas;
 
 function createWindow() {
   const win = new BrowserWindow({

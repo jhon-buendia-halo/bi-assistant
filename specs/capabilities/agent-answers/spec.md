@@ -93,18 +93,45 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - a reasoning trail: one step per call that carried a rationale, in run order, with that call's row count or error;
   - the ontology items that were in its context.
 - R31. The interpretation line SHALL be built from the successful SQL runs only, never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.` It is absent when no SQL succeeded.
-- R32. Under an answer, the chat SHALL show these blocks, each only when non-empty:
+- R32. Under an answer, the chat SHALL show these blocks, each only when non-empty (unless the host shows the query inspector, R67: the coverage line and the query rows of R70 and R71 then replace the first and the last):
   - a collapsible "How I worked this out (N step(s))" list, each step's rationale followed by "N rows" or "failed — <error>";
   - a collapsible "Ontology in context (N)" list (kind, name, dataset or "all datasets", body), with a note that disabled items are never included and that the ontology is edited in the dataset's Ontology tab;
   - the interpretation line;
   - "Data entities" chips;
   - a collapsible "Data used (N query|queries)" list.
-- R33. Each entry in "Data used" SHALL show:
+- R33. Unless the host shows the query inspector (R67), each entry in "Data used" SHALL show:
   - `<tool> — N row(s)` or `<tool> — failed`;
   - "(truncated)" when clipped;
   - a "Copy SQL" action;
   - the rationale, each warning (with a warning icon), the SQL text and any error.
 - R34. The chat SHALL offer "Copy message" on every user message and answer.
+
+### Query inspector
+
+The query inspector (M1-25) shows, for each figure of an answer, which query produced it, and lists the answer's queries with their coverage. Screens and test ids: [ui.md](../../system/ui.md) 4.12.2. Plan: `docs/plans/m1-25-query-inspector.md`.
+
+- R67. A host turns the inspector on with the answer view's `queryInspector` input; the first host is the Run panel of Answer a Business Question ([workflows](../workflows/spec.md)). Other hosts (a user agent's Try it, past chats, the Data Readiness Agent) keep R32 and R33 until a later story connects them. With the input off, an answer SHALL render exactly as before.
+- R68. Each persisted answer MAY carry `evidence`: one entry per `run_readonly_sql` or `sample_rows` record, failed ones included, in `data` order (`index` = the record's index in `data`). An entry holds the coverage, the statement's own top-level LIMIT, the datasource, the row total before the tool's cap and the cap, and, filled later, the size of each table read and the explanation. Coverage is the first rule that applies, read from the SQL with literals masked, at bracket depth 0: `sample_rows` is `sample`; rows cut by the tool's cap is `partial`; a top-level LIMIT (or `FETCH FIRST n`) that the result reached is `top-n` with an ORDER BY before it and `sample` without; anything else is `whole-table` (a LIMIT that returned fewer rows than it allowed cut nothing). A failed record has no coverage. The facts never reach a model: no agent's request changes.
+- R69. In inspector mode each figure of the answer text SHALL carry a chip `Q<n>` (`n` = the record's index + 1) after it, linked in code at render time from the stored rows (at most 200 per record) and never by a model, so it works for every agent and every past answer:
+  - the index holds the cells of every record that did not fail: numbers and bigints as they are, strings that read as a number (`1204`, `1,204.5`, `1e3`) once trimmed, and ISO dates (`YYYY-MM-DD…`) as date keys; booleans and other text are skipped, and so is a column that identifies or ranks a row (`id`, `*_id`, `rnk`, `rank`, `rn`, `row_number`);
+  - the text is read for dates first (`14 Nov 2025`, `November 14, 2025`, `2025-11-14`), consumed whole so their parts never match as numbers; then for numbers (an optional sign and currency sign, digits with or without thousands separators, optional decimals, an optional `%` or scale `k`, `K`, `M`, `bn`, `B`), not glued to a letter, digit or underscore; a bare whole number under 10 is skipped, and so is a whole number the question itself names (`the top 100`, `in 2018`), when the host gives the question;
+  - a shown value `t` with `d` decimals and scale `s` matches a cell `c` when `|c/s - t| <= 0.5 x 10^-d`; for a percentage `c x 100` is tried too;
+  - a value found in several queries gets one chip: of a query that is not a sample first, then of the query that holds the most figures of the answer, then of the earliest, its title naming the others (`Also in Q2`); text inside `code`, `pre`, `a`, `th` and existing chips is skipped, while headings and table cells (`td`) get chips;
+  - the chips are added to the already sanitized HTML with DOM APIs only (labels through `textContent`) and the result is then trusted: nothing in the answer text can add markup after the sanitizer;
+  - a figure whose only matching queries are samples gets the warning tone and the title `From a sample: not a reliable figure`.
+- R70. Under the answer, in place of `How I worked this out` and `Data used`, the answer view SHALL show a **coverage line**, only when the answer has `evidence` and at least one query did not fail:
+  - every query is fine (`whole-table` or `top-n`): `The whole returns table was read (48,912 rows).`, with two tables `The whole returns (48,912 rows) and products (1,870 rows) tables were read.`; a size is left out while it is unknown, and the sentence is left out when no table is known;
+  - a query was cut: `Q2 was cut at 500 rows, so figures from it may be incomplete.`;
+  - a query is a sample: `Q1 is a sample of rows, not a ranking: no figure should come from it.`;
+  - then the link `Inspect the 2 queries` or `Inspect the query`, which opens the first query.
+- R71. The answer view in inspector mode SHALL list one **row** per `data` record: the `Q<n>` chip, the rationale as the title (one line, the full text in the tooltip; `Query <n>` when there is none) and a coverage chip: `Whole table`; `Top 100 after ranking`, which reads `Top 100 of 1,870` once the step counts are verified; `Sample`; `Partial result`; `Failed` (a failed record). A chip or a row SHALL emit `inspectQuery` with the record's index.
+- R72. An answer stored before the feature has `data` but no `evidence`: the rows SHALL show without a coverage chip, there SHALL be no coverage line, and the chips of R69 still appear (they need only `data`). The inspector asks the host to build the evidence once when it opens (endpoint 139).
+- R73. Opening a query (a chip, a row or the coverage line's link) SHALL show the **query inspector**: a non-modal sheet over the workflow page's canvas column, flush with the Run panel, at most 720 px wide, with the tabs `Step by step`, `Result (<n> rows)` and `SQL`, and the buttons `Download all rows (CSV)`, `Re-run` and `Copy SQL`. The answer stays visible beside it. Focus moves to the close button; Escape closes it and returns focus to the chip or row that opened it; another chip swaps the query shown.
+- R74. `Step by step` shows the SQL as a funnel of business steps (`Start from`, `Keep`, `Add`, `Combine`, `Group`, `Count`, `Compute`, `Sort`, `Show`), each with the rows it leaves. The steps are explained by the System agent `query-explainer`, lazily, when a query is first opened; the explanation is stored with the run and never asked twice. A reply that is not usable falls back to steps built by code. The last step, `Show`, is always built by code and says in plain words what a LIMIT or the tool's cap dropped: `(LIMIT 100: only the list is shortened)` for `top-n`, a sample for a LIMIT with no sort, `(the query tool stops at 500 rows: the rest of the result was not read)` for `partial`.
+- R75. The size of each table a query reads is counted in code (`SELECT COUNT(*)`, exact) when the evidence is prepared, never when the answer is saved. Row counts per step run only on demand (`Count rows at each step`) and are shown only when they pass these checks: the first step's count equals the table's measured size; every count statement names only tables the original query reads; each returns one finite integer of 0 or more; `sort` and `compute` inherit the previous count, `keep` and `group` cannot increase it; and `min(outerLimit, last count)` equals the rows the query produced. Otherwise no step count is shown, only the start and show counts, and the sheet says `The row counts could not be verified, so they are not shown.`
+- R76. The `Result` tab SHALL always show the rows stored with the answer (at most 200) and, when they are fewer than the total, `Showing the first 200 of 1,870 rows. Download all rows for the rest.` **Download all rows (CSV)** builds the file in the browser when the stored rows are the complete result of a `whole-table` query, and otherwise asks the server, which runs the statement again with its LIMIT raised to 50,001 and keeps 50,000 rows.
+- R77. **Re-run** SHALL run the same statement again, with no repair, on the datasource it first ran on, and show the result; it SHALL NOT change the stored answer, so the chips keep pointing at the rows the answer was written from. It is offered only for a finished run with a single datasource in scope.
+- R78. The explanation, the step counts and the evidence are written to the run's answer under one lock per run, so two writes cannot overwrite each other (this includes the rating of an answer).
 
 ### Verified badge and rating
 

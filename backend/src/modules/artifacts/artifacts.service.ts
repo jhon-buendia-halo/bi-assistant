@@ -44,13 +44,13 @@ export class ArtifactsService {
 
   constructor(private readonly repository: ArtifactsRepository) {}
 
-  /** Every artifact, newest first (api.md 139). */
+  /** Every artifact, newest first (api.md 144). */
   async list(): Promise<ArtifactSummary[]> {
     return (await this.repository.list()).map((doc) => summaryOf(doc));
   }
 
   /**
-   * One artifact with its dashboard (api.md 140); 404 when unknown. The
+   * One artifact with its dashboard (api.md 145); 404 when unknown. The
    * controller draws the dashboard: the document builder is not loaded
    * here, so the services that use this one stay light.
    */
@@ -59,7 +59,7 @@ export class ArtifactsService {
     return { ...summaryOf(doc), blueprint: doc.blueprint };
   }
 
-  /** The image an artifact's dashboard was read from (api.md 141); 404. */
+  /** The image an artifact's dashboard was read from (api.md 146); 404. */
   async image(id: string): Promise<{ data: Buffer; mediaType: string }> {
     const doc = await this.stored(id);
     const missing = () =>
@@ -76,7 +76,7 @@ export class ArtifactsService {
   }
 
   /**
-   * Store a new artifact (api.md 144): 400 when the blueprint is not a
+   * Store a new artifact (agents.md 5.17): 400 when the blueprint is not a
    * dashboard's or the name is too long. Its image is written to the data
    * dir first; a failure to write it stores the artifact without it.
    */
@@ -116,7 +116,7 @@ export class ArtifactsService {
     return summaryOf(stored);
   }
 
-  /** Rename an artifact (api.md 142): 400 for a bad name, 404 when unknown. */
+  /** Rename an artifact (api.md 147): 400 for a bad name, 404 when unknown. */
   async rename(id: string, body: unknown): Promise<ArtifactSummary> {
     const raw =
       body && typeof body === 'object'
@@ -129,7 +129,7 @@ export class ArtifactsService {
     return summaryOf(updated);
   }
 
-  /** Delete an artifact and its image (api.md 143); 404 when unknown. */
+  /** Delete an artifact and its image (api.md 148); 404 when unknown. */
   async delete(id: string): Promise<void> {
     const doc = await this.stored(id);
     await this.repository.delete(id);

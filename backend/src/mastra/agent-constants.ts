@@ -51,6 +51,8 @@ export const DASHBOARD_READER_AGENT_NAME = 'Dashboard Reader';
 export const DATA_MAPPER_AGENT_KEY = 'data-mapper';
 /** Its name: the Map data step's agent. */
 export const DATA_MAPPER_AGENT_NAME = 'Data Mapper';
+/** The agent that explains a stored query step by step (agents.md 2.12). */
+export const QUERY_EXPLAINER_AGENT_KEY = 'query-explainer';
 
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
@@ -58,6 +60,7 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANSWER_WRITER_AGENT_KEY,
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
+  QUERY_EXPLAINER_AGENT_KEY,
   'visualization',
   'sql-fixer',
   'sql-verifier',

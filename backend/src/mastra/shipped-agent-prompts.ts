@@ -4,6 +4,7 @@ import {
   PLAN_INSTRUCTIONS,
   WRITE_ANSWER_INSTRUCTIONS,
 } from './workflows/answer-business-question.prompts';
+import { QUERY_EXPLAINER_INSTRUCTIONS } from './agents/query-explainer.prompts';
 import {
   MAP_DATA_INSTRUCTIONS,
   READ_DASHBOARD_INSTRUCTIONS,
@@ -37,6 +38,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'answer-writer': WRITE_ANSWER_INSTRUCTIONS,
   'dashboard-reader': READ_DASHBOARD_INSTRUCTIONS,
   'data-mapper': MAP_DATA_INSTRUCTIONS,
+  'query-explainer': QUERY_EXPLAINER_INSTRUCTIONS,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

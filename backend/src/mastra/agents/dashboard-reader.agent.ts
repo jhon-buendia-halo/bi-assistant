@@ -5,7 +5,7 @@ import { resolveAgentModel } from '../model-resolver';
 import { READ_DASHBOARD_INSTRUCTIONS } from '../workflows/recreate-dashboard.prompts';
 
 /**
- * Grace, Dashboard Analyst (agents.md 1.1, 2.12, 5.17): the agent of the
+ * Grace, Dashboard Analyst (agents.md 1.1, 2.13, 5.17): the agent of the
  * Read dashboard step of `recreate-dashboard`. She looks at the image of a
  * dashboard and describes its layout, filters, widgets and the columns of
  * a mock dataset behind them, in one model call that carries the image,

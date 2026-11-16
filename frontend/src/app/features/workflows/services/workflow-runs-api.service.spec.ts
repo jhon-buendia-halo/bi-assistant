@@ -413,3 +413,54 @@ describe('WorkflowRunsApiService, resume (api.md 138)', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 });
+
+describe('WorkflowRunsApiService, the query evidence calls (api.md 139 to 143)', () => {
+  let service: WorkflowRunsApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(WorkflowRunsApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('posts to the evidence, explanation, stage-counts and rerun routes', () => {
+    const base = '/workflow-runs/run%201/answer';
+    service.prepareEvidence('run 1').subscribe();
+    http
+      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/evidence`))
+      .flush({ ok: true, run: RUN });
+    service.explainQuery('run 1', 2).subscribe();
+    http
+      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/queries/2/explanation`))
+      .flush({ ok: true, run: RUN });
+    service.countQueryStages('run 1', 2).subscribe();
+    http
+      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/queries/2/stage-counts`))
+      .flush({ ok: true, run: RUN });
+    let rows = -1;
+    service.rerunQuery('run 1', 0).subscribe((response) => (rows = response.result.rowCount));
+    http
+      .expectOne((r) => r.method === 'POST' && r.url.endsWith(`${base}/queries/0/rerun`))
+      .flush({
+        ok: true,
+        result: { columns: [], rows: [], rowCount: 4, coverage: 'whole-table', ranAt: 'x' },
+      });
+    expect(rows).toBe(4);
+  });
+
+  it('reads the CSV as a blob', () => {
+    let size = 0;
+    service.queryCsv('run-1', 1).subscribe((blob) => (size = blob.size));
+    const req = http.expectOne(
+      (r) => r.method === 'GET' && r.url.endsWith('/workflow-runs/run-1/answer/queries/1/csv'),
+    );
+    expect(req.request.responseType).toBe('blob');
+    req.flush(new Blob(['a,b\r\n']));
+    expect(size).toBe(5);
+  });
+});

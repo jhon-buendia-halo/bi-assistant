@@ -29,6 +29,7 @@ import { UserAgentsRepository } from '../user-agents/repositories/user-agents.re
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import { AgentsService } from '../agents/agents.service';
 import type { SessionsService } from '../sessions/sessions.service';
+import type { QueryEvidenceService } from '../sessions/query-evidence/query-evidence.service';
 import type { WorkflowRun, WorkflowRunDoc } from './workflow-run-steps';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import {
@@ -361,6 +362,12 @@ function build(
   const nodeChats = new WorkflowNodeChatsRepository(
     new SqliteDocStore(db, 'workflow_run_node_chats'),
   );
+  // The query inspector's queries (api.md 139-143); its own spec proves them.
+  const queryEvidence = {
+    prepare: jest.fn().mockResolvedValue(null),
+    rerun: jest.fn(),
+    exportRows: jest.fn(),
+  };
   const service = new WorkflowRunsService(
     workflows,
     sessions as unknown as SessionsService,
@@ -368,6 +375,7 @@ function build(
     mastra,
     repository,
     nodeChats,
+    queryEvidence as unknown as QueryEvidenceService,
     // No stored artifact: no workflow here takes one.
     { list: () => Promise.resolve([]) } as never,
   );
@@ -376,6 +384,7 @@ function build(
     service,
     repository,
     nodeChats,
+    queryEvidence,
     deleteMemoryThread,
     deleteMemoryResource,
     /** The same store and collaborators after a backend restart. */
@@ -387,6 +396,7 @@ function build(
         mastra,
         new WorkflowRunsRepository(new SqliteDocStore(db, 'workflow_runs')),
         nodeChats,
+        queryEvidence as unknown as QueryEvidenceService,
         { list: () => Promise.resolve([]) } as never,
       ),
     sessions,

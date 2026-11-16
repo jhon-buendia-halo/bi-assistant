@@ -1,5 +1,6 @@
 import type { KnowledgeUse } from '../../ontology/entities/ontology-item.entity';
 import type { Maturity } from '../../data-readiness/engine/types';
+import type { QueryEvidence } from '../query-evidence/query-evidence.types';
 
 export type { KnowledgeUse };
 
@@ -100,6 +101,12 @@ export interface ChatMessage {
    * outcomes are ours, so the trail can never claim a query that never ran.
    */
   reasoning?: ReasoningStep[];
+  /**
+   * The query inspector's facts about each data-gathering call of `data`
+   * (one entry per `run_readonly_sql` / `sample_rows` record, failed ones
+   * included, in `data` order). Kept beside `data` so no model input changes.
+   */
+  evidence?: QueryEvidence[];
   /**
    * The curated knowledge snippets this answer's context carried, recorded
    * when the block was assembled rather than reconstructed afterwards. Shown

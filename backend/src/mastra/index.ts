@@ -4,6 +4,7 @@ import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
 import { analysisPlannerAgent } from './agents/analysis-planner.agent';
 import { answerWriterAgent } from './agents/answer-writer.agent';
+import { queryExplainerAgent } from './agents/query-explainer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
 import { dataMapperAgent } from './agents/data-mapper.agent';
@@ -46,6 +47,8 @@ export const mastra = new Mastra({
     // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
     'data-mapper': dataMapperAgent,
+    // The query inspector's explainer (agents.md 2.12).
+    'query-explainer': queryExplainerAgent,
   },
   // The turn workflows (agents.md 1.2, 5.1): `answer-business-question`, the one
   // catalogue workflow (5.11, ADR-0034; api.md 118, 119), and `agent-turn`,

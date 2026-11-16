@@ -10,6 +10,7 @@ import {
 import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import type { RequestContext } from '@mastra/core/request-context';
+import { explainQueryWithModel } from './agents/query-explainer.agent';
 import {
   checkDataQualityWithModel,
   planWithModel,
@@ -102,6 +103,16 @@ export class MastraService {
     ...args: Parameters<typeof writeAnswerWithModel>
   ): ReturnType<typeof writeAnswerWithModel> {
     return writeAnswerWithModel(...args);
+  }
+
+  /**
+   * The query inspector's explanation of one stored query (api.md 140): the
+   * `query-explainer` agent's model, no tools, the steps read from her reply.
+   */
+  explainQuery(
+    ...args: Parameters<typeof explainQueryWithModel>
+  ): ReturnType<typeof explainQueryWithModel> {
+    return explainQueryWithModel(...args);
   }
 
   /**

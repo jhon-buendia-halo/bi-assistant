@@ -42,24 +42,8 @@ test('moves between areas from the rail', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await expectCurrent(page, 'Agents');
 
-  await railItem(page, 'Context').click();
-  await expectCurrent(page, 'Context');
-  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
-  await expect(page.getByTestId('context-section-knowledge')).toHaveCount(0);
-  await expect(page.getByTestId('context-section-ontologies')).toBeVisible();
-  await expect(page.getByTestId('context-section-personas')).toBeVisible();
-  await page.getByTestId('context-section-visuals').click();
-  await expect(
-    page.getByRole('heading', { name: 'Visuals', exact: true }),
-  ).toBeVisible();
-  await expectCurrent(page, 'Context');
-  await page.getByTestId('context-back').click();
-  await expect(page.getByRole('heading', { name: 'Context' })).toBeVisible();
-  await page.getByTestId('context-section-personas').click();
-  await expect(
-    page.getByRole('heading', { name: 'User personas' }),
-  ).toBeVisible();
-  await expectCurrent(page, 'Context');
+  // The Context area is gone; ontologies live in the dataset editor (app-shell R3).
+  await expect(railItem(page, 'Context')).toHaveCount(0);
 
   await railItem(page, 'Runs').click();
   await expectCurrent(page, 'Runs');
@@ -114,7 +98,7 @@ test(
 
 test('the start page explains how the product works', async ({ page }) => {
   await expect(
-    page.getByRole('heading', { name: 'Welcome to Agentic Hub' }),
+    page.getByRole('heading', { name: 'Welcome to Halo Powered' }),
   ).toBeVisible();
   const steps = [
     'Pick your data',
@@ -285,7 +269,6 @@ test('expands the rail into a drawer with labels', async ({ page }) => {
   for (const label of [
     'Datasets',
     'Agents',
-    'Context',
     'Artifacts',
     'Runs',
     'Monitoring',
@@ -349,15 +332,18 @@ test('opens Settings as an area with a section list', async ({ page }) => {
 });
 
 test('shows the product name', async ({ page }) => {
-  // Only the banner names US Health (app-shell R7, BA-234).
+  // The header names the product, then the open area (app-shell R7, ADR-0044).
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'US Health Agentic Hub',
+    'Halo Powered',
   );
-  await expect(page).toHaveTitle('Agentic Hub');
+  await expect(page.getByTestId('header-area')).toHaveCount(0);
+  await expect(page).toHaveTitle('Halo Powered');
+  await expect(rail(page).getByRole('img', { name: 'Halo Powered' })).toBeVisible();
 
   await railItem(page, 'Settings').click();
+  await expect(page.getByTestId('header-area')).toHaveText('Settings');
   await expect(page.getByTestId('app-version')).toHaveText(
-    /^Agentic Hub v\d+\.\d+\.\d+$/,
+    /^Halo Powered v\d+\.\d+\.\d+$/,
   );
 });
 
@@ -366,7 +352,7 @@ test('the app opens straight into the shell', async ({ page }) => {
   await expect(rail(page)).toBeVisible();
   await expect(page.getByLabel('Open system logs')).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Welcome to Agentic Hub' }),
+    page.getByRole('heading', { name: 'Welcome to Halo Powered' }),
   ).toBeVisible();
   // No sign-in page.
   await expect(page.getByRole('button', { name: /sign in/i })).toHaveCount(0);
@@ -382,7 +368,14 @@ test('the app opens straight into the shell', async ({ page }) => {
   });
 
   // The identity and admin routes are gone (api.md; ADR-0030).
-  for (const route of ['/me', '/admin/overview', '/auth/local/personas']) {
+  // So are the user personas and the visuals library (removed 2026-11-15).
+  for (const route of [
+    '/me',
+    '/admin/overview',
+    '/auth/local/personas',
+    '/personas',
+    '/visuals',
+  ]) {
     expect((await apiFetch(page, 'GET', route)).status(), route).toBe(404);
   }
 
@@ -390,7 +383,6 @@ test('the app opens straight into the shell', async ({ page }) => {
   for (const [area, heading] of [
     ['Datasets', 'Datasets'],
     ['Agents', 'Agents'],
-    ['Context', 'Context'],
   ]) {
     await railItem(page, area).click();
     await expect(page.getByRole('heading', { name: heading })).toBeVisible();

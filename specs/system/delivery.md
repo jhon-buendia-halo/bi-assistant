@@ -37,8 +37,27 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 
 ### Dev and branding helpers
 
-- `frontend/scripts/brand-electron.sh` renames `node_modules/electron/dist/Electron.app` to `Halo BI Assistant.app`, rewrites its `CFBundleName` / `CFBundleDisplayName` and the launcher's `path.txt`, and refreshes LaunchServices, so the macOS menu bar and Dock show the product name in unpackaged runs. Idempotent; a no-op off macOS. Packaged builds get the name from electron-builder's `productName`.
-- The app icon is `frontend/build/icon.png` (electron-builder derives `.icns` / `.ico`); a copy ships in the renderer bundle under `brand/`.
+- `frontend/scripts/brand-electron.sh` renames `node_modules/electron/dist/Electron.app` to `<osName>.app` (the selected brand's `osName`, "Halo BI Assistant" by default), rewrites its `CFBundleName` / `CFBundleDisplayName` and the launcher's `path.txt`, and refreshes LaunchServices, so the macOS menu bar and Dock show the product name in unpackaged runs. Idempotent; a no-op off macOS. Packaged builds get the name from electron-builder's `productName`.
+- The app icon is per brand: `frontend/brands/<id>/public/brand/icon.png` (electron-builder derives `.icns` / `.ico`), rendered at 1024 px from `frontend/brands/<id>/art/app-icon.svg` (ADR-0044, ADR-0045); a copy ships in the renderer bundle as `brand/icon.png`.
+- The Electron main process reads `frontend/electron/brand.json` (a gitignored copy of the selected brand's `brand.json`, written by `brand.mjs electron-prepare`; it falls back to `brands/halo/brand.json` when absent) for the app name, window title, legacy userData migration (halo only), window background per theme and icon. Mercer has its own userData folder and no migration, so both apps install and run side by side.
+
+### Brands (ADR-0045)
+
+`BRAND=halo|mercer` (default `halo`) picks the brand for every build; one build is one brand. Each brand is a folder `frontend/brands/<id>/` (`brand.json`, `tokens.css`, `public/`, `art/`), and `brand.json` carries `id`, `osName`, `legacyOsName`, `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}` and `publishNpm`.
+
+| Brand | Product | OS name | appId | Installer | npm |
+|---|---|---|---|---|---|
+| `halo` | Halo Powered | Halo BI Assistant | `com.halopowered.questions-to-insights` | `Questions-to-Insights-<version>-<os>-<arch>.<ext>` | yes |
+| `mercer` | Agentic Hub | Agentic Hub | `com.halopowered.agentic-hub` | `Agentic-Hub-<version>-<os>-<arch>.<ext>` | no |
+
+```bash
+npm --prefix backend run build:all                           # web UI, Halo
+BRAND=mercer npm --prefix backend run build:all              # web UI, Agentic Hub (served by node backend/dist/cli.js)
+BRAND=mercer npm --prefix frontend run electron:dist         # Agentic Hub installer
+BRAND=mercer npm --prefix frontend run electron        # production-style desktop run of the brand
+```
+
+The web build writes `dist/frontend/browser/brand.json` (`{ "id" }`), which `copy-web.js` carries to `backend/public/brand.json`; the npm guard and `e2e/brand-mercer.spec.ts` read it. Rebuild without `BRAND` after a mercer build before running the rest of the E2E suite.
 
 ## 2. npm scripts
 
@@ -49,21 +68,21 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `ng` | `ng` | Angular CLI passthrough. |
 | `start` | `ng serve` | Dev server on http://localhost:4200 (development configuration, base href `/`). |
 | `build` | `ng build` | Production Angular build into `dist/frontend/browser` (base href `/`). |
-| `build:web` | `ng build` | Same as `build`; named so the backend's `build:web` can call it. |
+| `build:web` | `node scripts/brand.mjs ng-build` | `build` for the selected brand (`BRAND`, default halo; `ng build -c production,mercer` for mercer) and writes `dist/frontend/browser/brand.json`; the backend's `build:web` calls it. |
 | `watch` | `ng build --watch --configuration development` | Rebuild on change. |
 | `test` | `ng test` | Karma + Jasmine unit tests. |
 | `test:e2e:prepare` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build:all` | Type-check the e2e code, build the backend and the web UI into `backend/public/`. |
-| `test:e2e:prepare:desktop` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build && ng build --base-href ./` | Type-check the e2e code, build the backend, build the Angular app for Electron. |
+| `test:e2e:prepare:desktop` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build && node scripts/brand.mjs electron-prepare && node scripts/brand.mjs ng-build --base-href ./` | Type-check the e2e code, build the backend, write `electron/brand.json`, build the Angular app for Electron (selected brand). |
 | `test:e2e` | prepare + `playwright test --project=web` | The full Playwright suite against the web app (the default target). The app has one built-in user and no sign-in, so the fixture only starts the app ([tech-stack.md](tech-stack.md)). |
 | `test:e2e:ui` | prepare + `playwright test --project=web --ui` | Same, in Playwright's UI mode. |
 | `test:e2e:update` | prepare + `playwright test --project=web --update-snapshots` | Regenerate the web visual baselines; only for an intended visual change. |
 | `test:e2e:desktop` | desktop prepare + `playwright test --project=desktop` | The same suite against the real Electron app. Run only when a desktop run is requested. |
 | `test:e2e:desktop:update` | desktop prepare + `playwright test --project=desktop --update-snapshots` | Regenerate the desktop visual baselines. |
 | `brand:electron` | `bash scripts/brand-electron.sh` | See above. |
-| `electron` | `brand:electron`, backend build, `ng build --base-href ./`, `electron .` | Production-style run: builds everything, opens the app. |
-| `electron:dev` | `brand:electron`, then `ELECTRON_DEV_URL=http://localhost:4200 electron .` | Window pointed at `ng serve` for live reload. Run `npm start` first; the backend spawns from `backend/dist`, so build it once. |
+| `electron` | `brand:electron`, `brand.mjs electron-prepare`, backend build, `brand.mjs ng-build --base-href ./`, `electron .` | Production-style run: builds everything for the selected brand, opens the app. |
+| `electron:dev` | `brand:electron`, `brand.mjs electron-prepare`, then `ELECTRON_DEV_URL=http://localhost:4200 electron .` | Window pointed at `ng serve` for live reload. Run `npm start` first; the backend spawns from `backend/dist`, so build it once. |
 | `stage:backend` | `bash scripts/stage-backend.sh` | Build and stage the backend for packaging (section 3). |
-| `electron:dist` | `stage:backend`, `ng build --base-href ./`, `electron-builder` | Full installer build into `frontend/release/`. Extra arguments select the target, for example `-- --mac dmg --arm64` or `-- --win nsis --x64`. |
+| `electron:dist` | `stage:backend`, `brand.mjs electron-prepare`, `brand.mjs ng-build --base-href ./`, `node scripts/electron-dist.mjs` | Full installer build into `frontend/release/`; `electron-dist.mjs` runs electron-builder with the selected brand's appId, product name, artifact name and icons. Extra arguments select the target, for example `-- --mac dmg --arm64` or `-- --win nsis --x64`. |
 
 ### `backend/package.json`
 
@@ -87,7 +106,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `worldcup:rest:setup` | `ts-node scripts/setup-worldcup-rest.ts` | Registers that API as a `rest` datasource and a dataset in a running backend through its HTTP API (`BACKEND_URL`, `WORLD_CUP_API_URL`); idempotent. |
 | `build:web` | `npm --prefix ../frontend run build:web && node scripts/copy-web.js` | Build the UI and copy it to `backend/public/` (gitignored). `copy-web.js` fails if the frontend build has no `index.html`. |
 | `build:all` | `build` then `build:web` | Everything the npm package needs. |
-| `prepack` | `build:all` | `npm pack` / `npm publish` always ship a fresh UI. |
+| `prepack` | `build:all && node scripts/assert-publishable-brand.js` | `npm pack` / `npm publish` always ship a fresh UI, and fail unless its brand (`backend/public/brand.json`) has `publishNpm: true` in `frontend/brands/<id>/brand.json`. |
 
 ### Repo scripts (`scripts/`, no root `package.json`)
 
@@ -140,14 +159,14 @@ Configuration lives in the `build` block of `frontend/package.json`.
 
 | Setting | Value |
 |---|---|
-| `appId` | `com.halopowered.questions-to-insights` |
-| `productName` | `Halo BI Assistant` |
-| `artifactName` | `Questions-to-Insights-${version}-${os}-${arch}.${ext}`, for example `Questions-to-Insights-0.20.3-mac-arm64.dmg`, `…-win-x64.exe` |
+| `appId` | `com.halopowered.questions-to-insights` (halo); `electron-dist.mjs` overrides it from the selected brand's `brand.json` (mercer: `com.halopowered.agentic-hub`) |
+| `productName` | `Halo BI Assistant` (halo); the brand's `osName` (mercer: `Agentic Hub`) |
+| `artifactName` | `Questions-to-Insights-${version}-${os}-${arch}.${ext}`, for example `Questions-to-Insights-0.20.3-mac-arm64.dmg`, `…-win-x64.exe`; mercer: `Agentic-Hub-${version}-${os}-${arch}.${ext}` |
 | Output | `frontend/release/` (gitignored) |
-| Build resources / icon | `frontend/build/`, `build/icon.png` (also set for `mac` and `win`) |
+| Build resources / icon | `frontend/build/` (now only `installer.nsh`); the icon is `brands/<id>/public/brand/icon.png` (`brands/halo/…` in the config, also set for `mac` and `win`; `electron-dist.mjs` swaps in the brand's) |
 | Packaged files | `dist/frontend/**`, `electron/**` except `electron/**/*.test.cjs` (the shell's `node --test` unit tests), `package.json` |
 | macOS | category `public.app-category.productivity`; `.dmg` for arm64 and x64 |
-| Windows | NSIS `.exe` for x64, electron-builder's default one-click per-user installer: it silently runs the previous version's uninstaller (keeping app data) before installing. `build/installer.nsh` (picked up automatically from build resources) defines `customCheckAppRunning`: electron-builder's usual check (asks to close a running app) runs first, then `taskkill /F /T` ends every `Halo BI Assistant.exe` the current user still runs, such as an orphaned backend, so no file in the install folder stays locked. The installer and the uninstaller both run it. |
+| Windows | NSIS `.exe` for x64, electron-builder's default one-click per-user installer: it silently runs the previous version's uninstaller (keeping app data) before installing. `build/installer.nsh` (picked up automatically from build resources) defines `customCheckAppRunning`: electron-builder's usual check (asks to close a running app) runs first, then `taskkill /F /T` ends every app executable (`${APP_EXECUTABLE_FILENAME}`, "Halo BI Assistant.exe" for halo) the current user still runs, such as an orphaned backend, so no file in the install folder stays locked. The installer and the uninstaller both run it. |
 | Signing | none: CI sets `CSC_IDENTITY_AUTO_DISCOVERY=false` and produces unsigned artifacts |
 
 **Backend staging** (`frontend/scripts/stage-backend.sh`): runs `npm run build` in `backend/`; recreates `backend/release-staging/` (gitignored); copies in `dist/`, `package.json` and `package-lock.json`; then runs `npm ci --omit=dev --ignore-scripts --legacy-peer-deps --no-audit --no-fund` there. Production dependencies only; install scripts are skipped, so the native modules come from their prebuilt binaries. Last, `frontend/scripts/prune-node-modules.mjs` deletes build-time leftovers from that `node_modules` (roadmap 1.7.22): type declarations (`*.d.ts`, `*.d.mts`, `*.d.cts`), TypeScript sources (`*.ts`, `*.mts`, `*.cts`), source maps (`*.js.map` and the like, never a bare `.map`), docs (`*.md`, `*.mdx`, `*.markdown`), lint and CI configs (`.eslintrc*`, `.nycrc*`, `.prettierrc*`, `.editorconfig`, `.travis.yml`, `.npmignore`, `.gitattributes`, `.jshintrc`, `.babelrc`) and `__tests__/` and `.github/` folders. Licence files (`LICENSE*`, `LICENCE*`, `NOTICE*`, `COPYING*`) are kept, and `@github/copilot-sdk*` is left whole because its bundled runtime reads its own `.md` and `.ts` files. Install time on Windows grows with the file count, and this halves it (0.48.1: 46,955 installed files before, 22,906 after).
@@ -237,6 +256,9 @@ Manual: Actions → Build desktop installers → Run workflow. A hand-pushed `v*
 |---|---|---|
 | `ref` | empty | Tag, branch or SHA to build; empty = the branch the run was started from |
 | `publish` | false | Attach the Windows installer to the GitHub release for the resolved tag |
+| `brand` | `halo` | The brand to build (`halo` or `mercer`, ADR-0045); a `v*` tag push has no inputs and builds halo |
+
+`prepare` fails on a brand without `frontend/brands/<brand>/brand.json`, exposes it as an output, and appends it to the artifact and job names (`questions-to-insights-windows-x64-<brand>`); the `build` job sets it as `BRAND` for `electron:dist`, so the installer is `Questions-to-Insights-*.exe` or `Agentic-Hub-*.exe`.
 
 Jobs:
 
@@ -257,7 +279,7 @@ Manual only: Actions → Publish npm package → Run workflow. There is no tag e
 | `ref` | empty | The `vX.Y.Z` tag from version-on-merge, or any branch/SHA; empty = dispatch branch |
 | `dry_run` | false | `npm publish --dry-run`, nothing uploaded |
 
-Steps: check out the ref; Node 22 with the GitHub Packages registry and scope; read `name@version` from `backend/package.json`; **refuse an already-published version** (`npm view`; success means it exists → fail with a readable message, `E404` means free, any other failure is fatal; skipped on dry runs, because GitHub Packages answers a re-publish with a bare 409); `npm ci --legacy-peer-deps` in `frontend/` and `backend/`; explicit `npm run build:all`; `npm publish --ignore-scripts` (so `prepack` does not rebuild and the tarball is exactly the logged build). Auth is `GITHUB_TOKEN` (`packages: write`); the `repository` field in `backend/package.json` links the package to this repo, so no personal token is needed. The run summary prints `name@version` and the `.npmrc` + `npx` install commands.
+Steps: check out the ref; Node 22 with the GitHub Packages registry and scope; read `name@version` from `backend/package.json`; **refuse an already-published version** (`npm view`; success means it exists → fail with a readable message, `E404` means free, any other failure is fatal; skipped on dry runs, because GitHub Packages answers a re-publish with a bare 409); `npm ci --legacy-peer-deps` in `frontend/` and `backend/`; explicit `npm run build:all` with `BRAND=halo`; a step running `node scripts/assert-publishable-brand.js` (fails unless `backend/public/brand.json` names a brand whose `brand.json` has `publishNpm: true`; only halo does, so the Agentic Hub brand is never published to npm); `npm publish --ignore-scripts` (so `prepack` does not rebuild and the tarball is exactly the logged build, which is why the guard is its own step). Auth is `GITHUB_TOKEN` (`packages: write`); the `repository` field in `backend/package.json` links the package to this repo, so no personal token is needed. The run summary prints `name@version` and the `.npmrc` + `npx` install commands.
 
 ### `spec-checks.yml` — Spec checks
 

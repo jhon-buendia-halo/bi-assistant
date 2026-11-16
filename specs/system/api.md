@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **109 HTTP route handlers** across 20 app controllers (agents 17, workflow runs 15, skills 9, sessions 7, llm 7, datasources 6, ontology 6, metrics 5, monitoring 5, personas 4, visuals 4, synthetic data 4, workflows 4, datasets 3, data readiness 3, developer settings 3, testing data 3, UI preferences 2, draft runs 1, health 1). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **101 HTTP route handlers** across 18 app controllers (agents 17, workflow runs 15, skills 9, sessions 7, llm 7, datasources 6, ontology 6, metrics 5, monitoring 5, synthetic data 4, workflows 4, datasets 3, data readiness 3, developer settings 3, testing data 3, UI preferences 2, draft runs 1, health 1). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -650,7 +650,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
         | 'datasets'                  // one or more dataset names
         | 'dataset'                   // exactly one dataset name
         | 'image'                     // one PNG, JPEG or WebP image of at most 5 MB, as a base64 `data:` URL (118's rules); a stored run holds the file's path instead
-        | 'artifact';                 // the id of one stored artifact (139)
+        | 'artifact';                 // the id of one stored artifact (144)
     required: boolean;
     placeholder?: string;
     help?: string;                    // one line under the control
@@ -793,6 +793,11 @@ Controller prefix `/workflow-runs`. Capability: [workflows](../capabilities/work
 | 136 | `GET /workflow-runs/:id/node-chats/:stepId` | A step's node chat in a run: its messages | yes |
 | 137 | `POST /workflow-runs/:id/node-chats/:stepId/messages/stream` | Chat with a step's agent about the run's data, streamed (SSE) | yes |
 | 138 | `POST /workflow-runs/:id/resume/stream` | Answer a run that waits for the user and continue the same run, streamed (SSE) | yes |
+| 139 | `POST /workflow-runs/:id/answer/evidence` | Build the query evidence of an answer stored before it, and size the tables its queries read | yes |
+| 140 | `POST /workflow-runs/:id/answer/queries/:index/explanation` | Explain one of the answer's queries step by step (cached with the answer) | yes |
+| 141 | `POST /workflow-runs/:id/answer/queries/:index/stage-counts` | Count the rows after each step of an explained query, checked | yes |
+| 142 | `POST /workflow-runs/:id/answer/queries/:index/rerun` | Run one of the answer's queries again; nothing stored | yes |
+| 143 | `GET /workflow-runs/:id/answer/queries/:index/csv` | One query's rows as CSV, up to 50,000 | yes |
 
 #### 120. `GET /workflow-runs`
 - Query: `workflowId` (optional): only that workflow's runs.
@@ -843,6 +848,7 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Body: `{ rating: "up" | "down" }`. As 7 on the run's answer: sets `feedback` and `verified` on the stored answer; `up` saves a verified query keyed by `sourceRunId` (question = the run's question; same SQL, datasource and entity rules as 7), `down` deletes it.
 - Success `200`: `{ ok: true, message, run }` (`message` as 7, `run` as 121).
 - Errors (Style B): `400 "rating must be 'up' or 'down'"`; `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`.
+- The rating is written under the run's answer lock (139-143), so it never drops evidence another request stored meanwhile.
 
 #### 129. `POST /agents/:id/draft-runs/stream`
 - Prefix `/agents`, served by the workflows module's draft-runs controller. Capability: [agents-evals](../capabilities/agents-evals/spec.md) R60, R61. `:id` is a user agent's id.
@@ -907,9 +913,54 @@ Removed 2026-11-12 with the RFP Builder: the route no longer exists (the number 
 - Side effects: the stored run becomes `running` with `waitingFor` removed before `run` is sent, and is updated when it ends as in 119; the workflow snapshot written while it waited is deleted once it ends ([data-model.md](data-model.md) 3.16).
 - "Run again with my answer": for an expired run the client starts a new run (119) with the answer as `question` and `context.fromRunId` the expired run; that context is the expired run's question and its clarifying question with its options (`<question>\n- <option>` …), not an answer (118 accepts it).
 
+#### Query evidence (139-143)
+
+The query inspector's endpoints over a run's stored answer and its `evidence` (3.6, [data-model.md](data-model.md) 3.4.2a; plan `docs/plans/m1-25-query-inspector.md`). `:index` is an `evidence[].index`: the position of the query's record in `answer.data`. Rules for all five:
+- Errors (Style B), in this order: `404 "Run \"<id>\" not found"`; `404 "Run \"<id>\" has no answer"`; `400 "Wait for the run to finish"` (the run is `running` or `suspended`); `400 "Query <index> not found in the run's answer"` (an `:index` that is no `evidence[].index`, or not a whole number). An answer stored without `evidence` has it derived from `data` for these checks.
+- Every write to a run's `answer` goes through **one lock per run**, so two writes cannot overwrite each other: each re-reads the run inside the lock, patches it and writes `answer`. This includes 128.
+- Every statement runs through the datasource's `runReadOnlySql` directly (its read-only guard, and PostgreSQL's READ ONLY transaction), never through the SQL repair: a re-run executes the same statement.
+- The datasource of a query (as 133): the record's `evidence.datasourceId` when the run's datasets use it, else the run's only datasource; `400 "Several datasources are in scope for this run; this query cannot be re-run"` when there are several, `400 "No datasource is bound to this run's datasets"` when there is none.
+
+#### 139. `POST /workflow-runs/:id/answer/evidence`
+- Body: none. Builds `evidence` for an answer stored before the feature (from `data`; the coverage of a record without `totalRows` reads the cap its rows ran into), then fills, for each query that did not fail and lacks them, `datasourceId`, `datasourceKind` and `tables`: the catalog entities of the run's datasets whose name the SQL contains (PostgreSQL also `schema.table`; a `sample_rows` record its entity), each sized by one `SELECT COUNT(*) AS n FROM <entity>` per distinct table across the answer, at most 3 at a time. Exact counts, never estimates.
+- Success `201`: `{ ok: true, run }` (`run` as 121).
+- A count that fails gives that table `rows: null, error: "<connector message>"`, never an HTTP error; a query whose datasource cannot be resolved gets its tables with `rows: null` and that reason. Called again with nothing missing, it runs no query and writes nothing.
+- Errors: the shared ones.
+
+#### 140. `POST /workflow-runs/:id/answer/queries/:index/explanation`
+- Body: none. Returns the stored `evidence[index].explanation` when there is one. Otherwise: for a `sample_rows` record, code builds the steps; for SQL, one call to the System agent `query-explainer` ([agents.md](agents.md)), whose request holds the dialect, the rationale, the tables with their sizes, the columns and the SQL, never result rows. The explanation is stored at `answer.evidence[index].explanation` under the lock. A second request for the same run and index while one is running waits for the same result.
+- Success `201`: `{ ok: true, run }`.
+- A reply that is no JSON object is stored with `fallback: true` (steps built by code) and answers 201.
+- Errors: the shared ones; `400 "Query <index> has no SQL to explain"` (a failed record); `400 "The query could not be explained: <model error>"`.
+
+#### 141. `POST /workflow-runs/:id/answer/queries/:index/stage-counts`
+- Body: none. Runs each step's `countSql` in turn, at most 8, and checks them (the start count equals the table size; every statement reads only tables the query reads and returns one whole number of 0 or more; `keep` and `group` never increase the count; the last count, with the outer limit, equals the rows produced). Stores each step's `rows` and `explanation.stageCounts` (`verified`, or `unverified` with its `reason`, when no step count but the start and show counts is stored). `unverified` is a stored result, not an error. Called again once verified, it returns the stored result.
+- Success `201`: `{ ok: true, run }`.
+- Errors: the shared ones; `400 "Explain query <index> first"`.
+
+#### 142. `POST /workflow-runs/:id/answer/queries/:index/rerun`
+- Body: none. Runs the record's statement again, with no repair, at its `rowLimit` (default 100; a `sample_rows` record samples its entity again, default 10). **Nothing is stored**: the answer keeps pointing at the rows it was written from.
+- Success `201`: `{ ok: true, result: QueryRerunResult }`.
+  ```ts
+  type QueryRerunResult = {
+    columns: string[];
+    rows: Record<string, unknown>[];
+    rowCount: number;
+    totalRows?: number;           // rows the statement produced before the cap
+    coverage: QueryCoverage;      // as 3.6, for the new result
+    ranAt: string;                // ISO
+  };
+  ```
+- Errors: the shared ones; `400 "Query <index> has no SQL to run"` (a failed record); the datasource rule's two 400s; the connector's own message as a 400 otherwise.
+
+#### 143. `GET /workflow-runs/:id/answer/queries/:index/csv`
+- The checks of 142, before any header is written. Raises the statement's top-level `LIMIT` (or `FETCH FIRST n`) to 50 001, or appends `LIMIT 50001` when there is none (a trailing `;` or comment is dropped first), runs it with the row clamp raised to 50 001, and keeps 50 000 rows. A `sample_rows` record is sampled again at its size.
+- Response `200`: `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="query-<Q>-<first 8 of the run id>.csv"` (`<Q>` is the query's 1-based position in `evidence`), and `X-Rows-Cut: 50000` when more rows existed. Body: a header row of the columns, then one line per row, CRLF line ends, quoted per RFC 4180 (a field holding `"`, `,`, CR or LF is quoted, `"` doubled); `null` is empty, an object is its JSON.
+- Errors: as 142.
+
 ### 2.6.4 Artifacts
 
-Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R32; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own, and taken by Map a Dashboard to Data (5.18).
+Reusable context saved from workflow runs ([workflows](../capabilities/workflows/spec.md) R33; [data-model.md](data-model.md) 3.18). One kind today, `dashboard`: saved by every successful run of Dashboard Image to Artifact ([agents.md](agents.md) 5.17), with no route of its own (144-148 read, rename and delete them), and taken by Map a Dashboard to Data (5.18).
 
 ```ts
 type ArtifactSummary = {
@@ -919,7 +970,7 @@ type ArtifactSummary = {
   description: string;              // the blueprint's summary; may be ''
   widgetCount: number;
   filterCount: number;
-  hasImage: boolean;                // whether 141 answers the image the dashboard was read from
+  hasImage: boolean;                // whether 146 answers the image the dashboard was read from
   source?: { runId: string; workflowId: string };   // the run it was saved from
   createdAt: string;                // ISO
   updatedAt: string;                // ISO
@@ -930,20 +981,20 @@ type Artifact = ArtifactSummary & {
 };
 ```
 
-#### 139. `GET /artifacts`
+#### 144. `GET /artifacts`
 - Response `200`: `ArtifactSummary[]`, newest first (`createdAt` descending).
 
-#### 140. `GET /artifacts/:id`
+#### 145. `GET /artifacts/:id`
 - Response `200`: `Artifact`. `404 "Artifact \"<id>\" not found"`.
 
-#### 141. `GET /artifacts/:id/image`
+#### 146. `GET /artifacts/:id/image`
 - Response `200`: the bytes of the image the dashboard was read from, with its `Content-Type` (`image/png`, `image/jpeg` or `image/webp`) and `Cache-Control: private, max-age=3600`. `404 "Artifact \"<id>\" not found"`; `404 "Artifact \"<id>\" has no image"` when it was saved without one or the file is gone.
 
-#### 142. `PATCH /artifacts/:id`
+#### 147. `PATCH /artifacts/:id`
 - Body: `{ name: string }` (trimmed).
 - Response `200`: `ArtifactSummary`. `400 "Name is required"`; `400 "Name must be at most 80 characters"`; `404 "Artifact \"<id>\" not found"`.
 
-#### 143. `DELETE /artifacts/:id`
+#### 148. `DELETE /artifacts/:id`
 - Response `204`. `404 "Artifact \"<id>\" not found"`.
 - Side effects: the document and its image file are deleted. Runs that used the artifact are unchanged (they keep the blueprint in their own output).
 
@@ -1010,62 +1061,6 @@ Route order: `/datasets/:name/ontology...` and `/ontology/:id` do not collide wi
 See [section 3.4](#34-ontology-bootstrap-stream-post-datasetsnameontologybootstrapstream).
 
 Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent (shown as Ontology Bootstrap) drafts concepts, relations, constraints and instructions from the dataset's stored schema snapshot, sample rows, column references and governed metrics (see [agents.md](agents.md) 2.5); at most 15 drafts are kept; concepts are inserted first, relations resolve against concepts and metrics by name and are dropped when unresolved, mappings to entities outside the dataset are dropped, and a draft is skipped when its name (case-insensitive) already exists for the same kind in the dataset or earlier in the run; survivors are persisted with `dataset: <name>`, `source: "mined"`, **`enabled: false`** for human review.
-
-### 2.8a Personas
-
-Controller prefix `/personas`. Capability: [user-personas](../capabilities/user-personas/spec.md). **Style B throughout** (real status codes, bare bodies). Shape `Persona` in data-model (3.9a): `{ id, name, role, description, goals, typicalQuestions: string[], expertise: "novice"|"intermediate"|"expert", answerStyle, createdAt, updatedAt }`.
-
-| # | Method + path | Purpose | FE |
-|---|---|---|---|
-| 49a | `GET /personas` | List personas sorted by name | yes |
-| 49b | `POST /personas` | Create a persona | yes |
-| 49c | `PATCH /personas/:id` | Partial update | yes |
-| 49d | `DELETE /personas/:id` | Delete (204) | yes |
-
-#### 49a. `GET /personas`
-- Response `200`: **`Persona[]`** (a bare array), sorted by `name` ignoring case.
-
-#### 49b. `POST /personas`
-- Body: `{ name: string; role?: string; description?: string; goals?: string; typicalQuestions?: string[]; expertise?: "novice"|"intermediate"|"expert"; answerStyle?: string }`. Every string is trimmed.
-- Validation `400` (messages exact): `"Name is required"`, `"Name is at most 80 characters"`, `"Role is at most 80 characters"`, `"Description is at most 2,000 characters"`, `"Goals are at most 2,000 characters"`, `"Typical questions must be an array"`, `"At most 10 typical questions"` (blank questions are dropped first), `"A typical question is at most 300 characters"`, `"Expertise must be novice, intermediate or expert"`, `"Answer style is at most 500 characters"`. `expertise` defaults to `intermediate`; omitted strings default to `""` and `typicalQuestions` to `[]`.
-- `409 "A persona named \"<name>\" already exists"` when another persona has the name, ignoring case.
-- Response `201`: the created `Persona` (`id` generated, timestamps set).
-
-#### 49c. `PATCH /personas/:id`
-- Body: any subset of the create fields. **Only fields present on the body are validated and applied**; omitted fields are kept and `updatedAt` is restamped. Same `400` and `409` messages as create (a persona renamed to its own name, in any case, is not a conflict).
-- `404 "Persona not found"`.
-- Response `200`: the updated `Persona`.
-
-#### 49d. `DELETE /personas/:id`
-- Response `204` (empty). `404 "Persona not found"`.
-
-### 2.8b Visuals library
-
-Controller prefix `/visuals`. Capability: [visuals-library](../capabilities/visuals-library/spec.md). **Style B throughout** (real status codes, bare bodies). Shape `VisualChart` in data-model (3.9b): `{ id, name, category, previewKey, rendererForm: string|null, description, whenToUse, whenToAvoid, dataShape, enabled, builtIn, createdAt, updatedAt }`.
-
-| # | Method + path | Purpose | FE |
-|---|---|---|---|
-| 49e | `GET /visuals` | List charts in display order | yes |
-| 49f | `POST /visuals` | Create a chart | yes |
-| 49g | `PATCH /visuals/:id` | Partial update | yes |
-| 49h | `DELETE /visuals/:id` | Delete (204) | yes |
-
-#### 49e. `GET /visuals`
-- Response `200`: **`VisualChart[]`** (a bare array): the nine default categories first in the shipped order (Comparison, Change over time, Part-to-whole, Distribution, Relationship, Ranking, Flow, Spatial, Numbers and tables), other categories after them alphabetically ignoring case, and within a category by `name` ignoring case.
-
-#### 49f. `POST /visuals`
-- Body: `{ name: string; category: string; previewKey?: string; rendererForm?: string|null; description?: string; whenToUse?: string; whenToAvoid?: string; dataShape?: string; enabled?: boolean }`. Every string is trimmed. `builtIn` is never read from the body: a created chart is `builtIn: false`.
-- Validation `400` (messages exact): `"Name is required"`, `"Name is at most 80 characters"`, `"Category is required"`, `"Category is at most 60 characters"`, `"Description is at most 1,000 characters"`, `"When to use is at most 1,000 characters"`, `"When to avoid is at most 1,000 characters"`, `"Data needed is at most 200 characters"`, `"Unknown preview"` (`previewKey` is none of the 30 preview keys or `none`), `"Unknown renderer form"` (not one of `bar`, `line`, `scatter`, `heatmap`, `metric-cards`, `table`, `donut` or null), `"Enabled must be true or false"`. `previewKey` defaults to `none`, `rendererForm` to `null`, omitted strings to `""` and `enabled` to `true`.
-- `409 "A chart named \"<name>\" already exists"` when another chart has the name, ignoring case.
-- Response `201`: the created `VisualChart` (`id` generated, timestamps set).
-
-#### 49g. `PATCH /visuals/:id`
-- Body: any subset of the create fields. **Only fields present on the body are validated and applied**; omitted fields are kept and `updatedAt` is restamped. Same `400` and `409` messages as create (a chart renamed to its own name, in any case, is not a conflict). `builtIn` cannot be changed.
-- `404 "Chart not found"`.
-- Response `200`: the updated `VisualChart`.
-
-#### 49h. `DELETE /visuals/:id`
-- Response `204` (empty). `404 "Chart not found"`.
 
 ### 2.8c Monitoring
 
@@ -1172,6 +1167,7 @@ interface ChatMessage {
   visual?: VisualEvent; verified?: boolean; interpretation?: string;
   feedback?: 'up' | 'down'; crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
   reasoning?: ReasoningStep[]; knowledge?: KnowledgeUse[]; report?: AnalysisReport;
+  evidence?: QueryEvidence[];   // the query inspector's facts, beside `data` (data-model 3.4.2a)
 }
 interface ToolDataRecord {
   tool: string; input?: string;                       // SQL text or entity name
@@ -1511,6 +1507,7 @@ type WorkflowRun = {
   // Answer a Business Question runs only:
   question?: string;               // the user message the agent received (`question`), trimmed
   answer?: ChatMessage;            // the assistant message the turn persisted on the host (data-model 3.4.1): Write answer's text (a run stored before 2026-11-13 may hold a clarifying question with its `clarification`); absent while it waits, and when it stopped or failed before answering
+                                   // answer.evidence?: QueryEvidence[] (data-model 3.4.2a): one entry per run_readonly_sql or sample_rows record of answer.data, failed ones included, in data order; set at persist, built by 139 for an answer stored before it, patched only by 139-141 under the run's answer lock
   datasets: string[];              // the host's datasets 
   agentKey?: string; agentId?: string; agentName?: string;
   agent?: SessionAgentRef;         // as a session's (2.1)

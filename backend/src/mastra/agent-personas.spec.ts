@@ -42,7 +42,7 @@ describe('built-in agent personas (agents.md 1.1)', () => {
         'knowledge-bootstrap',
       ],
       analysis: ['analysis-planner', 'assistant', 'insights-analyst'],
-      sql: ['sql-fixer', 'sql-verifier'],
+      sql: ['query-explainer', 'sql-fixer', 'sql-verifier'],
       storytelling: ['answer-writer', 'dashboard-reader', 'visualization'],
       quality: ['assistant-eval-judge'],
     });

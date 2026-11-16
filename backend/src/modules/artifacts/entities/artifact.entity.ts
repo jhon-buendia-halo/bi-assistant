@@ -31,7 +31,7 @@ export interface ArtifactDoc {
   updatedAt?: string;
 }
 
-/** An artifact as the list shows it (api.md 139). */
+/** An artifact as the list shows it (api.md 144). */
 export interface ArtifactSummary {
   id: string;
   kind: ArtifactKind;
@@ -45,7 +45,7 @@ export interface ArtifactSummary {
   updatedAt: string;
 }
 
-/** An artifact in full (api.md 140). */
+/** An artifact in full (api.md 145). */
 export interface ArtifactDetail extends ArtifactSummary {
   blueprint: DashboardBlueprint;
   /** The dashboard drawn by the fixed runtime, as a sandboxed document. */

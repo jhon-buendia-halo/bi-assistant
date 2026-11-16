@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   HostListener,
+  computed,
   effect,
   inject,
   signal,
@@ -14,7 +15,6 @@ import {
   Bot,
   FlaskConical,
   FolderKanban,
-  Layers,
   Menu,
   PanelRight,
   ScrollText,
@@ -32,7 +32,6 @@ import { AgentsArea } from './features/agents/components/agents-area/agents-area
 import { AgentTryIt } from './features/agents/components/agent-try-it/agent-try-it';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { ArtifactsArea } from './features/artifacts/components/artifacts-area/artifacts-area';
-import { ContextArea } from './features/context/components/context-area/context-area';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
 import { DatasetsArea } from './features/datasets/components/datasets-area/datasets-area';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
@@ -45,6 +44,8 @@ import { SessionsState } from './features/sessions/services/sessions-state';
 import { SettingsContent } from './features/settings/components/settings-content/settings-content';
 import { SettingsNav } from './features/settings/components/settings-nav/settings-nav';
 import { WorkflowsArea } from './features/workflows/components/workflows-area/workflows-area';
+import { BRAND } from './core/brand/brand';
+import { AppLogo } from './shared/components/app-logo/app-logo';
 import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
@@ -57,7 +58,7 @@ const RIGHT_PANEL_RESIZE_STEP = 24;
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 
 /**
- * The shell: the navigation rail, the banner, the right-panel host and the
+ * The shell: the navigation rail, the header, the right-panel host and the
  * switch between the area containers (each area's state, handlers and template
  * live under features/<area>/, see specs/system/tech-stack.md).
  */
@@ -66,6 +67,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
   imports: [
     NgTemplateOutlet,
     LucideAngularModule,
+    AppLogo,
     BackendStatusBanner,
     ToastContainer,
     SystemLogsPanel,
@@ -75,7 +77,6 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     DatasetsArea,
     WorkflowsArea,
     AgentsArea,
-    ContextArea,
     ArtifactsArea,
     SessionsArea,
     SessionsHeader,
@@ -118,7 +119,6 @@ export class App {
     { area: 'datasets', label: 'Datasets', icon: FlaskConical },
     { area: 'workflows', label: 'Workflows', icon: Workflow },
     { area: 'agents', label: 'Agents', icon: Bot },
-    { area: 'context', label: 'Context', icon: Layers },
     { area: 'artifacts', label: 'Artifacts', icon: Boxes },
     { area: 'runs', label: 'Runs', icon: FolderKanban },
     { area: 'monitoring', label: 'Monitoring', icon: Activity },
@@ -129,6 +129,18 @@ export class App {
    * Expanded unless the user last collapsed it (R2, R50).
    */
   readonly navExpanded = this.uiPreferences.navExpanded;
+
+  /** The brand this build is for (ADR-0045) and whether its shell is the framed one. */
+  readonly brand = BRAND;
+  readonly framed = BRAND.shell === 'framed';
+  readonly art = BRAND.art;
+
+  /** The open area's name, shown after "Halo Powered" in the header; none on the home view. */
+  readonly areaLabel = computed(() => {
+    const area = this.shell.currentArea();
+    if (area === 'settings') return 'Settings';
+    return this.railItems.find((item) => item.area === area)?.label ?? null;
+  });
 
   constructor() {
     // Selecting a datasource element reveals its details in the right panel.

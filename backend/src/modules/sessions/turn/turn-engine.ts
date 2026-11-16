@@ -87,6 +87,13 @@ import {
   toolDataRecord,
   toolRecords,
 } from '../turn-data';
+import { evidenceOf } from '../query-evidence/query-evidence';
+import {
+  QUERY_FACTS_CONTEXT_KEY,
+  queryFactsKey,
+  type QueryFactsMap,
+} from '../query-evidence/query-facts';
+import type { QueryFacts } from '../query-evidence/query-evidence.types';
 import type {
   ChatMessage,
   CrossCheck,
@@ -260,6 +267,15 @@ export class TurnEngine {
     const data: ToolDataRecord[] = [];
     // The visual tools and `show_in_panel` read them, for every agent (agents.md 4.2).
     options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
+    // What the data tools knew about each call, written beside the result
+    // (never into it) and matched to the records as they are captured; at
+    // persist it becomes the answer's `evidence` (plan m1-25 1.25.1).
+    const queryFacts: QueryFactsMap = new Map();
+    const recordFacts = new Map<ToolDataRecord, QueryFacts>();
+    options.requestContext.set(QUERY_FACTS_CONTEXT_KEY, queryFacts);
+    const factsOf = (record: ToolDataRecord) =>
+      recordFacts.get(record) ??
+      queryFacts.get(queryFactsKey(record.tool, record.input));
     let stream: Awaited<ReturnType<typeof agent.stream>> | undefined;
 
     let text = '';
@@ -484,6 +500,10 @@ export class TurnEngine {
             const record = toolDataRecord(toolName, args, payload.result);
             if (record) {
               data.push(record);
+              const facts = payload.toolCallId
+                ? queryFacts.get(payload.toolCallId)
+                : undefined;
+              if (facts) recordFacts.set(record, facts);
               emit({
                 type: 'tool-result',
                 content: JSON.stringify({
@@ -1057,6 +1077,8 @@ export class TurnEngine {
       const entities = sourceEntities(data);
       const reasoning = reasoningTrail(data);
       const knowledge = knowledgeUsed(options.requestContext);
+      // One entry per query record, beside `data` (never on a record).
+      const evidence = evidenceOf(data, factsOf);
       if (clarification) {
         // The turn stops here, but the schema/sample work done before the
         // question is real work — keep it on the card instead of dropping it.
@@ -1066,6 +1088,7 @@ export class TurnEngine {
           at: new Date().toISOString(),
           clarification,
           ...(data.length ? { data } : {}),
+          ...(evidence.length ? { evidence } : {}),
           ...(entities.length ? { entities } : {}),
           ...(reasoning ? { reasoning } : {}),
           ...(knowledge ? { knowledge } : {}),
@@ -1088,6 +1111,7 @@ export class TurnEngine {
               : readinessAnswerFallback(readinessReport!)),
           at: new Date().toISOString(),
           ...(data.length ? { data } : {}),
+          ...(evidence.length ? { evidence } : {}),
           ...(entities.length ? { entities } : {}),
           ...(interpretation ? { interpretation } : {}),
           ...(reasoning ? { reasoning } : {}),

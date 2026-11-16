@@ -362,20 +362,22 @@ ${visualBody}
 }
 
 /**
- * The frame's colour tokens, Light and Dark. They mirror the app's own theme
- * tokens (ui.md 6.0) so a visual reads as part of the panel around it, and the
- * series palette keeps 3:1 against each theme's page colour.
+ * The frame's colour tokens, Light and Dark, per brand (ADR-0045). They mirror
+ * the app's own theme tokens (ui.md 6.0) so a visual reads as part of the
+ * panel around it, and the series palette keeps 3:1 against each theme's page
+ * colour. Halo Powered is the default; the host panel sets
+ * `data-brand="mercer"` on the root of an Agentic Hub build's frames.
  */
 const LIGHT_TOKENS = `
   color-scheme: light;
   --qti-bg: #ffffff;
-  --qti-fg: rgb(0 0 0 / 0.85);
-  --qti-fg-strong: #001f52;
-  --qti-fg-muted: rgb(0 0 0 / 0.6);
-  --qti-surface: #f8fafc;
-  --qti-border: rgb(0 0 0 / 0.1);
-  --qti-link: #0b41ad;
-  --qti-focus: #0b41ad;
+  --qti-fg: #2a2a2a;
+  --qti-fg-strong: #181818;
+  --qti-fg-muted: #5f5f5c;
+  --qti-surface: #f6f6f4;
+  --qti-border: #e3e3df;
+  --qti-link: #d4380f;
+  --qti-focus: #ed3e13;
   /* Categorical series palette — accessible on the white page. */
   --qti-cat-1: #0284c7; /* sky-600 */
   --qti-cat-2: #d97706; /* amber-600 */
@@ -395,14 +397,14 @@ const LIGHT_TOKENS = `
 
 const DARK_TOKENS = `
   color-scheme: dark;
-  --qti-bg: #12233a;
-  --qti-fg: #d5dfec;
-  --qti-fg-strong: #eef4fc;
-  --qti-fg-muted: #93a6bf;
-  --qti-surface: #16294a;
-  --qti-border: #24384f;
-  --qti-link: #5b95ff;
-  --qti-focus: #7fb0ff;
+  --qti-bg: #242424;
+  --qti-fg: #d9d9d9;
+  --qti-fg-strong: #ffffff;
+  --qti-fg-muted: #a3a3a3;
+  --qti-surface: #2b2b2b;
+  --qti-border: #363636;
+  --qti-link: #ff7a3d;
+  --qti-focus: #ff9361;
   /* Categorical series palette — accessible on the dark page. */
   --qti-cat-1: #38bdf8; /* sky-400 */
   --qti-cat-2: #fbbf24; /* amber-400 */
@@ -415,6 +417,29 @@ const DARK_TOKENS = `
   --qti-pos: #34d399;
   --qti-neg: #f87171;
   --qti-grid: rgb(255 255 255 / 0.08);
+  --qti-axis: #a3a3a3;
+  --qti-tooltip-bg: #303030;
+  --qti-on-cat: #141414;`;
+
+/** Agentic Hub (Mercer) overrides of the page tokens, as before the rebrand (ADR-0007). */
+const MERCER_LIGHT_TOKENS = `
+  --qti-fg: rgb(0 0 0 / 0.85);
+  --qti-fg-strong: #001f52;
+  --qti-fg-muted: rgb(0 0 0 / 0.6);
+  --qti-surface: #f8fafc;
+  --qti-border: rgb(0 0 0 / 0.1);
+  --qti-link: #0b41ad;
+  --qti-focus: #0b41ad;`;
+
+const MERCER_DARK_TOKENS = `
+  --qti-bg: #12233a;
+  --qti-fg: #d5dfec;
+  --qti-fg-strong: #eef4fc;
+  --qti-fg-muted: #93a6bf;
+  --qti-surface: #16294a;
+  --qti-border: #24384f;
+  --qti-link: #5b95ff;
+  --qti-focus: #7fb0ff;
   --qti-axis: #93a6bf;
   --qti-tooltip-bg: #1a3357;
   --qti-on-cat: #0b1626;`;
@@ -433,6 +458,14 @@ const FRAME_CSS = `
   }
 }
 :root[data-theme="dark"] {${DARK_TOKENS}
+}
+:root[data-brand="mercer"] {${MERCER_LIGHT_TOKENS}
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-brand="mercer"]:not([data-theme="light"]) {${MERCER_DARK_TOKENS}
+  }
+}
+:root[data-brand="mercer"][data-theme="dark"] {${MERCER_DARK_TOKENS}
 }
 html, body { margin: 0; background: var(--qti-bg); }
 .qti-frame {

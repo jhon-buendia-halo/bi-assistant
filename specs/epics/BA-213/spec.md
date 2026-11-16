@@ -14,7 +14,7 @@ This epic lets the user:
 
 The agent's instructions stay layered on the core prompt, which the user can edit since BA-224 (ADR-0026). The read-only SQL guard, grounding, SQL repair and trust signals hold for every agent whatever it is configured with (ADR-0008). The decision is ADR-0022 in [system/architecture.md](../../system/architecture.md).
 
-On 2026-10-14 the user widened the epic: besides shaping user agents, the hub ships a second Official agent built in code, the **RFP Builder**, which walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data ([BA-212](https://halo-powered.atlassian.net/browse/BA-212)), reached only through a REST API this epic builds (ADR-0027, ADR-0028).
+On 2026-10-14 the user widened the epic: besides shaping user agents, the hub ships a second Official agent built in code, the **RFP Builder**, which walks a benefits consultant through building a carrier RFP for one client over the Intellify data ([BA-212](https://halo-powered.atlassian.net/browse/BA-212)), reached only through a REST API this epic builds (ADR-0027, ADR-0028).
 
 ## Scope
 

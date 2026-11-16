@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "09570fe7e004",
+  "contractHash": "3ee2f02607f3",
   "edges": [
     {
       "from": "start",
@@ -1167,7 +1167,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "type": "number",
                 },
                 "rows": {
-                  "description": "Its result rows, at most 50.",
+                  "description": "Its result rows, at most 200.",
                   "items": {
                     "additionalProperties": {},
                     "propertyNames": {
@@ -1395,7 +1395,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "type": "number",
                 },
                 "rows": {
-                  "description": "Its result rows, at most 50.",
+                  "description": "Its result rows, at most 200.",
                   "items": {
                     "additionalProperties": {},
                     "propertyNames": {
@@ -1657,7 +1657,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "type": "number",
                 },
                 "rows": {
-                  "description": "Its result rows, at most 50.",
+                  "description": "Its result rows, at most 200.",
                   "items": {
                     "additionalProperties": {},
                     "propertyNames": {
@@ -1899,7 +1899,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "type": "number",
                 },
                 "rows": {
-                  "description": "Its result rows, at most 50.",
+                  "description": "Its result rows, at most 200.",
                   "items": {
                     "additionalProperties": {},
                     "propertyNames": {
@@ -2144,7 +2144,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "type": "number",
                 },
                 "rows": {
-                  "description": "Its result rows, at most 50.",
+                  "description": "Its result rows, at most 200.",
                   "items": {
                     "additionalProperties": {},
                     "propertyNames": {
@@ -2339,7 +2339,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "type": "number",
                 },
                 "rows": {
-                  "description": "Its result rows, at most 50.",
+                  "description": "Its result rows, at most 200.",
                   "items": {
                     "additionalProperties": {},
                     "propertyNames": {

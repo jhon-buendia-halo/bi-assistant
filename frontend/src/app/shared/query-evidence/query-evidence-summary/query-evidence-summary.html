@@ -1,0 +1,52 @@
+@if (rows().length > 0) {
+  <div data-testid="query-evidence" class="flex flex-col gap-2">
+    @if (line(); as coverage) {
+      <p
+        data-testid="query-coverage-line"
+        [attr.data-tone]="coverage.tone"
+        class="rounded-lg px-3 py-2 text-[13px] leading-5"
+        [class]="
+          coverage.tone === 'success'
+            ? 'bg-success-soft text-on-success-soft'
+            : 'bg-warning-soft text-on-warning-soft'
+        "
+      >
+        @if (coverage.text) {
+          <span>{{ coverage.text }}</span>
+          {{ " " }}
+        }
+        <button
+          type="button"
+          data-testid="query-inspect-all"
+          (click)="inspect.emit(coverage.linkIndex)"
+          class="underline"
+        >
+          {{ coverage.linkLabel }}
+        </button>
+      </p>
+    }
+    @for (row of rows(); track row.index) {
+      <button
+        type="button"
+        [attr.data-testid]="'query-row-' + row.index"
+        (click)="inspect.emit(row.index)"
+        class="flex w-full items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2 text-left hover:border-border-strong hover:bg-surface-muted"
+      >
+        <span class="chip chip-info shrink-0">{{ row.label }}</span>
+        <span
+          class="min-w-0 flex-1 truncate text-[13px] text-fg"
+          [title]="row.title"
+          >{{ row.title }}</span
+        >
+        @if (row.chipLabel) {
+          <span
+            data-testid="query-coverage-chip"
+            [attr.data-coverage]="row.coverage"
+            [class]="chipClass(row.tone)"
+            >{{ row.chipLabel }}</span
+          >
+        }
+      </button>
+    }
+  </div>
+}

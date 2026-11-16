@@ -467,6 +467,7 @@ function build(options: BuildOptions = {}) {
         'workflow_run_node_chats',
       ),
     ),
+    {} as never,
     // No stored artifact: no workflow here takes one.
     { list: () => Promise.resolve([]) } as never,
   );

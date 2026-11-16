@@ -33,10 +33,19 @@
       }
     </div>
     <!-- Work already done before the question — kept visible, not lost -->
-    <ng-container
-      [ngTemplateOutlet]="reasoningTrail"
-      [ngTemplateOutletContext]="{ $implicit: msg }"
-    />
+    @if (queryInspector()) {
+      <div class="mt-3">
+        <app-query-evidence-summary
+          [message]="msg"
+          (inspect)="inspectQuery.emit($event)"
+        />
+      </div>
+    } @else {
+      <ng-container
+        [ngTemplateOutlet]="reasoningTrail"
+        [ngTemplateOutletContext]="{ $implicit: msg }"
+      />
+    }
     <ng-container
       [ngTemplateOutlet]="knowledgeApplied"
       [ngTemplateOutletContext]="{ $implicit: msg }"
@@ -141,15 +150,24 @@
   </div>
 } @else {
   <div class="group flex max-w-[800px] gap-3">
-    <img
-      src="brand/agentic-hub/sparks.svg"
-      alt=""
-      width="24"
-      height="24"
-      class="size-6 shrink-0 self-start"
+    <lucide-angular
+      [img]="Sparkles"
+      [size]="20"
+      class="mt-0.5 size-6 shrink-0 self-start text-accent"
+      aria-hidden="true"
+      data-testid="answer-mark"
     />
     <div class="flex min-w-0 flex-1 flex-col gap-4">
-      <div class="prose-dark" [innerHTML]="msg.content | markdown"></div>
+      @if (queryInspector()) {
+        <!-- Sanitized markdown plus a chip after each figure (figure-refs.ts) -->
+        <div
+          class="prose-dark"
+          [innerHTML]="inspectorBody()"
+          (click)="onProseClick($event)"
+        ></div>
+      } @else {
+        <div class="prose-dark" [innerHTML]="msg.content | markdown"></div>
+      }
       @if (msg.readinessReport; as readiness) {
         <!-- Data readiness report: score, band, Open scorecard -->
         <app-readiness-card
@@ -157,10 +175,17 @@
           (openScorecard)="openScorecard.emit(readiness)"
         />
       }
-      <ng-container
-        [ngTemplateOutlet]="reasoningTrail"
-        [ngTemplateOutletContext]="{ $implicit: msg }"
-      />
+      @if (queryInspector()) {
+        <app-query-evidence-summary
+          [message]="msg"
+          (inspect)="inspectQuery.emit($event)"
+        />
+      } @else {
+        <ng-container
+          [ngTemplateOutlet]="reasoningTrail"
+          [ngTemplateOutletContext]="{ $implicit: msg }"
+        />
+      }
       <ng-container
         [ngTemplateOutlet]="knowledgeApplied"
         [ngTemplateOutletContext]="{ $implicit: msg }"
@@ -383,19 +408,18 @@
       }
     </div>
   }
-  @if (message.data?.length) {
+  @if (message.data?.length && !queryInspector()) {
     <details
       class="qti-data-used w-full rounded-lg border border-border bg-surface text-[12px]"
     >
       <summary
         class="flex cursor-pointer items-center gap-2 p-3 text-[14px] leading-[22px] text-on-primary-soft select-none"
       >
-        <img
-          src="brand/agentic-hub/data-sources.svg"
-          alt=""
-          width="24"
-          height="24"
-          class="shrink-0"
+        <lucide-angular
+          [img]="Database"
+          [size]="20"
+          class="shrink-0 text-accent"
+          aria-hidden="true"
         />
         <span class="min-w-0 flex-1">
           Data used ({{ message.data.length }}

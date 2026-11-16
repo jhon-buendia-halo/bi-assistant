@@ -426,11 +426,11 @@ flowchart LR
 - **Consequences:** Readability does not depend on designer-model output; storage grows per version.
 
 #### ADR-0007 — Themeable renderer: semantic design tokens, a bundled webfont and a System / Light / Dark preference
-- **Status:** Accepted; its *Preference* storage and default superseded by ADR-0009
+- **Status:** Accepted; its *Preference* storage and default superseded by ADR-0009; its token values and Noto Sans superseded by ADR-0044
 - **Date:** 2026-10-09
 - **Context:**
   - The renderer is dark-only. Its colours are hardcoded per component as Tailwind arbitrary values (`bg-[#232323]`, `zinc-*`), and it has no theme file and no CSS variables ([ui.md](ui.md) §6).
-  - The Agentic Hub look and feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) needs a light theme and a navy dark theme derived from it, switchable at runtime. With hardcoded values, each theme would need a second class on every element.
+  - The Agentic Hub look and feel of the time (since replaced by Halo Powered, ADR-0044) ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) needs a light theme and a navy dark theme derived from it, switchable at runtime. With hardcoded values, each theme would need a second class on every element.
   - The renderer loads over `file://` in the desktop app and must work offline, so it can't fetch fonts from a CDN.
 - **Decision:**
   - **Semantic tokens.** Colours, radii and shadows become CSS custom properties named by role (surface, card, text, border, primary, status), not by value. A `data-theme="light" | "dark"` attribute on the root element selects one of two token sets. The tokens are mapped into Tailwind v4 through `@theme`, so components use role utilities (`bg-surface`, `text-muted`), never hex values or palette shades.
@@ -669,7 +669,7 @@ flowchart LR
 - **Status:** Superseded (2026-11-12): the RFP Builder agent was removed from the product together with the Intellify RFP API (ADR-0027); the sessions-bind-to-a-built-in-agent mechanism it introduced stays for the Data Readiness Agent and Questions to Insights v2. Kept as history. Earlier status: Accepted; amended 2026-11-09 (BA-320, see the amendment at the end of this ADR); amended by ADR-0040 (sessions bind to a workflow; Start chat moves to the workflow); amended by ADR-0041 (the RFP Builder runs one exchange per run)
 - **Date:** 2026-10-14
 - **Context:**
-  - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
+  - The user asked for an agent that walks a benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
   - Sessions bind to user agents only (ADR-0008); every turn runs the `assistant`, with its SQL repair, grounding guard and careful mode. Start chat is offered to the Official assistant (which opens the composer) and to Live user agents.
   - The BA-213 epic listed new tools as out of scope; the user amended it on 2026-10-14.
 - **Decision:**
@@ -1127,6 +1127,52 @@ flowchart LR
   - The run stream gains the `step` status `suspended` and the `input-required` event (api.md 3.6); a node chat on a waiting run answers 409; a waiting run can't be visualized.
   - **Amends ADR-0034 / ADR-0041:** Clarify no longer ends a v2 run, and the eval target scores a suspended run on its question and options.
   - **Stack-neutral:** a rebuild needs a workflow engine that pauses a step on a typed payload and continues the same run with a typed answer, and a store of the paused run (in memory, with an expiry, or persisted).
+
+#### ADR-0044 — Halo Powered rebrand: n8n-style flat shell, halopowered.com palette and type, HALO wordmark
+- **Status:** Accepted; supersedes the token values and the Noto Sans choice of ADR-0007 (the token mechanism and the System / Light / Dark preference stay)
+- **Date:** 2026-11-15
+- **Context:**
+  - Ownership of the app moved from Mercer to Halo. Mercer branding (the "US Health Agentic Hub" name, the teal textured frame and photo banner, the LenAI badge, the Figma-exported brand assets) must not ship.
+  - The product needs the look of halopowered.com ("Editorial" direction) in a shell that stays out of the way of dense work screens, the way n8n's does.
+- **Decision:**
+  - **Name.** The UI product name is "Halo Powered": window and document title, the header's level-one heading, the rail brand, the Settings build identity ("Halo Powered v<version>") and the welcome heading ("Welcome to Halo Powered", with "Halo Powered" as a serif accent). The operating-system app name, installers and data directory stay "Halo BI Assistant".
+  - **Flat shell.** No gradient frame, photo banner, gaps, rounded panels or page card. A full-height rail with a right border; beside it a 48 px header (`role="banner"`) holding "Halo Powered" and, when an area is open, "/" and the area name; below it the main area (the canvas colour with an 18 px dot texture) and, when open, the details panel flush on the right with a left border.
+  - **Brand.** The HALO wordmark is an inline SVG filled with `currentColor` (`app-logo`; the notched "O" alone on the collapsed rail), followed by "Powered" in the expanded rail. The LenAI mark and "Powered by LenAI" are removed from the rail; LenAI stays an LLM provider. The app icon and favicon are the notched O in white on a rounded square filled with the Halo gradient (`brand/halo-mark.svg`, full-bleed `brand/halo-favicon.svg`), replacing the "HALO BI" ring. `public/brand/agentic-hub/` is deleted; icons are lucide (Runs header `folder-kanban`, answer mark `sparkles`, Data used `database`).
+  - **Palette.** From halopowered.com: ink `#181818`, warm greys, ember `#ed3e13` (darkened to `#d4380f` in Light so white text meets AA; Dark uses `#ff7a3d` with `#141414` text) and plum `#63254e` (agent spans, informational chips). Light and Dark both exist; values in `tokens.css` and [ui.md](ui.md) 6.0. Radii: cards 10 px, frame 0; hairline shadows; buttons stay pill-shaped. The Electron window background follows the theme (`#f2f2f0` / `#1c1c1c`).
+  - **Type.** Bundled Inter Tight 300 to 700 replaces Noto Sans; bundled Fraunces 800 is the display serif for the accent word of a display title (`.display-title`, `.display-accent`).
+- **Consequences:**
+  - ADR-0007's token values and Noto Sans are superseded; the semantic-token mechanism, `data-theme` and the preference are unchanged, so no component moves off tokens.
+  - Mercer assets are deleted, the LenAI badge is gone, and the Testing Data fixtures no longer mention Mercer.
+  - Specs, E2E selectors and screenshots that named the old heading, frame or banner change with this ADR (app-shell R1, R4, R7, R32, R33, R51).
+  - The Mercer look survives as the `mercer` brand, chosen at build time ([ADR-0045](#adr-0045--brands-chosen-at-build-time-white-label-halo-powered-and-agentic-hub)); this ADR describes the `halo` brand.
+  - **Stack-neutral:** a rebuild needs a themeable token set, a bundled sans and a display serif, and an inline-vector wordmark; nothing else in the shell is specific to the framework.
+- **Alternatives considered:**
+  - **Halo Noir, Halo Daylight and Halo Contrast single themes:** drop either the light or the dark preference that ADR-0007 and ADR-0009 give users.
+  - **n8n's own light and dark palette with Inter:** familiar, but carries none of the Halo identity.
+  - **Plum Studio:** plum as the primary colour; ember reads better as the action colour and keeps plum for agents.
+  - **Gradient Band:** a Halo-gradient header band; heavier than the flat header and competes with the work area.
+
+#### ADR-0045 — Brands chosen at build time (white-label): Halo Powered and Agentic Hub
+- **Status:** Accepted; refines ADR-0044 (the Halo look is the `halo` brand; the pre-rebrand look is restored as `mercer`)
+- **Date:** 2026-11-15
+- **Context:**
+  - The previous Mercer look (the "Agentic Hub" framed shell) must stay available alongside the Halo rebrand, for example for delivery to that client, without either brand leaking into the other's product: no names, images or assets of one in the other's bundle, installer or npm package.
+- **Decision:**
+  - **One build, one brand.** `BRAND=halo|mercer` (default `halo`) picks the brand for every build: web bundle, Electron app and installer. The brand is not a runtime setting.
+  - **One folder per brand:** `frontend/brands/<id>/` holds `brand.json` (`id`, `osName`, `legacyOsName`, `windowTitle`, `appId`, `artifactName`, `icon`, `canvas {light, dark}`, `publishNpm`), `tokens.css` (the brand's Light and Dark values, including `--qti-font-sans`, `--qti-font-display`, `--qti-radius-card`, `--qti-radius-frame`, and for mercer the frame, banner and logo gradient tokens), `public/` (`favicon.ico`, `brand/favicon.svg`, `brand/icon.png`, and for mercer `brand/agentic-hub/`) and `art/app-icon.svg` (the source of `icon.png`). `frontend/public/` no longer exists; `src/styles/tokens.css` keeps only the shared `@theme inline` mapping.
+  - **Halo** ("Halo Powered"): the flat n8n-style shell of ADR-0044; OS name "Halo BI Assistant".
+  - **Mercer** ("Agentic Hub"): the pre-rebrand look restored exactly: framed shell (textured teal gradient frame, photo banner titled "US Health Agentic Hub", rounded panels), gradient logo circle and "Agentic Hub" in the rail, the "Powered by LenAI" badge, Noto Sans and the ADR-0007 token values. OS name "Agentic Hub", appId `com.halopowered.agentic-hub`, installer `Agentic-Hub-<version>-<os>-<arch>.<ext>`, its own userData folder so both apps install side by side, no legacy data migration. In both brands the Runs header icon, answer mark and Data used icon are lucide.
+  - **Renderer:** `src/app/core/brand/` holds the `Brand` model (`id`, `productName`, `headerTitle`, `welcomeLead`, `welcomeName`, `shell` `flat|framed`, `poweredByLenai`, `art`), `brand.ts` (Halo, default) and `brand.mercer.ts`. The `mercer` Angular build configuration swaps `brand.ts` by `fileReplacements`, the styles (fonts and `brands/mercer/tokens.css`) and the assets (`brands/mercer/public`); `ng build -c production,mercer`. The shell template draws the flat or framed shell from `brand.shell`; `main.ts` sets the document title from the brand.
+  - **Electron:** `scripts/brand.mjs` builds the web bundle (also writing `dist/frontend/browser/brand.json`) and copies the brand's `brand.json` to `frontend/electron/brand.json` (gitignored); `main.cjs` reads it for the app name, window title, legacy migration, per-theme window background and icon. `scripts/electron-dist.mjs` passes appId, product name, artifact name and icons to electron-builder.
+  - **Delivery:** the desktop workflow takes a `brand` input (tag pushes build halo). The npm package ships only brands with `publishNpm: true`; `backend/scripts/assert-publishable-brand.js` checks `backend/public/brand.json` in `prepack` and as its own CI step. Mercer is distributed as the desktop installer only (plus local web builds).
+- **Consequences:**
+  - Each brand's names and images never reach the other's bundle (verified on both builds).
+  - The E2E suite runs on the Halo build; `e2e/brand-mercer.spec.ts` runs only on a `BRAND=mercer` web build and skips otherwise.
+  - A new brand is a new folder plus a `brand.<id>.ts` and a build configuration; no runtime switch exists to test.
+  - **Stack-neutral:** a rebuild needs a build-time brand input that selects a token set, assets, names and packaging identity, and a guard keeping unpublishable brands out of the public package.
+- **Alternatives considered:**
+  - **Brand chosen at runtime in Appearance:** rejected; every build would ship both brands' assets and four brand and theme combinations would need testing.
+  - **The old palette as an extra colour theme only:** rejected; it does not restore the old look (framed shell, banner, names, badge, installer identity).
 
 ## Level 4 — Code
 

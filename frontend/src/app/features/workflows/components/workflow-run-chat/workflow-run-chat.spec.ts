@@ -4,6 +4,7 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { EMPTY } from 'rxjs';
 import {
   WorkflowDetail,
   WorkflowRun,
@@ -95,6 +96,7 @@ class FakeRunsApi {
     signal?: AbortSignal;
   }[] = [];
   getRun = jasmine.createSpy('getRun');
+  prepareEvidence = jasmine.createSpy('prepareEvidence').and.returnValue(EMPTY);
 
   streamRun(
     workflowId: string,

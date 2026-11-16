@@ -9,5 +9,8 @@ dist
 .context
 .env
 
+# Written by `node frontend/scripts/brand.mjs electron-prepare` (ADR-0045)
+/frontend/electron/brand.json
+
 # scripts/qa.mjs reports and logs (delivery.md 13)
 /.qa-reports/

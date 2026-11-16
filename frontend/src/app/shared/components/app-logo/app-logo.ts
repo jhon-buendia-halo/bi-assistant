@@ -1,9 +1,10 @@
 import { Component, input } from '@angular/core';
 
 /**
- * Halo BI wordmark. Drawn as strokes in `currentColor` so it inherits the
- * surrounding text colour, and sized by cap height rather than by a fixed
- * width so it lines up with the text next to it.
+ * The HALO wordmark (halopowered.com), filled with `currentColor` so it
+ * inherits the surrounding text colour. Sized by height; the width follows
+ * the aspect ratio. `mark` draws only the notched O, for narrow places such
+ * as the collapsed navigation rail.
  */
 @Component({
   selector: 'app-logo',
@@ -11,10 +12,14 @@ import { Component, input } from '@angular/core';
   styleUrl: './app-logo.scss',
 })
 export class AppLogo {
-  /** Cap height of the wordmark in pixels; the width follows the aspect ratio. */
-  readonly height = input(14);
+  /** Height in pixels; the width follows the aspect ratio. */
+  readonly height = input(16);
+  /** Only the O, square. */
+  readonly mark = input(false);
+  /** Accessible name of the image. */
+  readonly label = input('Halo');
 
   protected get width(): number {
-    return Math.round((this.height() * 573) / 113);
+    return Math.round((this.height() * (this.mark() ? 48 : 187)) / 46);
   }
 }
