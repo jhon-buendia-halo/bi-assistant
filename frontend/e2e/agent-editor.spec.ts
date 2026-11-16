@@ -17,6 +17,7 @@ import {
   seedWorldCupDataset,
 } from './helpers/agents-api';
 import { apiJson } from './helpers/api';
+import { worldCupKey } from './helpers/world-cup-db';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -969,4 +970,89 @@ test('the Skills tab shows what is linked and creates a skill inline', async ({
   page.once('dialog', (dialog) => void dialog.accept());
   await page.getByTestId('agent-skill-delete-fy-rules').click();
   await expect(page.getByTestId('agent-skill-row-fy-rules')).toHaveCount(0);
+});
+
+test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query inspector', async ({
+  page,
+}) => {
+  const question = 'How many matches were played?';
+  const sql = `SELECT MAX(0) + 4321 AS matches_played FROM ${worldCupKey('matches')}`;
+  stub.reply = (request) =>
+    request.messages[request.messages.length - 1]?.role === 'tool'
+      ? { text: 'The data holds 4,321 matches played.' }
+      : {
+          toolCall: {
+            name:
+              request.tools.find((tool) => tool.endsWith('run_readonly_sql')) ??
+              'run_readonly_sql',
+            arguments: { sql, rationale: 'Counting the matches played.' },
+          },
+        };
+  const id = await createUserAgent(page, {
+    name: HISTORIAN,
+    instructions: 'Answer from the data with [[tool:run_readonly_sql]].',
+    datasets: [WORLD_CUP_DATASET],
+  });
+  const answer = detailsPanel(page).getByTestId('agent-tryit-answer');
+  const sheet = page.getByTestId('query-inspector-sheet');
+
+  await test.step('Given a draft user agent "Cup historian" over "World Cup Core" in its editor', async () => {
+    await openEditor(page, id, HISTORIAN);
+    await page.getByTestId('agent-try-it').click();
+  });
+  await test.step('When I run "How many matches were played?" in Try it', async () => {
+    await tryInPanel(page, question);
+    await expect(answer).toContainText('The data holds 4,321');
+  });
+  await test.step('Then the answer shows a figure chip, the coverage line and the query row with its coverage chip', async () => {
+    await expect(answer.getByTestId('figure-ref').first()).toHaveText('Q1');
+    await expect(answer.getByTestId('query-coverage-line')).toBeVisible();
+    await expect(answer.getByTestId('query-row-0')).toBeVisible();
+    await expect(answer.getByTestId('query-coverage-chip')).toHaveCount(1);
+  });
+  await test.step('When I open the query from its row', async () => {
+    await answer.getByTestId('query-row-0').click();
+    await expect(sheet).toBeVisible();
+  });
+  await test.step("Then the sheet is in the main column and does not overlap the Details panel", async () => {
+    const box = await sheet.boundingBox();
+    const panel = await detailsPanel(page).boundingBox();
+    expect(box).not.toBeNull();
+    expect(panel).not.toBeNull();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(panel!.x + 1);
+    expect(box!.width).toBeLessThanOrEqual(720);
+  });
+  await test.step("And the inspector's header shows Query 1 of 1 and its steps start from a table and end with Show", async () => {
+    await expect(page.getByTestId('query-inspector-position')).toHaveText(
+      'Query 1 of 1',
+    );
+    const steps = page.getByTestId('query-funnel-step');
+    await expect(steps.first()).toHaveAttribute('data-verb', 'start');
+    await expect(steps.last()).toHaveAttribute('data-verb', 'show');
+  });
+  await test.step('When I switch to Result and to SQL', async () => {
+    await page.getByTestId('query-inspector-tab-result').click();
+    await expect(page.getByTestId('query-result-table')).toContainText('4321');
+    await page.getByTestId('query-inspector-tab-sql').click();
+    await expect(page.getByTestId('query-sql')).toContainText('4321');
+  });
+  await test.step('And I press Escape', async () => {
+    await page.keyboard.press('Escape');
+  });
+  await test.step('Then the sheet closes and the focus is back on the query row', async () => {
+    await expect(sheet).toHaveCount(0);
+    await expect(answer.getByTestId('query-row-0')).toBeFocused();
+  });
+  await test.step('When I open the query again and run the draft again', async () => {
+    await answer.getByTestId('query-row-0').click();
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Escape');
+    await answer.getByTestId('query-row-0').click();
+    await expect(sheet).toBeVisible();
+    await detailsPanel(page).getByTestId('agent-tryit-run').click();
+  });
+  await test.step('Then the sheet is closed', async () => {
+    await expect(sheet).toHaveCount(0);
+    await expect(answer).toContainText('The data holds 4,321');
+  });
 });
