@@ -107,6 +107,19 @@ Workflow runs
 - R45. A workflow run's agent turn runs on a temporary host `run-<runId>` (ADR-0041, amending ADR-0038), so its calls carry that id as their thread. Monitoring SHALL treat such a thread like a session: it SHALL read the run `<runId>` from `workflow_runs` and name the thread `<workflow name>: <run title>` (the run's question, else its workflow's name, as the history titles it). The calls table (R3), the Session filter (R6), the call page (R14), the Sessions tab (R28) and the session page (R32) use that name. The call page's Session link for a run SHALL open the run's session page (its execution flow), not a chat, and the session page of a run SHALL show a **Run** chip instead of **Open chat**. A run that was deleted, or an unknown `run-` id, has no name and no link, like a deleted chat. Sessions already listed are unchanged.
 - R46. The Plan and Write answer steps of Answer a Business Question run two registered System agents, so their model calls SHALL appear in the LLM calls list like any agent's, under the agents `Analysis Planner` and `Answer Writer` (their technical names, [../../system/agents.md](../../system/agents.md) 2.11). The Agent filter (R6) offers both once such a call exists. Runs stored before this change have no such calls.
 
+Costs (usage and cost)
+- R47. The **Costs** page (its own rail item, [../app-shell/spec.md](../app-shell/spec.md) R3c) SHALL summarise the estimated cost of the LLM calls of R1: every call counts once, priced as in R5. A call whose model has no price, or whose tokens are not known, SHALL count as a call and add its known tokens but no cost. The page records nothing and reads the same trace store (ADR-0038); it changes nothing (R24).
+- R48. A **Period** choice SHALL offer This month, Last 30 days (the default), Last 90 days, This year and All time. A period starts at local midnight of its first day (Last 30 days: today and the 29 days before) and ends now; All time has no start. Days and months SHALL follow the time zone of the computer that shows the page.
+- R49. Five tiles SHALL show: **Today** and **This month** (cost and number of calls of the current day and calendar month, whatever the period), the period's cost and calls (titled with the period's name), **Avg per workflow run** (R54) with the number of runs, and **Avg per chat question** (R54) with the number of questions; a dash when there are none. When some calls of the period have no cost (R47), a line SHALL say how many.
+- R50. **Daily cost** SHALL show one bar per day of the period, days without calls at zero; for All time the days start at the first call. **Monthly cost** SHALL show the 12 calendar months ending with the current one, whatever the period. Both are single-series column charts on a scale from $0 to a round ceiling, with a tooltip per bar (`<day or month>`, cost, calls) and a **Show table** control that shows the same values as a table (**Show chart** returns).
+- R51. Two rankings over the period SHALL list the cost and calls, highest cost first: **By model** (the model with its provider; "No price" for a model without one) and **By agent** (its name; calls made by no agent under "No agent"). The workflows are compared per run (R55).
+- R52. Choosing a model or an agent in a ranking SHALL open Monitoring's LLM calls tab filtered to that model or agent, with the Date filter set to Custom from the period's start (Any time for All time), and Monitoring the current rail item.
+- R53. With no calls in the period the page SHALL show the tiles, "No LLM calls in this period." and the monthly chart, and no daily chart, per-run table, top runs, cost split or rankings. A fresh data dir with no trace table shows the same, not an error. Loading and failed loads behave as in R12. `GET /monitoring/usage` SHALL reject a From or To that is not a date (`From is not a valid date`, `To is not a valid date`), a From after To (`From must not be after To`) and an unknown time zone (`Time zone is not valid`) with HTTP 400.
+- R54. A **workflow run** is every call whose thread is the run's host `run-<runId>` or one of its step agents' threads `run-<runId>:<agent key>` (ADR-0041, [../../system/agents.md](../../system/agents.md) 5.14); its cost is the sum of those calls in the period. A **chat question** is one trace (turn) of the calls outside any workflow run. **Avg per workflow run** and **Avg per chat question** SHALL be the period's mean cost of each.
+- R55. **Cost per workflow run** SHALL list, for each workflow with runs in the period, its runs, the mean, the median and the 95th percentile (nearest rank) of their costs, and its total, highest total first; the runs of deleted runs under "Deleted workflow run"; then "No workflow" (chats, the agent panel, previews and evals) with its total only.
+- R56. **Most expensive runs** SHALL list the period's 10 costliest workflow runs, highest first: the run's title (its question, as the run history titles it; "Run" and the first 8 characters of its id for a deleted run), its workflow, the start of its first call in the period, its calls and its cost. Choosing a stored run SHALL open it as the Runs page does ([../workflows/spec.md](../workflows/spec.md) R19); a deleted run is not a link.
+- R57. **Where the cost goes** SHALL split the period's cost into **Input** (uncached input tokens at the input price), **Cache writes**, **Cache reads** and **Output**, priced as in R5, each with its cost, its share of the total and its tokens, and SHALL say how much the cache reads saved against the full input price when they saved anything.
+
 ## Edge cases and errors
 
 - Fresh data dir, or a trace store with no table yet: "No LLM calls yet." (R12).
@@ -124,10 +137,12 @@ Workflow runs
 - A session whose chat was deleted: "Unnamed session" with its short id, and no **Open chat** link (R28, R32).
 - A very long answer: clamped to 6 lines with **Show more** (R35).
 - A turn with only framework spans besides its agent run: the waterfall shows the agent row and "(N hidden)" (R40).
+- Costs page with calls of a model that has no price: they count in the calls, the tiles say how many have no cost, and the model ranks with "No price" (R47, R49, R51).
+- Costs page on a period with no calls: the tiles at $0.00, "No LLM calls in this period." and the monthly chart (R53).
 
 ## Contracts
 
-- Endpoints: `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, `GET /monitoring/sessions`, `GET /monitoring/sessions/:id` and `GET /monitoring/traces/:traceId`. See [../../system/api.md](../../system/api.md) (section 2.8c).
+- Endpoints: `GET /monitoring/llm-calls`, `GET /monitoring/llm-calls/:id`, `GET /monitoring/sessions`, `GET /monitoring/sessions/:id`, `GET /monitoring/traces/:traceId` and `GET /monitoring/usage` (the Costs page). See [../../system/api.md](../../system/api.md) (section 2.8c).
 - Source data: the `span_events` table of `observability.duckdb`, read in-process, no new collection. See [../../system/data-model.md](../../system/data-model.md) (1.2).
 - Decision: [../../system/architecture.md](../../system/architecture.md) ADR-0038.
 - Related: [../app-shell/spec.md](../app-shell/spec.md) R3b (the rail item and the page), [../../system/agents.md](../../system/agents.md) 4.1 (the per-turn context blocks that fill the Dataset box), [../developer-settings/spec.md](../developer-settings/spec.md) (the opt-in trace viewers this area does not depend on).
@@ -141,6 +156,7 @@ Placement: the **Monitoring** item on the navigation rail opens the Monitoring p
 - Call page: heading, the facts grid, the error box when failed, **Context window** (caption, stacked bar, legend, seven boxes), **Steps**.
 - Runs tab: a filter bar (Agent, Date, **Clear filters**), the table and the same footer.
 - Session page: heading, the totals strip, **Open chat**, then each turn (question, meta line, path, answer, **Open timeline**) and the waterfall under the turn that opened it.
+- Costs page (rail **Costs**, [../../system/ui.md](../../system/ui.md) 4.8j): heading "Costs", the note and **Period**, the five tiles, **Daily cost**, **Monthly cost**, **Cost per workflow run**, then **Most expensive runs** beside **Where the cost goes**, then **By model** beside **By agent** on a wide window.
 
 ## Flows
 
@@ -320,6 +336,7 @@ Feature: Runs in Monitoring
 - After two chat turns in one session the Runs tab lists it with 2 turns and totals (tokens, cost, tool calls) equal to the sum of its LLM calls (R27–R29).
 - The session page shows both questions, each model request and tool group in order, and both answers (R32–R34). **Open timeline** shows the waterfall with bars to scale, and the framework switch adds the housekeeping spans (R37–R40).
 - A run's call is listed under `<workflow>: <title>`, offered in the Session filter, and its link opens the run's session page with one turn, its path and its waterfall (R45).
+- The Costs page's totals, daily, model, workflow and agent sums each equal the sum of the LLM calls of the period, a workflow run's calls (its step agents' included) count under its workflow and as one run, and the cost split adds up to the total (R47–R57); backend unit tests cover them on the real-shape fixture and pin the time-zone bucketing.
 - Back keeps the tab, filters and page, and a call opened from a session returns to it (R26, R43). Backend unit tests cover R27–R30, R33, R34, R36 and R38–R41 at service and controller level, pinned to the same real-shape fixture.
 
-<!-- sources: backend/src/modules/monitoring/**, backend/src/mastra/storage.ts, frontend/src/app/features/monitoring/**, frontend/src/app/app.html (monitoring and llm-call views) -->
+<!-- sources: backend/src/modules/monitoring/**, backend/src/mastra/storage.ts, frontend/src/app/features/monitoring/**, frontend/src/app/features/costs/**, frontend/src/app/app.html (monitoring, llm-call and costs views) -->

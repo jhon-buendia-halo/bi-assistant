@@ -62,6 +62,16 @@ async function serviceWith(): Promise<MonitoringService> {
             }
           : null,
       ),
+    list: () =>
+      Promise.resolve([
+        {
+          id: 'found',
+          workflowId: 'wf-assistant',
+          workflowName: 'Assistant',
+          question: 'Top scorers?',
+          input: {},
+        },
+      ]),
   } as unknown as WorkflowRunsRepository;
   return new MonitoringService(new SpanEventsRepository(db), sessions, runs);
 }
@@ -119,6 +129,61 @@ describe('MonitoringService: runs (ADR-0041)', () => {
     expect(flow.name).toBe('Assistant: Top scorers?');
     expect(flow.runId).toBe('found');
     expect(flow.turns).toBeGreaterThan(0);
+  });
+
+  it('sums the Costs page usage by workflow, agent and model (GET /monitoring/usage)', async () => {
+    const page = await service.listCalls({ pageSize: '100' });
+    const usage = await service.getUsage({ tz: 'UTC' });
+    const priced = page.items.filter((i) => i.costUsd !== null);
+    const total = priced.reduce((sum, i) => sum + (i.costUsd ?? 0), 0);
+
+    expect(usage.totals.calls).toBe(page.total);
+    expect(usage.totals.pricedCalls).toBe(priced.length);
+    expect(usage.totals.costUsd).toBeCloseTo(total, 10);
+
+    const callsOf = (id: string) =>
+      page.items.filter((i) => i.session?.id === id).length;
+    const workflow = usage.byWorkflow.find((w) => w.id === 'wf-assistant');
+    expect(workflow).toMatchObject({
+      name: 'Assistant',
+      kind: 'workflow',
+      calls: callsOf(FOUND),
+    });
+    const deleted = usage.byWorkflow.find(
+      (w) => w.kind === 'workflow' && w.id === null,
+    );
+    expect(deleted?.calls).toBe(callsOf(DELETED) + callsOf(UNKNOWN));
+    const none = usage.byWorkflow.find((w) => w.kind === 'none');
+    expect(none?.calls).toBe(
+      page.total - callsOf(FOUND) - callsOf(DELETED) - callsOf(UNKNOWN),
+    );
+
+    const agentCalls = usage.byAgent.reduce((n, a) => n + a.calls, 0);
+    const modelCalls = usage.byModel.reduce((n, m) => n + m.calls, 0);
+    const dayCalls = usage.daily.reduce((n, d) => n + d.calls, 0);
+    expect(agentCalls).toBe(page.total);
+    expect(modelCalls).toBe(page.total);
+    expect(dayCalls).toBe(page.total);
+
+    // Three runs (found, deleted, unknown); the found one is titled.
+    expect(usage.perRun.count).toBe(3);
+    expect(usage.topRuns.map((r) => r.runId).sort()).toEqual([
+      'deleted',
+      'found',
+      'unknown',
+    ]);
+    expect(usage.topRuns.find((r) => r.runId === 'found')).toMatchObject({
+      workflowName: 'Assistant',
+      title: 'Top scorers?',
+      calls: callsOf(FOUND),
+    });
+    const split = usage.split;
+    expect(
+      split.inputUsd +
+        split.cacheReadUsd +
+        split.cacheWriteUsd +
+        split.outputUsd,
+    ).toBeCloseTo(usage.totals.costUsd, 10);
   });
 
   it('lists the run among the sessions', async () => {

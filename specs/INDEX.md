@@ -583,69 +583,69 @@ specs/capabilities/agents-evals/spec.md:1265-1271  ## Acceptance
 specs/capabilities/agents-evals/spec.md:1273-1282  ## Open questions
 
 specs/capabilities/app-shell/spec.md:5-14  ## Concepts
-specs/capabilities/app-shell/spec.md:16-92  ## Rules
+specs/capabilities/app-shell/spec.md:16-93  ## Rules
 specs/capabilities/app-shell/spec.md:19-19  R1 The system SHALL present, left to right: the navigation rail (expandab
 specs/capabilities/app-shell/spec.md:20-20  R2 On launch the navigation drawer SHALL be expanded unless the user last
 specs/capabilities/app-shell/spec.md:21-23  R3 The rail SHALL offer, under "Workspace navigation", one icon button ea
 specs/capabilities/app-shell/spec.md:24-24  R4 Below the workspace items the rail SHALL offer **Open system logs** (t
 specs/capabilities/app-shell/spec.md:25-25  R5 Choosing **Settings** on the rail SHALL show the Settings area: a list
-specs/capabilities/app-shell/spec.md:26-26  R6 Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: t
-specs/capabilities/app-shell/spec.md:27-27  R7 In the `halo` brand the header (the `banner` landmark, above the main
-specs/capabilities/app-shell/spec.md:28-30  R8 The sidebar and details panel SHALL keep a fixed minimum usable width
-specs/capabilities/app-shell/spec.md:31-31  R9 The system SHALL provide a **Collapse right panel** control inside the
-specs/capabilities/app-shell/spec.md:32-32  R10 The details panel SHALL open (if collapsed) whenever the user selects
-specs/capabilities/app-shell/spec.md:33-33  R11 The details panel width SHALL default to 572 px and SHALL always lie b
-specs/capabilities/app-shell/spec.md:34-34  R12 The maximum SHALL additionally be limited to the viewport width minus
-specs/capabilities/app-shell/spec.md:35-35  R13 The details panel SHALL have a vertical separator on its left edge, la
-specs/capabilities/app-shell/spec.md:36-36  R14 The details panel SHALL show: the session panel when the main view is
-specs/capabilities/app-shell/spec.md:37-37  R15 Pointer interaction: pressing the primary button on the separator and
-specs/capabilities/app-shell/spec.md:38-38  R16 Keyboard interaction on the focused separator: ArrowLeft SHALL widen t
-specs/capabilities/app-shell/spec.md:39-39  R17 Double-clicking the separator SHALL reset the width to 572 and remembe
-specs/capabilities/app-shell/spec.md:40-42  R18 The remembered width SHALL be stored in browser-local storage under th
-specs/capabilities/app-shell/spec.md:43-43  R19 The system SHALL show a banner across the top of the window (above the
-specs/capabilities/app-shell/spec.md:44-44  R20 For `restarting` the banner SHALL read "Backend restarting…" on an amb
-specs/capabilities/app-shell/spec.md:45-45  R21 When the app runs without the desktop shell (a plain browser, as in we
-specs/capabilities/app-shell/spec.md:46-46  R22 The desktop shell SHALL run the backend as a supervised child process
-specs/capabilities/app-shell/spec.md:47-47  R54 The desktop app SHALL run as a single instance per profile: launching
-specs/capabilities/app-shell/spec.md:48-48  R56 The brand SHALL be fixed at build time (`BRAND=halo|mercer`, default `
-specs/capabilities/app-shell/spec.md:49-49  R55 The desktop shell SHALL NOT report `ready` for a server it did not sta
-specs/capabilities/app-shell/spec.md:50-50  R23 The readiness probe SHALL be an HTTP GET of the sessions list on the l
-specs/capabilities/app-shell/spec.md:51-51  R24 The window SHALL open as soon as the backend is ready, or after the 30
-specs/capabilities/app-shell/spec.md:52-52  R25 When the backend exits unexpectedly (anything other than the app quitt
-specs/capabilities/app-shell/spec.md:53-53  R26 A backend that has stayed ready for 60 seconds SHALL be treated as hea
-specs/capabilities/app-shell/spec.md:54-56  R27 Quitting the app SHALL stop the backend and SHALL NOT trigger a relaun
-specs/capabilities/app-shell/spec.md:57-57  R28 The system SHALL show short messages as toasts stacked at the bottom-r
-specs/capabilities/app-shell/spec.md:58-58  R29 A toast SHALL be one of three kinds: `success`, `error` or `info`, eac
-specs/capabilities/app-shell/spec.md:59-59  R30 Each toast SHALL have a dismiss button, named "Dismiss notification",
-specs/capabilities/app-shell/spec.md:60-62  R31 Every error toast SHALL also be recorded as an error entry with source
-specs/capabilities/app-shell/spec.md:63-63  R32 The Settings list pane SHALL end with the build identity: the brand's
-specs/capabilities/app-shell/spec.md:64-64  R33 In the `halo` brand the window title and the document title SHALL be "
-specs/capabilities/app-shell/spec.md:65-67  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
-specs/capabilities/app-shell/spec.md:68-68  R46 In the Runs area the content shows an open run of a removed workflow o
-specs/capabilities/app-shell/spec.md:69-69  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
-specs/capabilities/app-shell/spec.md:70-70  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
-specs/capabilities/app-shell/spec.md:71-71  R49 In the Runs area the page SHALL start with a header: an icon, then the
-specs/capabilities/app-shell/spec.md:72-72  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
-specs/capabilities/app-shell/spec.md:73-75  R51 The home view (R2) SHALL welcome the user and explain how the product
-specs/capabilities/app-shell/spec.md:76-76  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
-specs/capabilities/app-shell/spec.md:77-79  R53 All text in the app SHALL be selectable and copyable with the mouse an
-specs/capabilities/app-shell/spec.md:80-80  R39 The Appearance section SHALL offer a single choice labelled **Theme**
-specs/capabilities/app-shell/spec.md:81-81  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
-specs/capabilities/app-shell/spec.md:82-82  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
-specs/capabilities/app-shell/spec.md:83-83  R42 The resolved theme SHALL be applied before the page first paints, so t
-specs/capabilities/app-shell/spec.md:84-84  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
-specs/capabilities/app-shell/spec.md:85-85  R44 In the desktop app, the window's own background (shown while resizing
-specs/capabilities/app-shell/spec.md:86-88  R45 Both themes SHALL produce zero violations in the automated accessibili
-specs/capabilities/app-shell/spec.md:89-89  R35 The application shell, in its initial state, SHALL produce zero violat
-specs/capabilities/app-shell/spec.md:90-90  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
-specs/capabilities/app-shell/spec.md:91-91  R37 Every icon-only control in the shell SHALL have an accessible name (a
-specs/capabilities/app-shell/spec.md:92-92  R38 The application shell in its initial state SHALL match the approved `a
-specs/capabilities/app-shell/spec.md:94-104  ## Edge cases and errors
-specs/capabilities/app-shell/spec.md:106-113  ## Contracts
-specs/capabilities/app-shell/spec.md:115-121  ## UI
-specs/capabilities/app-shell/spec.md:123-385  ## Flows
-specs/capabilities/app-shell/spec.md:387-391  ## Acceptance
-specs/capabilities/app-shell/spec.md:393-399  ## Open questions
+specs/capabilities/app-shell/spec.md:26-27  R6 Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: t
+specs/capabilities/app-shell/spec.md:28-28  R7 In the `halo` brand the header (the `banner` landmark, above the main
+specs/capabilities/app-shell/spec.md:29-31  R8 The sidebar and details panel SHALL keep a fixed minimum usable width
+specs/capabilities/app-shell/spec.md:32-32  R9 The system SHALL provide a **Collapse right panel** control inside the
+specs/capabilities/app-shell/spec.md:33-33  R10 The details panel SHALL open (if collapsed) whenever the user selects
+specs/capabilities/app-shell/spec.md:34-34  R11 The details panel width SHALL default to 572 px and SHALL always lie b
+specs/capabilities/app-shell/spec.md:35-35  R12 The maximum SHALL additionally be limited to the viewport width minus
+specs/capabilities/app-shell/spec.md:36-36  R13 The details panel SHALL have a vertical separator on its left edge, la
+specs/capabilities/app-shell/spec.md:37-37  R14 The details panel SHALL show: the session panel when the main view is
+specs/capabilities/app-shell/spec.md:38-38  R15 Pointer interaction: pressing the primary button on the separator and
+specs/capabilities/app-shell/spec.md:39-39  R16 Keyboard interaction on the focused separator: ArrowLeft SHALL widen t
+specs/capabilities/app-shell/spec.md:40-40  R17 Double-clicking the separator SHALL reset the width to 572 and remembe
+specs/capabilities/app-shell/spec.md:41-43  R18 The remembered width SHALL be stored in browser-local storage under th
+specs/capabilities/app-shell/spec.md:44-44  R19 The system SHALL show a banner across the top of the window (above the
+specs/capabilities/app-shell/spec.md:45-45  R20 For `restarting` the banner SHALL read "Backend restarting…" on an amb
+specs/capabilities/app-shell/spec.md:46-46  R21 When the app runs without the desktop shell (a plain browser, as in we
+specs/capabilities/app-shell/spec.md:47-47  R22 The desktop shell SHALL run the backend as a supervised child process
+specs/capabilities/app-shell/spec.md:48-48  R54 The desktop app SHALL run as a single instance per profile: launching
+specs/capabilities/app-shell/spec.md:49-49  R56 The brand SHALL be fixed at build time (`BRAND=halo|mercer`, default `
+specs/capabilities/app-shell/spec.md:50-50  R55 The desktop shell SHALL NOT report `ready` for a server it did not sta
+specs/capabilities/app-shell/spec.md:51-51  R23 The readiness probe SHALL be an HTTP GET of the sessions list on the l
+specs/capabilities/app-shell/spec.md:52-52  R24 The window SHALL open as soon as the backend is ready, or after the 30
+specs/capabilities/app-shell/spec.md:53-53  R25 When the backend exits unexpectedly (anything other than the app quitt
+specs/capabilities/app-shell/spec.md:54-54  R26 A backend that has stayed ready for 60 seconds SHALL be treated as hea
+specs/capabilities/app-shell/spec.md:55-57  R27 Quitting the app SHALL stop the backend and SHALL NOT trigger a relaun
+specs/capabilities/app-shell/spec.md:58-58  R28 The system SHALL show short messages as toasts stacked at the bottom-r
+specs/capabilities/app-shell/spec.md:59-59  R29 A toast SHALL be one of three kinds: `success`, `error` or `info`, eac
+specs/capabilities/app-shell/spec.md:60-60  R30 Each toast SHALL have a dismiss button, named "Dismiss notification",
+specs/capabilities/app-shell/spec.md:61-63  R31 Every error toast SHALL also be recorded as an error entry with source
+specs/capabilities/app-shell/spec.md:64-64  R32 The Settings list pane SHALL end with the build identity: the brand's
+specs/capabilities/app-shell/spec.md:65-65  R33 In the `halo` brand the window title and the document title SHALL be "
+specs/capabilities/app-shell/spec.md:66-68  R34 The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 96
+specs/capabilities/app-shell/spec.md:69-69  R46 In the Runs area the content shows an open run of a removed workflow o
+specs/capabilities/app-shell/spec.md:70-70  R47 Removed in roadmap 1.8.8: the separate, collapsible session list pane
+specs/capabilities/app-shell/spec.md:71-71  R48 The rail SHALL start with a menu button, **Expand navigation** (when c
+specs/capabilities/app-shell/spec.md:72-72  R49 In the Runs area the page SHALL start with a header: an icon, then the
+specs/capabilities/app-shell/spec.md:73-73  R50 Clicking **Expand navigation** or **Collapse navigation** SHALL rememb
+specs/capabilities/app-shell/spec.md:74-76  R51 The home view (R2) SHALL welcome the user and explain how the product
+specs/capabilities/app-shell/spec.md:77-77  R52 The shell SHALL appear at once on launch, with no sign-in page, and ev
+specs/capabilities/app-shell/spec.md:78-80  R53 All text in the app SHALL be selectable and copyable with the mouse an
+specs/capabilities/app-shell/spec.md:81-81  R39 The Appearance section SHALL offer a single choice labelled **Theme**
+specs/capabilities/app-shell/spec.md:82-82  R40 Choosing an option SHALL apply it at once, without a reload, and SHALL
+specs/capabilities/app-shell/spec.md:83-83  R41 The **resolved theme** is Light or Dark: the chosen option, or for Sys
+specs/capabilities/app-shell/spec.md:84-84  R42 The resolved theme SHALL be applied before the page first paints, so t
+specs/capabilities/app-shell/spec.md:85-85  R43 The remembered choice SHALL be stored in the backend's `ui-preferences
+specs/capabilities/app-shell/spec.md:86-86  R44 In the desktop app, the window's own background (shown while resizing
+specs/capabilities/app-shell/spec.md:87-89  R45 Both themes SHALL produce zero violations in the automated accessibili
+specs/capabilities/app-shell/spec.md:90-90  R35 The application shell, in its initial state, SHALL produce zero violat
+specs/capabilities/app-shell/spec.md:91-91  R36 The system SHALL expose labelled landmarks: "Navigation rail" (complem
+specs/capabilities/app-shell/spec.md:92-92  R37 Every icon-only control in the shell SHALL have an accessible name (a
+specs/capabilities/app-shell/spec.md:93-93  R38 The application shell in its initial state SHALL match the approved `a
+specs/capabilities/app-shell/spec.md:95-105  ## Edge cases and errors
+specs/capabilities/app-shell/spec.md:107-114  ## Contracts
+specs/capabilities/app-shell/spec.md:116-122  ## UI
+specs/capabilities/app-shell/spec.md:124-390  ## Flows
+specs/capabilities/app-shell/spec.md:392-396  ## Acceptance
+specs/capabilities/app-shell/spec.md:398-404  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
 specs/capabilities/data-readiness/spec.md:24-224  ## Rules
@@ -1075,7 +1075,7 @@ specs/capabilities/metrics/spec.md:134-137  ## Acceptance
 specs/capabilities/metrics/spec.md:139-146  ## Open questions
 
 specs/capabilities/monitoring/spec.md:7-13  ## Concepts
-specs/capabilities/monitoring/spec.md:15-108  ## Rules
+specs/capabilities/monitoring/spec.md:15-121  ## Rules
 specs/capabilities/monitoring/spec.md:18-18  R1 The system SHALL list **LLM calls**: one row per model call of one age
 specs/capabilities/monitoring/spec.md:19-19  R2 Rows SHALL be ordered by start time, newest first.
 specs/capabilities/monitoring/spec.md:20-20  R3 Each row SHALL show: **Started** (local date and time), **Agent** (its
@@ -1121,12 +1121,23 @@ specs/capabilities/monitoring/spec.md:100-102  R42 The waterfall SHALL show a me
 specs/capabilities/monitoring/spec.md:103-103  R43 The back control of the call page SHALL return to where the call was o
 specs/capabilities/monitoring/spec.md:104-106  R44 Viewing a session page or a waterfall SHALL NOT start any model call a
 specs/capabilities/monitoring/spec.md:107-107  R45 A workflow run's agent turn runs on a temporary host `run-<runId>` (AD
-specs/capabilities/monitoring/spec.md:108-108  R46 The Plan and Write answer steps of Answer a Business Question run two
-specs/capabilities/monitoring/spec.md:110-126  ## Edge cases and errors
-specs/capabilities/monitoring/spec.md:128-133  ## Contracts
-specs/capabilities/monitoring/spec.md:135-143  ## UI
-specs/capabilities/monitoring/spec.md:145-312  ## Flows
-specs/capabilities/monitoring/spec.md:314-325  ## Acceptance
+specs/capabilities/monitoring/spec.md:108-110  R46 The Plan and Write answer steps of Answer a Business Question run two
+specs/capabilities/monitoring/spec.md:111-111  R47 The **Costs** page (its own rail item, [../app-shell/spec.md](../app-s
+specs/capabilities/monitoring/spec.md:112-112  R48 A **Period** choice SHALL offer This month, Last 30 days (the default)
+specs/capabilities/monitoring/spec.md:113-113  R49 Five tiles SHALL show: **Today** and **This month** (cost and number o
+specs/capabilities/monitoring/spec.md:114-114  R50 **Daily cost** SHALL show one bar per day of the period, days without
+specs/capabilities/monitoring/spec.md:115-115  R51 Two rankings over the period SHALL list the cost and calls, highest co
+specs/capabilities/monitoring/spec.md:116-116  R52 Choosing a model or an agent in a ranking SHALL open Monitoring's LLM
+specs/capabilities/monitoring/spec.md:117-117  R53 With no calls in the period the page SHALL show the tiles, "No LLM cal
+specs/capabilities/monitoring/spec.md:118-118  R54 A **workflow run** is every call whose thread is the run's host `run-<
+specs/capabilities/monitoring/spec.md:119-119  R55 **Cost per workflow run** SHALL list, for each workflow with runs in t
+specs/capabilities/monitoring/spec.md:120-120  R56 **Most expensive runs** SHALL list the period's 10 costliest workflow
+specs/capabilities/monitoring/spec.md:121-121  R57 **Where the cost goes** SHALL split the period's cost into **Input** (
+specs/capabilities/monitoring/spec.md:123-141  ## Edge cases and errors
+specs/capabilities/monitoring/spec.md:143-148  ## Contracts
+specs/capabilities/monitoring/spec.md:150-159  ## UI
+specs/capabilities/monitoring/spec.md:161-328  ## Flows
+specs/capabilities/monitoring/spec.md:330-342  ## Acceptance
 
 specs/capabilities/past-chats/spec.md:5-7  ## Concepts
 specs/capabilities/past-chats/spec.md:9-46  ## Rules
@@ -1755,7 +1766,7 @@ specs/system/api.md:71-76  ### 1.6 CORS
 specs/system/api.md:78-88  ### 1.7 Static web UI and SPA fallback
 specs/system/api.md:90-94  ### 1.8 Conventions used by the UI that clients should preserve
 specs/system/api.md:96-102  ### 1.9 Authentication
-specs/system/api.md:104-1397  ## 2. Endpoints
+specs/system/api.md:104-1404  ## 2. Endpoints
 specs/system/api.md:108-243  ### 2.1 Sessions
 specs/system/api.md:143-146  #### 1. `GET /sessions`
 specs/system/api.md:148-150  #### 2. `GET /sessions/:id`
@@ -1879,56 +1890,57 @@ specs/system/api.md:1084-1087  #### 51. `PATCH /ontology/:id`
 specs/system/api.md:1089-1091  #### 52. `DELETE /ontology/:id`
 specs/system/api.md:1093-1097  #### 53. `POST /datasets/:name/ontology/bootstrap`
 specs/system/api.md:1099-1102  #### 54. `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:1104-1148  ### 2.8c Monitoring
-specs/system/api.md:1116-1121  #### 111. `GET /monitoring/llm-calls`
-specs/system/api.md:1123-1127  #### 112. `GET /monitoring/llm-calls/:id`
-specs/system/api.md:1129-1135  #### 113. `GET /monitoring/sessions`
-specs/system/api.md:1137-1141  #### 114. `GET /monitoring/sessions/:id`
-specs/system/api.md:1143-1148  #### 115. `GET /monitoring/traces/:traceId`
-specs/system/api.md:1150-1189  ### 2.9 Testing data
-specs/system/api.md:1160-1177  #### 55. `GET /testing-data`
-specs/system/api.md:1179-1185  #### 56. `POST /testing-data/:fixtureId/load`
-specs/system/api.md:1187-1189  #### 57. `DELETE /testing-data/:fixtureId`
-specs/system/api.md:1191-1223  ### 2.10 Shared wire shapes
-specs/system/api.md:1225-1256  ### 2.11 Developer settings
-specs/system/api.md:1244-1245  #### 53. `GET /developer-settings`
-specs/system/api.md:1247-1251  #### 54. `PUT /developer-settings`
-specs/system/api.md:1253-1256  #### 55. `POST /developer-settings/test-endpoint`
-specs/system/api.md:1259-1279  ### 2.12 UI preferences
-specs/system/api.md:1273-1274  #### 56. `GET /ui-preferences`
-specs/system/api.md:1276-1279  #### 57. `PUT /ui-preferences`
-specs/system/api.md:1281-1283  ### 2.16 Intellify RFP API (removed)
-specs/system/api.md:1285-1316  ### 2.17 Data readiness
-specs/system/api.md:1295-1307  #### 108. `POST /data-readiness/assessments`
-specs/system/api.md:1309-1312  #### 109. `GET /data-readiness/assessments`
-specs/system/api.md:1314-1316  #### 110. `GET /data-readiness/assessments/:id`
-specs/system/api.md:1318-1385  ### 2.18 Synthetic data
-specs/system/api.md:1329-1347  #### 111. `POST /synthetic-data/profiles`
-specs/system/api.md:1349-1364  #### 112. `POST /synthetic-data/scripts`
-specs/system/api.md:1366-1374  #### 113. `POST /synthetic-data/profile-exports`
-specs/system/api.md:1376-1385  #### 114. `POST /synthetic-data/sample-exports`
-specs/system/api.md:1387-1397  ### 2.19 Health
-specs/system/api.md:1395-1397  #### 135. `GET /health`
-specs/system/api.md:1399-1596  ## 3. Streaming and long-running work
-specs/system/api.md:1403-1467  ### 3.1 Chat stream (removed in 1.23.27)
-specs/system/api.md:1469-1471  ### 3.2 Deep analysis (removed 2026-11-12)
-specs/system/api.md:1473-1481  ### 3.3 Eval runs
-specs/system/api.md:1483-1495  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:1497-1506  ### 3.5 Other long-running calls (no progress channel)
-specs/system/api.md:1508-1596  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1598-1663  ## 4. Desktop bridge (IPC)
-specs/system/api.md:1602-1619  ### 4.1 Globals exposed on `window`
-specs/system/api.md:1621-1637  ### 4.2 IPC channels
-specs/system/api.md:1639-1655  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1657-1663  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1665-1708  ## 5. CLI contract
-specs/system/api.md:1710-1756  ## 6. Environment variables
-specs/system/api.md:1712-1729  ### 6.1 Backend (server process)
-specs/system/api.md:1731-1735  ### 6.2 CLI-only
-specs/system/api.md:1737-1746  ### 6.3 Electron main process
-specs/system/api.md:1748-1750  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1752-1756  ### 6.5 Frontend build/runtime
-specs/system/api.md:1758-1774  ## 7. Gaps and open questions
+specs/system/api.md:1104-1155  ### 2.8c Monitoring
+specs/system/api.md:1117-1122  #### 111. `GET /monitoring/llm-calls`
+specs/system/api.md:1124-1128  #### 112. `GET /monitoring/llm-calls/:id`
+specs/system/api.md:1130-1136  #### 113. `GET /monitoring/sessions`
+specs/system/api.md:1138-1142  #### 114. `GET /monitoring/sessions/:id`
+specs/system/api.md:1144-1149  #### 115. `GET /monitoring/traces/:traceId`
+specs/system/api.md:1151-1155  #### 144. `GET /monitoring/usage`
+specs/system/api.md:1157-1196  ### 2.9 Testing data
+specs/system/api.md:1167-1184  #### 55. `GET /testing-data`
+specs/system/api.md:1186-1192  #### 56. `POST /testing-data/:fixtureId/load`
+specs/system/api.md:1194-1196  #### 57. `DELETE /testing-data/:fixtureId`
+specs/system/api.md:1198-1230  ### 2.10 Shared wire shapes
+specs/system/api.md:1232-1263  ### 2.11 Developer settings
+specs/system/api.md:1251-1252  #### 53. `GET /developer-settings`
+specs/system/api.md:1254-1258  #### 54. `PUT /developer-settings`
+specs/system/api.md:1260-1263  #### 55. `POST /developer-settings/test-endpoint`
+specs/system/api.md:1266-1286  ### 2.12 UI preferences
+specs/system/api.md:1280-1281  #### 56. `GET /ui-preferences`
+specs/system/api.md:1283-1286  #### 57. `PUT /ui-preferences`
+specs/system/api.md:1288-1290  ### 2.16 Intellify RFP API (removed)
+specs/system/api.md:1292-1323  ### 2.17 Data readiness
+specs/system/api.md:1302-1314  #### 108. `POST /data-readiness/assessments`
+specs/system/api.md:1316-1319  #### 109. `GET /data-readiness/assessments`
+specs/system/api.md:1321-1323  #### 110. `GET /data-readiness/assessments/:id`
+specs/system/api.md:1325-1392  ### 2.18 Synthetic data
+specs/system/api.md:1336-1354  #### 111. `POST /synthetic-data/profiles`
+specs/system/api.md:1356-1371  #### 112. `POST /synthetic-data/scripts`
+specs/system/api.md:1373-1381  #### 113. `POST /synthetic-data/profile-exports`
+specs/system/api.md:1383-1392  #### 114. `POST /synthetic-data/sample-exports`
+specs/system/api.md:1394-1404  ### 2.19 Health
+specs/system/api.md:1402-1404  #### 135. `GET /health`
+specs/system/api.md:1406-1603  ## 3. Streaming and long-running work
+specs/system/api.md:1410-1474  ### 3.1 Chat stream (removed in 1.23.27)
+specs/system/api.md:1476-1478  ### 3.2 Deep analysis (removed 2026-11-12)
+specs/system/api.md:1480-1488  ### 3.3 Eval runs
+specs/system/api.md:1490-1502  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
+specs/system/api.md:1504-1513  ### 3.5 Other long-running calls (no progress channel)
+specs/system/api.md:1515-1603  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
+specs/system/api.md:1605-1670  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1609-1626  ### 4.1 Globals exposed on `window`
+specs/system/api.md:1628-1644  ### 4.2 IPC channels
+specs/system/api.md:1646-1662  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1664-1670  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1672-1715  ## 5. CLI contract
+specs/system/api.md:1717-1763  ## 6. Environment variables
+specs/system/api.md:1719-1736  ### 6.1 Backend (server process)
+specs/system/api.md:1738-1742  ### 6.2 CLI-only
+specs/system/api.md:1744-1753  ### 6.3 Electron main process
+specs/system/api.md:1755-1757  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1759-1763  ### 6.5 Frontend build/runtime
+specs/system/api.md:1765-1781  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-256  ## Level 2 — Containers
@@ -2069,79 +2081,80 @@ specs/system/tech-stack.md:140-180  ### Backend: feature-based modules
 specs/system/tech-stack.md:182-205  ## Test layout
 specs/system/tech-stack.md:207-221  ## To rebuild on another stack
 
-specs/system/ui.md:9-134  ## 1. App shell
+specs/system/ui.md:9-135  ## 1. App shell
 specs/system/ui.md:11-18  ### 1.1 Window
 specs/system/ui.md:20-54  ### 1.2 Regions
 specs/system/ui.md:56-87  ### 1.3 Rail and drawer
-specs/system/ui.md:89-117  ### 1.4 Navigation model (no router)
-specs/system/ui.md:119-130  ### 1.5 Right panel
-specs/system/ui.md:132-134  ### 1.6 Startup
-specs/system/ui.md:136-146  ## 2. Loading, empty, error and confirmation conventions
-specs/system/ui.md:148-222  ## 3. Shared components
-specs/system/ui.md:150-160  ### 3.1 Backend status banner
-specs/system/ui.md:162-176  ### 3.2 System logs panel
-specs/system/ui.md:178-188  ### 3.3 Toast container
-specs/system/ui.md:190-192  ### 3.4 App logo
-specs/system/ui.md:194-196  ### 3.5 Markdown rendering
-specs/system/ui.md:198-222  ### 3.6 Shared component classes
-specs/system/ui.md:224-862  ## 4. Screens and panels
-specs/system/ui.md:228-236  ### 4.1 Home (welcome)
-specs/system/ui.md:238-244  ### 4.2 Datasets list
-specs/system/ui.md:246-260  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
-specs/system/ui.md:262-315  ### 4.3a Profile & synthesize tab (dataset editor)
-specs/system/ui.md:317-329  ### 4.4 Agent Hub
-specs/system/ui.md:331-342  ### 4.4a Workflows
-specs/system/ui.md:344-410  ### 4.4b Workflow page
-specs/system/ui.md:412-560  ### 4.5 Agent detail
-specs/system/ui.md:440-451  #### 4.5.1 Agent editor and Try it
-specs/system/ui.md:453-460  #### 4.5.2 Skills library
-specs/system/ui.md:462-469  #### 4.5.3 Skill editor
-specs/system/ui.md:471-478  #### 4.5.4 Built-in skill editor
-specs/system/ui.md:480-488  #### 4.5.5 Link editor and chips
-specs/system/ui.md:490-517  #### 4.5.6 Graph tab
-specs/system/ui.md:519-521  #### 4.5.7 LLM Config tab
-specs/system/ui.md:523-528  #### 4.5.8 Try it tab
-specs/system/ui.md:530-537  #### 4.5.9 Job Description tab, user agent
-specs/system/ui.md:539-550  #### 4.5.11 Job Description tab, built-in agent
-specs/system/ui.md:552-560  #### 4.5.10 Skills tab, user agent
-specs/system/ui.md:562-564  ### 4.6 Eval trace (right panel)
-specs/system/ui.md:566-568  ### 4.7 New-session composer
-specs/system/ui.md:570-585  ### 4.7.1 Runs page and Past chats
-specs/system/ui.md:587-598  ### 4.8i Artifacts
-specs/system/ui.md:600-619  ### 4.8 Ontology tab (dataset editor)
-specs/system/ui.md:621-631  ### 4.8d Monitoring: tabs and the LLM calls table
-specs/system/ui.md:633-641  ### 4.8e Monitoring: LLM call page
-specs/system/ui.md:643-650  ### 4.8f Monitoring: Runs tab
-specs/system/ui.md:652-664  ### 4.8g Monitoring: session page
-specs/system/ui.md:666-676  ### 4.8h Monitoring: waterfall
-specs/system/ui.md:678-682  ### 4.9 LLM configuration (settings)
-specs/system/ui.md:684-695  ### 4.10 Datasource configuration (settings)
-specs/system/ui.md:697-701  ### 4.11 Testing data (settings)
-specs/system/ui.md:704-716  ### 4.12 Developer (settings)
-specs/system/ui.md:717-785  ### 4.12 Past chat (read-only transcript)
-specs/system/ui.md:739-752  #### 4.12.1 Workflow bar
-specs/system/ui.md:754-785  #### 4.12.2 Query inspector (M1-25)
-specs/system/ui.md:787-845  ### 4.13 Session panel (right panel in a session)
-specs/system/ui.md:800-807  #### 4.13.1 Visual view
-specs/system/ui.md:809-811  #### 4.13.2 Document view
-specs/system/ui.md:813-815  #### 4.13.3 File view
-specs/system/ui.md:817-819  #### 4.13.4 Table view
-specs/system/ui.md:821-845  #### 4.13.5 Readiness scorecard
-specs/system/ui.md:847-849  ### 4.14 Entity details (right panel default)
-specs/system/ui.md:851-853  ### 4.15 Metrics panel (inside the catalog browser)
-specs/system/ui.md:855-862  ### 4.16 Appearance (settings)
-specs/system/ui.md:864-876  ## 5. Cross-cutting behaviour
-specs/system/ui.md:866-868  ### 5.1 State that survives view changes
-specs/system/ui.md:870-872  ### 5.2 Selection state
-specs/system/ui.md:874-876  ### 5.3 Toast policy
-specs/system/ui.md:878-967  ## 6. Design tokens
-specs/system/ui.md:882-925  ### 6.0 Theme tokens
-specs/system/ui.md:927-932  ### 6.1 Colour usage
-specs/system/ui.md:934-939  ### 6.2 Typography
-specs/system/ui.md:941-946  ### 6.3 Spacing, radii, shadows, motion
-specs/system/ui.md:948-955  ### 6.4 Icons
-specs/system/ui.md:957-967  ### 6.5 Theming
-specs/system/ui.md:969-1011  ## 7. Copy that tests or users rely on
-specs/system/ui.md:1013-1024  ## 8. Accessibility
-specs/system/ui.md:1026-1028  ## 9. Visual baseline
-specs/system/ui.md:1031-1038  ## 10. Open questions and gaps
+specs/system/ui.md:89-118  ### 1.4 Navigation model (no router)
+specs/system/ui.md:120-131  ### 1.5 Right panel
+specs/system/ui.md:133-135  ### 1.6 Startup
+specs/system/ui.md:137-147  ## 2. Loading, empty, error and confirmation conventions
+specs/system/ui.md:149-223  ## 3. Shared components
+specs/system/ui.md:151-161  ### 3.1 Backend status banner
+specs/system/ui.md:163-177  ### 3.2 System logs panel
+specs/system/ui.md:179-189  ### 3.3 Toast container
+specs/system/ui.md:191-193  ### 3.4 App logo
+specs/system/ui.md:195-197  ### 3.5 Markdown rendering
+specs/system/ui.md:199-223  ### 3.6 Shared component classes
+specs/system/ui.md:225-875  ## 4. Screens and panels
+specs/system/ui.md:229-237  ### 4.1 Home (welcome)
+specs/system/ui.md:239-245  ### 4.2 Datasets list
+specs/system/ui.md:247-261  ### 4.3 Catalog browser ("New dataset" / "Edit dataset")
+specs/system/ui.md:263-316  ### 4.3a Profile & synthesize tab (dataset editor)
+specs/system/ui.md:318-330  ### 4.4 Agent Hub
+specs/system/ui.md:332-343  ### 4.4a Workflows
+specs/system/ui.md:345-411  ### 4.4b Workflow page
+specs/system/ui.md:413-561  ### 4.5 Agent detail
+specs/system/ui.md:441-452  #### 4.5.1 Agent editor and Try it
+specs/system/ui.md:454-461  #### 4.5.2 Skills library
+specs/system/ui.md:463-470  #### 4.5.3 Skill editor
+specs/system/ui.md:472-479  #### 4.5.4 Built-in skill editor
+specs/system/ui.md:481-489  #### 4.5.5 Link editor and chips
+specs/system/ui.md:491-518  #### 4.5.6 Graph tab
+specs/system/ui.md:520-522  #### 4.5.7 LLM Config tab
+specs/system/ui.md:524-529  #### 4.5.8 Try it tab
+specs/system/ui.md:531-538  #### 4.5.9 Job Description tab, user agent
+specs/system/ui.md:540-551  #### 4.5.11 Job Description tab, built-in agent
+specs/system/ui.md:553-561  #### 4.5.10 Skills tab, user agent
+specs/system/ui.md:563-565  ### 4.6 Eval trace (right panel)
+specs/system/ui.md:567-569  ### 4.7 New-session composer
+specs/system/ui.md:571-586  ### 4.7.1 Runs page and Past chats
+specs/system/ui.md:588-599  ### 4.8i Artifacts
+specs/system/ui.md:601-620  ### 4.8 Ontology tab (dataset editor)
+specs/system/ui.md:622-632  ### 4.8d Monitoring: tabs and the LLM calls table
+specs/system/ui.md:634-642  ### 4.8e Monitoring: LLM call page
+specs/system/ui.md:644-651  ### 4.8f Monitoring: Runs tab
+specs/system/ui.md:653-665  ### 4.8g Monitoring: session page
+specs/system/ui.md:667-677  ### 4.8h Monitoring: waterfall
+specs/system/ui.md:679-689  ### 4.8j Costs
+specs/system/ui.md:691-695  ### 4.9 LLM configuration (settings)
+specs/system/ui.md:697-708  ### 4.10 Datasource configuration (settings)
+specs/system/ui.md:710-714  ### 4.11 Testing data (settings)
+specs/system/ui.md:717-729  ### 4.12 Developer (settings)
+specs/system/ui.md:730-798  ### 4.12 Past chat (read-only transcript)
+specs/system/ui.md:752-765  #### 4.12.1 Workflow bar
+specs/system/ui.md:767-798  #### 4.12.2 Query inspector (M1-25)
+specs/system/ui.md:800-858  ### 4.13 Session panel (right panel in a session)
+specs/system/ui.md:813-820  #### 4.13.1 Visual view
+specs/system/ui.md:822-824  #### 4.13.2 Document view
+specs/system/ui.md:826-828  #### 4.13.3 File view
+specs/system/ui.md:830-832  #### 4.13.4 Table view
+specs/system/ui.md:834-858  #### 4.13.5 Readiness scorecard
+specs/system/ui.md:860-862  ### 4.14 Entity details (right panel default)
+specs/system/ui.md:864-866  ### 4.15 Metrics panel (inside the catalog browser)
+specs/system/ui.md:868-875  ### 4.16 Appearance (settings)
+specs/system/ui.md:877-889  ## 5. Cross-cutting behaviour
+specs/system/ui.md:879-881  ### 5.1 State that survives view changes
+specs/system/ui.md:883-885  ### 5.2 Selection state
+specs/system/ui.md:887-889  ### 5.3 Toast policy
+specs/system/ui.md:891-980  ## 6. Design tokens
+specs/system/ui.md:895-938  ### 6.0 Theme tokens
+specs/system/ui.md:940-945  ### 6.1 Colour usage
+specs/system/ui.md:947-952  ### 6.2 Typography
+specs/system/ui.md:954-959  ### 6.3 Spacing, radii, shadows, motion
+specs/system/ui.md:961-968  ### 6.4 Icons
+specs/system/ui.md:970-980  ### 6.5 Theming
+specs/system/ui.md:982-1024  ## 7. Copy that tests or users rely on
+specs/system/ui.md:1026-1037  ## 8. Accessibility
+specs/system/ui.md:1039-1041  ## 9. Visual baseline
+specs/system/ui.md:1044-1051  ## 10. Open questions and gaps

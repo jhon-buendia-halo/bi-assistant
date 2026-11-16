@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **101 HTTP route handlers** across 18 app controllers (agents 17, workflow runs 15, skills 9, sessions 7, llm 7, datasources 6, ontology 6, metrics 5, monitoring 5, synthetic data 4, workflows 4, datasets 3, data readiness 3, developer settings 3, testing data 3, UI preferences 2, draft runs 1, health 1). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **102 HTTP route handlers** across 18 app controllers (agents 17, workflow runs 15, skills 9, sessions 7, llm 7, datasources 6, ontology 6, metrics 5, monitoring 6, synthetic data 4, workflows 4, datasets 3, data readiness 3, developer settings 3, testing data 3, UI preferences 2, draft runs 1, health 1). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -1103,7 +1103,7 @@ Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent (shown 
 
 ### 2.8c Monitoring
 
-Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monitoring/spec.md). Decision: ADR-0038. **Style B throughout** (real status codes, bare bodies). All five routes are read-only and read Mastra's trace store (`observability.duckdb`, data-model 1.2), not an app collection. A data dir with no trace table yet gives an empty page, not an error.
+Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monitoring/spec.md). Decision: ADR-0038. **Style B throughout** (real status codes, bare bodies). All six routes are read-only and read Mastra's trace store (`observability.duckdb`, data-model 1.2), not an app collection. A data dir with no trace table yet gives an empty page, not an error.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -1112,6 +1112,7 @@ Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monito
 | 113 | `GET /monitoring/sessions` | List sessions with recorded agent runs, filtered and paged, most recent first | yes |
 | 114 | `GET /monitoring/sessions/:id` | One session with its turns and each turn's trajectory | yes |
 | 115 | `GET /monitoring/traces/:traceId` | One turn's spans as a depth-first tree for the waterfall | yes |
+| 144 | `GET /monitoring/usage` | The Costs page's estimated cost by day, month, model, workflow and agent | yes |
 
 #### 111. `GET /monitoring/llm-calls`
 - Query (all optional): `page` (whole number >= 1, default 1); `pageSize` (25, 50 or 100, default 25); `agent` (agent id); `model` and `provider` (exact match); `status` (`succeeded`, `failed` or `running`); `session` (session id); `from` and `to` (ISO date-times, inclusive, on the call's start time).
@@ -1146,6 +1147,12 @@ Controller prefix `/monitoring`. Capability: [monitoring](../capabilities/monito
 - `SpanNode`: `{ id, parentId: string|null, depth: number, type: string (the raw span type), kind: 'agent'|'model'|'request'|'tool'|'memory'|'framework'|'other', label: string, startMs: number (offset from the trace start), durationMs: number|null (null while running), status: 'succeeded'|'failed'|'running', callId: string|null (the `model_generation` span id, for model and request spans), details: { label, value }[], input: string|null, output: string|null }`. `spans` are depth first, children by start time. `input` and `output` are pretty JSON or text, each cut to 4,000 characters, and are set for tool calls only.
 - Kinds by span type: `agent_run` agent; `model_generation` model; `model_step` request; `tool_call` tool; `memory_operation` memory; `skill_action`, `processor_run`, `workspace_action` and `model_inference` framework; `model_chunk` never listed; any other type `other`. Labels: `agent run · <agent name>`, `model call · <model>`, `request <n>`, the tool name, `memory · <operation>`, the raw name for others. When a framework span is left out its children take its nearest kept ancestor as `parentId` (a response-only change; the store is untouched).
 - `404 "Trace not found"`.
+
+#### 144. `GET /monitoring/usage`
+- Query (all optional): `from` (ISO date-time; the period's start, inclusive; absent = since the first call); `to` (ISO date-time, inclusive, default now); `tz` (an IANA time zone for the day and month buckets, default `UTC`). The Costs sends the browser's time zone and local midnight of the period's first day ([monitoring](../capabilities/monitoring/spec.md) R48).
+- Response `200`: `UsageSummary` = `{ from: ISO|null, to: ISO, timeZone, today: Amount, thisMonth: Amount, totals: Amount & { pricedCalls, inputTokens, outputTokens }, daily: (Amount & { date: 'YYYY-MM-DD' })[], monthly: (Amount & { month: 'YYYY-MM' })[], byModel: (Amount & { model, provider, inputTokens, outputTokens, priced: boolean })[], byWorkflow: (Amount & { id: string|null, name, kind: 'workflow'|'none', runs: number|null, avgCostUsd: number|null, medianCostUsd: number|null, p95CostUsd: number|null })[], byAgent: (Amount & { id: string|null, name })[], perRun: { count, avgCostUsd }, perQuestion: { count, avgCostUsd }, split: { inputUsd, cacheReadUsd, cacheWriteUsd, outputUsd, cacheSavedUsd, inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens }, topRuns: (Amount & { runId, workflowId: string|null, workflowName, title: string|null, startedAt: ISO })[] }` with `Amount` = `{ costUsd: number, calls: number }`.
+- Every call of `GET /monitoring/llm-calls` counts once; `costUsd` sums the calls' estimates (monitoring R5) and a call without one adds 0 (`totals.calls - totals.pricedCalls` of them). `today`, `thisMonth` and `monthly` (the 12 calendar months ending with the current one) ignore the period; `totals`, `daily` (every day of the period, zero-filled, from the first call when `from` is absent) and the three rankings cover it. Rankings are sorted by cost, then calls, descending. `byWorkflow`: a `run-<runId>` thread, or a step agent's `run-<runId>:<agent key>`, is that run's workflow (`id` = `workflowId`, `name` = the run's `workflowName`, from `workflow_runs`), a deleted run is `{ id: null, name: 'Deleted workflow run', kind: 'workflow' }`, and every other call is `{ id: null, name: 'No workflow', kind: 'none' }`; the run statistics are over the runs' period costs (median; nearest-rank 95th percentile) and null for `none`. `perRun` averages the workflow runs and `perQuestion` the traces of the calls outside runs (avg 0 when count is 0). `split` prices the period's tokens by kind (input = uncached input) and `cacheSavedUsd` is what the cache reads saved against the input price. `topRuns` holds up to 10 runs by cost, then calls; `startedAt` is their first call in the period, and a deleted run has `workflowId` and `title` null and `workflowName` `Deleted workflow run`. `byAgent` names a call with no agent `No agent`.
+- Validation `400` (messages exact): `"From is not a valid date"`, `"To is not a valid date"`, `"From must not be after To"`, `"Time zone is not valid"`.
 
 ### 2.9 Testing data
 
