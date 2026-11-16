@@ -19,6 +19,12 @@ import {
   DATA_READINESS_AGENT_KEY,
   DATA_READINESS_AGENT_NAME,
   DATA_READINESS_MAX_STEPS,
+  GAP_ADVISOR_AGENT_KEY,
+  GAP_ADVISOR_AGENT_NAME,
+  LAYER_MAPPER_AGENT_KEY,
+  LAYER_MAPPER_AGENT_NAME,
+  REQUIREMENTS_ANALYST_AGENT_KEY,
+  REQUIREMENTS_ANALYST_AGENT_NAME,
   SITE_REVIEWER_AGENT_KEY,
   SITE_REVIEWER_AGENT_NAME,
 } from '../agent-constants';
@@ -91,6 +97,23 @@ const STEP_AGENTS: Record<
   },
   [DATA_MAPPER_AGENT_KEY]: {
     name: DATA_MAPPER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+  // Consumption Gap Analysis (agents.md 5.20): the agent steps are one model
+  // call each without tools.
+  [REQUIREMENTS_ANALYST_AGENT_KEY]: {
+    name: REQUIREMENTS_ANALYST_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+  [LAYER_MAPPER_AGENT_KEY]: {
+    name: LAYER_MAPPER_AGENT_NAME,
+    tools: [],
+    maxSteps: 1,
+  },
+  [GAP_ADVISOR_AGENT_KEY]: {
+    name: GAP_ADVISOR_AGENT_NAME,
     tools: [],
     maxSteps: 1,
   },

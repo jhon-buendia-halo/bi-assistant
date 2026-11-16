@@ -77,6 +77,7 @@ const OFFICIAL = [
   ['recreate-dashboard', 'Dashboard Image to Artifact'],
   ['map-dashboard-data', 'Map a Dashboard to Data'],
   ['review-website', 'Review a Website'],
+  ['consumption-gap-analysis', 'Consumption Gap Analysis'],
 ] as const;
 
 const QUESTION = 'How many matches were played in each stage?';

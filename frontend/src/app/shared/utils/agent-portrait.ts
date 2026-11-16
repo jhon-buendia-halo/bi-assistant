@@ -49,6 +49,9 @@ export const BUILTIN_PORTRAITS: Readonly<Record<string, PortraitLook>> = {
   'query-explainer': { hair: 'variant58' }, // Hannah
   'result-explorer': { hair: 'variant12' }, // Nathan
   'image-reader': { hair: 'variant31', glasses: 'variant11' }, // Zoe
+  'requirements-analyst': { hair: 'variant19' }, // Rosa
+  'layer-mapper': { hair: 'variant09' }, // Leo
+  'gap-advisor': { hair: 'variant33' }, // Nora
   'site-reviewer': { hair: 'variant12', glasses: 'variant11' }, // Iris
 };
 

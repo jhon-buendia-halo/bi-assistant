@@ -134,6 +134,27 @@ export const BUILTIN_AGENT_PERSONAS: Readonly<Record<string, AgentPersona>> = {
     intro:
       "I match the columns a dashboard needs to the columns in your datasets, and tell you what's missing.",
   },
+  'requirements-analyst': {
+    name: 'Rosa',
+    role: 'Requirements Analyst',
+    domain: 'data-foundations',
+    intro:
+      'I turn your business questions into the exact data each one needs, in business words, before anyone opens a table.',
+  },
+  'layer-mapper': {
+    name: 'Leo',
+    role: 'Lineage Analyst',
+    domain: 'data-foundations',
+    intro:
+      'I find where each field lives in Landing, Normalized and Consumption, and how it is computed there.',
+  },
+  'gap-advisor': {
+    name: 'Nora',
+    role: 'Data Modeling Advisor',
+    domain: 'data-foundations',
+    intro:
+      "I propose the model changes that close your Consumption layer's gaps, starting in the lowest layer that has the data.",
+  },
   'image-reader': {
     name: 'Zoe',
     role: 'Image Analyst',

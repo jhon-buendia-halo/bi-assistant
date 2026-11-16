@@ -72,6 +72,21 @@ export const SITE_REVIEWER_AGENT_KEY = 'site-reviewer';
 /** Its name. */
 export const SITE_REVIEWER_AGENT_NAME = 'Site Reviewer';
 
+/**
+ * The agents of the three model steps of `consumption-gap-analysis`
+ * (agents.md 2.18 to 2.20, 5.20): Derive (and Confirm) requirements, Map
+ * requirements and Recommend fixes. System agents: the workflow calls them.
+ */
+export const REQUIREMENTS_ANALYST_AGENT_KEY = 'requirements-analyst';
+/** Its name: the Derive requirements step's agent. */
+export const REQUIREMENTS_ANALYST_AGENT_NAME = 'Requirements Analyst';
+export const LAYER_MAPPER_AGENT_KEY = 'layer-mapper';
+/** Its name: the Map requirements step's agent. */
+export const LAYER_MAPPER_AGENT_NAME = 'Layer Mapper';
+export const GAP_ADVISOR_AGENT_KEY = 'gap-advisor';
+/** Its name: the Recommend fixes step's agent. */
+export const GAP_ADVISOR_AGENT_NAME = 'Gap Advisor';
+
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANALYSIS_PLANNER_AGENT_KEY,
@@ -82,6 +97,9 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   QUERY_EXPLAINER_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
+  REQUIREMENTS_ANALYST_AGENT_KEY,
+  LAYER_MAPPER_AGENT_KEY,
+  GAP_ADVISOR_AGENT_KEY,
   'visualization',
   'sql-fixer',
   'sql-verifier',

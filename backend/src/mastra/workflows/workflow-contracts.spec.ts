@@ -44,6 +44,14 @@ import {
   type MapDashboardDataRuntime,
 } from './map-dashboard-data.steps';
 import { mapDashboardDataWorkflow } from './map-dashboard-data.workflow';
+import { CONSUMPTION_GAP_STEP_SCHEMAS } from './consumption-gap-analysis.schemas';
+import {
+  CONFIRM_REQUIREMENTS_OPTION,
+  CONSUMPTION_GAP_RUNTIME_KEY,
+  CONSUMPTION_GAP_WORKFLOW_ID,
+  type ConsumptionGapRuntime,
+} from './consumption-gap-analysis.steps';
+import { consumptionGapAnalysisWorkflow } from './consumption-gap-analysis.workflow';
 import { RECREATE_DASHBOARD_STEP_SCHEMAS } from './recreate-dashboard.schemas';
 import {
   SAMPLE_BLUEPRINT_REPLY,
@@ -67,14 +75,26 @@ import {
 import { reviewWebsiteWorkflow } from './review-website.workflow';
 import { CODE_WORKFLOWS } from './workflow-catalog';
 
+interface StubStream {
+  fullStream: AsyncIterable<{
+    type: string;
+    payload?: { id?: string; status?: string; output?: unknown };
+  }>;
+  result: Promise<{
+    status: string;
+    result?: unknown;
+    error?: unknown;
+    suspended?: string[][];
+  }>;
+}
+
 interface StubRun {
-  stream(args: { inputData: unknown; requestContext: unknown }): {
-    fullStream: AsyncIterable<{
-      type: string;
-      payload?: { id?: string; status?: string; output?: unknown };
-    }>;
-    result: Promise<{ status: string; result?: unknown; error?: unknown }>;
-  };
+  stream(args: { inputData: unknown; requestContext: unknown }): StubStream;
+  resumeStream(args: {
+    step: string[];
+    resumeData: unknown;
+    requestContext: unknown;
+  }): StubStream;
 }
 
 /** How each catalogued workflow is run with a stubbed model, and its Zod schemas. */
@@ -83,7 +103,38 @@ interface ContractFixture {
   schemas: Record<string, { input: z.ZodType; output: z.ZodType }>;
   input: Record<string, unknown>;
   requestContext(): RequestContext;
+  /** The user's answer when the run waits on its clear path (Confirm requirements). */
+  answer?: string;
 }
+
+/** The World Cup sample's Normalized and Consumption entities (plan m1-30). */
+const GAP_DATASET = {
+  dataset: 'World Cup',
+  datasourceId: 'ds-pg',
+  datasourceKind: 'postgres',
+  schemas: [
+    { key: 'world_cup.wc_normalized', layer: 'normalized' },
+    { key: 'world_cup.wc_consumption', layer: 'consumption' },
+  ],
+  entities: [
+    {
+      key: 'world_cup.wc_normalized.goals',
+      columns: [
+        { name: 'match_id', type: 'integer' },
+        { name: 'player_name', type: 'text' },
+        { name: 'is_penalty', type: 'boolean' },
+      ],
+    },
+    {
+      key: 'world_cup.wc_consumption.agg_player_goals',
+      columns: [
+        { name: 'tournament_year', type: 'integer' },
+        { name: 'player', type: 'text' },
+        { name: 'goals', type: 'integer' },
+      ],
+    },
+  ],
+};
 
 const FIXTURES: Record<string, ContractFixture> = {
   [ANSWER_BUSINESS_QUESTION_WORKFLOW_ID]: {
@@ -254,6 +305,85 @@ const FIXTURES: Record<string, ContractFixture> = {
       return context;
     },
   },
+  [CONSUMPTION_GAP_WORKFLOW_ID]: {
+    workflow:
+      consumptionGapAnalysisWorkflow as unknown as ContractFixture['workflow'],
+    schemas: CONSUMPTION_GAP_STEP_SCHEMAS,
+    input: {
+      question: 'Who scored the most goals in each World Cup?',
+      datasets: ['World Cup'],
+      artifact: '',
+    },
+    // The requirements are confirmed as they are.
+    answer: CONFIRM_REQUIREMENTS_OPTION,
+    requestContext: () => {
+      const context = new RequestContext();
+      const unused = () => Promise.reject(new Error('not used'));
+      // The stubbed run: two tagged schemas, every query failed (a failed
+      // query is a result, never a failed run), one question requirement
+      // mapped to a Consumption column, no fix, and the stored report.
+      context.set(CONSUMPTION_GAP_RUNTIME_KEY, {
+        readDashboard: unused,
+        loadDashboard: unused,
+        datasetLayers: () => Promise.resolve([GAP_DATASET]),
+        runQueries: ({ queries }) =>
+          Promise.resolve({
+            results: queries.map((query) => ({
+              id: query.id,
+              columns: [],
+              rows: [],
+              error: 'not run in this test',
+            })),
+            stopped: false,
+          }),
+        deriveRequirements: ({ questions }) =>
+          Promise.resolve({
+            requirements: questions.map((title, index) => ({
+              id: `Q${index + 1}`,
+              kind: 'question' as const,
+              title,
+              source: `Question ${index + 1}`,
+              dashboardId: '',
+              ref: '',
+              fields: [
+                {
+                  name: 'goals',
+                  role: 'measure' as const,
+                  aggregation: 'sum',
+                  description: 'Goals scored.',
+                },
+              ],
+              grain: 'player × tournament',
+              periodValues: [],
+            })),
+            stopped: false,
+          }),
+        reviseRequirements: unused,
+        mapRequirements: ({ requirements }) =>
+          Promise.resolve({
+            mappings: requirements.flatMap((requirement) =>
+              requirement.fields.map((field) => ({
+                requirementId: requirement.id,
+                field: field.name,
+                sources: [
+                  {
+                    layer: 'consumption' as const,
+                    entity: 'world_cup.wc_consumption.agg_player_goals',
+                    column: 'goals',
+                    expression: '',
+                  },
+                ],
+                note: '',
+              })),
+            ),
+            stopped: false,
+          }),
+        recommendFixes: () => Promise.resolve({ fixes: [], stopped: false }),
+        saveReport: ({ title }) => Promise.resolve({ visualId: 'v-1', title }),
+      } satisfies ConsumptionGapRuntime);
+      return context;
+    },
+  },
   [REVIEW_WEBSITE_WORKFLOW_ID]: {
     workflow: reviewWebsiteWorkflow as unknown as ContractFixture['workflow'],
     schemas: REVIEW_WEBSITE_STEP_SCHEMAS,
@@ -402,25 +532,40 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
     async (id, source) => {
       const fixture = FIXTURES[id];
       expect(fixture).toBeDefined();
-      const output = (await fixture.workflow.createRun()).stream({
+      const engineRun = await fixture.workflow.createRun();
+      const requestContext = fixture.requestContext();
+      let output = engineRun.stream({
         inputData: fixture.input,
-        requestContext: fixture.requestContext(),
+        requestContext,
       });
       const outputs = new Map<string, unknown>();
-      for await (const event of output.fullStream) {
-        // A nested workflow's step is `<workflow>.<step>`: the step's id is
-        // the last segment; the nested workflows are not catalogue steps.
-        const id = event.payload?.id?.split('.').at(-1);
-        if (
-          event.type === 'workflow-step-result' &&
-          id &&
-          fixture.schemas[id] &&
-          event.payload?.status === 'success'
-        ) {
-          outputs.set(id, event.payload.output);
+      const drain = async () => {
+        for await (const event of output.fullStream) {
+          // A nested workflow's step is `<workflow>.<step>`: the step's id is
+          // the last segment; the nested workflows are not catalogue steps.
+          const id = event.payload?.id?.split('.').at(-1);
+          if (
+            event.type === 'workflow-step-result' &&
+            id &&
+            fixture.schemas[id] &&
+            event.payload?.status === 'success'
+          ) {
+            outputs.set(id, event.payload.output);
+          }
         }
+        return output.result;
+      };
+      let result = await drain();
+      // A run that waits on its clear path goes on with the fixture's answer.
+      if (result.status === 'suspended' && fixture.answer !== undefined) {
+        output = engineRun.resumeStream({
+          step: result.suspended![0],
+          resumeData: { answer: fixture.answer },
+          requestContext,
+        });
+        result = await drain();
       }
-      expect((await output.result).status).toBe('success');
+      expect(result.status).toBe('success');
       // The clear path: every step but Clarify and Read images, whose
       // branches are not taken (the sample input has no images), and the
       // follow-up branch (a first run has no earlier result).

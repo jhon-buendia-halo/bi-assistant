@@ -9,6 +9,9 @@ import { resultExplorerAgent } from './agents/result-explorer.agent';
 import { insightsAnalystAgent } from './agents/insights-analyst.agent';
 import { dashboardReaderAgent } from './agents/dashboard-reader.agent';
 import { dataMapperAgent } from './agents/data-mapper.agent';
+import { gapAdvisorAgent } from './agents/gap-advisor.agent';
+import { layerMapperAgent } from './agents/layer-mapper.agent';
+import { requirementsAnalystAgent } from './agents/requirements-analyst.agent';
 import { imageReaderAgent } from './agents/image-reader.agent';
 import { dataReadinessAgent } from './agents/data-readiness.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
@@ -23,6 +26,7 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
 import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
+import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
 import { mapDashboardDataWorkflow } from './workflows/map-dashboard-data.workflow';
 import { recreateDashboardWorkflow } from './workflows/recreate-dashboard.workflow';
@@ -51,6 +55,10 @@ export const mastra = new Mastra({
     // The agents of Dashboard Image to Artifact's two model steps (agents.md 5.17).
     'dashboard-reader': dashboardReaderAgent,
     'data-mapper': dataMapperAgent,
+    // The agents of Consumption Gap Analysis's model steps (agents.md 5.20).
+    'requirements-analyst': requirementsAnalystAgent,
+    'layer-mapper': layerMapperAgent,
+    'gap-advisor': gapAdvisorAgent,
     // The agent of Read images, the optional first step of three workflows
     // (agents.md 2.15; workflows R35).
     'image-reader': imageReaderAgent,
@@ -72,6 +80,7 @@ export const mastra = new Mastra({
     'recreate-dashboard': recreateDashboardWorkflow,
     'map-dashboard-data': mapDashboardDataWorkflow,
     'review-website': reviewWebsiteWorkflow,
+    'consumption-gap-analysis': consumptionGapAnalysisWorkflow,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

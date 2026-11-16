@@ -22,6 +22,12 @@ import {
   readDashboardWithModel,
 } from './workflows/recreate-dashboard.agents';
 import { readImagesWithModel } from './workflows/read-images.agents';
+import {
+  deriveRequirementsWithModel,
+  mapRequirementsWithModel,
+  recommendFixesWithModel,
+  reviseRequirementsWithModel,
+} from './workflows/consumption-gap-analysis.agents';
 import { reviewTemplateWithModel } from './workflows/review-website.agents';
 import {
   createSessionWorkspace,
@@ -183,6 +189,36 @@ export class MastraService {
     ...args: Parameters<typeof mapDataWithModel>
   ): ReturnType<typeof mapDataWithModel> {
     return mapDataWithModel(...args);
+  }
+
+  /**
+   * Consumption Gap Analysis's model calls (agents.md 2.18 to 2.20, 5.20):
+   * the Requirements Analyst (Derive and Confirm requirements), the Layer
+   * Mapper (Map requirements) and the Gap Advisor (Recommend fixes), each
+   * reply read leniently and checked in code.
+   */
+  deriveRequirements(
+    ...args: Parameters<typeof deriveRequirementsWithModel>
+  ): ReturnType<typeof deriveRequirementsWithModel> {
+    return deriveRequirementsWithModel(...args);
+  }
+
+  reviseRequirements(
+    ...args: Parameters<typeof reviseRequirementsWithModel>
+  ): ReturnType<typeof reviseRequirementsWithModel> {
+    return reviseRequirementsWithModel(...args);
+  }
+
+  mapRequirements(
+    ...args: Parameters<typeof mapRequirementsWithModel>
+  ): ReturnType<typeof mapRequirementsWithModel> {
+    return mapRequirementsWithModel(...args);
+  }
+
+  recommendFixes(
+    ...args: Parameters<typeof recommendFixesWithModel>
+  ): ReturnType<typeof recommendFixesWithModel> {
+    return recommendFixesWithModel(...args);
   }
 
   /** Every registered agent, keyed by its registry name. */

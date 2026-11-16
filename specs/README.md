@@ -87,6 +87,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | M1-27 Review a Website: measured visual QA of every page | [epics/M1-27](epics/M1-27/spec.md) |
 | M1-28 Explore a query's full result: page, filter, sort | [epics/M1-28](epics/M1-28/spec.md) |
 | M1-29 Border-case evals for every agent of the two workflows | [epics/M1-29](epics/M1-29/spec.md) |
+| M1-30 Consumption Gap Analysis | [epics/M1-30](epics/M1-30/spec.md) |
 | M0-5 Faster workflow, repo-only planning | [epics/M0-5](epics/M0-5/spec.md) |
 | M0-6 Workflow modes: Strict and Free style | [epics/M0-6](epics/M0-6/spec.md) |
 

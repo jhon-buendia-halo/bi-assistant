@@ -22,6 +22,13 @@ export interface SampleFixtureDefaults {
   ssl: boolean;
 }
 
+/** One schema of a multi-schema sample, with the layer it plays. */
+export interface SampleLayerSchema {
+  name: string;
+  layer: 'landing' | 'normalized' | 'consumption';
+  description: string;
+}
+
 export interface SampleFixture {
   /** Stable id used in URLs and by the eval sets that depend on the sample. */
   id: string;
@@ -34,6 +41,14 @@ export interface SampleFixture {
   seedFile?: string;
   /** The schema the sample owns — what `DROP SCHEMA` targets before a seed. */
   schema: string;
+  /**
+   * Optional: a sample that owns several schemas (a medallion sample). The
+   * loader drops every one before seeding, registers every entity of them and
+   * saves a schema note (layer and description) per schema. `requiredTables`
+   * is then qualified (`schema.table`), and `schema` names the primary one.
+   * Absent = the sample owns just `schema`, exactly as before.
+   */
+  layerSchemas?: SampleLayerSchema[];
   defaults: SampleFixtureDefaults;
   /** Name of the datasource record the loader creates (and reuses). */
   datasourceName: string;
@@ -390,6 +405,54 @@ const EDGE_CASES: SampleFixture = {
   ],
 };
 
+/**
+ * A medallion sample on the World Cup data: three schemas, one per layer, with
+ * deliberate gaps (2018 missing from Consumption, columns only in Normalized,
+ * raw text only in Landing, cards in no layer). Hand-maintained.
+ */
+const WORLD_CUP_MEDALLION: SampleFixture = {
+  id: 'world-cup-medallion',
+  name: 'World Cup Medallion',
+  description:
+    'The World Cup 2018 and 2022 as a medallion lakehouse — raw Landing text, ' +
+    'typed Normalized tables and a Consumption layer with known gaps.',
+  seedFile: '006_world_cup_medallion.sql',
+  schema: 'wc_consumption',
+  layerSchemas: [
+    {
+      name: 'wc_landing',
+      layer: 'landing',
+      description: 'Raw files as delivered: every value is text.',
+    },
+    {
+      name: 'wc_normalized',
+      layer: 'normalized',
+      description: 'Cleaned, typed and keyed tables.',
+    },
+    {
+      name: 'wc_consumption',
+      layer: 'consumption',
+      description: 'Reporting tables for dashboards.',
+    },
+  ],
+  defaults: { ...WORLD_CUP.defaults },
+  datasourceName: 'World Cup Medallion PostgreSQL',
+  datasetName: 'World Cup Medallion',
+  requiredTables: [
+    'wc_landing.raw_matches',
+    'wc_landing.raw_goals',
+    'wc_landing.raw_match_stats',
+    'wc_landing.raw_teams',
+    'wc_normalized.matches',
+    'wc_normalized.teams',
+    'wc_normalized.goals',
+    'wc_normalized.match_team_statistics',
+    'wc_consumption.fct_match_results',
+    'wc_consumption.agg_team_tournament',
+    'wc_consumption.agg_player_goals',
+  ],
+};
+
 /** Every sample the app knows how to provision, in panel order. */
 export const SAMPLE_FIXTURES: SampleFixture[] = [
   WORLD_CUP,
@@ -397,6 +460,7 @@ export const SAMPLE_FIXTURES: SampleFixture[] = [
   INTELLIFY,
   US_HEALTH,
   EDGE_CASES,
+  WORLD_CUP_MEDALLION,
   WORLD_CUP_REST,
 ];
 
@@ -410,7 +474,16 @@ export function findFixture(id: string): SampleFixture | undefined {
  * eval preflight match against.
  */
 export function requiredEntities(fixture: SampleFixture): string[] {
-  return fixture.requiredTables.map((table) => `${fixture.schema}.${table}`);
+  return fixture.requiredTables.map((table) =>
+    fixture.layerSchemas ? table : `${fixture.schema}.${table}`,
+  );
+}
+
+/** Every schema a sample owns: the loader drops all of them before seeding. */
+export function ownedSchemas(fixture: SampleFixture): string[] {
+  return fixture.layerSchemas
+    ? fixture.layerSchemas.map((entry) => entry.name)
+    : [fixture.schema];
 }
 
 /**
