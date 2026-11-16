@@ -26,6 +26,7 @@ import {
   systemTexts,
 } from './helpers/llm-stub';
 import { scenarioStep } from './support/demo-captions';
+import { pickedDataset } from './helpers/run-ui';
 
 /**
  * Mirrors the Feature "Session management" in
@@ -435,9 +436,7 @@ test.describe('Runs and Past chats', () => {
         await expect(page.getByTestId('workflow-run-question')).toHaveCount(0);
         await expect(page.getByTestId('workflow-run')).toBeVisible();
         await expect(page.getByTestId('workflow-input-question')).toHaveValue(QUESTION);
-        await expect(
-          page.getByTestId('workflow-input-datasets').getByRole('button', { name: WORLD_CUP_DATASET }),
-        ).toHaveAttribute('aria-pressed', 'true');
+        await expect(pickedDataset(page, WORLD_CUP_DATASET)).toBeVisible();
       });
       await scenarioStep(page, 'When I open Past chats and open the old chat', async () => {
         await rail(page).getByRole('button', { name: 'Runs', exact: true }).click();

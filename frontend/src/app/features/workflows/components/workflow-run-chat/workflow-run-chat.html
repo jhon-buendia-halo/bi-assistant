@@ -452,50 +452,12 @@
                       No datasets yet — create one in Datasets first.
                     </p>
                   } @else {
-                    <ul
-                      class="m-0 flex max-h-[76px] list-none flex-wrap gap-1.5 overflow-y-auto p-0"
-                    >
-                      @for (
-                        dataset of datasetChoices(field);
-                        track dataset.name
-                      ) {
-                        <li>
-                          <button
-                            type="button"
-                            [attr.aria-pressed]="
-                              designer.picked(field.name).includes(dataset.name)
-                            "
-                            [attr.title]="dataset.tables.length + ' entities'"
-                            (click)="
-                              designer.toggleDataset(field.name, dataset.name)
-                            "
-                            class="dataset-pill"
-                          >
-                            @if (
-                              designer.picked(field.name).includes(dataset.name)
-                            ) {
-                              <lucide-angular
-                                [img]="CircleCheck"
-                                [size]="13"
-                                class="shrink-0 text-primary"
-                              />
-                            } @else {
-                              <lucide-angular
-                                [img]="Database"
-                                [size]="13"
-                                class="shrink-0 text-fg-muted"
-                              />
-                            }
-                            <span class="max-w-[200px] truncate">{{
-                              dataset.name
-                            }}</span>
-                            <span class="sr-only"
-                              >, {{ dataset.tables.length }} entities</span
-                            >
-                          </button>
-                        </li>
-                      }
-                    </ul>
+                    <app-dataset-picker
+                      [datasets]="datasetChoices(field)"
+                      [selected]="designer.picked(field.name)"
+                      [invalid]="fieldError(field.name) !== null"
+                      (selectedChange)="designer.setInput(field.name, $event)"
+                    />
                   }
                   @if (fieldError(field.name); as message) {
                     <p
