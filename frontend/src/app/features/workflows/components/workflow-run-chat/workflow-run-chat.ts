@@ -28,6 +28,14 @@ import {
   X,
 } from 'lucide-angular';
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
+import {
+  ConversationTurn,
+  WorkflowConversation,
+} from '../../services/workflow-conversation';
+import {
+  ConversationNavItem,
+  WorkflowConversationNav,
+} from '../workflow-conversation-nav/workflow-conversation-nav';
 import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
 import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
@@ -107,7 +115,9 @@ const FORM_CONTROLS =
     WorkflowRunInputRequired,
     WorkflowRunStory,
     WorkflowRunTeam,
+    WorkflowConversationNav,
   ],
+  providers: [WorkflowConversation],
   templateUrl: './workflow-run-chat.html',
   styles: `
     .composer {
@@ -156,7 +166,7 @@ const FORM_CONTROLS =
     }
   `,
   host: {
-    class: 'flex min-h-0 flex-col',
+    class: 'relative flex min-h-0 flex-col',
     'data-testid': 'workflow-run-chat',
   },
 })
@@ -212,6 +222,11 @@ export class WorkflowRunChat {
   private shownRunId: string | null = null;
 
   constructor() {
+    // The Business view reads the whole conversation (R38).
+    effect(() => {
+      const on = this.business();
+      untracked(() => this.conversation.active.set(on));
+    });
     // While a run streams, keep its newest text in view; once it ends, show
     // its question and the start of its answer.
     effect(() => {
@@ -276,6 +291,62 @@ export class WorkflowRunChat {
     const el = this.log()?.nativeElement;
     if (el === undefined) return;
     this.stickToEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    this.updateActiveTurn();
+  }
+
+  /** Business view: the earlier questions of this conversation (R38). */
+  protected readonly conversation = inject(WorkflowConversation);
+
+  /** The conversation navigation's questions; empty under two (R38). */
+  protected readonly navItems = computed<ConversationNavItem[]>(() => {
+    if (!this.business()) return [];
+    const current = this.designer.shownQuestion();
+    const items: ConversationNavItem[] = this.conversation
+      .earlier()
+      .map((turn) => ({ id: turn.runId, label: turn.question }));
+    if (current) items.push({ id: 'current', label: current });
+    return items.length >= 2 ? items : [];
+  });
+
+  /** The question in view: the last one whose top has passed a third of the chat. */
+  protected readonly activeTurn = signal<string>('current');
+
+  private updateActiveTurn(): void {
+    const el = this.log()?.nativeElement;
+    if (el === undefined || this.navItems().length === 0) return;
+    const line = el.getBoundingClientRect().top + el.clientHeight / 3;
+    let active = 'current';
+    let first = true;
+    for (const turn of Array.from(
+      el.querySelectorAll<HTMLElement>('[data-turn]'),
+    )) {
+      if (first || turn.getBoundingClientRect().top <= line) {
+        active = turn.dataset['turn'] ?? 'current';
+      }
+      first = false;
+    }
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 8) {
+      active = 'current';
+    }
+    this.activeTurn.set(active);
+  }
+
+  /** A question picked in the navigation: scroll the chat to it. */
+  protected goToTurn(id: string): void {
+    const el = this.log()?.nativeElement;
+    const turn = el?.querySelector<HTMLElement>(
+      `[data-turn="${CSS.escape(id)}"]`,
+    );
+    if (el === undefined || turn === null || turn === undefined) return;
+    this.stickToEnd = false;
+    el.scrollTop +=
+      turn.getBoundingClientRect().top - el.getBoundingClientRect().top - 8;
+    this.activeTurn.set(id);
+  }
+
+  /** A figure of an earlier turn: its query opens in the sheet, from that run. */
+  protected inspectEarlierQuery(turn: ConversationTurn, index: number): void {
+    this.designer.openQuery(index, window.document.activeElement, turn.run);
   }
 
   private follow(status: string | null, runId: string | null): void {

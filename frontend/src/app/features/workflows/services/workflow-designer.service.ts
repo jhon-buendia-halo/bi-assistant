@@ -132,6 +132,12 @@ export class WorkflowDesigner {
   readonly runDockMaximized = signal(false);
   /** The query open in the inspector sheet (an index into the answer's `data`); null when none is. */
   readonly openQueryIndex = signal<number | null>(null);
+  /**
+   * The run whose answer holds the open query when it is not the shown run:
+   * an earlier turn of the Business view's conversation (workflows R38).
+   * Null for the shown run.
+   */
+  readonly queryRun = signal<WorkflowRun | null>(null);
   /** What opened the sheet, to give the focus back on close. */
   private queryOpener: QueryOpener | null = null;
   /** The runs whose answer evidence was already requested (api.md 139): once per run id. */
@@ -573,17 +579,19 @@ export class WorkflowDesigner {
 
   /** The datasets a `datasets` field offers; then, with `thenExecute`, the run starts. */
   private loadDatasets(thenExecute = false): void {
-    this.datasetsSubscription = this.datasetsApi.getDatasetSummaries().subscribe({
-      next: (response) => {
-        this.datasets.set(response.datasets ?? []);
-        this.datasetsLoaded.set(true);
-        if (thenExecute) this.execute();
-      },
-      error: () => {
-        this.datasets.set([]);
-        if (thenExecute) this.execute();
-      },
-    });
+    this.datasetsSubscription = this.datasetsApi
+      .getDatasetSummaries()
+      .subscribe({
+        next: (response) => {
+          this.datasets.set(response.datasets ?? []);
+          this.datasetsLoaded.set(true);
+          if (thenExecute) this.execute();
+        },
+        error: () => {
+          this.datasets.set([]);
+          if (thenExecute) this.execute();
+        },
+      });
   }
 
   /**
@@ -614,6 +622,7 @@ export class WorkflowDesigner {
     this.selectedStepId.set(null);
     this.openNodeId.set(null);
     this.openQueryIndex.set(null);
+    this.queryRun.set(null);
     this.queryOpener = null;
     this.runDockMaximized.set(false);
     this.runFormRequest.set(0);
@@ -658,11 +667,16 @@ export class WorkflowDesigner {
    * maximized Run panel is restored first; another query swaps the one shown.
    * `opener` is the chip or row that was used: Escape returns the focus to it.
    */
-  openQuery(index: number, opener: Element | null = null): void {
+  openQuery(
+    index: number,
+    opener: Element | null = null,
+    run: WorkflowRun | null = null,
+  ): void {
     this.runDockMaximized.set(false);
     if (this.openQueryIndex() === null && opener !== null) {
       this.queryOpener = queryOpenerOf(opener);
     }
+    this.queryRun.set(run);
     this.openQueryIndex.set(index);
   }
 
@@ -671,12 +685,14 @@ export class WorkflowDesigner {
     const opener = this.queryOpener;
     this.queryOpener = null;
     this.openQueryIndex.set(null);
+    this.queryRun.set(null);
     return opener;
   }
 
   /** A call changed the stored answer: show the updated run, when it is still the one shown. */
   applyRun(run: WorkflowRun): void {
     if (this.run()?.id === run.id) this.run.set(run);
+    if (this.queryRun()?.id === run.id) this.queryRun.set(run);
   }
 
   /**
@@ -1060,6 +1076,7 @@ export class WorkflowDesigner {
 
   private resetRun(): void {
     this.openQueryIndex.set(null);
+    this.queryRun.set(null);
     this.runId.set(null);
     this.run.set(null);
     this.contextRun.set(null);

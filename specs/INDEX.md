@@ -1469,12 +1469,12 @@ specs/capabilities/workflows/spec.md:114-117  R38 **Business and Builder views**
 specs/capabilities/workflows/spec.md:119-136  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:138-142  ## Contracts
 specs/capabilities/workflows/spec.md:144-152  ## UI
-specs/capabilities/workflows/spec.md:154-394  ## Flows
-specs/capabilities/workflows/spec.md:156-269  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:271-357  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:359-365  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:367-394  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:396-414  ## Acceptance
+specs/capabilities/workflows/spec.md:154-398  ## Flows
+specs/capabilities/workflows/spec.md:156-273  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:275-361  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:363-369  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:371-398  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:400-418  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope

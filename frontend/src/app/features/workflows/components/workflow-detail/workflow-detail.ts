@@ -152,7 +152,8 @@ export class WorkflowDetailPage {
   /** The query open in the sheet, when the answer holds it. */
   readonly openQuery = computed(() => {
     const index = this.designer.openQueryIndex();
-    const answer = this.answer();
+    // An earlier turn of the Business view's conversation, else the shown run.
+    const answer = this.designer.queryRun()?.answer ?? this.answer();
     return index !== null &&
       answer !== null &&
       answer.data?.[index] !== undefined

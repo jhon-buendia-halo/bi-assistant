@@ -444,6 +444,75 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       designer.closeNode();
     });
 
+    it('Business reads a follow-up as one conversation, with a navigation over its questions', fakeAsync(() => {
+      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
+      open(THREE_STEPS);
+      designer.run.set({
+        id: 'run-2',
+        workflowId: 'three-steps',
+        workflowName: 'Three steps',
+        input: { text: 'And per word?' },
+        context: { fromRunId: 'run-1' },
+        status: 'success',
+        steps: [],
+        datasets: [],
+        startedAt: '2026-11-15T10:01:00.000Z',
+        question: 'And per word?',
+        answer: { role: 'assistant', content: 'One each', at: '2026-11-15T10:01:01.000Z' },
+      });
+      fixture.detectChanges();
+      tick();
+      http
+        .expectOne((r) => r.url.endsWith('/workflow-runs/run-1'))
+        .flush({
+          id: 'run-1',
+          workflowId: 'three-steps',
+          workflowName: 'Three steps',
+          input: { text: 'a b' },
+          status: 'success',
+          steps: [],
+          datasets: [],
+          startedAt: '2026-11-15T10:00:00.000Z',
+          question: 'How many words?',
+          answer: {
+            role: 'assistant',
+            content: 'Two words',
+            at: '2026-11-15T10:00:01.000Z',
+            data: [{ tool: 'run_readonly_sql', input: 'select 2', rowCount: 1, rows: [{ n: 2 }] }],
+          },
+        });
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+
+      const view = q('workflow-business-view')!;
+      const turn = view.querySelector('[data-testid="workflow-turn"]')!;
+      expect(turn.getAttribute('data-turn')).toBe('run-1');
+      expect(turn.querySelector('[data-testid="workflow-turn-question"]')?.textContent?.trim()).toBe(
+        'How many words?',
+      );
+      expect(turn.textContent).toContain('Two words');
+      // The thread replaces the Follows up on line.
+      expect(q('workflow-run-context')).toBeNull();
+      expect(
+        Array.from(
+          view.querySelectorAll('[data-testid^="workflow-conversation-item-"]'),
+        ).map((b) => b.textContent?.trim()),
+      ).toEqual(['How many words?', 'And per word?']);
+
+      // An earlier figure opens the query of its own run.
+      const earlier = designer.run();
+      designer.openQuery(0, null, { ...earlier!, id: 'run-1', answer: { role: 'assistant', content: 'Two words', at: '', data: [{ tool: 'run_readonly_sql', input: 'select 2', rowCount: 1, rows: [{ n: 2 }] }] } });
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      expect(q('query-inspector-sheet')).not.toBeNull();
+      expect(designer.queryRun()?.id).toBe('run-1');
+      designer.closeQuery();
+      fixture.detectChanges();
+      expect(designer.queryRun()).toBeNull();
+    }));
+
     it('an unknown kept value opens in Business', () => {
       localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'reports');
       open(THREE_STEPS);

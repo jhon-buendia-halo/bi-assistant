@@ -97,16 +97,50 @@
     class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
   >
     @if (designer.runResult(); as result) {
+      @if (business()) {
+        <!-- The conversation so far (R38): each earlier question and its
+             answer, read-only; their figures open the inspector on that run. -->
+        @for (turn of conversation.earlier(); track turn.runId) {
+          <section
+            class="flex flex-col gap-3 border-b border-border pb-4"
+            data-testid="workflow-turn"
+            [attr.data-turn]="turn.runId"
+            [attr.aria-label]="'Earlier question: ' + turn.question"
+          >
+            <p
+              data-testid="workflow-turn-question"
+              class="m-0 max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg-strong"
+            >
+              {{ turn.question }}
+            </p>
+            @if (turn.answer; as answer) {
+              <app-answer-view
+                [message]="answer"
+                [queryInspector]="hasQueries(answer)"
+                [question]="turn.question"
+                (inspectQuery)="inspectEarlierQuery(turn, $event)"
+              />
+            } @else {
+              <p class="m-0 text-[13px] text-fg-muted">
+                This run {{ turn.status }} without an answer.
+              </p>
+            }
+          </section>
+        }
+      }
       @if (designer.contextRun(); as earlier) {
-        <p
-          data-testid="workflow-run-context"
-          class="m-0 text-[12px] text-fg-muted"
-        >
-          Follows up on “{{ earlier.question }}”
-        </p>
+        @if (!business() || conversation.earlier().length === 0) {
+          <p
+            data-testid="workflow-run-context"
+            class="m-0 text-[12px] text-fg-muted"
+          >
+            Follows up on “{{ earlier.question }}”
+          </p>
+        }
       }
       @if (designer.shownQuestion(); as question) {
         <p
+          [attr.data-turn]="business() ? 'current' : null"
           data-testid="workflow-run-question"
           class="m-0 max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg-strong"
         >
@@ -850,5 +884,16 @@
         </form>
       }
     </div>
+  }
+
+  @if (navItems().length > 0) {
+    <!-- The conversation navigation (R38): a tick per question on the chat's
+         right edge, the list of questions on hover or focus -->
+    <app-workflow-conversation-nav
+      class="absolute top-12 -right-12 z-20"
+      [items]="navItems()"
+      [active]="activeTurn()"
+      (pick)="goToTurn($event)"
+    />
   }
 }

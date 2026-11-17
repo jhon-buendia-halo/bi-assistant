@@ -96,8 +96,9 @@ export abstract class RunEvidenceApi implements QueryEvidenceApi {
 export class RunQueryEvidenceApi extends RunEvidenceApi {
   private readonly designer = inject(WorkflowDesigner);
 
+  /** The run whose query is open: an earlier conversation turn's, else the shown run. */
   protected shownRun(): WorkflowRun | null {
-    return this.designer.run();
+    return this.designer.queryRun() ?? this.designer.run();
   }
 
   protected showRun(run: WorkflowRun): void {
