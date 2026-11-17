@@ -145,10 +145,12 @@
         }
       </div>
     } @else {
-      <!-- Two zones (ui.md 4.4b): the canvas at the column's full height, and
-         the Run panel (the Chat) on the right at full height. The Run panel
-         resizes, maximizes and folds to a strip. -->
+      <!-- Two zones (ui.md 4.4b): the Run panel (the Chat) on the left at full
+         height, where the conversation starts, and the canvas on the right,
+         where side panels open over it. The Run panel resizes, maximizes and
+         folds to a strip. -->
       <div class="flex min-h-0 flex-1 flex-row overflow-hidden">
+        <app-workflow-run-dock />
         <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <app-workflow-canvas
             class="min-h-[200px] flex-1"
@@ -165,7 +167,7 @@
           />
           @if (openQuery(); as open) {
             <!-- The query inspector sheet (ui.md 4.4b): over the canvas, flush
-               with the Run panel's left edge, never over it. -->
+               with the page's right edge, never over the Run panel. -->
             <div
               data-testid="query-inspector-sheet"
               class="absolute inset-y-0 right-0 z-20 w-full max-w-[720px] border-l border-border shadow-lg"
@@ -182,7 +184,6 @@
             </div>
           }
         </div>
-        <app-workflow-run-dock />
       </div>
     }
     @if (designer.openInspection(); as node) {

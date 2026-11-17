@@ -147,7 +147,7 @@ Consumption Gap Analysis (2026-11-16, roadmap 1.30; ADR-0051)
 
 - The **User journeys** rail item, first on the rail (lucide `workflow` icon; [../../system/ui.md](../../system/ui.md) 1.3), and the `workflows` and `workflow-detail` views (ui.md 1.4).
 - The Workflows page: the note `Each user journey runs on an input. Its steps call agent personas, and agent personas use skills and tools.`, the search, the Official section and the workflow card with **Run** (ui.md 4.4a).
-- A workflow's page, an n8n-style designer (ui.md 4.4b): the header with the breadcrumb, the name, id and kind; the left-to-right canvas with Execute user journey and its zoom toolbar; the Run panel on the right (resizable from its left edge, maximizable, foldable to a strip; its header holds the run's summary and activity line, its body the Chat); the node dialog (Input, Parameters and Settings, Output), with the Agents links on Start. The app's right panel is not shown on this page.
+- A workflow's page, an n8n-style designer (ui.md 4.4b): the header with the breadcrumb, the name, id and kind; the left-to-right canvas with Execute user journey and its zoom toolbar; the Run panel on the left (resizable from its right edge, maximizable, foldable to a strip; its header holds the run's summary and activity line, its body the Chat); the node dialog (Input, Parameters and Settings, Output), with the Agents links on Start. The app's right panel is not shown on this page.
 - A workflow page's **View** control in its header, **Business** (the default) and **Builder** (R38; ui.md 4.4b): Business is an agentic chat where every message runs the workflow, with **Open in Builder** for a run's details.
 - Answer a Business Question's Run panel (ui.md 4.4b): **Chat** (the question bubble, the waiting card, the status line, the live Thinking and tool calls, the answer view (`run-answer`), the composer with the question and the dataset picker, Execute and Stop, Follow up and New question) in the Run panel; **How it ran** under the answer once the run has ended (the run's figures and one line per step); each node's live state and run line on the canvas.
 - A workflow's card: its kind chip and **Run** (ui.md 4.4a); its page's **Execute user journey** on the canvas, and the Run panel's composer with **Execute**, with the run status on the canvas nodes (ui.md 4.4b).
@@ -218,7 +218,7 @@ Feature: Workflows
   Scenario: A workflow opens as a designer
     When I open "Answer a Business Question" from User journeys
     Then the canvas shows Start, its steps in order with their badges, and End, left to right, with Clarify below Plan
-    And the Run panel with the Chat is on the right of the canvas, and the app has no right panel and no Logs panel
+    And the Run panel with the Chat is on the left of the canvas, and the app has no right panel and no Logs panel
     When I double-click Start
     Then its dialog shows the trigger, the input parameters and the output
     When I click "Analyse" on the canvas

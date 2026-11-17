@@ -33,10 +33,10 @@ import {
 } from './workflow-run-dock.util';
 
 /**
- * The Run panel on the right of a workflow's page, beside the canvas
+ * The Run panel on the left of a workflow's page (Builder), beside the canvas
  * (ui.md 4.4b): a header with the run's summary and live
  * activity, then the Chat (question, answer, composer) at full height. It is
- * resizable by dragging its left edge (or the arrow keys on it), maximizable,
+ * resizable by dragging its right edge (or the arrow keys on it), maximizable,
  * and folds to a narrow strip; its width is kept as a share of the page. The
  * app's right panel is not used here.
  */
@@ -53,11 +53,11 @@ import {
     :host {
       position: relative;
     }
-    /* The left edge: a 10 px grab area, a 2 px line on hover, focus and drag. */
+    /* The right edge: a 10 px grab area, a 2 px line on hover, focus and drag. */
     .run-dock-handle {
       position: absolute;
       z-index: 30;
-      left: -5px;
+      right: -5px;
       top: 0;
       bottom: 0;
       width: 10px;
@@ -91,7 +91,7 @@ import {
   `,
   host: {
     '[class.run-dock-resizing]': 'resizing()',
-    class: 'flex min-h-0 shrink-0 flex-col border-l border-border bg-surface',
+    class: 'flex min-h-0 shrink-0 flex-col border-r border-border bg-surface',
     'data-testid': 'workflow-run-dock',
     '[style.width.px]': 'designer.stateOpen() ? width() : null',
   },
@@ -193,7 +193,7 @@ export class WorkflowRunDock {
     this.maximized.set(true);
   }
 
-  /** Dragging the left edge sets the dock's width (and its share, on release). */
+  /** Dragging the right edge sets the dock's width (and its share, on release). */
   protected startResize(event: PointerEvent): void {
     const parent = this.host.nativeElement.parentElement;
     if (parent === null || event.button !== 0) return;
@@ -203,7 +203,7 @@ export class WorkflowRunDock {
     this.resizing.set(true);
     const move = (e: PointerEvent) => {
       const rect = parent.getBoundingClientRect();
-      this.setWidth(rect.right - e.clientX);
+      this.setWidth(e.clientX - rect.left);
     };
     const up = () => {
       handle.removeEventListener('pointermove', move);
@@ -218,16 +218,16 @@ export class WorkflowRunDock {
   }
 
   /**
-   * Arrow Left / Right grow or shrink it by a step (it grows leftwards, as
-   * the app's right panel does); Home and End go to the bounds.
+   * Arrow Right / Left grow or shrink it by a step (it sits on the page's
+   * left and grows rightwards, over the canvas); Home and End go to the bounds.
    */
   protected resizeWithKeyboard(event: KeyboardEvent): void {
     const { min, max } = this.bounds();
     const now = this.width();
     const next =
-      event.key === 'ArrowLeft'
+      event.key === 'ArrowRight'
         ? now + DOCK_KEY_STEP
-        : event.key === 'ArrowRight'
+        : event.key === 'ArrowLeft'
           ? now - DOCK_KEY_STEP
           : event.key === 'Home'
             ? max

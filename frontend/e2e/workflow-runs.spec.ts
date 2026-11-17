@@ -310,10 +310,11 @@ test.describe('Feature: Workflow runs', () => {
         await expect(steps.first()).toHaveAttribute('data-verb', 'start');
         await expect(steps.last()).toHaveAttribute('data-verb', 'show');
         await expect(steps.last()).toContainText('Show');
-        // The sheet stays clear of the Run panel and the answer stays visible.
+        // The sheet opens over the canvas, right of the Run panel on the left,
+        // so the answer stays visible.
         const sheetBox = (await page.getByTestId('query-inspector-sheet').boundingBox())!;
         const dockBox = (await runDock(page).boundingBox())!;
-        expect(sheetBox.x + sheetBox.width).toBeLessThanOrEqual(dockBox.x + 1);
+        expect(sheetBox.x).toBeGreaterThanOrEqual(dockBox.x + dockBox.width - 1);
         expect(sheetBox.width).toBeLessThanOrEqual(720);
         await expect(runAnswer(page)).toBeVisible();
       });
@@ -593,12 +594,12 @@ test.describe('Feature: Workflow runs', () => {
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
       await expect.poll(width).toBe(normal);
     });
-    await test.step('When I press Arrow Left on the resize separator, the panel grows', async () => {
+    await test.step('When I press Arrow Right on the resize separator, the panel grows', async () => {
       const separator = dock.getByRole('separator', { name: 'Resize Run panel' });
       await expect(separator).toHaveAttribute('aria-orientation', 'vertical');
       const before = Number(await separator.getAttribute('aria-valuenow'));
       await separator.focus();
-      await page.keyboard.press('ArrowLeft');
+      await page.keyboard.press('ArrowRight');
       await expect
         .poll(async () => Number(await separator.getAttribute('aria-valuenow')))
         .toBeGreaterThan(before);

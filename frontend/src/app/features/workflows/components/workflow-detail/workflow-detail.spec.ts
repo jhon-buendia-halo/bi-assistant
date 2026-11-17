@@ -263,7 +263,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(designer.inputValues()).toEqual({});
   });
 
-  it('has two zones: the canvas and the Run panel (Chat) on the right, and no Logs or app right panel', () => {
+  it('has two zones: the Run panel (Chat) on the left and the canvas, and no Logs or app right panel', () => {
     open(THREE_STEPS);
     const dock = q('workflow-run-dock')!;
     expect(dock.tagName.toLowerCase()).toBe('app-workflow-run-dock');
@@ -273,7 +273,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     const canvas = el.querySelector('app-workflow-canvas') as HTMLElement;
     expect(dock.parentElement).toBe(canvas.parentElement!.parentElement);
     expect(canvas.compareDocumentPosition(dock)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
+      Node.DOCUMENT_POSITION_PRECEDING,
     );
     expect(el.querySelector('header')!.classList).toContain('px-6');
     expect('openPanel' in fixture.componentInstance).toBe(false);

@@ -353,14 +353,14 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then the Run panel is on the right of the canvas, there is no Details panel and no chat is started',
+        'Then the Run panel is on the left of the canvas, there is no Details panel and no chat is started',
         async () => {
           await expectRunPanel(page);
           await expect(detailsPanel(page)).toHaveCount(0);
           await expect(page.getByTitle('Expand right panel')).toHaveCount(0);
           const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
           const dockBox = await runDock(page).boundingBox();
-          expect(dockBox!.x).toBeGreaterThanOrEqual(canvasBox!.x + canvasBox!.width - 1);
+          expect(dockBox!.x + dockBox!.width).toBeLessThanOrEqual(canvasBox!.x + 1);
           // No Logs panel: the canvas takes the column's full height.
           await expect(page.getByTestId('workflow-logs-dock')).toHaveCount(0);
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
@@ -1052,14 +1052,14 @@ test.describe('Feature: Workflows (the designer)', () => {
       );
       await scenarioStep(
         page,
-        'And there is no Details panel and no Logs panel, and the Run panel with the Chat is on the right of the canvas',
+        'And there is no Details panel and no Logs panel, and the Run panel with the Chat is on the left of the canvas',
         async () => {
           await expect(detailsPanel(page)).toHaveCount(0);
           await expect(page.getByTestId('workflow-logs-dock')).toHaveCount(0);
           await expectRunPanel(page);
           const canvasBox = await page.getByTestId('workflow-canvas').boundingBox();
           const dockBox = await runDock(page).boundingBox();
-          expect(canvasBox!.x + canvasBox!.width).toBeLessThanOrEqual(dockBox!.x + 1);
+          expect(dockBox!.x + dockBox!.width).toBeLessThanOrEqual(canvasBox!.x + 1);
           await expect(runDock(page).getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
         },
       );
