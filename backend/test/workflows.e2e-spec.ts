@@ -119,11 +119,19 @@ describe('The workflow catalogue (API)', () => {
         // follow-up over an earlier result, Olivia plans, Sarah checks data
         // quality when asked and Jessica writes (agents.md 5.11).
         agents: [
-          { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
+          {
+            key: 'insights-analyst',
+            name: 'Michael',
+            role: 'Insights Analyst',
+          },
           { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
           { key: 'result-explorer', name: 'Nathan', role: 'Result Explorer' },
           { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
-          { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
+          {
+            key: 'data-readiness',
+            name: 'Sarah',
+            role: 'Data Quality Analyst',
+          },
           { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
         ],
         stepCount: 13,
@@ -177,7 +185,11 @@ describe('The workflow catalogue (API)', () => {
         kind: 'code',
         owner: 'Official',
         agents: [
-          { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
+          {
+            key: 'data-readiness',
+            name: 'Sarah',
+            role: 'Data Quality Analyst',
+          },
           { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
         ],
         stepCount: 8,
