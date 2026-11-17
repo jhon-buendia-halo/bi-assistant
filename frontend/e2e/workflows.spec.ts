@@ -235,12 +235,19 @@ async function expandNodeSection(page: Page, section: 'input' | 'output'): Promi
   return dialog.getByTestId(`workflow-ndv-${section}`);
 }
 
-/** An agent step's artifact (ui.md 4.4b): show its Preview, Data or Config. */
-async function showArtifactView(page: Page, view: 'story' | 'data' | 'config'): Promise<Locator> {
-  const tab = nodeDialog(page).getByTestId(`workflow-ndv-view-${view}`);
-  await tab.click();
-  await expect(tab).toHaveAttribute('aria-selected', 'true');
-  return nodeDialog(page).getByTestId('workflow-ndv-artifact');
+/**
+ * An agent step's collapsed cards (ui.md 4.4b): unfold What it received (`input`), What it returned
+ * (`output`) or How it's set up (`params`). Does nothing when the card is already open.
+ */
+async function unfoldAgentCard(
+  page: Page,
+  card: 'input' | 'output' | 'params',
+): Promise<Locator> {
+  const dialog = nodeDialog(page);
+  const toggle = dialog.getByTestId(`workflow-ndv-${card}-toggle`);
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  return dialog.getByTestId(`workflow-ndv-${card}`);
 }
 
 async function closeNode(page: Page): Promise<void> {
@@ -604,10 +611,8 @@ test.describe('Feature: Workflows (run workflows)', () => {
         page,
         'Then its report shows the question, the measures, the entities, the scope and the assumptions',
         async () => {
-          await expect(nodeDialog(page).getByTestId('workflow-ndv-view-story')).toHaveAttribute(
-            'aria-selected',
-            'true',
-          );
+          // An agent step is one column: its Story card, from the persona, comes first.
+          await expect(nodeDialog(page).getByTestId('workflow-ndv-story-persona')).toBeVisible();
           // Its Story (api.md 3.6 `story`): the question as Plan read it, then the plan.
           const story = nodeDialog(page).getByTestId('workflow-step-story');
           await expect(story.getByTestId('workflow-step-story-headline')).toContainText(QUESTION);
@@ -620,12 +625,12 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await expect(story.getByTestId('workflow-step-story-next')).toHaveText(
             'Nothing was ambiguous, so Clarify was skipped and Analyse ran next.',
           );
-          // The plan's own panel is in Data.
-          await showArtifactView(page, 'data');
+          // The plan's own panel is in What it returned.
+          await unfoldAgentCard(page, 'output');
           const view = nodeDialog(page).getByTestId('workflow-plan-view');
           await expect(view.getByTestId('workflow-plan-question')).toHaveText(QUESTION);
           await expect(view.getByTestId('workflow-plan-clarification')).toHaveCount(0);
-          // The raw data follows it in Data.
+          // The raw data follows it in What it returned.
           await expect(
             nodeDialog(page).getByTestId('workflow-ndv-output').getByTestId('workflow-data-json'),
           ).toContainText('"measures"');
@@ -1111,12 +1116,9 @@ test.describe('Feature: Workflows (the designer)', () => {
         async () => {
           const dialog = nodeDialog(page);
           await expect(dialog.getByTestId('workflow-ndv-title')).toHaveText('Analyse');
-          // An agent step opens on its Story; its fields are under Config.
-          await expect(dialog.getByTestId('workflow-ndv-view-story')).toHaveAttribute(
-            'aria-selected',
-            'true',
-          );
-          await showArtifactView(page, 'config');
+          // An agent step opens on its Story; its fields are under "How it's set up".
+          await expect(dialog.getByTestId('workflow-ndv-story')).toBeVisible();
+          await unfoldAgentCard(page, 'params');
           await expect(dialog.getByTestId('workflow-step-field-model')).toBeVisible();
           await expect(dialog.getByTestId('workflow-step-field-tools')).toHaveText(
             'list_entities, describe_entity, sample_rows, run_readonly_sql, explore_result, ask_clarification',
@@ -1155,9 +1157,9 @@ test.describe('Feature: Workflows (the designer)', () => {
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
         },
       );
-      await scenarioStep(page, 'When I double-click "Analyse" again and pick Config', async () => {
+      await scenarioStep(page, 'When I double-click "Analyse" again and unfold "How it\'s set up"', async () => {
         await openNode(page, 'analyse', 'Analyse');
-        await showArtifactView(page, 'config');
+        await unfoldAgentCard(page, 'params');
       });
       await scenarioStep(
         page,
@@ -1176,8 +1178,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         page,
         'And its Output in Schema mode shows the declared contract',
         async () => {
-          await showArtifactView(page, 'data');
-          const output = nodeDialog(page).getByTestId('workflow-ndv-output');
+          const output = await unfoldAgentCard(page, 'output');
           await output.getByTestId('workflow-data-mode-schema').click();
           await expect(output.getByTestId('workflow-data-schema-declared')).toHaveText(
             'Declared contract',
@@ -1192,7 +1193,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         'And its Settings show the contract the run used',
         async () => {
           const dialog = nodeDialog(page);
-          await showArtifactView(page, 'config');
+          await unfoldAgentCard(page, 'params');
           await expect(dialog.getByText('Contract', { exact: true })).toBeVisible();
           await expect(dialog.getByTestId('workflow-ndv-setting-contract')).toHaveText(
             /^\s*[0-9a-f]{12}\s*$/,
@@ -1280,7 +1281,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(dialog.getByTestId('workflow-ndv-output-status')).toHaveText('Failed');
         // Its Story says it failed (the generic story: `It failed: <error>`).
         await expect(dialog.getByTestId('workflow-step-story-headline')).toContainText('It failed:');
-        await showArtifactView(page, 'data');
+        await unfoldAgentCard(page, 'output');
         await expect(dialog.getByTestId('workflow-ndv-output-error')).toBeVisible();
         await expect(dialog.getByTestId('workflow-ndv-output-error')).not.toBeEmpty();
         await closeNode(page);
@@ -1366,7 +1367,8 @@ test.describe('Feature: Workflows (the designer)', () => {
         'When I open "Analyse" before any run, its chat says to execute the user journey first',
         async () => {
           const dialog = await openNode(page, 'analyse', 'Analyse');
-          await expect(dialog.getByTestId('workflow-ndv-chat-pane')).toBeVisible();
+          await expect(dialog.getByTestId('workflow-ndv-chat')).toBeVisible();
+          await expect(dialog.getByRole('heading', { name: 'Chat with Michael' })).toBeVisible();
           await expect(dialog.getByTestId('workflow-ndv-story-empty')).toHaveText(
             'This node has not run yet. Execute the user journey to see its data.',
           );
@@ -1377,60 +1379,25 @@ test.describe('Feature: Workflows (the designer)', () => {
           await closeNode(page);
         },
       );
-      await scenarioStep(
-        page,
-        'And I widen its chat by dragging its edge, and it keeps that width when I reopen it',
-        async () => {
-          const viewport = page.viewportSize()!;
-          let dialog = await openNode(page, 'analyse', 'Analyse');
-          const dialogBox = (await dialog.boundingBox())!;
-          expect(dialogBox.width).toBe(viewport.width - 48);
-          const pane = dialog.getByTestId('workflow-ndv-chat-pane');
-          const handle = dialog.getByRole('separator', { name: 'Resize chat' });
-          await expect(handle).toHaveAttribute('aria-valuenow', '400');
-
-          const box = (await handle.boundingBox())!;
-          const x = box.x + box.width / 2;
-          const y = box.y + box.height / 2;
-          await page.mouse.move(x, y);
-          await page.mouse.down();
-          await page.mouse.move(x + 100, y, { steps: 4 });
-          await page.mouse.move(x + 200, y, { steps: 4 });
-          await page.mouse.up();
-          await expect(handle).toHaveAttribute('aria-valuenow', '600');
-          expect((await pane.boundingBox())!.width).toBeCloseTo(600, 0);
-
-          await closeNode(page);
-          dialog = await openNode(page, 'analyse', 'Analyse');
-          await expect(dialog.getByTestId('workflow-ndv-chat-resize')).toHaveAttribute(
-            'aria-valuenow',
-            '600',
-          );
-
-          // Home goes to the least width; a double-click resets it.
-          await dialog.getByTestId('workflow-ndv-chat-resize').focus();
-          await page.keyboard.press('Home');
-          await expect(dialog.getByTestId('workflow-ndv-chat-resize')).toHaveAttribute(
-            'aria-valuenow',
-            '320',
-          );
-          await dialog.getByTestId('workflow-ndv-chat-resize').dblclick();
-          await expect(dialog.getByTestId('workflow-ndv-chat-resize')).toHaveAttribute(
-            'aria-valuenow',
-            '400',
-          );
-          await closeNode(page);
-        },
-      );
       await scenarioStep(page, `When I run it on "${QUESTION}"`, async () => {
         await page.getByTestId('workflow-execute').click();
         await runOnQuestion(page, QUESTION);
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       });
-      await scenarioStep(page, 'And I open "Analyse", its chat beside its report', async () => {
+      await scenarioStep(page, 'And I open "Analyse", its chat under its story and evidence', async () => {
         const dialog = await openNode(page, 'analyse', 'Analyse');
-        await expect(dialog.getByTestId('workflow-ndv-chat-intro')).toBeVisible();
+        await expect(dialog.getByTestId('workflow-ndv-chat')).toBeVisible();
+        await expect(dialog.getByTestId('workflow-step-evidence')).toBeVisible();
+        await expect(dialog.getByTestId('workflow-node-chat-composer-label')).toHaveText(
+          'Ask Michael about this step',
+        );
         await expect(dialog.getByTestId('workflow-step-story-headline')).toContainText('Ran ');
+        // Expanding an evidence row shows the SQL the persona ran.
+        const row = dialog.getByTestId('workflow-step-evidence-row-0');
+        await expect(row).toHaveAttribute('aria-expanded', 'false');
+        await row.click();
+        await expect(row).toHaveAttribute('aria-expanded', 'true');
+        await expect(dialog.getByTestId('workflow-step-evidence-input').first()).toHaveText(SQL);
         await expect(dialog.getByTestId('workflow-node-chat-note')).toHaveText(
           /^\s*Chatting about this run: this step's input, output and tool calls\.\s*Execution ID \S{8}\s*$/,
         );
@@ -1439,7 +1406,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(dialog.getByTestId('workflow-node-chat-send')).toBeDisabled();
       });
       await scenarioStep(page, `And I ask "${CHAT_QUESTION}"`, async () => {
-        const box = nodeDialog(page).getByRole('textbox', { name: "Ask this step's agent persona" });
+        const box = nodeDialog(page).getByRole('textbox', { name: 'Ask Michael about this step' });
         await box.fill(CHAT_QUESTION);
         await box.press('Enter');
       });
@@ -1596,9 +1563,9 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await openNode(page, 'plan', 'Plan');
   await expect(nodeDialog(page).getByTestId('workflow-step-story')).toBeVisible();
   await scan('Answer a Business Question page, Plan dialog after a run: Story');
-  await showArtifactView(page, 'data');
+  await unfoldAgentCard(page, 'output');
   await expect(nodeDialog(page).getByTestId('workflow-plan-view')).toBeVisible();
-  await scan('Answer a Business Question page, Plan dialog after a run: Data');
+  await scan('Answer a Business Question page, Plan dialog after a run: What it returned');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
   await openNode(page, 'validate', 'Validate');
@@ -1609,7 +1576,7 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 
-  // The Analyse dialog's Chat tab, with a question, its answer and a tool call.
+  // The Analyse dialog's chat, with a question, its answer and a tool call.
   stub.reply = chatOrRun;
   const chatDialog = await openNode(page, 'analyse', 'Analyse');
   await chatDialog.getByTestId('workflow-node-chat-input').fill(CHAT_QUESTION);
@@ -1618,10 +1585,10 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(chatDialog.getByTestId('workflow-node-chat-tool-call')).toHaveCount(1);
   await expect(chatDialog.getByTestId('workflow-step-story')).toBeVisible();
   await scan('Answer a Business Question page, Analyse dialog: chat and Story');
-  await showArtifactView(page, 'data');
-  await scan('Answer a Business Question page, Analyse dialog: Data');
-  await showArtifactView(page, 'config');
-  await scan('Answer a Business Question page, Analyse dialog: Config');
+  await unfoldAgentCard(page, 'output');
+  await scan('Answer a Business Question page, Analyse dialog: What it returned');
+  await unfoldAgentCard(page, 'params');
+  await scan('Answer a Business Question page, Analyse dialog: How it\'s set up');
   await page.keyboard.press('Escape');
   await expect(nodeDialog(page)).toHaveCount(0);
 

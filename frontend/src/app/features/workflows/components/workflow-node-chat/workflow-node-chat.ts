@@ -17,6 +17,7 @@ import {
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { Loader2, LucideAngularModule, Send, Square } from 'lucide-angular';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 import {
@@ -84,6 +85,7 @@ function toStoredCall(call: LiveToolCall): WorkflowRunToolCall {
 @Component({
   selector: 'app-workflow-node-chat',
   imports: [
+    AgentAvatar,
     ChatHistoryNav,
     ExecutionId,
     LucideAngularModule,
@@ -91,7 +93,7 @@ function toStoredCall(call: LiveToolCall): WorkflowRunToolCall {
     NgTemplateOutlet,
   ],
   templateUrl: './workflow-node-chat.html',
-  host: { class: 'flex min-h-0 flex-1 flex-col' },
+  host: { class: 'flex flex-col' },
 })
 export class WorkflowNodeChat {
   readonly Loader2 = Loader2;
@@ -102,6 +104,12 @@ export class WorkflowNodeChat {
 
   readonly availability = input.required<NodeChatAvailability>();
   readonly stepId = input.required<string>();
+  /** Suggested first questions, shown while the chat is ready and empty. */
+  readonly suggestions = input<string[]>([]);
+  readonly agentName = input<string>('');
+  readonly agentRole = input<string>('');
+  /** The agent's registry key (portrait seed); the name when empty. */
+  readonly agentKey = input<string>('');
 
   readonly noRunText = NODE_CHAT_NO_RUN;
   readonly runningText = NODE_CHAT_RUNNING;
@@ -129,6 +137,26 @@ export class WorkflowNodeChat {
   });
   readonly canSend = computed(
     () => this.runId() !== null && !this.streaming() && !!this.draft().trim(),
+  );
+  readonly personaLabel = computed(() => {
+    const name = this.agentName();
+    const role = this.agentRole();
+    if (!name) return role ? `Agent · ${role}` : 'Agent';
+    return role ? `${name} · ${role}` : name;
+  });
+  readonly composerLabel = computed(() => {
+    const name = this.agentName();
+    return name
+      ? `Ask ${name} about this step`
+      : "Ask this step's agent persona";
+  });
+  readonly showSuggestions = computed(
+    () =>
+      this.runId() !== null &&
+      !this.loading() &&
+      !this.streaming() &&
+      this.messages().length === 0 &&
+      this.suggestions().length > 0,
   );
   readonly liveToolCalls = computed(() => this.liveCalls().map(liveCallView));
 
@@ -182,6 +210,11 @@ export class WorkflowNodeChat {
     if (this.runId() === null || this.streaming()) return;
     this.draft.set(text);
     setTimeout(() => this.composer()?.nativeElement.focus());
+  }
+
+  /** A suggestion chip: fills the box, like the dialog's chips always did. */
+  suggest(question: string): void {
+    this.prefill(question);
   }
 
   onInput(event: Event): void {

@@ -59,199 +59,267 @@
   </header>
 
   @if (artifact()) {
-    <!-- An agent step: the chat beside an artifact of its run (ui.md 4.4b). -->
+    <!-- An agent step: one centred column in the Business view's style (ui.md 4.4b):
+         the Story, what the persona used, three collapsed cards, then the chat. -->
     <div
-      #artifactLayout
-      class="flex min-h-0 flex-1"
-      data-testid="workflow-ndv-artifact-layout"
-      [class.ndv-resizing]="chatResizing()"
+      class="min-h-0 flex-1 overflow-y-auto"
+      data-testid="workflow-ndv-scroll"
     >
-      @if (hasChat()) {
-        <aside
-          class="relative flex shrink-0 flex-col border-r border-border bg-surface-muted/40"
-          data-testid="workflow-ndv-chat-pane"
-          [style.width.px]="chatWidth()"
-          [attr.aria-label]="'Chat with ' + agentLabel()"
-        >
-          <!-- The right edge: drag (or the arrow keys) to resize; double-click resets. -->
-          <div
-            class="ndv-chat-handle"
-            [class.ndv-chat-handle-active]="chatResizing()"
-            role="separator"
-            tabindex="0"
-            aria-label="Resize chat"
-            aria-orientation="vertical"
-            [attr.aria-valuemin]="chatBounds().min"
-            [attr.aria-valuemax]="chatBounds().max"
-            [attr.aria-valuenow]="chatWidth()"
-            title="Drag to resize · Double-click to reset"
-            data-testid="workflow-ndv-chat-resize"
-            (pointerdown)="startChatResize($event)"
-            (keydown)="resizeChatWithKeyboard($event)"
-            (dblclick)="resetChatWidth()"
-          ></div>
-          <p
-            class="m-0 shrink-0 border-b border-border px-4 py-2.5 text-[12px] text-fg-muted"
-          >
-            Chat with {{ agentLabel() }}
-          </p>
-          <div class="flex min-h-0 flex-1 flex-col gap-3 p-4">
-            @if (run()) {
-              <div
-                class="flex shrink-0 flex-col gap-2"
-                data-testid="workflow-ndv-chat-intro"
-              >
-                @if (introText(); as intro) {
-                  <p class="m-0 text-[13px] leading-relaxed text-fg">
-                    {{ intro }}
-                  </p>
-                }
-                <button
-                  type="button"
-                  data-testid="workflow-ndv-artifact-card"
-                  [attr.aria-label]="artifactTitle() + ', ' + artifactCaption()"
-                  class="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-left hover:border-border-selected"
-                  (click)="selectView('story')"
-                >
-                  <span
-                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-muted text-fg-muted"
-                  >
-                    <lucide-angular [img]="FileText" [size]="14" />
-                  </span>
-                  <span class="flex min-w-0 flex-col">
-                    <span class="text-[12px] font-medium text-fg-strong">{{
-                      artifactTitle()
-                    }}</span>
-                    <span class="text-[11px] text-fg-muted">{{
-                      artifactCaption()
-                    }}</span>
-                  </span>
-                </button>
-                @if (chat().state === "ready" && suggestions().length) {
-                  <div
-                    class="flex flex-wrap gap-1.5"
-                    role="group"
-                    aria-label="Suggested questions"
-                  >
-                    @for (q of suggestions(); track q) {
-                      <button
-                        type="button"
-                        class="btn btn-outline px-2.5 py-0.5 text-left text-[12px] whitespace-normal"
-                        data-testid="workflow-ndv-suggestion"
-                        (click)="suggest(q)"
-                      >
-                        {{ q }}
-                      </button>
-                    }
-                  </div>
-                }
-              </div>
-            }
-            <app-workflow-node-chat
-              #nodeChat
-              [availability]="chat()"
-              [stepId]="node().nodeId"
-            />
-          </div>
-        </aside>
-      }
-
-      <section
-        class="flex min-w-0 flex-1 flex-col"
-        data-testid="workflow-ndv-artifact"
-        [attr.aria-label]="artifactTitle()"
+      <div
+        class="mx-auto flex w-full max-w-[820px] flex-col gap-4 px-6 py-6"
+        data-testid="workflow-ndv-column"
       >
-        <div
-          class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2"
+        <!-- The Story, as an answer from the persona -->
+        <section
+          class="rounded-xl border border-border bg-surface p-4"
+          data-testid="workflow-ndv-story"
+          aria-label="Story"
         >
-          <h3 class="m-0 truncate text-[13px] font-semibold text-fg-strong">
-            {{ artifactTitle() }}
-          </h3>
-          <div
-            role="tablist"
-            aria-label="Artifact view"
-            class="inline-flex shrink-0 overflow-hidden rounded-lg border border-border text-[12px]"
-          >
-            @for (v of views; track v) {
+          <div class="mb-3 flex items-center gap-2.5">
+            <app-agent-avatar
+              [agentKey]="agentKey() ?? agentName()"
+              [name]="agentName()"
+              [size]="32"
+            />
+            <h3
+              id="workflow-ndv-story-heading"
+              class="m-0 flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[13px] font-normal"
+              data-testid="workflow-ndv-story-persona"
+            >
+              <span class="font-semibold text-fg-strong">{{ agentName() }}</span>
+              @if (agentRole(); as role) {
+                <span class="text-fg-muted">· {{ role }}</span>
+              }
+            </h3>
+            <button
+              type="button"
+              class="btn btn-secondary ml-auto shrink-0 px-2.5 py-0.5 text-[12px]"
+              data-testid="workflow-ndv-copy"
+              aria-label="Copy the story"
+              [disabled]="!canCopy('story')"
+              (click)="copy('story')"
+            >
+              <lucide-angular
+                [img]="copied() === 'story' ? Check : Copy"
+                [size]="12"
+              />
+              {{ copied() === "story" ? "Copied" : "Copy" }}
+            </button>
+          </div>
+          <ng-container *ngTemplateOutlet="storyBody" />
+        </section>
+
+        @if (run()) {
+          <!-- What the persona used: its tool calls as evidence rows -->
+          <app-workflow-step-evidence
+            [calls]="toolCalls()"
+            [agentName]="agentName()"
+            [output]="run()?.output"
+            [summary]="evidenceSummary()"
+          />
+        }
+
+        <!-- What it received -->
+        <section
+          class="rounded-xl border border-border bg-surface"
+          data-testid="workflow-ndv-input"
+          aria-labelledby="workflow-ndv-input-toggle"
+        >
+          <div class="flex items-center gap-2 pr-3">
+            <h3 class="m-0 min-w-0 flex-1">
               <button
                 type="button"
-                role="tab"
-                [id]="'workflow-ndv-view-' + v"
-                [attr.data-testid]="'workflow-ndv-view-' + v"
-                [attr.aria-selected]="view() === v"
-                aria-controls="workflow-ndv-artifact-panel"
-                class="px-2.5 py-1"
-                [class.bg-surface-muted]="view() === v"
-                [class.font-semibold]="view() === v"
-                [class.text-fg-strong]="view() === v"
-                [class.text-fg-muted]="view() !== v"
-                (click)="selectView(v)"
+                id="workflow-ndv-input-toggle"
+                data-testid="workflow-ndv-input-toggle"
+                aria-controls="workflow-ndv-input-body"
+                [attr.aria-expanded]="inputOpen()"
+                class="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+                (click)="inputOpen.set(!inputOpen())"
               >
-                {{ viewLabels[v] }}
+                <lucide-angular
+                  [img]="ChevronRight"
+                  [size]="14"
+                  aria-hidden="true"
+                  class="shrink-0 text-fg-muted transition-transform"
+                  [class.rotate-90]="inputOpen()"
+                />
+                <span class="text-[13px] font-semibold text-fg-strong"
+                  >What it received</span
+                >
+                {{ " " }}
+                @if (receivedSummary(); as summary) {
+                  <span
+                    class="min-w-0 flex-1 truncate text-right text-[12px] font-normal text-fg-muted"
+                    >{{ summary }}</span
+                  >
+                }
               </button>
-            }
+            </h3>
+            <button
+              type="button"
+              class="btn btn-secondary shrink-0 px-2.5 py-0.5 text-[12px]"
+              data-testid="workflow-ndv-copy-input"
+              aria-label="Copy what it received"
+              [disabled]="!canCopy('input')"
+              (click)="copy('input')"
+            >
+              <lucide-angular
+                [img]="copied() === 'input' ? Check : Copy"
+                [size]="12"
+              />
+              {{ copied() === "input" ? "Copied" : "Copy" }}
+            </button>
           </div>
-          <button
-            type="button"
-            class="btn btn-secondary ml-auto shrink-0 px-2.5 py-0.5 text-[12px]"
-            data-testid="workflow-ndv-copy"
-            [disabled]="!run()?.story"
-            (click)="copyNarrative()"
+          <div
+            id="workflow-ndv-input-body"
+            class="border-t border-border px-3 pt-2.5 pb-3"
+            [hidden]="!inputOpen()"
           >
-            <lucide-angular [img]="copied() ? Check : Copy" [size]="12" />
-            {{ copied() ? "Copied" : "Copy" }}
-          </button>
-        </div>
-        <div
-          #artifactPanel
-          id="workflow-ndv-artifact-panel"
-          role="tabpanel"
-          [attr.aria-labelledby]="'workflow-ndv-view-' + view()"
-          class="min-h-0 flex-1 overflow-y-auto px-7 py-5"
-          tabindex="0"
+            <ng-container *ngTemplateOutlet="inputBody" />
+          </div>
+        </section>
+
+        <!-- What it returned -->
+        <section
+          class="rounded-xl border border-border bg-surface"
+          data-testid="workflow-ndv-output"
+          aria-labelledby="workflow-ndv-output-toggle"
         >
-          @switch (view()) {
-            @case ("story") {
-              <ng-container *ngTemplateOutlet="storyBody" />
-            }
-            @case ("data") {
-              <section
-                data-testid="workflow-ndv-input"
-                role="group"
-                aria-label="Input"
-                class="mb-6"
+          <div class="flex items-center gap-2 pr-3">
+            <h3 class="m-0 min-w-0 flex-1">
+              <button
+                type="button"
+                id="workflow-ndv-output-toggle"
+                data-testid="workflow-ndv-output-toggle"
+                aria-controls="workflow-ndv-output-body"
+                [attr.aria-expanded]="outputOpen()"
+                class="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+                (click)="outputOpen.set(!outputOpen())"
               >
-                <h4 class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase">
-                  Input
-                </h4>
-                <ng-container *ngTemplateOutlet="inputBody" />
-              </section>
-              <section
-                data-testid="workflow-ndv-output"
-                role="group"
-                aria-label="Output"
+                <lucide-angular
+                  [img]="ChevronRight"
+                  [size]="14"
+                  aria-hidden="true"
+                  class="shrink-0 text-fg-muted transition-transform"
+                  [class.rotate-90]="outputOpen()"
+                />
+                <span class="text-[13px] font-semibold text-fg-strong"
+                  >What it returned</span
+                >
+                {{ " " }}
+                @if (run()?.error) {
+                  <span class="chip chip-danger ml-auto shrink-0">Failed</span>
+                } @else if (returnedSummary(); as summary) {
+                  <span
+                    class="min-w-0 flex-1 truncate text-right text-[12px] font-normal text-fg-muted"
+                    >{{ summary }}</span
+                  >
+                }
+              </button>
+            </h3>
+            <button
+              type="button"
+              class="btn btn-secondary shrink-0 px-2.5 py-0.5 text-[12px]"
+              data-testid="workflow-ndv-copy-output"
+              aria-label="Copy what it returned"
+              [disabled]="!canCopy('output')"
+              (click)="copy('output')"
+            >
+              <lucide-angular
+                [img]="copied() === 'output' ? Check : Copy"
+                [size]="12"
+              />
+              {{ copied() === "output" ? "Copied" : "Copy" }}
+            </button>
+          </div>
+          <div
+            id="workflow-ndv-output-body"
+            class="border-t border-border px-3 pt-2.5 pb-3"
+            [hidden]="!outputOpen()"
+          >
+            <ng-container *ngTemplateOutlet="outputBody" />
+          </div>
+        </section>
+
+        <!-- How it's set up: Parameters and Settings -->
+        <section
+          class="rounded-xl border border-border bg-surface"
+          data-testid="workflow-ndv-params"
+          aria-labelledby="workflow-ndv-params-toggle"
+        >
+          <h3 class="m-0">
+            <button
+              type="button"
+              id="workflow-ndv-params-toggle"
+              data-testid="workflow-ndv-params-toggle"
+              aria-controls="workflow-ndv-params-body"
+              [attr.aria-expanded]="setupOpen()"
+              class="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+              (click)="setupOpen.set(!setupOpen())"
+            >
+              <lucide-angular
+                [img]="ChevronRight"
+                [size]="14"
+                aria-hidden="true"
+                class="shrink-0 text-fg-muted transition-transform"
+                [class.rotate-90]="setupOpen()"
+              />
+              <span class="text-[13px] font-semibold text-fg-strong"
+                >How it's set up</span
               >
-                <h4 class="m-0 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase">
-                  Output
-                </h4>
-                <ng-container *ngTemplateOutlet="outputBody" />
-              </section>
-            }
-            @case ("config") {
-              <section data-testid="workflow-ndv-params" aria-label="Parameters and settings">
-                <h4 class="m-0 mb-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase">
-                  Parameters
-                </h4>
-                <ng-container *ngTemplateOutlet="parametersBody" />
-                <h4 class="m-0 mt-6 mb-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase">
-                  Settings
-                </h4>
-                <ng-container *ngTemplateOutlet="settingsBody" />
-              </section>
-            }
-          }
-        </div>
-      </section>
+              {{ " " }}
+              @if (setupSummary(); as summary) {
+                <span
+                  class="min-w-0 flex-1 truncate text-right font-mono text-[12px] font-normal text-fg-muted"
+                  >{{ summary }}</span
+                >
+              }
+            </button>
+          </h3>
+          <div
+            id="workflow-ndv-params-body"
+            class="border-t border-border px-3 pt-2.5 pb-3"
+            [hidden]="!setupOpen()"
+          >
+            <h4
+              class="m-0 mb-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Parameters
+            </h4>
+            <ng-container *ngTemplateOutlet="parametersBody" />
+            <h4
+              class="m-0 mt-6 mb-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Settings
+            </h4>
+            <ng-container *ngTemplateOutlet="settingsBody" />
+          </div>
+        </section>
+
+        @if (hasChat()) {
+          <!-- The chat with the persona about this step's run -->
+          <section
+            class="flex flex-col gap-2 pt-2"
+            data-testid="workflow-ndv-chat"
+            aria-labelledby="workflow-ndv-chat-heading"
+          >
+            <h3
+              id="workflow-ndv-chat-heading"
+              class="m-0 text-[13px] font-semibold text-fg-strong"
+            >
+              Chat with {{ agentLabel() }}
+            </h3>
+            <app-workflow-node-chat
+              [availability]="chat()"
+              [stepId]="node().nodeId"
+              [suggestions]="suggestions()"
+              [agentName]="agentName()"
+              [agentRole]="agentRole()"
+              [agentKey]="agentKey() ?? ''"
+            />
+          </section>
+        }
+      </div>
     </div>
   } @else {
   <!-- A code step's Story, then Input, the configuration and Output, top to bottom; Input and Output start collapsed. -->
@@ -481,39 +549,6 @@
       }
     </ul>
   }
-
-  @if (node().kind === "agent" && run()) {
-    <h4
-      class="m-0 mb-1.5 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-    >
-      Tool calls
-    </h4>
-    <ul class="m-0 mb-3 flex list-none flex-col gap-1.5 p-0">
-      @for (call of toolCalls(); track $index) {
-        <li
-          data-testid="workflow-ndv-tool-call"
-          class="rounded-lg border border-border bg-surface px-3 py-1.5 text-[13px]"
-        >
-          <span class="font-medium text-fg-strong">{{ call.tool }}</span>
-          <span class="text-[12px] text-fg-muted">
-            @if (hasError(call)) {
-              · <span class="text-on-danger-soft">{{ call.error }}</span>
-            } @else if (toolMeta(call)) {
-              · {{ toolMeta(call) }}
-            }
-          </span>
-          @if (call.input) {
-            <pre
-              class="m-0 mt-1 font-mono text-[12px] whitespace-pre-wrap break-words text-fg"
-              >{{ call.input }}</pre>
-          }
-        </li>
-      } @empty {
-        <li class="text-[13px] text-fg-muted">No tool calls recorded.</li>
-      }
-    </ul>
-  }
-
   @if (node().kind === "output" && endLine(); as line) {
     <p
       class="m-0 mb-2 text-[13px] text-fg"

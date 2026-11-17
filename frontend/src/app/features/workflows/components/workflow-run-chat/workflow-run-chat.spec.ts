@@ -880,6 +880,9 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         expect(text('workflow-follow-up-agent-hint')).toBe(
           'Runs every step again: plans, queries the data, checks and writes a new answer.',
         );
+        expect(q('workflow-follow-up-agent-hint')!.classList).toContain('text-fg-muted');
+        const head = picker.closest('div')!.querySelector('.composer-head')!;
+        expect(head.textContent?.replace(/\s+/g, ' ').trim()).toBe('Who answersOptional');
         expect((q('workflow-follow-up-input') as HTMLTextAreaElement).placeholder).toBe(
           'Ask a follow-up about this result',
         );
@@ -1128,12 +1131,29 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(q('workflow-input-datasets')).toBeNull();
       expect(q('workflow-run')).toBeNull();
       const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
-      expect(follow.rows).toBe(1);
+      expect(follow.rows).toBe(3);
+      expect(follow.classList).toContain('field');
       expect(follow.getAttribute('aria-describedby')).toBe('workflow-follow-up-hint');
       const hint = el.querySelector('#workflow-follow-up-hint')!;
       expect(hint.textContent?.trim()).toBe('Follows up on this run');
-      expect(hint.classList).toContain('sr-only');
+      expect(hint.classList).not.toContain('sr-only');
       expect(q('workflow-run-empty')).toBeNull();
+    });
+
+    it('the follow-up composer is a labelled form: Follow-up question Required, Who answers Optional', () => {
+      openStored(answered());
+      const heads = Array.from(
+        q('workflow-run-composer')!.querySelectorAll('.composer-head'),
+      ).map((h) => h.textContent?.replace(/\s+/g, ' ').trim());
+      expect(heads).toContain('Follow-up questionRequired');
+      const follow = q('workflow-follow-up-input') as HTMLTextAreaElement;
+      expect(follow.labels?.[0].textContent?.trim()).toBe('Follow-up question');
+      const button = q('workflow-run-follow-up') as HTMLButtonElement;
+      expect(button.disabled).toBeTrue();
+      follow.value = 'And in 2018?';
+      follow.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(button.disabled).toBeFalse();
     });
 
     it('Enter in the follow-up sends it; Shift+Enter does not', () => {

@@ -45,11 +45,24 @@ describe('WorkflowNodeDialog', () => {
     fixture.componentRef.setInput('runId', runId);
     fixture.detectChanges();
   }
-  /** An agent step's artifact: show its Story, Data or Config. */
-  function showView(view: 'story' | 'data' | 'config') {
-    byId(`workflow-ndv-view-${view}`)!.click();
+  /** An agent step's cards: open What it received and returned, or How it's set up. */
+  function expandCards(cards: 'data' | 'config') {
+    const toggles =
+      cards === 'data'
+        ? ['workflow-ndv-input-toggle', 'workflow-ndv-output-toggle']
+        : ['workflow-ndv-params-toggle'];
+    for (const id of toggles) {
+      if (byId(id)!.getAttribute('aria-expanded') !== 'true') byId(id)!.click();
+    }
     fixture.detectChanges();
   }
+  /** The evidence rows' texts, one line each. */
+  const evidenceRows = () =>
+    Array.from(
+      el().querySelectorAll<HTMLElement>(
+        '[data-testid^="workflow-step-evidence-row-"]',
+      ),
+    ).map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
 
   beforeEach(() =>
     TestBed.configureTestingModule({ imports: [WorkflowNodeDialog] }),
@@ -65,40 +78,113 @@ describe('WorkflowNodeDialog', () => {
     expect(dialog?.textContent).toContain(
       'Insights Analyst · ≤ 15 steps',
     );
-    expect(byId('workflow-ndv-artifact')).not.toBeNull();
+    expect(byId('workflow-ndv-column')).not.toBeNull();
     expect(text('workflow-ndv-output-status')).toBe('Done');
   });
 
-  it('shows an agent step as an artifact: Story first, then Data and Config', () => {
+  it('reads an agent step as one column: Story, evidence, three collapsed cards', () => {
     open(node('analyse'));
-    const views = Array.from(
-      byId('workflow-ndv-artifact')!.querySelectorAll<HTMLElement>(
-        '[role="tab"]',
-      ),
-    );
-    expect(views.map((v) => v.textContent?.trim())).toEqual([
-      'Story',
-      'Data',
-      'Config',
+    const column = byId('workflow-ndv-column')!;
+    const order = Array.from(column.children)
+      .map((c) => c.getAttribute('data-testid') ?? c.tagName.toLowerCase())
+      .filter((id) => id !== null);
+    expect(order).toEqual([
+      'workflow-ndv-story',
+      'app-workflow-step-evidence',
+      'workflow-ndv-input',
+      'workflow-ndv-output',
+      'workflow-ndv-params',
     ]);
-    expect(views[0].getAttribute('aria-selected')).toBe('true');
+    // The Story is told by the persona.
+    expect(text('workflow-ndv-story-persona')).toBe('Insights Analyst');
     expect(byId('workflow-ndv-story-body')).not.toBeNull();
-    expect(byId('workflow-ndv-input')).toBeNull();
-    expect(byId('workflow-ndv-params')).toBeNull();
+    // The cards are headed and collapsed.
+    const toggles = [
+      'workflow-ndv-input-toggle',
+      'workflow-ndv-output-toggle',
+      'workflow-ndv-params-toggle',
+    ].map((id) => byId(id)!);
+    expect(toggles.map((t) => t.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'What it received question',
+      'What it returned calls, stopped',
+      "How it's set up anthropic/claude-sonnet-5-5 · ≤ 15 steps",
+    ]);
+    expect(toggles.every((t) => t.getAttribute('aria-expanded') === 'false')).toBeTrue();
+    expect(toggles.every((t) => t.closest('h3') !== null)).toBeTrue();
+    expect(byId('workflow-step-field-id')!.closest('[hidden]')).not.toBeNull();
 
-    showView('data');
-    expect(views[1].getAttribute('aria-selected')).toBe('true');
-    expect(byId('workflow-ndv-input')).not.toBeNull();
-    expect(byId('workflow-ndv-output')).not.toBeNull();
-    expect(byId('workflow-ndv-story-body')).toBeNull();
-
-    showView('config');
-    expect(byId('workflow-ndv-params')).not.toBeNull();
+    expandCards('config');
+    expect(toggles[2].getAttribute('aria-expanded')).toBe('true');
+    expect(byId('workflow-step-field-id')!.closest('[hidden]')).toBeNull();
     expect(text('workflow-step-field-id')).toBe('analyse');
     expect(text('workflow-ndv-setting-status')).toBe('Done');
-    // No stacked layout and no tabs of its own.
-    expect(byId('workflow-ndv-input-toggle')).toBeNull();
+    // No tabs, no chat pane, no Story/Data/Config switch.
     expect(byId('workflow-ndv-tab-parameters')).toBeNull();
+    expect(byId('workflow-ndv-view-story')).toBeNull();
+    expect(el().querySelector('[role="tablist"]')).toBeNull();
+  });
+
+  it("shows what the step used as evidence rows, a row opening the call's detail", () => {
+    open(node('analyse'));
+    expect(
+      byId('workflow-step-evidence')!.querySelector('h3')?.textContent?.trim(),
+    ).toBe('What Insights Analyst used');
+    expect(evidenceRows()).toEqual([
+      '1 · Listed the entities of the datasets 200 ms Done',
+      '2 · Ran a query 5 rows · 1.1 s Done',
+      '3 · Read the columns of an entity Failed · No such entity',
+    ]);
+    byId('workflow-step-evidence-row-1')!.click();
+    fixture.detectChanges();
+    expect(text('workflow-step-evidence-input')).toBe(
+      'SELECT state FROM claims',
+    );
+  });
+
+  it('shows the one row of what a step with no tool calls read', () => {
+    const analyse = node('analyse');
+    open({
+      ...analyse,
+      run: {
+        ...analyse.run!,
+        toolCalls: [],
+        input: {
+          question: 'Top 5 states?',
+          queries: [
+            { sql: 'SELECT 1', rows: [], rowCount: 5, truncated: false },
+            { sql: 'SELECT 2', rows: [], rowCount: 2, truncated: false },
+          ],
+        },
+      },
+    });
+    expect(text('workflow-step-evidence-summary')).toContain(
+      'Based on 7 rows from 2 queries',
+    );
+  });
+
+  it('copies the Story as Markdown and the input as JSON', async () => {
+    const writes: string[] = [];
+    spyOn(navigator.clipboard, 'writeText').and.callFake(async (t: string) => {
+      writes.push(t);
+    });
+    const analyse = node('analyse');
+    open({
+      ...analyse,
+      run: {
+        ...analyse.run!,
+        story: { headline: 'Ran 1 query.', source: 'step' },
+      },
+    });
+    byId('workflow-ndv-copy')!.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+    expect(writes[0]).toBe('## How Analyse ran\n\nRan 1 query.');
+    expect(text('workflow-ndv-copy')).toBe('Copied');
+    expect(text('workflow-ndv-copy-input')).toBe('Copy');
+
+    byId('workflow-ndv-copy-input')!.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(JSON.parse(writes[1])).toEqual(analyse.run!.input!);
   });
 
   it("tells the agent step's run in its Story, each query the answer kept opening in the inspector", () => {
@@ -211,22 +297,15 @@ describe('WorkflowNodeDialog', () => {
 
   it('shows an agent step: input, parameters, tool calls and output', () => {
     open(node('analyse'));
-    showView('data');
+    expandCards('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain('Top 5 states?');
     expect(text('workflow-ndv-output-status')).toBe('Done');
-    const calls = el().querySelectorAll(
-      '[data-testid="workflow-ndv-tool-call"]',
-    );
-    expect(calls.length).toBe(3);
-    expect(calls[0].textContent).toContain('list_entities');
-    expect(calls[0].textContent).toContain('200 ms');
-    expect(calls[1].textContent).toContain('SELECT state FROM claims');
-    expect(calls[1].textContent).toContain('1.1 s');
-    expect(calls[1].textContent).toContain('5 rows');
-    expect(calls[2].textContent).toContain('No such entity');
+    expect(evidenceRows().length).toBe(3);
+    // The calls are evidence rows only, not repeated in the output.
+    expect(byId('workflow-ndv-output')?.textContent).not.toContain('list_entities');
     expect(byId('workflow-ndv-output')?.textContent).toContain('"calls": 3');
 
-    showView('config');
+    expandCards('config');
     expect(text('workflow-step-field-id')).toBe('analyse');
     expect(text('workflow-step-field-kind')).toBe('LLM (agent persona call)');
     expect(text('workflow-step-field-agent')).toContain(
@@ -260,8 +339,7 @@ describe('WorkflowNodeDialog', () => {
   it('says so when an agent step recorded no tool calls', () => {
     const analyse = node('analyse');
     open({ ...analyse, run: { ...analyse.run!, toolCalls: [] } });
-    showView('data');
-    expect(byId('workflow-ndv-output')?.textContent).toContain(
+    expect(text('workflow-step-evidence-empty')).toBe(
       'No tool calls recorded.',
     );
   });
@@ -290,13 +368,13 @@ describe('WorkflowNodeDialog', () => {
       ...analyse,
       agent: { ...analyse.agent!, systemPromptTruncated: true },
     });
-    showView('config');
+    expandCards('config');
     expect(el().textContent).toContain('Shortened to 20 000 characters.');
   });
 
   it('opens the agent from its link', () => {
     open(node('analyse'));
-    showView('config');
+    expandCards('config');
     const keys: string[] = [];
     fixture.componentInstance.openAgent.subscribe((k) => keys.push(k));
     byId('workflow-step-field-agent')?.querySelector('button')?.click();
@@ -327,7 +405,7 @@ describe('WorkflowNodeDialog', () => {
 
   it("lists an agent step's settings under its Config: status, duration and run id", () => {
     open(node('analyse'));
-    showView('config');
+    expandCards('config');
     expect(text('workflow-ndv-setting-status')).toBe('Done');
     expect(text('workflow-ndv-setting-duration')).toBe('13.9 s');
     expect(text('workflow-ndv-setting-run-id')).toBe('run_8f21c4');
@@ -348,7 +426,7 @@ describe('WorkflowNodeDialog', () => {
     expect(byId('workflow-step-field-id')).toBeNull();
   });
 
-  describe('the Chat tab of an agent step (api.md 136, 137)', () => {
+  describe('the chat with an agent step (api.md 136, 137)', () => {
     let api: jasmine.SpyObj<WorkflowRunsApiService>;
 
     beforeEach(() => {
@@ -369,95 +447,40 @@ describe('WorkflowNodeDialog', () => {
       fixture.detectChanges();
     }
 
-    it('sits beside the artifact and reads the conversation at once', () => {
+    it('ends the column, headed, and reads the conversation at once', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-      const pane = byId('workflow-ndv-chat-pane')!;
-      expect(pane.getAttribute('aria-label')).toBe(
-        'Chat with Insights Analyst',
-      );
+      const section = byId('workflow-ndv-chat')!;
+      const column = byId('workflow-ndv-column')!;
+      expect(column.lastElementChild).toBe(section);
+      const heading = section.querySelector('h3')!;
+      expect(heading.textContent?.trim()).toBe('Chat with Insights Analyst');
+      expect(section.getAttribute('aria-labelledby')).toBe(heading.id);
       expect(
-        pane.querySelector('[data-testid="workflow-node-chat"]'),
+        section.querySelector('[data-testid="workflow-node-chat"]'),
       ).not.toBeNull();
       expect(api.getNodeChat).toHaveBeenCalledOnceWith('run_8f21c4', 'analyse');
-      expect(byId('workflow-ndv-tab-chat')).toBeNull();
-      expect(
-        byId('workflow-ndv-view-story')!.getAttribute('aria-selected'),
-      ).toBe('true');
+      // No chat pane, resizer, intro or report card of the dialog's own.
+      for (const id of [
+        'workflow-ndv-chat-pane',
+        'workflow-ndv-chat-resize',
+        'workflow-ndv-chat-intro',
+        'workflow-ndv-artifact-card',
+      ]) {
+        expect(byId(id)).withContext(id).toBeNull();
+      }
     });
 
-    describe('resizing the chat pane', () => {
-      const key = 'qti.workflow-ndv-chat.width';
-      beforeEach(() => localStorage.removeItem(key));
-      afterEach(() => localStorage.removeItem(key));
-
-      function handle(): HTMLElement {
-        return byId('workflow-ndv-chat-resize')!;
-      }
-      function press(k: string): void {
-        handle().dispatchEvent(
-          new KeyboardEvent('keydown', { key: k, bubbles: true }),
-        );
-        fixture.detectChanges();
-      }
-
-      /** Gives the dialog a fixed width, whatever the test browser's window. */
-      async function widenDialog(px: number): Promise<void> {
-        const dialog = byId('workflow-ndv')!;
-        dialog.style.right = 'auto';
-        dialog.style.width = `${px}px`;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        fixture.detectChanges();
-      }
-
-      it('opens at the kept width, as a labelled separator', async () => {
-        localStorage.setItem(key, '360');
-        openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-        await widenDialog(1600);
-        expect(handle().getAttribute('role')).toBe('separator');
-        expect(handle().getAttribute('aria-label')).toBe('Resize chat');
-        expect(handle().getAttribute('aria-valuenow')).toBe('360');
-        expect(byId('workflow-ndv-chat-pane')!.style.width).toBe('360px');
-      });
-
-      it('never leaves the artifact less than 480 px', async () => {
-        localStorage.setItem(key, '1500');
-        openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-        await widenDialog(1200);
-        const room = byId('workflow-ndv-artifact-layout')!.clientWidth;
-        const width = Number(handle().getAttribute('aria-valuenow'));
-        expect(width).toBe(Math.floor(Math.min(room * 0.6, room - 480)));
-        expect(handle().getAttribute('aria-valuemax')).toBe(String(width));
-      });
-
-      it('goes to its least width with Home, keeps it, and resets on double-click', () => {
-        openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-        press('Home');
-        expect(handle().getAttribute('aria-valuenow')).toBe('320');
-        expect(localStorage.getItem(key)).toBe('320');
-
-        handle().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-        fixture.detectChanges();
-        expect(localStorage.getItem(key)).toBe('400');
-      });
-    });
-
-    it('stays mounted while the artifact changes view, so the conversation is kept', () => {
+    it('stays mounted while the cards open, so the conversation is kept', () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
       const panel = byId('workflow-node-chat')!;
-      showView('data');
-      showView('config');
+      expandCards('data');
+      expandCards('config');
       expect(byId('workflow-node-chat')).toBe(panel);
       expect(api.getNodeChat).toHaveBeenCalledTimes(1);
     });
 
-    it('opens with what the step did, a card to its report and questions to ask', () => {
+    it("hands the chat questions from what the step did; one fills the chat's box", () => {
       openWithChat(node('analyse'), { state: 'ready', runId: 'run_8f21c4' });
-      expect(text('workflow-ndv-chat-intro')).toContain(
-        'Insights Analyst made 3 tool calls and returned 2 fields.',
-      );
-      expect(
-        byId('workflow-ndv-artifact-card')!.getAttribute('aria-label'),
-      ).toBe('How Analyse ran, Report · 3 tool calls');
       const suggestions = Array.from(
         el().querySelectorAll<HTMLElement>(
           '[data-testid="workflow-ndv-suggestion"]',
@@ -467,19 +490,15 @@ describe('WorkflowNodeDialog', () => {
         'Why did tool call 3 fail?',
         'What did this step do, step by step?',
       ]);
+      expect(
+        byId('workflow-ndv-chat')!.contains(suggestions[0]),
+      ).toBeTrue();
 
       suggestions[0].click();
       fixture.detectChanges();
       const box = byId('workflow-node-chat-input') as HTMLTextAreaElement;
       expect(box.value).toBe('Why did tool call 3 fail?');
       expect(api.streamNodeChat).not.toHaveBeenCalled();
-
-      showView('data');
-      byId('workflow-ndv-artifact-card')!.click();
-      fixture.detectChanges();
-      expect(
-        byId('workflow-ndv-view-story')!.getAttribute('aria-selected'),
-      ).toBe('true');
     });
 
     it('explains why it cannot chat yet before a run', () => {
@@ -492,16 +511,16 @@ describe('WorkflowNodeDialog', () => {
 
     it('is hidden for a run of a removed workflow, and on any node but an agent step', () => {
       openWithChat(node('analyse'), { state: 'hidden' });
-      expect(byId('workflow-ndv-chat-pane')).toBeNull();
-      expect(byId('workflow-ndv-artifact')).not.toBeNull();
+      expect(byId('workflow-ndv-chat')).toBeNull();
+      expect(byId('workflow-ndv-column')).not.toBeNull();
       for (const id of ['start', 'receive', 'end']) {
         openWithChat(node(id), { state: 'ready', runId: 'run_8f21c4' });
-        expect(byId('workflow-ndv-chat-pane')).withContext(id).toBeNull();
-        expect(byId('workflow-ndv-artifact')).withContext(id).toBeNull();
+        expect(byId('workflow-ndv-chat')).withContext(id).toBeNull();
+        expect(byId('workflow-ndv-column')).withContext(id).toBeNull();
       }
       openWithChat(FIXTURE_TOOL, { state: 'ready', runId: 'run_8f21c4' });
-      expect(byId('workflow-ndv-chat-pane')).toBeNull();
-      expect(byId('workflow-ndv-artifact')).toBeNull();
+      expect(byId('workflow-ndv-chat')).toBeNull();
+      expect(byId('workflow-ndv-column')).toBeNull();
     });
   });
 
@@ -510,12 +529,12 @@ describe('WorkflowNodeDialog', () => {
     expect(text('workflow-ndv-story-empty')).toBe(
       'This node has not run yet. Execute the user journey to see its data.',
     );
-    showView('data');
+    expandCards('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain(
       'This node has not run yet. Execute the user journey to see its data.',
     );
     expect(byId('workflow-ndv-output-status')).toBeNull();
-    showView('config');
+    expandCards('config');
     expect(text('workflow-ndv-setting-status')).toBe('Not run yet');
     expect(text('workflow-ndv-setting-run-id')).toBe('Not run yet');
   });
@@ -865,7 +884,7 @@ describe('WorkflowNodeDialog', () => {
       expect(byId('workflow-ndv-input')?.textContent).not.toContain(
         'Top 5 states?',
       );
-      expect(byId('workflow-ndv-tool-call')).toBeNull();
+      expect(byId('workflow-step-evidence')).toBeNull();
     });
 
     it('Settings: calls, total duration and run id', () => {
@@ -943,8 +962,8 @@ describe('WorkflowNodeDialog', () => {
       ),
     ).filter((e) => e.closest('[hidden]') === null);
     const last = focusable[focusable.length - 1];
-    // The artifact's last control is the last that Tab reaches.
-    expect(byId('workflow-ndv-artifact')!.contains(last)).toBeTrue();
+    // The column's last control is the last that Tab reaches.
+    expect(byId('workflow-ndv-column')!.contains(last)).toBeTrue();
     last.focus();
     const tab = new KeyboardEvent('keydown', {
       key: 'Tab',
@@ -974,9 +993,21 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
       running: false,
     });
 
-  function showView(view: 'story' | 'data' | 'config') {
-    byId(`workflow-ndv-view-${view}`)!.click();
+  function expandCards(cards: 'data' | 'config') {
+    const toggles =
+      cards === 'data'
+        ? ['workflow-ndv-input-toggle', 'workflow-ndv-output-toggle']
+        : ['workflow-ndv-params-toggle'];
+    for (const id of toggles) {
+      if (byId(id)!.getAttribute('aria-expanded') !== 'true') byId(id)!.click();
+    }
     fixture.detectChanges();
+  }
+  /** Opens evidence row `i` and gives its detail's text. */
+  function evidenceDetail(i: number): string | undefined {
+    byId(`workflow-step-evidence-row-${i}`)!.click();
+    fixture.detectChanges();
+    return text(`workflow-step-evidence-detail-${i}`);
   }
 
   function open(
@@ -1017,17 +1048,19 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     expect(one.getAttribute('aria-pressed')).toBe('false');
     // A run stored without stories says so in the Story.
     expect(text('workflow-ndv-story-empty')).toContain('No story was kept');
-    showView('data');
+    expandCards('data');
     expect(byId('workflow-ndv-input')?.textContent).toContain('second');
-    expect(text('workflow-ndv-tool-call')).toContain('select 2');
+    expect(evidenceDetail(0)).toContain('select 2');
     expect(header()).toContain('9.0 s');
 
     one.click();
     fixture.detectChanges();
     expect(one.getAttribute('aria-pressed')).toBe('true');
     expect(byId('workflow-ndv-input')?.textContent).toContain('first');
-    expect(text('workflow-ndv-tool-call')).toContain('select 1');
-    expect(text('workflow-ndv-tool-call')).toContain('boom');
+    // Another attempt: its own calls, none of them open.
+    expect(text('workflow-step-evidence-detail-0')).toBe('');
+    expect(evidenceDetail(0)).toContain('select 1');
+    expect(text('workflow-step-evidence-detail-0')).toContain('boom');
     expect(header()).toContain('6.0 s');
   });
 
@@ -1055,7 +1088,7 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
 
   it("shows Plan's output as a plan above the data", () => {
     open('plan');
-    showView('data');
+    expandCards('data');
     const view = byId('workflow-plan-view')!;
     expect(view).not.toBeNull();
     expect(text('workflow-plan-question')).toBe('How many matches per stage?');
@@ -1098,7 +1131,7 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
       ),
     };
     open('plan', run);
-    showView('data');
+    expandCards('data');
     expect(text('workflow-plan-clarification-question')).toBe(
       'Which tournament?',
     );
@@ -1141,11 +1174,11 @@ describe('WorkflowNodeDialog on a graph with a retry loop', () => {
     const ready: NodeChatAvailability = { state: 'ready', runId: 'run-retry' };
     for (const id of ['plan', 'analyse', 'write-answer']) {
       open(id, GRAPH_RETRY_RUN, ready);
-      expect(byId('workflow-ndv-chat-pane')).withContext(id).not.toBeNull();
+      expect(byId('workflow-ndv-chat')).withContext(id).not.toBeNull();
     }
     for (const id of ['clarify', 'validate']) {
       open(id, GRAPH_RETRY_RUN, ready);
-      expect(byId('workflow-ndv-chat-pane')).withContext(id).toBeNull();
+      expect(byId('workflow-ndv-chat')).withContext(id).toBeNull();
     }
   });
 });

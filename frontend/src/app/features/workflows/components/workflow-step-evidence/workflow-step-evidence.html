@@ -1,0 +1,136 @@
+<section
+  data-testid="workflow-step-evidence"
+  aria-labelledby="workflow-step-evidence-heading"
+  class="flex flex-col gap-2"
+>
+  <div class="flex items-baseline gap-2">
+    <h3
+      id="workflow-step-evidence-heading"
+      class="m-0 text-[13px] font-semibold text-fg-strong"
+    >
+      {{ heading() }}
+    </h3>
+    @if (count(); as count) {
+      <span
+        class="text-[12px] text-fg-muted"
+        data-testid="workflow-step-evidence-count"
+        >{{ count }}</span
+      >
+    }
+  </div>
+
+  @if (rows().length) {
+    <ol class="m-0 flex list-none flex-col gap-2 p-0">
+      @for (row of rows(); track $index; let i = $index) {
+        @let a = row.action;
+        <li
+          class="overflow-hidden rounded-xl border border-border bg-surface"
+          [class.border-border-strong]="isOpen(i)"
+        >
+          <button
+            type="button"
+            [attr.data-testid]="'workflow-step-evidence-row-' + i"
+            [attr.aria-expanded]="isOpen(i)"
+            [attr.aria-controls]="'workflow-step-evidence-detail-' + i"
+            class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-muted"
+            (click)="toggle(i)"
+          >
+            <span
+              class="chip chip-info shrink-0"
+              [attr.title]="'Call ' + a.index"
+              >{{ a.index }}</span
+            >
+            {{ " " }}
+            <span class="shrink-0 text-fg-muted" aria-hidden="true">·</span>
+            {{ " " }}
+            <span
+              class="min-w-0 flex-1 truncate text-[13px] text-fg"
+              [title]="a.text"
+              >{{ a.text }}</span
+            >
+            {{ " " }}
+            @if (a.detail) {
+              <span
+                class="shrink-0 text-[12px] text-fg-muted"
+                data-testid="workflow-step-evidence-meta"
+                >{{ a.detail }}</span
+              >
+              {{ " " }}
+            }
+            <span
+              data-testid="workflow-step-evidence-chip"
+              [attr.data-tone]="row.chip.tone"
+              [class]="chipClass(row.chip.tone)"
+              [title]="row.chip.title"
+              >{{ row.chip.label }}</span
+            >
+            <lucide-angular
+              [img]="ChevronRight"
+              [size]="14"
+              aria-hidden="true"
+              class="shrink-0 text-fg-muted transition-transform"
+              [class.rotate-90]="isOpen(i)"
+            />
+          </button>
+          <div
+            [id]="'workflow-step-evidence-detail-' + i"
+            [attr.data-testid]="'workflow-step-evidence-detail-' + i"
+            class="flex flex-col gap-2 border-t border-border px-3 pt-2.5 pb-3"
+            [hidden]="!isOpen(i)"
+          >
+            @if (isOpen(i)) {
+              <p class="m-0 text-[12px] text-fg-muted">
+                Tool
+                <code
+                  class="rounded border border-border bg-surface-muted px-1.5 font-mono text-[12px] text-fg"
+                  >{{ a.tool }}</code
+                >
+              </p>
+              @if (a.error) {
+                <p
+                  class="m-0 rounded-lg bg-danger-soft px-3 py-2 text-[13px] break-words text-on-danger-soft"
+                  data-testid="workflow-step-evidence-error"
+                >
+                  {{ a.error }}
+                </p>
+              }
+              @if (a.sql) {
+                <pre
+                  data-testid="workflow-step-evidence-input"
+                  class="m-0 max-h-60 overflow-auto rounded-lg border border-border bg-surface-muted p-3 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap text-fg"
+                  tabindex="0"
+                  >{{ a.sql }}</pre>
+              }
+              @if (a.rows?.length) {
+                <app-workflow-data-view
+                  [value]="a.rows"
+                  [modes]="['table', 'json']"
+                />
+              } @else if (!a.sql && !a.error) {
+                <p class="m-0 text-[12px] text-fg-muted">
+                  {{ a.running ? "Still running." : "No input recorded." }}
+                </p>
+              }
+            }
+          </div>
+        </li>
+      }
+    </ol>
+  } @else if (summary(); as summary) {
+    <p
+      data-testid="workflow-step-evidence-summary"
+      class="m-0 flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2 text-[13px] text-fg"
+    >
+      <span class="chip chip-info shrink-0" aria-hidden="true">1</span>
+      <span class="min-w-0 flex-1">{{ summary }}</span>
+      <span class="chip chip-neutral shrink-0">Earlier steps</span>
+    </p>
+  } @else {
+    <p
+      class="m-0 text-[13px] text-fg-muted"
+      data-testid="workflow-step-evidence-empty"
+    >
+      No tool calls recorded.
+    </p>
+  }
+</section>

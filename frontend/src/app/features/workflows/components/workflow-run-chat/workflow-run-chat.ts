@@ -139,10 +139,16 @@ const FORM_CONTROLS =
       max-height: 35vh;
       overflow-y: auto;
     }
+    /* The actions are the form's footer: the fields scroll under its
+       divider, never under the button alone. */
     .composer-actions {
       position: sticky;
       bottom: -0.5rem;
+      z-index: 1;
+      margin-top: 0.5rem;
       margin-bottom: -0.5rem;
+      border-top: 1px solid var(--qti-border);
+      padding-top: 0.5rem;
       padding-bottom: 0.5rem;
       background-color: var(--qti-surface);
     }

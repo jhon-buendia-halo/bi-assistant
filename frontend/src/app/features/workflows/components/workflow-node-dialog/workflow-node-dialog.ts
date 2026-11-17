@@ -4,7 +4,6 @@ import {
   ElementRef,
   afterNextRender,
   computed,
-  effect,
   input,
   linkedSignal,
   output,
@@ -16,7 +15,6 @@ import {
   Check,
   ChevronRight,
   Copy,
-  FileText,
   Flag,
   LucideAngularModule,
   Sparkles,
@@ -52,30 +50,27 @@ import {
   runStatusLine,
   runStepStatusLabel,
 } from '../../services/workflows.util';
-import { buildStepNarrative } from '../../services/workflow-step-narrative';
+import {
+  buildStepNarrative,
+  readSummary,
+} from '../../services/workflow-step-narrative';
 import {
   answerQueryIndex,
   storyMarkdown,
 } from '../../services/workflow-step-story';
 import { ToolDataRecord } from '../../../sessions/models/session.model';
+import { AgentAvatar } from '../../../../shared/components/agent-avatar/agent-avatar';
 import { WorkflowAttemptSwitcher } from '../workflow-attempt-switcher/workflow-attempt-switcher';
 import { WorkflowDataView } from '../workflow-data-view/workflow-data-view';
 import { WorkflowStepOutputView } from '../workflow-step-output-view/workflow-step-output-view';
 import { WorkflowNodeChat } from '../workflow-node-chat/workflow-node-chat';
+import { WorkflowStepEvidence } from '../workflow-step-evidence/workflow-step-evidence';
 import {
   StoryQueryOpen,
   WorkflowStepStory,
 } from '../workflow-step-story/workflow-step-story';
 import { exitSentence } from '../../../agents/services/workflow-flow';
 import { formatNodeDuration, nodeStatusChip } from './workflow-node-format';
-import {
-  DOCK_KEY_STEP,
-  NODE_CHAT_PANE,
-  nodeChatBounds,
-  nodeChatWidth,
-  readNodeChatWidth,
-  writeNodeChatWidth,
-} from '../workflow-run-dock/workflow-run-dock.util';
 
 type DialogTab = 'parameters' | 'settings';
 
@@ -84,17 +79,8 @@ const TAB_LABELS: Record<DialogTab, string> = {
   settings: 'Settings',
 };
 
-/** The views of an agent step's artifact (ui.md 4.4b). */
-type ArtifactView = 'story' | 'data' | 'config';
-
-const VIEW_LABELS: Record<ArtifactView, string> = {
-  story: 'Story',
-  data: 'Data',
-  config: 'Config',
-};
-
-/** The chat's opening note quotes at most this much of the step's own words. */
-const INTRO_MAX = 280;
+/** What a Copy button copies: the Story, or the input or output as JSON. */
+export type CopyTarget = 'story' | 'input' | 'output';
 
 const NOT_RUN =
   'This node has not run yet. Execute the user journey to see its data.';
@@ -113,60 +99,34 @@ const KIND_ICONS = {
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** A card's one-line summary lists at most this many field names. */
+const SUMMARY_FIELDS = 4;
+
 /**
- * The node dialog (ui.md 4.4b). An agent step shows a chat with its agent
- * beside an artifact of its run: its Story (the server's `step.story`), its
- * Data (input and output) and its Config (parameters and settings). A code
- * step shows its Story, then its input, its parameters and settings, and
- * its output, stacked top to bottom, Input and Output collapsed; Start and
- * End the same without a Story. A query in a Story opens in the query
- * inspector (`openQuery`). The parent returns focus on `close`.
+ * The node dialog (ui.md 4.4b). An agent step reads as one centred column,
+ * in the Business view's style: its Story told by its persona, what the
+ * persona used (its tool calls as evidence rows), what it received, what it
+ * returned and how it is set up (collapsed cards), then the chat with the
+ * persona. A code step shows its Story, then its input, its parameters and
+ * settings, and its output, stacked top to bottom, Input and Output
+ * collapsed; Start and End the same without a Story. A query in a Story
+ * opens in the query inspector (`openQuery`). The parent returns focus on
+ * `close`.
  */
 @Component({
   selector: 'app-workflow-node-dialog',
   imports: [
+    AgentAvatar,
     LucideAngularModule,
     NgTemplateOutlet,
     WorkflowAttemptSwitcher,
     WorkflowDataView,
     WorkflowNodeChat,
+    WorkflowStepEvidence,
     WorkflowStepOutputView,
     WorkflowStepStory,
   ],
   templateUrl: './workflow-node-dialog.html',
-  styles: `
-    /* The chat pane's right edge: a 10 px grab area, a 2 px line on hover, focus and drag. */
-    .ndv-chat-handle {
-      position: absolute;
-      z-index: 30;
-      right: -5px;
-      top: 0;
-      bottom: 0;
-      width: 10px;
-      cursor: col-resize;
-      touch-action: none;
-      outline: none;
-    }
-    .ndv-chat-handle::after {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 4px;
-      width: 2px;
-      content: '';
-      background: transparent;
-      transition: background-color 120ms ease;
-    }
-    .ndv-chat-handle:hover::after,
-    .ndv-chat-handle:focus-visible::after,
-    .ndv-chat-handle-active::after {
-      background: var(--qti-border-selected);
-    }
-    .ndv-resizing,
-    .ndv-resizing * {
-      user-select: none !important;
-    }
-  `,
   host: {
     '(document:keydown.escape)': 'close.emit()',
   },
@@ -179,7 +139,6 @@ export class WorkflowNodeDialog {
   readonly ChevronRight = ChevronRight;
   readonly Check = Check;
   readonly Copy = Copy;
-  readonly FileText = FileText;
 
   readonly node = input.required<NodeInspection>();
   readonly workflow = input.required<WorkflowDetail>();
@@ -199,19 +158,17 @@ export class WorkflowNodeDialog {
   readonly tabLabels = TAB_LABELS;
   readonly tabs: readonly DialogTab[] = ['parameters', 'settings'];
   readonly tab = signal<DialogTab>('parameters');
-  /** Input (above the tabs) and Output (below them) start collapsed. */
+  /** Input and Output (and an agent step's set-up card) start collapsed. */
   readonly inputOpen = signal(false);
   readonly outputOpen = signal(false);
+  readonly setupOpen = signal(false);
 
-  /** An agent step: the chat beside an artifact of its run. */
+  /** An agent step: one column of its Story, evidence, cards and chat. */
   readonly artifact = computed(() => this.node().kind === 'agent');
   /** An agent step offers its chat, unless the run's workflow is gone. */
   readonly hasChat = computed(
     () => this.artifact() && this.chat().state !== 'hidden',
   );
-  readonly viewLabels = VIEW_LABELS;
-  readonly views: readonly ArtifactView[] = ['story', 'data', 'config'];
-  readonly view = signal<ArtifactView>('story');
 
   /**
    * The shown answer's records (its `data`) when the page inspects its
@@ -236,106 +193,18 @@ export class WorkflowNodeDialog {
     if (run.status === 'running')
       return 'Running… its story appears when it ends.';
     if (run.status === 'suspended') return 'Waiting for your answer.';
-    return 'No story was kept for this step. Data has what it received and returned.';
+    return 'No story was kept for this step. What it received and returned are below.';
   });
-  readonly copied = signal(false);
-
-  /** Show another view of the artifact, from its top. */
-  selectView(view: ArtifactView): void {
-    this.view.set(view);
-    const panel = this.artifactPanel()?.nativeElement;
-    if (panel) panel.scrollTop = 0;
-  }
-
-  private readonly artifactPanel =
-    viewChild<ElementRef<HTMLElement>>('artifactPanel');
-
-  private readonly nodeChat = viewChild(WorkflowNodeChat);
+  /** The Copy button that just copied, for its two seconds of `Copied`. */
+  readonly copied = signal<CopyTarget | null>(null);
 
   private readonly dialog =
     viewChild.required<ElementRef<HTMLElement>>('dialog');
   private readonly closeButton =
     viewChild.required<ElementRef<HTMLButtonElement>>('closeButton');
 
-  /** The agent-step layout, measured: the room the chat and the artifact share. */
-  private readonly artifactLayout =
-    viewChild<ElementRef<HTMLElement>>('artifactLayout');
-  private readonly layoutRoom = signal(0);
-  /** The chat pane's width as last dragged (kept across openings). */
-  private readonly wantedChatWidth = signal(readNodeChatWidth());
-  readonly chatResizing = signal(false);
-  readonly chatBounds = computed(() => nodeChatBounds(this.layoutRoom()));
-  readonly chatWidth = computed(() =>
-    nodeChatWidth(this.layoutRoom(), this.wantedChatWidth()),
-  );
-
   constructor() {
     afterNextRender(() => this.closeButton().nativeElement.focus());
-    effect((onCleanup) => {
-      const layout = this.artifactLayout()?.nativeElement;
-      if (!layout) return;
-      this.layoutRoom.set(layout.clientWidth);
-      if (typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(() =>
-        this.layoutRoom.set(layout.clientWidth),
-      );
-      observer.observe(layout);
-      onCleanup(() => observer.disconnect());
-    });
-  }
-
-  /** Dragging the chat pane's right edge sets its width (kept on release). */
-  startChatResize(event: PointerEvent): void {
-    if (!this.artifactLayout() || event.button !== 0) return;
-    event.preventDefault();
-    const handle = event.target as HTMLElement;
-    handle.setPointerCapture?.(event.pointerId);
-    this.chatResizing.set(true);
-    // Relative to where it was grabbed, so the edge never jumps under the pointer.
-    const startX = event.clientX;
-    const startWidth = this.chatWidth();
-    const move = (e: PointerEvent) =>
-      this.setChatWidth(startWidth + e.clientX - startX);
-    const up = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
-      handle.removeEventListener('pointercancel', up);
-      this.chatResizing.set(false);
-      writeNodeChatWidth(this.chatWidth());
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
-    handle.addEventListener('pointercancel', up);
-  }
-
-  /** Arrow Right / Left widen or narrow the chat by a step; Home and End go to the bounds. */
-  resizeChatWithKeyboard(event: KeyboardEvent): void {
-    const { min, max } = this.chatBounds();
-    const now = this.chatWidth();
-    const next =
-      event.key === 'ArrowRight'
-        ? now + DOCK_KEY_STEP
-        : event.key === 'ArrowLeft'
-          ? now - DOCK_KEY_STEP
-          : event.key === 'Home'
-            ? min
-            : event.key === 'End'
-              ? max
-              : null;
-    if (next === null) return;
-    event.preventDefault();
-    this.setChatWidth(next);
-    writeNodeChatWidth(this.chatWidth());
-  }
-
-  /** Double-click on the edge: back to the default width. */
-  resetChatWidth(): void {
-    this.wantedChatWidth.set(NODE_CHAT_PANE.defaultWidth);
-    writeNodeChatWidth(NODE_CHAT_PANE.defaultWidth);
-  }
-
-  private setChatWidth(px: number): void {
-    this.wantedChatWidth.set(nodeChatWidth(this.layoutRoom(), px));
   }
 
   readonly icon = computed(() => KIND_ICONS[this.node().kind]);
@@ -419,11 +288,16 @@ export class WorkflowNodeDialog {
   );
 
   /** The agent of an agent step, by name. */
+  /** The agent of an agent step, by name. */
   readonly agentName = computed(
     () =>
       this.node().agent?.name ??
       this.node().step?.agent?.name ??
       'the agent persona',
+  );
+  /** The persona's role (job title); '' without one. */
+  readonly agentRole = computed(
+    () => (this.node().agent ?? this.node().step?.agent)?.role?.trim() ?? '',
   );
   /** The same with its role, where the dialog introduces the persona (R39). */
   readonly agentLabel = computed(() => {
@@ -435,7 +309,7 @@ export class WorkflowNodeDialog {
   protected toolPersona(tool: NodeToolView): string {
     return personaLabel({ name: tool.agentName, role: tool.agentRole });
   }
-  /** The Preview of an agent step's artifact: built from the attempt shown. */
+  /** What the attempt shown did, built from its run data (for the chat's suggestions). */
   readonly narrative = computed(() => {
     const attempts = this.attemptNumbers();
     return buildStepNarrative({
@@ -447,34 +321,39 @@ export class WorkflowNodeDialog {
       duration: this.run()?.durationMs != null ? this.duration() : '',
     });
   });
-  readonly artifactTitle = computed(() => `How ${this.node().title} ran`);
-  readonly artifactCaption = computed(() => {
-    if (!this.run()) return 'Report · not run yet';
-    const calls = this.narrative().actions.length;
-    return `Report · ${calls === 1 ? '1 tool call' : `${calls} tool calls`}`;
+  /** The Story's title when copied as Markdown. */
+  readonly storyTitle = computed(() => `How ${this.node().title} ran`);
+  /** What a step with no tool calls read, as its one evidence row; else null. */
+  readonly evidenceSummary = computed(() => readSummary(this.run()?.input));
+  /** A card's one-line summary: the first field names of a value. */
+  readonly receivedSummary = computed(() =>
+    this.fieldSummary(this.run()?.input),
+  );
+  readonly returnedSummary = computed(() =>
+    this.fieldSummary(this.run()?.output),
+  );
+  /** The set-up card's summary: the persona's model and step limit. */
+  readonly setupSummary = computed(() => {
+    const agent = this.node().step?.agent;
+    if (!agent) return '';
+    const model = this.node().agent?.model ?? null;
+    return [
+      model,
+      agent.maxSteps > 1 ? `≤ ${agent.maxSteps} steps` : 'one call',
+    ]
+      .filter(Boolean)
+      .join(' · ');
   });
-  /** The chat's opening note: the step's own words, else what it did. */
-  readonly introText = computed(() => {
-    const n = this.narrative();
-    if (n.error) return `This step failed: ${n.error}`;
-    // The summary's first paragraph of prose: no heading, table or list.
-    const paragraph = (n.summary ?? '')
-      .split(/\n\s*\n/)
-      .map((p) => p.trim())
-      .find((p) => p && !/^(\||#|[-*] |\d+\. )/.test(p));
-    if (paragraph) {
-      const flat = paragraph
-        .replace(/[#*_`>]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      return flat.length > INTRO_MAX
-        ? `${flat.slice(0, INTRO_MAX - 1)}…`
-        : flat;
-    }
-    const calls = n.actions.length;
-    const fields = n.returned.length;
-    return `${this.agentName()} made ${calls === 1 ? '1 tool call' : `${calls} tool calls`} and returned ${fields === 1 ? '1 field' : `${fields} fields`}. Ask about any of it below.`;
-  });
+
+  private fieldSummary(value: Record<string, unknown> | undefined): string {
+    const names = Object.keys(value ?? {});
+    if (!names.length) return '';
+    const shown = names.slice(0, SUMMARY_FIELDS).join(', ');
+    return names.length > SUMMARY_FIELDS
+      ? `${shown} +${names.length - SUMMARY_FIELDS}`
+      : shown;
+  }
+
   /** Questions to start the chat with, from what the step did. */
   readonly suggestions = computed(() => {
     const n = this.narrative();
@@ -489,22 +368,32 @@ export class WorkflowNodeDialog {
     return out.slice(0, 3);
   });
 
-  /** Put a suggested question in the chat's box, ready to send. */
-  suggest(question: string): void {
-    this.nodeChat()?.prefill(question);
+  /** Whether a Copy button has something to copy in the attempt shown. */
+  canCopy(target: CopyTarget): boolean {
+    const run = this.run();
+    if (target === 'story') return !!run?.story;
+    return (target === 'input' ? run?.input : run?.output) !== undefined;
   }
 
-  /** Copy the Story as Markdown. */
-  copyNarrative(): void {
-    const story = this.run()?.story;
-    if (!story) return;
-    const text = storyMarkdown(this.artifactTitle(), story);
+  /** Copy the Story as Markdown, or the input or output as JSON. */
+  copy(target: CopyTarget): void {
+    const run = this.run();
+    let text: string | null = null;
+    if (target === 'story') {
+      text = run?.story ? storyMarkdown(this.storyTitle(), run.story) : null;
+    } else {
+      const value = target === 'input' ? run?.input : run?.output;
+      text = value === undefined ? null : JSON.stringify(value, null, 2);
+    }
+    if (text === null) return;
     void navigator.clipboard?.writeText(text).then(
       () => {
-        this.copied.set(true);
-        setTimeout(() => this.copied.set(false), 2000);
+        this.copied.set(target);
+        setTimeout(() => {
+          if (this.copied() === target) this.copied.set(null);
+        }, 2000);
       },
-      () => this.copied.set(false),
+      () => this.copied.set(null),
     );
   }
   readonly outputEmpty = computed(() =>
@@ -582,16 +471,6 @@ export class WorkflowNodeDialog {
   /** The titles of the steps that read a Start input field, or `None`. */
   fieldUsedBy(field: WorkflowInputField): string {
     return this.list(usedByTitles(field, this.workflow().steps));
-  }
-
-  toolMeta(call: NodeToolCallView): string {
-    if (!call.finished) return 'Running…';
-    const parts: string[] = [];
-    if (call.durationMs !== undefined) {
-      parts.push(formatNodeDuration(call.durationMs));
-    }
-    if (call.rowCount !== undefined) parts.push(`${call.rowCount} rows`);
-    return parts.join(' · ');
   }
 
   /** A tool call's result row: `Done`, `Failed`, `Running…`. */
