@@ -1,4 +1,10 @@
-import { mkdtempSync, existsSync, rmSync, writeFileSync } from 'fs';
+import {
+  mkdtempSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { DuckDBInstance } from '@duckdb/node-api';
@@ -9,6 +15,7 @@ import {
   detectSheets,
   importFiles,
   slugSegment,
+  withoutLastLine,
   type FileImportOptions,
 } from './file-import';
 
@@ -357,5 +364,82 @@ describe('importFiles (plan m1-31 8)', () => {
       'Sales 2026.xlsx · Region Sales: Range must look like A1:H200',
     );
     expect(existsSync(databasePath)).toBe(false);
+  });
+});
+
+describe('a total row under a numeric first column (story 1.31.7 finding)', () => {
+  it('imports the workbook without the total and keeps the column numeric', async () => {
+    const path = join(dir, 'years.xlsx');
+    const wb = new Workbook();
+    const ws = wb.addWorksheet('Years');
+    ws.addRow(['Year', 'Goals']);
+    ws.addRow([2018, 169]);
+    ws.addRow([2022, 172]);
+    ws.addRow(['Total', 341]);
+    await wb.xlsx.writeFile(path);
+    const sheets = await detectSheets(path, 'years.xlsx', options);
+    expect(sheets[0]).toMatchObject({ excludeLastRow: true });
+    const [file] = assignEntityKeys([sourceFile('years.xlsx', 'xlsx', sheets)]);
+    const databasePath = join(dir, 'import-years', 'data.duckdb');
+
+    const [imported] = await importFiles(
+      databasePath,
+      [{ file, path }],
+      options,
+    );
+
+    expect(imported.sheets[0].rowCount).toBe(2);
+    expect(imported.sheets[0].columns?.[0]).toEqual({
+      name: 'Year',
+      type: 'DOUBLE',
+    });
+    expect(
+      await query(databasePath, 'SELECT sum(Goals) AS g FROM db.years.years'),
+    ).toEqual([{ g: 341 }]);
+  });
+
+  it('imports the CSV without its last line and leaves no copy behind', async () => {
+    const path = join(dir, 'years.csv');
+    writeFileSync(path, 'year,goals\n2018,169\n2022,172\nTotal,341\n\n');
+    const sheets = await detectSheets(path, 'years.csv', options);
+    const [file] = assignEntityKeys([
+      sourceFile('years.csv', 'csv', [{ ...sheets[0], excludeLastRow: true }]),
+    ]);
+    const databasePath = join(dir, 'import-years-csv', 'data.duckdb');
+
+    const [imported] = await importFiles(
+      databasePath,
+      [{ file, path }],
+      options,
+    );
+
+    expect(imported.sheets[0].rowCount).toBe(2);
+    expect(imported.sheets[0].columns?.[0]).toEqual({
+      name: 'year',
+      type: 'BIGINT',
+    });
+    expect(existsSync(`${path}.without-last-row.csv`)).toBe(false);
+  });
+});
+
+describe('withoutLastLine', () => {
+  it('drops the last non-empty line and the blank lines after it', async () => {
+    const from = join(dir, 'tail.csv');
+    const to = join(dir, 'tail-copy.csv');
+    writeFileSync(from, 'a,b\n1,2\nTotal,3\r\n\n  \n');
+
+    await withoutLastLine(from, to);
+
+    expect(readFileSync(to, 'utf8')).toBe('a,b\n1,2\n');
+  });
+
+  it('gives an empty copy for a one-line file', async () => {
+    const from = join(dir, 'one.csv');
+    const to = join(dir, 'one-copy.csv');
+    writeFileSync(from, 'only line');
+
+    await withoutLastLine(from, to);
+
+    expect(readFileSync(to, 'utf8')).toBe('');
   });
 });

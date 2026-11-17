@@ -7,7 +7,7 @@
  */
 import type { DuckDBConnection } from '@duckdb/node-api';
 import { existsSync } from 'fs';
-import { mkdir, rename, rm } from 'fs/promises';
+import { copyFile, mkdir, open, rename, rm, truncate } from 'fs/promises';
 import { dirname } from 'path';
 import type {
   SheetImport,
@@ -463,6 +463,8 @@ async function importSheet(
   let source: string;
   let headerCells: Cell[];
   let firstColumn = 1;
+  const cleanup: string[] = [];
+  let deleteLast = false;
   if (file.format === 'xlsx') {
     const range = parseRange(sheet.range);
     const headerRow = sheet.headerRow || range.firstRow;
@@ -481,10 +483,17 @@ async function importSheet(
         range: `${columns}${headerRow}`,
       })}`,
     );
+    // An excluded last row is left out of the range read, not deleted after
+    // it: a "Total" label under a numeric column would otherwise fail the
+    // whole read (it does not convert to DOUBLE).
+    const trim = sheet.excludeLastRow && range.lastRow - 1 > headerRow;
+    const lastRow = trim ? range.lastRow - 1 : range.lastRow;
+    // Only the header and the excluded row: read it, then drop that row.
+    deleteLast = sheet.excludeLastRow && !trim;
     source = readXlsx(path, sheet.sheet, {
       header: true,
       allText: sheet.allText,
-      range: `${columns}${range.lastRow}`,
+      range: `${columns}${lastRow}`,
     });
   } else {
     const skip = Math.max(0, (sheet.headerRow || 1) - 1);
@@ -492,7 +501,12 @@ async function importSheet(
       connection,
       `SELECT * FROM ${readCsv(path, { header: false, allText: true, skip })} LIMIT 1`,
     );
-    source = readCsv(path, { header: true, allText: sheet.allText, skip });
+    // Same reason for a CSV: read a copy that ends before its last line.
+    const csvPath = sheet.excludeLastRow
+      ? await withoutLastLine(path, `${path}.without-last-row.csv`)
+      : path;
+    if (csvPath !== path) cleanup.push(csvPath);
+    source = readCsv(csvPath, { header: true, allText: sheet.allText, skip });
   }
 
   const engineNames = (
@@ -506,10 +520,14 @@ async function importSheet(
     .map((n, i) => `${quoteIdent(n)} AS ${quoteIdent(names[i])}`)
     .join(', ');
   const table = `${quoteIdent(file.schema)}.${quoteIdent(sheet.table)}`;
-  await connection.run(
-    `CREATE TABLE ${table} AS SELECT ${select} FROM ${source}`,
-  );
-  if (sheet.excludeLastRow) {
+  try {
+    await connection.run(
+      `CREATE TABLE ${table} AS SELECT ${select} FROM ${source}`,
+    );
+  } finally {
+    await Promise.all(cleanup.map((p) => rm(p, { force: true })));
+  }
+  if (deleteLast) {
     await connection.run(
       `DELETE FROM ${table} WHERE rowid = (SELECT max(rowid) FROM ${table})`,
     );
@@ -521,6 +539,43 @@ async function importSheet(
     type: asText(c.column_type),
   }));
   return { ...sheet, rowCount: Number(count), columns };
+}
+
+/**
+ * Copy `path` to `to` without its last non-empty line (and the blank lines
+ * after it). Reads only the file's tail, so a 200 MB CSV costs one copy.
+ */
+export async function withoutLastLine(
+  path: string,
+  to: string,
+): Promise<string> {
+  const handle = await open(path, 'r');
+  try {
+    const { size } = await handle.stat();
+    let end = size;
+    // Drop trailing line breaks and spaces first.
+    for (let chunk = 64 * 1024; ; chunk *= 2) {
+      const start = Math.max(0, end - chunk);
+      const buffer = Buffer.alloc(end - start);
+      await handle.read(buffer, 0, buffer.length, start);
+      let i = buffer.length;
+      while (i > 0 && /\s/.test(String.fromCharCode(buffer[i - 1]))) i--;
+      const lastBreak = buffer.lastIndexOf(0x0a, i - 1);
+      if (lastBreak >= 0) {
+        end = start + lastBreak + 1;
+        break;
+      }
+      if (start === 0) {
+        end = 0;
+        break;
+      }
+    }
+    await copyFile(path, to);
+    await truncate(to, end);
+    return to;
+  } finally {
+    await handle.close();
+  }
 }
 
 async function removeDatabase(path: string): Promise<void> {
