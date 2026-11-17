@@ -1,19 +1,25 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
+import { builtVisualSchema } from './answer-business-question.schemas';
 import {
+  chartableQueries,
   interpretFollowUp,
   loadCatalog,
   pageAnswer,
   planCatalogBlock,
+  type BuiltVisual,
 } from './answer-business-question.steps';
 import {
   ASK_AGENT_RUNTIME_KEY,
   ASK_AGENT_WORKFLOW_ID,
   ASK_NEW_QUESTION_REPLY,
   ASK_NO_RESULT_REPLY,
+  ASK_NO_ROWS_REPLY,
   ASKABLE_STEP_IDS,
   imageNotesAnswer,
   planAnswer,
+  visualAnswer,
+  visualFailedAnswer,
   type AskAgentRuntime,
   type AskableStepId,
 } from './ask-agent.steps';
@@ -35,6 +41,8 @@ const askOutcome = z.object({
   step: z.enum(ASKABLE_STEP_IDS),
   answerLength: z.number(),
   stopped: z.boolean(),
+  // Build visual only: what Ryan built, read by the run's visual event.
+  visual: builtVisualSchema.optional(),
 });
 
 type AskInput = z.output<typeof askInput>;
@@ -47,6 +55,7 @@ const TITLES: Record<AskableStepId, string> = {
   plan: 'Plan',
   analyse: 'Analyse',
   'write-answer': 'Write answer',
+  'build-visual': 'Build visual',
 };
 
 function runtimeOf(params: {
@@ -63,9 +72,15 @@ async function delivered(
   runtime: AskAgentRuntime,
   step: AskableStepId,
   answer: string,
+  visual?: BuiltVisual,
 ): Promise<AskOutcome> {
   await runtime.deliverAnswer(answer);
-  return { step, answerLength: answer.length, stopped: false };
+  return {
+    step,
+    answerLength: answer.length,
+    stopped: false,
+    ...(visual ? { visual } : {}),
+  };
 }
 
 /** What each asked step does (agents.md 5.21). */
@@ -166,6 +181,34 @@ const WORK: Record<
       answerLength: answer.answer.length,
       stopped,
     };
+  },
+  // Ryan designs a new visual (v1) from the earlier answer's rows, the
+  // follow-up as his instruction; no query runs. As in the whole workflow,
+  // a design that fails is the answer's news, never a failed run.
+  'build-visual': async (runtime, input) => {
+    const earlier = runtime.earlierVisual();
+    // The request is refused before the run without rows; kept defensive.
+    if (!chartableQueries(earlier.queries)) {
+      return delivered(runtime, 'build-visual', ASK_NO_ROWS_REPLY, {
+        skipped: 'No query returned rows to chart.',
+      });
+    }
+    const { visual, stopped } = await runtime.buildVisual({
+      question: earlier.question,
+      answer: earlier.answer,
+      instruction: input.question,
+    });
+    if (stopped) {
+      return { step: 'build-visual', answerLength: 0, stopped: true, visual };
+    }
+    return delivered(
+      runtime,
+      'build-visual',
+      visual.error !== undefined
+        ? visualFailedAnswer(visual.error)
+        : visualAnswer(visual.title ?? 'New visual'),
+      visual,
+    );
   },
 };
 

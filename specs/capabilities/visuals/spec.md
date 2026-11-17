@@ -66,9 +66,10 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
 - R14. The panel's Tailor form SHALL turn its fields into one plain-English instruction, skipping defaults:
   - Chart type (Auto, Bar, Line, Scatter, Heatmap, Metric cards, Table, Donut) → "Change the visual to a bar chart." / "…a line chart." / "…a scatter plot." / "…a heatmap." / "…metric cards." / "…a compact sortable table." / "…a donut chart.";
   - Sort (None, Ascending, Descending) → "Sort ascending by the main measure." / "Sort descending by the main measure.";
-  - Top N (integer 3–50, optional) → `Show only the top <N> items and group the rest as "Other".`
+  - Top N (integer 3–50, optional) → `Show only the top <N> items and group the rest as "Other".`;
+  - Describe the change (optional multi-line free text, placeholder "e.g. Show it as a stacked bar by year and highlight France") → the trimmed text, added last. It alone is a valid instruction.
 
-  The form previews the instruction. "Apply" is disabled while the instruction is empty or a tailor is running. On success the form resets and closes.
+  The form previews the combined instruction. "Apply" is disabled while the instruction is empty (whitespace-only free text counts as empty) or a tailor is running; Cmd/Ctrl+Enter in the free-text field applies when Apply is enabled, and plain Enter adds a new line. On success the form resets (the free text too) and closes; on an error the text stays.
 - R41. **Tailor and Refresh data are background tasks** (ADR-0047, [app-shell](../app-shell/spec.md) R58–R63). On a run's visual they SHALL start a `visual-tailor` or `visual-refresh` task keyed `<runId>/<visualId>`, titled `Tailoring visual "<title>"` or `Refreshing visual "<title>"`; the busy state of the buttons (R14, R17) SHALL come from that task, so closing the run does not stop the call and reopening the run shows the visual busy. When the task ends and the panel shows that visual, the panel SHALL apply the result as before; a panel shown later SHALL apply a result it missed once, and a closed panel SHALL apply nothing. A failed tailor SHALL keep its inline error in the form, read from the failed task. The end SHALL be toasted, with **Open** (reopens the run) or **Retry**, only when the panel no longer shows that visual. Auto-repair is not user-started and SHALL stay outside the task list.
 - R15. Each version SHALL record its number, creation time, the instruction that produced it (absent for an untailored v1), its source answer and, after a refresh, its last refresh time. The visual's title and takeaway follow its current version.
 - R16. Viewing a version SHALL be read-only and SHALL NOT change the current version. While a non-current version is viewed:
@@ -249,7 +250,7 @@ Placement in the shell's right "Details panel" is in [ui.md](../../system/ui.md)
 
 - **Panel header**: "Visuals", then, when a visual is open:
   - The version control (title "Version history", label `v<N>`, highlighted when an old version is viewed). It opens a list of every version, newest first, as "Version <N>" with "current" and "viewing" tags and the entry text. When an old version is viewed, the list starts with "Make v<N> the current version" / "now v<M>".
-  - "Tailor" (title "Tailor this visual"), which opens a form with "Chart type", "Sort", "Top N (3–50, optional)" (placeholder "All items"), the instruction preview, the error line, and "Cancel" / "Apply".
+  - "Tailor" (title "Tailor this visual"), which opens a form with "Chart type", "Sort", "Top N (3–50, optional)" (placeholder "All items"), "Describe the change (optional)" (a multi-line text field), the instruction preview, the error line, and "Cancel" / "Apply".
   - "Refresh data" (title "Refresh data (re-run the stored query)").
   - "Download bundle" (title "Download bundle (HTML, CSS, JS, answer.md, data.json)").
   - There is no saved-visuals menu here: the session's visuals are switched through the Session panel's "Shown in this session" menu (agent-panel), which lists every visual, newest first.

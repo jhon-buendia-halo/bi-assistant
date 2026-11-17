@@ -929,6 +929,60 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         expect(text('workflow-run-context')).toContain('Asked Jessica');
       });
 
+      it('offers Ryan when the earlier answer has query rows and sends askStep build-visual', () => {
+        const withVisual: WorkflowDetail = {
+          ...ASK,
+          steps: [...ASK.steps, agentStep('build-visual', 'Build visual', 'Ryan', 'Visual Designer')],
+        };
+        openAssistant(withVisual);
+        typeQuestion('Which team scored the most goals?');
+        pickDataset();
+        click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: 'run-1', workflowId: withVisual.id });
+        h.onDone!(
+          assistantRun({
+            steps: [...ranSteps, { id: 'build-visual', title: 'Build visual', status: 'skipped' }],
+            answer: {
+              role: 'assistant',
+              content: 'Brazil.',
+              at: 'x',
+              data: [
+                {
+                  tool: 'run_readonly_sql',
+                  columns: ['team'],
+                  rows: [{ team: 'Brazil' }],
+                  rowCount: 1,
+                },
+              ],
+            },
+          }),
+        );
+        fixture.detectChanges();
+        const picker = select()!;
+        expect(Array.from(picker.options).map((o) => o.value)).toEqual([
+          '',
+          'analyse',
+          'write-answer',
+          'build-visual',
+        ]);
+        picker.value = 'build-visual';
+        picker.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          "Ryan designs a new visual from the earlier answer's rows, following what you type. No new queries run.",
+        );
+        const input = q('workflow-follow-up-input') as HTMLTextAreaElement;
+        input.value = 'A bar chart';
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        click('workflow-run-follow-up');
+        expect(runs.last.body.context).toEqual({
+          fromRunId: 'run-1',
+          askStep: 'build-visual',
+        });
+      });
+
       it('has no picker for another workflow', () => {
         openAssistant({ ...ASK, id: 'other-workflow' });
         typeQuestion('Which team scored the most goals?');

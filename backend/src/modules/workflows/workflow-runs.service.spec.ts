@@ -2949,9 +2949,8 @@ describe('WorkflowRunsService: a follow-up that asks one agent (workflows R40; a
   it.each([
     [{ askStep: 'validate' }, 'Step "validate" has no agent to ask'],
     [{ askStep: 'read-images' }, 'did not run in run'],
-    // Check data quality left the workflow; Build visual has no chat.
+    // Check data quality left the workflow.
     [{ askStep: 'check-data-quality' }, 'has no agent to ask'],
-    [{ askStep: 'build-visual' }, 'has no agent to ask'],
   ])('refuses %j before anything runs', async (extra, message) => {
     const first = await earlier();
     ctx.sessions.createRunHost.mockClear();
@@ -2961,6 +2960,95 @@ describe('WorkflowRunsService: a follow-up that asks one agent (workflows R40; a
     });
     await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
     await expect(refusal).rejects.toThrow(message);
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+  });
+
+  it("asks Ryan alone for a new visual of the earlier answer's rows, and logs the visual it stored", async () => {
+    const script: TurnScript = { answer: 'Brazil won in 2002.', data: DATA };
+    ctx = build(DATASETS, script);
+    const first = (
+      await streamed(ctx, 'answer-business-question', { input: ASK })
+    ).run;
+    // The follow-up's turn: Build visual stores Ryan's new visual.
+    script.visual = { visualId: 'v-2', title: 'Winners by year' };
+    script.answer = `Here's a new visual of the earlier answer: "Winners by year".`;
+    const metadata = {
+      id: 'v-2',
+      title: 'Winners by year',
+      description: '',
+      path: 'visuals/v-2',
+      sourceMessageAt: 't',
+      createdAt: 't',
+      currentVersion: 1,
+      versions: [],
+    };
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.resolve({
+        id: 'host',
+        name: 'Insights Analyst',
+        datasets: ['World Cup Core'],
+        messages: [],
+        visualizations: [metadata],
+        panelItems: [],
+      } as never),
+    );
+    const second = await streamed(ctx, 'answer-business-question', {
+      input: { question: 'As a line chart', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id, askStep: 'build-visual' },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      ask?: {
+        step: string;
+        earlier?: {
+          question?: string;
+          answer?: string;
+          records: { input?: string }[];
+        };
+      };
+    };
+    expect(spec.ask?.step).toBe('build-visual');
+    expect(spec.ask?.earlier).toMatchObject({
+      question: 'Who won in 2002?',
+      answer: 'Brazil won in 2002.',
+    });
+    expect(spec.ask?.earlier?.records.map((record) => record.input)).toEqual([
+      DATA[0].input,
+    ]);
+    expect(second.run.context).toEqual({
+      fromRunId: first.id,
+      askStep: 'build-visual',
+    });
+    expect(second.run.events).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Created interactive visual "Winners by year" (v1).',
+        visual: {
+          visualId: 'v-2',
+          version: 1,
+          title: 'Winners by year',
+          action: 'created',
+        },
+      }),
+    ]);
+  });
+
+  it('refuses to ask Ryan when the earlier answer has no query rows to chart', async () => {
+    ctx = build(DATASETS, {
+      answer: 'No match was found.',
+      data: [{ ...DATA[0], rows: [], rowCount: 0 }],
+    });
+    const first = (
+      await streamed(ctx, 'answer-business-question', { input: ASK })
+    ).run;
+    ctx.sessions.createRunHost.mockClear();
+    const refusal = ctx.service.prepare('answer-business-question', {
+      input: ASK,
+      context: { fromRunId: first.id, askStep: 'build-visual' },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+    await expect(refusal).rejects.toThrow(
+      'The earlier answer has no query rows to chart',
+    );
     expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
   });
 

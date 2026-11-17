@@ -151,6 +151,18 @@
                   class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none placeholder:text-fg-muted focus:border-border-selected"
                 />
               </label>
+              <label class="mt-2.5 flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-fg-muted">Describe the change (optional)</span>
+                <textarea
+                  rows="3"
+                  aria-label="Describe the change"
+                  placeholder="e.g. Show it as a stacked bar by year and highlight France"
+                  [value]="tailorFreeText()"
+                  (input)="setTailorFreeText($any($event.target).value)"
+                  (keydown)="onFreeTextKeydown($event)"
+                  class="resize-y rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none placeholder:text-fg-muted focus:border-border-selected"
+                ></textarea>
+              </label>
               @if (tailorInstruction(); as instruction) {
                 <p class="mt-2.5 rounded-lg bg-surface-muted px-2.5 py-1.5 text-[11px] leading-5 text-fg-muted">
                   {{ instruction }}

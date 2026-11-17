@@ -88,6 +88,8 @@ export const ASK_HINTS: Readonly<Record<string, string>> = {
     'Analyse step: answers with new queries over the data, with no plan or checks around it.',
   'write-answer':
     'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+  'build-visual':
+    "Ryan designs a new visual from the earlier answer's rows, following what you type. No new queries run.",
 };
 
 /** How often, and how many times, a stopped run is read back until it is stored. */
@@ -218,15 +220,23 @@ export class WorkflowDesigner {
     const ran = new Map(
       this.runPanelSteps().map((step) => [step.id, step.status]),
     );
+    // Build visual works from the earlier answer's query rows (api.md 118):
+    // askable when there are some, even if it was skipped or made no visual.
+    const hasRows = (this.runResult()?.answer?.data ?? []).some(
+      (record) =>
+        record.tool === 'run_readonly_sql' && (record.rows?.length ?? 0) > 0,
+    );
     return workflow.steps.flatMap((step) => {
       const status = ran.get(step.id);
+      const buildVisual = step.id === 'build-visual';
       if (
         step.kind !== 'agent' ||
         !step.agent ||
         status === undefined ||
         status === null ||
-        status === 'skipped' ||
-        status === 'running'
+        status === 'running' ||
+        (buildVisual && !hasRows) ||
+        (status === 'skipped' && !buildVisual)
       ) {
         return [];
       }

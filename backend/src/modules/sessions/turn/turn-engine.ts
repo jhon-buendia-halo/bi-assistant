@@ -97,6 +97,7 @@ import {
   type AskAgentRuntime,
   type AskableStepId,
   type EarlierAnswerInput,
+  type EarlierVisualInput,
 } from '../../../mastra/workflows/ask-agent.steps';
 import { planSchema } from '../../../mastra/workflows/answer-business-question.schemas';
 import type { LlmService } from '../../llm/llm.service';
@@ -232,7 +233,9 @@ export interface TurnEngineDeps {
   ): Promise<{ id: string; name: string }>;
   /**
    * Build visual (agents.md 5.11): Ryan designs a visual from an answer not
-   * stored yet; `at` is the time the answer message is stored with.
+   * stored yet; `at` is the time the answer message is stored with. With
+   * an `instruction` (a follow-up that asks Build visual alone, 5.21),
+   * `question` is the earlier run's and the instruction is the follow-up's.
    */
   buildVisual(
     sessionId: string,
@@ -241,6 +244,7 @@ export interface TurnEngineDeps {
       answer: string;
       at: string;
       data: ToolDataRecord[];
+      instruction?: string;
     },
   ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
@@ -417,6 +421,30 @@ export class TurnEngine {
           rationale: record.rationale,
         }),
       });
+    };
+    // A follow-up that asks Write answer or Build visual alone (agents.md
+    // 5.21): the earlier answer's records join this turn's, each with the
+    // facts its evidence kept, so the answer's sources keep their coverage
+    // and view. Once per turn, however many times a step reads them.
+    let carried: ToolDataRecord[] | undefined;
+    const carryEarlierRecords = (): ToolDataRecord[] => {
+      if (carried) return carried;
+      const earlier = session.ask?.earlier;
+      carried = earlier?.records ?? [];
+      carried.forEach((record, index) => {
+        data.push(record);
+        const known = earlier?.evidence.find((entry) => entry.index === index);
+        if (!known) return;
+        recordFacts.set(record, {
+          ...(known.datasourceId ? { datasourceId: known.datasourceId } : {}),
+          ...(known.totalRows !== undefined
+            ? { totalRows: known.totalRows }
+            : {}),
+          ...(known.rowLimit !== undefined ? { rowLimit: known.rowLimit } : {}),
+          ...(known.view ? { view: known.view } : {}),
+        });
+      });
+      return carried;
     };
     // Consume one agent stream (agents.md 5.1 step 3).
     const consume = async (
@@ -819,7 +847,17 @@ export class TurnEngine {
           // turn's queries returned. The answer message is stored later
           // with the same time, so the visual's later actions find it. A
           // visual that cannot be built is reported, never a failed run.
-          buildVisual: async ({ question, answer }) => {
+          // Asked alone (agents.md 5.21), Ryan designs from the earlier
+          // question and answer, the follow-up as his instruction.
+          buildVisual: async ({
+            question,
+            answer,
+            instruction,
+          }: {
+            question: string;
+            answer: string;
+            instruction?: string;
+          }) => {
             const stop = () => ({ visual: {}, stopped: true });
             if (turn.signal.aborted) return stop();
             answerAt ??= new Date().toISOString();
@@ -829,11 +867,13 @@ export class TurnEngine {
                 answer,
                 at: answerAt,
                 data,
+                ...(instruction !== undefined ? { instruction } : {}),
               });
-              if (turn.signal.aborted) return stop();
+              // Stored before the stop: the step still names it, so the run
+              // logs it and it stays one click away.
               return {
                 visual: { visualId: metadata.id, title: metadata.title },
-                stopped: false,
+                stopped: turn.signal.aborted,
               };
             } catch (error) {
               if (turn.signal.aborted) return stop();
@@ -919,26 +959,7 @@ export class TurnEngine {
           // checks are those records' own, plus the earlier quality ones.
           earlierAnswer: (): EarlierAnswerInput => {
             const earlier = session.ask?.earlier;
-            const records = earlier?.records ?? [];
-            records.forEach((record, index) => {
-              data.push(record);
-              const known = earlier?.evidence.find(
-                (entry) => entry.index === index,
-              );
-              if (!known) return;
-              recordFacts.set(record, {
-                ...(known.datasourceId
-                  ? { datasourceId: known.datasourceId }
-                  : {}),
-                ...(known.totalRows !== undefined
-                  ? { totalRows: known.totalRows }
-                  : {}),
-                ...(known.rowLimit !== undefined
-                  ? { rowLimit: known.rowLimit }
-                  : {}),
-                ...(known.view ? { view: known.view } : {}),
-              });
-            });
+            const records = carryEarlierRecords();
             const stored = planSchema.safeParse(earlier?.plan);
             const plan = stored.success
               ? stored.data
@@ -954,6 +975,17 @@ export class TurnEngine {
               queries,
               findings: [...findings, ...(earlier?.qualityFindings ?? [])],
               imageNotes: earlier?.imageNotes ?? '',
+            };
+          },
+          // A follow-up that asks Build visual alone (agents.md 5.21): the
+          // earlier answer's records come into this answer as for Write
+          // answer, and Ryan charts their rows.
+          earlierVisual: (): EarlierVisualInput => {
+            const earlier = session.ask?.earlier;
+            return {
+              question: earlier?.question || trimmed,
+              answer: earlier?.answer ?? '',
+              queries: analyseQueriesOf(carryEarlierRecords()),
             };
           },
           writeAnswer: async (written) => {
@@ -1663,6 +1695,10 @@ export class TurnEngine {
         consumptionGap: ConsumptionGapRuntime;
         /** A follow-up that asks Write answer alone (agents.md 5.21). */
         earlierAnswer: () => EarlierAnswerInput;
+        /** A follow-up that asks Build visual alone (agents.md 5.21). */
+        earlierVisual: () => EarlierVisualInput;
+        /** Its designer call, the follow-up as Ryan's instruction. */
+        buildVisual: AskAgentRuntime['buildVisual'];
       },
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
@@ -1697,6 +1733,9 @@ export class TurnEngine {
         plan: (input) => captured(() => runtime.plan(input)),
         earlierAnswer: () => runtime.earlierAnswer(),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
+        earlierVisual: () => runtime.earlierVisual(),
+        buildVisual: (input: Parameters<AskAgentRuntime['buildVisual']>[0]) =>
+          captured(() => runtime.buildVisual(input)),
         deliverAnswer: (answer) => runtime.deliverAnswer(answer),
       } satisfies AskAgentRuntime);
     } else if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
