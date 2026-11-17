@@ -487,7 +487,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
 
       const view = q('workflow-business-view')!;
       const turn = view.querySelector('[data-testid="workflow-turn"]')!;
-      expect(turn.getAttribute('data-turn')).toBe('run-1');
+      expect(turn.getAttribute('data-history-id')).toBe('run-1');
       expect(turn.querySelector('[data-testid="workflow-turn-question"]')?.textContent?.trim()).toBe(
         'How many words?',
       );

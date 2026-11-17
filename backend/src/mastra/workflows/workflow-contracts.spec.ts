@@ -1,3 +1,4 @@
+import { edgeFlow } from './workflow-contract';
 // The real engine pulls in ESM-only packages Jest cannot require; the stub
 // runs `.then()` steps in order with the engine's step events (see it).
 jest.mock('@mastra/core/workflows', () =>
@@ -596,7 +597,8 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
           inputSchema: step.inputSchema,
           outputSchema: step.outputSchema,
         })),
-        edges: source.edges,
+        // A note is prose about the path (workflows R42), not the contract.
+        edges: source.edges.map(edgeFlow),
       }).toMatchSnapshot();
     },
   );

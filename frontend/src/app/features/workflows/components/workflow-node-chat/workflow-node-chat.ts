@@ -1,3 +1,7 @@
+import {
+  ChatHistoryItem,
+  ChatHistoryNav,
+} from '../../../../shared/components/chat-history-nav/chat-history-nav';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
@@ -79,7 +83,13 @@ function toStoredCall(call: LiveToolCall): WorkflowRunToolCall {
  */
 @Component({
   selector: 'app-workflow-node-chat',
-  imports: [ExecutionId, LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
+  imports: [
+    ChatHistoryNav,
+    ExecutionId,
+    LucideAngularModule,
+    MarkdownPipe,
+    NgTemplateOutlet,
+  ],
   templateUrl: './workflow-node-chat.html',
   host: { class: 'flex min-h-0 flex-1 flex-col' },
 })
@@ -123,6 +133,13 @@ export class WorkflowNodeChat {
   readonly liveToolCalls = computed(() => this.liveCalls().map(liveCallView));
 
   private readonly list = viewChild<ElementRef<HTMLElement>>('list');
+  protected readonly listElement = computed(() => this.list()?.nativeElement);
+  /** The user's messages, for the chat-history navigation (ui.md). */
+  protected readonly historyItems = computed<ChatHistoryItem[]>(() =>
+    this.messages().flatMap((m) =>
+      m.role === 'user' ? [{ id: m.id, label: m.content }] : [],
+    ),
+  );
   private readonly composer =
     viewChild<ElementRef<HTMLTextAreaElement>>('composer');
   private readonly key = computed(() => {

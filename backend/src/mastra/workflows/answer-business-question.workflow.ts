@@ -555,12 +555,16 @@ const answerPathWorkflow = createWorkflow({
   // Build visual unless the run turns it off (its input's `buildVisual`),
   // from the answer and the queries' rows; Wrap up sums up either way.
   .map(
-    async (params) =>
-      Promise.resolve({
+    async (params) => {
+      const { question, queries } = answerPathInputSchema.parse(
+        params.getInitData(),
+      );
+      return Promise.resolve({
         ...(params.inputData as Record<string, unknown>),
-        question: (params.getInitData() as { question: string }).question,
-        queries: (params.getInitData() as { queries: unknown[] }).queries,
-      }),
+        question,
+        queries,
+      });
+    },
     { id: 'visual-input' },
   )
   .branch([

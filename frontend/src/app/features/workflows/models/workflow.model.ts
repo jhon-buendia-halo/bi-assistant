@@ -220,6 +220,8 @@ export interface WorkflowEdge {
   kind: 'next' | 'branch' | 'loop';
   /** `Needs clarification`, `Clear`, `Retry once`, `Valid or retried`. */
   label?: string;
+  /** What happens on this path, in business words (workflows R42); a labelled edge has one. */
+  note?: string;
 }
 
 /**

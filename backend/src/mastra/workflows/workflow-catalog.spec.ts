@@ -1,3 +1,4 @@
+import { edgeFlow } from './workflow-contract';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { OFFICIAL_AGENT_KEYS, SYSTEM_AGENT_KEYS } from '../agent-constants';
@@ -118,7 +119,9 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     // Analyse, and the optional branch from Write answer to Build visual.
     expect(CODE_WORKFLOWS[0].edges).toHaveLength(19);
     expect(
-      CODE_WORKFLOWS[0].edges.filter((edge) => edge.kind !== 'next'),
+      CODE_WORKFLOWS[0].edges
+        .filter((edge) => edge.kind !== 'next')
+        .map(edgeFlow),
     ).toEqual([
       {
         from: 'start',
@@ -179,6 +182,24 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
   });
 
   // Reference images (workflows R35; agents.md 2.15; api.md 116; plan D5).
+  it('explains every labelled connector of every workflow in a note (workflows R42)', () => {
+    const labelled = CODE_WORKFLOWS.flatMap((workflow) =>
+      workflow.edges
+        .filter((edge) => edge.label)
+        .map((edge) => ({ workflow: workflow.id, ...edge })),
+    );
+    expect(labelled.length).toBeGreaterThan(0);
+    expect(
+      labelled
+        .filter((edge) => !edge.note?.trim())
+        .map((edge) => `${edge.workflow}: ${edge.from} -> ${edge.to}`),
+    ).toEqual([]);
+    for (const edge of labelled) {
+      expect(edge.note!.length).toBeLessThanOrEqual(100);
+      expect(edge.note).toMatch(/\.$/);
+    }
+  });
+
   describe('reference images', () => {
     const byId = (id: string) =>
       CODE_WORKFLOWS.find((workflow) => workflow.id === id)!;

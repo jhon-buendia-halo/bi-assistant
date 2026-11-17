@@ -1,32 +1,12 @@
 <div class="relative flex h-full min-h-0 flex-col">
-  <!-- Chat-history navigator: tick per user message; hover opens the list -->
-  @if (historyItems().length > 0) {
-    <div
-      class="absolute top-4 right-1.5 z-20 flex flex-col items-end"
-      (mouseenter)="historyOpen.set(true)"
-      (mouseleave)="historyOpen.set(false)"
-    >
-      <div class="flex flex-col items-center gap-1.5 px-2 py-1">
-        @for (item of historyItems(); track item.index) {
-          <span class="h-0.5 w-4 rounded-full bg-border-strong"></span>
-        }
-      </div>
-      @if (historyOpen()) {
-        <div
-          class="absolute top-0 right-8 max-h-[70vh] w-[300px] overflow-y-auto menu"
-        >
-          @for (item of historyItems(); track item.index) {
-            <button
-              (click)="scrollToMessage(item.index)"
-              class="w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg hover:bg-surface-muted"
-            >
-              {{ item.message.content }}
-            </button>
-          }
-        </div>
-      }
-    </div>
-  }
+  <!-- Chat-history navigation: a tick per user message, the list on hover or focus -->
+  <app-chat-history-nav
+    class="absolute top-4 right-1.5 z-20"
+    [container]="scrollerElement()"
+    [items]="historyItems()"
+    label="Chat history"
+    testIdPrefix="session-chat-history"
+  />
 
   <!-- Messages: a past chat is read-only (past-chats R66) -->
   <div #scroller class="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-4">
@@ -37,7 +17,10 @@
         let i = $index
       ) {
         @if (message.role === "user") {
-          <div class="group flex items-end justify-end gap-2" [id]="'msg-' + i">
+          <div
+            class="group flex items-end justify-end gap-2"
+            [attr.data-history-id]="'' + i"
+          >
             <button
               (click)="copyMessage(message.content)"
               title="Copy message"

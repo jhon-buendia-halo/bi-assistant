@@ -781,6 +781,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     to: string;                       // a step id, or 'end'
     kind: 'next' | 'branch' | 'loop'; // the plain flow; one path a condition picks; the way back to an earlier step
     label?: string;                   // what the canvas writes on the edge
+    note?: string;                    // what happens on this path, in business words (workflows R42): under the label; every labelled edge has one; not part of the contract hash
   };
   // JSON Schema draft 2020-12 as Zod 4's z.toJSONSchema writes it, without `$schema`: an object schema
   // whose `properties` each carry `type` (a string, or e.g. ['string', 'null'] for a nullable field),

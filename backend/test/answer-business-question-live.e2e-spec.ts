@@ -22,12 +22,7 @@ import {
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
 import { type Backend, boot, stop } from './backend-process';
-import {
-  isAnalyseRequest,
-  isPlanRequest,
-  isWriteAnswerRequest,
-  useV2Steps,
-} from './v2-stub';
+import { isAnalyseRequest, isPlanRequest, useV2Steps } from './v2-stub';
 import { runClient, type StoredRun } from './workflow-run-client';
 import {
   WORLD_CUP_CONNECTION,

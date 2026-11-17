@@ -134,7 +134,6 @@ export class MastraService {
     return interpretResultWithModel(...args);
   }
 
-
   /**
    * Dashboard Image to Artifact's Read dashboard step model call (agents.md
    * 5.17): the Dashboard Reader over the image, the blueprint read from

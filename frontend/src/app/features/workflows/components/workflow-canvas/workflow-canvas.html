@@ -127,6 +127,19 @@
             @for (line of edge.branchLabelLines; track $index) {
               <span class="block">{{ $first ? "" : " " }}{{ line }}</span>
             }
+            @if (edge.branchNoteLines.length) {
+              <!-- What happens on this path (R42), under its label -->
+              <span
+                class="block font-normal text-fg-muted"
+                [attr.data-testid]="
+                  'workflow-edge-note-' + edge.from + '-' + edge.to
+                "
+              >
+                @for (line of edge.branchNoteLines; track $index) {
+                  <span class="block">{{ $first ? "" : " " }}{{ line }}</span>
+                }
+              </span>
+            }
           </span>
         }
       }

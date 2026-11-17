@@ -17,6 +17,7 @@
       }
     </p>
 
+    <div class="relative flex min-h-0 flex-1 flex-col">
     <div
       #list
       role="log"
@@ -38,6 +39,7 @@
             [attr.data-role]="message.role"
             [attr.aria-label]="message.role === 'user' ? 'You' : 'Agent'"
             class="flex flex-col gap-1.5"
+            [attr.data-history-id]="message.role === 'user' ? message.id : null"
             [class.items-end]="message.role === 'user'"
           >
             @if (message.role === "user") {
@@ -101,6 +103,14 @@
           </div>
         }
       }
+    </div>
+    <app-chat-history-nav
+      class="absolute top-2 right-4 z-20"
+      [container]="listElement()"
+      [items]="historyItems()"
+      label="Chat history"
+      testIdPrefix="node-chat-history"
+    />
     </div>
 
     @if (error(); as message) {

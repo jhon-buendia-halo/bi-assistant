@@ -409,12 +409,14 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       q('workflow-connector-start-receive-question')?.getAttribute('d'),
     ).toBe(`M 128 ${cy} L 221 ${cy}`);
     const label = q('workflow-connector-label-analyse-wrap-up')!;
-    expect(text(label)).toBe('2 fieldsPasses on: calls, stopped');
+    expect(text(label)).toBe(
+      '2 fieldsNext: Wrap up. s Passes on: calls, stopped',
+    );
     expect(text(label.querySelector('[aria-hidden="true"]'))).toBe('2 fields');
-    expect(text(label.querySelector('.sr-only'))).toBe(
+    expect(text(label.querySelector('.sr-only'))).toContain(
       'Passes on: calls, stopped',
     );
-    expect(label.getAttribute('title')).toBe('Passes on: calls, stopped');
+    expect(label.getAttribute('title')).toContain('Passes on: calls, stopped');
     expect(
       text(
         q('workflow-connector-label-wrap-up-end')?.querySelector(
@@ -471,12 +473,12 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
     it("types each edge's fields from the declared schema", () => {
       expect(
         text(label('start-receive-question').querySelector('.sr-only')),
-      ).toBe('Passes on: question (string), datasets (string[])');
-      expect(label('analyse-wrap-up').getAttribute('title')).toBe(
+      ).toContain('Passes on: question (string), datasets (string[])');
+      expect(label('analyse-wrap-up').getAttribute('title')).toContain(
         'Passes on: calls (object[]), stopped (boolean)',
       );
       // A step with no declared output keeps the names alone.
-      expect(label('wrap-up-end').getAttribute('title')).toBe(
+      expect(label('wrap-up-end').getAttribute('title')).toContain(
         'Passes on: sqlQueries, failedQueries, rows',
       );
     });
@@ -503,7 +505,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
           'violation',
         ),
       ).toBeTrue();
-      expect(label('load-catalog-analyse').getAttribute('title')).toBe(
+      expect(label('load-catalog-analyse').getAttribute('title')).toContain(
         'Passes on: question, catalog. Contract violation',
       );
     });
@@ -513,7 +515,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
       fixture.detectChanges();
       expect(violation('analyse-wrap-up')).toBe('true');
       expect(violation('load-catalog-analyse')).toBeNull();
-      expect(text(label('analyse-wrap-up').querySelector('.sr-only'))).toBe(
+      expect(
+        text(label('analyse-wrap-up').querySelector('.sr-only')),
+      ).toContain(
         'Passes on: calls (object[]), stopped (boolean). Contract violation',
       );
       expect(el.querySelectorAll('[data-violation="true"]').length).toBe(1);
@@ -715,7 +719,9 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
 
   it("shows a code step's run line in place of its id while a run is shown", () => {
     const node = () => q('workflow-node-load-catalog')!;
-    expect(node().querySelector('[data-testid="workflow-node-id"]')).not.toBeNull();
+    expect(
+      node().querySelector('[data-testid="workflow-node-id"]'),
+    ).not.toBeNull();
     fixture.componentRef.setInput('runLines', {
       'load-catalog': {
         text: '9 tables · 2 ms',

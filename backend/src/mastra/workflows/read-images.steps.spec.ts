@@ -1,3 +1,4 @@
+import { edgeFlow } from './workflow-contract';
 import { z } from 'zod';
 import {
   checkWorkflowContract,
@@ -58,7 +59,7 @@ describe('Read images: the catalogue entry and edges (agents.md 2.15, 5.11)', ()
   });
 
   it('branches from Start to Read images and on to the first step, which Start also reaches', () => {
-    expect(readImagesEdges('receive-question')).toEqual([
+    expect(readImagesEdges('receive-question').map(edgeFlow)).toEqual([
       {
         from: 'start',
         to: 'receive-question',

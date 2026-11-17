@@ -289,9 +289,10 @@ export class WorkflowCanvas {
 
   /** The edge label's title and screen-reader text. */
   protected edgeText(edge: CanvasEdge): string {
-    return this.violated(edge)
+    const text = this.violated(edge)
       ? `${edge.passesOn}. Contract violation`
       : edge.passesOn;
+    return edge.about ? `${edge.about} ${text}` : text;
   }
 
   protected subNodeLabel(node: CanvasNode, sub: CanvasSubNode): string {

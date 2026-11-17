@@ -34,9 +34,9 @@ import {
   WorkflowConversation,
 } from '../../services/workflow-conversation';
 import {
-  ConversationNavItem,
-  WorkflowConversationNav,
-} from '../workflow-conversation-nav/workflow-conversation-nav';
+  ChatHistoryItem,
+  ChatHistoryNav,
+} from '../../../../shared/components/chat-history-nav/chat-history-nav';
 import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
 import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
@@ -116,7 +116,7 @@ const FORM_CONTROLS =
     WorkflowRunInputRequired,
     WorkflowRunStory,
     WorkflowRunTeam,
-    WorkflowConversationNav,
+    ChatHistoryNav,
     RunArtifactCard,
   ],
   providers: [WorkflowConversation],
@@ -303,58 +303,29 @@ export class WorkflowRunChat {
     const el = this.log()?.nativeElement;
     if (el === undefined) return;
     this.stickToEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    this.updateActiveTurn();
   }
 
   /** Business view: the earlier questions of this conversation (R38). */
   protected readonly conversation = inject(WorkflowConversation);
 
   /** The conversation navigation's questions; empty under two (R38). */
-  protected readonly navItems = computed<ConversationNavItem[]>(() => {
+  protected readonly navItems = computed<ChatHistoryItem[]>(() => {
     if (!this.business()) return [];
     const current = this.designer.shownQuestion();
-    const items: ConversationNavItem[] = this.conversation
+    const items: ChatHistoryItem[] = this.conversation
       .earlier()
       .map((turn) => ({ id: turn.runId, label: turn.question }));
     if (current) items.push({ id: 'current', label: current });
     return items.length >= 2 ? items : [];
   });
 
-  /** The question in view: the last one whose top has passed a third of the chat. */
-  protected readonly activeTurn = signal<string>('current');
-
-  private updateActiveTurn(): void {
-    const el = this.log()?.nativeElement;
-    if (el === undefined || this.navItems().length === 0) return;
-    const line = el.getBoundingClientRect().top + el.clientHeight / 3;
-    let active = 'current';
-    let first = true;
-    for (const turn of Array.from(
-      el.querySelectorAll<HTMLElement>('[data-turn]'),
-    )) {
-      if (first || turn.getBoundingClientRect().top <= line) {
-        active = turn.dataset['turn'] ?? 'current';
-      }
-      first = false;
-    }
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 8) {
-      active = 'current';
-    }
-    this.activeTurn.set(active);
-  }
-
-  /** A question picked in the navigation: scroll the chat to it. */
-  protected goToTurn(id: string): void {
-    const el = this.log()?.nativeElement;
-    const turn = el?.querySelector<HTMLElement>(
-      `[data-turn="${CSS.escape(id)}"]`,
-    );
-    if (el === undefined || turn === null || turn === undefined) return;
+  /** A question picked in the navigation: the chat stops following the run. */
+  protected onHistoryPicked(): void {
     this.stickToEnd = false;
-    el.scrollTop +=
-      turn.getBoundingClientRect().top - el.getBoundingClientRect().top - 8;
-    this.activeTurn.set(id);
   }
+
+  /** The chat's scrolling element, for the conversation navigation. */
+  protected readonly logElement = computed(() => this.log()?.nativeElement);
 
   /** A figure of an earlier turn: its query opens in the sheet, from that run. */
   protected inspectEarlierQuery(turn: ConversationTurn, index: number): void {

@@ -167,6 +167,21 @@ Feature: Session management
     Then I see the "Cup history" chat open
 ```
 
+### Feature: Chat-history navigation
+
+E2E: `frontend/e2e/chat-history-nav.spec.ts`. The shared control is specified once in [ui.md](../../system/ui.md) 3.8; this Feature covers it on a past chat.
+
+```gherkin
+Feature: Chat-history navigation
+
+  Scenario: a past chat with several questions has a history navigation that scrolls to a question
+    Given a past chat with three questions and long answers
+    When I open it from Past chats
+    Then the chat-history navigation shows three ticks, the last question in view
+    When I hover it and pick the first question
+    Then the chat scrolls to that question and it is marked as in view
+```
+
 ## Acceptance
 
 - Every scenario above passes. The covered Feature runs in `runs.spec.ts`.
