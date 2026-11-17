@@ -953,6 +953,92 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       expect(designer.askedAgentName()).toBeNull();
     });
 
+    describe('Build visual', () => {
+      const ROWS = {
+        tool: 'run_readonly_sql',
+        columns: ['team'],
+        rows: [{ team: 'Brazil' }],
+        rowCount: 1,
+      };
+      const withVisual = (): void =>
+        designer.workflow.set({
+          ...ASK,
+          steps: [
+            ...ASK.steps,
+            agentStep('build-visual', 'Build visual', 'Ryan', 'Visual Designer'),
+          ],
+        });
+      const answer = (data: unknown[]): Partial<WorkflowRun> => ({
+        answer: {
+          role: 'assistant',
+          content: 'Brazil',
+          at: '2026-01-01T00:00:00Z',
+          data,
+        } as never,
+      });
+
+      it('is offered after the other agents when the earlier answer has query rows, even skipped', () => {
+        withVisual();
+        executeQuestion();
+        runs.last.handlers.onDone!(
+          storedRun({
+            ...answer([ROWS]),
+            steps: [
+              step('analyse', 'success'),
+              step('build-visual', 'skipped'),
+            ],
+          }),
+        );
+        expect(designer.askableSteps().map((s) => s.id)).toEqual([
+          'analyse',
+          'build-visual',
+        ]);
+        designer.askStep.set('build-visual');
+        expect(designer.askHint()).toBe(ASK_HINTS['build-visual']);
+        expect(designer.askedAgentName()).toBe('Ryan');
+      });
+
+      it('is left out when the answer has no query rows or the step is running or absent', () => {
+        withVisual();
+        executeQuestion();
+        runs.last.handlers.onDone!(
+          storedRun({
+            ...answer([{ tool: 'run_readonly_sql', rows: [], rowCount: 0 }]),
+            steps: [step('build-visual', 'success')],
+          }),
+        );
+        expect(designer.askableSteps()).toEqual([]);
+        runs.last.handlers.onDone!(
+          storedRun({ steps: [step('build-visual', 'success')] }),
+        );
+        expect(designer.askableSteps()).toEqual([]);
+        runs.last.handlers.onDone!(
+          storedRun({
+            ...answer([ROWS]),
+            steps: [step('build-visual', 'running')],
+          }),
+        );
+        expect(designer.askableSteps()).toEqual([]);
+        runs.last.handlers.onDone!(
+          storedRun({ ...answer([ROWS]), steps: [step('analyse', 'success')] }),
+        );
+        expect(designer.askableSteps().map((s) => s.id)).toEqual(['analyse']);
+      });
+
+      it('a stored run with context.askStep build-visual names Ryan', () => {
+        withVisual();
+        executeQuestion();
+        runs.last.handlers.onDone!(
+          storedRun({
+            id: 'run-2',
+            context: { fromRunId: 'run-1', askStep: 'build-visual' },
+            steps: [step('build-visual', 'success')],
+          }),
+        );
+        expect(designer.contextAgent()).toBe('Ryan');
+      });
+    });
+
     it('a stored run with context.askStep names the agent asked', () => {
       executeQuestion();
       runs.last.handlers.onDone!(
