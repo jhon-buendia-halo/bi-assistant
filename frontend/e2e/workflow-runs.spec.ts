@@ -195,8 +195,7 @@ test.describe('Feature: Workflow runs', () => {
         async () => {
           await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
           await expect(runStep(page, 'analyse')).toHaveAttribute('data-status', 'running');
-          await expect(page.getByTestId('workflow-run-live')).toContainText('Thinking');
-          await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+          await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
           await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
           held.release();
         },
@@ -641,7 +640,7 @@ test.describe('Feature: Workflow runs', () => {
         await openRunTab(page);
         await fillRun(page, QUESTION, WORLD_CUP_DATASET);
         await page.getByTestId('workflow-run').click();
-        await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+        await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
       });
       await test.step('When I click Stop', async () => {
         await page.getByTestId('workflow-run-stop').click();
@@ -686,7 +685,7 @@ test.describe('Feature: Workflow runs', () => {
           await openRunTab(page);
           await fillRun(page, QUESTION, WORLD_CUP_DATASET);
           await page.getByTestId('workflow-run').click();
-          await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+          await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
         });
         await scenarioStep(page, 'When I go to another area', async () => {
           await railItem(page, 'Datasets').click();
@@ -720,8 +719,7 @@ test.describe('Feature: Workflow runs', () => {
           async () => {
             await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);
             await expect(nodeStatus(page, 'analyse')).toHaveText('Running');
-            await expect(page.getByTestId('workflow-run-live')).toContainText('Thinking');
-            await expect(page.getByTestId('workflow-run-tool')).toContainText('run_readonly_sql');
+            await expect(page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first()).toBeVisible();
             await expect(page.getByTestId('workflow-run-stop')).toBeVisible();
           },
         );

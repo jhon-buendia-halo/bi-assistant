@@ -70,12 +70,10 @@ test('renders a streamed run: reasoning, tool activity, final Markdown, and supp
 
   try {
     await runQuestionInTab(page, QUESTION, WORLD_CUP_DATASET);
-    await expect(page.getByTestId('workflow-run-live')).toContainText(
-      'Thinking',
-    );
-    await expect(page.getByTestId('workflow-run-tool')).toContainText(
-      'run_readonly_sql',
-    );
+    // The agent's query, in words under the agent (ui.md 4.4b).
+    await expect(
+      page.locator('[data-testid="workflow-run-tool"][data-tool="run_readonly_sql"]').first(),
+    ).toBeVisible();
     held.release();
 
     // The answer's Markdown is rendered, not shown as source.

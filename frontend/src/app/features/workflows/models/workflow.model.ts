@@ -279,6 +279,8 @@ export interface WorkflowRunToolCall {
   error?: string;
   /** From the `tool` event to its `tool-result`; absent when no result came. */
   durationMs?: number;
+  /** Why the agent made the call, in its words (the `tool` event's `rationale`). */
+  rationale?: string;
 }
 
 /** One labelled fact under a step story's headline (api.md 3.6 `step.story`). */

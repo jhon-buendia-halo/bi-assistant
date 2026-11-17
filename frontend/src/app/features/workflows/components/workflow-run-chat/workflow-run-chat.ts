@@ -24,7 +24,6 @@ import {
   Square,
   SquarePen,
   Workflow,
-  Wrench,
   X,
 } from 'lucide-angular';
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
@@ -66,6 +65,8 @@ import {
 import { WorkflowRunInputRequired } from '../workflow-run-input-required/workflow-run-input-required';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { WorkflowRunTeam } from '../workflow-run-team/workflow-run-team';
+import { AgentActivity } from '../agent-activity/agent-activity';
+import { activitySteps } from '../../services/agent-activity';
 import { WorkflowRunStory } from '../workflow-run-story/workflow-run-story';
 import { WorkflowRunAttachments } from './workflow-run-attachments';
 import {
@@ -116,6 +117,7 @@ const FORM_CONTROLS =
     WorkflowRunInputRequired,
     WorkflowRunStory,
     WorkflowRunTeam,
+    AgentActivity,
     ChatHistoryNav,
     RunArtifactCard,
   ],
@@ -202,7 +204,6 @@ export class WorkflowRunChat {
   protected readonly Square = Square;
   protected readonly SquarePen = SquarePen;
   protected readonly Workflow = Workflow;
-  protected readonly Wrench = Wrench;
   protected readonly X = X;
 
   /**
@@ -475,6 +476,32 @@ export class WorkflowRunChat {
         .runPanelSteps()
         .some((step) => step.kind === 'agent' && step.status === 'running'),
   );
+
+  /**
+   * The running agent step has a row in the team, where its thought and
+   * steps show; a step with no persona shows them in the live block.
+   */
+  protected readonly liveStepInTeam = computed(() =>
+    [...this.designer.agentStories().values()].some(
+      (story) => story.state === 'active',
+    ),
+  );
+
+  /** The running step's calls as plain-language steps, for the live block. */
+  protected readonly liveActivity = computed(() =>
+    activitySteps(
+      this.designer.toolCalls().map((call) => ({ ...call, tool: call.name })),
+      true,
+    ),
+  );
+
+  /** A query line of the live block: open the running step's queries. */
+  protected openRunningStep(): void {
+    const step = this.designer
+      .runPanelSteps()
+      .find((s) => s.kind === 'agent' && s.status === 'running');
+    if (step) this.openStep(step.id);
+  }
 
   /**
    * A code step running with progress of its own (Review a Website's pages,

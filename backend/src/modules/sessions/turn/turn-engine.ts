@@ -641,6 +641,18 @@ export class TurnEngine {
             }
             const record = toolDataRecord(toolName, args, payload.result);
             if (record) captureRecord(record, payload.toolCallId);
+            else {
+              // Every call ends with its result, so the client never leaves
+              // a lookup (describe_entity, skill…) spinning (api.md 3.1).
+              const error = resultError(payload.result);
+              emit({
+                type: 'tool-result',
+                content: JSON.stringify({
+                  tool: toolName,
+                  ...(error ? { error } : {}),
+                }),
+              });
+            }
           }
         }
       } catch (error) {
