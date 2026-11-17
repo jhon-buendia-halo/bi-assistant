@@ -638,7 +638,7 @@ describe('WorkflowCanvas (workflows R7; ui.md 4.4b)', () => {
 
   it('Execute workflow floats over the canvas and asks to execute', () => {
     const button = q('workflow-execute') as HTMLButtonElement;
-    expect(text(button)).toBe('Execute workflow');
+    expect(text(button)).toBe('Execute user journey');
     expect(button.type).toBe('button');
     button.click();
     expect(executed).toBe(1);

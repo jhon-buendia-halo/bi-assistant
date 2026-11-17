@@ -115,18 +115,18 @@ test('has no automatically detectable accessibility violations on any screen in 
     [
       'Agents',
       async () => {
-        await rail('Agents').click();
+        await rail('Agent personas').click();
         await expect(
-          page.getByRole('heading', { name: 'Agents' }),
+          page.getByRole('heading', { name: 'Agent personas' }),
         ).toBeVisible();
       },
     ],
     [
       'Agent detail',
       async () => {
-        await rail('Agents').click();
+        await rail('Agent personas').click();
         await page.getByTestId('agent-assistant').click();
-        await expect(page.getByText('All agents')).toBeVisible();
+        await expect(page.getByText('All agent personas')).toBeVisible();
       },
     ],
     [

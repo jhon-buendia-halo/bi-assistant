@@ -139,7 +139,7 @@
           <span class="font-medium text-fg">{{
             askWorkflow()?.name ?? "Answer a Business Question"
           }}</span>
-          workflow · Shift+Enter for a new line
+          user journey · Shift+Enter for a new line
         </span>
         <button
           type="submit"
@@ -171,7 +171,7 @@
             class="card m-0 p-3 text-[13px] text-fg-muted"
             data-testid="welcome-runs-empty"
           >
-            No runs yet. Your questions and workflow runs show up here.
+            No runs yet. Your questions and user journey runs show up here.
           </p>
         } @else {
           <ul
@@ -234,10 +234,10 @@
           id="welcome-workflows-title"
           class="mb-2 text-[12px] font-semibold tracking-wide text-fg-muted uppercase"
         >
-          Other workflows
+          Other user journeys
         </h3>
         @if (workflows() === null) {
-          <p class="m-0 text-[13px] text-fg-muted">Loading workflows…</p>
+          <p class="m-0 text-[13px] text-fg-muted">Loading user journeys…</p>
         } @else {
           <ul
             class="card m-0 list-none divide-y divide-border overflow-hidden p-0"
@@ -293,8 +293,8 @@
       class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
     >
       <p class="m-0 text-[13px] text-fg-muted">
-        Agents are the building blocks behind every step. Open one to read how
-        it works, or build your own.
+        Agent personas are the building blocks behind every step. Open one to
+        read how it works, or build your own.
       </p>
       <button
         type="button"
@@ -303,7 +303,7 @@
         (click)="openArea('agents')"
       >
         <lucide-angular [img]="Bot" [size]="16" />
-        Explore agents
+        Explore agent personas
       </button>
     </div>
   </div>

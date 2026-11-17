@@ -21,7 +21,7 @@
       #list
       role="log"
       aria-live="polite"
-      aria-label="Chat with this step's agent"
+      aria-label="Chat with this step's agent persona"
       data-testid="workflow-node-chat-messages"
       tabindex="0"
       class="flex min-h-[120px] flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-border p-3"
@@ -118,7 +118,7 @@
       (submit)="$event.preventDefault(); send()"
     >
       <label for="workflow-node-chat-input" class="sr-only">
-        Ask this step's agent
+        Ask this step's agent persona
       </label>
       <textarea
         #composer

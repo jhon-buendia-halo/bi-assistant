@@ -331,7 +331,7 @@ export class SessionsState {
 
   deleteSession(session: Session): void {
     const confirmed = window.confirm(
-      `Delete “${session.name}”?\n\nThis permanently removes its conversation, agent memory, and workspace files.`,
+      `Delete “${session.name}”?\n\nThis permanently removes its conversation, agent persona memory, and workspace files.`,
     );
     if (!confirmed) return;
 

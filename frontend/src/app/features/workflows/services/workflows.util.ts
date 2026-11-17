@@ -50,7 +50,7 @@ export function workflowsEmptyMessage(
 ): string | null {
   if (sections.length > 0) return null;
   const trimmed = query.trim();
-  return trimmed ? `No workflows match "${trimmed}"` : null;
+  return trimmed ? `No user journeys match "${trimmed}"` : null;
 }
 
 /** The kind chip: `<n> steps` (workflows R5). */

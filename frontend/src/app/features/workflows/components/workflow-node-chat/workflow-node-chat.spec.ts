@@ -116,7 +116,7 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
     open({ state: 'no-run' });
     expect(text(byId('workflow-node-chat-unavailable'))).toBe(NODE_CHAT_NO_RUN);
     expect(NODE_CHAT_NO_RUN).toBe(
-      "Execute the workflow, then chat with this agent about this step's data.",
+      "Execute the user journey, then chat with this agent persona about this step's data.",
     );
     expect(byId('workflow-node-chat')).toBeNull();
     expect(api.getNodeChat).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
   it('has a labelled box; Send is disabled while it is blank', () => {
     open();
     const label = el().querySelector(`label[for="${input().id}"]`);
-    expect(text(label)).toBe("Ask this step's agent");
+    expect(text(label)).toBe("Ask this step's agent persona");
     expect(send().disabled).toBe(true);
     type('   ');
     expect(send().disabled).toBe(true);

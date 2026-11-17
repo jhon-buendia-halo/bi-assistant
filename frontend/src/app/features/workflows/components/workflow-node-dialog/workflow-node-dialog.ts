@@ -95,10 +95,10 @@ const VIEW_LABELS: Record<ArtifactView, string> = {
 const INTRO_MAX = 280;
 
 const NOT_RUN =
-  'This node has not run yet. Execute the workflow to see its data.';
+  'This node has not run yet. Execute the user journey to see its data.';
 
 const TOOL_NOT_RUN =
-  'This tool has not run yet. Execute the workflow to see its calls.';
+  'This tool has not run yet. Execute the user journey to see its calls.';
 
 const KIND_ICONS = {
   trigger: Zap,
@@ -413,7 +413,9 @@ export class WorkflowNodeDialog {
   /** The agent of an agent step, by name. */
   readonly agentName = computed(
     () =>
-      this.node().agent?.name ?? this.node().step?.agent?.name ?? 'the agent',
+      this.node().agent?.name ??
+      this.node().step?.agent?.name ??
+      'the agent persona',
   );
   /** The Preview of an agent step's artifact: built from the attempt shown. */
   readonly narrative = computed(() => {

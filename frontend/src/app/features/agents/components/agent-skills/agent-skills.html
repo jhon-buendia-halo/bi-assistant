@@ -1,13 +1,14 @@
 <div class="flex flex-col gap-4">
   @if (userAgent()) {
     <p class="text-[12px] text-fg-muted">
-      This agent runs on the assistant, so it uses the assistant's skills.
+      This agent persona runs on the assistant, so it uses the assistant's
+      skills.
     </p>
   }
 
   <div>
     @if (skills().length === 0) {
-      <p class="text-[13px] text-fg-muted">This agent has no skills.</p>
+      <p class="text-[13px] text-fg-muted">This agent persona has no skills.</p>
     } @else {
       <div class="flex flex-col gap-2">
         @for (skill of skills(); track skill.name) {

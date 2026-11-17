@@ -17,9 +17,9 @@ export async function openWorkflowPage(
   id: string,
   name: string,
 ): Promise<void> {
-  await railItem(page, 'Workflows').click();
+  await railItem(page, 'User journeys').click();
   await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
   ).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);

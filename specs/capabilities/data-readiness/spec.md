@@ -294,9 +294,9 @@ Feature: Data readiness
 
   Scenario: the Data Readiness Agent is an Official library agent used by Assess Data Readiness
     Given the app runs with the LLM stub as its provider
-    When I open "Agents"
+    When I open "Agent personas"
     Then the "Official" section shows "Data Readiness Agent" with "Owner: Official" and no "Start chat" or "Run"
-    When I open "Workflows"
+    When I open "User journeys"
     Then I see "Assess Data Readiness" and do not see "Data Readiness Agent"
     When I open the "Data Readiness Agent" agent
     Then its "Used in" line shows "Assess Data Readiness"

@@ -75,7 +75,7 @@
   @if (editor.loading()) {
     <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading agent…</span>
+      <span>Loading agent persona…</span>
     </div>
   } @else if (editor.loadError(); as err) {
     <p
@@ -130,7 +130,7 @@
           }
         </select>
         <p class="text-[12px] text-fg-muted">
-          The Agents screen groups agents by domain.
+          The Agent personas screen groups agent personas by domain.
         </p>
       </div>
 

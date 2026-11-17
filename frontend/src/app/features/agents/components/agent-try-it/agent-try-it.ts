@@ -89,7 +89,7 @@ export class AgentTryIt implements OnDestroy {
     const state = this.state();
     if (state.kind === 'error') return state.message;
     if (state.kind === 'done' && !state.run.answer) {
-      return state.run.error ?? 'The agent gave no answer.';
+      return state.run.error ?? 'The agent persona gave no answer.';
     }
     return null;
   });

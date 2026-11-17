@@ -2,11 +2,11 @@
   <h2
     class="text-[20px] leading-7 font-light tracking-[0.12px] text-fg-strong"
   >
-    Workflows
+    User journeys
   </h2>
   <p class="mt-1 text-[13px] text-fg-muted">
-    Each workflow runs on an input. Its steps call agents, and agents use skills
-    and tools.
+    Each user journey runs on an input. Its steps call agent personas, and agent
+    personas use skills and tools.
   </p>
 
   <!-- Search: a full-width row under the header -->
@@ -19,8 +19,8 @@
     <input
       type="search"
       data-testid="workflow-search"
-      placeholder="Search workflows by name or description"
-      aria-label="Search workflows by name or description"
+      placeholder="Search user journeys by name or description"
+      aria-label="Search user journeys by name or description"
       [value]="query()"
       (input)="onSearch($event)"
       class="field pl-10"
@@ -30,7 +30,7 @@
   @if (loading()) {
     <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading workflows…</span>
+      <span>Loading user journeys…</span>
     </div>
   } @else if (error(); as err) {
     <p

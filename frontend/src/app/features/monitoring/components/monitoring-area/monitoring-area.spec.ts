@@ -46,7 +46,7 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
     fixture.detectChanges();
     expect(
       page?.querySelector('[data-testid="monitoring-note"]')?.textContent?.trim(),
-    ).toBe("LLM calls made by the app's agents, newest first.");
+    ).toBe("LLM calls made by the app's agent personas, newest first.");
     expect(compiled.querySelector('app-llm-calls-page')).toBeTruthy();
     http
       .expectOne((req) => req.url.endsWith('/monitoring/llm-calls'))
@@ -132,7 +132,7 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
     expect(state.tab()).toBe('sessions');
     expect(q('monitoring-tab-sessions').getAttribute('aria-selected')).toBe('true');
     expect(q('monitoring-note').textContent?.trim()).toBe(
-      'Runs with recorded agent calls, most recent first.',
+      'Runs with recorded agent persona calls, most recent first.',
     );
     await fixture.whenStable();
     fixture.detectChanges();
@@ -152,7 +152,7 @@ describe('Monitoring area (app-shell R3b, roadmap 1.21.14-1.21.16)', () => {
     fixture.detectChanges();
     expect(state.tab()).toBe('calls');
     expect(q('monitoring-note').textContent?.trim()).toBe(
-      "LLM calls made by the app's agents, newest first.",
+      "LLM calls made by the app's agent personas, newest first.",
     );
 
     // The chosen tab is kept when Monitoring is left and chosen again.

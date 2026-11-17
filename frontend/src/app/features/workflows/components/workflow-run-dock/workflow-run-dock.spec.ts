@@ -166,7 +166,7 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
     expect(q('workflow-state-status')).toBeNull();
     expect(text('workflow-state-progress')).toBe('0 of 3 nodes ran');
     expect(text('workflow-state-run-id')).toBe(
-      "No run yet. Execute the workflow to see each node's data.",
+      "No run yet. Execute the user journey to see each node's data.",
     );
     expect(text('workflow-run-activity')).toBe('');
   });

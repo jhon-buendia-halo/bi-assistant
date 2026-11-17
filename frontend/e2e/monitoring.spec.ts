@@ -117,7 +117,7 @@ test.describe('Feature: LLM calls', () => {
       );
       await scenarioStep(
         page,
-        'Then I see the call with its agent, model, session, tokens and status',
+        'Then I see the call with its agent persona, model, session, tokens and status',
         async () => {
           await expect(
             page.getByRole('heading', { name: 'Monitoring', exact: true }),
@@ -133,7 +133,7 @@ test.describe('Feature: LLM calls', () => {
       );
       await scenarioStep(
         page,
-        `When I filter by the agent "${AGENT}" and the status "Succeeded"`,
+        `When I filter by the agent persona "${AGENT}" and the status "Succeeded"`,
         async () => {
           await page
             .getByTestId('llm-filter-agent')
@@ -513,13 +513,13 @@ test.describe('Feature: Session flow', () => {
       );
       await scenarioStep(
         page,
-        'Then I see each run with its turn, its agent and status',
+        'Then I see each run with its turn, its agent persona and status',
         async () => {
           await expect(
             page.getByTestId('monitoring-tab-sessions'),
           ).toHaveAttribute('aria-selected', 'true');
           await expect(page.getByTestId('monitoring-note')).toHaveText(
-            'Runs with recorded agent calls, most recent first.',
+            'Runs with recorded agent persona calls, most recent first.',
           );
           const cells = sessionRow(page).first().locator('td');
           await expect(cells.nth(0)).toHaveText(runName(FIRST_QUESTION));
@@ -534,7 +534,7 @@ test.describe('Feature: Session flow', () => {
       });
       await scenarioStep(
         page,
-        'Then I read the question, its answer and the steps the agent took',
+        'Then I read the question, its answer and the steps the agent persona took',
         async () => {
           const detail = page.getByTestId('monitoring-session-detail');
           await expect(detail).toBeVisible();
@@ -568,7 +568,7 @@ test.describe('Feature: Session flow', () => {
       const spanRows = waterfall.locator('[data-testid^="trace-span-row-"]');
       await scenarioStep(
         page,
-        'Then I see the agent run, the model call and its requests on a time axis',
+        'Then I see the agent persona run, the model call and its requests on a time axis',
         async () => {
           await expect(
             page.getByTestId('turn-timeline-toggle-1'),
@@ -808,7 +808,7 @@ test.describe('Feature: Runs in Monitoring', () => {
       const runName = `${V2_WORKFLOW_NAME}: ${RUN_QUESTION}`;
       await scenarioStep(
         page,
-        `Given I ran the "${V2_WORKFLOW_NAME}" workflow on a question`,
+        `Given I ran the "${V2_WORKFLOW_NAME}" user journey on a question`,
         async () => {
           await runQuestionOk(page, RUN_QUESTION);
         },

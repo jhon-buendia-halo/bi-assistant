@@ -12,7 +12,7 @@
               (click)="back.emit()"
               class="rounded text-fg-muted underline-offset-2 hover:text-fg hover:underline focus-visible:outline-2 focus-visible:outline-focus"
             >
-              Workflows
+              User journeys
             </button>
           </li>
           <li class="text-fg-muted" aria-hidden="true">/</li>
@@ -38,7 +38,7 @@
         <span
           data-testid="workflow-detail-id"
           class="font-mono text-[12px] text-fg-muted"
-          title="Workflow id"
+          title="User journey id"
           >{{ w.id }}</span
         >
         @if (missing()) {
@@ -83,7 +83,7 @@
               type="button"
               data-testid="workflow-view-builder"
               [attr.aria-pressed]="view() === 'builder'"
-              title="The graph and the Run panel: build and debug the workflow"
+              title="The graph and the Run panel: build and debug the user journey"
               (click)="setView('builder')"
               class="inline-flex items-center gap-1.5 border-l border-border px-3 py-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
               [class.bg-primary-soft]="view() === 'builder'"
@@ -103,7 +103,7 @@
   @if (designer.loading()) {
     <div class="flex items-center gap-2.5 px-6 py-8 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading workflow…</span>
+      <span>Loading user journey…</span>
     </div>
   } @else if (designer.error(); as err) {
     <p

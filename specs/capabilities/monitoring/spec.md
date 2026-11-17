@@ -17,12 +17,12 @@ A **turn** is one question of a session and the agent's work to answer it. In th
 The table
 - R1. The system SHALL list **LLM calls**: one row per model call of one agent run, read from the trace store `observability.duckdb` ([../../system/data-model.md](../../system/data-model.md) 1.2, ADR-0038). Calls recorded before this feature existed are listed too. A model call the agent framework does not trace is not listed.
 - R2. Rows SHALL be ordered by start time, newest first.
-- R3. Each row SHALL show: **Started** (local date and time), **Agent** (its display name), **Model** (with its provider below it, muted), **Run** (its name; when the session has no name, the first 8 characters of its id; a dash when the call belongs to no session), **Tokens in / out** (for example `61,185 / 2,445`; the input count includes cache reads and writes), **Duration** (for example `17.3 s`), **Cost** (for example `$0.0213`) and **Status**. A value the trace does not hold is shown as a dash.
+- R3. Each row SHALL show: **Started** (local date and time), **Agent persona** (its display name), **Model** (with its provider below it, muted), **Run** (its name; when the session has no name, the first 8 characters of its id; a dash when the call belongs to no session), **Tokens in / out** (for example `61,185 / 2,445`; the input count includes cache reads and writes), **Duration** (for example `17.3 s`), **Cost** (for example `$0.0213`) and **Status**. A value the trace does not hold is shown as a dash.
 - R4. **Status** SHALL be **Succeeded**, **Failed** or **Running**. A call with no end recorded yet is Running. A call whose end carries an error is Failed. Any other call is Succeeded.
 - R5. **Cost** SHALL be an estimate computed from a price table shipped with the app: USD per million tokens for input, output and cache reads, as of 2026-11-03. Cache writes are priced at 1.25 times the input price. The cost is the uncached input tokens at the input price, plus the cache reads at the cache-read price, plus the cache writes at the cache-write price, plus the output tokens at the output price. A model is matched by its exact id or an id that starts with a table key followed by `-`, and the longest key wins. A model not in the table has no cost, shown as a dash, and no context limit. The table is code, not a setting, and the user cannot edit it.
 
 Filters
-- R6. The page SHALL offer these filters: **Agent**, **Model**, **Provider**, **Status** (Any status, Succeeded, Failed, Running), **Run** and **Date**. Their choices SHALL be the values present among all calls, sorted by name, and SHALL NOT shrink as other filters are set. A session without a name is offered by the first 8 characters of its id.
+- R6. The page SHALL offer these filters: **Agent persona**, **Model**, **Provider**, **Status** (Any status, Succeeded, Failed, Running), **Run** and **Date**. Their choices SHALL be the values present among all calls, sorted by name, and SHALL NOT shrink as other filters are set. A session without a name is offered by the first 8 characters of its id.
 - R7. **Date** SHALL offer Any time, Last hour, Last 24 hours, Last 7 days and Custom. Custom SHALL show a **From** and a **To** date-time input. A call is kept when its start time is inside the range, ends included.
 - R8. Filters SHALL combine (a call must match all of them) and SHALL be applied on the server before paging, so the total counts only matching calls.
 - R9. Changing any filter or the page size SHALL return to page 1. **Clear filters** SHALL reset every filter and SHALL be disabled when no filter is set.
@@ -75,13 +75,13 @@ General
 - R25. The Monitoring page SHALL work in the light and dark themes, and its controls SHALL have accessible names (each filter, the table, the row buttons, the paging controls and the box toggles).
 
 Tabs
-- R26. The Monitoring page SHALL show two tabs under its heading, **LLM calls** and **Runs** (`role="tablist"`, the arrow keys move between them). **LLM calls** is chosen when the page opens for the first time. The note under the heading follows the tab: "LLM calls made by the app's agents, newest first." or "Runs with recorded agent calls, most recent first.". The chosen tab, and each tab's own filters, page and page size, SHALL be kept while the app runs, so leaving to a call page or a session page and coming back finds them as they were left.
+- R26. The Monitoring page SHALL show two tabs under its heading, **LLM calls** and **Runs** (`role="tablist"`, the arrow keys move between them). **LLM calls** is chosen when the page opens for the first time. The note under the heading follows the tab: "LLM calls made by the app's agent personas, newest first." or "Runs with recorded agent persona calls, most recent first.". The chosen tab, and each tab's own filters, page and page size, SHALL be kept while the app runs, so leaving to a call page or a session page and coming back finds them as they were left.
 
 The Sessions table
 - R27. The **Runs** tab (named **Sessions** until 2026-11-11, roadmap 1.23.21; its test ids keep `sessions`) SHALL list **sessions**, which the tab and the page now call runs: one row per session that has at least one recorded agent run, read from the trace store (ADR-0038). A session is a distinct `threadId` on the agent runs. Rows SHALL be ordered by last activity, newest first. A session whose chat was deleted, or that was a preview or an eval, is listed too.
-- R28. Each row SHALL show: **Run** (its name, read from the sessions collection; "Unnamed run" with the first 8 characters of its id, muted, when it has no name), **Agent** (the display names of the agents that ran in it), **Turns**, **Last activity** (local date and time), **Wall time** (the sum of the turns' durations), **Model time** (the sum of the model calls' durations), **Tools** (the number of tool calls), **Tokens in / out**, **Cost** (the sum of the estimated costs, R5) and **Status**. A value the trace does not hold is shown as a dash.
+- R28. Each row SHALL show: **Run** (its name, read from the sessions collection; "Unnamed run" with the first 8 characters of its id, muted, when it has no name), **Agent persona** (the display names of the agents that ran in it), **Turns**, **Last activity** (local date and time), **Wall time** (the sum of the turns' durations), **Model time** (the sum of the model calls' durations), **Tools** (the number of tool calls), **Tokens in / out**, **Cost** (the sum of the estimated costs, R5) and **Status**. A value the trace does not hold is shown as a dash.
 - R29. A session's **Status** SHALL be **Failed** when it has at least one failed span (an agent run, a model call or a tool call that ended with an error or `success: false`), else **Running** when a turn has no end recorded yet, else **Succeeded**. The row's error count SHALL equal the number of those failed spans.
-- R30. The tab SHALL offer the filters **Agent** (sessions in which that agent ran) and **Date** (Any time, Last hour, Last 24 hours, Last 7 days, Custom with **From** and **To**; a session is kept when one of its turns started inside the range, ends included), and **Clear filters**. Agent choices SHALL be the agents present among all sessions and SHALL NOT shrink as the date is set. R8 and R9 apply to these filters, and R10 and R11 to the paging, with the same page sizes and messages.
+- R30. The tab SHALL offer the filters **Agent persona** (sessions in which that agent ran) and **Date** (Any time, Last hour, Last 24 hours, Last 7 days, Custom with **From** and **To**; a session is kept when one of its turns started inside the range, ends included), and **Clear filters**. Agent choices SHALL be the agents present among all sessions and SHALL NOT shrink as the date is set. R8 and R9 apply to these filters, and R10 and R11 to the paging, with the same page sizes and messages.
 - R31. With no sessions at all, the tab SHALL show "No runs yet.". With sessions but none matching the filters, it SHALL show "No runs match these filters.". Loading and failed loads behave as in R12. Clicking a row, or pressing Enter on it, SHALL open that session's page, and **Monitoring** SHALL stay the current rail item.
 
 The session page
@@ -110,13 +110,13 @@ Workflow runs
 Costs (usage and cost)
 - R47. The **Costs** page (its own rail item, [../app-shell/spec.md](../app-shell/spec.md) R3c) SHALL summarise the estimated cost of the LLM calls of R1: every call counts once, priced as in R5. A call whose model has no price, or whose tokens are not known, SHALL count as a call and add its known tokens but no cost. The page records nothing and reads the same trace store (ADR-0038); it changes nothing (R24).
 - R48. A **Period** choice SHALL offer This month, Last 30 days (the default), Last 90 days, This year and All time. A period starts at local midnight of its first day (Last 30 days: today and the 29 days before) and ends now; All time has no start. Days and months SHALL follow the time zone of the computer that shows the page.
-- R49. Five tiles SHALL show: **Today** and **This month** (cost and number of calls of the current day and calendar month, whatever the period), the period's cost and calls (titled with the period's name), **Avg per workflow run** (R54) with the number of runs, and **Avg per chat question** (R54) with the number of questions; a dash when there are none. When some calls of the period have no cost (R47), a line SHALL say how many.
+- R49. Five tiles SHALL show: **Today** and **This month** (cost and number of calls of the current day and calendar month, whatever the period), the period's cost and calls (titled with the period's name), **Avg per user journey run** (R54) with the number of runs, and **Avg per chat question** (R54) with the number of questions; a dash when there are none. When some calls of the period have no cost (R47), a line SHALL say how many.
 - R50. **Daily cost** SHALL show one bar per day of the period, days without calls at zero; for All time the days start at the first call. **Monthly cost** SHALL show the 12 calendar months ending with the current one, whatever the period. Both are single-series column charts on a scale from $0 to a round ceiling, with a tooltip per bar (`<day or month>`, cost, calls) and a **Show table** control that shows the same values as a table (**Show chart** returns).
-- R51. Two rankings over the period SHALL list the cost and calls, highest cost first: **By model** (the model with its provider; "No price" for a model without one) and **By agent** (its name; calls made by no agent under "No agent"). The workflows are compared per run (R55).
+- R51. Two rankings over the period SHALL list the cost and calls, highest cost first: **By model** (the model with its provider; "No price" for a model without one) and **By agent persona** (its name; calls made by no agent under "No agent persona"). The workflows are compared per run (R55).
 - R52. Choosing a model or an agent in a ranking SHALL open Monitoring's LLM calls tab filtered to that model or agent, with the Date filter set to Custom from the period's start (Any time for All time), and Monitoring the current rail item.
 - R53. With no calls in the period the page SHALL show the tiles, "No LLM calls in this period." and the monthly chart, and no daily chart, per-run table, top runs, cost split or rankings. A fresh data dir with no trace table shows the same, not an error. Loading and failed loads behave as in R12. `GET /monitoring/usage` SHALL reject a From or To that is not a date (`From is not a valid date`, `To is not a valid date`), a From after To (`From must not be after To`) and an unknown time zone (`Time zone is not valid`) with HTTP 400.
-- R54. A **workflow run** is every call whose thread is the run's host `run-<runId>` or one of its step agents' threads `run-<runId>:<agent key>` (ADR-0041, [../../system/agents.md](../../system/agents.md) 5.14); its cost is the sum of those calls in the period. A **chat question** is one trace (turn) of the calls outside any workflow run. **Avg per workflow run** and **Avg per chat question** SHALL be the period's mean cost of each.
-- R55. **Cost per workflow run** SHALL list, for each workflow with runs in the period, its runs, the mean, the median and the 95th percentile (nearest rank) of their costs, and its total, highest total first; the runs of deleted runs under "Deleted workflow run"; then "No workflow" (chats, the agent panel, previews and evals) with its total only.
+- R54. A **workflow run** is every call whose thread is the run's host `run-<runId>` or one of its step agents' threads `run-<runId>:<agent key>` (ADR-0041, [../../system/agents.md](../../system/agents.md) 5.14); its cost is the sum of those calls in the period. A **chat question** is one trace (turn) of the calls outside any workflow run. **Avg per user journey run** and **Avg per chat question** SHALL be the period's mean cost of each.
+- R55. **Cost per user journey run** SHALL list, for each workflow with runs in the period, its runs, the mean, the median and the 95th percentile (nearest rank) of their costs, and its total, highest total first; the runs of deleted runs under "Deleted user journey run"; then "No user journey" (chats, the agent panel, previews and evals) with its total only.
 - R56. **Most expensive runs** SHALL list the period's 10 costliest workflow runs, highest first: the run's title (its question, as the run history titles it; "Run" and the first 8 characters of its id for a deleted run), its workflow, the start of its first call in the period, its calls and its cost. Choosing a stored run SHALL open it as the Runs page does ([../workflows/spec.md](../workflows/spec.md) R19); a deleted run is not a link.
 - R57. **Where the cost goes** SHALL split the period's cost into **Input** (uncached input tokens at the input price), **Cache writes**, **Cache reads** and **Output**, priced as in R5, each with its cost, its share of the total and its tokens, and SHALL say how much the cache reads saved against the full input price when they saved anything.
 
@@ -156,7 +156,7 @@ Placement: the **Monitoring** item on the navigation rail opens the Monitoring p
 - Call page: heading, the facts grid, the error box when failed, **Context window** (caption, stacked bar, legend, seven boxes), **Steps**.
 - Runs tab: a filter bar (Agent, Date, **Clear filters**), the table and the same footer.
 - Session page: heading, the totals strip, **Open chat**, then each turn (question, meta line, path, answer, **Open timeline**) and the waterfall under the turn that opened it.
-- Costs page (rail **Costs**, [../../system/ui.md](../../system/ui.md) 4.8j): heading "Costs", the note and **Period**, the five tiles, **Daily cost**, **Monthly cost**, **Cost per workflow run**, then **Most expensive runs** beside **Where the cost goes**, then **By model** beside **By agent** on a wide window.
+- Costs page (rail **Costs**, [../../system/ui.md](../../system/ui.md) 4.8j): heading "Costs", the note and **Period**, the five tiles, **Daily cost**, **Monthly cost**, **Cost per user journey run**, then **Most expensive runs** beside **Where the cost goes**, then **By model** beside **By agent persona** on a wide window.
 
 ## Flows
 
@@ -178,7 +178,7 @@ Feature: LLM calls
 
   Scenario: Filters narrow the list and Clear filters restores it
     Given the table lists calls from two agents and two models
-    When I choose an agent in "Agent"
+    When I choose an agent in "Agent persona"
     Then every row shows that agent and the footer shows the new total
     When I also choose a model in "Model"
     Then only the calls of that agent and that model are listed
@@ -225,7 +225,7 @@ Feature: LLM call detail
     Then the "Chat history" box shows "Nothing in this call."
 
   Scenario: Back keeps the filters and the page
-    Given I chose an agent in "Agent" and opened one of its calls
+    Given I chose an agent in "Agent persona" and opened one of its calls
     When I click the "Monitoring" back control
     Then I see the table with that agent still chosen and the same page
 
@@ -243,7 +243,7 @@ Feature: Session flow
   Scenario: The Runs tab lists a session with its totals
     Given I asked the assistant two questions in one session
     When I open "Monitoring" and choose the "Runs" tab
-    Then I see the note "Runs with recorded agent calls, most recent first."
+    Then I see the note "Runs with recorded agent persona calls, most recent first."
     And the session's row shows its name, the assistant, 2 turns, a last activity time, a wall time, a model time, the tool count, tokens in and out, a cost and the status "Succeeded"
 
   Scenario: A new install has no sessions
@@ -253,7 +253,7 @@ Feature: Session flow
 
   Scenario: Filters narrow the sessions and Clear filters restores them
     Given the Runs tab lists sessions from two agents
-    When I choose an agent in "Agent"
+    When I choose an agent in "Agent persona"
     Then every row shows that agent
     When I click "Clear filters"
     Then all sessions are listed again and "Clear filters" is disabled
@@ -301,7 +301,7 @@ Feature: Session flow
     Then I see the session page again
 
   Scenario: Back keeps the tab and the filters
-    Given I chose the "Runs" tab, chose an agent in "Agent" and opened one of its sessions
+    Given I chose the "Runs" tab, chose an agent in "Agent persona" and opened one of its sessions
     When I click the "Monitoring" back control
     Then I see the "Runs" tab with that agent still chosen
     When I open the session again and click "Monitoring" on the rail

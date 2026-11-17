@@ -166,7 +166,7 @@ export class SystemLogsPanel {
     if (source === 'user-visible')
       return 'An operation shown in the app failed.';
     if (source.startsWith('backend:mastra'))
-      return 'The AI agent runtime reported this event.';
+      return 'The AI agent persona runtime reported this event.';
     if (source.startsWith('backend'))
       return 'The local data and backend service reported this event.';
     if (source.includes('renderer'))

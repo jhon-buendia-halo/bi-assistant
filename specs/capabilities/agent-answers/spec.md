@@ -389,10 +389,10 @@ Feature: Sessions started from an agent
 
   Scenario: only Answer a Business Question can be run, and no agent page offers a chat
     Given a draft user agent "Claims triage" over "World Cup Core"
-    When I click "Workflows"
+    When I click "User journeys"
     Then I see only the workflow "Answer a Business Question"
     And I see no "Cup historian" and no "Claims triage"
-    When I click "Agents" and show every System agent
+    When I click "Agent personas" and show every System agent
     Then no agent card offers Start chat
 
   Scenario: a Answer a Business Question run can't write: the read-only guard rejects a DELETE

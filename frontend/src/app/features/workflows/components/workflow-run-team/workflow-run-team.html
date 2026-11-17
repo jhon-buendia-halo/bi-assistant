@@ -1,7 +1,7 @@
 @if (rows().length > 0) {
   <ol
     class="m-0 flex list-none flex-col gap-2 p-0"
-    aria-label="Agents on this run"
+    aria-label="Agent personas on this run"
     data-testid="workflow-run-team"
   >
     @for (row of rows(); track row.story.stepId) {

@@ -547,7 +547,7 @@
   @if (inputErrors().length) {
     <!-- Start: the last Execute was refused; nothing ran (ui.md 4.4b). -->
     <p class="m-0 mb-1.5 text-[13px] text-fg">
-      The input was refused, so the workflow did not start:
+      The input was refused, so the user journey did not start:
     </p>
     <ul
       class="m-0 flex list-none flex-col gap-1.5 p-0"
@@ -653,7 +653,7 @@
         <h3
           class="m-0 mt-5 mb-2 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
         >
-          Agents
+          Agent personas
         </h3>
         <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
           @for (agent of workflow().agents; track agent.key) {
@@ -713,7 +713,7 @@
           >
             {{ list(tool.inputs) }}
           </dd>
-          <dt class="text-fg-muted">Agent</dt>
+          <dt class="text-fg-muted">Agent persona</dt>
           <dd class="m-0 text-fg" data-testid="workflow-tool-field-agent">
             @if (tool.agentKey; as key) {
               <button
@@ -764,10 +764,10 @@
           </dd>
           <dt class="text-fg-muted">Kind</dt>
           <dd class="m-0 text-fg" data-testid="workflow-step-field-kind">
-            {{ step.kind === "agent" ? "LLM (agent call)" : "Code" }}
+            {{ step.kind === "agent" ? "LLM (agent persona call)" : "Code" }}
           </dd>
           @if (step.agent; as agent) {
-            <dt class="text-fg-muted">Agent</dt>
+            <dt class="text-fg-muted">Agent persona</dt>
             <dd
               class="m-0 text-fg"
               data-testid="workflow-step-field-agent"
@@ -847,7 +847,7 @@
             Job description
           </h3>
           <p class="m-0 mb-2 text-[12px] text-fg-muted">
-            The agent's job description; each run adds its own context.
+            The agent persona's job description; each run adds its own context.
             @if (agent.systemPromptTruncated) {
               Shortened to 20 000 characters.
             }

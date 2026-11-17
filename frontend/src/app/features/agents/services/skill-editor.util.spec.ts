@@ -101,12 +101,12 @@ describe('skill copy', () => {
   it('words the delete confirm, with the warning when agents use it', () => {
     expect(skillDeleteConfirm('a', [])).toBe('Delete "a"?');
     expect(skillDeleteConfirm('a', ['X'])).toBe(
-      'Delete "a"?\n\nAgents using it keep it in their Live version until republished.',
+      'Delete "a"?\n\nAgent personas using it keep it in their Live version until republished.',
     );
   });
 
   it('words who uses a skill', () => {
-    expect(usedByLabel([])).toBe('Not used by any agent');
+    expect(usedByLabel([])).toBe('Not used by any agent persona');
     expect(usedByLabel(['A', 'B'])).toBe('Used by A, B');
   });
 });

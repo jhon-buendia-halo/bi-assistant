@@ -15,8 +15,8 @@
   }
 </div>
 <p class="mt-2 text-[13px] text-fg-muted">
-  The agent only gets the skills its job description links. To link one, edit
-  the Job Description and type /.
+  The agent persona only gets the skills its job description links. To link one,
+  edit the Job Description and type /.
 </p>
 
 @if (editing() !== null) {
@@ -227,7 +227,7 @@
 <h3
   class="mt-8 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
 >
-  Built-in · included in every agent
+  Built-in · included in every agent persona
 </h3>
 <div class="mt-2 flex flex-col gap-2">
   @for (skill of builtIn(); track skill.name) {

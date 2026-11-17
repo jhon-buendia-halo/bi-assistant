@@ -38,16 +38,18 @@ describe('WorkflowBar', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(
       el.querySelector('[data-testid="workflow-bar-empty"]')?.textContent,
-    ).toContain('No workflow yet');
+    ).toContain('No user journey yet');
     expect(steps(el)).toEqual([]);
-    expect(el.querySelector('button[aria-label="Hide workflow"]')).toBeNull();
+    expect(
+      el.querySelector('button[aria-label="Hide user journey"]'),
+    ).toBeNull();
   });
 
   it('renders the five statuses with a labelled list and aria-current', () => {
     const fixture = create({ done: [1], skipped: [2], current: 3 });
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('[role="list"]')?.getAttribute('aria-label')).toBe(
-      'Workflow',
+      'User journey',
     );
     expect(steps(el).map((s) => s.getAttribute('data-status'))).toEqual([
       'done',
@@ -82,12 +84,12 @@ describe('WorkflowBar', () => {
   it('shows the next-step row only when there is an action or a note, with no Note link', () => {
     expect(
       create().nativeElement.querySelector(
-        '[aria-label="What the agent needs now"]',
+        '[aria-label="What the agent persona needs now"]',
       ),
     ).toBeNull();
     const fixture = create({ note: 'Pick the **carriers**\nmore text' });
     const row = fixture.nativeElement.querySelector(
-      '[aria-label="What the agent needs now"]',
+      '[aria-label="What the agent persona needs now"]',
     ) as HTMLElement;
     // No action: the row reads the note's first line as plain text.
     expect(row.querySelector('p')?.textContent).toContain('Your next step:');
@@ -194,7 +196,7 @@ describe('WorkflowBar', () => {
       expect(toggle(el).getAttribute('aria-expanded')).toBe('true');
       const p = panel(el)!;
       expect(p.getAttribute('role')).toBe('region');
-      expect(p.getAttribute('aria-label')).toBe('Workflow details');
+      expect(p.getAttribute('aria-label')).toBe('User journey details');
       expect(p.id).toBe('workflow-details');
       toggle(el).click();
       fixture.detectChanges();
@@ -364,21 +366,25 @@ describe('WorkflowBar', () => {
     const fixture = create();
     const el: HTMLElement = fixture.nativeElement;
     const toggle = el.querySelector<HTMLButtonElement>(
-      'button[title="Hide workflow"]',
+      'button[title="Hide user journey"]',
     )!;
     toggle.click();
     fixture.detectChanges();
     expect(localStorage.getItem(WORKFLOW_BAR_COLLAPSED_KEY)).toBe('1');
     expect(el.querySelector('[role="list"]')).toBeNull();
-    expect(el.textContent).toContain('Workflow ·');
+    expect(el.textContent).toContain('User journey ·');
     expect(el.textContent).toContain('Pricing');
     expect(el.textContent).toContain('1/4');
-    expect(el.querySelector('button[title="Show workflow"]')).not.toBeNull();
+    expect(
+      el.querySelector('button[title="Show user journey"]'),
+    ).not.toBeNull();
 
     // A new bar starts folded.
     const again = create();
     expect(again.nativeElement.querySelector('[role="list"]')).toBeNull();
-    again.nativeElement.querySelector('button[title="Show workflow"]').click();
+    again.nativeElement
+      .querySelector('button[title="Show user journey"]')
+      .click();
     again.detectChanges();
     expect(localStorage.getItem(WORKFLOW_BAR_COLLAPSED_KEY)).toBe('0');
   });

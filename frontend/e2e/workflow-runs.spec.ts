@@ -116,8 +116,8 @@ function runDock(page: Page): Locator {
 }
 
 async function openWorkflowPage(page: Page, id: string, name: string): Promise<void> {
-  await railItem(page, 'Workflows').click();
-  await expect(page.getByRole('heading', { name: 'Workflows', exact: true })).toBeVisible();
+  await railItem(page, 'User journeys').click();
+  await expect(page.getByRole('heading', { name: 'User journeys', exact: true })).toBeVisible();
   await page.getByTestId(`workflow-${id}`).click();
   await expect(page.getByTestId('workflow-detail-name')).toHaveText(name);
 }
@@ -154,7 +154,7 @@ test.describe('Feature: Workflow runs', () => {
       stub.hold = (request) =>
         isTurn(request, QUESTION) && afterToolResult(request) ? held.promise : undefined;
 
-      await scenarioStep(page, `When I open "${V2}" from Workflows and click Execute`, async () => {
+      await scenarioStep(page, `When I open "${V2}" from User journeys and click Execute`, async () => {
         await openWorkflowPage(page, V2_ID, V2);
         await openRunTab(page);
       });
@@ -503,7 +503,7 @@ test.describe('Feature: Workflow runs', () => {
       await question.fill(QUESTION);
       await question.press('Enter');
     });
-    await test.step('Then the workflow runs and I see the answer', async () => {
+    await test.step('Then the user journey runs and I see the answer', async () => {
       await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       await expect(runAnswer(page)).toContainText(ANSWER);
       await expect(page.getByTestId('workflow-run-question')).toHaveText(QUESTION);

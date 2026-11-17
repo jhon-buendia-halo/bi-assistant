@@ -21,7 +21,7 @@ export async function createWorldCupDatasource(page: Page): Promise<void> {
   await page.getByLabel('Host').fill(WORLD_CUP_DB.host);
   await page.getByLabel('Port').fill(String(WORLD_CUP_DB.port));
   await page.getByLabel('Database').fill(WORLD_CUP_DB.database);
-  await page.getByLabel('User').fill(WORLD_CUP_DB.user);
+  await page.getByLabel('User', { exact: true }).fill(WORLD_CUP_DB.user);
   await page.getByLabel('Password').fill(WORLD_CUP_DB.password);
 
   await page.getByRole('button', { name: 'Test connection' }).click();

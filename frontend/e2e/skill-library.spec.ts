@@ -15,11 +15,11 @@ import { createSkill, createUserAgent } from './helpers/agents-api';
  */
 
 const EMPTY_LIBRARY =
-  'No skills yet. A skill is know-how an agent reads when a question needs it.';
+  'No skills yet. A skill is know-how an agent persona reads when a question needs it.';
 const FISCAL = 'fiscal-calendar';
 const FISCAL_DESCRIPTION = 'Use when a question names a fiscal year.';
 const BUILT_IN_BANNER =
-  'Changes apply to every session and agent as soon as you save. Run the evals to check them.';
+  'Changes apply to every session and agent persona as soon as you save. Run the evals to check them.';
 
 /** Screenshots of the claimed state go to `evidence/<feature>/` at the repo root. */
 const EVIDENCE = path.resolve(__dirname, '../../evidence');
@@ -37,10 +37,10 @@ function button(scope: Page | Locator, name: string): Locator {
 async function openHub(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Agent personas', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
 }
 
@@ -175,7 +175,7 @@ test('creates, edits and deletes a skill', async ({ page }) => {
   await button(page, 'Back').click();
   const row = page.getByTestId(`skill-row-${FISCAL}`);
   await expect(row).toContainText(FISCAL);
-  await expect(row).toContainText('Not used by any agent');
+  await expect(row).toContainText('Not used by any agent persona');
   await evidenceShot(page, '1.14.3', 'skill-library-list.png');
 
   await openSkill(page, FISCAL);
@@ -313,7 +313,7 @@ test.describe('built-in skills', () => {
     await openLibrary(page);
     await expect(
       page.getByRole('heading', {
-        name: 'Built-in · included in every agent',
+        name: 'Built-in · included in every agent persona',
         exact: true,
       }),
     ).toBeVisible();

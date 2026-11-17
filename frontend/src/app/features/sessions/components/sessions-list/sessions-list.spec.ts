@@ -82,14 +82,14 @@ describe('SessionsList', () => {
     const chip = (row: Element) =>
       row.querySelector('[data-testid="row-session-workflow"]') as HTMLElement;
     expect(chip(rows[0]).textContent?.trim()).toBe('Report Builder');
-    expect(chip(rows[0]).title).toBe('Workflow: Report Builder');
+    expect(chip(rows[0]).title).toBe('User journey: Report Builder');
     expect(rows[0].textContent).toContain('World Cup');
     expect(chip(rows[1]).textContent?.trim()).toBe('Assistant');
     expect(chip(rows[2]).textContent?.trim()).toBe(
-      'Cup historian · agent deleted',
+      'Cup historian · agent persona deleted',
     );
     expect(chip(rows[2]).title).toBe(
-      'Workflow: Cup historian · agent deleted',
+      'User journey: Cup historian · agent persona deleted',
     );
     expect(root().querySelector('[data-testid="row-session-agent"]')).toBeNull();
     expect(rows[0].textContent).toContain('2 h ago');

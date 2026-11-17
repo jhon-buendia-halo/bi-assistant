@@ -159,9 +159,9 @@ function railItem(page: Page, name: string): Locator {
 }
 
 async function openWorkflows(page: Page): Promise<void> {
-  await railItem(page, 'Workflows').click();
+  await railItem(page, 'User journeys').click();
   await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
   ).toBeVisible();
 }
 
@@ -296,14 +296,14 @@ test.describe('Feature: Workflows', () => {
     'Open a workflow and run it from its page',
     { tag: ['@demo', '@story-1.23.5'] },
     async ({ page }) => {
-      await scenarioStep(page, 'When I click "Workflows" on the rail', async () => {
+      await scenarioStep(page, 'When I click "User journeys" on the rail', async () => {
         await openWorkflows(page);
       });
       await scenarioStep(
         page,
         'Then I see "Answer a Business Question", "Assess Data Readiness", "Dashboard Image to Artifact", "Map a Dashboard to Data" and "Review a Website" under Official, and no Mine section',
         async () => {
-          await expect(railItem(page, 'Workflows')).toHaveAttribute(
+          await expect(railItem(page, 'User journeys')).toHaveAttribute(
             'aria-current',
             'page',
           );
@@ -332,7 +332,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its thirteen steps on the canvas and the agents Michael, Zoe, Nathan, Olivia, Sarah and Jessica under Agents in its Start node',
+        'Then I see its thirteen steps on the canvas and the agent personas Michael, Zoe, Nathan, Olivia, Sarah and Jessica under Agent personas in its Start node',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
@@ -341,13 +341,13 @@ test.describe('Feature: Workflows', () => {
           await expect(start.getByTestId('workflow-agent-image-reader')).toContainText('Zoe');
           await expect(start.getByTestId('workflow-agent-result-explorer')).toContainText('Nathan');
           await closeNode(page);
-          await expect(railItem(page, 'Workflows')).toHaveAttribute(
+          await expect(railItem(page, 'User journeys')).toHaveAttribute(
             'aria-current',
             'page',
           );
         },
       );
-      await scenarioStep(page, 'When I click "Execute workflow"', async () => {
+      await scenarioStep(page, 'When I click "Execute user journey"', async () => {
         await page.getByTestId('workflow-execute').click();
       });
       await scenarioStep(
@@ -363,7 +363,7 @@ test.describe('Feature: Workflows', () => {
           // No Logs panel: the canvas takes the column's full height.
           await expect(page.getByTestId('workflow-logs-dock')).toHaveCount(0);
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
-          await expect(railItem(page, 'Workflows')).toHaveAttribute(
+          await expect(railItem(page, 'User journeys')).toHaveAttribute(
             'aria-current',
             'page',
           );
@@ -374,7 +374,7 @@ test.describe('Feature: Workflows', () => {
 
   test("Workflows can't be edited", async ({ page }) => {
     const editing = /^(edit|new|delete|remove|add|move|reorder|duplicate|rename|save)\b/i;
-    await test.step('When I open Workflows', async () => {
+    await test.step('When I open User journeys', async () => {
       await openWorkflows(page);
     });
     await test.step(
@@ -414,14 +414,14 @@ test.describe('Feature: Workflows', () => {
   });
 
   test('Search filters the list', async ({ page }) => {
-    await test.step('Given I am on Workflows', async () => {
+    await test.step('Given I am on User journeys', async () => {
       await openWorkflows(page);
     });
     const search = page.getByTestId('workflow-search');
     await test.step('When I search for "business"', async () => {
       await expect(search).toHaveAttribute(
         'placeholder',
-        'Search workflows by name or description',
+        'Search user journeys by name or description',
       );
       await search.fill('business');
     });
@@ -433,9 +433,9 @@ test.describe('Feature: Workflows', () => {
     await test.step('When I search for "zzz"', async () => {
       await search.fill('zzz');
     });
-    await test.step('Then I see "No workflows match "zzz""', async () => {
+    await test.step('Then I see "No user journeys match "zzz""', async () => {
       await expect(
-        page.getByText('No workflows match "zzz"', { exact: true }),
+        page.getByText('No user journeys match "zzz"', { exact: true }),
       ).toBeVisible();
       await expect(page.locator('[data-testid^="workflow-card-"]')).toHaveCount(0);
     });
@@ -458,7 +458,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
     'I run Answer a Business Question on a question from its card',
     { tag: ['@demo', '@story-1.23.9'] },
     async ({ page }) => {
-      await scenarioStep(page, 'When I open Workflows', async () => {
+      await scenarioStep(page, 'When I open User journeys', async () => {
         await openWorkflows(page);
       });
       await scenarioStep(
@@ -489,12 +489,12 @@ test.describe('Feature: Workflows (run workflows)', () => {
           await expect(page.getByTestId('workflow-detail-kind')).toHaveText(
             V2_STEP_COUNT,
           );
-          await expect(page.getByTestId('workflow-execute')).toHaveText('Execute workflow');
+          await expect(page.getByTestId('workflow-execute')).toHaveText('Execute user journey');
           await expect(page.getByTestId('workflow-start-chat')).toHaveCount(0);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
         },
       );
-      await scenarioStep(page, 'When I click Execute workflow', async () => {
+      await scenarioStep(page, 'When I click Execute user journey', async () => {
         await page.getByTestId('workflow-execute').click();
       });
       await scenarioStep(
@@ -781,7 +781,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'And a card "Waiting for your answer" asks the agent\'s question with its options',
+        'And a card "Waiting for your answer" asks the agent persona\'s question with its options',
         async () => {
           const card = page.getByTestId('workflow-run-input-required');
           await expect(card).toBeVisible();
@@ -879,7 +879,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
         await openV2FromRun(page);
         storedBefore = (await storedRuns(page)).length;
       });
-      await scenarioStep(page, 'When I click Execute workflow', async () => {
+      await scenarioStep(page, 'When I click Execute user journey', async () => {
         await page.getByTestId('workflow-execute').click();
         await expectRunPanel(page);
       });
@@ -990,7 +990,7 @@ test.describe('Feature: Workflows (the designer)', () => {
     'A workflow opens as a designer',
     { tag: ['@demo', '@story-1.23.10'] },
     async ({ page }) => {
-      await scenarioStep(page, 'When I open "Answer a Business Question" from Workflows', async () => {
+      await scenarioStep(page, 'When I open "Answer a Business Question" from User journeys', async () => {
         await openWorkflows(page);
         await openWorkflow(page, V2_ID, V2);
       });
@@ -1121,7 +1121,7 @@ test.describe('Feature: Workflows (the designer)', () => {
           await expect(nodeDialog(page)).toHaveCount(0);
         },
       );
-      await scenarioStep(page, 'When I click Execute workflow', async () => {
+      await scenarioStep(page, 'When I click Execute user journey', async () => {
         await page.getByTestId('workflow-execute').click();
       });
       await scenarioStep(page, 'Then the Run panel focuses its input and nothing runs', async () => {
@@ -1307,7 +1307,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       await expect(nodeDialog(page).getByTestId('workflow-ndv-title')).toHaveText('run_readonly_sql');
     });
     await test.step(
-      "Then its dialog shows the tool's description and inputs, not the agent's prompt",
+      "Then its dialog shows the tool's description and inputs, not the agent persona's prompt",
       async () => {
         const dialog = nodeDialog(page);
         await expect(dialog.getByText('TOOL', { exact: true })).toBeVisible();
@@ -1320,7 +1320,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(dialog.getByTestId('workflow-step-field-system-prompt')).toHaveCount(0);
         await expandNodeSection(page, 'input');
         await expect(dialog.getByTestId('workflow-ndv-input')).toContainText(
-          'This tool has not run yet. Execute the workflow to see its calls.',
+          'This tool has not run yet. Execute the user journey to see its calls.',
         );
         await closeNode(page);
         await expect(page.getByTestId('workflow-subnode-analyse-tools')).toBeFocused();
@@ -1332,7 +1332,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       await openTool(page, 'analyse', 'run_readonly_sql');
     });
-    await test.step('Then its Input shows the SQL the agent ran and its Output the call done', async () => {
+    await test.step('Then its Input shows the SQL the agent persona ran and its Output the call done', async () => {
       const dialog = nodeDialog(page);
       await expandNodeSection(page, 'input');
       await expandNodeSection(page, 'output');
@@ -1357,15 +1357,15 @@ test.describe('Feature: Workflows (the designer)', () => {
       });
       await scenarioStep(
         page,
-        'When I open "Analyse" before any run, its chat says to execute the workflow first',
+        'When I open "Analyse" before any run, its chat says to execute the user journey first',
         async () => {
           const dialog = await openNode(page, 'analyse', 'Analyse');
           await expect(dialog.getByTestId('workflow-ndv-chat-pane')).toBeVisible();
           await expect(dialog.getByTestId('workflow-ndv-story-empty')).toHaveText(
-            'This node has not run yet. Execute the workflow to see its data.',
+            'This node has not run yet. Execute the user journey to see its data.',
           );
           await expect(dialog.getByTestId('workflow-node-chat-unavailable')).toHaveText(
-            "Execute the workflow, then chat with this agent about this step's data.",
+            "Execute the user journey, then chat with this agent persona about this step's data.",
           );
           await expect(dialog.getByTestId('workflow-node-chat-input')).toHaveCount(0);
           await closeNode(page);
@@ -1433,13 +1433,13 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(dialog.getByTestId('workflow-node-chat-send')).toBeDisabled();
       });
       await scenarioStep(page, `And I ask "${CHAT_QUESTION}"`, async () => {
-        const box = nodeDialog(page).getByRole('textbox', { name: "Ask this step's agent" });
+        const box = nodeDialog(page).getByRole('textbox', { name: "Ask this step's agent persona" });
         await box.fill(CHAT_QUESTION);
         await box.press('Enter');
       });
       await scenarioStep(
         page,
-        "Then the agent's answer appears under my question, with the query it ran",
+        "Then the agent persona's answer appears under my question, with the query it ran",
         async () => {
           const messages = nodeDialog(page).getByTestId('workflow-node-chat-message');
           await expect(messages).toHaveCount(2);
@@ -1457,7 +1457,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       );
       await scenarioStep(
         page,
-        "And the agent received this step's input question and the SQL it ran in the run",
+        "And the agent persona received this step's input question and the SQL it ran in the run",
         async () => {
           const chat = stub.requests.filter((request) => isChatTurn(request));
           expect(chat.length, `a model call for "${CHAT_QUESTION}"`).toBeGreaterThan(0);
@@ -1659,7 +1659,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
     const FOLLOW_UP = 'Which stage had the most matches?';
     await scenarioStep(
       page,
-      `When I open "${V2}" from Workflows on a device that never picked a view`,
+      `When I open "${V2}" from User journeys on a device that never picked a view`,
       async () => {
         // The theme follows the OS so the axe scan below can try both; it reloads the app.
         await followOsTheme(page);
@@ -1700,7 +1700,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
     );
     await scenarioStep(
       page,
-      `Then the workflow runs and I see my question, the agents' thread and the answer, with no tool calls and no How it ran`,
+      `Then the user journey runs and I see my question, the agent personas' thread and the answer, with no tool calls and no How it ran`,
       async () => {
         const view = businessView(page);
         await expect(view.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
@@ -1728,7 +1728,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
       await businessView(page).getByTestId('workflow-follow-up-input').fill(FOLLOW_UP);
       await businessView(page).getByTestId('workflow-run-follow-up').click();
     });
-    await scenarioStep(page, 'Then it runs the workflow again on my earlier answer', async () => {
+    await scenarioStep(page, 'Then it runs the user journey again on my earlier answer', async () => {
       const view = businessView(page);
       await expect(view.getByTestId('workflow-run-context')).toHaveText(
         `Follows up on “${QUESTION}”`,
@@ -1752,7 +1752,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
         await expect(runDock(page).getByTestId('workflow-run-story')).toBeVisible();
       },
     );
-    await scenarioStep(page, `When I go back to Workflows and open "${V2}" again`, async () => {
+    await scenarioStep(page, `When I go back to User journeys and open "${V2}" again`, async () => {
       await page.getByTestId('workflow-breadcrumb').click();
       await openWorkflow(page, V2_ID, V2);
     });

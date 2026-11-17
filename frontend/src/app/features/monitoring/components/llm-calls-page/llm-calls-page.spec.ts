@@ -162,7 +162,7 @@ describe('LlmCallsPage', () => {
   it('offers the facets in the selects', async () => {
     await render();
     expect(optionTexts('llm-filter-agent')).toEqual([
-      'All agents',
+      'All agent personas',
       'Questions to Insights Assistant',
       'Visual Designer',
     ]);

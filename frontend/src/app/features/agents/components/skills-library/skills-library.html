@@ -57,14 +57,14 @@
         </button>
       } @empty {
         <p class="p-8 text-center text-[13px] text-fg-muted">
-          No skills yet. A skill is know-how an agent reads when a question
-          needs it.
+          No skills yet. A skill is know-how an agent persona reads when a
+          question needs it.
         </p>
       }
     </div>
 
     <h3 class="mt-8 text-[13px] font-semibold text-fg-muted">
-      Built-in · included in every agent
+      Built-in · included in every agent persona
     </h3>
     <div class="card mt-2 flex flex-col">
       @for (skill of builtIn(); track skill.name) {

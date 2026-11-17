@@ -97,7 +97,7 @@ describe('workflows.util', () => {
   describe('workflowsEmptyMessage', () => {
     it('names the query when nothing matches', () => {
       expect(workflowsEmptyMessage(' zzz ', [])).toBe(
-        'No workflows match "zzz"',
+        'No user journeys match "zzz"',
       );
     });
 

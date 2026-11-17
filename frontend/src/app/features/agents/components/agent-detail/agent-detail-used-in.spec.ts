@@ -88,7 +88,7 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
     for (const status of ['draft', 'live'] as const) {
       const el = open(agent(`u-${status}`, 'user', [], { status }));
       expect(byId(el, 'agent-used-in')!.textContent).toContain(
-        'Not used in any workflow.',
+        'Not used in any user journey.',
       );
       expect(byId(el, 'agent-used-in')!.textContent).not.toContain('one-step');
       expect(el.querySelector('[data-testid^="agent-used-in-"]')).toBeNull();
@@ -98,7 +98,7 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
   it('says the app calls a System agent itself', () => {
     const el = open(agent('sql-fixer', 'system', []));
     expect(byId(el, 'agent-used-in')!.textContent).toContain(
-      'Not used in any workflow. The app calls this agent itself.',
+      'Not used in any user journey. The app calls this agent persona itself.',
     );
   });
 
@@ -108,7 +108,7 @@ describe('AgentDetail Used in and tabs (agents-evals R5, R109)', () => {
     expect(byId(el, 'agent-tab-chat')).toBeNull();
     expect(byId(el, 'agent-tab-prompt')).not.toBeNull();
     expect(byId(el, 'agent-start-chat')).toBeNull();
-    expect(byId(el, 'agent-used-in')!.textContent).toContain('Not used in any workflow.');
+    expect(byId(el, 'agent-used-in')!.textContent).toContain('Not used in any user journey.');
   });
 
   it('opens a Live user agent on Try it, with no Start chat', () => {

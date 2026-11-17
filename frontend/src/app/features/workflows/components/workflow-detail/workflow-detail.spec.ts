@@ -80,7 +80,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     page.back.subscribe(() => events.push('back'));
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Loading workflow…');
+    expect(el.textContent).toContain('Loading user journey…');
     http
       .expectOne((r) => r.url.endsWith(`/workflows/${encodeURIComponent(workflow.id)}`))
       .flush(workflow);
@@ -95,7 +95,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     open(THREE_STEPS);
     const nav = el.querySelector('nav[aria-label="Breadcrumb"]')!;
     expect(nav.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      'Workflows / Three steps',
+      'User journeys / Three steps',
     );
     expect(nav.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(
       'Three steps',
@@ -121,7 +121,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
   it('Execute workflow on the canvas unfolds the Run panel and asks for its composer; it never runs', () => {
     open(THREE_STEPS);
     expect(q('workflow-start-chat')).toBeNull();
-    expect(text('workflow-execute')).toBe('Execute workflow');
+    expect(text('workflow-execute')).toBe('Execute user journey');
     expect(el.querySelector('header [data-testid="workflow-execute"]')).toBeNull();
     designer.stateOpen.set(false);
     designer.setInput('text', 'a b');
@@ -142,7 +142,7 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       ],
     });
     http.expectOne((r) => r.url.endsWith('/datasets')).flush({ datasets: [] });
-    expect(text('workflow-execute')).toBe('Execute workflow');
+    expect(text('workflow-execute')).toBe('Execute user journey');
     expect(q('workflow-start-chat')).toBeNull();
     q('workflow-execute')!.click();
     expect(designer.runFormRequest()).toBe(1);

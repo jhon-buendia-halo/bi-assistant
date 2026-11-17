@@ -57,7 +57,7 @@
         <input
           type="search"
           data-testid="runs-search"
-          placeholder="Search runs by title, workflow or ID…"
+          placeholder="Search runs by title, user journey or ID…"
           aria-label="Search runs"
           [value]="query()"
           (input)="onSearch($event)"
@@ -75,7 +75,7 @@
           class="py-10 text-center text-[13px] text-fg-muted"
           data-testid="runs-empty"
         >
-          No runs yet. Open a workflow and run it.
+          No runs yet. Open a user journey and run it.
         </p>
       } @else if (visible().length === 0) {
         <p class="py-10 text-center text-[13px] text-fg-muted">
@@ -103,7 +103,7 @@
               <span
                 data-testid="row-run-workflow"
                 class="chip chip-neutral min-w-0 max-w-48 shrink-0"
-                [attr.title]="'Workflow: ' + run.workflowName"
+                [attr.title]="'User journey: ' + run.workflowName"
               >
                 <lucide-angular [img]="Workflow" [size]="12" class="shrink-0" />
                 <span class="truncate">{{ run.workflowName }}</span>

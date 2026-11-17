@@ -61,7 +61,7 @@ export function builtInResetConfirm(name: string): string {
 }
 
 export const BUILT_IN_BANNER =
-  'Changes apply to every session and agent as soon as you save. Run the evals to check them.';
+  'Changes apply to every session and agent persona as soon as you save. Run the evals to check them.';
 
 export const BUILT_IN_DRIFT_NOTICE =
   "The app's built-in version changed since this was edited. Review it, then save again or reset.";
