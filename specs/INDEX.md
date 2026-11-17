@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-843  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-844  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -350,17 +350,17 @@ roadmap.md:778-781  #### 1.30.2 — Lineage inference and gap tracing  `✅ Done
 roadmap.md:783-786  #### 1.30.3 — Requirements Analyst, Layer Mapper and Gap Advisor  `✅ Done`
 roadmap.md:788-791  #### 1.30.4 — The gap report  `✅ Done`
 roadmap.md:793-797  #### 1.30.5 — The Consumption Gap Analysis workflow  `✅ Done`
-roadmap.md:799-843  ### Milestone 1.31 — Excel and CSV files as datasources (M1-31)
-roadmap.md:803-807  #### 1.31.1 — DuckDB connector and importer for the `file` kind  `📋 Planned`
-roadmap.md:809-813  #### 1.31.2 — The `excel` extension ships with the app  `📋 Planned`
-roadmap.md:815-819  #### 1.31.3 — Upload, preview and storage of files  `📋 Planned`
-roadmap.md:821-825  #### 1.31.4 — The Excel / CSV form and the review dialog  `📋 Planned`
-roadmap.md:827-831  #### 1.31.5 — The `duckdb` dialect in the agents  `📋 Planned`
-roadmap.md:833-837  #### 1.31.6 — Allow-list refusals and no silent fallbacks  `📋 Planned`
-roadmap.md:839-843  #### 1.31.7 — World Cup Excel sample and E2E  `📋 Planned`
-roadmap.md:845-849  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:849-849  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:851-853  ## Backlog
+roadmap.md:799-844  ### Milestone 1.31 — Excel and CSV files as datasources (M1-31)
+roadmap.md:803-807  #### 1.31.1 — DuckDB connector and importer for the `file` kind  `✅ Done`
+roadmap.md:809-814  #### 1.31.2 — The `excel` extension ships with the app  `🚧 In progress`
+roadmap.md:816-820  #### 1.31.3 — Upload, preview and storage of files  `✅ Done`
+roadmap.md:822-826  #### 1.31.4 — The Excel / CSV form and the review dialog  `✅ Done`
+roadmap.md:828-832  #### 1.31.5 — The `duckdb` dialect in the agents  `✅ Done`
+roadmap.md:834-838  #### 1.31.6 — Allow-list refusals and no silent fallbacks  `✅ Done`
+roadmap.md:840-844  #### 1.31.7 — World Cup Excel sample and E2E  `✅ Done`
+roadmap.md:846-850  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:850-850  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:852-854  ## Backlog
 
 specs/README.md:7-93  ## Layout
 specs/README.md:28-52  ### Capabilities

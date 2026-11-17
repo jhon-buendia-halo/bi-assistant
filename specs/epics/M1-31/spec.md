@@ -19,13 +19,13 @@ A user uploads Excel workbooks (`.xlsx`) and CSV files as a datasource, confirms
 
 | Story | What | Status |
 |---|---|---|
-| 1.31.1 | DuckDB connector and importer for the `file` kind | Planned |
-| 1.31.2 | The `excel` extension ships with the app | Planned |
-| 1.31.3 | Upload, preview and storage of files | Planned |
-| 1.31.4 | The Excel / CSV form and the review dialog | Planned |
-| 1.31.5 | The `duckdb` dialect in the agents | Planned |
-| 1.31.6 | Allow-list refusals and no silent fallbacks | Planned |
-| 1.31.7 | World Cup Excel sample and E2E | Planned |
+| 1.31.1 | DuckDB connector and importer for the `file` kind | Done |
+| 1.31.2 | The `excel` extension ships with the app | In progress (Windows installer check open) |
+| 1.31.3 | Upload, preview and storage of files | Done |
+| 1.31.4 | The Excel / CSV form and the review dialog | Done |
+| 1.31.5 | The `duckdb` dialect in the agents | Done |
+| 1.31.6 | Allow-list refusals and no silent fallbacks | Done |
+| 1.31.7 | World Cup Excel sample and E2E | Done |
 
 ## Specs touched
 
