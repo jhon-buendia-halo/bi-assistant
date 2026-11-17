@@ -10,6 +10,8 @@
 // 2. Installs Playwright's Chromium (cached per machine), unless --no-playwright.
 // 3. Builds the backend and the web UI (`npm --prefix backend run build:all`),
 //    unless --no-build.
+// 3b. Fetches DuckDB's excel extension for this machine into
+//    backend/vendor/duckdb-extensions/ (scripts/fetch-duckdb-extensions.mjs).
 // 4. Reports whether the shared Postgres answers on 55432 and whether Docker
 //    runs. It never starts the app or the compose stack: that needs the user's
 //    choice of target (workflow-implement, Worktree deploy convention).
@@ -105,6 +107,20 @@ if (!failed && !args.has('--no-build')) {
   tail.push(run('build', 'npm --prefix backend run build:all', root));
 }
 for (const r of await Promise.all(tail)) failed ||= !r.ok;
+
+// 3b. DuckDB's excel extension for this machine (ADR-0052): `LOAD` never uses the network.
+if (!failed) {
+  const { fetchExtensions, hostPlatform } = await import('./fetch-duckdb-extensions.mjs');
+  const platform = hostPlatform();
+  if (platform) {
+    try {
+      await fetchExtensions([platform], path.join(root, 'backend', 'vendor', 'duckdb-extensions'));
+    } catch (e) {
+      console.log(`✗ excel extension: ${e.message}`);
+      failed = true;
+    }
+  }
+}
 
 // 4. Shared services.
 const postgres = await portOpen(55432);
