@@ -1361,6 +1361,28 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       expect(none.split('\n')[0]).toBe('No rows match these filters.');
       expect(none).not.toContain('| ');
     });
+
+    // A page read straight from the connector (the pg driver hands a
+    // timestamp over as a Date) shows its instants as the stored rows
+    // do, never as JSON with its quotes (found by the live-LLM layer).
+    it('writes a timestamp cell as its ISO instant, without JSON quotes', () => {
+      const answer = pageAnswer(
+        { ...view, page: 1 },
+        {
+          columns: ['stage', 'kicked_off_at'],
+          rows: [
+            { stage: 'final', kicked_off_at: new Date('2018-07-15T15:00:00Z') },
+          ],
+          pageCount: 1,
+          matchedRows: 1,
+          capped: false,
+          understood: 'Stage is final',
+        },
+        'Q1',
+      );
+      expect(answer).toContain('| final | 2018-07-15T15:00:00.000Z |');
+      expect(answer).not.toContain('"2018');
+    });
   });
 
   // Read images' notes (agents.md 2.15, 5.11; workflows R35): Plan, Analyse
