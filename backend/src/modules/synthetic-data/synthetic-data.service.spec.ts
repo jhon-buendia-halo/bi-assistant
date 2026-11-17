@@ -149,7 +149,16 @@ describe('SyntheticDataService.profile (#111 errors)', () => {
       setup({ kind: 'rest' }).service.profile({ datasetName: 'World Cup' }),
     );
     expect(e?.message).toBe(
-      'Profiling a sample supports PostgreSQL and Databricks datasets only',
+      'Synthetic data supports PostgreSQL and Databricks datasources; "World Cup" is a REST API datasource.',
+    );
+  });
+
+  it('400 for an Excel / CSV dataset', async () => {
+    const e = await reject(
+      setup({ kind: 'file' }).service.profile({ datasetName: 'World Cup' }),
+    );
+    expect(e?.message).toBe(
+      'Synthetic data supports PostgreSQL and Databricks datasources; "World Cup" is an Excel / CSV datasource.',
     );
   });
 

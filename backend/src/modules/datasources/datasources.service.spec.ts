@@ -258,6 +258,15 @@ describe('DatasourcesService and the file kind (ADR-0052)', () => {
     });
   });
 
+  it('adds no password to a file config when it restores secrets', async () => {
+    const { service, file } = buildFile();
+
+    await service.testConnection('file', { files: [] }, 'ds-file');
+
+    const sent = file.testConnection.mock.calls[0][0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('password');
+  });
+
   it('never stores the database path', async () => {
     const { service, repository } = buildFile();
 

@@ -141,7 +141,7 @@ describe('SyntheticDataBridge: dataset resolution (agents.md 3.13, 3.14)', () =>
   it('refuses a dataset that is not PostgreSQL or Databricks', async () => {
     const ctx = build(['Orders API']);
     expect(await failure(ctx.bridge.profileSample({ sessionId: 's-1' }))).toBe(
-      'Synthetic data supports PostgreSQL and Databricks datasets only',
+      'Synthetic data supports PostgreSQL and Databricks datasources; "Orders API" is a REST API datasource.',
     );
   });
 });

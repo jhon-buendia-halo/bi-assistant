@@ -1,3 +1,4 @@
+import { unsupportedKindMessage } from '../datasources/kind-refusal';
 import {
   BadGatewayException,
   BadRequestException,
@@ -37,8 +38,6 @@ interface EntityRef {
   name: string;
 }
 
-const UNSUPPORTED_KIND =
-  'Data readiness supports PostgreSQL and Databricks datasources only';
 const NONE_EXIST = 'None of the entities to assess exist';
 const ID_REQUIRED = 'datasourceId is required';
 const ENTITIES_INVALID = 'entities must be an array of entity keys';
@@ -187,7 +186,9 @@ export class DataReadinessService {
     const keys = requireKeys(input.entities);
     const ds = await this.datasource(datasourceId);
     if (ds.kind !== 'postgres' && ds.kind !== 'databricks') {
-      throw new BadRequestException(UNSUPPORTED_KIND);
+      throw new BadRequestException(
+        unsupportedKindMessage('Data Readiness', ds.name, ds.kind),
+      );
     }
     const kind: ReadinessKind = ds.kind;
 

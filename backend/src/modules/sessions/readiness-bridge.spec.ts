@@ -71,6 +71,12 @@ const DATASETS: Record<string, ReadinessDataset> = {
     datasourceKind: 'databricks',
     tables: ['main.sales.orders'],
   },
+  Sheets: {
+    name: 'Sheets',
+    datasourceId: 'ds-file',
+    datasourceKind: 'file',
+    tables: ['file.s.t'],
+  },
   Api: {
     name: 'Api',
     datasourceId: 'ds-rest',
@@ -361,7 +367,19 @@ describe('ReadinessBridge.startAssessment (agents.md 5.13)', () => {
     await expect(
       ctx.bridge.startAssessment({ sessionId: 'run-1' }),
     ).rejects.toThrow(
-      'Data readiness supports PostgreSQL and Databricks datasources only',
+      'Data Readiness supports PostgreSQL and Databricks datasources; "Api" is a REST API datasource.',
+    );
+    expect(ctx.readiness.prepare).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReadinessBridge and an Excel / CSV dataset', () => {
+  it('refuses it by name before preparing', async () => {
+    const ctx = build(['Sheets']);
+    await expect(
+      ctx.bridge.startAssessment({ sessionId: 'run-1' }),
+    ).rejects.toThrow(
+      'Data Readiness supports PostgreSQL and Databricks datasources; "Sheets" is an Excel / CSV datasource.',
     );
     expect(ctx.readiness.prepare).not.toHaveBeenCalled();
   });
@@ -430,7 +448,7 @@ describe('ReadinessBridge (agents.md 3.13)', () => {
       await expect(
         ctx.bridge.assessReadiness({ sessionId: 's-1' }),
       ).rejects.toThrow(
-        'Data readiness supports PostgreSQL and Databricks datasources only',
+        'Data Readiness supports PostgreSQL and Databricks datasources; "Api" is a REST API datasource.',
       );
     });
   });

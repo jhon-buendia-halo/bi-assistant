@@ -79,7 +79,10 @@ export class SyntheticDataPanel implements OnInit {
   }
 
   readonly tablesMax = PROFILE_TABLES_MAX;
-  readonly supported = computed(() => this.dataset().datasourceKind !== 'rest');
+  readonly supported = computed(() => {
+    const kind = this.dataset().datasourceKind;
+    return kind === 'postgres' || kind === 'databricks';
+  });
   readonly allTables = computed(() => this.dataset().tables);
   /** Unchecked keys; every table starts checked. */
   private readonly unchecked = signal<ReadonlySet<string>>(new Set());
