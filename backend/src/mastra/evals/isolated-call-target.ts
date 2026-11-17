@@ -11,7 +11,7 @@ import { EVAL_CASE_CONTEXT_KEY, EVAL_DETAILS_KEY } from './eval-details';
 /**
  * The isolated-call eval target (agents.md 8.1): each case runs ONE of the
  * app's model functions (`planWithModel`, `writeAnswerWithModel`,
- * `checkDataQualityWithModel`, `readImagesWithModel`, …) over a frozen,
+ * `readImagesWithModel`, …) over a frozen,
  * hand-built input, so a failure belongs to that one agent and no step
  * before it.
  *

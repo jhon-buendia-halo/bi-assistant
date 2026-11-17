@@ -27,14 +27,11 @@ import {
 import {
   ANALYSIS_PLANNER_EVAL_TARGET,
   ANSWER_WRITER_EVAL_TARGET,
-  DATA_QUALITY_CHECK_EVAL_TARGET,
   IMAGE_READER_EVAL_TARGET,
   analysisPlannerEvalTarget,
   answerWriterEvalTarget,
-  dataQualityCheckEvalTarget,
   imageReaderEvalTarget,
 } from './isolated-call-targets';
-import { DATA_QUALITY_CHECK_EVAL_SET } from './data-quality-check.evals';
 import { READINESS_WORKFLOW_EVAL_SET } from './readiness-workflow.evals';
 import { ANALYSIS_PLANNER_EVAL_SET } from './analysis-planner.evals';
 import { ANSWER_WRITER_EVAL_SET } from './answer-writer.evals';
@@ -59,7 +56,6 @@ import {
 export const EVAL_SETS: AssistantEvalSet[] = [
   ...ASSISTANT_EVAL_SETS,
   DATA_READINESS_EVAL_SET,
-  DATA_QUALITY_CHECK_EVAL_SET,
   READINESS_WORKFLOW_EVAL_SET,
   ANALYSIS_PLANNER_EVAL_SET,
   ANSWER_WRITER_EVAL_SET,
@@ -101,7 +97,6 @@ const EVAL_TARGET_FACTORIES: Record<
   [ANALYSIS_PLANNER_EVAL_TARGET]: (sets) => analysisPlannerEvalTarget(sets),
   [ANSWER_WRITER_EVAL_TARGET]: (sets) => answerWriterEvalTarget(sets),
   [IMAGE_READER_EVAL_TARGET]: (sets) => imageReaderEvalTarget(sets),
-  [DATA_QUALITY_CHECK_EVAL_TARGET]: (sets) => dataQualityCheckEvalTarget(sets),
   [READINESS_WORKFLOW_EVAL_TARGET]: (sets) => readinessWorkflowEvalTarget(sets),
 };
 

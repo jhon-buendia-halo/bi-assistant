@@ -13,7 +13,6 @@ import type { RequestContext } from '@mastra/core/request-context';
 import { explainQueryWithModel } from './agents/query-explainer.agent';
 import { interpretResultWithModel } from './agents/result-explorer.agent';
 import {
-  checkDataQualityWithModel,
   planWithModel,
   writeAnswerWithModel,
 } from './workflows/answer-business-question.agents';
@@ -135,16 +134,6 @@ export class MastraService {
     return interpretResultWithModel(...args);
   }
 
-  /**
-   * Insights Analyst's optional Check data quality step model call
-   * (agents.md 5.11): Sarah's model, no tools, the issues read from her
-   * reply.
-   */
-  checkDataQuality(
-    ...args: Parameters<typeof checkDataQualityWithModel>
-  ): ReturnType<typeof checkDataQualityWithModel> {
-    return checkDataQualityWithModel(...args);
-  }
 
   /**
    * Dashboard Image to Artifact's Read dashboard step model call (agents.md

@@ -315,7 +315,13 @@ test(
           page,
           'POST',
           `/workflows/${V2_WORKFLOW_ID}/runs`,
-          { input: { question: QUESTION, datasets: [WORLD_CUP_DATASET] } },
+          {
+            input: {
+              question: QUESTION,
+              datasets: [WORLD_CUP_DATASET],
+              buildVisual: false,
+            },
+          },
         );
         runId = run.id;
         await page.reload();
@@ -401,12 +407,12 @@ test(
     await scenarioStep(page, 'Then it is version 2', async () => {
       await expect(versionButton).toHaveText(/v2/);
       // Its artifact card in the thread (visuals R42).
-        await expect(
-          page
-            .getByTestId('workflow-run-chat-log')
-            .getByTestId('run-artifact-card')
-            .filter({ hasText: 'Updated · Version' }),
-        ).toContainText(VISUAL_TITLE);
+      await expect(
+        page
+          .getByTestId('workflow-run-chat-log')
+          .getByTestId('run-artifact-card')
+          .filter({ hasText: 'Updated · Version' }),
+      ).toContainText(VISUAL_TITLE);
     });
     await scenarioStep(
       page,
@@ -423,12 +429,12 @@ test(
     await scenarioStep(page, 'Then version 1 is current again', async () => {
       await expect(versionButton).toHaveText(/v1/);
       // Its artifact card in the thread (visuals R42).
-        await expect(
-          page
-            .getByTestId('workflow-run-chat-log')
-            .getByTestId('run-artifact-card')
-            .filter({ hasText: 'Reverted · Version' }),
-        ).toContainText(VISUAL_TITLE);
+      await expect(
+        page
+          .getByTestId('workflow-run-chat-log')
+          .getByTestId('run-artifact-card')
+          .filter({ hasText: 'Reverted · Version' }),
+      ).toContainText(VISUAL_TITLE);
     });
     await scenarioStep(page, 'When I refresh its data', async () => {
       const refreshed = page.waitForResponse(

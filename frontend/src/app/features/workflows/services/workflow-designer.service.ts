@@ -86,8 +86,6 @@ export const ASK_HINTS: Readonly<Record<string, string>> = {
   plan: 'Plan step: plans how to answer your question. Reads no data.',
   analyse:
     'Analyse step: answers with new queries over the data, with no plan or checks around it.',
-  'check-data-quality':
-    'Check data quality step: answers about the quality of the data behind the answer.',
   'write-answer':
     'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
 };

@@ -110,6 +110,12 @@ function build(
       '',
       'You assess readiness.',
     ),
+    visualization: fakeAgent(
+      'Visualization Designer',
+      ['b'],
+      '',
+      'You design the visual.',
+    ),
     // The agents of v2's Plan and Write answer steps (agents.md 5.11).
     'analysis-planner': fakeAgent(
       'Analysis Planner',
@@ -183,13 +189,13 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
   kind: 'code',
   owner: 'Official',
   // Every agent its steps run: Michael, then Zoe (Read images), Olivia
-  // (Plan), Sarah (Check data quality) and Jessica (Write answer).
+  // (Plan), Jessica (Write answer) and Ryan (Build visual).
   agents: [
     { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
     { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
     { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
-    { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
     { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
+    { key: 'visualization', name: 'Ryan', role: 'Visualization Designer' },
   ],
   stepCount: 13,
   bar: 'steps',
@@ -222,12 +228,12 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
       usedBy: ['receive-question'],
     },
     {
-      // Picks the branch to Check data quality; no step reads it.
-      name: 'checkDataQuality',
-      label: 'Check data quality: Sarah reviews the tables the analysis used',
+      // Picks the branch to Build visual; no step reads it.
+      name: 'buildVisual',
+      label: 'Build a visual: Ryan charts the results of the answer',
       type: 'boolean',
       required: false,
-      default: false,
+      default: true,
       usedBy: [],
     },
   ],
@@ -304,8 +310,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         'result-explorer',
         'analysis-planner',
         'insights-analyst',
-        'data-readiness',
         'answer-writer',
+        'visualization',
       ]);
       expect(detail.steps).toEqual(
         agentWorkflow('insights-analyst')!.steps.map((step, index) => ({
@@ -398,22 +404,22 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           systemPrompt: 'You plan a data analysis.',
           toolDetails: [],
         },
-        // Sarah checks data quality in one model call: none of her tools
-        // here, though she has some.
-        {
-          key: 'data-readiness',
-          name: 'Sarah',
-          role: 'Data Quality Analyst',
-          model: null,
-          systemPrompt: 'You assess readiness.',
-          toolDetails: [],
-        },
         {
           key: 'answer-writer',
           name: 'Jessica',
           role: 'Insights Writer',
           model: null,
           systemPrompt: 'You write the final answer.',
+          toolDetails: [],
+        },
+        // Ryan designs the visual in one model call: none of his tools
+        // here, though he has some.
+        {
+          key: 'visualization',
+          name: 'Ryan',
+          role: 'Visualization Designer',
+          model: null,
+          systemPrompt: 'You design the visual.',
           toolDetails: [],
         },
       ]);
@@ -444,8 +450,8 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
         { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
         { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
-        { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
         { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
+        { key: 'visualization', name: 'Ryan', role: 'Visualization Designer' },
       ]);
     });
 
@@ -501,10 +507,11 @@ describe('AgentsService usedInWorkflows (api.md 34)', () => {
     ['assistant', []],
     [
       'data-readiness',
-      [
-        { id: 'answer-business-question', name: 'Answer a Business Question' },
-        { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
-      ],
+      [{ id: 'data-readiness-assessment', name: 'Assess Data Readiness' }],
+    ],
+    [
+      'visualization',
+      [{ id: 'answer-business-question', name: 'Answer a Business Question' }],
     ],
     ['sql-fixer', []],
   ])('%s is used in %p', async (key, expected) => {

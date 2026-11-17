@@ -13,7 +13,7 @@ import {
   startLlmStub,
 } from './helpers/llm-stub';
 import { worldCupKey, worldCupScalar } from './helpers/world-cup-db';
-import { fillRun, pickDataset, pickedDataset } from './helpers/run-ui';
+import { fillRun as fillRunDefault, pickDataset, pickedDataset } from './helpers/run-ui';
 
 /**
  * Mirrors the Feature "Workflow runs" in specs/capabilities/workflows/spec.md:
@@ -38,6 +38,15 @@ const V2_STEPS = [
   'write-answer',
   'wrap-up',
 ];
+
+/**
+ * Fills the Run tab and turns "Build a visual" off (it is on by default), so
+ * a run that is not about the visual keeps its steps to the answer's.
+ */
+async function fillRun(page: Page, question: string, dataset?: string): Promise<void> {
+  await fillRunDefault(page, question, dataset);
+  await page.getByTestId('workflow-input-buildVisual').setChecked(false);
+}
 
 let stub: LlmStub;
 
@@ -207,14 +216,14 @@ test.describe('Feature: Workflow runs', () => {
             await expect(runStep(page, id)).toHaveAttribute('data-status', 'success');
           }
           await expect(nodeStatus(page, 'clarify')).toHaveText('Skipped');
-          // The data-quality check runs only when asked for, and its line says so.
-          await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Skipped');
-          await expect(runStep(page, 'check-data-quality')).toHaveAttribute(
+          // The visual is off for this run, and its line says so.
+          await expect(nodeStatus(page, 'build-visual')).toHaveText('Skipped');
+          await expect(runStep(page, 'build-visual')).toHaveAttribute(
             'data-status',
             'skipped',
           );
           await expect(
-            runStep(page, 'check-data-quality').getByTestId('workflow-node-activity'),
+            runStep(page, 'build-visual').getByTestId('workflow-node-activity'),
           ).toHaveText('Off for this run');
         },
       );
@@ -400,7 +409,7 @@ test.describe('Feature: Workflow runs', () => {
   );
 
   test(
-    'Answer a Business Question checks data quality with Sarah when asked',
+    'Answer a Business Question builds a visual with Ryan unless it is turned off',
     { tag: ['@demo'] },
     async ({ page }) => {
       stub.reply = answerWithSql({ [QUESTION]: ANSWER });
@@ -411,20 +420,20 @@ test.describe('Feature: Workflow runs', () => {
       });
       await scenarioStep(
         page,
-        `When I tick "Check data quality", pick "${WORLD_CUP_DATASET}", ask "${QUESTION}" and click Execute`,
+        `When "Build a visual" is ticked by default, I pick "${WORLD_CUP_DATASET}", ask "${QUESTION}" and click Execute`,
         async () => {
-          await page.getByTestId('workflow-input-checkDataQuality').check();
-          await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+          await expect(page.getByTestId('workflow-input-buildVisual')).toBeChecked();
+          await fillRunDefault(page, QUESTION, WORLD_CUP_DATASET);
           await page.getByTestId('workflow-run').click();
         },
       );
       await scenarioStep(
         page,
-        'Then "Check data quality" ends Done, after Validate and before Write answer in How it ran',
+        'Then "Build visual" ends Done, after Write answer and before Wrap up in How it ran',
         async () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
-          await expect(nodeStatus(page, 'check-data-quality')).toHaveText('Done');
-          await expect(runStep(page, 'check-data-quality')).toHaveAttribute('data-status', 'success');
+          await expect(nodeStatus(page, 'build-visual')).toHaveText('Done');
+          await expect(runStep(page, 'build-visual')).toHaveAttribute('data-status', 'success');
           const order = await page
             .getByTestId('workflow-run-story')
             .locator('[data-testid^="workflow-run-story-step-"]')
@@ -433,20 +442,13 @@ test.describe('Feature: Workflow runs', () => {
                 (e.getAttribute('data-testid') ?? '').replace('workflow-run-story-step-', ''),
               ),
             );
-          expect(order.indexOf('check-data-quality')).toBeGreaterThan(order.indexOf('validate'));
-          expect(order.indexOf('check-data-quality')).toBeLessThan(order.indexOf('write-answer'));
+          expect(order.indexOf('build-visual')).toBeGreaterThan(order.indexOf('write-answer'));
+          expect(order.indexOf('build-visual')).toBeLessThan(order.indexOf('wrap-up'));
         },
       );
-      await scenarioStep(
-        page,
-        "And Sarah's model call reached the stub, and the answer shows a readiness card",
-        async () => {
-          const asked = stub.requests.filter((request) => request.step === 'quality');
-          expect(asked.length, "Sarah's structured call").toBeGreaterThan(0);
-          await expect(runAnswer(page)).toContainText(ANSWER);
-          await expect(runAnswer(page).getByTestId('readiness-card')).toBeVisible();
-        },
-      );
+      await scenarioStep(page, 'And the answer is still shown', async () => {
+        await expect(runAnswer(page)).toContainText(ANSWER);
+      });
     },
   );
 

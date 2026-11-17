@@ -37,8 +37,8 @@ const V2_STEP_IDS = [
   ['clarify', 'Clarify'],
   ['analyse', 'Analyse'],
   ['validate', 'Validate'],
-  ['check-data-quality', 'Check data quality'],
   ['write-answer', 'Write answer'],
+  ['build-visual', 'Build visual'],
   ['wrap-up', 'Wrap up'],
   ['page-result', 'Page result'],
   ['page-answer', 'Page answer'],
@@ -47,13 +47,12 @@ const V2_STEP_IDS = [
 const V2_OFF_PATH = ['clarify', 'page-result', 'page-answer'] as const;
 /**
  * The steps a clear question runs: the canvas's main path, left to right.
- * Read images (only when the run has images), Clarify, Check data quality
- * (ticked only) and the follow-up branch are branches off it.
+ * Build visual (on by default) is on it; Read images (only when the run has
+ * images), Clarify and the follow-up branch are branches off it.
  */
 const V2_MAIN_STEP_IDS = V2_STEP_IDS.filter(
   ([id]) =>
     id !== 'read-images' &&
-    id !== 'check-data-quality' &&
     !(V2_OFF_PATH as readonly string[]).includes(id),
 );
 /** The steps a question that needs clarification skips. */
@@ -332,7 +331,7 @@ test.describe('Feature: Workflows', () => {
       });
       await scenarioStep(
         page,
-        'Then I see its thirteen steps on the canvas and the agent personas Michael, Zoe, Nathan, Olivia, Sarah and Jessica under Agent personas in its Start node',
+        'Then I see its thirteen steps on the canvas and the agent personas Michael, Zoe, Nathan, Olivia, Jessica and Ryan under Agent personas in its Start node',
         async () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
@@ -525,7 +524,7 @@ test.describe('Feature: Workflows (run workflows)', () => {
       });
       await scenarioStep(
         page,
-        'Then I see "Run succeeded" with every step "Done" but "Read images", "Clarify" and "Check data quality", which are "Skipped"',
+        'Then I see "Run succeeded" with every step "Done" but "Read images" and "Clarify", which are "Skipped"',
         async () => {
           await expect(page.getByTestId('workflow-run-status')).toHaveText(
             'Run succeeded',
@@ -536,7 +535,6 @@ test.describe('Feature: Workflows (run workflows)', () => {
           }
           await expect(runStep(page, 'read-images')).toHaveAttribute('data-status', 'skipped');
           await expect(runStep(page, 'clarify')).toHaveAttribute('data-status', 'skipped');
-          await expect(runStep(page, 'check-data-quality')).toHaveAttribute('data-status', 'skipped');
           // How it ran, under the answer, tells the same run step by step.
           const howItRan = page.getByTestId('workflow-run-story');
           await howItRan.getByTestId('workflow-run-story-toggle').click();
@@ -1213,7 +1211,7 @@ test.describe('Feature: Workflows (the designer)', () => {
         await expect(page.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
       });
       await test.step(
-        'Then every connector of the main path is done, the branches to "Read images" and "Clarify" are muted, and the Run panel reads "10 of 15 nodes ran"',
+        'Then every connector of the main path is done, the branches to "Read images" and "Clarify" are muted, and the Run panel reads "11 of 15 nodes ran" (Build visual included)',
         async () => {
           const canvas = page.getByTestId('workflow-canvas');
           const connectors = canvas.locator('path[data-testid^="workflow-connector-"]');
@@ -1235,7 +1233,7 @@ test.describe('Feature: Workflows (the designer)', () => {
             'false',
           );
           await expect(page.getByTestId('workflow-state-progress')).toHaveText(
-            '10 of 15 nodes ran',
+            '11 of 15 nodes ran',
           );
           await expect(page.getByTestId('workflow-state-status')).toHaveText('success');
         },

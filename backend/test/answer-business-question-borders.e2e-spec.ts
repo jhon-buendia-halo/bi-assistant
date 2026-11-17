@@ -82,7 +82,7 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
   const client = runClient(() => backend!.url);
   const ask = (question: string, extra: Record<string, unknown> = {}) =>
     client.run(WORKFLOW, {
-      input: { question, datasets: [DATASET], ...extra },
+      input: { question, datasets: [DATASET], buildVisual: false, ...extra },
     });
 
   /** The model requests `act` made, in order. */
@@ -354,22 +354,23 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
     );
   });
 
-  it('Check data quality with no query that succeeded runs, says so, and never fails the run', async () => {
+  it('Build visual is skipped when the input turns it off, and the run still succeeds', async () => {
     useV2Steps(
       stub,
       analyseWithQuery(`SELECT COUNT(*) AS matches FROM ${MATCHES}`),
     );
-    const res = await ask('How many matches? (checked)', {
-      checkDataQuality: true,
+    const res = await ask('How many matches? (no visual)', {
+      buildVisual: false,
     });
     expect(res.run?.status).toBe('success');
     expect(res.steps).toEqual(
       expect.arrayContaining([
-        'check-data-quality:success',
         'write-answer:success',
+        'build-visual:skipped',
+        'wrap-up:success',
       ]),
     );
-    expect(res.steps).not.toContain('check-data-quality:skipped');
+    expect(res.steps).not.toContain('build-visual:success');
   });
 
   describe('reference images (Read images, agents.md 2.15; workflows R35)', () => {
@@ -449,9 +450,9 @@ describe('Answer a Business Question: border cases (API, no Postgres)', () => {
         'Reference images must be at most 4 images',
       ],
       [
-        'checkDataQuality that is no boolean',
-        { question: 'Hi', datasets: [DATASET], checkDataQuality: 'maybe' },
-        'Check data quality: Sarah reviews the tables the analysis used must be true or false',
+        'buildVisual that is no boolean',
+        { question: 'Hi', datasets: [DATASET], buildVisual: 'maybe' },
+        'Build a visual: Ryan charts the results of the answer must be true or false',
       ],
     ])('%s', async (_case, input, message) => {
       const before = stub.requests.length;

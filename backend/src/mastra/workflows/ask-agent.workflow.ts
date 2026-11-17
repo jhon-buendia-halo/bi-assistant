@@ -46,7 +46,6 @@ const TITLES: Record<AskableStepId, string> = {
   'interpret-follow-up': 'Interpret follow-up',
   plan: 'Plan',
   analyse: 'Analyse',
-  'check-data-quality': 'Check data quality',
   'write-answer': 'Write answer',
 };
 
@@ -147,18 +146,10 @@ const WORK: Record<
     if (stopped) return { step: 'plan', answerLength: 0, stopped: true };
     return delivered(runtime, 'plan', planAnswer(plan));
   },
-  // The Analyst or Sarah answers alone, with their own tools.
+  // The Analyst answers alone, with their own tools.
   analyse: async (runtime) => {
     const outcome = await runtime.answer();
     return { step: 'analyse', answerLength: 0, stopped: outcome.stopped };
-  },
-  'check-data-quality': async (runtime) => {
-    const outcome = await runtime.answer();
-    return {
-      step: 'check-data-quality',
-      answerLength: 0,
-      stopped: outcome.stopped,
-    };
   },
   // Jessica writes again from the earlier answer's queries and rows.
   'write-answer': async (runtime, input) => {

@@ -14,7 +14,7 @@ import {
   planInputSchema,
   answerBusinessQuestionResultSchema,
   turnSummarySchema,
-  dataQualityInputSchema,
+  answerPathInputSchema,
 } from './answer-business-question.schemas';
 import {
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
@@ -29,7 +29,7 @@ import {
   planAfterAnswer,
   planCatalogBlock,
   planLoopDone,
-  queriedTables,
+  chartableQueries,
   receiveQuestion,
   validateAttempt,
   wrapUp,
@@ -57,8 +57,9 @@ import { engineInputSchema, withContract } from './workflow-contract';
 //         → .branch(not stopped → analysis-path:
 //             .dountil(analysis-attempt: analyse → validate, ok or 2 attempts)
 //             → .branch(not stopped → answer-path:
-//                 .branch(the run checks data quality → check-data-quality)
-//                 → quality-outcome → write-answer → wrap-up)),
+//                 write-answer → visual-input
+//                 → .branch(the run builds a visual → build-visual)
+//                 → visual-outcome → wrap-up)),
 //       not stopped, a follow-up over an earlier result → explore-result:
 //         page-result → page-answer)
 //
@@ -410,52 +411,6 @@ const validateStep = createStep({
   ),
 });
 
-/** Whether the run checks data quality: its runtime says so (the input). */
-function checksDataQuality(requestContext: unknown): boolean {
-  const context = requestContext as { get(key: string): unknown } | undefined;
-  const runtime = context?.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
-    AnswerBusinessQuestionRuntime | undefined;
-  return runtime?.checksDataQuality === true;
-}
-
-// Optional: the engine assesses the tables the queries read, and Sarah
-// picks the findings that affect the answer; they reach Write answer as
-// findings. A check that cannot run says so in a finding: it never fails
-// the run. A stop leaves the findings as they were (Write answer stops).
-const checkDataQualityStep = createStep({
-  id: STEP['check-data-quality'].id,
-  description: STEP['check-data-quality'].title,
-  inputSchema: engineInputSchema(SCHEMAS['check-data-quality'].input),
-  outputSchema: SCHEMAS['check-data-quality'].output,
-  execute: withContract(
-    STEP['check-data-quality'].title,
-    SCHEMAS['check-data-quality'],
-    async (params: StepParams<(typeof SCHEMAS)['check-data-quality']>) => {
-      const { inputData } = params;
-      const runtime = runtimeOf(params, STEP['check-data-quality'].title);
-      if (!runtime.checkDataQuality) {
-        throw new Error('The Check data quality step has no check to run');
-      }
-      const checked = await runtime.checkDataQuality({
-        question: inputData.question,
-        queries: inputData.queries,
-        tables: queriedTables(inputData.queries, inputData.catalog),
-      });
-      return {
-        question: inputData.question,
-        plan: inputData.plan,
-        queries: inputData.queries,
-        findings: checked.stopped
-          ? inputData.findings
-          : [...inputData.findings, ...checked.findings],
-        calls: inputData.calls,
-        imageNotes: inputData.imageNotes,
-        dataQuality: checked.dataQuality,
-      };
-    },
-  ),
-});
-
 const writeAnswerStep = createStep({
   id: STEP['write-answer'].id,
   description: STEP['write-answer'].title,
@@ -478,6 +433,54 @@ const writeAnswerStep = createStep({
       });
       const output = { ...answer, calls: inputData.calls };
       // A stopped turn ends here: Wrap up does not run.
+      return stopped ? params.bail(output) : output;
+    },
+  ),
+});
+
+/** Whether the run builds a visual: its runtime says so (the input). */
+function buildsVisual(requestContext: unknown): boolean {
+  const context = requestContext as { get(key: string): unknown } | undefined;
+  const runtime = context?.get(ANSWER_BUSINESS_QUESTION_RUNTIME_KEY) as
+    AnswerBusinessQuestionRuntime | undefined;
+  return runtime?.buildsVisual === true;
+}
+
+// On unless the run turns it off (workflows R41): Ryan designs an
+// interactive visual from the answer and its queries' rows, stored with the
+// run. Nothing to chart skips the design; a design that fails leaves the
+// answer without a visual and never fails the run. A stop bails the step (Wrap up still sums the stopped turn).
+const buildVisualStep = createStep({
+  id: STEP['build-visual'].id,
+  description: STEP['build-visual'].title,
+  inputSchema: engineInputSchema(SCHEMAS['build-visual'].input),
+  outputSchema: SCHEMAS['build-visual'].output,
+  execute: withContract(
+    STEP['build-visual'].title,
+    SCHEMAS['build-visual'],
+    async (params: StepParams<(typeof SCHEMAS)['build-visual']>) => {
+      const { inputData } = params;
+      const written = {
+        headline: inputData.headline,
+        answer: inputData.answer,
+        calls: inputData.calls,
+      };
+      if (!chartableQueries(inputData.queries)) {
+        return {
+          ...written,
+          visual: { skipped: 'No query returned rows to chart.' },
+        };
+      }
+      const runtime = runtimeOf(params, STEP['build-visual'].title);
+      if (!runtime.buildVisual) {
+        throw new Error('The Build visual step has no designer to run');
+      }
+      const { visual, stopped } = await runtime.buildVisual({
+        question: inputData.question,
+        answer: inputData.answer,
+        queries: inputData.queries,
+      });
+      const output = { ...written, visual };
       return stopped ? params.bail(output) : output;
     },
   ),
@@ -543,29 +546,38 @@ const analysisAttemptWorkflow = createWorkflow({
 // The answer: written from the last attempt, then summed up.
 const answerPathWorkflow = createWorkflow({
   id: 'answer-path',
-  // Write answer's input and the catalog Check data quality reads.
-  inputSchema: engineInputSchema(dataQualityInputSchema),
+  // Write answer's input and the catalog of the run's datasets.
+  inputSchema: engineInputSchema(answerPathInputSchema),
   outputSchema: turnSummarySchema,
   options: { shouldPersistSnapshot: persistWhileWaiting },
 })
-  // Check data quality when the run asks for it (its input's
-  // `checkDataQuality`); either way Write answer gets Write answer's input.
+  .then(writeAnswerStep)
+  // Build visual unless the run turns it off (its input's `buildVisual`),
+  // from the answer and the queries' rows; Wrap up sums up either way.
+  .map(
+    async (params) =>
+      Promise.resolve({
+        ...(params.inputData as Record<string, unknown>),
+        question: (params.getInitData() as { question: string }).question,
+        queries: (params.getInitData() as { queries: unknown[] }).queries,
+      }),
+    { id: 'visual-input' },
+  )
   .branch([
     [
       async ({ requestContext }) =>
-        Promise.resolve(checksDataQuality(requestContext)),
-      checkDataQualityStep,
+        Promise.resolve(buildsVisual(requestContext)),
+      buildVisualStep,
     ],
   ])
   .map(
     async (params) =>
       Promise.resolve(
-        ((params.inputData as Record<string, unknown>)['check-data-quality'] ??
-          params.getInitData()) as Record<string, unknown>,
+        ((params.inputData as Record<string, unknown>)['build-visual'] ??
+          params.getStepResult(writeAnswerStep)) as Record<string, unknown>,
       ),
-    { id: 'quality-outcome' },
+    { id: 'visual-outcome' },
   )
-  .then(writeAnswerStep)
   .then(wrapUpStep)
   .commit();
 

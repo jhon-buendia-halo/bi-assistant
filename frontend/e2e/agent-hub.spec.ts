@@ -740,7 +740,7 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in both user journeys',
+      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in Assess Data Readiness only',
       async () => {
         await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
         await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
@@ -750,14 +750,14 @@ test(
         await expect(page.getByTestId('agent-prompt-view')).toContainText(
           'You are the Data Readiness Agent',
         );
-        // Her steps: Check data quality in Answer a Business Question, and
-        // Explain report in Assess Data Readiness.
+        // Her step: Explain report in Assess Data Readiness only (Answer a
+        // Business Question no longer runs her).
         const usedIn = page.getByTestId('agent-used-in');
         await expect(usedIn).toContainText('Used in');
         await expect(usedIn).not.toContainText(NOT_USED);
         await expect(
           usedIn.getByTestId('agent-used-in-answer-business-question'),
-        ).toHaveText(V2);
+        ).toHaveCount(0);
         await expect(
           usedIn.getByTestId('agent-used-in-data-readiness-assessment'),
         ).toHaveText('Assess Data Readiness');

@@ -196,8 +196,7 @@ export interface AssistantEvalSet {
   agentKey?: string;
   /**
    * The eval target its cases run on, when its agent has more than one
-   * (`eval-sets.ts` `EVAL_TARGET_FACTORIES`): `data-readiness:check-data-quality`
-   * or `data-readiness:assessment-workflow`. Absent means the agent's own
+   * (`eval-sets.ts` `EVAL_TARGET_FACTORIES`): `data-readiness:assessment-workflow`. Absent means the agent's own
    * target (its `agentKey`).
    */
   target?: string;

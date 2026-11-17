@@ -105,8 +105,8 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       'clarify',
       'analyse',
       'validate',
-      'check-data-quality',
       'write-answer',
+      'build-visual',
       'wrap-up',
       'page-result',
       'page-answer',
@@ -115,7 +115,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
     // images from Start, a branch after Interpret follow-up (a new
     // question, or the earlier result paged), a branch after Plan, a loop
     // back from Clarify to Plan once answered, a loop back from Validate to
-    // Analyse, and the optional branch to Check data quality.
+    // Analyse, and the optional branch from Write answer to Build visual.
     expect(CODE_WORKFLOWS[0].edges).toHaveLength(19);
     expect(
       CODE_WORKFLOWS[0].edges.filter((edge) => edge.kind !== 'next'),
@@ -148,10 +148,10 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       { from: 'plan', to: 'analyse', kind: 'branch', label: 'Clear' },
       { from: 'validate', to: 'analyse', kind: 'loop', label: 'Retry once' },
       {
-        from: 'validate',
-        to: 'check-data-quality',
+        from: 'write-answer',
+        to: 'build-visual',
         kind: 'branch',
-        label: 'Check data quality',
+        label: 'Build a visual',
       },
     ]);
     expect(CODE_WORKFLOWS[0].description).toBe(
@@ -169,11 +169,11 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       IMAGES_FIELD,
       { name: 'datasets', label: 'Datasets', type: 'datasets', required: true },
       {
-        name: 'checkDataQuality',
-        label: 'Check data quality: Sarah reviews the tables the analysis used',
+        name: 'buildVisual',
+        label: 'Build a visual: Ryan charts the results of the answer',
         type: 'boolean',
         required: false,
-        default: false,
+        default: true,
       },
     ]);
   });
@@ -233,7 +233,7 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
         question: ['read-images', 'receive-question'],
         images: ['read-images'],
         datasets: ['receive-question'],
-        checkDataQuality: [],
+        buildVisual: [],
       });
       expect(usedBy('data-readiness-assessment')).toEqual({
         dataset: ['resolve-dataset'],
@@ -581,14 +581,19 @@ describe('the workflow catalogue (agents.md 5.12; workflows R1, R2)', () => {
       ]);
     });
 
-    it('data-readiness is used in Answer a Business Question (Check data quality) and Assess Data Readiness', () => {
+    it('data-readiness is used in Assess Data Readiness only', () => {
       expect(workflowsUsingAgent('data-readiness')).toEqual([
-        { id: 'answer-business-question', name: 'Answer a Business Question' },
         { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
       ]);
     });
 
-    it.each(['assistant', 'rfp', 'sql-fixer', 'visualization', 'u-1'])(
+    it('visualization is used in Answer a Business Question (Build visual)', () => {
+      expect(workflowsUsingAgent('visualization')).toEqual([
+        { id: 'answer-business-question', name: 'Answer a Business Question' },
+      ]);
+    });
+
+    it.each(['assistant', 'rfp', 'sql-fixer', 'u-1'])(
       '%s is used in none: agents are a library',
       (key) => {
         expect(workflowsUsingAgent(key)).toEqual([]);

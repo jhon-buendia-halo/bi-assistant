@@ -37,6 +37,7 @@ import type {
   ChatMessage,
   FilePanelItem,
   InteractiveVisualization,
+  SessionVisualization,
   VisualEvent,
 } from '../sessions/entities/session.entity';
 import type {
@@ -90,6 +91,7 @@ import {
   type StepTeller,
   type WorkflowRun,
   type WorkflowRunDoc,
+  type WorkflowRunStep,
   type WorkflowRunSummary,
   type WorkflowRunWaitingFor,
 } from './workflow-run-steps';
@@ -128,6 +130,29 @@ function visualEventMessage(event: VisualEvent): ChatMessage {
     at: new Date().toISOString(),
     visual: event,
   };
+}
+
+/**
+ * The event of the visual Build visual stored (agents.md 5.11, workflows
+ * R41), logged beside the answer as a visual action is, so the answer keeps
+ * its query evidence; none when the step did not run or built nothing.
+ */
+function builtVisualEvent(
+  steps: readonly WorkflowRunStep[],
+  visualizations: readonly SessionVisualization[],
+): ChatMessage | undefined {
+  const built = steps.find((step) => step.id === 'build-visual')?.output?.[
+    'visual'
+  ] as { visualId?: unknown } | undefined;
+  const metadata = visualizations.find((v) => v.id === built?.visualId);
+  return metadata
+    ? visualEventMessage({
+        visualId: metadata.id,
+        version: 1,
+        title: metadata.title,
+        action: 'created',
+      })
+    : undefined;
 }
 
 /**
@@ -614,7 +639,7 @@ export class WorkflowRunsService implements OnModuleInit {
         ...(ask?.contextBlock ? { contextBlock: ask.contextBlock } : {}),
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
-        ...(prepared.turn.checkDataQuality ? { checkDataQuality: true } : {}),
+        ...(prepared.turn.buildVisual ? { buildVisual: true } : {}),
         ...(prepared.image ? { image: prepared.image } : {}),
         ...(prepared.images.length
           ? {
@@ -1541,6 +1566,7 @@ export class WorkflowRunsService implements OnModuleInit {
     }
     const answer = runAnswerOf(view.messages, prepared.context ? 2 : 0);
     const output = status === 'success' ? tracker.lastOutput() : undefined;
+    const built = builtVisualEvent(ended.steps, view.visualizations ?? []);
     return {
       ...base,
       status,
@@ -1555,6 +1581,7 @@ export class WorkflowRunsService implements OnModuleInit {
       ...(view.agentName ? { agentName: view.agentName } : {}),
       panelItems: view.panelItems,
       visualizations: view.visualizations ?? [],
+      ...(built ? { events: [...(base.events ?? []), built] } : {}),
       ...(view.workflowState ? { workflowState: view.workflowState } : {}),
       finishedAt,
     };

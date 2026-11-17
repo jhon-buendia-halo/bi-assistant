@@ -114,7 +114,7 @@ describeLive(
       context?: { fromRunId: string },
     ) =>
       client.run(WORKFLOW, {
-        input: { question, datasets: [DATASET], ...extra },
+        input: { question, datasets: [DATASET], buildVisual: false, ...extra },
         ...(context ? { context } : {}),
       });
 
@@ -401,19 +401,19 @@ describeLive(
       await expectInspectable(run, seen);
     });
 
-    it('Check data quality: Sarah reviews the tables the analysis read; the answer still states the true total', async () => {
-      const { run, seen } = await observe('Data quality on', () =>
+    it("Build visual: Ryan charts the answer's rows; the answer still states the true total", async () => {
+      const { run, seen } = await observe('Build visual on', () =>
         ask('What was the total attendance across all matches?', {
-          checkDataQuality: true,
+          buildVisual: true,
         }),
       );
       expectAnswered(run, seen);
-      const checked = stepsOf(run, 'check-data-quality')[0];
-      expect(checked?.status).toBe('success');
-      expect(checked?.output).toHaveProperty('dataQuality');
+      const built = stepsOf(run, 'build-visual')[0];
+      expect(built?.status).toBe('success');
+      expect(built?.output).toHaveProperty('visual');
       seen.notes.push(
-        `Check data quality: ${JSON.stringify(
-          (checked?.output as { dataQuality?: unknown }).dataQuality,
+        `Build visual: ${JSON.stringify(
+          (built?.output as { visual?: unknown }).visual,
         ).slice(0, 400)}`,
       );
       expect(states(run.answer!.content, truth.attendance)).toBe(true);

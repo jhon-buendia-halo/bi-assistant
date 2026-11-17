@@ -38,8 +38,8 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
         'clarify',
         'analyse',
         'validate',
-        'check-data-quality',
         'write-answer',
+        'build-visual',
         'wrap-up',
         'page-result',
         'page-answer',
@@ -69,16 +69,6 @@ describe('turnWorkflowOf (agents.md 5.11, 5.16)', () => {
         stepIds: ['write-answer'],
       }),
     );
-    // Sarah, bound to the host: still the asked step's engine.
-    expect(
-      turnWorkflowOf(
-        session({
-          run: true,
-          agentKey: 'data-readiness',
-          ask: { step: 'check-data-quality' },
-        }),
-      ).engineId,
-    ).toBe('ask-agent');
   });
 });
 

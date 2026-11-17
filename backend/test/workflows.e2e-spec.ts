@@ -116,8 +116,9 @@ describe('The workflow catalogue (API)', () => {
         kind: 'code',
         owner: 'Official',
         // Michael analyses; Zoe reads the reference images, Nathan reads a
-        // follow-up over an earlier result, Olivia plans, Sarah checks data
-        // quality when asked and Jessica writes (agents.md 5.11).
+        // follow-up over an earlier result, Olivia plans, Jessica writes and
+        // Ryan builds the visual unless the run turns it off (agents.md
+        // 5.11).
         agents: [
           {
             key: 'insights-analyst',
@@ -127,12 +128,12 @@ describe('The workflow catalogue (API)', () => {
           { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
           { key: 'result-explorer', name: 'Nathan', role: 'Result Explorer' },
           { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
-          {
-            key: 'data-readiness',
-            name: 'Sarah',
-            role: 'Data Quality Analyst',
-          },
           { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
+          {
+            key: 'visualization',
+            name: 'Ryan',
+            role: 'Visualization Designer',
+          },
         ],
         stepCount: 13,
         bar: 'steps',
@@ -164,13 +165,12 @@ describe('The workflow catalogue (API)', () => {
             usedBy: ['receive-question'],
           },
           {
-            // It picks the branch to Check data quality; no step reads it.
-            name: 'checkDataQuality',
-            label:
-              'Check data quality: Sarah reviews the tables the analysis used',
+            // It picks the branch to Build visual; no step reads it.
+            name: 'buildVisual',
+            label: 'Build a visual: Ryan charts the results of the answer',
             type: 'boolean',
             required: false,
-            default: false,
+            default: true,
             usedBy: [],
           },
         ],
@@ -359,8 +359,8 @@ describe('The workflow catalogue (API)', () => {
         'clarify',
         'analyse',
         'validate',
-        'check-data-quality',
         'write-answer',
+        'build-visual',
         'wrap-up',
         'page-result',
         'page-answer',
@@ -393,7 +393,7 @@ describe('The workflow catalogue (API)', () => {
           usedBy: ['receive-question'],
         },
         {
-          name: 'checkDataQuality',
+          name: 'buildVisual',
           required: false,
           maxLength: undefined,
           usedBy: [],
@@ -407,8 +407,8 @@ describe('The workflow catalogue (API)', () => {
       expect(v2.steps.flatMap((step) => step.exits)).not.toContainEqual(
         expect.objectContaining({ label: 'Empty question' }),
       );
-      // Olivia plans, Michael analyses with his tools, Sarah checks data
-      // quality in one call with no tools, Jessica writes.
+      // Olivia plans, Michael analyses with his tools, Jessica writes and
+      // Ryan builds the visual, each in one call with no tools.
       expect(
         v2.steps
           .filter((step) => step.agent)
@@ -418,8 +418,8 @@ describe('The workflow catalogue (API)', () => {
         ['interpret-follow-up', 'result-explorer', 0],
         ['plan', 'analysis-planner', 0],
         ['analyse', 'insights-analyst', 6],
-        ['check-data-quality', 'data-readiness', 0],
         ['write-answer', 'answer-writer', 0],
+        ['build-visual', 'visualization', 0],
       ]);
       expect(v2.agents).toEqual([
         {
@@ -459,18 +459,6 @@ describe('The workflow catalogue (API)', () => {
           ) as string,
           toolDetails: [],
         },
-        // Sarah: her job description; Check data quality calls her with no
-        // tools, so the workflow shows none.
-        {
-          key: 'data-readiness',
-          name: 'Sarah',
-          role: 'Data Quality Analyst',
-          model: null,
-          systemPrompt: expect.stringMatching(
-            /^You are the Data Readiness Agent/,
-          ) as string,
-          toolDetails: [],
-        },
         {
           key: 'answer-writer',
           name: 'Jessica',
@@ -479,6 +467,15 @@ describe('The workflow catalogue (API)', () => {
           systemPrompt: expect.stringMatching(
             /^You write the final answer for Questions to Insights\./,
           ) as string,
+          toolDetails: [],
+        },
+        // Ryan: his job description; Build visual calls him with no tools.
+        {
+          key: 'visualization',
+          name: 'Ryan',
+          role: 'Visualization Designer',
+          model: null,
+          systemPrompt: expect.any(String) as string,
           toolDetails: [],
         },
       ]);
@@ -601,15 +598,15 @@ describe('The workflow catalogue (API)', () => {
           kind: 'next',
           label: 'Valid or retried',
         },
-        // When the input ticks Check data quality (agents.md 5.11).
-        {
-          from: 'validate',
-          to: 'check-data-quality',
-          kind: 'branch',
-          label: 'Check data quality',
-        },
-        { from: 'check-data-quality', to: 'write-answer', kind: 'next' },
         { from: 'write-answer', to: 'wrap-up', kind: 'next' },
+        // Unless the input turns the visual off (agents.md 5.11).
+        {
+          from: 'write-answer',
+          to: 'build-visual',
+          kind: 'branch',
+          label: 'Build a visual',
+        },
+        { from: 'build-visual', to: 'wrap-up', kind: 'next' },
         { from: 'wrap-up', to: 'end', kind: 'next' },
         { from: 'page-result', to: 'page-answer', kind: 'next' },
         { from: 'page-answer', to: 'end', kind: 'next' },
@@ -625,7 +622,7 @@ describe('The workflow catalogue (API)', () => {
       expect(again.contractHash).toBe(v2.contractHash);
     });
 
-    it("an agent's detail says which workflows use it: Michael, Olivia and Jessica in one, Sarah in both", async () => {
+    it("an agent's detail says which workflows use it: Michael, Olivia, Jessica and Ryan in one, Sarah in the other", async () => {
       const used = async (key: string) =>
         (
           (await http().get(`/agents/${key}`).expect(200)).body as {
@@ -636,6 +633,7 @@ describe('The workflow catalogue (API)', () => {
         'insights-analyst',
         'analysis-planner',
         'answer-writer',
+        'visualization',
       ]) {
         expect({ key, used: await used(key) }).toEqual({
           key,
@@ -647,10 +645,8 @@ describe('The workflow catalogue (API)', () => {
           ],
         });
       }
-      // Sarah runs Check data quality and every agent step of Assess Data
-      // Readiness.
+      // Sarah runs every agent step of Assess Data Readiness only.
       expect(await used('data-readiness')).toEqual([
-        { id: 'answer-business-question', name: 'Answer a Business Question' },
         { id: 'data-readiness-assessment', name: 'Assess Data Readiness' },
       ]);
       for (const key of ['assistant', liveId, draftId]) {

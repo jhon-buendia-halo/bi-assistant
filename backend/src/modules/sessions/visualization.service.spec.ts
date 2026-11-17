@@ -365,6 +365,70 @@ describe('VisualizationService truncation markers', () => {
   });
 });
 
+describe('VisualizationService.createFromAnswer (Build visual)', () => {
+  const AT = '2024-02-02T00:00:00.000Z';
+  const record: ToolDataRecord = {
+    tool: 'run_readonly_sql',
+    input: 'SELECT month, n FROM main.health.claims',
+    columns: ['month', 'n'],
+    rows: [{ month: 'Mar', n: 9 }],
+    rowCount: 1,
+  };
+  const emptySession = (): SessionDoc => ({
+    id: 'session-1',
+    name: 'Claims',
+    datasets: ['claims'],
+    visualizations: [],
+    messages: [],
+  });
+
+  beforeEach(() => {
+    (storedVisualizationDocument as jest.Mock).mockClear();
+  });
+
+  it('designs from the question and the answer that are not stored yet, naming the answer as the visual source', async () => {
+    const { service, agent } = build();
+
+    const { metadata } = await service.createFromAnswer(emptySession(), {
+      question: 'Claims per month?',
+      answer: 'March is the peak.',
+      at: AT,
+      data: [record],
+    });
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(prompt).toContain('Claims per month?');
+    expect(prompt).toContain('March is the peak.');
+    expect(prompt).toContain('<data>');
+    expect(metadata.sourceMessageAt).toBe(AT);
+    expect(metadata.currentVersion).toBe(1);
+  });
+
+  it('does not repeat a question the transcript already ends with', async () => {
+    const { service, agent } = build();
+    const session = emptySession();
+    session.messages = [
+      {
+        role: 'user',
+        content: 'Claims per month?',
+        at: '2024-02-01T00:00:00.000Z',
+      },
+    ];
+
+    await service.createFromAnswer(session, {
+      question: 'Claims per month?',
+      answer: 'March is the peak.',
+      at: AT,
+      data: [],
+    });
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(prompt).toContain('March is the peak.');
+    // The caller's session is left as it was.
+    expect(session.messages).toHaveLength(1);
+  });
+});
+
 describe('VisualizationService contextFor reasoning', () => {
   beforeEach(() => {
     (storedVisualizationDocument as jest.Mock).mockClear();

@@ -13,7 +13,6 @@ import {
   ANSWER_WRITER_AGENT_KEY,
   DASHBOARD_READER_AGENT_KEY,
   DATA_MAPPER_AGENT_KEY,
-  DATA_READINESS_AGENT_KEY,
   GAP_ADVISOR_AGENT_KEY,
   IMAGE_READER_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
@@ -67,25 +66,17 @@ import type {
 } from '../../site-review/site-review.service';
 import type { WorkflowRunStream } from '../../../mastra/mastra.service';
 import {
-  DATA_QUALITY_CHECK,
   ANSWER_BUSINESS_QUESTION_RUNTIME_KEY,
   ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
-  assessable,
   clarifyingQuestionOf,
-  dataQualityFailure,
-  dataQualityFindings,
   planOf,
   turnSummaryOf,
   validateAttempt,
   type AnsweredClarification,
-  type QualityEngineFinding,
   type AnswerBusinessQuestionInput,
   type AnswerBusinessQuestionRuntime,
 } from '../../../mastra/workflows/answer-business-question.steps';
-import {
-  DATA_QUALITY_FINDINGS_CAP,
-  analyseSystemBlocks,
-} from '../../../mastra/workflows/answer-business-question.prompts';
+import { analyseSystemBlocks } from '../../../mastra/workflows/answer-business-question.prompts';
 import {
   READ_IMAGES_RUNTIME_KEY,
   imageNotesBlock,
@@ -123,7 +114,6 @@ import {
   readinessReportIdOf,
   readinessReportOf,
   readinessReportRef,
-  topFindings,
 } from '../readiness-bridge';
 import {
   SYNTHETIC_DATA_TOOLS,
@@ -240,6 +230,19 @@ export interface TurnEngineDeps {
     blueprint: DashboardBlueprint,
     image: { data: Buffer; mediaType: string } | undefined,
   ): Promise<{ id: string; name: string }>;
+  /**
+   * Build visual (agents.md 5.11): Ryan designs a visual from an answer not
+   * stored yet; `at` is the time the answer message is stored with.
+   */
+  buildVisual(
+    sessionId: string,
+    source: {
+      question: string;
+      answer: string;
+      at: string;
+      data: ToolDataRecord[];
+    },
+  ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
     sessionId: string,
@@ -359,6 +362,8 @@ export class TurnEngine {
     // Set inside `consume`, so typed without narrowing to the initial null.
     let clarification = null as ChatMessage['clarification'] | null;
     let visualEvent: VisualEvent | undefined;
+    // The answer's time, fixed early when Build visual names it as the source.
+    let answerAt: string | undefined;
     // The last report a readiness tool returned this turn (Data Readiness Agent).
     let readinessReport: ReadinessReportRef | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
@@ -797,107 +802,33 @@ export class TurnEngine {
                 : {}),
             };
           },
-          // v2's optional Check data quality (agents.md 5.11): the engine
-          // assesses the tables the queries read, one assessment per
-          // dataset, stored and shown as the answer's readiness card; then
-          // Sarah's model picks the findings that affect the answer. A
-          // check that cannot run becomes a finding, never a failed run.
-          checkDataQuality: async ({ question, queries, tables }) => {
-            const assessed = tables.filter(assessable);
-            const skipped = tables
-              .filter((table) => !assessable(table))
-              .map((table) => table.entity);
-            const measured = {
-              tables: assessed.map((table) => table.entity),
-              reportIds: [] as string[],
-              findingCount: 0,
-              issues: 0,
-              skipped,
-            };
-            const stop = () => ({
-              findings: [],
-              dataQuality: measured,
-              stopped: true,
-            });
-            if (assessed.length === 0) {
+          // Build visual (agents.md 5.11, workflows R41): Ryan designs an
+          // interactive visual from the written answer and the rows the
+          // turn's queries returned. The answer message is stored later
+          // with the same time, so the visual's later actions find it. A
+          // visual that cannot be built is reported, never a failed run.
+          buildVisual: async ({ question, answer }) => {
+            const stop = () => ({ visual: {}, stopped: true });
+            if (turn.signal.aborted) return stop();
+            answerAt ??= new Date().toISOString();
+            try {
+              const metadata = await this.deps.buildVisual(id, {
+                question,
+                answer,
+                at: answerAt,
+                data,
+              });
+              if (turn.signal.aborted) return stop();
               return {
-                findings: [
-                  {
-                    check: DATA_QUALITY_CHECK,
-                    passed: true,
-                    detail: tables.length
-                      ? `No table the queries read can be assessed: only PostgreSQL and Databricks tables can (${skipped.join(', ')}).`
-                      : 'The queries read no table of the catalog.',
-                  },
-                ],
-                dataQuality: measured,
+                visual: { visualId: metadata.id, title: metadata.title },
                 stopped: false,
               };
-            }
-            const engineFindings: QualityEngineFinding[] = [];
-            try {
-              const bridge = this.deps.readinessBridge();
-              if (!bridge) throw new Error('data readiness is not available');
-              const byDataset = new Map<string, string[]>();
-              for (const table of assessed) {
-                byDataset.set(table.dataset, [
-                  ...(byDataset.get(table.dataset) ?? []),
-                  table.entity,
-                ]);
-              }
-              for (const [dataset, entities] of byDataset) {
-                const assessment = await bridge.startAssessment({
-                  sessionId: id,
-                  datasetName: dataset,
-                  tables: entities,
-                });
-                await assessment.profile({ signal: turn.signal });
-                if (turn.signal.aborted) return stop();
-                assessment.score();
-                const saved = await assessment.save();
-                measured.reportIds.push(saved.report.id);
-                measured.findingCount += saved.report.findings.length;
-                const shown = await this.showReadinessReport(id, saved, emit);
-                if (shown && !readinessReport) readinessReport = shown;
-                engineFindings.push(
-                  ...topFindings(saved.report.findings).map((finding) => ({
-                    severity: finding.severity,
-                    dimension: finding.dimension,
-                    entity: finding.namespace
-                      ? `${finding.namespace}.${finding.entity ?? ''}`
-                      : (finding.entity ?? saved.report.datasourceName),
-                    ...(finding.field ? { field: finding.field } : {}),
-                    description: finding.description,
-                  })),
-                );
-              }
-              const shown = engineFindings.slice(0, DATA_QUALITY_FINDINGS_CAP);
-              const reply = shown.length
-                ? await this.deps.mastra.checkDataQuality(
-                    {
-                      question,
-                      sql: queries.map((query) => query.sql),
-                      tables: measured.tables,
-                      findings: shown,
-                    },
-                    stepModelOf(DATA_READINESS_AGENT_KEY),
-                  )
-                : { issues: [], stopped: false };
-              if (reply.stopped || turn.signal.aborted) return stop();
-              const findings = dataQualityFindings({
-                tables: measured.tables,
-                findings: shown,
-                issues: reply.issues,
-              });
-              measured.issues = findings.filter((f) => !f.passed).length;
-              return { findings, dataQuality: measured, stopped: false };
             } catch (error) {
               if (turn.signal.aborted) return stop();
-              const reason =
-                error instanceof Error ? error.message : String(error);
               return {
-                findings: [dataQualityFailure(reason)],
-                dataQuality: { ...measured, error: reason },
+                visual: {
+                  error: error instanceof Error ? error.message : String(error),
+                },
                 stopped: false,
               };
             }
@@ -1634,7 +1565,7 @@ export class TurnEngine {
             (visualEvent
               ? `${visualEvent.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent.title}" (v${visualEvent.version}).`
               : readinessAnswerFallback(readinessReport!)),
-          at: new Date().toISOString(),
+          at: answerAt ?? new Date().toISOString(),
           ...(data.length ? { data } : {}),
           ...(evidence.length ? { evidence } : {}),
           ...(entities.length ? { entities } : {}),
@@ -1707,10 +1638,7 @@ export class TurnEngine {
       Required<
         Pick<
           AnswerBusinessQuestionRuntime,
-          | 'checkDataQuality'
-          | 'interpretFollowUp'
-          | 'pageResult'
-          | 'deliverAnswer'
+          'buildVisual' | 'interpretFollowUp' | 'pageResult' | 'deliverAnswer'
         >
       > &
       AgentTurnRuntime &
@@ -1831,9 +1759,8 @@ export class TurnEngine {
         plan: (input) => captured(() => runtime.plan(input)),
         analyse: (input) => captured(() => runtime.analyse(input)),
         // Only a run host whose input ticked it (agents.md 5.11).
-        checksDataQuality: session.checkDataQuality === true,
-        checkDataQuality: (input) =>
-          captured(() => runtime.checkDataQuality(input)),
+        buildsVisual: session.buildVisual === true,
+        buildVisual: (input) => captured(() => runtime.buildVisual(input)),
         writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
         // A follow-up over an earlier result (roadmap 1.28.8). Nathan's
         // failure is no step's: the run plans the question instead.

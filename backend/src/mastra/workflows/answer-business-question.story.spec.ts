@@ -199,37 +199,57 @@ describe('Answer a Business Question step stories (ui.md 4.4b, Logs Story)', () 
     ).toBe('Its one check passed.');
   });
 
-  it('a skipped Check data quality says the check was off', () => {
+  it('a skipped Build visual says building a visual was off', () => {
     expect(
-      tell(step('check-data-quality', { status: 'skipped' }), context()),
+      tell(step('build-visual', { status: 'skipped' }), context()),
     ).toEqual({
-      headline: 'Skipped: the data quality check was off for this run.',
+      headline: 'Skipped: building a visual was off for this run.',
       brief: 'Off for this run',
     });
     // On but not reached: left to the generic story.
     expect(
       tell(
-        step('check-data-quality', { status: 'skipped' }),
-        context({ runInput: { checkDataQuality: true } }),
+        step('build-visual', { status: 'skipped' }),
+        context({ runInput: { buildVisual: true } }),
       ),
     ).toBeUndefined();
   });
 
-  it('Check data quality counts the tables and the issues', () => {
+  it('Build visual names the visual it built, or says why there is none', () => {
     expect(
       tell(
-        step('check-data-quality', {
+        step('build-visual', {
+          output: { visual: { visualId: 'v-1', title: 'Goals per team' } },
+        }),
+        context(),
+      ),
+    ).toEqual({
+      headline: 'Built the visual “Goals per team”.',
+      brief: 'Visual built',
+    });
+    expect(
+      tell(
+        step('build-visual', {
           output: {
-            dataQuality: { tables: ['goals'], issues: 2, skipped: [] },
+            visual: { skipped: 'No query returned rows to chart.' },
           },
         }),
         context(),
       ),
     ).toEqual({
-      headline:
-        'Checked the quality of 1 table: 2 issues could affect this answer.',
-      facts: [{ label: 'Tables checked', values: ['goals'], code: true }],
-      brief: '2 issues',
+      headline: 'No visual: No query returned rows to chart.',
+      brief: 'Nothing to chart',
+    });
+    expect(
+      tell(
+        step('build-visual', {
+          output: { visual: { error: 'Design failed' } },
+        }),
+        context(),
+      ),
+    ).toEqual({
+      headline: 'Could not build a visual: Design failed',
+      brief: 'Could not build',
       concern: true,
     });
   });

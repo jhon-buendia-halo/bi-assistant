@@ -208,12 +208,6 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
     expect(turn.deliverAnswer).not.toHaveBeenCalled();
   });
 
-  it('asks Sarah alone through the same agent turn', async () => {
-    const turn = runtime();
-    await ask('check-data-quality', turn);
-    expect(turn.answer).toHaveBeenCalledTimes(1);
-  });
-
   it("asks Jessica to write again from the earlier answer's queries", async () => {
     const turn = runtime();
     await ask('write-answer', turn);

@@ -417,64 +417,13 @@ export const writeAnswerInputSchema = z.object({
 });
 
 /**
- * What Check data quality receives (agents.md 5.11; the run's optional
- * quality check): Write answer's input, and the catalog its tables are
- * looked up in.
+ * What the answer path receives (agents.md 5.11): Write answer's input, and
+ * the catalog of the run's datasets.
  */
-export const dataQualityInputSchema = writeAnswerInputSchema.extend({
+export const answerPathInputSchema = writeAnswerInputSchema.extend({
   catalog: z
     .array(catalogEntitySchema)
     .describe("The entities of the run's datasets."),
-});
-
-/** What Check data quality measured: the scope, the reports and the issues. */
-export const dataQualitySummarySchema = z.object({
-  tables: z
-    .array(z.string())
-    .describe('The tables the queries read that were assessed.'),
-  reportIds: z
-    .array(z.string())
-    .describe('The readiness reports stored for them, one per datasource.'),
-  findingCount: z
-    .number()
-    .describe('Engine findings on those tables, of any severity.'),
-  issues: z
-    .number()
-    .describe('Of those, the ones Sarah judged to affect this answer.'),
-  skipped: z
-    .array(z.string())
-    .describe(
-      'Tables read that could not be assessed (not PostgreSQL or Databricks).',
-    ),
-  error: z
-    .string()
-    .optional()
-    .describe('Why the check could not run; the answer is still written.'),
-});
-
-/**
- * What Check data quality passes on: Write answer's input, its findings
- * ending with the data-quality ones, and what it measured.
- */
-export const qualityCheckedSchema = writeAnswerInputSchema.extend({
-  dataQuality: dataQualitySummarySchema.describe('What the check measured.'),
-});
-
-/**
- * Sarah's reply in Check data quality: the engine findings (by their number
- * in the request) that could change or limit this answer, each with how.
- */
-export const dataQualityReplySchema = z.object({
-  issues: z
-    .array(
-      z.object({
-        finding: z.number().describe('The finding number from the request.'),
-        impact: z
-          .string()
-          .describe('One sentence: how it could change or limit this answer.'),
-      }),
-    )
-    .describe('Only the findings that affect this answer; empty when none.'),
 });
 
 /** The answer the Write answer step's model writes (AnswerOutput). */
@@ -496,6 +445,39 @@ export const writtenAnswerSchema = z.object({
     .string()
     .describe("The run's answer in Markdown, starting with the headline."),
   calls: z.array(analyseCallSchema).describe("The last attempt's tool calls."),
+});
+
+/**
+ * What Build visual receives (agents.md 5.11, workflows R41): Write answer's
+ * answer, the question and the queries with their rows.
+ */
+export const visualInputSchema = writtenAnswerSchema.extend({
+  question: z.string().describe('The trimmed question.'),
+  queries: z
+    .array(analyseQuerySchema)
+    .describe('The SQL queries of the last attempt, with their rows.'),
+});
+
+/** What Build visual made: the stored visual, or why there is none. */
+export const builtVisualSchema = z.object({
+  visualId: z
+    .string()
+    .optional()
+    .describe("The run's new visual (absent when none was built)."),
+  title: z.string().optional().describe("The visual's title."),
+  skipped: z
+    .string()
+    .optional()
+    .describe('Why no visual was built (no rows to chart).'),
+  error: z
+    .string()
+    .optional()
+    .describe('Why the design failed; the answer stands without a visual.'),
+});
+
+/** What Build visual passes on: Write answer's output and the visual. */
+export const visualBuiltSchema = writtenAnswerSchema.extend({
+  visual: builtVisualSchema.describe('The visual Ryan built, or why none.'),
 });
 
 /** What Wrap up receives. */
@@ -564,16 +546,12 @@ export const ANSWER_BUSINESS_QUESTION_STEP_SCHEMAS = {
     resume: clarificationAnswerSchema,
   },
   validate: { input: analyseOutcomeSchema, output: validateOutcomeSchema },
-  // Optional (the input's `checkDataQuality`): Sarah's review of the data
-  // the analysis read.
-  'check-data-quality': {
-    input: dataQualityInputSchema,
-    output: qualityCheckedSchema,
-  },
   'write-answer': {
     input: writeAnswerInputSchema,
     output: writtenAnswerSchema,
   },
+  // Optional (the input's `buildVisual`): Ryan's visual of the answer.
+  'build-visual': { input: visualInputSchema, output: visualBuiltSchema },
   'wrap-up': { input: wrapUpInputSchema, output: turnSummarySchema },
   // The follow-up branch: the earlier query's page, then the answer.
   'page-result': { input: followedUpQuestionSchema, output: pagedResultSchema },

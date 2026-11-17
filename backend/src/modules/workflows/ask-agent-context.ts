@@ -3,7 +3,6 @@
  * single-agent follow-up takes from the earlier run, as pure functions of
  * the stored run. No framework import.
  */
-import { DATA_READINESS_AGENT_KEY } from '../../mastra/agent-constants';
 import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
 import {
   isAskableStep,
@@ -70,7 +69,7 @@ function findingsOf(value: unknown): Finding[] {
 /** How the run host of a single-agent follow-up is set up (agents.md 5.21). */
 export interface AskHost {
   ask: AskedStep;
-  /** The agent the host is bound to, when not the workflow's own (Sarah). */
+  /** The agent the host is bound to, when not the workflow's own. */
   agentKey?: string;
   /** The earlier step's context block, for an agent that answers with tools. */
   contextBlock?: string;
@@ -82,10 +81,9 @@ export interface AskHost {
  * The host of a follow-up that asks `step` of `earlier` (agents.md 5.21):
  * - Analyse: the Analyst, from copies of the run's threads, with the step's
  *   context block (as its node chat has it);
- * - Check data quality: Sarah, bound to the host, with the step's context
- *   block and no copied thread (the host's thread would be the Analyst's);
  * - Write answer: the earlier answer's records and evidence, its plan, its
- *   data quality findings and Zoe's notes;
+ *   data quality findings (a run stored before Check data quality left the
+ *   workflow) and Zoe's notes;
  * - Read images, Interpret follow-up and Plan: the step alone.
  */
 export function askHostOf(
@@ -99,16 +97,10 @@ export function askHostOf(
       continuesThreads: true,
     };
   }
-  if (step === 'check-data-quality') {
-    return {
-      ask: { step },
-      agentKey: DATA_READINESS_AGENT_KEY,
-      contextBlock: nodeChatContextBlock(earlier, step),
-      continuesThreads: false,
-    };
-  }
   if (step === 'write-answer') {
     const notes = outputOf(earlier, 'read-images')?.['imageNotes'];
+    // A run stored before Check data quality left the workflow keeps its
+    // findings; Jessica reads them again.
     const quality = findingsOf(
       outputOf(earlier, 'check-data-quality')?.['findings'],
     ).filter((finding) => finding.check.startsWith('Data quality'));

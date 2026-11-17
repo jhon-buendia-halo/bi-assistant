@@ -37,7 +37,6 @@ export const ASKABLE_STEP_IDS = [
   'interpret-follow-up',
   'plan',
   'analyse',
-  'check-data-quality',
   'write-answer',
 ] as const;
 
@@ -52,10 +51,7 @@ export function isAskableStep(id: unknown): id is AskableStepId {
 }
 
 /** The steps whose agent answers alone with its own tools (an agent turn). */
-export const AGENT_TURN_ASK_STEPS: readonly AskableStepId[] = [
-  'analyse',
-  'check-data-quality',
-];
+export const AGENT_TURN_ASK_STEPS: readonly AskableStepId[] = ['analyse'];
 
 /** What the engine runs on: the follow-up's question and the asked step. */
 export interface AskAgentInput {

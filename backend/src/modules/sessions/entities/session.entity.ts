@@ -380,11 +380,11 @@ export interface SessionDoc {
    */
   continuesThreads?: boolean;
   /**
-   * A run host of Answer a Business Question whose input ticked Check data
-   * quality (agents.md 5.11): its turn takes the branch to that step. In
+   * A run host of Answer a Business Question whose input ticked Build a
+   * visual (agents.md 5.11): its turn takes the branch to Build visual. In
    * memory only, like the host.
    */
-  checkDataQuality?: true;
+  buildVisual?: true;
   /**
    * A run host of Dashboard Image to Artifact (agents.md 5.17): the path of the
    * run's input image in the host's workspace. In memory only, like the
