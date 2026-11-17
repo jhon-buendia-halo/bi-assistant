@@ -75,6 +75,14 @@ export interface SqlRunResult {
   note?: string;
 }
 
+/**
+ * How a data tool stops its statement (agents.md 3.3, 3.4): the turn's stop,
+ * as the tool call's `abortSignal`. Mirrors `RunSqlOptions` (datasources R38).
+ */
+export interface SqlCallOptions {
+  signal?: AbortSignal;
+}
+
 export interface VisualToolResult {
   visualId: string;
   version: number;
@@ -196,41 +204,51 @@ export interface DatasetToolServices {
     input: WorkflowToolInput,
   ): Promise<WorkflowToolResult>;
   getDatasets(names: string[]): Promise<DatasetSnapshot[]>;
+  /** `options.signal` is the tool call's abort signal (the turn's stop). */
   sampleRows(
     datasourceId: string,
     entity: string,
     limit: number,
+    options?: SqlCallOptions,
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
   /**
    * Runs the statement and repairs it on execution errors — `datasets` names
-   * the datasets whose schema the fixer may draw on.
+   * the datasets whose schema the fixer may draw on. `options.signal`, the
+   * tool call's abort signal, cancels the statement and the repair.
    */
   runReadOnlySql(
     datasourceId: string,
     sql: string,
     limit: number,
     datasets: string[],
+    options?: SqlCallOptions,
   ): Promise<SqlRunResult>;
   /**
    * One page of an earlier query's full result (`explore_result`, agents.md
    * 3.15) through the query inspector's own page path (api.md 152, 154):
    * the same checks and caps. Throws the message the model should see.
+   * `options.signal`, the tool call's abort signal, ends the call at once.
    */
   pageQuery?(
     source: ExploredQuerySource,
     datasets: string[],
     request: PageRequest,
+    options?: SqlCallOptions,
   ): Promise<PageResult & { datasourceId: string }>;
   /**
    * `result-explorer`'s reading of the user's words as a view of one of the
-   * candidates (api.md 153, 155 use the same call).
+   * candidates (api.md 153, 155 use the same call). `options.abortSignal`,
+   * the tool call's abort signal, cancels the model call.
    */
-  interpretResult?(input: {
-    text: string;
-    candidates: ExplorerCandidate[];
-    view: ResultView | null;
-    pageCount: number | null;
-  }): Promise<ExplorerSpec>;
+  interpretResult?(
+    input: {
+      text: string;
+      candidates: ExplorerCandidate[];
+      view: ResultView | null;
+      pageCount: number | null;
+    },
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<ExplorerSpec>;
 }
 
 let services: DatasetToolServices | null = null;
