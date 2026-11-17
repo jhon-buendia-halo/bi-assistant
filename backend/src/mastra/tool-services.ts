@@ -227,22 +227,28 @@ export interface DatasetToolServices {
    * One page of an earlier query's full result (`explore_result`, agents.md
    * 3.15) through the query inspector's own page path (api.md 152, 154):
    * the same checks and caps. Throws the message the model should see.
+   * `options.signal`, the tool call's abort signal, ends the call at once.
    */
   pageQuery?(
     source: ExploredQuerySource,
     datasets: string[],
     request: PageRequest,
+    options?: SqlCallOptions,
   ): Promise<PageResult & { datasourceId: string }>;
   /**
    * `result-explorer`'s reading of the user's words as a view of one of the
-   * candidates (api.md 153, 155 use the same call).
+   * candidates (api.md 153, 155 use the same call). `options.abortSignal`,
+   * the tool call's abort signal, cancels the model call.
    */
-  interpretResult?(input: {
-    text: string;
-    candidates: ExplorerCandidate[];
-    view: ResultView | null;
-    pageCount: number | null;
-  }): Promise<ExplorerSpec>;
+  interpretResult?(
+    input: {
+      text: string;
+      candidates: ExplorerCandidate[];
+      view: ResultView | null;
+      pageCount: number | null;
+    },
+    options?: { abortSignal?: AbortSignal },
+  ): Promise<ExplorerSpec>;
 }
 
 let services: DatasetToolServices | null = null;

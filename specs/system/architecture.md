@@ -1286,7 +1286,7 @@ flowchart LR
   - **Page only on the client:** rejected; limited to the 200 stored rows.
 
 #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-11-17 (the value checks run four at a time, committed in query order, and a stop cancels the running ones; [agents.md](agents.md) 5.20)
 - **Date:** 2026-11-16
 - **Context:**
   - Consumption Gap Analysis ([agents.md](agents.md) 5.20; workflows R37) must say, for every gap of the Consumption layer, whether the data sits in Normalized or Landing, so the fix starts in the right layer (roadmap 1.30).
@@ -1301,7 +1301,7 @@ flowchart LR
   - A gap is traced through lineage the run can show and re-run, never through a model's guess; the report and the answer never name a column the catalogs lack.
   - A renamed or reshaped column (a split, a pivot, a code mapped to a label) can be missed; the mapper's `mapped` edges cover some of it, and the report shows the method so a reader can weigh it.
   - Pairs on different datasources and REST datasets are never value-checked: their edges stay name edges.
-  - The checks add up to 40 queries to a run, one after another, each with the datasource's timeout; a stop ends the step between two queries.
+  - The checks add up to 40 queries to a run, four at a time ([agents.md](agents.md) 5.20, `SQL_BATCH_CONCURRENCY`), each with the datasource's timeout, committed in query order; a stop starts no new query and cancels the ones running.
   - **Stack-neutral:** a rebuild needs the schema notes, the column catalog and a guarded read-only query path; no lineage store.
 - **Alternatives considered:**
   - **Declared lineage (dbt manifest, catalog lineage, user hints):** rejected for this version; no source is common to the models users bring. Hints are a follow-up.

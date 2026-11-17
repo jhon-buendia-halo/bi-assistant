@@ -380,9 +380,18 @@ export class SessionsService implements OnModuleInit {
             )
           : this.sqlChecks.runSqlWithRepair(datasourceId, sql, limit, datasets),
       // `explore_result` (agents.md 3.15): the inspector's own page path.
-      pageQuery: (source, datasets, request) =>
-        this.queryEvidence.pageOf(source, datasets, request),
-      interpretResult: (input) => this.mastra.interpretResult(input),
+      // `pageOf` takes no signal, so the tool call's stop ends the call at
+      // once and the page statement is left to finish (agents.md 3.3).
+      pageQuery: (source, datasets, request, options) => {
+        const page = this.queryEvidence.pageOf(source, datasets, request);
+        return options?.signal ? raceAbort(page, options.signal) : page;
+      },
+      interpretResult: (input, options) =>
+        options?.abortSignal
+          ? this.mastra.interpretResult(input, {
+              abortSignal: options.abortSignal,
+            })
+          : this.mastra.interpretResult(input),
       createVisual: async (
         sessionId,
         sourceMessageAt,

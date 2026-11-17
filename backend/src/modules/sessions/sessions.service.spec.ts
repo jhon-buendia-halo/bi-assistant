@@ -1469,6 +1469,7 @@ describe('SessionsService SQL self-correction', () => {
     fixerReplies?: ({ sql: string } | undefined)[];
   }) {
     const fixer = { generate: jest.fn() };
+    const interpretResult = jest.fn();
     for (const reply of overrides.fixerReplies ?? []) {
       fixer.generate.mockResolvedValueOnce({ object: reply });
     }
@@ -1489,6 +1490,7 @@ describe('SessionsService SQL self-correction', () => {
       {
         getAgent: jest.fn().mockReturnValue(fixer),
         ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+        interpretResult,
       } as never,
       { getByNames: jest.fn().mockResolvedValue([dataset]) } as never,
       {
@@ -1507,6 +1509,9 @@ describe('SessionsService SQL self-correction', () => {
       .calls as unknown[][];
     const installed = calls.at(-1)![0] as DatasetToolServices;
     return {
+      service,
+      installed,
+      interpretResult,
       sample: (signal: AbortSignal) =>
         installed.sampleRows('ds-1', 'main.health.claims', 10, { signal }),
       run: (sql: string, signal?: AbortSignal) =>
@@ -1554,6 +1559,39 @@ describe('SessionsService SQL self-correction', () => {
 
     await expect(call).rejects.toThrow('The run was stopped');
     expect(samples).toHaveBeenCalledWith('ds-1', 'main.health.claims', 10);
+  });
+
+  it('ends an explore_result page at once on the stop (agents.md 3.15)', async () => {
+    const { service, installed } = await bridge({ runs: jest.fn() });
+    const pageOf = jest.fn(() => new Promise(() => undefined));
+    (
+      service as unknown as { queryEvidence: { pageOf: jest.Mock } }
+    ).queryEvidence.pageOf = pageOf;
+    const stop = new AbortController();
+    const source = { sql: 'SELECT 1', columns: [], kinds: {} };
+    const call = installed.pageQuery!(
+      source,
+      ['claims'],
+      { page: 2 },
+      {
+        signal: stop.signal,
+      },
+    );
+    stop.abort(new Error('The run was stopped'));
+
+    await expect(call).rejects.toThrow('The run was stopped');
+    expect(pageOf).toHaveBeenCalledWith(source, ['claims'], { page: 2 });
+  });
+
+  it("hands the tool call's stop to result-explorer", async () => {
+    const { installed, interpretResult } = await bridge({ runs: jest.fn() });
+    const stop = new AbortController();
+    const input = { text: 'x', candidates: [], view: null, pageCount: null };
+    await installed.interpretResult!(input, { abortSignal: stop.signal });
+
+    expect(interpretResult).toHaveBeenCalledWith(input, {
+      abortSignal: stop.signal,
+    });
   });
 
   it('does not repair a statement the stop cut short: the stop ends the call', async () => {
