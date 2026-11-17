@@ -13,12 +13,18 @@ const INSTANCE_OPTIONS = {
 };
 
 /**
- * `<dataDir>/files/<datasourceId>/data.duckdb`, the data dir resolved as
- * `database.module.ts` resolves it (APP_DATA_DIR, else `<cwd>/data`).
+ * `<dataDir>/files`, where the `file` kind keeps uploads and datasources'
+ * files, the data dir resolved as `database.module.ts` resolves it
+ * (APP_DATA_DIR, else `<cwd>/data`).
  */
-export function fileDatabasePath(datasourceId: string): string {
+export function filesRoot(): string {
   const dataDir = process.env.APP_DATA_DIR ?? join(process.cwd(), 'data');
-  return join(dataDir, 'files', datasourceId, 'data.duckdb');
+  return join(dataDir, 'files');
+}
+
+/** `<dataDir>/files/<datasourceId>/data.duckdb`. */
+export function fileDatabasePath(datasourceId: string): string {
+  return join(filesRoot(), datasourceId, 'data.duckdb');
 }
 
 /** Open `path` (`:memory:` or a database file), run `fn`, always close. */

@@ -1,9 +1,15 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
+  type OnApplicationBootstrap,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { existsSync } from 'fs';
+import { basename } from 'path';
+import type { Readable } from 'stream';
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { normalizeDatabricksHost } from './connectors/databricks-host';
 import { PostgresConnector } from './connectors/postgres.connector';
@@ -13,6 +19,18 @@ import {
   type FileConnectorConfig,
 } from './connectors/file.connector';
 import { fileDatabasePath } from './connectors/duckdb';
+import { excelExtension } from './connectors/excel-extension';
+import { previewSheet } from './connectors/file-preview';
+import {
+  checkImport,
+  originalPath,
+  removeDatasourceFiles,
+  removeUpload,
+  saveImport,
+  sweepStaleUploads,
+  uploadedFilePath,
+  uploadFile,
+} from './connectors/file-storage';
 import type {
   DatasourceConnector,
   ForeignKeyEdge,
@@ -34,7 +52,10 @@ import {
   RestApiConfig,
   RestDiscovery,
   type FileDatasourceConfig,
+  type SheetPreview,
+  type SourceFile,
 } from './entities/datasource.entity';
+import type { PreviewFileDto } from './dto/datasource.dto';
 
 /** A `file` config as stored, never with the connector's runtime path. */
 function withoutDatabasePath(config: DatasourceConfig): FileDatasourceConfig {
@@ -45,7 +66,7 @@ function withoutDatabasePath(config: DatasourceConfig): FileDatasourceConfig {
 
 /** Kind-agnostic entry point: resolves a datasource and dispatches to its connector. */
 @Injectable()
-export class DatasourcesService {
+export class DatasourcesService implements OnApplicationBootstrap {
   private readonly logger = new Logger(DatasourcesService.name);
 
   constructor(
@@ -126,14 +147,112 @@ export class DatasourcesService {
       : undefined;
   }
 
+  /** Uploads left unsaved for more than 24 hours go at backend start. */
+  async onApplicationBootstrap(): Promise<void> {
+    try {
+      const removed = await sweepStaleUploads();
+      if (removed) this.logger.log(`Removed ${removed} stale file upload(s)`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Stale file uploads not swept: ${message}`);
+    }
+  }
+
+  /**
+   * Test (16). A `file` config is imported into a throwaway database and
+   * answers its own message (`Imported <n> tables · <rows> rows`); the
+   * other kinds answer nothing and the caller says `Connection successful`.
+   */
   async testConnection(
     kind: DatasourceKind,
     config: DatasourceConfig,
     id?: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
+    if (kind === 'file') {
+      return checkImport(
+        withoutDatabasePath(config).files,
+        id,
+        await this.savedFiles(id),
+      );
+    }
     await this.connector(kind).testConnection(
       this.runtimeConfig(kind, await this.withSecrets(kind, config, id), id),
     );
+    return undefined;
+  }
+
+  /** The files of a saved `file` datasource, else none. */
+  private async savedFiles(id?: string): Promise<SourceFile[]> {
+    if (!id) return [];
+    const saved = await this.repository.get(id);
+    return saved?.kind === 'file'
+      ? ((saved.config as FileDatasourceConfig).files ?? [])
+      : [];
+  }
+
+  /** Upload one file (api.md 156). */
+  uploadFile(
+    body: Readable,
+    fileName: string | string[] | undefined,
+    declaredBytes: number | undefined,
+    maxBytes: number,
+  ): Promise<{ uploadId: string; file: SourceFile }> {
+    return uploadFile(body, fileName, declaredBytes, maxBytes);
+  }
+
+  /** Drop an unsaved upload (api.md 158). */
+  deleteUpload(uploadId: string): Promise<void> {
+    return removeUpload(uploadId);
+  }
+
+  /**
+   * Preview one sheet (api.md 157) of an upload, or of a saved datasource's
+   * file. A bad option answers 400 with the importer's message.
+   */
+  async previewFile(dto: PreviewFileDto): Promise<SheetPreview> {
+    if (!dto?.sheet || typeof dto.sheet !== 'string') {
+      throw new BadRequestException('sheet is required');
+    }
+    let path: string;
+    let name: string;
+    if (dto.uploadId) {
+      path = await uploadedFilePath(dto.uploadId);
+      name = basename(path);
+    } else if (dto.datasourceId) {
+      const file = (await this.savedFiles(dto.datasourceId)).find(
+        (f) => f.id === dto.fileId,
+      );
+      path = file ? originalPath(dto.datasourceId, file) : '';
+      if (!file || !existsSync(path)) {
+        throw new NotFoundException(`File ${dto.fileId} not found`);
+      }
+      name = file.name;
+    } else {
+      throw new BadRequestException('uploadId or datasourceId is required');
+    }
+    const number = (v: unknown) =>
+      v === undefined || v === null || v === '' ? undefined : Number(v);
+    const flag = (v: unknown) =>
+      v === undefined || v === null ? undefined : v === true;
+    try {
+      return await previewSheet(
+        path,
+        name,
+        {
+          sheet: dto.sheet,
+          headerRow: number(dto.headerRow),
+          range: dto.range || undefined,
+          excludeLastRow: flag(dto.excludeLastRow),
+          allText: flag(dto.allText),
+        },
+        { excelExtension: excelExtension() },
+      );
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      throw new BadRequestException(
+        err instanceof Error ? err.message : String(err),
+      );
+    }
   }
 
   async discoverRestEndpoints(
@@ -176,6 +295,9 @@ export class DatasourcesService {
         : input.kind === 'file'
           ? withoutDatabasePath(withSecrets)
           : withSecrets;
+    if (input.kind === 'file') {
+      return this.saveFiles({ ...input, name }, config as FileDatasourceConfig);
+    }
     const saved = await this.repository.save({
       id: input.id,
       name: name.slice(0, 64),
@@ -185,10 +307,42 @@ export class DatasourcesService {
     return this.view(saved);
   }
 
+  /**
+   * Save (18) of a `file` datasource: the import comes first, into its own
+   * `data.duckdb`, so a failure stores nothing and keeps the previous
+   * database; then the uploads move to `originals/`, the document is
+   * written without `uploadId`, and the inventory snapshot is refreshed.
+   */
+  private async saveFiles(
+    input: { id?: string; name: string },
+    config: FileDatasourceConfig,
+  ): Promise<DatasourceView> {
+    const id = input.id ?? randomUUID();
+    const files = await saveImport(
+      id,
+      config.files,
+      await this.savedFiles(input.id),
+    );
+    const saved = await this.repository.save({
+      id,
+      name: input.name.slice(0, 64),
+      kind: 'file',
+      config: { ...config, files },
+    });
+    try {
+      await this.inventory(id, true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Inventory of ${id} not refreshed: ${message}`);
+    }
+    return this.view(saved);
+  }
+
   async delete(id: string): Promise<Datasource> {
     const existing = await this.get(id);
     await this.repository.delete(id);
     await this.inventoryCache.delete(id);
+    if (existing.kind === 'file') await removeDatasourceFiles(id);
     return existing;
   }
 

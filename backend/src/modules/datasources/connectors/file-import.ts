@@ -166,11 +166,11 @@ export function parseRange(range: string): CellRange {
   return range_;
 }
 
-function rangeText(r: CellRange): string {
+export function rangeText(r: CellRange): string {
   return `${columnLetter(r.firstColumn)}${r.firstRow}:${columnLetter(r.lastColumn)}${r.lastRow}`;
 }
 
-type Cell = string | null;
+export type Cell = string | null;
 
 function present(cell: Cell): boolean {
   return cell !== null && cell !== undefined && String(cell).trim() !== '';
@@ -213,7 +213,7 @@ export function headerNames(
 
 // ------------------------------------------------------------ detection
 
-async function loadExcel(
+export async function loadExcel(
   connection: DuckDBConnection,
   options: FileImportOptions,
 ): Promise<void> {
@@ -224,7 +224,7 @@ async function loadExcel(
   );
 }
 
-function readXlsx(
+export function readXlsx(
   path: string,
   sheet: string,
   args: { header: boolean; allText: boolean; range?: string },
@@ -237,7 +237,7 @@ function readXlsx(
   );
 }
 
-function readCsv(
+export function readCsv(
   path: string,
   args: { header: boolean; allText: boolean; skip?: number },
 ): string {
@@ -245,7 +245,7 @@ function readCsv(
   return `read_csv(${sqlString(path)}, header = ${args.header}, all_varchar = ${args.allText}${skip})`;
 }
 
-async function rows(
+export async function rows(
   connection: DuckDBConnection,
   sql: string,
 ): Promise<Cell[][]> {
@@ -254,7 +254,7 @@ async function rows(
 }
 
 /** The last data row's first non-empty cell names a total (plan m1-31 5). */
-function looksLikeTotal(cells: Cell[]): boolean {
+export function looksLikeTotal(cells: Cell[]): boolean {
   const first = cells.find(present);
   return first !== undefined && TOTAL_ROW.test(String(first).trim());
 }
