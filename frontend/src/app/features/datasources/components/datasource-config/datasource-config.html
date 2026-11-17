@@ -233,6 +233,8 @@
           />
           <span>Use SSL</span>
         </label>
+      } @else if (kind() === "file") {
+        <app-file-sources [files]="files()" (filesChange)="patchFiles($event)" />
       } @else {
         <label class="flex flex-col gap-1">
           <span class="field-label">Base URL</span>
@@ -795,6 +797,17 @@
         </div>
       }
 
+      @if (kind() === "file" && fileStatus(); as status) {
+        <span
+          class="chip self-start"
+          [class.chip-success]="status.ok"
+          [class.chip-danger]="!status.ok"
+          role="status"
+          data-testid="file-import-status"
+          >{{ status.message }}</span
+        >
+      }
+
       <div class="mt-1 flex items-center gap-2">
         <button
           (click)="testConnection()"
@@ -803,9 +816,9 @@
         >
           @if (testing()) {
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
-            <span>Testing…</span>
+            <span>{{ kind() === "file" ? "Importing…" : "Testing…" }}</span>
           } @else {
-            <span>Test connection</span>
+            <span>{{ kind() === "file" ? "Import and check" : "Test connection" }}</span>
           }
         </button>
         <button

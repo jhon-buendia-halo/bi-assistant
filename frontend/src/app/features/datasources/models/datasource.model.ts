@@ -1,9 +1,10 @@
-export type DatasourceKind = 'databricks' | 'postgres' | 'rest';
+export type DatasourceKind = 'databricks' | 'postgres' | 'rest' | 'file';
 
 export const DATASOURCE_KINDS: { value: DatasourceKind; label: string }[] = [
   { value: 'databricks', label: 'Databricks' },
   { value: 'postgres', label: 'PostgreSQL' },
   { value: 'rest', label: 'REST API' },
+  { value: 'file', label: 'Excel / CSV' },
 ];
 
 export interface DatabricksConfig {
@@ -80,8 +81,59 @@ export interface RestDiscoveryResult {
   skipped?: { path: string; reason: string }[];
 }
 
+export interface FileDatasourceConfig {
+  files: SourceFile[];
+}
+
+export interface SourceFile {
+  id: string;
+  name: string;
+  format: 'xlsx' | 'csv';
+  sizeBytes: number;
+  sha256: string;
+  uploadedAt: string;
+  schema: string;
+  sheets: SheetImport[];
+  /** Set only while the file is not saved yet. */
+  uploadId?: string;
+}
+
+export interface SheetImport {
+  sheet: string;
+  table: string;
+  include: boolean;
+  headerRow: number;
+  range: string;
+  excludeLastRow: boolean;
+  allText: boolean;
+  rowCount?: number;
+  columns?: { name: string; type: string }[];
+  warnings?: SheetWarning[];
+}
+
+export type SheetWarning =
+  | { code: 'total-row'; row: number }
+  | { code: 'no-table' }
+  | { code: 'header-guessed'; row: number }
+  | { code: 'duplicate-columns'; names: string[] };
+
+export type PreviewCell = string | number | boolean | null;
+
+export interface SheetPreview {
+  sheet: string;
+  headerRow: number;
+  range: string;
+  totalRows: number;
+  columns: { letter: string; name: string; type: string }[];
+  rows: { row: number; cells: PreviewCell[] }[];
+  warnings: SheetWarning[];
+}
+
 export type DatasourceConfig =
-  DatabricksConfig | PostgresConfig | RestApiConfig;
+  | DatabricksConfig
+  | PostgresConfig
+  | RestApiConfig
+  | FileDatasourceConfig;
 
 export interface Datasource {
   id: string;
