@@ -102,6 +102,17 @@ export interface LlmStub {
    * what the app shows while it still streams. Unset answers at once.
    */
   hold?: (request: StubRequest) => Promise<void> | undefined;
+  /**
+   * Optional: overrides any agent call's answer, the structured steps' and
+   * `result-explorer`'s included (the request is recorded first). A
+   * `{ status }` answers that HTTP error with an OpenAI-style error body (use
+   * a 4xx: the AI SDK retries a 5xx); a `StubReply` is sent as is, e.g. a
+   * reply that is no JSON for a step that expects JSON. Undefined goes on as
+   * usual.
+   */
+  intercept?: (
+    request: StubRequest,
+  ) => StubReply | { status: number; message?: string } | undefined;
   /** Plan's output for a v2 run; the default is `clearPlan` of the question. */
   plan: (request: StubRequest) => V2Plan;
   /**
@@ -388,6 +399,26 @@ export async function startLlmStub(
         ...(step !== null ? { step } : {}),
       };
       stub.requests.push(request);
+      const intercepted = stub.intercept?.(request);
+      if (intercepted && 'status' in intercepted) {
+        res.writeHead(intercepted.status, {
+          'Content-Type': 'application/json',
+        });
+        res.end(
+          JSON.stringify({
+            error: {
+              message: intercepted.message ?? 'The stub model failed.',
+              type: 'invalid_request_error',
+              code: null,
+            },
+          }),
+        );
+        return;
+      }
+      if (intercepted) {
+        respond(res, request.stream, intercepted);
+        return;
+      }
       if (explore) {
         respond(res, request.stream, exploring(request));
         return;
