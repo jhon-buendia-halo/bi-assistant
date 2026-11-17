@@ -767,7 +767,7 @@ export class WorkflowRunChat {
     const all = this.designer.datasets();
     if (!kinds || kinds.length === 0) return all;
     return all.filter(
-      (d) => d.datasourceKind !== undefined && (kinds as readonly string[]).includes(d.datasourceKind),
+      (d) => d.datasourceKind !== undefined && kinds.includes(d.datasourceKind),
     );
   }
 

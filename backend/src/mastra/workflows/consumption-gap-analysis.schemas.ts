@@ -99,7 +99,7 @@ export const layerTableSchema = z.object({
   datasourceKind: z
     .string()
     .nullable()
-    .describe('postgres, databricks or rest.'),
+    .describe('postgres, databricks, rest or file.'),
   columns: z.array(z.object({ name: z.string(), type: z.string() })),
   more: z.number().describe('Columns left out by the cap.'),
 });

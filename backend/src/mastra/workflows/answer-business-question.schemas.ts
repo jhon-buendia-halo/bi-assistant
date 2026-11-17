@@ -84,7 +84,7 @@ export const catalogEntitySchema = z.object({
   datasourceKind: z
     .string()
     .nullable()
-    .describe('postgres, databricks or rest.'),
+    .describe('postgres, databricks, rest or file.'),
   columnCount: z.number().nullable().describe('Its column count, when known.'),
 });
 
