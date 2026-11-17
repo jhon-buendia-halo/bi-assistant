@@ -421,7 +421,30 @@ export class WorkflowRunChat {
 
   protected viewVisual(event: VisualEvent): void {
     const run = this.designer.run();
-    if (run !== null) this.visuals.view(run, event);
+    if (run === null) return;
+    this.visuals.view(run, event);
+    this.revealVisual();
+  }
+
+  /**
+   * View opens the visual in a section under the whole answer, below the
+   * fold of a long answer: scroll the chat to it once it is drawn (it loads
+   * on its own, `@defer`), so View visibly shows it (ui.md 4.4b).
+   */
+  private revealVisual(tries = 30): void {
+    setTimeout(() => {
+      const log = this.log()?.nativeElement;
+      const visual = log?.querySelector<HTMLElement>('app-run-visual');
+      if (log === undefined || visual === null || visual === undefined) {
+        if (tries > 0) this.revealVisual(tries - 1);
+        return;
+      }
+      this.stickToEnd = false;
+      log.scrollTop +=
+        visual.getBoundingClientRect().top -
+        log.getBoundingClientRect().top -
+        8;
+    }, 100);
   }
 
   /**

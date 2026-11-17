@@ -375,6 +375,8 @@ test(
         await expect(
           runVisual.locator('iframe[title="Interactive visualization"]'),
         ).toBeVisible();
+        // View scrolls the chat to the visual, under however long an answer.
+        await expect(runVisual).toBeInViewport();
         await expect(versionButton).toHaveText(/v1/);
         await expect(page.getByTestId('workflow-run-chat-log')).toContainText(
           `Created ${VISUAL_TITLE}`,
