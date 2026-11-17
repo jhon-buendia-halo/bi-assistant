@@ -75,6 +75,14 @@ export interface SqlRunResult {
   note?: string;
 }
 
+/**
+ * How a data tool stops its statement (agents.md 3.3, 3.4): the turn's stop,
+ * as the tool call's `abortSignal`. Mirrors `RunSqlOptions` (datasources R38).
+ */
+export interface SqlCallOptions {
+  signal?: AbortSignal;
+}
+
 export interface VisualToolResult {
   visualId: string;
   version: number;
@@ -196,20 +204,24 @@ export interface DatasetToolServices {
     input: WorkflowToolInput,
   ): Promise<WorkflowToolResult>;
   getDatasets(names: string[]): Promise<DatasetSnapshot[]>;
+  /** `options.signal` is the tool call's abort signal (the turn's stop). */
   sampleRows(
     datasourceId: string,
     entity: string,
     limit: number,
+    options?: SqlCallOptions,
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
   /**
    * Runs the statement and repairs it on execution errors — `datasets` names
-   * the datasets whose schema the fixer may draw on.
+   * the datasets whose schema the fixer may draw on. `options.signal`, the
+   * tool call's abort signal, cancels the statement and the repair.
    */
   runReadOnlySql(
     datasourceId: string,
     sql: string,
     limit: number,
     datasets: string[],
+    options?: SqlCallOptions,
   ): Promise<SqlRunResult>;
   /**
    * One page of an earlier query's full result (`explore_result`, agents.md

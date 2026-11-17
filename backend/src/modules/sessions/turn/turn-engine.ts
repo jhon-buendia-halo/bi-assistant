@@ -207,11 +207,15 @@ export interface TurnEngineDeps {
   /** The workflow view of a stored session, for the `workflow` event. */
   workflowOf(session: SessionDoc): Promise<WorkflowView | undefined>;
   effectiveWorkflowFor(session: SessionDoc): WorkflowPhase[];
-  /** Careful mode's cross-check of the answer's SQL (agents.md 5.4). */
+  /**
+   * Careful mode's cross-check of the answer's SQL (agents.md 5.4); `signal`
+   * is the turn's stop, for the verifier call and its statement.
+   */
   crossCheckAnswer(
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
+    signal?: AbortSignal,
   ): Promise<CrossCheck | undefined>;
   /** The readiness tools' bridge, once installed (agents.md 3.13). */
   readinessBridge(): ReadinessBridge | undefined;
@@ -1044,8 +1048,9 @@ export class TurnEngine {
             if (!savedReport) throw new Error('The report has not been saved');
             return recordFindingSources({
               report: savedReport,
-              run: (datasourceId, sql, limit) =>
-                this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+              // Each statement gets the turn's stop (datasources R38).
+              run: (datasourceId, sql, limit, sqlOptions) =>
+                this.deps.sql.runBuiltSql(datasourceId, sql, limit, sqlOptions),
               signal: turn.signal,
               record: (args, result, facts) => {
                 emit({
@@ -1316,14 +1321,20 @@ export class TurnEngine {
                 }),
               ),
             // Infer lineage and Probe evidence (ADR-0051): each statement
-            // on the guarded read-only path, one after the other, recorded
-            // as a `run_readonly_sql` source as Rows behind findings does
-            // (agent-answers R67-R78). A failed one is a result.
+            // on the guarded read-only path with the turn's stop, four at a
+            // time, recorded in query order as a `run_readonly_sql` source
+            // as Rows behind findings does (agent-answers R67-R78). A failed
+            // one is a result.
             runQueries: ({ queries }) =>
               runGapQueries({
                 queries,
-                run: (datasourceId, sql, limit) =>
-                  this.deps.sql.runBuiltSql(datasourceId, sql, limit),
+                run: (datasourceId, sql, limit, sqlOptions) =>
+                  this.deps.sql.runBuiltSql(
+                    datasourceId,
+                    sql,
+                    limit,
+                    sqlOptions,
+                  ),
                 signal: turn.signal,
                 record: (args, result, facts) => {
                   emit({
@@ -1556,7 +1567,12 @@ export class TurnEngine {
         // The assistant's only: another agent runs no SQL to cross-check.
         const crossChecked =
           careful && isAssistant && !turn.signal.aborted
-            ? await this.deps.crossCheckAnswer(session, trimmed, data)
+            ? await this.deps.crossCheckAnswer(
+                session,
+                trimmed,
+                data,
+                turn.signal,
+              )
             : undefined;
         messages.push({
           role: 'assistant',
