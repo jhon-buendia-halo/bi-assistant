@@ -44,7 +44,8 @@ export function duckdbPlatform(
   platform: string = process.platform,
   arch: string = process.arch,
 ): string {
-  const os = { win32: 'windows', darwin: 'osx', linux: 'linux' }[platform] ?? platform;
+  const os =
+    { win32: 'windows', darwin: 'osx', linux: 'linux' }[platform] ?? platform;
   const cpu = { x64: 'amd64', arm64: 'arm64' }[arch] ?? arch;
   return `${os}_${cpu}`;
 }

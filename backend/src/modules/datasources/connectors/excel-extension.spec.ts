@@ -55,9 +55,8 @@ describe('excelExtension (ADR-0052, plan m1-31 section 9)', () => {
         join(__dirname, '..', '..', '..', '..', 'package-lock.json'),
         'utf8',
       ),
-    );
-    const pinned: string =
-      lock.packages['node_modules/@duckdb/node-bindings'].version;
+    ) as { packages: Record<string, { version: string }> };
+    const pinned = lock.packages['node_modules/@duckdb/node-bindings'].version;
     expect(`v${pinned.replace(/-r\.\d+$/, '')}`).toBe(duckdbVersion());
   });
 

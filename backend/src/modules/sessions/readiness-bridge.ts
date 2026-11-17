@@ -614,16 +614,12 @@ export class ReadinessBridge implements ReadinessToolServices {
     sessionId: string,
     datasetName?: string,
   ): Promise<ReadinessDataset & { datasourceId: string }> {
-    return resolveSessionDataset(
-      this.deps,
-      sessionId,
-      datasetName,
-      (dataset) =>
-        unsupportedKindMessage(
-          'Data Readiness',
-          dataset.name,
-          dataset.datasourceKind,
-        ),
+    return resolveSessionDataset(this.deps, sessionId, datasetName, (dataset) =>
+      unsupportedKindMessage(
+        'Data Readiness',
+        dataset.name,
+        dataset.datasourceKind,
+      ),
     );
   }
 }
