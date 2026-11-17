@@ -242,6 +242,7 @@ export interface TurnEngineDeps {
       at: string;
       data: ToolDataRecord[];
     },
+    abortSignal?: AbortSignal,
   ): Promise<SessionVisualization>;
   /** Store a drawn dashboard as a visual of the session (agents.md 5.17). */
   saveMock(
@@ -812,12 +813,11 @@ export class TurnEngine {
             if (turn.signal.aborted) return stop();
             answerAt ??= new Date().toISOString();
             try {
-              const metadata = await this.deps.buildVisual(id, {
-                question,
-                answer,
-                at: answerAt,
-                data,
-              });
+              const metadata = await this.deps.buildVisual(
+                id,
+                { question, answer, at: answerAt, data },
+                turn.signal,
+              );
               if (turn.signal.aborted) return stop();
               return {
                 visual: { visualId: metadata.id, title: metadata.title },

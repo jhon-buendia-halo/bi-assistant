@@ -1196,6 +1196,10 @@ describe('a v2 run that builds a visual (agents.md 5.11, workflows R41)', () => 
     expect(source.question).toBe('Who won?');
     expect(source.answer).toBe(run.answer?.content);
     expect(source.data.length).toBeGreaterThan(0);
+    // The turn's stop reaches the designer (agents.md 6.7).
+    expect((createFromAnswer.mock.calls[0] as unknown[])[2]).toBeInstanceOf(
+      AbortSignal,
+    );
     // The answer is stored at the time the visual names as its source.
     expect(run.answer?.at).toBe(source.at);
     expect((run.visualizations ?? []).map((v) => v.id)).toEqual(['v-1']);

@@ -317,11 +317,12 @@ export class SessionsService implements OnModuleInit {
       },
       writeFile: (sessionId, path, data) =>
         writeWorkspaceFile(sessionId, path, data),
-      buildVisual: async (sessionId, source) => {
+      buildVisual: async (sessionId, source, abortSignal) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromAnswer(
           session,
           source,
+          abortSignal,
         );
         await this.saveVisualMetadata(session, metadata);
         return metadata;

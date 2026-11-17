@@ -114,6 +114,29 @@ function stopIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw new StoppedError();
 }
 
+/**
+ * Close the browser the moment the run is stopped (agents.md 5.19), so a
+ * navigation, a settle wait or a capture in flight ends at once instead of at
+ * the next page boundary. `close` is the one end of the browser, on a normal
+ * end or a stop: it removes the listener and closes the browser once.
+ */
+function closeOnStop(
+  browser: Browser,
+  signal: AbortSignal,
+): { close: () => Promise<void> } {
+  let closing: Promise<void> | undefined;
+  const close = () => (closing ??= browser.close().catch(() => undefined));
+  const onAbort = () => void close();
+  if (signal.aborted) onAbort();
+  else signal.addEventListener('abort', onAbort, { once: true });
+  return {
+    close: () => {
+      signal.removeEventListener('abort', onAbort);
+      return close();
+    },
+  };
+}
+
 /** A page's path for progress lines. */
 function screenLabel(screen: SiteScreenName): string {
   return SITE_SCREENS.find((entry) => entry.name === screen)?.label ?? screen;
@@ -359,6 +382,7 @@ export class SiteReviewService implements OnApplicationShutdown {
     let sessionLost: string | null = null;
     const widest = session.screens[session.screens.length - 1];
     const browser = await launchSiteBrowser({ headless: true });
+    const guard = closeOnStop(browser, io.signal);
     try {
       const context = await browser.newContext(
         await this.contextOptions(session, widest),
@@ -388,6 +412,8 @@ export class SiteReviewService implements OnApplicationShutdown {
             .catch(() => '');
           record.fingerprint = skeleton ? shortHash(skeleton) : '';
         } catch (error) {
+          // A stop closed the browser under this page: stopped, not a failed page.
+          stopIfAborted(io.signal);
           record.error =
             error instanceof Error
               ? error.message.split('\n')[0]
@@ -429,14 +455,19 @@ export class SiteReviewService implements OnApplicationShutdown {
           queue.push({ url, depth: next.depth + 1, parent: next.url });
         }
       }
+      stopIfAborted(io.signal);
       return {
         pages,
         skippedLinks: [...skipped],
         capped: sessionLost === null && queue.length > 0,
         sessionLost,
       };
+    } catch (error) {
+      // The closed browser's own error is the stop.
+      stopIfAborted(io.signal);
+      throw error;
     } finally {
-      await browser.close().catch(() => undefined);
+      await guard.close();
     }
   }
 
@@ -483,6 +514,7 @@ export class SiteReviewService implements OnApplicationShutdown {
     ];
     const reviewShots: ReviewShot[] = [];
     const browser = await launchSiteBrowser({ headless: true });
+    const guard = closeOnStop(browser, io.signal);
     try {
       for (const screen of site.screens) {
         stopIfAborted(io.signal);
@@ -508,6 +540,8 @@ export class SiteReviewService implements OnApplicationShutdown {
                 thumbnail,
                 cropped,
               });
+              // A stop closed the browser under the capture: stopped, not a failed page.
+              stopIfAborted(io.signal);
               if (thumbnail && !result.capture.thumbnail) {
                 thumbnailed.delete(target.group);
               }
@@ -542,10 +576,15 @@ export class SiteReviewService implements OnApplicationShutdown {
             worker,
           ),
         );
+        stopIfAborted(io.signal);
         await context.close().catch(() => undefined);
       }
+    } catch (error) {
+      // The closed browser's own error is the stop.
+      stopIfAborted(io.signal);
+      throw error;
     } finally {
-      await browser.close().catch(() => undefined);
+      await guard.close();
     }
     const order = new Map(site.pages.map((page, at) => [page.url, at]));
     captures.sort(
