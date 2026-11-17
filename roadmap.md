@@ -796,6 +796,53 @@ A workflow that takes a medallion model (schemas tagged Landing, Normalized, Con
 - **Out of scope:** a `gap-analysis` artifact kind (the report lives in the run); several saved dashboards in one run (one artifact field); declared lineage hints.
 - **Acceptance:** a run on the World Cup Medallion sample waits at Confirm requirements, goes on after the answer, and ends with the report and an answer whose probes open in the query inspector.
 
+### Milestone 1.31 — Excel and CSV files as datasources (M1-31)
+
+Users upload Excel workbooks and CSV files as a datasource, confirm how each sheet reads in a review dialog, build datasets from the sheets and ask the agents about them. Each file is imported once into a DuckDB database of its datasource and queried read-only, sandboxed from the rest of the disk; DuckDB's `excel` extension ships with the app, so nothing is downloaded at runtime. Requested on 2026-11-17 (Free style); the user picked DuckDB and option B of three wireframes (the review dialog). Epic spec: [specs/epics/M1-31/spec.md](specs/epics/M1-31/spec.md). Plan and contract: [docs/plans/m1-31-excel-csv-datasources.md](docs/plans/m1-31-excel-csv-datasources.md). ADR-0052.
+
+#### 1.31.1 — DuckDB connector and importer for the `file` kind  `✅ Done`
+- **Intent:** the `file` kind's connector answers inventory, samples, read-only SQL and paged reads from the datasource's DuckDB database, and the importer turns `.xlsx` sheets and `.csv` files into its tables.
+- **Scope:** per plan 1.31.1: `DatasourceKind` and `FileDatasourceConfig`, `file.connector.ts`, `file-import.ts` with the detection of section 5, the `duckdb` entry of `paged-sql.ts`, registration in `datasources.service.ts` and the module; datasources spec R1, R30, R33–R37, R52 and the kind's new rules; data-model 3.1.
+- **Out of scope:** the upload routes (1.31.3), the shipped extension (1.31.2; tests use the host's extension), the agents (1.31.5).
+- **Acceptance:** unit tests import a workbook with a title row, a total row and a formula, and a CSV; the detection proposes the header row, range and warnings of the plan; inventory lists `file.<schema>.<table>` with DuckDB types; a paged read filters and sorts with bound parameters; `read_csv('<path>')`, a second `ATTACH` and a `CREATE` are refused.
+
+#### 1.31.2 — The `excel` extension ships with the app  `🚧 In progress`
+- **Intent:** `.xlsx` import works offline on the installed app, the CLI and in development.
+- **Scope:** per plan 1.31.2: `scripts/fetch-duckdb-extensions.mjs`, `bootstrap.mjs`, `stage-backend.sh`, the npm package's `prepack`, the importer's extension path and its error, the version check test; delivery.md.
+- **Out of scope:** other DuckDB extensions.
+- **Acceptance:** the staged Windows backend holds the extension for the lockfile's DuckDB version; with the network off, the importer reads an `.xlsx`; a version mismatch fails the test; no request to `extensions.duckdb.org` at runtime.
+- **Notes:** built and tested in development and the CLI (2026-11-17); open: confirm on a real Windows installer that `.xlsx` import works with the network off (the staged-backend step has not run yet).
+
+#### 1.31.3 — Upload, preview and storage of files  `✅ Done`
+- **Intent:** files reach the backend in one streamed upload, are previewed with any import options, and live in the data dir for as long as their datasource.
+- **Scope:** per plan 1.31.3: endpoints 156–158, test (16) and save (18) of a `file` config, delete (19) removing the files, the stale-upload sweep at start; api.md 2.2, data-model (data dir layout).
+- **Out of scope:** the form (1.31.4).
+- **Acceptance:** unit and HTTP tests: a 200 MB cap answers 413, `.xls` and other extensions 400 with the plan's messages; a preview with a new header row answers the plan's shape; saving moves the files and builds `data.duckdb`, a failed import keeps the previous database; deleting the datasource removes its folder; an upload older than 24 hours is gone after a restart.
+
+#### 1.31.4 — The Excel / CSV form and the review dialog  `✅ Done`
+- **Intent:** the user uploads files, sees each sheet's proposal and warnings, reviews a sheet in a wide grid, imports and saves, as in wireframe B.
+- **Scope:** per plan 1.31.4: an Angular prototype on mock data first, then the kind option, the drop zone, file cards, sheet rows, Import and check, the review dialog, Replace file, the kind label everywhere; ui.md; the `Datasources` Feature's scenario.
+- **Out of scope:** drag to select a range on the grid (the Range field covers it; a follow-up if users ask).
+- **Acceptance:** the Feature's scenario passes on the web target: upload, review (header row, range, exclude the last row), import, save, edit and Replace file; axe passes on the form and the dialog in Light and Dark.
+
+#### 1.31.5 — The `duckdb` dialect in the agents  `✅ Done`
+- **Intent:** agents write DuckDB SQL for file datasets, and their repair and verification know the dialect.
+- **Scope:** per plan 1.31.5: `sqlDialectOf`, the assistant prompt, the fixer and verifier prompts, the `run_readonly_sql` description, the query explainer's labels, the `sql-analysis` skill, the workflow input kinds; agents.md.
+- **Out of scope:** new eval cases beyond the World Cup Excel set of 1.31.7.
+- **Acceptance:** unit tests name the dialect for a file dataset; the assistant's and the two workflows' eval sets pass on the branch as on the base (3 runs per case).
+
+#### 1.31.6 — Allow-list refusals and no silent fallbacks  `✅ Done`
+- **Intent:** a feature that does not support file datasources says so, and no code path treats an unknown kind as another kind.
+- **Scope:** per plan 1.31.6: Data Readiness, synthetic data (backend and panel), Consumption Gap; `connector()`, `withSecrets`, the form's `startEdit`; the catalog browser's kind label; data-readiness, synthetic-data and workflows specs.
+- **Out of scope:** supporting those features on file datasources.
+- **Acceptance:** unit tests: each feature refuses a `file` datasource with the plan's message; an unknown kind throws instead of using another connector; the catalog browser labels REST and Excel / CSV datasources correctly.
+
+#### 1.31.7 — World Cup Excel sample and E2E  `✅ Done`
+- **Intent:** a realistic sample to try and test the kind end to end.
+- **Scope:** per plan 1.31.7: the sample's files and the script that builds them, the registry and loader, `setup-local`, a World Cup Excel eval set for the assistant, the Playwright spec of the epic acceptance; testing-data spec.
+- **Out of scope:** other samples.
+- **Acceptance:** the sample loads from the Testing Data panel and `setup-local`; the epic's acceptance scenario passes on the web target; the World Cup Excel eval set passes 3 runs.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

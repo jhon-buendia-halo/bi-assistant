@@ -8,6 +8,8 @@ import {
   Search,
   Trash2,
 } from 'lucide-angular';
+import { FileSources } from '../file-sources/file-sources';
+import { FILE_SOURCES_API } from '../../services/file-sources-api';
 import { DatasourcesApiService } from '../../services/datasources-api.service';
 import {
   DATASOURCE_KINDS,
@@ -16,6 +18,8 @@ import {
   DatasourceConfig as DatasourceConnectionConfig,
   DatasourceKind,
   DiscoveredEndpoint,
+  FileDatasourceConfig,
+  SourceFile,
   PostgresConfig,
   RestApiConfig,
   RestAuthConfig,
@@ -68,7 +72,7 @@ const PAGINATION_STYLES: { value: PaginationStyle; label: string }[] = [
 
 @Component({
   selector: 'app-datasource-config',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, FileSources],
   templateUrl: './datasource-config.html',
   styleUrl: './datasource-config.scss',
 })
@@ -86,6 +90,7 @@ export class DatasourceConfig implements OnInit {
 
   private readonly api = inject(DatasourcesApiService);
   private readonly toast = inject(ToastService);
+  private readonly fileApi = inject(FILE_SOURCES_API);
 
   readonly datasources = signal<Datasource[]>([]);
   readonly loading = signal(true);
@@ -100,6 +105,9 @@ export class DatasourceConfig implements OnInit {
   readonly databricks = signal<DatabricksConfig>({ ...EMPTY_DATABRICKS });
   readonly postgres = signal<PostgresConfig>({ ...EMPTY_POSTGRES });
   readonly rest = signal<RestApiConfig>(emptyRest());
+  readonly files = signal<SourceFile[]>([]);
+  /** Result of the last Import and check (file kind). */
+  readonly fileStatus = signal<{ ok: boolean; message: string } | null>(null);
   readonly testing = signal(false);
   readonly saving = signal(false);
   // Only a configuration whose test passed can be saved.
@@ -153,6 +161,9 @@ export class DatasourceConfig implements OnInit {
         c.endpoints.some((e) => e.name.trim() && e.path.trim())
       );
     }
+    if (this.kind() === 'file') {
+      return this.files().some((f) => f.sheets.some((s) => s.include));
+    }
     const c = this.postgres();
     return !!(c.host.trim() && c.database.trim() && c.user.trim());
   });
@@ -185,6 +196,8 @@ export class DatasourceConfig implements OnInit {
     this.databricks.set({ ...EMPTY_DATABRICKS });
     this.postgres.set({ ...EMPTY_POSTGRES });
     this.rest.set(emptyRest());
+    this.files.set([]);
+    this.fileStatus.set(null);
     this.resetDiscovery();
     this.testedOk.set(false);
     this.formOpen.set(true);
@@ -197,11 +210,18 @@ export class DatasourceConfig implements OnInit {
     this.databricks.set({ ...EMPTY_DATABRICKS });
     this.postgres.set({ ...EMPTY_POSTGRES });
     this.rest.set(emptyRest());
+    this.files.set([]);
+    this.fileStatus.set(null);
     if (datasource.kind === 'databricks') {
       this.databricks.set({ ...(datasource.config as DatabricksConfig) });
     } else if (datasource.kind === 'postgres') {
       this.postgres.set({ ...(datasource.config as PostgresConfig) });
-    } else {
+    } else if (datasource.kind === 'file') {
+      const c = datasource.config as FileDatasourceConfig;
+      this.files.set(
+        c.files.map((f) => ({ ...f, sheets: f.sheets.map((s) => ({ ...s })) })),
+      );
+    } else if (datasource.kind === 'rest') {
       const c = datasource.config as RestApiConfig;
       this.rest.set({
         ...c,
@@ -213,6 +233,8 @@ export class DatasourceConfig implements OnInit {
             }))
           : [{ name: '', path: '' }],
       });
+    } else {
+      throw new Error(`Unknown datasource kind: ${datasource.kind}`);
     }
     this.resetDiscovery();
     this.testedOk.set(false);
@@ -220,9 +242,25 @@ export class DatasourceConfig implements OnInit {
   }
 
   cancel(): void {
+    this.discardUploads();
     this.formOpen.set(false);
     this.editingId.set(null);
     this.resetDiscovery();
+  }
+
+  /** Unsaved uploads are dropped when the form closes. */
+  private discardUploads(): void {
+    for (const f of this.files()) {
+      if (f.uploadId) void this.fileApi.discard(f.uploadId).catch(() => undefined);
+    }
+    this.files.set([]);
+    this.fileStatus.set(null);
+  }
+
+  patchFiles(files: SourceFile[]): void {
+    this.files.set(files);
+    this.fileStatus.set(null);
+    this.onFieldChange();
   }
 
   setKind(kind: DatasourceKind): void {
@@ -433,6 +471,7 @@ export class DatasourceConfig implements OnInit {
       };
     }
     if (this.kind() === 'rest') return this.restConfig();
+    if (this.kind() === 'file') return { files: this.files() };
     const c = this.postgres();
     return {
       host: c.host.trim(),
@@ -503,6 +542,21 @@ export class DatasourceConfig implements OnInit {
   testConnection(): void {
     if (!this.canTest()) return;
     this.testing.set(true);
+    if (this.kind() === 'file') {
+      this.fileApi
+        .importAndCheck({ files: this.files() }, this.editingId() ?? undefined)
+        .then((res) => {
+          this.fileStatus.set(res);
+          if (!res.ok) this.toast.error(res.message);
+          this.testedOk.set(res.ok);
+        })
+        .catch((e) => {
+          this.toast.error(e instanceof Error ? e.message : 'Import failed');
+          this.testedOk.set(false);
+        })
+        .finally(() => this.testing.set(false));
+      return;
+    }
     this.api
       .testConnection(this.kind(), this.config(), this.editingId() ?? undefined)
       .subscribe({

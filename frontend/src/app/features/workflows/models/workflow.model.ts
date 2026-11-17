@@ -44,7 +44,7 @@ export interface WorkflowInputField {
   /** The value of a field that is missing or empty. */
   default?: string | number | boolean;
   /** 'dataset' / 'datasets': only datasets bound to these kinds. */
-  datasourceKinds?: ('postgres' | 'databricks' | 'rest')[];
+  datasourceKinds?: ('postgres' | 'databricks' | 'rest' | 'file')[];
   /** 'artifact': only artifacts of these kinds are offered. */
   artifactKinds?: ArtifactKind[];
   /**

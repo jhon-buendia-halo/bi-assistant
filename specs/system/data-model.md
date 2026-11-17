@@ -34,6 +34,7 @@ The directory is created (recursively) at backend start if it does not exist.
 | **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages of sessions and of workflow runs' agents (section 5); any other Mastra runtime state | Agent framework |
 | **Observability store** | `observability.duckdb` | DuckDB (memory limit 512 MB, 2 threads) | Agent traces, metrics and logs written by the framework's storage exporter (service name `questions-to-insights`, log level `info`). The `span_events` table is **read by Monitoring** ([../capabilities/monitoring/spec.md](../capabilities/monitoring/spec.md), ADR-0038): event-sourced, one `start` and one `end` row per span (`eventType`, `timestamp`, `traceId`, `spanId`, `parentSpanId`, `entityType`, `entityId`, `entityName`, `threadId`, `name`, `spanType`, `endedAt`, and the JSON columns `attributes`, `metadata`, `input`, `output`, `error`). Monitoring reads the `agent_run`, `model_generation`, `model_step`, `tool_call` and `memory_operation` spans (and, for the waterfall, the framework spans `skill_action`, `processor_run`, `workspace_action` and `model_inference`), in the backend process, one **trace** (`traceId`) being one turn of a session and the `threadId` of its `agent_run` being the session id, through the same store handle that writes them. It adds no collection and writes nothing here | Agent framework |
 | **Session workspaces** | `workspaces/session-<session-id>/`; a stored workflow run's `workspaces/session-run-<run id>/` (3.16) | Plain directories, a contained filesystem root per session or run | Visual bundles, deep-analysis reports, panel files and synthetic scripts (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
+| **Excel / CSV files** | `files/uploads/<uploadId>/<name>` (an uploaded file not saved yet; also a test's throwaway `files/uploads/check-<uuid>/data.duckdb`); `files/<datasourceId>/originals/<fileId>.<ext>` (the saved copy of each source file); `files/<datasourceId>/data.duckdb` (the imported tables, one schema per file, built as `data.duckdb.tmp` and renamed) | Plain files; DuckDB database files | The `file` kind's uploads and each Excel / CSV datasource's files ([api.md](api.md) 156 to 158, 16, 18, 19; datasources R61 to R67). An upload goes when it is saved (moved to `originals/`), dropped (158), or at backend start once older than 24 hours; `files/<datasourceId>/` goes with its datasource | App backend |
 | **Developer settings** | `developer-settings.json` | JSON file, written atomically (temp file + rename) | `{ observabilityEnabled: boolean, phoenixEndpoint: string, otlpEndpoint: string, updatedAt: ISO string }`. Absent until the first save, and absent means the defaults (`false`, `http://localhost:6006`, `http://localhost:4318`). Invalid or missing values fall back to their defaults. Read synchronously by the backend at startup, before any app module loads (ADR-0006). See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md). | App backend |
 | **App secret** | `.app-secret` | Text file, mode `0600` | 64 lowercase hex characters (32 random bytes). The key material for encrypting stored secrets (section 2.3). Read if present and non-empty, else generated once and written. `APP_SECRET` env var, when set, wins and the file is not used. Created by the launcher (Electron main or CLI); a backend started without `APP_SECRET` reads or creates the same file itself. | Launcher, else backend |
 | **Backend PID** (desktop app only) | `backend.pid` | Text file | The decimal PID of the backend child the desktop shell last spawned. Written after each spawn, removed when that child exits and on quit. Read once at startup to stop a backend left running by an earlier launch ([api.md](api.md) 4.3). Never read by the backend. | Electron main |
@@ -130,8 +131,8 @@ One document per saved connection. The `kind` selects the shape of `config`.
 |---|---|---|---|
 | `id` | uuid | yes | Generated on first save (`legacy-databricks` for the migrated legacy connection, section 6). |
 | `name` | string | yes | User-chosen display name, trimmed, non-empty, truncated to 64 characters. Not required to be unique (the testing-data feature looks a sample's datasource up by name). |
-| `kind` | enum | yes | `databricks` \| `postgres` \| `rest`. |
-| `config` | object | yes | One of the three config shapes below. |
+| `kind` | enum | yes | `databricks` \| `postgres` \| `rest` \| `file`. |
+| `config` | object | yes | One of the four config shapes below. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `DatabricksConfig` (`kind = databricks`):
@@ -175,7 +176,42 @@ One document per saved connection. The `kind` selects the shape of `config`.
 | `pagination` | object | no | `style` enum `none` \| `page` \| `offset` \| `cursor` (required in the object); `pageParam`, `sizeParam`, `offsetParam`, `cursorParam`, `cursorPointer` (string, the query param / response pointer names the style needs); `pageSize` (number). |
 | `maxRows` | number | no | Cap on rows fetched. |
 
-**Secret masking.** API views of a connection replace secrets with the literal `••••••••` (8 bullet characters U+2022) when the secret is non-empty (empty stays empty): Postgres `password`, Databricks `token`, REST `auth.token` and `auth.password`. When the client sends a masked or empty secret back on test/save for an existing `id` of the same `kind`, the stored secret is kept. The view also carries a computed `summary` string (not stored): Postgres `host:port/database` (port defaults 5432); Databricks `host · warehouse <warehouseId>`; REST `REST API · <baseUrl> · <n> endpoint(s)`. See [api.md](api.md).
+`FileDatasourceConfig` (`kind = file`, Excel / CSV, ADR-0052; datasources R53–R67). No secret. The imported tables live in the datasource's own DuckDB database, `<dataDir>/files/<id>/data.duckdb`, and its source files in `<dataDir>/files/<id>/originals/` (section 1.2); the database path is filled in for each connector call and never stored.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `files` | `SourceFile[]` | yes | The uploaded files, each one schema of `file.<schema>.<table>`. |
+
+`SourceFile`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | Stable across Replace file. |
+| `name` | string | yes | Original file name, e.g. `sales_2026.xlsx`. |
+| `format` | enum | yes | `xlsx` \| `csv`. |
+| `sizeBytes` | number | yes | |
+| `sha256` | string | yes | Of the file's bytes. |
+| `uploadedAt` | ISO | yes | |
+| `schema` | string | yes | Entity schema segment (datasources R55), e.g. `sales_2026`. |
+| `sheets` | `SheetImport[]` | yes | A CSV has one. |
+| `uploadId` | string | no | Set only while the file is not saved yet: it names `files/uploads/<uploadId>/`. Never stored: saving moves the file to `files/<datasourceId>/originals/<id>.<format>` and drops it. |
+
+`SheetImport`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `sheet` | string | yes | Workbook sheet name; for a CSV, the file name without extension. |
+| `table` | string | yes | Entity table segment (datasources R55); a CSV's equals its file's `schema`. |
+| `include` | boolean | yes | Imported as a table. |
+| `headerRow` | number | yes | 1-based row of the column names. |
+| `range` | string | yes | A1 range of header and data, e.g. `A3:H12482`. |
+| `excludeLastRow` | boolean | yes | The last row of the range is not imported (a total). |
+| `allText` | boolean | yes | Every column read as `VARCHAR`. |
+| `rowCount` | number | no | Data rows imported; set by the import. |
+| `columns` | `{name, type}[]` | no | Imported column names and DuckDB types; set by the import. |
+| `warnings` | `SheetWarning[]` | no | From the detection (datasources R56): `{code: 'total-row', row}`, `{code: 'no-table'}`, `{code: 'header-guessed', row}`, `{code: 'duplicate-columns', names}`. |
+
+**Secret masking.** API views of a connection replace secrets with the literal `••••••••` (8 bullet characters U+2022) when the secret is non-empty (empty stays empty): Postgres `password`, Databricks `token`, REST `auth.token` and `auth.password`. When the client sends a masked or empty secret back on test/save for an existing `id` of the same `kind`, the stored secret is kept. The view also carries a computed `summary` string (not stored): Postgres `host:port/database` (port defaults 5432); Databricks `host · warehouse <warehouseId>`; REST `REST API · <baseUrl> · <n> endpoint(s)`; Excel / CSV `<n> files · <m> tables` (a file config has nothing to mask). See [api.md](api.md).
 
 The **inventory shape** every connector normalises to (used by section 3.5 and the datasets browser): `catalog → schema → table → column`, as `CatalogInfo {name, schemas[], selectable?}`, `SchemaInfo {name, tables[], selectable?}`, `TableInfo {name, columns[], selectable?}`, `ColumnInfo {name: string, type: string, nullable: boolean}`. `selectable` is `boolean`, optional: `undefined` means access unknown (treated as accessible); only an explicit `false` means the credentials cannot query it (shown greyed).
 

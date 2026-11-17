@@ -120,6 +120,12 @@ describe('SyntheticDataPanel', () => {
     expect(q('synth-table-count')).toBeNull();
   });
 
+  it('shows the empty state and no controls for an Excel / CSV dataset', () => {
+    render(dataset(2, 'file'));
+    expect(q('synth-unsupported')).not.toBeNull();
+    expect(q('synth-profile')).toBeNull();
+  });
+
   it('checks every table by default and counts them', () => {
     render(dataset(3));
     expect(q('synth-table-count')!.textContent).toContain('3 of 3 tables');

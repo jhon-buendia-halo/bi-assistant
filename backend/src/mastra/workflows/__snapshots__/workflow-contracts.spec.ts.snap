@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "b563ef17a0ef",
+  "contractHash": "cb4700168ba8",
   "edges": [
     {
       "from": "start",
@@ -282,7 +282,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -394,7 +394,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -503,7 +503,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -764,7 +764,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -899,7 +899,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -1050,7 +1050,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -1198,7 +1198,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -1342,7 +1342,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -1542,7 +1542,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -1778,7 +1778,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -2011,7 +2011,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -2266,7 +2266,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -3049,7 +3049,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -3668,7 +3668,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) consumption-gap-analysis's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "bd5a9b49a464",
+  "contractHash": "e683d4ede09f",
   "edges": [
     {
       "from": "start",
@@ -5655,7 +5655,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -6101,7 +6101,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -6654,7 +6654,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -7197,7 +7197,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -7846,7 +7846,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -8482,7 +8482,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -9136,7 +9136,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -9777,7 +9777,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -10489,7 +10489,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -11186,7 +11186,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -12062,7 +12062,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -12917,7 +12917,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -13802,7 +13802,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -14669,7 +14669,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -15615,7 +15615,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -16539,7 +16539,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -17712,7 +17712,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) map-dashboard-data's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "5adb1f3d73d3",
+  "contractHash": "4008b7e95ee4",
   "edges": [
     {
       "from": "start",
@@ -18824,7 +18824,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",
@@ -19239,7 +19239,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   ],
                 },
                 "datasourceKind": {
-                  "description": "postgres, databricks or rest.",
+                  "description": "postgres, databricks, rest or file.",
                   "type": [
                     "string",
                     "null",

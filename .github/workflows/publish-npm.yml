@@ -115,6 +115,12 @@ jobs:
           BRAND: halo
         run: npm run build:all
 
+      # Publish runs with --ignore-scripts, so prepack's own fetch does not run
+      # either: the package ships DuckDB's excel extension for all four platforms
+      # (ADR-0052).
+      - name: Fetch the DuckDB excel extension
+        run: node scripts/fetch-duckdb-extensions.mjs windows_amd64 osx_arm64 osx_amd64 linux_amd64 --out backend/vendor/duckdb-extensions
+
       # Publish runs with --ignore-scripts, so prepack's own check does not run.
       - name: Refuse a brand that may not be published
         working-directory: backend

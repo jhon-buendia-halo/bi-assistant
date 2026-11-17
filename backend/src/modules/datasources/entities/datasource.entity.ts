@@ -1,9 +1,10 @@
-export type DatasourceKind = 'databricks' | 'postgres' | 'rest';
+export type DatasourceKind = 'databricks' | 'postgres' | 'rest' | 'file';
 
 export const DATASOURCE_KINDS: DatasourceKind[] = [
   'databricks',
   'postgres',
   'rest',
+  'file',
 ];
 
 export interface DatabricksConfig {
@@ -73,8 +74,74 @@ export interface RestDiscovery {
   skipped: { path: string; reason: string }[];
 }
 
+/**
+ * The `file` kind (ADR-0052, plan m1-31 3): uploaded `.xlsx` and `.csv`
+ * files imported into the datasource's own DuckDB database. No secrets.
+ */
+export interface FileDatasourceConfig {
+  files: SourceFile[];
+}
+
+export interface SourceFile {
+  /** uuid, stable across Replace file. */
+  id: string;
+  /** Original file name, e.g. "sales_2026.xlsx". */
+  name: string;
+  format: 'xlsx' | 'csv';
+  sizeBytes: number;
+  sha256: string;
+  /** ISO. */
+  uploadedAt: string;
+  /** Entity schema segment, e.g. "sales_2026" (plan m1-31 4). */
+  schema: string;
+  sheets: SheetImport[];
+  /** Set only while the file is not saved yet. */
+  uploadId?: string;
+}
+
+export interface SheetImport {
+  /** Workbook sheet name; for a CSV, the file name without extension. */
+  sheet: string;
+  /** Entity table segment, e.g. "region" (plan m1-31 4). */
+  table: string;
+  include: boolean;
+  /** 1-based row of the column names. */
+  headerRow: number;
+  /** A1 range of header + data, e.g. "A3:H12482". */
+  range: string;
+  excludeLastRow: boolean;
+  allText: boolean;
+  /** Data rows imported, set by the import. */
+  rowCount?: number;
+  /** Set by the import. */
+  columns?: { name: string; type: string }[];
+  warnings?: SheetWarning[];
+}
+
+export type SheetWarning =
+  /** "Last row looks like a total". */
+  | { code: 'total-row'; row: number }
+  /** "No table found" (sheet skipped). */
+  | { code: 'no-table' }
+  /** "Header found on row <n>". */
+  | { code: 'header-guessed'; row: number }
+  /** Renamed "<name>_2". */
+  | { code: 'duplicate-columns'; names: string[] };
+
+export interface SheetPreview {
+  sheet: string;
+  headerRow: number;
+  range: string;
+  /** Rows in range below the header. */
+  totalRows: number;
+  columns: { letter: string; name: string; type: string }[];
+  /** First 7 sheet rows from its first row, and the range's last 2. */
+  rows: { row: number; cells: (string | number | boolean | null)[] }[];
+  warnings: SheetWarning[];
+}
+
 export type DatasourceConfig =
-  DatabricksConfig | PostgresConfig | RestApiConfig;
+  DatabricksConfig | PostgresConfig | RestApiConfig | FileDatasourceConfig;
 
 /** A saved connection to a data platform the datasets can draw from. */
 export interface Datasource {

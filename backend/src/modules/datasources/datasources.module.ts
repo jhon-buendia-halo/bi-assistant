@@ -6,6 +6,7 @@ import { InventoryCacheRepository } from './repositories/inventory-cache.reposit
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { PostgresConnector } from './connectors/postgres.connector';
 import { RestConnector } from './connectors/rest.connector';
+import { FileConnector } from './connectors/file.connector';
 import { PostgresProfiler } from './connectors/postgres-profiling';
 import { DatabricksProfiler } from './connectors/databricks-profiling';
 
@@ -18,6 +19,7 @@ import { DatabricksProfiler } from './connectors/databricks-profiling';
     DatabricksConnector,
     PostgresConnector,
     RestConnector,
+    FileConnector,
     PostgresProfiler,
     DatabricksProfiler,
   ],

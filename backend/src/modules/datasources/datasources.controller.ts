@@ -1,15 +1,27 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Headers,
+  HttpCode,
+  Inject,
+  Optional,
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
+import {
+  FILE_UPLOAD_MAX_BYTES,
+  UPLOAD_MAX_BYTES,
+} from './connectors/file-storage';
 import { DatasourcesService } from './datasources.service';
 import type {
   DiscoverRestEndpointsDto,
+  PreviewFileDto,
   SaveDatasourceDto,
   TestDatasourceDto,
 } from './dto/datasource.dto';
@@ -17,11 +29,18 @@ import type {
   CatalogInfo,
   DatasourceView,
   RestDiscovery,
+  SheetPreview,
+  SourceFile,
 } from './entities/datasource.entity';
 
 @Controller('datasources')
 export class DatasourcesController {
-  constructor(private readonly datasources: DatasourcesService) {}
+  constructor(
+    private readonly datasources: DatasourcesService,
+    @Optional()
+    @Inject(FILE_UPLOAD_MAX_BYTES)
+    private readonly uploadMaxBytes: number = UPLOAD_MAX_BYTES,
+  ) {}
 
   @Get()
   async list(): Promise<{ datasources: DatasourceView[] }> {
@@ -33,12 +52,54 @@ export class DatasourcesController {
     @Body() dto: TestDatasourceDto,
   ): Promise<{ ok: boolean; message: string }> {
     try {
-      await this.datasources.testConnection(dto.kind, dto.config, dto.id);
-      return { ok: true, message: 'Connection successful' };
+      const message = await this.datasources.testConnection(
+        dto.kind,
+        dto.config,
+        dto.id,
+      );
+      return { ok: true, message: message ?? 'Connection successful' };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
     }
+  }
+
+  /**
+   * Upload one file (api.md 156, Style B). The raw body is streamed to
+   * disk: `application/octet-stream` matches none of the app's body
+   * parsers, so the JSON parser and its limit never see it.
+   */
+  @Post('files/uploads')
+  async uploadFile(
+    @Req() req: Request,
+    @Headers('x-file-name') fileName?: string,
+  ): Promise<{ uploadId: string; file: SourceFile }> {
+    if ((req as Request & { _body?: boolean })._body) {
+      throw new BadRequestException(
+        'Send the file as the raw body (application/octet-stream)',
+      );
+    }
+    const declared = Number(req.headers['content-length']);
+    return this.datasources.uploadFile(
+      req,
+      fileName,
+      Number.isFinite(declared) ? declared : undefined,
+      this.uploadMaxBytes,
+    );
+  }
+
+  /** Preview one sheet under import options (api.md 157, Style B). */
+  @Post('files/preview')
+  @HttpCode(200)
+  previewFile(@Body() dto: PreviewFileDto): Promise<SheetPreview> {
+    return this.datasources.previewFile(dto);
+  }
+
+  /** Drop an unsaved upload (api.md 158, Style B). */
+  @Delete('files/uploads/:uploadId')
+  @HttpCode(204)
+  async deleteUpload(@Param('uploadId') uploadId: string): Promise<void> {
+    await this.datasources.deleteUpload(uploadId);
   }
 
   @Post('rest/discover')

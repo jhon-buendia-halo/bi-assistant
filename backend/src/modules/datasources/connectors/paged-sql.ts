@@ -29,7 +29,7 @@ import {
   withoutTrailingFraming,
 } from './sql-text';
 
-export type SqlDialect = 'postgres' | 'databricks' | 'sqlite';
+export type SqlDialect = 'postgres' | 'databricks' | 'sqlite' | 'duckdb';
 
 /** The window total's alias; stripped from the page before it leaves the connector. */
 export const TOTAL_COLUMN = '__qti_total';
@@ -40,7 +40,7 @@ export interface PagedSql {
   text: string;
   /** The matching rows' count alone, for a page past the end. */
   countText: string;
-  /** Bound in order: `$n`, `:pN` (N = index + 1) or `?`. */
+  /** Bound in order: `$n` (Postgres, DuckDB), `:pN` (N = index + 1) or `?`. */
   params: (FilterValue | number)[];
 }
 
@@ -84,6 +84,16 @@ const DIALECTS: Record<SqlDialect, Dialect> = {
     // SQLite's LIKE has no default escape character.
     likeEscape: " ESCAPE '\\'",
     bind: (value) => (typeof value === 'boolean' ? (value ? 1 : 0) : value),
+  },
+  // The `file` kind (ADR-0052). DuckDB's LIKE has no default escape
+  // character either; the cast gives `$n` a type inside LOWER().
+  duckdb: {
+    quote: doubleQuote,
+    placeholder: (n) => `$${n}`,
+    textParam: (p) => `CAST(${p} AS VARCHAR)`,
+    textType: 'VARCHAR',
+    likeEscape: " ESCAPE '\\'",
+    bind: asIs,
   },
 };
 
