@@ -130,6 +130,38 @@ describe('OntologyApiService bootstrap stream', () => {
     );
   });
 
+  it('ignores a ": ping" heartbeat frame, also split across chunks', async () => {
+    const encoder = new TextEncoder();
+    const chunks = [
+      'data: {"type":"progress","key":"a","message":"A"}\n\n',
+      ': ping\n\n',
+      ': pi',
+      'ng\n\ndata: {"type":"done","created":[]}\n\n',
+    ];
+    spyOn(globalThis, 'fetch').and.callFake(() =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              for (const c of chunks) controller.enqueue(encoder.encode(c));
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const onProgress = jasmine.createSpy('onProgress');
+    const onDone = jasmine.createSpy('onDone');
+    const onError = jasmine.createSpy('onError');
+
+    await service.bootstrapStream('sales', { onProgress, onDone, onError });
+
+    expect(onProgress).toHaveBeenCalledOnceWith({ key: 'a', message: 'A' });
+    expect(onDone).toHaveBeenCalledOnceWith([]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('never leaves the run spinning when the stream ends without a verdict', async () => {
     spyOn(globalThis, 'fetch').and.callFake(() =>
       Promise.resolve(sseResponse([])),

@@ -1533,7 +1533,7 @@ interface StreamMessageRequest {
 
 **Response headers.** `Content-Type: text/event-stream; charset=utf-8` (the charset is explicit so every client decodes `…` and other non-ASCII text as UTF-8; without it Chromium's network layer falls back to Windows-1252), `Cache-Control: no-cache`, `Connection: keep-alive`; headers are flushed immediately, so the HTTP status is **always 200** once the handler runs. Consequently *every* failure, including an unknown session or an empty message, arrives as an in-stream `error` event, not as a 4xx.
 
-**Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`, no heartbeat/comment frames. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; malformed frames are skipped.
+**Framing.** Each event is a single `data: <JSON>\n\n` frame. No `event:` or `id:` fields, no `retry:`. While a stream is open the server writes the comment frame `: ping\n\n` every 15 s (`SSE_HEARTBEAT_MS`) so a proxy or the OS does not drop a silent stream (a long SQL statement, a model call that streams nothing); it is not an event (no `data:` line, no `seq`, never logged) and a re-attach replays exactly the events it replayed before. Readers split on `\n\n`, take the line starting with `data: ` and `JSON.parse` it; a frame with no `data:` line (the heartbeat) and malformed frames are skipped.
 
 **Event envelope.** `{ type, content?, session? }`. `content` is a string; for `tool`, `tool-result`, `visual-updated`, `panel-item`, `workflow`, `readiness-report` and `tool-progress` it is itself **a JSON-encoded string** (double encoding) that the client parses.
 
@@ -1626,7 +1626,7 @@ Note the error text is in **`message`** here but in **`content`** for the chat s
 
 **Request.** As 118: `{ input, context?: { fromRunId, askStep? } }`. Every refusal (118's list) is answered with its real status before the stream starts, unlike the chat stream.
 
-**Response headers and framing.** As 3.1: `text/event-stream; charset=utf-8`, flushed at once; one `data: <JSON>\n\n` frame per event. On 119, 138 and 149 each frame's JSON also carries `seq`, the event's number in the run's log (from 1; ADR-0048), to follow the run again after it with 149 (`after=<seq>`); 129 sends no `seq`.
+**Response headers and framing.** As 3.1: `text/event-stream; charset=utf-8`, flushed at once; one `data: <JSON>\n\n` frame per event, with 3.1's `: ping` heartbeat between them (also on 149 and the ontology bootstrap stream). On 119, 138 and 149 each frame's JSON also carries `seq`, the event's number in the run's log (from 1; ADR-0048), to follow the run again after it with 149 (`after=<seq>`); 129 sends no `seq`.
 
 **Events, in order.**
 
