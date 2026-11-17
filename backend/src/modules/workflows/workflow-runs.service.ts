@@ -70,6 +70,8 @@ import {
 } from '../sessions/sessions.service';
 import { WorkflowNodeChatsRepository } from './repositories/workflow-node-chats.repository';
 import { nodeChatHostRunId } from './node-chat-context';
+import { askHostOf, askRefusal, type AskHost } from './ask-agent-context';
+import type { AskableStepId } from '../../mastra/workflows/ask-agent.steps';
 import { HeldDraftRuns } from './held-draft-runs';
 import { LiveRuns, type LiveRunEvent } from './live-runs';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
@@ -204,6 +206,11 @@ export interface PreparedRun {
      * plan m1-27 2); absent when it ran none.
      */
     queries?: ExplorableQuery[];
+    /**
+     * A follow-up that asks one agent alone (workflows R40; agents.md
+     * 5.21): the asked step and how its host is set up.
+     */
+    ask?: AskHost;
   };
   /**
    * A draft run (api.md R12; agents-evals R60): the user agent whose saved
@@ -369,7 +376,7 @@ export class WorkflowRunsService implements OnModuleInit {
     const errors: WorkflowInputError[] = checked.ok ? [] : checked.errors;
     let context: PreparedRun['context'];
     try {
-      context = await this.contextOf(request.context);
+      context = await this.contextOf(request.context, workflow.id);
     } catch (refusal) {
       if (!(refusal instanceof BadRequestException)) throw refusal;
       errors.push({ field: null, message: refusal.message });
@@ -594,11 +601,17 @@ export class WorkflowRunsService implements OnModuleInit {
     const { workflow } = prepared;
     const live = liveEmit(emit, abortSignal);
     live({ type: 'run', runId: base.id, workflowId: workflow.id });
+    // A follow-up that asks one agent alone (agents.md 5.21).
+    const ask = prepared.context?.ask;
     return this.drive(held, live, abortSignal, async (io) => {
       const host = await this.sessions.createRunHost({
         runId: base.id,
-        workflowId: workflow.id,
+        ...(ask?.agentKey
+          ? { agentKey: ask.agentKey }
+          : { workflowId: workflow.id }),
         name: workflow.name,
+        ...(ask ? { ask: ask.ask } : {}),
+        ...(ask?.contextBlock ? { contextBlock: ask.contextBlock } : {}),
         ...(prepared.draft ? { draftAgentId: prepared.draft.agentId } : {}),
         ...(prepared.turn.datasets ? { datasets: prepared.turn.datasets } : {}),
         ...(prepared.turn.checkDataQuality ? { checkDataQuality: true } : {}),
@@ -623,8 +636,13 @@ export class WorkflowRunsService implements OnModuleInit {
                 question: prepared.context.question,
                 answer: prepared.context.answer,
               },
-              // Its agents go on from copies of the earlier run's threads.
-              continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
+              // Its agents go on from copies of the earlier run's threads
+              // (not Sarah asked alone: the host's thread is the Analyst's).
+              ...(ask?.continuesThreads === false
+                ? {}
+                : {
+                    continuesThreadsOf: `${RUN_HOST_ID_PREFIX}${prepared.context.fromRunId}`,
+                  }),
               // "Next page" or "only Brazil" explores its queries.
               ...(prepared.context.queries?.length
                 ? { contextQueries: prepared.context.queries }
@@ -1371,7 +1389,14 @@ export class WorkflowRunsService implements OnModuleInit {
         : {}),
       input: prepared.values,
       ...(prepared.context
-        ? { context: { fromRunId: prepared.context.fromRunId } }
+        ? {
+            context: {
+              fromRunId: prepared.context.fromRunId,
+              ...(prepared.context.ask
+                ? { askStep: prepared.context.ask.ask.step }
+                : {}),
+            },
+          }
         : {}),
       status: 'running',
       steps: [],
@@ -1391,12 +1416,24 @@ export class WorkflowRunsService implements OnModuleInit {
   }
 
   /** The earlier run a request names as context (plan 5.4). */
-  private async contextOf(raw: unknown): Promise<PreparedRun['context']> {
+  private async contextOf(
+    raw: unknown,
+    workflowId: string,
+  ): Promise<PreparedRun['context']> {
     const fromRunId =
       raw && typeof raw === 'object'
         ? (raw as { fromRunId?: unknown }).fromRunId
         : undefined;
+    const askStep =
+      raw && typeof raw === 'object'
+        ? (raw as { askStep?: unknown }).askStep
+        : undefined;
+    const asks = askStep !== undefined && askStep !== null && askStep !== '';
     if (fromRunId === undefined || fromRunId === null || fromRunId === '') {
+      // Asking one agent is a follow-up: it needs the run it follows.
+      if (asks) {
+        throw new BadRequestException('Asking one agent needs an earlier run');
+      }
       return undefined;
     }
     const earlier =
@@ -1412,7 +1449,7 @@ export class WorkflowRunsService implements OnModuleInit {
     // with my answer", api.md 138 410): its question and the clarifying
     // question it asked are the context, so the new run's question (the
     // user's answer) is planned with the original question.
-    if (earlier.question && !earlier.answer && earlier.waitingFor) {
+    if (earlier.question && !earlier.answer && earlier.waitingFor && !asks) {
       return {
         fromRunId: earlier.id,
         question: earlier.question,
@@ -1424,6 +1461,14 @@ export class WorkflowRunsService implements OnModuleInit {
         `Run "${earlier.id}" has no answer to continue from`,
       );
     }
+    // Asking one agent (workflows R40): a step that ran in the earlier run
+    // of Answer a Business Question.
+    let ask: AskHost | undefined;
+    if (asks) {
+      const refused = askRefusal(workflowId, askStep, earlier);
+      if (refused) throw new BadRequestException(refused);
+      ask = askHostOf(earlier, askStep as AskableStepId);
+    }
     const queries = explorableQueriesOf(
       earlier.answer.data ?? [],
       earlier.answer.evidence,
@@ -1433,6 +1478,7 @@ export class WorkflowRunsService implements OnModuleInit {
       question: earlier.question,
       answer: earlier.answer.content,
       ...(queries.length ? { queries } : {}),
+      ...(ask ? { ask } : {}),
     };
   }
 

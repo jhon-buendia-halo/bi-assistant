@@ -899,6 +899,18 @@ export class WorkflowRunChat {
     this.designer.followUpText.set((event.target as HTMLInputElement).value);
   }
 
+  protected onAskStepChange(event: Event): void {
+    this.designer.askStep.set((event.target as HTMLSelectElement).value);
+  }
+
+  /** The follow-up box's hint: names the agent when one is picked. */
+  protected readonly followUpPlaceholder = computed(() => {
+    const agent = this.designer.askedAgentName();
+    return agent !== null
+      ? `Ask ${agent} about this result`
+      : 'Ask a follow-up about this result';
+  });
+
   /** Enter sends (Execute or Follow up); Shift+Enter adds a line. */
   protected onEnter(event: Event, action: 'execute' | 'follow-up'): void {
     const key = event as KeyboardEvent;

@@ -74,7 +74,9 @@ import {
   clarifyingQuestionOf,
   dataQualityFailure,
   dataQualityFindings,
+  planOf,
   turnSummaryOf,
+  validateAttempt,
   type AnsweredClarification,
   type QualityEngineFinding,
   type AnswerBusinessQuestionInput,
@@ -96,6 +98,16 @@ import {
   AGENT_TURN_WORKFLOW_ID,
   type AgentTurnRuntime,
 } from '../../../mastra/workflows/agent-turn.steps';
+import {
+  AGENT_TURN_ASK_STEPS,
+  ASK_AGENT_RUNTIME_KEY,
+  ASK_AGENT_WORKFLOW_ID,
+  type AskAgentInput,
+  type AskAgentRuntime,
+  type AskableStepId,
+  type EarlierAnswerInput,
+} from '../../../mastra/workflows/ask-agent.steps';
+import { planSchema } from '../../../mastra/workflows/answer-business-question.schemas';
 import type { LlmService } from '../../llm/llm.service';
 import { chatTurnError } from '../llm-error-message';
 import { sourceEntities } from '../visualization-document';
@@ -175,6 +187,7 @@ import {
 import {
   analyseAttemptOf,
   analyseOutcomeOf,
+  analyseQueriesOf,
   answeredTurnInput,
   catalogStepId,
   clarificationOptionText,
@@ -368,6 +381,15 @@ export class TurnEngine {
     const workflow = turnWorkflowOf(session);
     // v2's answer is its Write answer step's only (agents.md 5.11).
     const v2 = workflow.engineId === ANSWER_BUSINESS_QUESTION_WORKFLOW_ID;
+    // A follow-up that asks one agent (agents.md 5.21): only the Analyst
+    // and Sarah answer as an agent turn; every other asked step's answer is
+    // its model call's or the code's, which no synthesis replaces.
+    const asked =
+      workflow.engineId === ASK_AGENT_WORKFLOW_ID
+        ? (session.ask?.step as AskableStepId | undefined)
+        : undefined;
+    const codeAnswer =
+      v2 || (asked !== undefined && !AGENT_TURN_ASK_STEPS.includes(asked));
     // A query record of the turn: kept for the answer with its facts,
     // explorable from then on, and shown as its call's result.
     const captureRecord = (record: ToolDataRecord, callId?: string) => {
@@ -948,6 +970,49 @@ export class TurnEngine {
             emit({ type: 'text', content: answer });
             return Promise.resolve();
           },
+          // A follow-up that asks Write answer alone (agents.md 5.21): the
+          // earlier answer's records come into this answer with their
+          // evidence, so its sources stay one click from its figures; the
+          // checks are those records' own, plus the earlier quality ones.
+          earlierAnswer: (): EarlierAnswerInput => {
+            const earlier = session.ask?.earlier;
+            const records = earlier?.records ?? [];
+            records.forEach((record, index) => {
+              data.push(record);
+              const known = earlier?.evidence.find(
+                (entry) => entry.index === index,
+              );
+              if (!known) return;
+              recordFacts.set(record, {
+                ...(known.datasourceId
+                  ? { datasourceId: known.datasourceId }
+                  : {}),
+                ...(known.totalRows !== undefined
+                  ? { totalRows: known.totalRows }
+                  : {}),
+                ...(known.rowLimit !== undefined
+                  ? { rowLimit: known.rowLimit }
+                  : {}),
+                ...(known.view ? { view: known.view } : {}),
+              });
+            });
+            const stored = planSchema.safeParse(earlier?.plan);
+            const plan = stored.success
+              ? stored.data
+              : planOf(undefined, trimmed);
+            const queries = analyseQueriesOf(records);
+            const { findings } = validateAttempt({
+              plan,
+              calls: analyseOutcomeOf(records, false).calls,
+              queries,
+            });
+            return {
+              plan,
+              queries,
+              findings: [...findings, ...(earlier?.qualityFindings ?? [])],
+              imageNotes: earlier?.imageNotes ?? '',
+            };
+          },
           writeAnswer: async (written) => {
             try {
               // Zoe's notes only when the run has images (agents.md 5.11).
@@ -1469,11 +1534,17 @@ export class TurnEngine {
     const finishTurn = async (): Promise<void> => {
       // v2's answer is its Write answer step's text only (agents.md 5.11):
       // its Analyse stream's text is a note, and no synthesis replaces it.
-      if (!v2 && !turn.signal.aborted && !clarification && !text && stream) {
+      if (
+        !codeAnswer &&
+        !turn.signal.aborted &&
+        !clarification &&
+        !text &&
+        stream
+      ) {
         text = ((await stream.text) ?? '').trim();
       }
       if (
-        !v2 &&
+        !codeAnswer &&
         !turn.signal.aborted &&
         !clarification &&
         !text.trim() &&
@@ -1650,6 +1721,8 @@ export class TurnEngine {
       ReviewWebsiteRuntime & {
         /** Its names overlap the others' (readDashboard, saveReport): kept apart. */
         consumptionGap: ConsumptionGapRuntime;
+        /** A follow-up that asks Write answer alone (agents.md 5.21). */
+        earlierAnswer: () => EarlierAnswerInput;
       },
     onStepEvent?: (event: RunStepEvent) => void,
   ): Promise<TurnRunOutcome> {
@@ -1670,7 +1743,23 @@ export class TurnEngine {
     const mapping = workflow.engineId === MAP_DASHBOARD_DATA_WORKFLOW_ID;
     const review = workflow.engineId === REVIEW_WEBSITE_WORKFLOW_ID;
     const gap = workflow.engineId === CONSUMPTION_GAP_WORKFLOW_ID;
-    if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
+    const ask = workflow.engineId === ASK_AGENT_WORKFLOW_ID;
+    if (ask) {
+      // A follow-up that asks one agent (agents.md 5.21): the same calls
+      // the workflow's own steps make, on this turn's records.
+      requestContext.set(ASK_AGENT_RUNTIME_KEY, {
+        answer: () => captured(() => runtime.answer()),
+        readImages: (input) => captured(() => runtime.readImages(input)),
+        followUp: runtime.followUp ?? [],
+        interpretFollowUp: (input) =>
+          captured(() => runtime.interpretFollowUp(input)),
+        pageResult: (input) => captured(() => runtime.pageResult(input)),
+        plan: (input) => captured(() => runtime.plan(input)),
+        earlierAnswer: () => runtime.earlierAnswer(),
+        writeAnswer: (input) => captured(() => runtime.writeAnswer(input)),
+        deliverAnswer: (answer) => runtime.deliverAnswer(answer),
+      } satisfies AskAgentRuntime);
+    } else if (workflow.engineId === AGENT_TURN_WORKFLOW_ID) {
       requestContext.set(AGENT_TURN_RUNTIME_KEY, {
         answer: () => captured(() => runtime.answer()),
       } satisfies AgentTurnRuntime);
@@ -1777,6 +1866,7 @@ export class TurnEngine {
     // saved dashboard ('' when none) and its reference dashboards (5.20).
     const turnInput:
       | AnswerBusinessQuestionInput
+      | AskAgentInput
       | { question: string; dataset: string; images?: string[] }
       | { question: string; image: string }
       | {
@@ -1785,28 +1875,36 @@ export class TurnEngine {
           datasets: string[];
           images?: string[];
         }
-      | ReviewWebsiteInput = review
-      ? // Review a Website reads the whole form (agents.md 5.19).
-        reviewWebsiteInputOf(session.inputValues ?? { url: question })
-      : gap
-        ? {
-            question,
-            datasets: session.datasets,
-            artifact: session.inputArtifact ?? '',
-            images: [...(session.inputImages ?? [])],
-          }
-        : recreate
-          ? { question, image: session.inputImage ?? '' }
-          : mapping
-            ? {
-                question,
-                artifact: session.inputArtifact ?? '',
-                datasets: session.datasets,
-                ...images,
-              }
-            : readiness
-              ? { question, dataset: session.datasets[0] ?? '', ...images }
-              : { question, datasets: session.datasets, ...images };
+      | ReviewWebsiteInput = ask
+      ? // The asked step, over the run's datasets and images (5.21).
+        {
+          question,
+          datasets: session.datasets,
+          askStep: session.ask?.step as AskableStepId,
+          ...images,
+        }
+      : review
+        ? // Review a Website reads the whole form (agents.md 5.19).
+          reviewWebsiteInputOf(session.inputValues ?? { url: question })
+        : gap
+          ? {
+              question,
+              datasets: session.datasets,
+              artifact: session.inputArtifact ?? '',
+              images: [...(session.inputImages ?? [])],
+            }
+          : recreate
+            ? { question, image: session.inputImage ?? '' }
+            : mapping
+              ? {
+                  question,
+                  artifact: session.inputArtifact ?? '',
+                  datasets: session.datasets,
+                  ...images,
+                }
+              : readiness
+                ? { question, dataset: session.datasets[0] ?? '', ...images }
+                : { question, datasets: session.datasets, ...images };
     let state = session.workflowState;
     // A new run starts the bar over at its first step event, whichever step
     // that is: Read images, step 1, is optional, so a run without images

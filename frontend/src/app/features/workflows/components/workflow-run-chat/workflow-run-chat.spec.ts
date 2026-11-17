@@ -820,6 +820,129 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       );
     });
 
+    describe('asking one agent in a follow-up', () => {
+      const agentStep = (
+        id: string,
+        title: string,
+        name: string,
+        role?: string,
+      ): WorkflowDetail['steps'][number] => ({
+        ...STEP(id, title, ['question'], ['out']),
+        kind: 'agent',
+        agent: { name, ...(role ? { role } : {}), tools: [], maxSteps: 5 },
+      });
+      const ASK: WorkflowDetail = {
+        ...ASSISTANT,
+        steps: [
+          STEP('receive-question', 'Receive question', ['question'], ['question']),
+          agentStep('plan', 'Plan', 'Olivia'),
+          agentStep('analyse', 'Analyse', 'Insights Analyst'),
+          agentStep('write-answer', 'Write answer', 'Jessica', 'Insights Writer'),
+        ],
+      };
+      const ranSteps: WorkflowRun['steps'] = [
+        { id: 'receive-question', title: 'Receive question', status: 'success' },
+        { id: 'plan', title: 'Plan', status: 'skipped' },
+        { id: 'analyse', title: 'Analyse', status: 'success' },
+        { id: 'write-answer', title: 'Write answer', status: 'success' },
+      ];
+
+      function showAnswer(overrides: Partial<WorkflowRun> = {}): void {
+        openAssistant(ASK);
+        typeQuestion('Which team scored the most goals?');
+        pickDataset();
+        click('workflow-run');
+        const h = runs.last.handlers;
+        h.onRun!({ runId: 'run-1', workflowId: ASK.id });
+        h.onDone!(
+          assistantRun({
+            steps: ranSteps,
+            answer: { role: 'assistant', content: 'Brazil.', at: 'x' },
+            ...overrides,
+          }),
+        );
+        fixture.detectChanges();
+      }
+
+      const select = () => q('workflow-follow-up-agent') as HTMLSelectElement | null;
+
+      it('lists the Whole user journey and the agent steps that ran, skipped ones left out', () => {
+        showAnswer();
+        const picker = select()!;
+        expect(picker.getAttribute('aria-label')).toBe('Ask');
+        expect(Array.from(picker.options).map((o) => [o.value, o.textContent?.trim()])).toEqual([
+          ['', 'Whole user journey'],
+          ['analyse', 'Insights Analyst · Analyse'],
+          ['write-answer', 'Jessica · Insights Writer'],
+        ]);
+        expect(picker.value).toBe('');
+        expect(picker.getAttribute('aria-describedby')).toBe('workflow-follow-up-agent-hint');
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          'Runs every step again: plans, queries the data, checks and writes a new answer.',
+        );
+        expect((q('workflow-follow-up-input') as HTMLTextAreaElement).placeholder).toBe(
+          'Ask a follow-up about this result',
+        );
+      });
+
+      it('picking an agent names it in the placeholder and sends askStep; the run reads Asked <agent>', () => {
+        showAnswer();
+        const picker = select()!;
+        picker.value = 'write-answer';
+        picker.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+        const input = q('workflow-follow-up-input') as HTMLTextAreaElement;
+        expect(input.placeholder).toBe('Ask Jessica about this result');
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+        );
+        input.value = 'Say it shorter';
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        click('workflow-run-follow-up');
+        expect(runs.last.body.context).toEqual({
+          fromRunId: 'run-1',
+          askStep: 'write-answer',
+        });
+        fixture.detectChanges();
+        expect(text('workflow-run-context')).toBe(
+          'Asked Jessica · Follows up on “Which team scored the most goals?”',
+        );
+      });
+
+      it('a stored run that asked an agent reads Asked <agent>', () => {
+        showAnswer();
+        designer.run.set(
+          assistantRun({
+            id: 'run-2',
+            steps: ranSteps,
+            context: { fromRunId: 'run-1', askStep: 'write-answer' },
+            answer: { role: 'assistant', content: 'Short.', at: 'x' },
+          }),
+        );
+        fixture.detectChanges();
+        expect(text('workflow-run-context')).toContain('Asked Jessica');
+      });
+
+      it('has no picker for another workflow', () => {
+        openAssistant({ ...ASK, id: 'other-workflow' });
+        typeQuestion('Which team scored the most goals?');
+        pickDataset();
+        click('workflow-run');
+        runs.last.handlers.onRun!({ runId: 'run-1', workflowId: 'other-workflow' });
+        runs.last.handlers.onDone!(
+          assistantRun({
+            workflowId: 'other-workflow',
+            steps: ranSteps,
+            answer: { role: 'assistant', content: 'x', at: 'x' },
+          }),
+        );
+        fixture.detectChanges();
+        expect(q('workflow-follow-up-input')).not.toBeNull();
+        expect(select()).toBeNull();
+      });
+    });
+
     it('Stop ends the run: the run reads "Run stopped"', () => {
       openAssistant();
       typeQuestion('Which team scored the most goals?');

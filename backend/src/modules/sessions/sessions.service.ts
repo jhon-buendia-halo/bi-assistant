@@ -73,6 +73,7 @@ import {
   writeWorkspaceFile,
 } from './workspace-files';
 import {
+  AskedStep,
   ChatMessage,
   CrossCheck,
   FilePanelItem,
@@ -193,6 +194,11 @@ export interface RunHostSpec {
    * memory threads the host starts from as copies of its own.
    */
   continuesThreadsOf?: string;
+  /**
+   * A follow-up that asks one agent alone (agents.md 5.21): the host's turn
+   * runs on the `ask-agent` engine. With `agentKey`, that agent is bound.
+   */
+  ask?: AskedStep;
   /**
    * A draft run (agents-evals R60): the user agent whose saved draft the host
    * runs, as a preview does. `workflowId` is then unused.
@@ -575,6 +581,7 @@ export class SessionsService implements OnModuleInit {
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
       ...(spec.inputValues ? { inputValues: { ...spec.inputValues } } : {}),
+      ...(spec.ask ? { ask: spec.ask } : {}),
       visualizations: [],
       createdAt: now,
       updatedAt: now,
