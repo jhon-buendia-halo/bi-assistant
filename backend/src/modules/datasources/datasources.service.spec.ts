@@ -270,7 +270,7 @@ describe('DatasourcesService and the file kind (ADR-0052)', () => {
       config: { files: [] },
     });
 
-    const stored = repository.save.mock.calls[0][0].config as Record<
+    const stored = repository.save.mock.calls[0][0].config as unknown as Record<
       string,
       unknown
     >;

@@ -82,7 +82,10 @@ async function sheetFirstRow(
  * An Excel serial number (days since 1899-12-30) in a DATE or TIMESTAMP
  * column as `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`; any other cell as it is.
  */
-export function excelSerialAsDate(cell: Cell, type: string | undefined): Cell {
+export function excelSerialAsDate<T extends Cell | number | boolean>(
+  cell: T,
+  type: string | undefined,
+): T | string {
   if (cell === null || !type || !/^(DATE|TIMESTAMP)/.test(type)) return cell;
   const serial = Number(cell);
   if (!Number.isFinite(serial) || String(cell).trim() === '') return cell;
