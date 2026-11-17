@@ -1018,11 +1018,18 @@ test.describe('Feature: Workflows (the designer)', () => {
           const plan = await canvas.getByTestId('workflow-node-plan').boundingBox();
           const clarify = await canvas.getByTestId('workflow-node-clarify').boundingBox();
           expect(clarify!.y).toBeGreaterThan(plan!.y + plan!.height);
-          await expect(canvas.getByTestId('workflow-edge-label-plan-clarify')).toHaveText(
+          // Each branch label carries its note under it (R42).
+          await expect(canvas.getByTestId('workflow-edge-label-plan-clarify')).toContainText(
             'Needs clarification',
           );
-          await expect(canvas.getByTestId('workflow-edge-label-validate-analyse')).toHaveText(
+          await expect(canvas.getByTestId('workflow-edge-note-plan-clarify')).toHaveText(
+            'The question can be read more than one way: the run waits for you to pick.',
+          );
+          await expect(canvas.getByTestId('workflow-edge-label-validate-analyse')).toContainText(
             'Retry once',
+          );
+          await expect(canvas.getByTestId('workflow-edge-note-validate-analyse')).toHaveText(
+            'A check failed: the analyst tries once more, told what failed.',
           );
           await expect(canvas.getByTestId('workflow-connector-validate-analyse')).toHaveAttribute(
             'data-kind',

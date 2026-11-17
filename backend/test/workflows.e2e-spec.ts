@@ -552,9 +552,24 @@ describe('The workflow catalogue (API)', () => {
       const { edges } = (
         await http().get('/workflows/answer-business-question').expect(200)
       ).body as {
-        edges: { from: string; to: string; kind: string; label?: string }[];
+        edges: {
+          from: string;
+          to: string;
+          kind: string;
+          label?: string;
+          note?: string;
+        }[];
       };
-      expect(edges).toEqual([
+      // Every labelled edge has a note (workflows R42); the flow is the rest.
+      expect(edges.filter((edge) => edge.label && !edge.note)).toEqual([]);
+      expect(
+        edges.map(({ from, to, kind, label }) => ({
+          from,
+          to,
+          kind,
+          ...(label ? { label } : {}),
+        })),
+      ).toEqual([
         {
           from: 'start',
           to: 'receive-question',
