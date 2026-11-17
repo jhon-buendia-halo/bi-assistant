@@ -62,6 +62,7 @@ const DIALECTS: Record<string, string> = {
   postgres: 'PostgreSQL',
   databricks: 'Databricks SQL',
   rest: 'SQLite (REST API datasource)',
+  file: 'DuckDB',
 };
 
 /**

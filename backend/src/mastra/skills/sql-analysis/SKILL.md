@@ -1,6 +1,6 @@
 ---
 name: sql-analysis
-description: Use when writing the SQL of an analysis — a ranking or top-N that may tie, a ratio or share, a period-over-period comparison, a distinct count across joins, columns with NULLs, or a query for a specific datasource dialect (PostgreSQL, Databricks SQL, SQLite).
+description: Use when writing the SQL of an analysis — a ranking or top-N that may tie, a ratio or share, a period-over-period comparison, a distinct count across joins, columns with NULLs, or a query for a specific datasource dialect (PostgreSQL, Databricks SQL, SQLite, DuckDB).
 ---
 
 # SQL analysis patterns
@@ -43,4 +43,5 @@ Write one read-only SELECT (or WITH) per call, in the dialect of the entity's da
 - PostgreSQL: `ILIKE` for case-insensitive matching; `::numeric` casts; `date_trunc`, `EXTRACT(YEAR FROM d)`; `FILTER (WHERE …)` on aggregates; identifiers in double quotes.
 - Databricks SQL: `catalog.schema.table` names; `lower(c) LIKE` for case-insensitive matching; `date_trunc('MONTH', d)`, `year(d)`; `count_if(cond)`; identifiers in backticks.
 - SQLite (REST API datasets): no `ILIKE` (`LIKE` is case-insensitive for ASCII); dates are text, so use `strftime`; no `FULL OUTER JOIN` in older versions; `CAST(x AS REAL)` before dividing.
+- DuckDB (Excel / CSV datasets): PostgreSQL-like (`ILIKE`, `::` casts, `date_trunc`, `QUALIFY`, `GROUP BY ALL`); `strftime` not `to_char`; `/` on integers gives a DOUBLE, `//` is integer division; spreadsheet numbers are DOUBLE and a column may be text, so `TRY_CAST` before arithmetic.
 - Before filtering on a text value, check its exact spelling and case with [[tool:sample_rows]] or the sample values `describe_entity` shows.
