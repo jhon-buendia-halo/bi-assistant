@@ -2,17 +2,18 @@
 // Deterministic QA for one roadmap story (delivery.md 13, roadmap 0.4.5).
 //   node scripts/qa.mjs <roadmap-id> --fast|--gate [--base <ref>] [--rebuild] [--no-demo] [--dry-run]
 //   node scripts/qa.mjs <roadmap-id> --draft-impact [--base <ref>] [--dry-run]
-// --fast: builds, then related unit tests and check-specs in parallel, the
+// --fast: builds, then related unit tests and check-specs in parallel (and
+//         the backend API-level E2E specs when backend/ changed), the
 //         selected Playwright specs, then the demo (evidence/<id>/demo.webm,
 //         or demo.txt with no UI or with --no-demo).
 // --gate: builds, then the full unit suites, backend lint and check-specs in
-//         parallel, the step-6 Playwright list with JSON/HTML reporters, then
+//         parallel, the backend API-level E2E specs, the step-6 Playwright list with JSON/HTML reporters, then
 //         evidence/<id>/tests.md (--no-demo skips the demo evidence check).
 // --draft-impact: writes a draft evidence/<id>/e2e-impact.md from the diff,
 //         with the --fast spec selection; never overwrites.
 //   node scripts/qa.mjs --free [--base <ref>] [--rebuild] [--dry-run]
 // --free: Free style checks with no story: build, full unit suites, backend
-//         lint and check-specs in parallel, then the Playwright specs the
+//         lint and check-specs in parallel, the backend API-level E2E specs, then the Playwright specs the
 //         --fast selection picks; reports in .qa-reports/free/, nothing under
 //         evidence/, no demo.
 // The build is skipped when backend/dist and backend/public are newer than
@@ -252,6 +253,19 @@ async function main() {
   const jest = 'npx jest';
   const ngTest = 'npx ng test --watch=false --browsers=ChromeHeadless';
   /**
+   * The backend API-level E2E specs (backend/test/*.e2e-spec.ts, delivery.md
+   * 13): the built backend in its own process, the stub model, the real
+   * Mastra engine. Alone after the others: each spec boots backends, and the
+   * live ones read the shared Postgres on 55432 (they skip without it).
+   */
+  const apiE2e = {
+    name: 'backend API e2e',
+    command: `${jest} --config ./test/jest-e2e.json --json --outputFile=${JSON.stringify(path.join(reportDir, 'jest-e2e.json'))}`,
+    cwd: backend,
+    counts: () => readJson(path.join(reportDir, 'jest-e2e.json'), jestCounts),
+    solo: true,
+  };
+  /**
    * The steps between the build and Playwright. They run in parallel, except
    * the `solo` ones: Karma's browser tests are timing-sensitive and leaked
    * HTTP requests under the CPU load of Jest and ESLint (3 of 5 gate runs on
@@ -264,6 +278,8 @@ async function main() {
       if (backendFiles.length) {
         plan.push({ name: 'backend unit (related)', command: `${jest} --findRelatedTests ${backendFiles.join(' ')} --passWithNoTests`, cwd: backend });
       }
+      // A change under backend/ (or to the shared stub model) runs the API-level E2E specs.
+      if (changed.some((f) => f.startsWith('backend/') || f.startsWith('frontend/e2e/helpers/'))) plan.push(apiE2e);
       const frontendSpecs = frontendRelated(changed, fs.existsSync, root);
       if (frontendSpecs.length) {
         plan.push({
@@ -285,6 +301,7 @@ async function main() {
         counts: () => readJson(path.join(reportDir, 'jest.json'), jestCounts),
       },
       { name: 'frontend unit', command: ngTest, cwd: frontend, counts: karmaCounts, solo: true },
+      apiE2e,
       {
         name: 'backend lint',
         command: 'npx eslint "{src,apps,libs,test}/**/*.ts" --rule "{\\"prettier/prettier\\": [\\"error\\", {\\"endOfLine\\": \\"auto\\"}]}"',

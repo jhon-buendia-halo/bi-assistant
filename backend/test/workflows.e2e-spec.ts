@@ -98,13 +98,15 @@ describe('The workflow catalogue (API)', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it('lists the four code workflows, Answer a Business Question and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
+  it('lists the six code workflows, Answer a Business Question and Assess Data Readiness first, on a fresh data dir (R1)', async () => {
     const listed = await workflows();
     expect(listed.map((w) => w.id)).toEqual([
       'answer-business-question',
       'data-readiness-assessment',
       'recreate-dashboard',
       'map-dashboard-data',
+      'review-website',
+      'consumption-gap-analysis',
     ]);
     expect(listed.slice(0, 2)).toEqual([
       {
@@ -317,6 +319,8 @@ describe('The workflow catalogue (API)', () => {
         'data-readiness-assessment',
         'recreate-dashboard',
         'map-dashboard-data',
+        'review-website',
+        'consumption-gap-analysis',
       ]);
       await notFound(`agent:${liveId}`);
       await notFound(`agent:${draftId}`);
