@@ -1938,9 +1938,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       waitingFor: { stepId: 'clarify', expired: true },
       finishedAt: expect.any(String) as unknown,
     });
-    expect(ctx.mastra.discardSuspendedWorkflowRuns).toHaveBeenCalledWith(
-      'answer-business-question',
-    );
+    // No key: every registered workflow's leftover snapshots are deleted.
+    expect(ctx.mastra.discardSuspendedWorkflowRuns).toHaveBeenCalledWith();
     // The run keeps its memory threads, as any finished run does.
     expect(ctx.mastra.deleteMemoryThread).not.toHaveBeenCalled();
   });
