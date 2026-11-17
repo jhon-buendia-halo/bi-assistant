@@ -70,8 +70,12 @@ export class DatasourcesService {
         return this.rest;
       case 'file':
         return this.file;
-      default:
+      case 'databricks':
         return this.databricks;
+      default:
+        throw new BadRequestException(
+          `Unknown datasource kind "${String(kind)}"`,
+        );
     }
   }
 
@@ -368,14 +372,17 @@ export class DatasourcesService {
       }
       return { ...incoming, auth };
     }
-    const incoming = config as PostgresConfig;
-    const stored = saved.config as PostgresConfig;
-    return {
-      ...incoming,
-      password:
-        !incoming.password || incoming.password === MASKED
-          ? stored.password
-          : incoming.password,
-    };
+    if (kind === 'postgres') {
+      const incoming = config as PostgresConfig;
+      const stored = saved.config as PostgresConfig;
+      return {
+        ...incoming,
+        password:
+          !incoming.password || incoming.password === MASKED
+            ? stored.password
+            : incoming.password,
+      };
+    }
+    throw new BadRequestException(`Unknown datasource kind "${String(kind)}"`);
   }
 }

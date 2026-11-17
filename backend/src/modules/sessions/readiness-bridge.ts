@@ -5,6 +5,7 @@
 // orchestrator only wires it in.
 
 import { HttpException } from '@nestjs/common';
+import { unsupportedKindMessage } from '../datasources/kind-refusal';
 import type { DatasourceKind } from '../datasources/entities/datasource.entity';
 import type {
   ReadinessFindingsPage,
@@ -52,8 +53,6 @@ export const FINDINGS_PAGE_SIZE = 50;
 const REPORT_CACHE_SIZE = 50;
 
 const READINESS_KINDS: readonly DatasourceKind[] = ['postgres', 'databricks'];
-const UNSUPPORTED_KIND =
-  'Data readiness supports PostgreSQL and Databricks datasources only';
 const KIND_LABELS: Partial<Record<DatasourceKind, string>> = {
   postgres: 'PostgreSQL',
   databricks: 'Databricks',
@@ -619,7 +618,12 @@ export class ReadinessBridge implements ReadinessToolServices {
       this.deps,
       sessionId,
       datasetName,
-      UNSUPPORTED_KIND,
+      (dataset) =>
+        unsupportedKindMessage(
+          'Data Readiness',
+          dataset.name,
+          dataset.datasourceKind,
+        ),
     );
   }
 }
@@ -634,7 +638,7 @@ export async function resolveSessionDataset(
   deps: Pick<ReadinessBridgeDeps, 'sessionDatasetNames' | 'datasets'>,
   sessionId: string,
   datasetName: string | undefined,
-  unsupported: string,
+  unsupported: (dataset: ReadinessDataset) => string,
 ): Promise<ReadinessDataset & { datasourceId: string }> {
   const names = await deps.sessionDatasetNames(sessionId);
   const list = names.join(', ');
@@ -665,7 +669,7 @@ export async function resolveSessionDataset(
     !dataset.datasourceKind ||
     !READINESS_KINDS.includes(dataset.datasourceKind)
   ) {
-    throw new Error(unsupported);
+    throw new Error(unsupported(dataset));
   }
   return { ...dataset, datasourceId: dataset.datasourceId };
 }

@@ -1398,7 +1398,7 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 - Response `201`: `ReadinessReport` ([data-model.md](data-model.md)). It carries `notProfiled?: { entity, reason: "too-large"|"timed-out", rowCount? }[]` for entities whose column checks were skipped (ADR-0033); absent when none.
 - Errors:
   - 400 `"datasourceId is required"`;
-  - 400 `"Data readiness supports PostgreSQL and Databricks datasources only"` (a `rest` datasource);
+  - 400 `Data Readiness supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`);
   - 400 `"entities must be an array of entity keys"` when `entities` is present (and not null) but is not an array of strings;
   - 400 `"None of the entities to assess exist"`, also for a whole-datasource assessment of a datasource with no entity;
   - 404 `"Datasource \"<id>\" not found"`;
@@ -1435,7 +1435,7 @@ Controller prefix `/synthetic-data`. Capability: [synthetic-data](../capabilitie
   - 400 `datasetName is required`
   - 404 `Dataset "<name>" not found`
   - 400 `Dataset "<name>" has no datasource`
-  - 400 `Profiling a sample supports PostgreSQL and Databricks datasets only`
+  - 400 `Synthetic data supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`)
   - 400 `tables must be an array of entity keys`
   - 400 `"<key>" is not a table of dataset "<name>"`
   - 400 `Choose at most 50 tables`
