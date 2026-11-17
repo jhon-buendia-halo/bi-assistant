@@ -1640,3 +1640,122 @@ test('the Workflows pages have no detectable accessibility violations in either 
   await expect(page.getByTestId('workflow-run-activity')).toHaveText('Waiting for your answer');
   await scan('Answer a Business Question page, a run waiting for my answer');
 });
+
+test.describe('Feature: Workflows (Builder and Business views)', () => {
+  function viewButton(page: Page, name: 'Builder' | 'Business'): Locator {
+    return page
+      .getByRole('group', { name: 'View', exact: true })
+      .getByRole('button', { name, exact: true });
+  }
+
+  function businessView(page: Page): Locator {
+    return page.getByTestId('workflow-business-view');
+  }
+
+  test('I run a workflow in the Business view', { tag: ['@demo'] }, async ({ page }) => {
+    await scenarioStep(
+      page,
+      'Given I am on the "Answer a Business Question" page in the Builder view',
+      async () => {
+        // The theme follows the OS so the axe scan below can try both; it reloads the app.
+        await followOsTheme(page);
+        await openWorkflows(page);
+        await openWorkflow(page, V2_ID, V2);
+        await expect(viewButton(page, 'Builder')).toHaveAttribute('aria-pressed', 'true');
+        await expect(viewButton(page, 'Business')).toHaveAttribute('aria-pressed', 'false');
+        await expect(drawnSteps(page)).toHaveText(V2_STEPS);
+        await expect(runDock(page)).toBeVisible();
+      },
+    );
+    await scenarioStep(page, `When I click "Business" in the header's View control`, async () => {
+      await viewButton(page, 'Business').click();
+    });
+    await scenarioStep(
+      page,
+      'Then the canvas and the Run panel are gone, and the question, the datasets and Execute fill one column',
+      async () => {
+        await expect(viewButton(page, 'Business')).toHaveAttribute('aria-pressed', 'true');
+        await expect(businessView(page)).toBeVisible();
+        await expect(page.getByTestId('workflow-canvas')).toHaveCount(0);
+        await expect(runDock(page)).toHaveCount(0);
+        const view = businessView(page);
+        await expect(view.getByLabel('Question', { exact: true })).toBeVisible();
+        await expect(view.getByTestId('workflow-input-datasets')).toBeVisible();
+        await expect(view.getByTestId('workflow-run')).toHaveText('Execute');
+        await expect(view.getByRole('heading', { name: 'Chat', exact: true })).toHaveCount(0);
+        // The form is on top: the workflow's name and hint come under it.
+        const form = await view.getByTestId('workflow-run-composer').boundingBox();
+        const empty = await view.getByTestId('workflow-run-empty').boundingBox();
+        expect(form!.y).toBeLessThan(empty!.y);
+        await expect(view.getByTestId('workflow-run-empty')).toContainText(
+          'Pick the datasets above and type a question.',
+        );
+      },
+    );
+    await scenarioStep(
+      page,
+      `When I pick "${WORLD_CUP_DATASET}", type "${QUESTION}" and click Execute`,
+      async () => {
+        await fillRun(page, QUESTION, WORLD_CUP_DATASET);
+        await businessView(page).getByTestId('workflow-run').click();
+      },
+    );
+    await scenarioStep(
+      page,
+      'Then I see the answer under the form, with no agent team and no How it ran',
+      async () => {
+        const view = businessView(page);
+        await expect(view.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
+        await expect(view.getByTestId('run-answer')).toContainText(ANSWER);
+        await expect(view.getByTestId('workflow-run-question')).toHaveText(QUESTION);
+        await expect(view.getByTestId('workflow-run-team')).toHaveCount(0);
+        await expect(view.getByTestId('workflow-run-story')).toHaveCount(0);
+        await expect(view.getByTestId('workflow-run-tool')).toHaveCount(0);
+        // Under a stored answer, Follow up takes the input form's place, below the answer.
+        const answer = await view.getByTestId('run-answer').boundingBox();
+        const followUp = await view.getByTestId('workflow-follow-up-input').boundingBox();
+        expect(followUp!.y).toBeGreaterThan(answer!.y);
+      },
+    );
+    await scenarioStep(page, 'And the Business view has no detectable accessibility violations', async () => {
+      await page.addScriptTag({ content: axe.source });
+      for (const theme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await page.waitForTimeout(500);
+        const results = await page.evaluate(async () =>
+          (window as unknown as { axe: typeof axe }).axe.run(document),
+        );
+        expect(results.violations, `Business view, ${theme}`).toEqual([]);
+      }
+    });
+    await scenarioStep(page, 'When I click "Builder"', async () => {
+      await viewButton(page, 'Builder').click();
+    });
+    await scenarioStep(
+      page,
+      'Then the canvas and the Run panel are back with the same answer',
+      async () => {
+        await expect(businessView(page)).toHaveCount(0);
+        await expect(drawnSteps(page)).toHaveText(V2_STEPS);
+        await expect(runDock(page).getByTestId('run-answer')).toContainText(ANSWER);
+        await expect(runDock(page).getByTestId('workflow-run-team')).toBeVisible();
+      },
+    );
+    await scenarioStep(
+      page,
+      `When I click "Business", go back to Workflows and open "${V2}" again`,
+      async () => {
+        await viewButton(page, 'Business').click();
+        await expect(businessView(page)).toBeVisible();
+        await page.getByTestId('workflow-breadcrumb').click();
+        await openWorkflow(page, V2_ID, V2);
+      },
+    );
+    await scenarioStep(page, 'Then it opens in the Business view', async () => {
+      await expect(viewButton(page, 'Business')).toHaveAttribute('aria-pressed', 'true');
+      await expect(businessView(page)).toBeVisible();
+      await expect(page.getByTestId('workflow-canvas')).toHaveCount(0);
+    });
+  });
+});

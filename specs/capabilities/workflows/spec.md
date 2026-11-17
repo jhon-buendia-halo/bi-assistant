@@ -111,6 +111,10 @@ Consumption Gap Analysis (2026-11-16, roadmap 1.30; ADR-0051)
   - Lineage SHALL be inferred, never assumed (ADR-0051): candidate column pairs by name and type, each checked by a bounded read-only query of how many values match. The lineage checks and the probes SHALL be read-only queries recorded as sources of the answer, each with its rationale, so the query inspector opens them (R31); a query that fails SHALL be a source with its error, never a failed run.
   - The run's result SHALL be a report drawn by a fixed runtime (no model writes its markup), shown read-only on the run, and an answer written in code that never names a column the catalogs lack. Every fix SHALL start in the lowest layer that has the data, and its proposed change SHALL never be run.
   - A stop SHALL end the run at the step it reaches, `stopped`, storing no report.
+- R38. **Builder and Business views** (2026-11-17). A workflow's page SHALL offer two views, picked in its header's **View** control ([../../system/ui.md](../../system/ui.md) 4.4b), for every workflow:
+  - **Builder**, for people who build and debug workflows: the page as R7, R12 and R13 describe it (the canvas, the node dialogs and the Run panel with its Chat).
+  - **Business**, for people who fill in a workflow's input and read its outcome: the Run panel's Chat alone in one column, without the canvas or the Run panel. The input form (the same fields, rules and errors as the Run panel's composer, R11, R14) SHALL come first and the result under it: the status line, the answer view with its rating, visuals, scorecard and report, the Output of a run without an answer, Run again, New question and Follow up. The Business view SHALL NOT show the Chat heading, the agent team, the live Thinking and tool calls or How it ran; the answer forming SHALL still stream. Its answer SHALL keep the query inspector (R31): a figure or query opens in the same sheet as in Builder.
+  - Builder SHALL be the view until one is picked. The last view picked SHALL be kept on the device (`localStorage` `qti.workflow-view`) and every workflow page SHALL open in it. Switching views SHALL keep the shown run, its input and any run in progress.
 
 ## Edge cases and errors
 
@@ -142,6 +146,7 @@ Consumption Gap Analysis (2026-11-16, roadmap 1.30; ADR-0051)
 - The **Workflows** rail item, between Datasets and Agents (lucide `workflow` icon; [../../system/ui.md](../../system/ui.md) 1.3), and the `workflows` and `workflow-detail` views (ui.md 1.4).
 - The Workflows page: the note `Each workflow runs on an input. Its steps call agents, and agents use skills and tools.`, the search, the Official section and the workflow card with **Run** (ui.md 4.4a).
 - A workflow's page, an n8n-style designer (ui.md 4.4b): the header with the breadcrumb, the name, id and kind; the left-to-right canvas with Execute workflow and its zoom toolbar; the Run panel on the right (resizable from its left edge, maximizable, foldable to a strip; its header holds the run's summary and activity line, its body the Chat); the node dialog (Input, Parameters and Settings, Output), with the Agents links on Start. The app's right panel is not shown on this page.
+- A workflow page's **View** control in its header, **Builder** and **Business** (R38; ui.md 4.4b): Business shows the input form and, under it, the result in one column.
 - Answer a Business Question's Run panel (ui.md 4.4b): **Chat** (the question bubble, the waiting card, the status line, the live Thinking and tool calls, the answer view (`run-answer`), the composer with the question and the dataset picker, Execute and Stop, Follow up and New question) in the Run panel; **How it ran** under the answer once the run has ended (the run's figures and one line per step); each node's live state and run line on the canvas.
 - A workflow's card: its kind chip and **Run** (ui.md 4.4a); its page's **Execute workflow** on the canvas, and the Run panel's composer with **Execute**, with the run status on the canvas nodes (ui.md 4.4b).
 - No control creates, edits, reorders or deletes a workflow or a step (R3).
@@ -246,6 +251,18 @@ Feature: Workflows
   Scenario: A question that needs clarification waits for my answer and continues the same run
 
   Scenario: The agent asks mid-analysis and continues after my answer
+
+  @demo
+  Scenario: I run a workflow in the Business view
+    Given I am on the "Answer a Business Question" page in the Builder view
+    When I click "Business" in the header's View control
+    Then the canvas and the Run panel are gone, and the question, the datasets and Execute fill one column
+    When I pick "World Cup Core", type "How many matches were played in each stage?" and click Execute
+    Then I see the answer under the form, with no agent team and no How it ran
+    When I click "Builder"
+    Then the canvas and the Run panel are back with the same answer
+    When I click "Business", go back to Workflows and open "Answer a Business Question" again
+    Then it opens in the Business view
 ```
 
 ### Feature: Workflow runs

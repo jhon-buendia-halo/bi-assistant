@@ -7,6 +7,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { WorkflowDetail } from '../../models/workflow.model';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { FIXTURE_WORKFLOW } from '../workflow-node-dialog/workflow-node.testing';
+import { WORKFLOW_VIEW_STORAGE_KEY } from '../../services/workflow-view';
 import { WorkflowDetailPage } from './workflow-detail';
 
 const STEP = (id: string, title: string) => ({
@@ -65,6 +66,8 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     http = TestBed.inject(HttpTestingController);
     designer = TestBed.inject(WorkflowDesigner);
     events = [];
+    // The kept view is shared browser state: every test starts in Builder.
+    localStorage.removeItem(WORKFLOW_VIEW_STORAGE_KEY);
   });
 
   afterEach(() => http.verify());
@@ -320,4 +323,98 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     expect(document.activeElement).toBe(opener);
     opener.remove();
   }));
+
+  describe('the Builder and Business views (R38)', () => {
+    const pressed = (testId: string) => q(testId)?.getAttribute('aria-pressed');
+
+    const answeredRun = () =>
+      designer.run.set({
+        id: 'run-1',
+        workflowId: 'three-steps',
+        workflowName: 'Three steps',
+        input: { text: 'a b' },
+        status: 'success',
+        steps: [],
+        datasets: [],
+        startedAt: '2026-11-15T10:00:00.000Z',
+        answer: {
+          role: 'assistant',
+          content: 'Two words',
+          at: '2026-11-15T10:00:01.000Z',
+          data: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1, rows: [{ n: 1 }] }],
+        },
+      });
+
+    it('opens in Builder: the View control in the header, the canvas and the Run panel', () => {
+      open(THREE_STEPS);
+      const group = el.querySelector('header [data-testid="workflow-view"]')!;
+      expect(group.getAttribute('role')).toBe('group');
+      expect(
+        el.querySelector(`#${group.getAttribute('aria-labelledby')}`)?.textContent?.trim(),
+      ).toBe('View');
+      expect(text('workflow-view-builder')).toBe('Builder');
+      expect(text('workflow-view-business')).toBe('Business');
+      expect(pressed('workflow-view-builder')).toBe('true');
+      expect(pressed('workflow-view-business')).toBe('false');
+      expect(q('workflow-canvas')).not.toBeNull();
+      expect(q('workflow-run-dock')).not.toBeNull();
+      expect(q('workflow-business-view')).toBeNull();
+    });
+
+    it('Business shows the input form alone in one column, without the canvas or the Run panel, and is kept', () => {
+      open(THREE_STEPS);
+      q('workflow-view-business')!.click();
+      fixture.detectChanges();
+      expect(pressed('workflow-view-business')).toBe('true');
+      expect(pressed('workflow-view-builder')).toBe('false');
+      expect(q('workflow-canvas')).toBeNull();
+      expect(q('workflow-run-dock')).toBeNull();
+      const view = q('workflow-business-view')!;
+      const chat = view.querySelector('[data-testid="workflow-run-chat"]')!;
+      const composer = chat.querySelector('[data-testid="workflow-run-composer"]')!;
+      // The form comes first, above the result.
+      expect(composer.parentElement!.classList).toContain('order-first');
+      expect(chat.querySelector('[data-testid="workflow-input-text"]')).not.toBeNull();
+      expect(text('workflow-run-empty')).toContain('Type a question above.');
+      expect(chat.textContent).not.toContain('Chat');
+      expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('business');
+
+      // Another workflow page opens in the kept view; Builder brings the designer back.
+      fixture.destroy();
+      open(THREE_STEPS);
+      expect(pressed('workflow-view-business')).toBe('true');
+      q('workflow-view-builder')!.click();
+      fixture.detectChanges();
+      expect(q('workflow-canvas')).not.toBeNull();
+      expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('builder');
+    });
+
+    it('Business shows the answer without the agent team or How it ran; a query still opens in the sheet', fakeAsync(() => {
+      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
+      open(THREE_STEPS);
+      answeredRun();
+      fixture.detectChanges();
+      const view = q('workflow-business-view')!;
+      expect(view.querySelector('[data-testid="run-answer"]')?.textContent).toContain('Two words');
+      expect(view.querySelector('app-workflow-run-team')).toBeNull();
+      expect(view.querySelector('app-workflow-run-story')).toBeNull();
+
+      designer.openQuery(0, null);
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      const sheet = q('query-inspector-sheet')!;
+      expect(sheet.contains(q('query-inspector'))).toBe(true);
+      expect(sheet.parentElement).toBe(view.parentElement);
+      designer.closeQuery();
+      fixture.detectChanges();
+    }));
+
+    it('an unknown kept value opens in Builder', () => {
+      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'reports');
+      open(THREE_STEPS);
+      expect(pressed('workflow-view-builder')).toBe('true');
+      expect(q('workflow-canvas')).not.toBeNull();
+    });
+  });
 });

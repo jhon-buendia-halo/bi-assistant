@@ -4,6 +4,7 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   untracked,
   viewChild,
@@ -170,6 +171,14 @@ export class WorkflowRunChat {
   protected readonly SquarePen = SquarePen;
   protected readonly Wrench = Wrench;
   protected readonly X = X;
+
+  /**
+   * `panel`: the Run panel's Chat beside the canvas. `business`: the page's
+   * Business view (R38): the input form above the result, no Chat heading,
+   * no agent team, live tool calls or How it ran; the page scrolls, not the log.
+   */
+  readonly variant = input<'panel' | 'business'>('panel');
+  protected readonly business = computed(() => this.variant() === 'business');
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
@@ -523,8 +532,13 @@ export class WorkflowRunChat {
     this.workflowsNav.openWorkflow(MAP_WORKFLOW_ID);
   }
 
-  /** The line under the workflow's name before a run. */
+  /** The line under the workflow's name before a run; the form is above it in the Business view. */
   protected readonly emptyHint = computed(() => {
+    const hint = this.composerHint();
+    return this.business() ? hint.replace('below', 'above') : hint;
+  });
+
+  private readonly composerHint = computed(() => {
     const workflow = this.designer.workflow();
     const datasets = workflow?.input.some(
       (field) =>

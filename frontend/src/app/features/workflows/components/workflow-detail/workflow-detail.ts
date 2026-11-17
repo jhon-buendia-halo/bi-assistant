@@ -7,19 +7,32 @@ import {
   inject,
   input,
   output,
+  signal,
   untracked,
 } from '@angular/core';
 import { QueryInspector } from '../../../../shared/query-evidence/query-inspector/query-inspector';
 import { QUERY_EVIDENCE_API } from '../../../../shared/query-evidence/query-evidence.model';
 import { focusQueryOpener } from '../../../../shared/query-evidence/query-opener';
 import { RunQueryEvidenceApi } from '../../services/run-query-evidence-api';
-import { Loader2, LucideAngularModule, TriangleAlert } from 'lucide-angular';
+import {
+  FileText,
+  Loader2,
+  LucideAngularModule,
+  TriangleAlert,
+  Workflow,
+} from 'lucide-angular';
 import { WorkflowDesigner } from '../../services/workflow-designer.service';
 import { workflowKindLabel } from '../../services/workflows.util';
 import { WorkflowCanvas } from '../workflow-canvas/workflow-canvas';
 import { WorkflowNodeDialog } from '../workflow-node-dialog/workflow-node-dialog';
 import { StoryQueryOpen } from '../workflow-step-story/workflow-step-story';
 import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
+import { WorkflowRunChat } from '../workflow-run-chat/workflow-run-chat';
+import {
+  WorkflowView,
+  readWorkflowView,
+  writeWorkflowView,
+} from '../../services/workflow-view';
 
 /**
  * A workflow's page, laid out as an n8n-style designer (workflows R6, R7,
@@ -28,7 +41,8 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
  * canvas, left to right, with Execute workflow at its top-right; the Run
  * panel on its right (the Chat, then How it ran); and a node's
  * dialog over the page. The app's right panel is not used on this page.
- * Read-only (R3).
+ * Read-only (R3). The header's View control switches to the Business view
+ * (R38): the Run panel's Chat alone, in one column, without the canvas.
  */
 @Component({
   selector: 'app-workflow-detail',
@@ -37,6 +51,7 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
     QueryInspector,
     WorkflowCanvas,
     WorkflowNodeDialog,
+    WorkflowRunChat,
     WorkflowRunDock,
   ],
   templateUrl: './workflow-detail.html',
@@ -46,6 +61,8 @@ import { WorkflowRunDock } from '../workflow-run-dock/workflow-run-dock';
 export class WorkflowDetailPage {
   readonly Loader2 = Loader2;
   readonly TriangleAlert = TriangleAlert;
+  readonly Workflow = Workflow;
+  readonly FileText = FileText;
 
   protected readonly designer = inject(WorkflowDesigner);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -69,6 +86,17 @@ export class WorkflowDetailPage {
     const workflow = this.designer.workflow();
     return workflow === null ? '' : workflow.missingDatasets.join(', ');
   });
+
+  /** Builder (canvas + Run panel) or Business (form + result), kept on this device (R38). */
+  readonly view = signal<WorkflowView>(readWorkflowView());
+
+  /** The header's View control: switch, and keep the choice for every workflow. */
+  setView(view: WorkflowView): void {
+    if (this.view() === view) return;
+    this.designer.closeNode();
+    this.view.set(view);
+    writeWorkflowView(view);
+  }
 
   constructor() {
     effect(() => {

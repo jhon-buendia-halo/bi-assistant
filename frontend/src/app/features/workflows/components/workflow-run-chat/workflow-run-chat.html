@@ -3,14 +3,18 @@
        question, the run's answer as it forms, How it ran once it ended, and
        the composer. Each step's state is on the canvas. -->
   <div
-    class="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 px-4 pt-2.5 pb-1"
+    class="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"
+    [class]="business() ? 'pt-4 pb-1' : 'px-4 pt-2.5 pb-1'"
+    [class.hidden]="business() && designer.runResult() === null"
   >
-    <h3
-      class="m-0 mr-auto flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
-    >
-      <lucide-angular [img]="MessageSquare" [size]="12" />
-      Chat
-    </h3>
+    @if (!business()) {
+      <h3
+        class="m-0 mr-auto flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-fg-muted uppercase"
+      >
+        <lucide-angular [img]="MessageSquare" [size]="12" />
+        Chat
+      </h3>
+    }
     @if (designer.runResult() !== null && !designer.running()) {
       <!-- Run again: the composer opens with the shown run's whole input -->
       @if (designer.canRunAgain()) {
@@ -69,11 +73,12 @@
   <!-- Focusable: it scrolls (axe scrollable-region-focusable). -->
   <section
     #log
-    aria-label="Chat"
-    tabindex="0"
+    [attr.aria-label]="business() ? 'Result' : 'Chat'"
+    [attr.tabindex]="business() ? null : 0"
     data-testid="workflow-run-chat-log"
     (scroll)="onLogScroll()"
-    class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
+    class="flex min-h-0 flex-1 flex-col gap-3 pb-3 focus-visible:outline-2 focus-visible:outline-focus"
+    [class]="business() ? 'pt-2' : 'overflow-y-auto px-4'"
   >
     @if (designer.runResult(); as result) {
       @if (designer.contextRun(); as earlier) {
@@ -87,7 +92,12 @@
       @if (designer.shownQuestion(); as question) {
         <p
           data-testid="workflow-run-question"
-          class="m-0 max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg-strong"
+          class="m-0 break-words whitespace-pre-wrap text-fg-strong"
+          [class]="
+            business()
+              ? 'text-[15px] leading-6 font-semibold'
+              : 'max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px]'
+          "
         >
           {{ question }}
         </p>
@@ -127,12 +137,15 @@
         {{ runStatus() }}
       </p>
 
-      <!-- The run's agents as a team: who did what, and the handoffs (ui.md 4.4b). -->
-      @defer (on immediate) {
-        <app-workflow-run-team
-          [stories]="designer.agentStories()"
-          (openNode)="designer.openNode($event)"
-        />
+      <!-- The run's agents as a team: who did what, and the handoffs (ui.md
+           4.4b). Not in the Business view (R38). -->
+      @if (!business()) {
+        @defer (on immediate) {
+          <app-workflow-run-team
+            [stories]="designer.agentStories()"
+            (openNode)="designer.openNode($event)"
+          />
+        }
       }
 
       @if (liveCodeProgress(); as progress) {
@@ -174,46 +187,49 @@
       @if (liveAgentStep()) {
         <!-- The running agent step, live: Thinking, its tool calls and the answer forming -->
         <div class="flex flex-col gap-2" data-testid="workflow-run-live">
-          <div class="flex min-w-0 items-center gap-2">
-            <lucide-angular
-              [img]="Brain"
-              [size]="14"
-              class="shrink-0 text-fg-muted"
-            />
-            <span class="text-[13px] font-medium text-fg">Thinking</span>
-            @if (reasoningSnippet()) {
-              <span
-                class="min-w-0 truncate rounded bg-surface-muted px-2 py-0.5 text-[12px] text-fg-muted"
-                >{{ reasoningSnippet() }}</span
-              >
-            }
-          </div>
-          @for (call of designer.toolCalls(); track $index) {
-            <div
-              class="flex min-w-0 items-center gap-2 text-fg-muted"
-              data-testid="workflow-run-tool"
-            >
-              <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
-              <span class="truncate font-mono text-[12px]">{{
-                call.name
-              }}</span>
-              @if (call.error) {
-                <span class="text-[12px] text-on-danger-soft">failed</span>
-              } @else if (call.rowCount !== undefined) {
-                <span class="text-[12px]">{{ call.rowCount }} rows</span>
-              } @else if (!call.finished) {
-                <lucide-angular
-                  [img]="Loader2"
-                  [size]="11"
-                  class="shrink-0 animate-spin"
-                />
-                @if (call.progress) {
-                  <span class="min-w-0 truncate text-[12px]">{{
-                    call.progress
-                  }}</span>
-                }
+          <!-- The Business view shows the answer forming, not the agent's work (R38) -->
+          @if (!business()) {
+            <div class="flex min-w-0 items-center gap-2">
+              <lucide-angular
+                [img]="Brain"
+                [size]="14"
+                class="shrink-0 text-fg-muted"
+              />
+              <span class="text-[13px] font-medium text-fg">Thinking</span>
+              @if (reasoningSnippet()) {
+                <span
+                  class="min-w-0 truncate rounded bg-surface-muted px-2 py-0.5 text-[12px] text-fg-muted"
+                  >{{ reasoningSnippet() }}</span
+                >
               }
             </div>
+            @for (call of designer.toolCalls(); track $index) {
+              <div
+                class="flex min-w-0 items-center gap-2 text-fg-muted"
+                data-testid="workflow-run-tool"
+              >
+                <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
+                <span class="truncate font-mono text-[12px]">{{
+                  call.name
+                }}</span>
+                @if (call.error) {
+                  <span class="text-[12px] text-on-danger-soft">failed</span>
+                } @else if (call.rowCount !== undefined) {
+                  <span class="text-[12px]">{{ call.rowCount }} rows</span>
+                } @else if (!call.finished) {
+                  <lucide-angular
+                    [img]="Loader2"
+                    [size]="11"
+                    class="shrink-0 animate-spin"
+                  />
+                  @if (call.progress) {
+                    <span class="min-w-0 truncate text-[12px]">{{
+                      call.progress
+                    }}</span>
+                  }
+                }
+              </div>
+            }
           }
           @if (designer.streamingText()) {
             <div
@@ -297,6 +313,7 @@
 
       <!-- How it ran (ui.md 4.4b): the ended run read step by step, folded under the answer. -->
       @if (
+        !business() &&
         result.status !== "running" &&
         result.status !== "suspended" &&
         !designer.running()
@@ -371,8 +388,19 @@
   </section>
 
   @if (canRun()) {
-    <!-- The composer: a follow-up under a stored answer, else the run's input -->
-    <div class="shrink-0 px-3 pb-3">
+    <!-- The composer: a follow-up under a stored answer, else the run's input.
+         In the Business view (R38) the input form comes first, above the result;
+         Follow up stays under it. -->
+    <div
+      class="shrink-0"
+      [class]="
+        business()
+          ? followUpMode()
+            ? 'pt-1 pb-2'
+            : 'order-first pb-2'
+          : 'px-3 pb-3'
+      "
+    >
       @if (followUpMode()) {
         <form
           data-testid="workflow-run-composer"
@@ -425,7 +453,8 @@
         <form
           data-testid="workflow-run-composer"
           aria-label="Input"
-          class="composer composer-form flex flex-col gap-2"
+          class="composer flex flex-col gap-2"
+          [class.composer-form]="!business()"
           [class.composer-dragging]="dragging()"
           (submit)="$event.preventDefault(); designer.execute()"
           (paste)="onPaste($event)"
@@ -454,311 +483,321 @@
             </button>
           }
           @if (!inputFolded()) {
-          @for (field of composerFields(); track field.name) {
-            @switch (field.type) {
-              @case ("boolean") {
-                <div class="flex flex-col gap-1">
-                  <label class="flex items-start gap-2 text-[13px] text-fg">
-                    <input
-                      type="checkbox"
+            @for (field of composerFields(); track field.name) {
+              @switch (field.type) {
+                @case ("boolean") {
+                  <div class="flex flex-col gap-1">
+                    <label class="flex items-start gap-2 text-[13px] text-fg">
+                      <input
+                        type="checkbox"
+                        [id]="inputId(field.name)"
+                        [attr.data-testid]="inputId(field.name)"
+                        [checked]="designer.checked(field.name)"
+                        [attr.aria-invalid]="
+                          fieldError(field.name) ? 'true' : null
+                        "
+                        [attr.aria-describedby]="describedBy(field.name)"
+                        (change)="onCheck(field.name, $event)"
+                        class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                      />
+                      <span>{{ field.label }}</span>
+                    </label>
+                    @if (field.help) {
+                      <p class="m-0 text-[12px] text-fg-muted">
+                        {{ field.help }}
+                      </p>
+                    }
+                    @if (fieldError(field.name); as message) {
+                      <p
+                        [id]="errorId(field.name)"
+                        [attr.data-testid]="errorId(field.name)"
+                        class="m-0 text-[12px] text-on-danger-soft"
+                      >
+                        {{ message }}
+                      </p>
+                    }
+                  </div>
+                }
+                @case ("datasets") {
+                  <div
+                    role="group"
+                    tabindex="-1"
+                    [attr.aria-labelledby]="inputId(field.name) + '-label'"
+                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
+                    [attr.aria-describedby]="describedBy(field.name)"
+                    data-testid="workflow-input-datasets"
+                    class="flex flex-col gap-1 outline-none"
+                  >
+                    <span
+                      [id]="inputId(field.name) + '-label'"
+                      class="text-[12px] font-medium text-fg-muted"
+                      >{{ field.label }}</span
+                    >
+                    @if (datasetChoices(field).length === 0) {
+                      <p class="m-0 text-[12px] text-fg-muted">
+                        No datasets yet — create one in Datasets first.
+                      </p>
+                    } @else {
+                      <app-dataset-picker
+                        [datasets]="datasetChoices(field)"
+                        [selected]="designer.picked(field.name)"
+                        [invalid]="fieldError(field.name) !== null"
+                        (selectedChange)="designer.setInput(field.name, $event)"
+                      />
+                    }
+                    @if (fieldError(field.name); as message) {
+                      <p
+                        [id]="errorId(field.name)"
+                        [attr.data-testid]="errorId(field.name)"
+                        class="m-0 text-[12px] text-on-danger-soft"
+                      >
+                        {{ message }}
+                      </p>
+                    }
+                  </div>
+                }
+                @case ("dataset") {
+                  <div class="flex flex-col gap-1">
+                    <label
+                      [for]="inputId(field.name)"
+                      class="text-[12px] font-medium text-fg-muted"
+                      >{{ field.label }}</label
+                    >
+                    <select
                       [id]="inputId(field.name)"
                       [attr.data-testid]="inputId(field.name)"
-                      [checked]="designer.checked(field.name)"
+                      [attr.aria-required]="field.required ? 'true' : null"
                       [attr.aria-invalid]="
                         fieldError(field.name) ? 'true' : null
                       "
                       [attr.aria-describedby]="describedBy(field.name)"
-                      (change)="onCheck(field.name, $event)"
-                      class="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-                    />
-                    <span>{{ field.label }}</span>
-                  </label>
-                  @if (field.help) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      {{ field.help }}
-                    </p>
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
+                      (change)="onInput(field.name, $event)"
+                      class="field"
                     >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("datasets") {
-                <div
-                  role="group"
-                  tabindex="-1"
-                  [attr.aria-labelledby]="inputId(field.name) + '-label'"
-                  [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                  [attr.aria-describedby]="describedBy(field.name)"
-                  data-testid="workflow-input-datasets"
-                  class="flex flex-col gap-1 outline-none"
-                >
-                  <span
-                    [id]="inputId(field.name) + '-label'"
-                    class="text-[12px] font-medium text-fg-muted"
-                    >{{ field.label }}</span
-                  >
-                  @if (datasetChoices(field).length === 0) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      No datasets yet — create one in Datasets first.
-                    </p>
-                  } @else {
-                    <app-dataset-picker
-                      [datasets]="datasetChoices(field)"
-                      [selected]="designer.picked(field.name)"
-                      [invalid]="fieldError(field.name) !== null"
-                      (selectedChange)="designer.setInput(field.name, $event)"
-                    />
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("dataset") {
-                <div class="flex flex-col gap-1">
-                  <label
-                    [for]="inputId(field.name)"
-                    class="text-[12px] font-medium text-fg-muted"
-                    >{{ field.label }}</label
-                  >
-                  <select
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    (change)="onInput(field.name, $event)"
-                    class="field"
-                  >
-                    <!-- Each option marks itself selected: a [value] on the
+                      <!-- Each option marks itself selected: a [value] on the
                          select would apply before its options exist (a form
                          opened already holding a dataset, e.g. Run again). -->
-                    <option
-                      value=""
-                      [selected]="designer.inputValue(field.name) === ''"
-                    >
-                      Select a dataset
-                    </option>
-                    @for (
-                      dataset of datasetChoices(field);
-                      track dataset.name
-                    ) {
                       <option
-                        [value]="dataset.name"
-                        [selected]="
-                          dataset.name === designer.inputValue(field.name)
-                        "
+                        value=""
+                        [selected]="designer.inputValue(field.name) === ''"
                       >
-                        {{ dataset.name }}
+                        Select a dataset
                       </option>
+                      @for (
+                        dataset of datasetChoices(field);
+                        track dataset.name
+                      ) {
+                        <option
+                          [value]="dataset.name"
+                          [selected]="
+                            dataset.name === designer.inputValue(field.name)
+                          "
+                        >
+                          {{ dataset.name }}
+                        </option>
+                      }
+                    </select>
+                    @if (fieldError(field.name); as message) {
+                      <p
+                        [id]="errorId(field.name)"
+                        [attr.data-testid]="errorId(field.name)"
+                        class="m-0 text-[12px] text-on-danger-soft"
+                      >
+                        {{ message }}
+                      </p>
                     }
-                  </select>
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
+                  </div>
+                }
+                @case ("artifact") {
+                  <div class="flex flex-col gap-1">
+                    <label
+                      [for]="inputId(field.name)"
+                      class="text-[12px] font-medium text-fg-muted"
+                      >{{ field.label }}</label
                     >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("artifact") {
-                <div class="flex flex-col gap-1">
-                  <label
-                    [for]="inputId(field.name)"
-                    class="text-[12px] font-medium text-fg-muted"
-                    >{{ field.label }}</label
-                  >
-                  <select
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    (change)="onArtifact(field, $event)"
-                    class="field"
-                  >
-                    <option
-                      value=""
-                      [selected]="designer.inputValue(field.name) === ''"
+                    <select
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [attr.aria-required]="field.required ? 'true' : null"
+                      [attr.aria-invalid]="
+                        fieldError(field.name) ? 'true' : null
+                      "
+                      [attr.aria-describedby]="describedBy(field.name)"
+                      (change)="onArtifact(field, $event)"
+                      class="field"
                     >
-                      {{
-                        field.requiredWithout
-                          ? "None — upload an image"
-                          : "Select a saved dashboard"
-                      }}
-                    </option>
-                    @for (
-                      artifact of artifactChoices(field);
-                      track artifact.id
-                    ) {
                       <option
-                        [value]="artifact.id"
-                        [selected]="
-                          artifact.id === designer.inputValue(field.name)
-                        "
+                        value=""
+                        [selected]="designer.inputValue(field.name) === ''"
                       >
-                        {{ artifact.name }}
+                        {{
+                          field.requiredWithout
+                            ? "None — upload an image"
+                            : "Select a saved dashboard"
+                        }}
                       </option>
+                      @for (
+                        artifact of artifactChoices(field);
+                        track artifact.id
+                      ) {
+                        <option
+                          [value]="artifact.id"
+                          [selected]="
+                            artifact.id === designer.inputValue(field.name)
+                          "
+                        >
+                          {{ artifact.name }}
+                        </option>
+                      }
+                    </select>
+                    @if (field.help) {
+                      <p class="m-0 text-[12px] text-fg-muted">
+                        {{ field.help }}
+                      </p>
                     }
-                  </select>
-                  @if (field.help) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      {{ field.help }}
-                    </p>
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("images") {
-                <app-workflow-run-attachments
-                  [images]="composerThumbs()"
-                  [label]="field.label"
-                  [max]="field.max ?? 4"
-                  [help]="field.help ?? null"
-                  [error]="imagesError()"
-                  (picked)="addImages($event)"
-                  (removed)="removeImage($event)"
-                />
-              }
-              @case ("image") {
-                <div class="flex flex-col gap-1">
-                  <label
-                    [for]="inputId(field.name)"
-                    class="text-[12px] font-medium text-fg-muted"
-                    >{{ field.label }}</label
-                  >
-                  <input
-                    type="file"
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.accept]="imageAccept"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    (change)="onImage(field.name, $event)"
-                    class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:text-fg"
+                    @if (fieldError(field.name); as message) {
+                      <p
+                        [id]="errorId(field.name)"
+                        [attr.data-testid]="errorId(field.name)"
+                        class="m-0 text-[12px] text-on-danger-soft"
+                      >
+                        {{ message }}
+                      </p>
+                    }
+                  </div>
+                }
+                @case ("images") {
+                  <app-workflow-run-attachments
+                    [images]="composerThumbs()"
+                    [label]="field.label"
+                    [max]="field.max ?? 4"
+                    [help]="field.help ?? null"
+                    [error]="imagesError()"
+                    (picked)="addImages($event)"
+                    (removed)="removeImage($event)"
                   />
-                  @if (imagePreview(field.name); as preview) {
-                    <img
-                      [src]="preview"
-                      [alt]="imageName(field.name) || field.label"
-                      [attr.data-testid]="inputId(field.name) + '-preview'"
-                      class="max-h-40 w-auto self-start rounded-md border border-border object-contain"
+                }
+                @case ("image") {
+                  <div class="flex flex-col gap-1">
+                    <label
+                      [for]="inputId(field.name)"
+                      class="text-[12px] font-medium text-fg-muted"
+                      >{{ field.label }}</label
+                    >
+                    <input
+                      type="file"
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [attr.accept]="imageAccept"
+                      [attr.aria-required]="field.required ? 'true' : null"
+                      [attr.aria-invalid]="
+                        fieldError(field.name) ? 'true' : null
+                      "
+                      [attr.aria-describedby]="describedBy(field.name)"
+                      (change)="onImage(field.name, $event)"
+                      class="text-[13px] text-fg file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-[13px] file:text-fg"
                     />
-                  }
-                  @if (field.help) {
-                    <p class="m-0 text-[12px] text-fg-muted">
-                      {{ field.help }}
-                    </p>
-                  }
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
+                    @if (imagePreview(field.name); as preview) {
+                      <img
+                        [src]="preview"
+                        [alt]="imageName(field.name) || field.label"
+                        [attr.data-testid]="inputId(field.name) + '-preview'"
+                        class="max-h-40 w-auto self-start rounded-md border border-border object-contain"
+                      />
+                    }
+                    @if (field.help) {
+                      <p class="m-0 text-[12px] text-fg-muted">
+                        {{ field.help }}
+                      </p>
+                    }
+                    @if (fieldError(field.name); as message) {
+                      <p
+                        [id]="errorId(field.name)"
+                        [attr.data-testid]="errorId(field.name)"
+                        class="m-0 text-[12px] text-on-danger-soft"
+                      >
+                        {{ message }}
+                      </p>
+                    }
+                  </div>
+                }
+                @case ("textarea") {
+                  <div class="flex flex-col gap-1">
+                    <label
+                      [for]="inputId(field.name)"
+                      [class]="
+                        isPrompt(field)
+                          ? 'sr-only'
+                          : 'text-[12px] font-medium text-fg-muted'
+                      "
+                      >{{ field.label }}</label
                     >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @case ("textarea") {
-                <div class="flex flex-col gap-1">
-                  <label
-                    [for]="inputId(field.name)"
-                    [class]="
-                      isPrompt(field)
-                        ? 'sr-only'
-                        : 'text-[12px] font-medium text-fg-muted'
-                    "
-                    >{{ field.label }}</label
-                  >
-                  <textarea
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [attr.placeholder]="field.placeholder ?? null"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    [value]="designer.inputValue(field.name)"
-                    (input)="onInput(field.name, $event)"
-                    (keydown.enter)="onEnter($event, 'execute')"
-                    rows="2"
-                    [class]="
-                      isPrompt(field) ? 'composer-input' : 'field resize-y'
-                    "
-                    [class.composer-input-invalid]="
-                      isPrompt(field) && !!fieldError(field.name)
-                    "
-                  ></textarea>
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
+                    <textarea
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [attr.placeholder]="field.placeholder ?? null"
+                      [attr.aria-required]="field.required ? 'true' : null"
+                      [attr.aria-invalid]="
+                        fieldError(field.name) ? 'true' : null
+                      "
+                      [attr.aria-describedby]="describedBy(field.name)"
+                      [value]="designer.inputValue(field.name)"
+                      (input)="onInput(field.name, $event)"
+                      (keydown.enter)="onEnter($event, 'execute')"
+                      rows="2"
+                      [class]="
+                        isPrompt(field) ? 'composer-input' : 'field resize-y'
+                      "
+                      [class.composer-input-invalid]="
+                        isPrompt(field) && !!fieldError(field.name)
+                      "
+                    ></textarea>
+                    @if (fieldError(field.name); as message) {
+                      <p
+                        [id]="errorId(field.name)"
+                        [attr.data-testid]="errorId(field.name)"
+                        class="m-0 text-[12px] text-on-danger-soft"
+                      >
+                        {{ message }}
+                      </p>
+                    }
+                  </div>
+                }
+                @default {
+                  <div class="flex flex-col gap-1">
+                    <label
+                      [for]="inputId(field.name)"
+                      class="text-[12px] font-medium text-fg-muted"
+                      >{{ field.label }}</label
                     >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
-              }
-              @default {
-                <div class="flex flex-col gap-1">
-                  <label
-                    [for]="inputId(field.name)"
-                    class="text-[12px] font-medium text-fg-muted"
-                    >{{ field.label }}</label
-                  >
-                  <input
-                    [id]="inputId(field.name)"
-                    [attr.data-testid]="inputId(field.name)"
-                    [type]="field.type === 'number' ? 'number' : 'text'"
-                    [attr.placeholder]="field.placeholder ?? null"
-                    [attr.aria-required]="field.required ? 'true' : null"
-                    [attr.aria-invalid]="fieldError(field.name) ? 'true' : null"
-                    [attr.aria-describedby]="describedBy(field.name)"
-                    [value]="designer.inputValue(field.name)"
-                    (input)="onInput(field.name, $event)"
-                    class="field"
-                    [class.border-on-danger-soft]="!!fieldError(field.name)"
-                  />
-                  @if (fieldError(field.name); as message) {
-                    <p
-                      [id]="errorId(field.name)"
-                      [attr.data-testid]="errorId(field.name)"
-                      class="m-0 text-[12px] text-on-danger-soft"
-                    >
-                      {{ message }}
-                    </p>
-                  }
-                </div>
+                    <input
+                      [id]="inputId(field.name)"
+                      [attr.data-testid]="inputId(field.name)"
+                      [type]="field.type === 'number' ? 'number' : 'text'"
+                      [attr.placeholder]="field.placeholder ?? null"
+                      [attr.aria-required]="field.required ? 'true' : null"
+                      [attr.aria-invalid]="
+                        fieldError(field.name) ? 'true' : null
+                      "
+                      [attr.aria-describedby]="describedBy(field.name)"
+                      [value]="designer.inputValue(field.name)"
+                      (input)="onInput(field.name, $event)"
+                      class="field"
+                      [class.border-on-danger-soft]="!!fieldError(field.name)"
+                    />
+                    @if (fieldError(field.name); as message) {
+                      <p
+                        [id]="errorId(field.name)"
+                        [attr.data-testid]="errorId(field.name)"
+                        class="m-0 text-[12px] text-on-danger-soft"
+                      >
+                        {{ message }}
+                      </p>
+                    }
+                  </div>
+                }
               }
             }
-          }
           }
           @if (w.runRequirement) {
             <p
