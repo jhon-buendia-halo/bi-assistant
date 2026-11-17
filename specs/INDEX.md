@@ -147,28 +147,30 @@ roadmap-archive.md:1201-1238  #### 0.4.3 — Agent roles: builder, reviewer and 
 roadmap-archive.md:1240-1277  #### 0.4.5 — Deterministic QA: impacted tests, demo video, test-run evidence  `✅ Done`
 roadmap-archive.md:1279-1290  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9))
 roadmap-archive.md:1285-1290  #### 1.1.2 — Intellify sample as a Testing Data fixture ([BA-212](https://halo-powered.atlassian.net/browse/BA-212))  `✅ Done`
-roadmap-archive.md:1292-1321  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4))
-roadmap-archive.md:1296-1305  #### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `🚫 Cut`
-roadmap-archive.md:1307-1321  #### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `🚫 Cut`
-roadmap-archive.md:1323-1348  ### Milestone 1.10 — LLM configuration ([BA-159](https://halo-powered.atlassian.net/browse/BA-159))
-roadmap-archive.md:1327-1332  #### 1.10.1 — Per-model reasoning effort in LLM Settings ([BA-160](https://halo-powered.atlassian.net/browse/BA-160))  `✅ Done`
-roadmap-archive.md:1334-1339  #### 1.10.2 — Light theme and open navigation drawer by default, remembered in the database ([BA-168](https://halo-powered.atlassian.net/browse/BA-168))  `✅ Done`
-roadmap-archive.md:1341-1348  #### 1.10.3 — GitHub Copilot as an LLM provider  `✅ Done`
-roadmap-archive.md:1350-1437  ### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213))
-roadmap-archive.md:1354-1361  #### 1.14.1 — ADR, epic spec and roadmap for agent tools and skills ([BA-214](https://halo-powered.atlassian.net/browse/BA-214))  `✅ Done`
-roadmap-archive.md:1363-1374  #### 1.14.3 — Write skills in the app ([BA-215](https://halo-powered.atlassian.net/browse/BA-215))  `✅ Done`
-roadmap-archive.md:1376-1381  #### 1.14.7 — Skills link tools ([BA-220](https://halo-powered.atlassian.net/browse/BA-220))  `✅ Done`
-roadmap-archive.md:1383-1388  #### 1.14.8 — Tools library, Graph and LLM Config tabs ([BA-221](https://halo-powered.atlassian.net/browse/BA-221))  `✅ Done`
-roadmap-archive.md:1390-1399  #### 1.14.9 — Agent page as in the reference: Chat Box, editable System Prompt and Skills tabs ([BA-222](https://halo-powered.atlassian.net/browse/BA-222))  `✅ Done`
-roadmap-archive.md:1401-1406  #### 1.14.12 — ADRs, epic amendment and specs for the RFP Builder and the Intellify RFP API ([BA-225](https://halo-powered.atlassian.net/browse/BA-225))  `✅ Done`
-roadmap-archive.md:1408-1412  #### 1.14.13 — The Intellify RFP API: read endpoints, auth, OpenAPI, embedded start and Testing Data registration ([BA-226](https://halo-powered.atlassian.net/browse/BA-226))  `✅ Done`
-roadmap-archive.md:1414-1420  #### 1.14.14 — RFP records and the RFP package in the API ([BA-227](https://halo-powered.atlassian.net/browse/BA-227))  `✅ Done`
-roadmap-archive.md:1422-1430  #### 1.14.16 — The RFP package from the chat ([BA-229](https://halo-powered.atlassian.net/browse/BA-229))  `✅ Done`
-roadmap-archive.md:1432-1437  #### 1.14.19 — Single-user app: remove authentication and authorization, keep only the super admin ([BA-232](https://halo-powered.atlassian.net/browse/BA-232))  `✅ Done`
-roadmap-archive.md:1439-1443  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
-roadmap-archive.md:1445-1449  ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
-roadmap-archive.md:1451-1459  ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5))
-roadmap-archive.md:1461-1465  ### Milestone 1.6 — User Testing ([BA-10](https://halo-powered.atlassian.net/browse/BA-10))
+roadmap-archive.md:1292-1335  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4))
+roadmap-archive.md:1296-1301  #### 1.3.5 — Knowledge Store — Research ([BA-123](https://halo-powered.atlassian.net/browse/BA-123))  `✅ Done`
+roadmap-archive.md:1303-1308  #### 1.3.6 — Knowledge Store — Execution plan ([BA-124](https://halo-powered.atlassian.net/browse/BA-124))  `📋 Planned`
+roadmap-archive.md:1310-1319  #### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `🚫 Cut`
+roadmap-archive.md:1321-1335  #### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `🚫 Cut`
+roadmap-archive.md:1337-1362  ### Milestone 1.10 — LLM configuration ([BA-159](https://halo-powered.atlassian.net/browse/BA-159))
+roadmap-archive.md:1341-1346  #### 1.10.1 — Per-model reasoning effort in LLM Settings ([BA-160](https://halo-powered.atlassian.net/browse/BA-160))  `✅ Done`
+roadmap-archive.md:1348-1353  #### 1.10.2 — Light theme and open navigation drawer by default, remembered in the database ([BA-168](https://halo-powered.atlassian.net/browse/BA-168))  `✅ Done`
+roadmap-archive.md:1355-1362  #### 1.10.3 — GitHub Copilot as an LLM provider  `✅ Done`
+roadmap-archive.md:1364-1451  ### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213))
+roadmap-archive.md:1368-1375  #### 1.14.1 — ADR, epic spec and roadmap for agent tools and skills ([BA-214](https://halo-powered.atlassian.net/browse/BA-214))  `✅ Done`
+roadmap-archive.md:1377-1388  #### 1.14.3 — Write skills in the app ([BA-215](https://halo-powered.atlassian.net/browse/BA-215))  `✅ Done`
+roadmap-archive.md:1390-1395  #### 1.14.7 — Skills link tools ([BA-220](https://halo-powered.atlassian.net/browse/BA-220))  `✅ Done`
+roadmap-archive.md:1397-1402  #### 1.14.8 — Tools library, Graph and LLM Config tabs ([BA-221](https://halo-powered.atlassian.net/browse/BA-221))  `✅ Done`
+roadmap-archive.md:1404-1413  #### 1.14.9 — Agent page as in the reference: Chat Box, editable System Prompt and Skills tabs ([BA-222](https://halo-powered.atlassian.net/browse/BA-222))  `✅ Done`
+roadmap-archive.md:1415-1420  #### 1.14.12 — ADRs, epic amendment and specs for the RFP Builder and the Intellify RFP API ([BA-225](https://halo-powered.atlassian.net/browse/BA-225))  `✅ Done`
+roadmap-archive.md:1422-1426  #### 1.14.13 — The Intellify RFP API: read endpoints, auth, OpenAPI, embedded start and Testing Data registration ([BA-226](https://halo-powered.atlassian.net/browse/BA-226))  `✅ Done`
+roadmap-archive.md:1428-1434  #### 1.14.14 — RFP records and the RFP package in the API ([BA-227](https://halo-powered.atlassian.net/browse/BA-227))  `✅ Done`
+roadmap-archive.md:1436-1444  #### 1.14.16 — The RFP package from the chat ([BA-229](https://halo-powered.atlassian.net/browse/BA-229))  `✅ Done`
+roadmap-archive.md:1446-1451  #### 1.14.19 — Single-user app: remove authentication and authorization, keep only the super admin ([BA-232](https://halo-powered.atlassian.net/browse/BA-232))  `✅ Done`
+roadmap-archive.md:1453-1457  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
+roadmap-archive.md:1459-1463  ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
+roadmap-archive.md:1465-1473  ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5))
+roadmap-archive.md:1475-1479  ### Milestone 1.6 — User Testing ([BA-10](https://halo-powered.atlassian.net/browse/BA-10))
 
 roadmap-backlog.md:1-261  ## Backlog
 roadmap-backlog.md:13-89  ### Moved from Milestone 0.4 — Harness Adjustments (2026-11-12)
@@ -1668,10 +1670,10 @@ specs/epics/BA-320/spec.md:78-82  ## Dependencies, risks and open questions
 specs/epics/BA-4/spec.md:5-6  ## Goal
 specs/epics/BA-4/spec.md:8-12  ## Scope
 specs/epics/BA-4/spec.md:14-16  ## Out of scope
-specs/epics/BA-4/spec.md:18-26  ## Stories
-specs/epics/BA-4/spec.md:28-30  ## Specs touched
-specs/epics/BA-4/spec.md:32-37  ## Acceptance
-specs/epics/BA-4/spec.md:39-43  ## Dependencies, risks and open questions
+specs/epics/BA-4/spec.md:18-28  ## Stories
+specs/epics/BA-4/spec.md:30-32  ## Specs touched
+specs/epics/BA-4/spec.md:34-39  ## Acceptance
+specs/epics/BA-4/spec.md:41-46  ## Dependencies, risks and open questions
 
 specs/epics/BA-5/spec.md:5-6  ## Goal
 specs/epics/BA-5/spec.md:8-11  ## Scope
