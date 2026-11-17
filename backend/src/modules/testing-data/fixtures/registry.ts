@@ -63,7 +63,15 @@ export interface SampleFixture {
    * `scripts/setup-worldcup-rest.ts`), and their entities are keyed
    * `api.<schema>.<table>`.
    */
-  datasourceKind?: 'postgres' | 'rest';
+  datasourceKind?: 'postgres' | 'rest' | 'file';
+  /**
+   * A `'file'` sample: the files it copies into the app, in a folder next to
+   * this one. Loaded through the upload (api.md 156) and save (18) code path,
+   * so no database server is involved. `requiredTables` are then qualified
+   * `<file schema>.<table>` (the file name without its extension, then the
+   * sheet's table), keyed `file.<schema>.<table>`.
+   */
+  files?: { dir: string; names: string[] };
 }
 
 const WORLD_CUP: SampleFixture = {
@@ -453,6 +461,42 @@ const WORLD_CUP_MEDALLION: SampleFixture = {
   ],
 };
 
+/**
+ * The World Cup data as an Excel workbook and a CSV file: the sample for the
+ * `file` datasource kind (M1-31). `fixtures/world-cup-excel/build.cjs`
+ * generates the files from the World Cup seed. The workbook has a title row
+ * and a blank row above the header of `Matches` and a `Total` row under
+ * `Goals`, so detection and the total-row exclusion have something to do.
+ */
+const WORLD_CUP_EXCEL: SampleFixture = {
+  id: 'world-cup-excel',
+  name: 'World Cup Excel',
+  description:
+    'The World Cup 2018 and 2022 as files — an Excel workbook with the ' +
+    'sheets Matches (a title row above its header), Teams and Goals (a ' +
+    'trailing Total row) and a players CSV.',
+  datasourceKind: 'file',
+  files: { dir: 'world-cup-excel', names: ['world_cup.xlsx', 'players.csv'] },
+  schema: 'world_cup',
+  // Placeholders: nothing connects anywhere; the panel shows no form.
+  defaults: {
+    host: '',
+    port: 0,
+    database: '',
+    user: '',
+    password: '',
+    ssl: false,
+  },
+  datasourceName: 'World Cup Excel',
+  datasetName: 'World Cup Excel',
+  requiredTables: [
+    'world_cup.matches',
+    'world_cup.teams',
+    'world_cup.goals',
+    'players.players',
+  ],
+};
+
 /** Every sample the app knows how to provision, in panel order. */
 export const SAMPLE_FIXTURES: SampleFixture[] = [
   WORLD_CUP,
@@ -461,6 +505,7 @@ export const SAMPLE_FIXTURES: SampleFixture[] = [
   US_HEALTH,
   EDGE_CASES,
   WORLD_CUP_MEDALLION,
+  WORLD_CUP_EXCEL,
   WORLD_CUP_REST,
 ];
 
@@ -474,9 +519,17 @@ export function findFixture(id: string): SampleFixture | undefined {
  * eval preflight match against.
  */
 export function requiredEntities(fixture: SampleFixture): string[] {
-  return fixture.requiredTables.map((table) =>
-    fixture.layerSchemas ? table : `${fixture.schema}.${table}`,
-  );
+  return fixture.requiredTables.map((table) => qualifiedTable(fixture, table));
+}
+
+/**
+ * A required table as `schema.table`: a multi-schema or file sample lists its
+ * tables already qualified, every other sample's belong to its one schema.
+ */
+export function qualifiedTable(fixture: SampleFixture, table: string): string {
+  return fixture.layerSchemas || fixture.files
+    ? table
+    : `${fixture.schema}.${table}`;
 }
 
 /** Every schema a sample owns: the loader drops all of them before seeding. */

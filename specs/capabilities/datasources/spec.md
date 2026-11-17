@@ -272,6 +272,16 @@ Feature: Excel and CSV datasources
     Then the datasource is listed with the kind "Excel / CSV"
     When I click "Edit" on it
     Then I see its two files and the "Region" sheet with header row 2
+
+  Scenario: Asks a question of the World Cup Excel sample and opens the query behind the answer
+    Given I loaded the "World Cup Excel" sample from Settings, Testing Data
+    When I ask "List the matches with every player of the players file." with the "World Cup Excel" dataset
+    Then I see the answer
+    When I open the query behind the answer
+    Then I see its SQL over "file.…"
+    When I open its result and go to the next page
+    And I sort a column
+    And I filter the position column to goalkeepers
 ```
 
 ## Acceptance

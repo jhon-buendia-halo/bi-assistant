@@ -977,10 +977,10 @@ specs/capabilities/datasources/spec.md:144-144  R67 At backend start the system 
 specs/capabilities/datasources/spec.md:146-156  ## Edge cases and errors
 specs/capabilities/datasources/spec.md:158-163  ## Contracts
 specs/capabilities/datasources/spec.md:165-194  ## UI
-specs/capabilities/datasources/spec.md:196-275  ## Flows
+specs/capabilities/datasources/spec.md:196-285  ## Flows
 specs/capabilities/datasources/spec.md:198-253  ### Feature: Datasources, datasets, and sessions (World Cup database)
-specs/capabilities/datasources/spec.md:255-275  ### Feature: Excel and CSV datasources
-specs/capabilities/datasources/spec.md:277-287  ## Acceptance
+specs/capabilities/datasources/spec.md:255-285  ### Feature: Excel and CSV datasources
+specs/capabilities/datasources/spec.md:287-297  ## Acceptance
 
 specs/capabilities/developer-settings/spec.md:5-13  ## Concepts
 specs/capabilities/developer-settings/spec.md:15-58  ## Rules
@@ -1322,44 +1322,47 @@ specs/capabilities/synthetic-data/spec.md:337-440  ## Flows
 specs/capabilities/synthetic-data/spec.md:442-457  ## Acceptance
 
 specs/capabilities/testing-data/spec.md:5-13  ## Concepts
-specs/capabilities/testing-data/spec.md:15-138  ## Rules
-specs/capabilities/testing-data/spec.md:17-37  ### The catalogue
+specs/capabilities/testing-data/spec.md:15-144  ## Rules
+specs/capabilities/testing-data/spec.md:17-38  ### The catalogue
 specs/capabilities/testing-data/spec.md:19-19  R1 The catalogue SHALL be the single definition of every sample: the pane
-specs/capabilities/testing-data/spec.md:20-32  R2 The system SHALL ship these fixtures, in this panel order:
-specs/capabilities/testing-data/spec.md:33-33  R3 The default connection of the PostgreSQL samples SHALL be host `127.0.
-specs/capabilities/testing-data/spec.md:34-37  R4 The seed files are data assets: `001_world_cup.sql` (a transaction tha
-specs/capabilities/testing-data/spec.md:39-43  ### Status
-specs/capabilities/testing-data/spec.md:41-41  R5 The system SHALL report, for every fixture: its id, name, description,
-specs/capabilities/testing-data/spec.md:42-42  R6 A fixture SHALL be considered **loaded** only when a datasource named
-specs/capabilities/testing-data/spec.md:43-43  R7 Status SHALL never fail the caller: if the stores cannot be read the s
-specs/capabilities/testing-data/spec.md:45-56  ### Loading
-specs/capabilities/testing-data/spec.md:47-47  R8 Loading a fixture SHALL accept a connection (host, port, database, use
-specs/capabilities/testing-data/spec.md:48-48  R9 The World Cup REST sample (`world-cup-rest`) SHALL NOT be loadable fro
-specs/capabilities/testing-data/spec.md:49-49  R10 The loader SHALL connect to the named database. If it does not exist (
-specs/capabilities/testing-data/spec.md:50-50  R11 A connection that cannot be established SHALL answer with an actionabl
-specs/capabilities/testing-data/spec.md:51-51  R12 For a seedable fixture the loader SHALL drop every schema the fixture
-specs/capabilities/testing-data/spec.md:52-52  R13 A seeding failure SHALL answer `Could not seed the <name> fixture into
-specs/capabilities/testing-data/spec.md:53-53  R14 After a successful seed (or immediately, for a register-only fixture)
-specs/capabilities/testing-data/spec.md:54-54  R15 If any required entity is missing from the inventory the loader SHALL
-specs/capabilities/testing-data/spec.md:55-55  R16 Otherwise the loader SHALL save the dataset named as the fixture's dat
-specs/capabilities/testing-data/spec.md:56-56  R17 Seeding SHALL be destructive by design (it drops the sample's schemas
-specs/capabilities/testing-data/spec.md:58-61  ### Removing
-specs/capabilities/testing-data/spec.md:60-60  R18 Removing a fixture SHALL delete its dataset (first) and its datasource
-specs/capabilities/testing-data/spec.md:61-61  R19 Because fixtures are matched to records by **name**, a datasource or d
-specs/capabilities/testing-data/spec.md:63-65  ### Availability
-specs/capabilities/testing-data/spec.md:65-65  R20 Every testing-data action SHALL be available to the user; the app has
-specs/capabilities/testing-data/spec.md:67-69  ### Background task
-specs/capabilities/testing-data/spec.md:69-69  R23 Loading a fixture SHALL run as a background task of kind `testing-data
-specs/capabilities/testing-data/spec.md:71-134  ### The Edge Cases sample
-specs/capabilities/testing-data/spec.md:73-134  R24 The Edge Cases sample SHALL hold every edge case below, at the place a
-specs/capabilities/testing-data/spec.md:136-138  ### Retired
-specs/capabilities/testing-data/spec.md:138-138  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
-specs/capabilities/testing-data/spec.md:140-149  ## Edge cases and errors
-specs/capabilities/testing-data/spec.md:151-157  ## Contracts
-specs/capabilities/testing-data/spec.md:159-171  ## UI
-specs/capabilities/testing-data/spec.md:173-264  ## Flows
-specs/capabilities/testing-data/spec.md:175-264  ### Feature: Testing data
-specs/capabilities/testing-data/spec.md:266-277  ## Acceptance
+specs/capabilities/testing-data/spec.md:20-33  R2 The system SHALL ship these fixtures, in this panel order:
+specs/capabilities/testing-data/spec.md:34-34  R3 The default connection of the PostgreSQL samples SHALL be host `127.0.
+specs/capabilities/testing-data/spec.md:35-38  R4 The seed files are data assets: `001_world_cup.sql` (a transaction tha
+specs/capabilities/testing-data/spec.md:40-44  ### Status
+specs/capabilities/testing-data/spec.md:42-42  R5 The system SHALL report, for every fixture: its id, name, description,
+specs/capabilities/testing-data/spec.md:43-43  R6 A fixture SHALL be considered **loaded** only when a datasource named
+specs/capabilities/testing-data/spec.md:44-44  R7 Status SHALL never fail the caller: if the stores cannot be read the s
+specs/capabilities/testing-data/spec.md:46-57  ### Loading
+specs/capabilities/testing-data/spec.md:48-48  R8 Loading a fixture SHALL accept a connection (host, port, database, use
+specs/capabilities/testing-data/spec.md:49-49  R9 The World Cup REST sample (`world-cup-rest`) SHALL NOT be loadable fro
+specs/capabilities/testing-data/spec.md:50-50  R10 The loader SHALL connect to the named database. If it does not exist (
+specs/capabilities/testing-data/spec.md:51-51  R11 A connection that cannot be established SHALL answer with an actionabl
+specs/capabilities/testing-data/spec.md:52-52  R12 For a seedable fixture the loader SHALL drop every schema the fixture
+specs/capabilities/testing-data/spec.md:53-53  R13 A seeding failure SHALL answer `Could not seed the <name> fixture into
+specs/capabilities/testing-data/spec.md:54-54  R14 After a successful seed (or immediately, for a register-only fixture)
+specs/capabilities/testing-data/spec.md:55-55  R15 If any required entity is missing from the inventory the loader SHALL
+specs/capabilities/testing-data/spec.md:56-56  R16 Otherwise the loader SHALL save the dataset named as the fixture's dat
+specs/capabilities/testing-data/spec.md:57-57  R17 Seeding SHALL be destructive by design (it drops the sample's schemas
+specs/capabilities/testing-data/spec.md:59-62  ### Removing
+specs/capabilities/testing-data/spec.md:61-61  R18 Removing a fixture SHALL delete its dataset (first) and its datasource
+specs/capabilities/testing-data/spec.md:62-62  R19 Because fixtures are matched to records by **name**, a datasource or d
+specs/capabilities/testing-data/spec.md:64-66  ### Availability
+specs/capabilities/testing-data/spec.md:66-66  R20 Every testing-data action SHALL be available to the user; the app has
+specs/capabilities/testing-data/spec.md:68-70  ### Background task
+specs/capabilities/testing-data/spec.md:70-70  R23 Loading a fixture SHALL run as a background task of kind `testing-data
+specs/capabilities/testing-data/spec.md:72-135  ### The Edge Cases sample
+specs/capabilities/testing-data/spec.md:74-135  R24 The Edge Cases sample SHALL hold every edge case below, at the place a
+specs/capabilities/testing-data/spec.md:137-140  ### The World Cup Excel sample
+specs/capabilities/testing-data/spec.md:139-139  R25 The World Cup Excel sample (`world-cup-excel`, kind `file`, [datasourc
+specs/capabilities/testing-data/spec.md:140-140  R26 Loading the World Cup Excel sample (`POST /testing-data/world-cup-exce
+specs/capabilities/testing-data/spec.md:142-144  ### Retired
+specs/capabilities/testing-data/spec.md:144-144  R21 Retired (2026-11-12). The self-registering `intellify-api` sample and
+specs/capabilities/testing-data/spec.md:146-155  ## Edge cases and errors
+specs/capabilities/testing-data/spec.md:157-163  ## Contracts
+specs/capabilities/testing-data/spec.md:165-178  ## UI
+specs/capabilities/testing-data/spec.md:180-271  ## Flows
+specs/capabilities/testing-data/spec.md:182-271  ### Feature: Testing data
+specs/capabilities/testing-data/spec.md:273-285  ## Acceptance
 
 specs/capabilities/verified-queries/spec.md:5-7  ## Concepts
 specs/capabilities/verified-queries/spec.md:9-39  ## Rules
@@ -1902,24 +1905,24 @@ specs/system/agents.md:2027-2068  ### 7.2 The `interactive-visuals` skill
 specs/system/agents.md:2070-2096  ### 7.3 Skills: source, layout, loading and validation
 specs/system/agents.md:2098-2182  ### 7.4 Skills per agent
 specs/system/agents.md:2184-2188  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2190-2365  ## 8. Evals
-specs/system/agents.md:2194-2320  ### 8.1 Case and set format
-specs/system/agents.md:2322-2329  ### 8.2 Data preflight
-specs/system/agents.md:2331-2342  ### 8.3 Executing a case
-specs/system/agents.md:2344-2349  ### 8.4 Runs, regression and report
-specs/system/agents.md:2351-2365  ### 8.5 Other entry points
-specs/system/agents.md:2367-2371  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2373-2386  ## Open questions and gaps
-specs/system/agents.md:2388-2527  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2529-2565  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2567-2569  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2571-2654  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2656-2760  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2762-2814  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2768-2787  ### Plan
-specs/system/agents.md:2789-2814  ### Write answer
-specs/system/agents.md:2816-2832  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2834-2853  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:2190-2366  ## 8. Evals
+specs/system/agents.md:2194-2321  ### 8.1 Case and set format
+specs/system/agents.md:2323-2330  ### 8.2 Data preflight
+specs/system/agents.md:2332-2343  ### 8.3 Executing a case
+specs/system/agents.md:2345-2350  ### 8.4 Runs, regression and report
+specs/system/agents.md:2352-2366  ### 8.5 Other entry points
+specs/system/agents.md:2368-2372  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2374-2387  ## Open questions and gaps
+specs/system/agents.md:2389-2528  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2530-2566  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2568-2570  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2572-2655  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2657-2761  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2763-2815  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2769-2788  ### Plan
+specs/system/agents.md:2790-2815  ### Write answer
+specs/system/agents.md:2817-2833  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2835-2854  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL

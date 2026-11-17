@@ -526,6 +526,136 @@ const WORLD_CUP_REST_EVAL_CASES: AssistantEvalCase[] = restVariants(
 );
 
 /**
+ * The World Cup data as an Excel workbook and a CSV file (`file` datasource,
+ * M1-31): `world_cup.xlsx` (sheets Matches, Teams, Goals) and `players.csv`,
+ * built from the same seed. DuckDB reads `file.world_cup.<sheet>` and
+ * `file.players.players`. The questions are the World Cup ones the sheets can
+ * answer; the goals question is also a trap for the `Total` row under Goals,
+ * which the import excludes (24, not 48), and the last one reads the CSV.
+ */
+const WORLD_CUP_EXCEL_EVAL_CASES: AssistantEvalCase[] = [
+  {
+    id: 'excel-champion-2022',
+    question: 'Who won the 2022 World Cup?',
+    intent:
+      'Single-hop lookup in the Matches sheet: the winner of the 2022 final.',
+    scorers: [
+      checks.includes('Argentina'),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT winner FROM file.world_cup.matches ' +
+      "WHERE tournament_year = 2022 AND stage = 'final'",
+  },
+  {
+    id: 'excel-final-score-2018',
+    question: 'What was the score of the 2018 World Cup final?',
+    intent:
+      'Filter the Matches sheet by stage and year, read both goal columns.',
+    scorers: [
+      checks.matches(/4\s*[-–:]\s*2/),
+      checks.includes('France'),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT home_team, away_team, home_goals, away_goals ' +
+      'FROM file.world_cup.matches ' +
+      "WHERE tournament_year = 2018 AND stage = 'final'",
+  },
+  {
+    id: 'excel-top-scorer-2022',
+    question: 'Who scored the most goals in the 2022 World Cup, and how many?',
+    intent:
+      'Aggregate the Goals sheet by scorer, excluding own goals; the sheet has a Total row the import must have dropped.',
+    scorers: [
+      checks.includes('Messi'),
+      checks.matches(/\b4\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT scorer, COUNT(*) AS goals FROM file.world_cup.goals ' +
+      "WHERE tournament_year = 2022 AND goal_type <> 'own_goal' " +
+      'GROUP BY scorer ORDER BY goals DESC, scorer LIMIT 1',
+  },
+  {
+    id: 'excel-goals-2022',
+    question: 'How many goals were scored in the 2022 World Cup?',
+    intent:
+      'Count rows of the Goals sheet for one year; a Total row left in the table would double the figure.',
+    scorers: [
+      checks.matches(/\b24\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT COUNT(*) AS goals FROM file.world_cup.goals ' +
+      'WHERE tournament_year = 2022',
+  },
+  {
+    id: 'excel-shootouts',
+    question:
+      'Which knockout matches went to a penalty shootout, and who advanced?',
+    intent:
+      'Shootouts are non-null penalty columns of the Matches sheet, not a flag.',
+    scorers: [
+      checks.includes('Croatia'),
+      checks.matches(/Argentina/i),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT tournament_year, home_team, away_team, winner ' +
+      'FROM file.world_cup.matches WHERE home_penalties IS NOT NULL ' +
+      'ORDER BY tournament_year, match_number',
+  },
+  {
+    id: 'excel-biggest-venue',
+    // Two matches share the best attendance at one stadium.
+    resultSetOptions: { distinctRows: true },
+    question:
+      'Which stadium hosted the best-attended match, and what was the attendance?',
+    intent:
+      'Order the Matches sheet by a nullable measure; the title row above its header must not shift the columns.',
+    scorers: [
+      checks.includes('Lusail'),
+      checks.matches(/88[,.]?966/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT DISTINCT stadium, attendance FROM file.world_cup.matches ' +
+      'WHERE attendance = (SELECT MAX(attendance) FROM file.world_cup.matches)',
+  },
+  {
+    id: 'excel-goalkeepers',
+    question: 'How many goalkeepers are in the players list?',
+    intent: 'A question only the CSV file can answer (`file.players.players`).',
+    scorers: [
+      checks.matches(/\b13\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      "SELECT COUNT(*) AS goalkeepers FROM file.players.players WHERE position = 'GK'",
+  },
+  {
+    id: 'excel-schema-discovery',
+    question: 'What data do I have available to analyse?',
+    intent:
+      'Pure discovery: the answer names the sheets and the CSV rather than running SQL.',
+    scorers: [
+      checks.includes('matches'),
+      checks.matches(/players/i),
+      checks.didNotCall('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+  },
+];
+
+/**
  * Grounded in the Formula 1 fixture (`formula1` schema, 1950-2026). Every
  * figure below was run against that database before it was written down, so a
  * failing check means the agent got it wrong rather than the fixture drifting.
@@ -787,6 +917,18 @@ export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
       'world_cup tables and views.',
     fixtureId: 'world-cup',
     cases: WORLD_CUP_EVAL_CASES,
+  },
+  {
+    id: 'world-cup-excel',
+    name: 'World Cup Excel',
+    description:
+      'The World Cup questions the sample files can answer, against the ' +
+      'bundled World Cup Excel sample: the workbook world_cup.xlsx (sheets ' +
+      'Matches, Teams, Goals) and players.csv. Load it from Settings → Testing ' +
+      'Data and select its Excel / CSV datasource with the saved dataset; ' +
+      'reference SQL runs in DuckDB over file.world_cup.* and file.players.players.',
+    fixtureId: 'world-cup-excel',
+    cases: WORLD_CUP_EXCEL_EVAL_CASES,
   },
   {
     id: 'world-cup-rest',

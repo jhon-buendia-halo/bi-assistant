@@ -553,6 +553,7 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'us-health',
       'edge-cases',
       'world-cup-medallion',
+      'world-cup-excel',
       'world-cup-rest',
       'register-only',
     ]);
@@ -720,7 +721,11 @@ describe('TestingDataService.describe', () => {
         id: fixture.id,
         name: fixture.name,
         description: fixture.description,
-        seedable: Boolean(fixture.seedFile),
+        seedable:
+          Boolean(fixture.seedFile) || fixture.datasourceKind === 'file',
+        ...(fixture.datasourceKind === 'file'
+          ? { datasourceKind: 'file', selfRegistering: true }
+          : {}),
         schema: fixture.schema,
         defaults: fixture.defaults,
         status: {

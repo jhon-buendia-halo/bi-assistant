@@ -36,11 +36,18 @@ export function assistantEvalDatasetError(
 ): string | undefined {
   const sample = typeof fixture === 'string' ? evalFixture(fixture) : fixture;
   const kind = sample.datasourceKind ?? 'postgres';
-  const kindLabel = kind === 'rest' ? 'REST API' : 'PostgreSQL';
+  const kindLabel =
+    kind === 'rest'
+      ? 'REST API'
+      : kind === 'file'
+        ? 'Excel / CSV'
+        : 'PostgreSQL';
   const setupDoc =
     kind === 'rest'
       ? 'scripts/setup-worldcup-rest.ts'
-      : 'docker/postgres/README.md';
+      : kind === 'file'
+        ? 'Settings → Testing Data (load the sample; no database needed)'
+        : 'docker/postgres/README.md';
   const setup =
     `These evals require the bundled ${sample.name} sample: ${sample.description} ` +
     `Select its ${kindLabel} datasource and save a dataset containing the ` +
