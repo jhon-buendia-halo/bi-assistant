@@ -1393,7 +1393,7 @@ specs/capabilities/verified-queries/spec.md:111-115  ## Acceptance
 specs/capabilities/verified-queries/spec.md:117-124  ## Open questions
 
 specs/capabilities/visuals/spec.md:12-14  ## Concepts
-specs/capabilities/visuals/spec.md:16-206  ## Rules
+specs/capabilities/visuals/spec.md:16-207  ## Rules
 specs/capabilities/visuals/spec.md:18-24  ### Creating
 specs/capabilities/visuals/spec.md:20-20  R1 The system SHALL create a visual only from a completed assistant answe
 specs/capabilities/visuals/spec.md:21-22  R2 Every answer with text SHALL offer "Generate interactive visuals". Whi
@@ -1407,54 +1407,54 @@ specs/capabilities/visuals/spec.md:51-51  R8 A freeform visual's script SHALL be
 specs/capabilities/visuals/spec.md:52-52  R9 Tailoring a freeform visual SHALL stay freeform. Tailoring a spec visu
 specs/capabilities/visuals/spec.md:53-53  R10 Each designer call SHALL time out after 120 seconds with "interactive
 specs/capabilities/visuals/spec.md:54-60  R11 A spec visual SHALL be drawn by one fixed, hand-written chart runtime,
-specs/capabilities/visuals/spec.md:62-81  ### Tailoring and versions
+specs/capabilities/visuals/spec.md:62-82  ### Tailoring and versions
 specs/capabilities/visuals/spec.md:64-64  R12 Tailoring (from chat or the panel) SHALL require a non-blank instructi
 specs/capabilities/visuals/spec.md:65-65  R13 In chat, the assistant SHALL tailor the visual open in the panel by de
-specs/capabilities/visuals/spec.md:66-71  R14 The panel's Tailor form SHALL turn its fields into one plain-English i
-specs/capabilities/visuals/spec.md:72-72  R41 **Tailor and Refresh data are background tasks** (ADR-0047, [app-shell
-specs/capabilities/visuals/spec.md:73-73  R15 Each version SHALL record its number, creation time, the instruction t
-specs/capabilities/visuals/spec.md:74-77  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
-specs/capabilities/visuals/spec.md:78-78  R17 Reverting SHALL only move the current-version pointer to an existing v
-specs/capabilities/visuals/spec.md:79-79  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
-specs/capabilities/visuals/spec.md:80-80  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
-specs/capabilities/visuals/spec.md:81-81  R20 Opening a session SHALL load into the panel the latest item the agent
-specs/capabilities/visuals/spec.md:83-91  ### Refresh data in place
-specs/capabilities/visuals/spec.md:85-85  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
-specs/capabilities/visuals/spec.md:86-90  R22 During a refresh:
-specs/capabilities/visuals/spec.md:91-91  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
-specs/capabilities/visuals/spec.md:93-111  ### Runtime errors and silent auto-repair
-specs/capabilities/visuals/spec.md:95-98  R24 The sandboxed visual SHALL report to the host:
-specs/capabilities/visuals/spec.md:99-105  R25 On a reported error the panel SHALL silently request one repair, but o
-specs/capabilities/visuals/spec.md:106-110  R26 A repair SHALL regenerate the current version with the runtime error,
-specs/capabilities/visuals/spec.md:111-111  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
-specs/capabilities/visuals/spec.md:113-159  ### Readable frame
-specs/capabilities/visuals/spec.md:115-124  R28 Every visual SHALL render inside a fixed frame. The frame's content co
-specs/capabilities/visuals/spec.md:125-128  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
-specs/capabilities/visuals/spec.md:129-129  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
-specs/capabilities/visuals/spec.md:130-130  R31 The designer's styles SHALL be confined to the visual's own area so th
-specs/capabilities/visuals/spec.md:131-131  R32 The visual SHALL read its rows from the embedded data at runtime, neve
-specs/capabilities/visuals/spec.md:132-132  R33 A frame generated or refreshed at a given time SHALL show that time. O
-specs/capabilities/visuals/spec.md:134-159  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
-specs/capabilities/visuals/spec.md:161-167  ### Sandboxing
-specs/capabilities/visuals/spec.md:163-166  R34 The visual SHALL run in a sandboxed frame:
-specs/capabilities/visuals/spec.md:167-167  R35 The visual SHALL talk to the host only through messages: runtime error
-specs/capabilities/visuals/spec.md:169-176  ### Click to follow up
-specs/capabilities/visuals/spec.md:171-176  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
-specs/capabilities/visuals/spec.md:178-192  ### Export
-specs/capabilities/visuals/spec.md:180-191  R37 "Download bundle" SHALL download a zip of the visual. It always contai
-specs/capabilities/visuals/spec.md:192-192  R38 The downloaded file SHALL be named after the visual's title, slugged a
-specs/capabilities/visuals/spec.md:194-206  ### Storage
-specs/capabilities/visuals/spec.md:196-204  R39 Each version's files SHALL live in the session workspace under the vis
-specs/capabilities/visuals/spec.md:206-206  R42 **A run's visual is an artifact card, opened in a side panel** (2026-1
-specs/capabilities/visuals/spec.md:208-229  ## Edge cases and errors
-specs/capabilities/visuals/spec.md:231-244  ## Contracts
-specs/capabilities/visuals/spec.md:246-273  ## UI
-specs/capabilities/visuals/spec.md:275-433  ## Flows
-specs/capabilities/visuals/spec.md:277-279  ### Covered: Chat and visuals
-specs/capabilities/visuals/spec.md:281-291  ### Visual actions on a run
-specs/capabilities/visuals/spec.md:293-409  ### Feature: Visual tailoring
-specs/capabilities/visuals/spec.md:411-433  ### Feature: Skills the designer is given
-specs/capabilities/visuals/spec.md:435-447  ## Acceptance
+specs/capabilities/visuals/spec.md:66-72  R14 The panel's Tailor form SHALL turn its fields into one plain-English i
+specs/capabilities/visuals/spec.md:73-73  R41 **Tailor and Refresh data are background tasks** (ADR-0047, [app-shell
+specs/capabilities/visuals/spec.md:74-74  R15 Each version SHALL record its number, creation time, the instruction t
+specs/capabilities/visuals/spec.md:75-78  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
+specs/capabilities/visuals/spec.md:79-79  R17 Reverting SHALL only move the current-version pointer to an existing v
+specs/capabilities/visuals/spec.md:80-80  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
+specs/capabilities/visuals/spec.md:81-81  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
+specs/capabilities/visuals/spec.md:82-82  R20 Opening a session SHALL load into the panel the latest item the agent
+specs/capabilities/visuals/spec.md:84-92  ### Refresh data in place
+specs/capabilities/visuals/spec.md:86-86  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
+specs/capabilities/visuals/spec.md:87-91  R22 During a refresh:
+specs/capabilities/visuals/spec.md:92-92  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
+specs/capabilities/visuals/spec.md:94-112  ### Runtime errors and silent auto-repair
+specs/capabilities/visuals/spec.md:96-99  R24 The sandboxed visual SHALL report to the host:
+specs/capabilities/visuals/spec.md:100-106  R25 On a reported error the panel SHALL silently request one repair, but o
+specs/capabilities/visuals/spec.md:107-111  R26 A repair SHALL regenerate the current version with the runtime error,
+specs/capabilities/visuals/spec.md:112-112  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
+specs/capabilities/visuals/spec.md:114-160  ### Readable frame
+specs/capabilities/visuals/spec.md:116-125  R28 Every visual SHALL render inside a fixed frame. The frame's content co
+specs/capabilities/visuals/spec.md:126-129  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
+specs/capabilities/visuals/spec.md:130-130  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
+specs/capabilities/visuals/spec.md:131-131  R31 The designer's styles SHALL be confined to the visual's own area so th
+specs/capabilities/visuals/spec.md:132-132  R32 The visual SHALL read its rows from the embedded data at runtime, neve
+specs/capabilities/visuals/spec.md:133-133  R33 A frame generated or refreshed at a given time SHALL show that time. O
+specs/capabilities/visuals/spec.md:135-160  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
+specs/capabilities/visuals/spec.md:162-168  ### Sandboxing
+specs/capabilities/visuals/spec.md:164-167  R34 The visual SHALL run in a sandboxed frame:
+specs/capabilities/visuals/spec.md:168-168  R35 The visual SHALL talk to the host only through messages: runtime error
+specs/capabilities/visuals/spec.md:170-177  ### Click to follow up
+specs/capabilities/visuals/spec.md:172-177  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
+specs/capabilities/visuals/spec.md:179-193  ### Export
+specs/capabilities/visuals/spec.md:181-192  R37 "Download bundle" SHALL download a zip of the visual. It always contai
+specs/capabilities/visuals/spec.md:193-193  R38 The downloaded file SHALL be named after the visual's title, slugged a
+specs/capabilities/visuals/spec.md:195-207  ### Storage
+specs/capabilities/visuals/spec.md:197-205  R39 Each version's files SHALL live in the session workspace under the vis
+specs/capabilities/visuals/spec.md:207-207  R42 **A run's visual is an artifact card, opened in a side panel** (2026-1
+specs/capabilities/visuals/spec.md:209-230  ## Edge cases and errors
+specs/capabilities/visuals/spec.md:232-245  ## Contracts
+specs/capabilities/visuals/spec.md:247-274  ## UI
+specs/capabilities/visuals/spec.md:276-434  ## Flows
+specs/capabilities/visuals/spec.md:278-280  ### Covered: Chat and visuals
+specs/capabilities/visuals/spec.md:282-292  ### Visual actions on a run
+specs/capabilities/visuals/spec.md:294-410  ### Feature: Visual tailoring
+specs/capabilities/visuals/spec.md:412-434  ### Feature: Skills the designer is given
+specs/capabilities/visuals/spec.md:436-448  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-131  ## Rules
@@ -1503,12 +1503,12 @@ specs/capabilities/workflows/spec.md:131-131  R39 **Agent personas are named wit
 specs/capabilities/workflows/spec.md:133-150  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:152-156  ## Contracts
 specs/capabilities/workflows/spec.md:158-166  ## UI
-specs/capabilities/workflows/spec.md:168-413  ## Flows
+specs/capabilities/workflows/spec.md:168-419  ## Flows
 specs/capabilities/workflows/spec.md:170-288  ### Feature: Workflows
 specs/capabilities/workflows/spec.md:290-376  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:378-384  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:386-413  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:415-433  ## Acceptance
+specs/capabilities/workflows/spec.md:378-390  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:392-419  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:421-440  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -1875,7 +1875,7 @@ specs/system/agents.md:1122-1265  ## 4. Per-turn context
 specs/system/agents.md:1124-1232  ### 4.1 System context blocks
 specs/system/agents.md:1234-1254  ### 4.2 requestContext keys
 specs/system/agents.md:1256-1265  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1267-1857  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1267-1858  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1269-1299  ### 5.1 Streamed chat turn
 specs/system/agents.md:1301-1305  ### 5.2 Read-only enforcement
 specs/system/agents.md:1307-1321  ### 5.3 Execution-guided repair
@@ -1896,41 +1896,41 @@ specs/system/agents.md:1647-1690  ### 5.17 Workflow: `recreate-dashboard` (Dashb
 specs/system/agents.md:1692-1725  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
 specs/system/agents.md:1727-1782  ### 5.19 Workflow: `review-website` (Review a Website)
 specs/system/agents.md:1784-1836  ### 5.20 Workflow: `consumption-gap-analysis` (Consumption Gap Analysis)
-specs/system/agents.md:1837-1857  ### 5.21 Ask one agent: a follow-up on the `ask-agent` engine
-specs/system/agents.md:1859-2032  ## 6. Visual designer pipeline
-specs/system/agents.md:1863-1873  ### 6.1 Entry points
-specs/system/agents.md:1875-1877  ### 6.2 Data handed to the designer
-specs/system/agents.md:1879-1895  ### 6.3 Modes and loop
-specs/system/agents.md:1897-1932  ### 6.4 Designer prompt
-specs/system/agents.md:1934-1939  ### 6.5 Repair
-specs/system/agents.md:1941-1943  ### 6.6 Assembled files
-specs/system/agents.md:1945-1947  ### 6.7 Call options
-specs/system/agents.md:1949-1992  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1994-2032  ### 6.9 Chart runtime contract
-specs/system/agents.md:2034-2208  ## 7. Skills and workspaces
-specs/system/agents.md:2036-2045  ### 7.1 Session workspaces
-specs/system/agents.md:2047-2088  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:2090-2116  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:2118-2202  ### 7.4 Skills per agent
-specs/system/agents.md:2204-2208  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2210-2384  ## 8. Evals
-specs/system/agents.md:2214-2339  ### 8.1 Case and set format
-specs/system/agents.md:2341-2348  ### 8.2 Data preflight
-specs/system/agents.md:2350-2361  ### 8.3 Executing a case
-specs/system/agents.md:2363-2368  ### 8.4 Runs, regression and report
-specs/system/agents.md:2370-2384  ### 8.5 Other entry points
-specs/system/agents.md:2386-2390  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2392-2405  ## Open questions and gaps
-specs/system/agents.md:2407-2546  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2548-2584  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2586-2588  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2590-2673  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2675-2779  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2781-2833  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2787-2806  ### Plan
-specs/system/agents.md:2808-2833  ### Write answer
-specs/system/agents.md:2835-2851  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2853-2872  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:1837-1858  ### 5.21 Ask one agent: a follow-up on the `ask-agent` engine
+specs/system/agents.md:1860-2033  ## 6. Visual designer pipeline
+specs/system/agents.md:1864-1874  ### 6.1 Entry points
+specs/system/agents.md:1876-1878  ### 6.2 Data handed to the designer
+specs/system/agents.md:1880-1896  ### 6.3 Modes and loop
+specs/system/agents.md:1898-1933  ### 6.4 Designer prompt
+specs/system/agents.md:1935-1940  ### 6.5 Repair
+specs/system/agents.md:1942-1944  ### 6.6 Assembled files
+specs/system/agents.md:1946-1948  ### 6.7 Call options
+specs/system/agents.md:1950-1993  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1995-2033  ### 6.9 Chart runtime contract
+specs/system/agents.md:2035-2209  ## 7. Skills and workspaces
+specs/system/agents.md:2037-2046  ### 7.1 Session workspaces
+specs/system/agents.md:2048-2089  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:2091-2117  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:2119-2203  ### 7.4 Skills per agent
+specs/system/agents.md:2205-2209  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:2211-2385  ## 8. Evals
+specs/system/agents.md:2215-2340  ### 8.1 Case and set format
+specs/system/agents.md:2342-2349  ### 8.2 Data preflight
+specs/system/agents.md:2351-2362  ### 8.3 Executing a case
+specs/system/agents.md:2364-2369  ### 8.4 Runs, regression and report
+specs/system/agents.md:2371-2385  ### 8.5 Other entry points
+specs/system/agents.md:2387-2391  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2393-2406  ## Open questions and gaps
+specs/system/agents.md:2408-2547  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2549-2585  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2587-2589  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2591-2674  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2676-2780  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2782-2834  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2788-2807  ### Plan
+specs/system/agents.md:2809-2834  ### Write answer
+specs/system/agents.md:2836-2852  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2854-2873  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
@@ -2137,7 +2137,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1361  ## Level 3 — Components
+specs/system/architecture.md:258-1366  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -2178,8 +2178,8 @@ specs/system/architecture.md:1243-1264  #### ADR-0049 — Review a Website drive
 specs/system/architecture.md:1266-1286  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
 specs/system/architecture.md:1288-1310  #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
 specs/system/architecture.md:1312-1338  #### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
-specs/system/architecture.md:1340-1361  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
-specs/system/architecture.md:1363-1418  ## Level 4 — Code
+specs/system/architecture.md:1340-1366  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
+specs/system/architecture.md:1368-1423  ## Level 4 — Code
 
 specs/system/data-model.md:13-58  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory

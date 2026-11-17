@@ -202,16 +202,21 @@ export class VisualizationService {
    * freshly captured SQL/rows — merged onto the source answer's own data
    * (deduped by SQL text, fresh wins) so the designer and the stored
    * `data.json` both see them, without changing anything for callers that
-   * pass none (button/REST paths).
+   * pass none (button/REST paths). `question`, when given, is the designer's
+   * `<question>` instead of the user message before the source answer.
    */
   async create(
     session: SessionDoc,
     sourceMessageAt: string | undefined,
     instruction?: string,
     turnRecords?: ToolDataRecord[],
+    question?: string,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const answer = this.findSourceAnswer(session, sourceMessageAt);
-    const question = this.findQuestion(session, answer);
+    const asked: ChatMessage | undefined =
+      question !== undefined
+        ? { role: 'user', content: question, at: answer.at }
+        : this.findQuestion(session, answer);
     const { workspace, filesystem } = await this.workspaceFor(session);
     // With more result sets than the designer sees, keep the ones the
     // instruction is about, so the chart's data is never cut (agents.md 6.2).
@@ -220,7 +225,7 @@ export class VisualizationService {
       instruction,
     );
     const bundle = await this.design(workspace, {
-      question,
+      question: asked,
       answer,
       instruction,
       mergedData,
@@ -265,6 +270,11 @@ export class VisualizationService {
    * answer and its records are laid on the transcript as they will be
    * stored, the answer at `at`, so the visual reads the same context as one
    * built from the stored answer, and its later actions find that answer.
+   *
+   * With an `instruction` (agents.md 5.21: a follow-up that asks Build
+   * visual alone), the transcript ends with those words, so `question` (the
+   * earlier run's) is the designer's `<question>`, the words its
+   * `<instruction>`, and v1's version entry records them.
    */
   async createFromAnswer(
     session: SessionDoc,
@@ -273,6 +283,7 @@ export class VisualizationService {
       answer: string;
       at: string;
       data: ToolDataRecord[];
+      instruction?: string;
     },
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const asked = session.messages.at(-1);
@@ -288,7 +299,16 @@ export class VisualizationService {
         ...(source.data.length ? { data: source.data } : {}),
       },
     ];
-    return this.create({ ...session, messages }, source.at);
+    // Asked with an instruction, even a blank one, the question is the
+    // earlier run's: the transcript's last message is the instruction.
+    const instructed = source.instruction !== undefined;
+    return this.create(
+      { ...session, messages },
+      source.at,
+      source.instruction?.trim() || undefined,
+      undefined,
+      instructed ? source.question : undefined,
+    );
   }
 
   /**

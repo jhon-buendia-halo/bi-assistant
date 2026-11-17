@@ -35,7 +35,9 @@ import {
   ASK_NEW_QUESTION_REPLY,
   ASK_NO_IMAGES_REPLY,
   ASK_NO_RESULT_REPLY,
+  ASK_NO_ROWS_REPLY,
   ASKABLE_STEP_IDS,
+  visualAnswer,
   type AskAgentRuntime,
   type AskableStepId,
 } from './ask-agent.steps';
@@ -150,6 +152,24 @@ function runtime(overrides: Partial<Turn> = {}): Turn {
       }),
     ),
     deliverAnswer: mockOf('deliverAnswer', () => Promise.resolve()),
+    earlierVisual: mockOf('earlierVisual', () => ({
+      question: 'How many matches were played per year?',
+      answer: 'There were 64 matches in 2022.',
+      queries: [
+        {
+          sql: EARLIER.sql,
+          rows: [{ year: 2022, matches: 64 }],
+          rowCount: 1,
+          truncated: false,
+        },
+      ],
+    })),
+    buildVisual: mockOf('buildVisual', () =>
+      Promise.resolve({
+        visual: { visualId: 'v-1', title: 'Matches per year' },
+        stopped: false,
+      }),
+    ),
     ...overrides,
   };
 }
@@ -300,6 +320,70 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
     await ask('read-images', turn);
     expect(turn.readImages).not.toHaveBeenCalled();
     expect(turn.deliverAnswer).toHaveBeenCalledWith(ASK_NO_IMAGES_REPLY);
+  });
+
+  it('asks Ryan for a new visual of the earlier answer, the follow-up as his instruction, and no new query', async () => {
+    const turn = runtime();
+    const { result } = await ask('build-visual', turn);
+    expect(turn.earlierVisual).toHaveBeenCalledTimes(1);
+    expect(turn.buildVisual).toHaveBeenCalledWith({
+      question: 'How many matches were played per year?',
+      answer: 'There were 64 matches in 2022.',
+      instruction: 'Next page',
+    });
+    expect(turn.answer).not.toHaveBeenCalled();
+    expect(turn.plan).not.toHaveBeenCalled();
+    expect(turn.writeAnswer).not.toHaveBeenCalled();
+    const answer = visualAnswer('Matches per year');
+    expect(answer).toBe(
+      `Here's a new visual of the earlier answer: "Matches per year".`,
+    );
+    expect(turn.deliverAnswer).toHaveBeenCalledWith(answer);
+    expect(result.result).toEqual({
+      step: 'build-visual',
+      answerLength: answer.length,
+      stopped: false,
+      visual: { visualId: 'v-1', title: 'Matches per year' },
+    });
+  });
+
+  it("answers why when Ryan's design fails, and the step still ends done", async () => {
+    const turn = runtime({
+      buildVisual: mockOf('buildVisual', () =>
+        Promise.resolve({
+          visual: { error: 'The designer returned no spec' },
+          stopped: false,
+        }),
+      ),
+    });
+    const { events, result } = await ask('build-visual', turn);
+    expect(ran(events)).toEqual(['build-visual:success']);
+    expect(turn.deliverAnswer).toHaveBeenCalledWith(
+      "I couldn't build a new visual: The designer returned no spec",
+    );
+    expect(result.result).toMatchObject({
+      step: 'build-visual',
+      visual: { error: 'The designer returned no spec' },
+    });
+  });
+
+  it('has Ryan say so, with no designer call, when the earlier answer has no rows', async () => {
+    const turn = runtime({
+      earlierVisual: mockOf('earlierVisual', () => ({
+        question: 'How many matches were played per year?',
+        answer: 'No matches.',
+        queries: [
+          { sql: EARLIER.sql, rows: [], rowCount: 0, truncated: false },
+        ],
+      })),
+    });
+    const { result } = await ask('build-visual', turn);
+    expect(turn.buildVisual).not.toHaveBeenCalled();
+    expect(turn.deliverAnswer).toHaveBeenCalledWith(ASK_NO_ROWS_REPLY);
+    expect(result.result).toMatchObject({
+      step: 'build-visual',
+      visual: { skipped: 'No query returned rows to chart.' },
+    });
   });
 
   it('delivers nothing when the asked call was stopped', async () => {
