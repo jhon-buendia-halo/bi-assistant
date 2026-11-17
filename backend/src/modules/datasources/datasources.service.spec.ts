@@ -290,3 +290,47 @@ describe('DatasourcesService and the file kind (ADR-0052)', () => {
     expect(repository.save.mock.calls[0][0].config).toEqual({ files: [] });
   });
 });
+
+describe('DatasourcesService.runReadOnlySql stop signal (datasources R38)', () => {
+  function withSql() {
+    const built = build(null);
+    const runReadOnlySql = jest
+      .fn<Promise<unknown>, unknown[]>()
+      .mockResolvedValue({ columns: [], rows: [], totalRows: 0 });
+    Object.assign(built.databricks, { runReadOnlySql });
+    return { ...built, runReadOnlySql };
+  }
+
+  it('hands the signal to the connector after the row limits', async () => {
+    const { service, runReadOnlySql } = withSql();
+    const { signal } = new AbortController();
+
+    await service.runReadOnlySql('ds-1', 'SELECT 1', 10, 50_001, { signal });
+    await service.runReadOnlySql('ds-1', 'SELECT 1', 10, undefined, {
+      signal,
+    });
+
+    expect(runReadOnlySql.mock.calls[0].slice(1)).toEqual([
+      'SELECT 1',
+      10,
+      50_001,
+      { signal },
+    ]);
+    expect(runReadOnlySql.mock.calls[1].slice(1)).toEqual([
+      'SELECT 1',
+      10,
+      undefined,
+      { signal },
+    ]);
+  });
+
+  it('calls the connector as before without options', async () => {
+    const { service, runReadOnlySql } = withSql();
+
+    await service.runReadOnlySql('ds-1', 'SELECT 1', 10);
+    await service.runReadOnlySql('ds-1', 'SELECT 1', 10, 500);
+
+    expect(runReadOnlySql.mock.calls[0]).toHaveLength(3);
+    expect(runReadOnlySql.mock.calls[1]).toHaveLength(4);
+  });
+});

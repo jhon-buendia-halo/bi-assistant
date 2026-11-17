@@ -15,6 +15,7 @@ import {
   DatasourceConnector,
   mapWithConcurrency,
   MASKED,
+  RunSqlOptions,
   splitEntity,
   SQL_ROWS_MAX,
 } from './connector';
@@ -55,6 +56,8 @@ interface ResolvedEndpoint {
 
 interface FetchOptions {
   pageSize?: number;
+  /** The caller's stop (datasources R38): aborts the request in flight. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -151,18 +154,22 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
   /**
    * Materialise-then-query: the endpoints the SQL references are fetched into
    * an in-memory SQLite database (one table per endpoint, named by its dotted
-   * key) and the statement runs there. Nothing outlives the call.
+   * key) and the statement runs there. Nothing outlives the call. An abort
+   * of `options.signal` aborts the fetches and stops before materialising;
+   * the SQLite statement itself runs synchronously and cannot be stopped.
    */
   async runReadOnlySql(
     config: RestApiConfig,
     sql: string,
     rowLimit: number,
     maxRows = SQL_ROWS_MAX,
+    options: RunSqlOptions = {},
   ): Promise<QueryResult> {
     const safeSql = assertReadOnlySql(sql);
     const lim = clampRows(rowLimit, 100, maxRows);
     const { sql: rewritten, refs } = rewriteReferences(safeSql);
-    return this.withDatabase(config, refs, (db) => {
+    options.signal?.throwIfAborted();
+    return this.withDatabase(config, refs, options.signal, (db) => {
       const statement = db.prepare(rewritten);
       const rows = statement.all() as Record<string, unknown>[];
       return {
@@ -187,7 +194,7 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     // statement's references are rewritten and loaded.
     const page = rewriteReferences(built.text);
     const count = rewriteReferences(built.countText).sql;
-    return this.withDatabase(config, page.refs, (db) =>
+    return this.withDatabase(config, page.refs, undefined, (db) =>
       readPagedRows(
         { ...built, text: page.sql, countText: count },
         stmt.offset,
@@ -204,11 +211,13 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
 
   /**
    * Fetch the endpoints `refs` names (all of them when it names none) into an
-   * in-memory SQLite database, run `query` on it, and close it.
+   * in-memory SQLite database, run `query` on it, and close it. An abort of
+   * `signal` rejects with its reason before anything is materialised.
    */
   private async withDatabase<T>(
     config: RestApiConfig,
     refs: Set<string>,
+    signal: AbortSignal | undefined,
     query: (db: import('better-sqlite3').Database) => T | Promise<T>,
   ): Promise<T> {
     const endpoints = this.endpoints(config);
@@ -225,9 +234,11 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
           ep.def.maxRows && ep.def.maxRows > 0
             ? ep.def.maxRows
             : DEFAULT_MAX_ROWS,
+          { signal },
         ),
       );
     });
+    signal?.throwIfAborted();
 
     const BetterSqlite3 =
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -400,11 +411,13 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
         params[pagination?.cursorParam || 'cursor'] = cursor;
       }
 
+      options.signal?.throwIfAborted();
       const body = await this.requestJson(
         config,
         endpoint,
         params,
         Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now()),
+        options.signal,
       );
       const rows = extractRows(body, endpoint.rowsPointer);
       if (style === 'none') {
@@ -435,6 +448,7 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     endpoint: RestEndpointDef,
     params: Record<string, string>,
     timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<unknown> {
     const label = `endpoint "${endpoint.name}"`;
     if (timeoutMs <= 0) {
@@ -443,6 +457,8 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     const url = buildUrl(config.baseUrl, endpoint.path, params);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const stop = () => controller.abort();
+    signal?.addEventListener('abort', stop, { once: true });
     try {
       const response = await fetch(url, {
         method: 'GET',
@@ -465,6 +481,8 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
         throw new Error(`REST API — ${label}: response is not valid JSON`);
       }
     } catch (err) {
+      // The caller's stop, not a timeout: reject with its reason.
+      signal?.throwIfAborted();
       if (controller.signal.aborted) {
         throw new Error(
           `REST API — ${label}: request timed out after ${Math.round(timeoutMs / 1000)}s`,
@@ -476,6 +494,7 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
       throw new Error(`REST API — ${label}: ${describeError(err)}`);
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', stop);
     }
   }
 }
