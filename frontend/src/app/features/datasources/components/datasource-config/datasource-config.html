@@ -234,7 +234,11 @@
           <span>Use SSL</span>
         </label>
       } @else if (kind() === "file") {
-        <app-file-sources [files]="files()" (filesChange)="patchFiles($event)" />
+        <app-file-sources
+          [files]="files()"
+          [datasourceId]="editingId()"
+          (filesChange)="patchFiles($event)"
+        />
       } @else {
         <label class="flex flex-col gap-1">
           <span class="field-label">Base URL</span>

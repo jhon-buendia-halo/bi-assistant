@@ -136,7 +136,7 @@ The `file` kind (ADR-0052; plan [m1-31](../../../docs/plans/m1-31-excel-csv-data
 - R59. The inventory SHALL be one catalog, `file`, with a schema per file and the tables of the attached database, column types as DuckDB names them (`VARCHAR`, `DOUBLE`, `BIGINT`, …). There are no foreign keys (datasets infer relationships from naming), and the summary reads `<n> files · <m> tables` (included sheets; `1 file · 1 table` in the singular). A test runs `SELECT 1` in the R35 sandbox.
 - R60. Excel / CSV failures SHALL surface as `DuckDB — <message>`, with DuckDB's whole message (its `Did you mean …` and `LINE 1:` lines help the SQL repair loop), and be logged as `DuckDB call failed: <message>`. Sampled and queried values are JSON-safe: a BIGINT becomes a number when exact, else its text.
 - R61. A file SHALL reach the backend in one upload whose raw body is streamed to `<dataDir>/files/uploads/<uploadId>/<name>`, never through the JSON body parser, with its name in the URI-encoded `X-File-Name` header. A file over 200 MB is refused (`File is larger than 200 MB`) and its partial copy deleted; `.xls` is refused with `.xls files are not supported — save the workbook as .xlsx` and any other extension but `.xlsx` and `.csv` with `Only .xlsx and .csv files can be imported`. The upload answers the file with a new id, its size, SHA-256, upload time, schema key and the proposal of R56 for each sheet, keyed by R55.
-- R62. The system SHALL preview one sheet of an upload or of a saved file under any import options, the omitted ones taken from the detection: the first 7 and the last 2 sheet rows of the range with their row numbers, each column's letter, its name as the import names it (R56.5) and the type DuckDB reads it as, the number of rows below the header, and the warnings that hold for those options (`header-guessed` only while the header row is the detected one). A bad range or header row is refused with R57's messages.
+- R62. The system SHALL preview one sheet of an upload or of a saved file under any import options, the omitted ones taken from the detection: the first 7 rows of the sheet (from its first non-empty row, so rows above the header show; widened to the header row and the one under it when the header sits lower) and the last 2 rows of the range, with their row numbers, each column's letter, its name as the import names it (R56.5) and the type DuckDB reads it as, the number of rows below the header, and the warnings that hold for those options (`header-guessed` only while the header row is the detected one). A bad range or header row is refused with R57's messages.
 - R63. Testing (R11) an Excel / CSV configuration SHALL import every included sheet, each file from its upload or its saved original, into a throwaway database under `<dataDir>/files/uploads/`, removed afterwards, and report `Imported <n> tables · <rows> rows` (`1 table`, `1 row` in the singular; numbers with `en-US` separators), or the first failure as `<file> · <sheet>: <cause>`. No file is refused with `Add at least one .xlsx or .csv file`, no included sheet with `Include at least one sheet`.
 - R64. Saving an Excel / CSV datasource SHALL import its files into its `data.duckdb` first (R57), so a failed import answers the failure, keeps the previous database and stores nothing; only then is each upload moved to `<dataDir>/files/<datasourceId>/originals/<fileId>.<ext>`, every original no file names any more removed, the configuration stored without `uploadId` and with each imported sheet's row count and columns, and the inventory snapshot refreshed (a failed refresh is logged and leaves the save in place).
 - R65. Replacing a file (its saved id with a new upload) SHALL keep the file's schema key and the table key of each sheet whose name is unchanged, so datasets keep working; a new file or sheet never takes a key a kept one holds.
@@ -251,6 +251,28 @@ Feature: Datasources, datasets, and sessions (World Cup database)
 ```
 
 The fourth scenario exercises the dataset catalog browser and is also referenced from [datasets](../datasets/spec.md). Flows for the Databricks and REST kinds, SSL, and OpenAPI discovery have no E2E yet (see Acceptance).
+
+### Feature: Excel and CSV datasources
+
+E2E: `frontend/e2e/excel-datasources.spec.ts`
+
+```gherkin
+Feature: Excel and CSV datasources
+
+  Scenario: Uploads a workbook and a CSV, reviews a sheet and saves the datasource
+    Given I am in "Datasource Configuration"
+    When I click "New datasource", name it, choose the kind "Excel / CSV" and upload a workbook and a CSV file
+    Then I see both files with their sheets, a total-row warning on "Region" and the "Notes" sheet skipped
+    When I click "Review" on the "Region" sheet
+    And I click row number 2 to make it the header row
+    And I click "Apply"
+    And I click "Import and check"
+    Then I see "Imported 2 tables · 9 rows"
+    When I click "Save datasource"
+    Then the datasource is listed with the kind "Excel / CSV"
+    When I click "Edit" on it
+    Then I see its two files and the "Region" sheet with header row 2
+```
 
 ## Acceptance
 

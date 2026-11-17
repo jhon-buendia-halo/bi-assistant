@@ -35,6 +35,8 @@ export class SheetReviewDialog implements OnInit, OnDestroy {
   readonly headerChoices = HEADER_ROW_CHOICES;
 
   readonly file = input.required<SourceFile>();
+  /** The saved datasource, for a file that is already saved. */
+  readonly datasourceId = input<string | null>(null);
   /** The sheet to show first. */
   readonly initialSheet = input<string>();
   /** The element to focus when the dialog closes (the Review button). */
@@ -110,6 +112,29 @@ export class SheetReviewDialog implements OnInit, OnDestroy {
     this.cancel();
   }
 
+  /** Focus wraps inside the dialog: Tab from the last control goes to the first and back. */
+  trapTab(event: Event): void {
+    const panel = this.panel()?.nativeElement;
+    if (!panel) return;
+    const items = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    const back = (event as KeyboardEvent).shiftKey;
+    if (back && (active === first || active === panel)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!back && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   select(sheet: string): void {
     this.selected.set(sheet);
     void this.loadPreview();
@@ -145,7 +170,9 @@ export class SheetReviewDialog implements OnInit, OnDestroy {
     this.error.set(null);
     try {
       const preview = await this.api.preview({
-        uploadId: this.file().uploadId,
+        ...(this.file().uploadId
+          ? { uploadId: this.file().uploadId }
+          : { datasourceId: this.datasourceId() ?? undefined }),
         fileId: this.file().id,
         sheet: s.sheet,
         headerRow: s.headerRow,

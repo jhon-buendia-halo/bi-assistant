@@ -135,7 +135,7 @@ export interface SheetPreview {
   /** Rows in range below the header. */
   totalRows: number;
   columns: { letter: string; name: string; type: string }[];
-  /** First 7 + last 2 sheet rows. */
+  /** First 7 sheet rows from its first row, and the range's last 2. */
   rows: { row: number; cells: (string | number | boolean | null)[] }[];
   warnings: SheetWarning[];
 }

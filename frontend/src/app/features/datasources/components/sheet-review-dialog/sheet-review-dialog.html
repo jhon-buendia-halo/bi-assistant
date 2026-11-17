@@ -9,6 +9,8 @@
     aria-modal="true"
     aria-labelledby="sheet-review-title"
     data-testid="sheet-review-dialog"
+    (keydown.tab)="trapTab($event)"
+    (keydown.shift.tab)="trapTab($event)"
   >
     <div
       class="flex items-center gap-2.5 border-b border-border px-[18px] py-3.5"

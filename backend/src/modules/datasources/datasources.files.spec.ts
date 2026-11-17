@@ -283,10 +283,12 @@ describe('POST /datasources/files/preview (api.md 157)', () => {
       ],
       warnings: [],
     });
+    // The grid starts at the sheet's first row, so the rows above the header show.
     expect(preview.rows.map((r) => r.row)).toEqual([
-      2, 3, 4, 5, 6, 7, 8, 13, 14,
+      1, 2, 3, 4, 5, 6, 7, 13, 14,
     ]);
-    expect(preview.rows[0].cells).toEqual(['Name', 'Titles']);
+    expect(preview.rows[0].cells).toEqual(['Team', 'Stats']);
+    expect(preview.rows[1].cells).toEqual(['Name', 'Titles']);
     expect(preview.rows[8].cells).toEqual(['Team 12', '11']);
   });
 

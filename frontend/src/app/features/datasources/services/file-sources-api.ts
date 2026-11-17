@@ -1,10 +1,10 @@
-import { InjectionToken } from '@angular/core';
+import { InjectionToken, inject } from '@angular/core';
 import {
   FileDatasourceConfig,
   SheetPreview,
   SourceFile,
 } from '../models/datasource.model';
-import { MockFileSourcesApi } from './mock-file-sources-api';
+import { HttpFileSourcesApi } from './http-file-sources-api';
 
 export interface SheetPreviewRequest {
   uploadId?: string;
@@ -24,11 +24,12 @@ export interface FileSourcesApi {
   discard(uploadId: string): Promise<void>;
   importAndCheck(
     config: FileDatasourceConfig,
+    datasourceId?: string,
   ): Promise<{ ok: boolean; message: string }>;
 }
 
-/** The mock answers until the HTTP implementation (endpoints 156 to 158) replaces it. */
+/** The HTTP implementation answers; unit tests provide `MockFileSourcesApi` instead. */
 export const FILE_SOURCES_API = new InjectionToken<FileSourcesApi>(
   'FILE_SOURCES_API',
-  { providedIn: 'root', factory: () => new MockFileSourcesApi() },
+  { providedIn: 'root', factory: () => inject(HttpFileSourcesApi) },
 );

@@ -75,4 +75,35 @@ describe('SheetReviewDialog', () => {
     expect(closed).toBe(2);
     expect(applied).toBe(0);
   });
+
+  it('keeps Tab and Shift+Tab inside the dialog', () => {
+    const panel = el().querySelector<HTMLElement>(
+      '[data-testid="sheet-review-dialog"]',
+    )!;
+    const apply = panel.querySelector<HTMLElement>(
+      '[data-testid="sheet-review-apply"]',
+    )!;
+    apply.focus();
+    const forward = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+    });
+    apply.dispatchEvent(forward);
+    expect(forward.defaultPrevented).toBeTrue();
+    expect(panel.contains(document.activeElement)).toBeTrue();
+    expect(document.activeElement).not.toBe(apply);
+
+    const first = document.activeElement as HTMLElement;
+    first.focus();
+    const back = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    first.dispatchEvent(back);
+    expect(back.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(apply);
+  });
 });

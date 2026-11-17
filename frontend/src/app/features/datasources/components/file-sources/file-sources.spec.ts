@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SourceFile } from '../../models/datasource.model';
+import { FILE_SOURCES_API } from '../../services/file-sources-api';
+import { MockFileSourcesApi } from '../../services/mock-file-sources-api';
 import { FileSources } from './file-sources';
 
 const sales: SourceFile = {
@@ -42,6 +44,7 @@ describe('FileSources', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [FileSources],
+      providers: [{ provide: FILE_SOURCES_API, useValue: new MockFileSourcesApi() }],
     }).compileComponents();
     fixture = TestBed.createComponent(FileSources);
     fixture.componentRef.setInput('files', [sales]);
