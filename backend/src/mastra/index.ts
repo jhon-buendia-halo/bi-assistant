@@ -25,6 +25,7 @@ import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
 import { appSkills } from './app-skills';
 import { agentTurnWorkflow } from './workflows/agent-turn.workflow';
+import { askAgentWorkflow } from './workflows/ask-agent.workflow';
 import { answerBusinessQuestionWorkflow } from './workflows/answer-business-question.workflow';
 import { consumptionGapAnalysisWorkflow } from './workflows/consumption-gap-analysis.workflow';
 import { dataReadinessAssessmentWorkflow } from './workflows/data-readiness-assessment.workflow';
@@ -75,6 +76,8 @@ export const mastra = new Mastra({
   // sessions; 5.12, ADR-0040).
   workflows: {
     'agent-turn': agentTurnWorkflow,
+    // A follow-up that asks one agent of Answer a Business Question (5.21).
+    'ask-agent': askAgentWorkflow,
     'answer-business-question': answerBusinessQuestionWorkflow,
     'data-readiness-assessment': dataReadinessAssessmentWorkflow,
     'recreate-dashboard': recreateDashboardWorkflow,

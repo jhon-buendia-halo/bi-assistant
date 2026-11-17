@@ -81,7 +81,17 @@
           data-testid="workflow-run-context"
           class="m-0 text-[12px] text-fg-muted"
         >
-          Follows up on “{{ earlier.question }}”
+          @if (designer.contextAgent(); as agent) {
+            <span>Asked {{ agent }} · </span>
+          }
+          <span>Follows up on “{{ earlier.question }}”</span>
+        </p>
+      } @else if (designer.contextAgent(); as agent) {
+        <p
+          data-testid="workflow-run-context"
+          class="m-0 text-[12px] text-fg-muted"
+        >
+          Asked {{ agent }}
         </p>
       }
       @if (designer.shownQuestion(); as question) {
@@ -395,30 +405,59 @@
               (removed)="removeImage($event)"
             />
           }
-          <div class="flex items-end gap-2">
+          <!-- With the agent picker, the question takes the whole line and
+               the picker and Follow up share the row under it. -->
+          <div
+            class="flex gap-2"
+            [class.flex-col]="designer.askableSteps().length > 0"
+            [class.items-end]="designer.askableSteps().length === 0"
+          >
             <textarea
               data-testid="workflow-follow-up-input"
               aria-label="Follow-up question"
               aria-describedby="workflow-follow-up-hint"
-              placeholder="Ask a follow-up about this result"
+              [placeholder]="followUpPlaceholder()"
               rows="1"
               [value]="designer.followUpText()"
               (input)="onFollowUpInput($event)"
               (keydown.enter)="onEnter($event, 'follow-up')"
               class="composer-input min-w-0 flex-1 self-center"
+              [class.w-full]="designer.askableSteps().length > 0"
             ></textarea>
             <span id="workflow-follow-up-hint" class="sr-only"
               >Follows up on this run</span
             >
-            <button
-              type="submit"
-              data-testid="workflow-run-follow-up"
-              [disabled]="!designer.followUpText().trim()"
-              class="btn btn-primary shrink-0 px-2.5 py-1"
+            <div
+              [class.contents]="designer.askableSteps().length === 0"
+              [class.flex]="designer.askableSteps().length > 0"
+              class="items-center gap-2"
             >
-              <lucide-angular [img]="MessageSquareReply" [size]="14" />
-              <span>Follow up</span>
-            </button>
+              @if (designer.askableSteps().length > 0) {
+                <select
+                  data-testid="workflow-follow-up-agent"
+                  aria-label="Ask"
+                  [value]="designer.askStep()"
+                  (change)="onAskStepChange($event)"
+                  class="field min-w-0 flex-1 truncate py-1"
+                >
+                  <option value="" class="bg-surface">Whole workflow</option>
+                  @for (step of designer.askableSteps(); track step.id) {
+                    <option [value]="step.id" class="bg-surface">
+                      {{ step.label }}
+                    </option>
+                  }
+                </select>
+              }
+              <button
+                type="submit"
+                data-testid="workflow-run-follow-up"
+                [disabled]="!designer.followUpText().trim()"
+                class="btn btn-primary shrink-0 px-2.5 py-1"
+              >
+                <lucide-angular [img]="MessageSquareReply" [size]="14" />
+                <span>Follow up</span>
+              </button>
+            </div>
           </div>
         </form>
       } @else {

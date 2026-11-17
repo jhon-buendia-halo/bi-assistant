@@ -2794,3 +2794,115 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
     });
   });
 });
+
+describe('WorkflowRunsService: a follow-up that asks one agent (workflows R38; api.md 118; agents.md 5.21)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const DATA = [
+    {
+      tool: 'run_readonly_sql',
+      input: 'SELECT year, winner FROM wc.public.cups',
+      columns: ['year', 'winner'],
+      rows: [{ year: 2002, winner: 'Brazil' }],
+      rowCount: 1,
+      rationale: 'Every winner.',
+    },
+  ];
+
+  async function earlier() {
+    ctx = build(DATASETS, { answer: 'Brazil won in 2002.', data: DATA });
+    return (await streamed(ctx, 'answer-business-question', { input: ASK }))
+      .run;
+  }
+
+  it('runs Write answer alone on a host given the earlier answer, and stores the asked step', async () => {
+    const first = await earlier();
+    const second = await streamed(ctx, 'answer-business-question', {
+      input: { question: 'Shorter, please', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id, askStep: 'write-answer' },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as {
+      ask?: {
+        step: string;
+        earlier?: { plan: unknown; records: { input?: string }[] };
+      };
+    };
+    expect(spec).toMatchObject({
+      runId: second.run.id,
+      workflowId: 'answer-business-question',
+      context: {
+        question: 'Who won in 2002?',
+        answer: 'Brazil won in 2002.',
+      },
+      continuesThreadsOf: `run-${first.id}`,
+    });
+    expect(spec.ask?.step).toBe('write-answer');
+    expect(spec.ask?.earlier?.plan).toEqual(PLAN_OUTPUT.plan);
+    expect(spec.ask?.earlier?.records.map((record) => record.input)).toEqual([
+      DATA[0].input,
+    ]);
+    expect(second.run.context).toEqual({
+      fromRunId: first.id,
+      askStep: 'write-answer',
+    });
+  });
+
+  it('refuses Sarah when the earlier run did not check data quality', async () => {
+    const first = await earlier();
+    await expect(
+      ctx.service.prepare('answer-business-question', {
+        input: ASK,
+        context: { fromRunId: first.id, askStep: 'check-data-quality' },
+      }),
+    ).rejects.toThrow(
+      `Step "check-data-quality" did not run in run "${first.id}"`,
+    );
+  });
+
+  it('asks the Analyst from copies of the run threads, with its step context block', async () => {
+    const first = await earlier();
+    const second = await streamed(ctx, 'answer-business-question', {
+      input: { question: 'Why Brazil?', datasets: ['World Cup Core'] },
+      context: { fromRunId: first.id, askStep: 'analyse' },
+    });
+    const spec = ctx.sessions.createRunHost.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(spec).toMatchObject({
+      workflowId: 'answer-business-question',
+      ask: { step: 'analyse' },
+      continuesThreadsOf: `run-${first.id}`,
+    });
+    expect(spec['contextBlock']).toContain('step "Analyse" (analyse)');
+    expect(spec['agentKey']).toBeUndefined();
+    expect(second.run.context?.askStep).toBe('analyse');
+  });
+
+  it.each([
+    [{ askStep: 'validate' }, 'Step "validate" has no agent to ask'],
+    [{ askStep: 'read-images' }, 'did not run in run'],
+  ])('refuses %j before anything runs', async (extra, message) => {
+    const first = await earlier();
+    ctx.sessions.createRunHost.mockClear();
+    const refusal = ctx.service.prepare('answer-business-question', {
+      input: ASK,
+      context: { fromRunId: first.id, ...extra },
+    });
+    await expect(refusal).rejects.toBeInstanceOf(BadRequestException);
+    await expect(refusal).rejects.toThrow(message);
+    expect(ctx.sessions.createRunHost).not.toHaveBeenCalled();
+  });
+
+  it('refuses an asked step with no earlier run', async () => {
+    ctx = build();
+    await expect(
+      ctx.service.prepare('answer-business-question', {
+        input: ASK,
+        context: { askStep: 'plan' },
+      }),
+    ).rejects.toThrow('Asking one agent needs an earlier run');
+  });
+});

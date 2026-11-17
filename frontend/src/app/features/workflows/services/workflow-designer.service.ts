@@ -71,6 +71,9 @@ export type { LiveToolCall, RunStepView, RunView };
 /** A step of the run panel: its last attempt, and how many times it ran. */
 export type RunPanelStep = RunStepView & { attempts: number };
 
+/** The only workflow whose follow-up can ask one agent step (api.md 118). */
+const ASK_AGENT_WORKFLOW = 'answer-business-question';
+
 /** How often, and how many times, a stopped run is read back until it is stored. */
 const STOPPED_POLL_MS = 300;
 const STOPPED_POLL_TRIES = 10;
@@ -171,7 +174,70 @@ export class WorkflowDesigner {
   /** The shown answer's rating is being saved. */
   readonly ratingPending = signal(false);
   /** The earlier run this one follows up (its context), if any. */
-  readonly contextRun = signal<{ id: string; question: string } | null>(null);
+  readonly contextRun = signal<{
+    id: string;
+    question: string;
+    /** The agent asked alone (a live run started from the picker). */
+    askedAgent?: string;
+  } | null>(null);
+
+  /** The follow-up composer's picked step id; '' is the whole workflow. */
+  readonly askStep = signal('');
+
+  /**
+   * The agent steps a follow-up can ask alone (answer-business-question
+   * only): those that ran in the run shown, last attempt, in step order.
+   */
+  readonly askableSteps = computed<
+    { id: string; agentName: string; label: string }[]
+  >(() => {
+    const workflow = this.workflow();
+    if (workflow === null || workflow.id !== ASK_AGENT_WORKFLOW) return [];
+    const ran = new Map(
+      this.runPanelSteps().map((step) => [step.id, step.status]),
+    );
+    return workflow.steps.flatMap((step) => {
+      const status = ran.get(step.id);
+      if (
+        step.kind !== 'agent' ||
+        !step.agent ||
+        status === undefined ||
+        status === null ||
+        status === 'skipped' ||
+        status === 'running'
+      ) {
+        return [];
+      }
+      return [
+        {
+          id: step.id,
+          agentName: step.agent.name,
+          label: `${step.agent.name} · ${step.title}`,
+        },
+      ];
+    });
+  });
+
+  /** The name of the agent picked in the composer; null for the whole workflow. */
+  readonly askedAgentName = computed(
+    () =>
+      this.askableSteps().find((s) => s.id === this.askStep())?.agentName ??
+      null,
+  );
+
+  /**
+   * The agent a stored run asked alone (its `context.askStep`), else the one
+   * a live run was started with; null for a whole-workflow run.
+   */
+  readonly contextAgent = computed<string | null>(() => {
+    const step = this.run()?.context?.askStep;
+    if (step) {
+      return (
+        this.workflow()?.steps.find((s) => s.id === step)?.agent?.name ?? null
+      );
+    }
+    return this.contextRun()?.askedAgent ?? null;
+  });
 
   /** The input of the run started here (Execute, Follow up, Continue); null before one. */
   readonly liveInput = signal<Record<string, WorkflowInputValue> | null>(null);
@@ -796,10 +862,12 @@ export class WorkflowDesigner {
     if (this.running()) return;
     this.setInput(field, text);
     this.followUpText.set('');
-    const request = followUpRequest(run, field, text, images);
+    const picked = this.askableSteps().find((s) => s.id === this.askStep());
+    const request = followUpRequest(run, field, text, images, picked?.id);
     this.start(workflow, request, {
       id: run.id,
       question: run.question ?? '',
+      ...(picked ? { askedAgent: picked.agentName } : {}),
     });
   }
 
@@ -1063,6 +1131,7 @@ export class WorkflowDesigner {
     this.runId.set(null);
     this.run.set(null);
     this.contextRun.set(null);
+    this.askStep.set('');
     this.liveInput.set(null);
     this.liveStartedAt.set(null);
     this.liveFinishedAt.set(null);
@@ -1169,7 +1238,7 @@ export class WorkflowDesigner {
   private start(
     workflow: WorkflowDetail,
     request: WorkflowRunRequest,
-    context: { id: string; question: string } | null,
+    context: { id: string; question: string; askedAgent?: string } | null,
   ): void {
     this.cancelStream();
     const generation = this.generation;

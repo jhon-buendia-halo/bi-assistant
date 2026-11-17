@@ -1309,6 +1309,29 @@ flowchart LR
   - **Check every column pair by query:** rejected; thousands of queries per run.
   - **Parse the views' and jobs' SQL:** rejected; Landing and Normalized are often loaded by tools outside the database.
 
+#### ADR-0052 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
+- **Status:** Accepted
+- **Date:** 2026-11-17
+- **Context:**
+  - Every follow-up of Answer a Business Question ran the whole workflow again (Load catalog, Plan, Analyse, Validate, Write answer), so "shorter", "as a table" or "next page" cost about as much as the first question.
+  - The user picked, among three approaches (a smarter router inside the workflow, a picker in the follow-up composer, a supervisor agent over subagents), the picker: the user chooses which agent answers, and the whole workflow stays the default.
+  - Four of the six agents (Olivia, Jessica, Nathan, Zoe) are step agents: one structured call with no tools and no chat of their own. Only the Analyst and Sarah can answer as an agent turn.
+- **Decision:**
+  - **A run of the same workflow, on a second engine.** The follow-up is stored as a run of `answer-business-question` with `context.askStep`; its turn runs on `ask-agent`, an internal Mastra workflow whose one `.branch()` takes the asked step. Each engine step has the asked catalogue step's id, so the run's tracker shows that step and skips the rest, and the Run panel, the Runs tab and the query inspector need nothing new.
+  - **The same calls as the workflow's steps.** The engine's runtime is built in `TurnEngine` beside Answer a Business Question's, from the same closures: the agent stream for the Analyst and Sarah, `writeAnswer`, `plan`, `interpretFollowUp` with `pageResult`, `readImages`. No agent's instructions or tools change.
+  - **Code-written answers for step agents that have no chat:** Olivia's plan and Zoe's notes become the answer through fixed text; Nathan's new-question case answers where to ask instead of planning.
+  - **Jessica's evidence is carried, not recomputed:** the earlier answer's records and their evidence facts become this turn's records, so the new answer's sources open in the query inspector (CLAUDE.md, *query inspector*).
+- **Consequences:**
+  - A single-agent follow-up makes one model call (Jessica, Olivia, Nathan, Zoe) or one agent turn (the Analyst, Sarah) instead of four or more; it gets no Validate, retry or Write answer around it, so its answer carries only that agent's guarantees.
+  - The picker lists only steps that ran in the shown run; a run that asked one agent has only that step, so its own follow-up offers that agent or the whole workflow.
+  - `answer-business-question`'s graph and contract hash are unchanged, so no eval set and no stored suspended run is affected.
+  - **Stack-neutral:** a rebuild needs a run store with a context field, a way to run one step's model call outside its workflow, and the shared answer path.
+- **Alternatives considered:**
+  - **A router inside the workflow (more `.branch()` arms after Interpret follow-up):** automatic, but a wrong route is invisible to the user; not picked.
+  - **A supervisor agent with subagents (`agents:` in Mastra 1.66):** flexible, but the flow would come from a prompt (against ADR-0034), with a supervisor call on top of every subagent call; not picked.
+  - **Mastra's time travel (`run.timeTravel`) from the asked step:** needs snapshots kept after a run ends (ADR-0043 keeps them only while suspended) and runs every step after the target; rejected.
+  - **The node chat path (agents.md 5.16) for every agent:** step agents would answer in their JSON format, and the reply would live in the step's chat, not in the Run panel; rejected.
+
 ## Level 4 — Code
 
 ```mermaid

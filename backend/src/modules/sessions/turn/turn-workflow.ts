@@ -11,6 +11,10 @@ import {
   AGENT_TURN_WORKFLOW_ID,
 } from '../../../mastra/workflows/agent-turn.steps';
 import {
+  ASK_AGENT_WORKFLOW_ID,
+  isAskableStep,
+} from '../../../mastra/workflows/ask-agent.steps';
+import {
   parseWorkflowId,
   sessionWorkflowId,
   type WorkflowBar,
@@ -36,6 +40,16 @@ export interface TurnWorkflow {
  */
 export function turnWorkflowOf(session: SessionDoc): TurnWorkflow {
   const id = sessionWorkflowId(session);
+  // A follow-up that asks one agent alone (agents.md 5.21): the asked step
+  // is the engine's one step, whatever agent the host is bound to.
+  if (session.ask && isAskableStep(session.ask.step)) {
+    return {
+      id,
+      engineId: ASK_AGENT_WORKFLOW_ID,
+      bar: 'agent',
+      stepIds: [session.ask.step],
+    };
+  }
   const parsed = parseWorkflowId(id);
   if (parsed?.kind === 'code' && !session.contextBlock) {
     return {

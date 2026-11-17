@@ -826,6 +826,132 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
     expect(designer.runResult()?.status).toBe('running');
   });
 
+  describe('asking one agent in a follow-up', () => {
+    const agentStep = (
+      id: string,
+      title: string,
+      name: string,
+    ): WorkflowDetail['steps'][number] => ({
+      id,
+      title,
+      kind: 'agent',
+      summary: title,
+      agent: { key: id, name, tools: [], maxSteps: 5 },
+      input: ['question'],
+      output: ['out'],
+      exits: [],
+    });
+    const ASK: WorkflowDetail = {
+      ...ASSISTANT,
+      steps: [
+        agentStep('plan', 'Plan', 'Olivia'),
+        agentStep('analyse', 'Analyse', 'Insights Analyst'),
+        agentStep('write-answer', 'Write answer', 'Jessica'),
+        {
+          id: 'wrap-up',
+          title: 'Wrap up',
+          kind: 'code',
+          summary: 'Wrap up',
+          input: [],
+          output: [],
+          exits: [],
+        },
+      ],
+    };
+    const step = (
+      id: string,
+      status: WorkflowRun['steps'][number]['status'],
+    ) => ({ id, title: id, status });
+
+    beforeEach(() => {
+      designer.workflow.set(ASK);
+    });
+
+    it('lists the agent steps that ran in the shown run, in step order, skipped ones left out', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          steps: [
+            step('wrap-up', 'success'),
+            step('write-answer', 'success'),
+            step('analyse', 'success'),
+            step('plan', 'skipped'),
+          ],
+        }),
+      );
+      expect(designer.askableSteps()).toEqual([
+        {
+          id: 'analyse',
+          agentName: 'Insights Analyst',
+          label: 'Insights Analyst · Analyse',
+        },
+        {
+          id: 'write-answer',
+          agentName: 'Jessica',
+          label: 'Jessica · Write answer',
+        },
+      ]);
+    });
+
+    it('the last attempt of a step wins', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          steps: [
+            step('analyse', 'success'),
+            { ...step('analyse', 'skipped'), attempt: 2 },
+            step('write-answer', 'failed'),
+          ],
+        }),
+      );
+      expect(designer.askableSteps().map((s) => s.id)).toEqual([
+        'write-answer',
+      ]);
+    });
+
+    it('gives none for another workflow', () => {
+      designer.workflow.set({ ...ASK, id: 'other-workflow' });
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          workflowId: 'other-workflow',
+          steps: [step('analyse', 'success')],
+        }),
+      );
+      expect(designer.askableSteps()).toEqual([]);
+    });
+
+    it('Follow up sends the picked step and the run says who was asked; a new run resets the pick', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({ steps: [step('write-answer', 'success')] }),
+      );
+      designer.askStep.set('write-answer');
+      expect(designer.askedAgentName()).toBe('Jessica');
+      designer.followUp('Shorter please');
+      expect(runs.last.body.context).toEqual({
+        fromRunId: 'run-1',
+        askStep: 'write-answer',
+      });
+      expect(designer.contextRun()?.askedAgent).toBe('Jessica');
+      expect(designer.contextAgent()).toBe('Jessica');
+      expect(designer.askStep()).toBe('');
+      expect(designer.askedAgentName()).toBeNull();
+    });
+
+    it('a stored run with context.askStep names the agent asked', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({
+          id: 'run-2',
+          context: { fromRunId: 'run-1', askStep: 'analyse' },
+          steps: [step('analyse', 'success')],
+        }),
+      );
+      expect(designer.contextAgent()).toBe('Insights Analyst');
+    });
+  });
+
   it('Follow up sends the composer images: the kept paths and the new ones', () => {
     executeQuestion();
     runs.last.handlers.onDone!(

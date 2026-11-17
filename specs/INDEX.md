@@ -1427,7 +1427,7 @@ specs/capabilities/visuals/spec.md:409-431  ### Feature: Skills the designer is 
 specs/capabilities/visuals/spec.md:433-445  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
-specs/capabilities/workflows/spec.md:13-113  ## Rules
+specs/capabilities/workflows/spec.md:13-120  ## Rules
 specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly six workflows, in this order
 specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `answer-business-question`, `data-readines
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
@@ -1464,16 +1464,17 @@ specs/capabilities/workflows/spec.md:81-83  R33 **Artifacts** SHALL be reusable 
 specs/capabilities/workflows/spec.md:84-89  R34 Map a Dashboard to Data SHALL run, fixed in code ([../../system/agents
 specs/capabilities/workflows/spec.md:90-98  R35 **Reference images** (2026-11-15). Answer a Business Question, Assess
 specs/capabilities/workflows/spec.md:99-105  R36 A run of Answer a Business Question whose question asks for another pa
-specs/capabilities/workflows/spec.md:106-113  R37 Consumption Gap Analysis SHALL run, fixed in code ([../../system/agent
-specs/capabilities/workflows/spec.md:115-132  ## Edge cases and errors
-specs/capabilities/workflows/spec.md:134-138  ## Contracts
-specs/capabilities/workflows/spec.md:140-147  ## UI
-specs/capabilities/workflows/spec.md:149-374  ## Flows
-specs/capabilities/workflows/spec.md:151-249  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:251-337  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:339-345  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:347-374  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:376-394  ## Acceptance
+specs/capabilities/workflows/spec.md:106-112  R38 A follow-up of Answer a Business Question MAY ask the agent of one ste
+specs/capabilities/workflows/spec.md:113-120  R37 Consumption Gap Analysis SHALL run, fixed in code ([../../system/agent
+specs/capabilities/workflows/spec.md:122-139  ## Edge cases and errors
+specs/capabilities/workflows/spec.md:141-145  ## Contracts
+specs/capabilities/workflows/spec.md:147-154  ## UI
+specs/capabilities/workflows/spec.md:156-381  ## Flows
+specs/capabilities/workflows/spec.md:158-256  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:258-344  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:346-352  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:354-381  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:383-401  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -1832,7 +1833,7 @@ specs/system/agents.md:1120-1257  ## 4. Per-turn context
 specs/system/agents.md:1122-1224  ### 4.1 System context blocks
 specs/system/agents.md:1226-1246  ### 4.2 requestContext keys
 specs/system/agents.md:1248-1257  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1259-1829  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1259-1850  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1261-1291  ### 5.1 Streamed chat turn
 specs/system/agents.md:1293-1297  ### 5.2 Read-only enforcement
 specs/system/agents.md:1299-1313  ### 5.3 Execution-guided repair
@@ -1852,41 +1853,42 @@ specs/system/agents.md:1616-1637  ### 5.16 Node chats: chatting with a run step'
 specs/system/agents.md:1639-1682  ### 5.17 Workflow: `recreate-dashboard` (Dashboard Image to Artifact)
 specs/system/agents.md:1684-1717  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
 specs/system/agents.md:1719-1774  ### 5.19 Workflow: `review-website` (Review a Website)
-specs/system/agents.md:1776-1829  ### 5.20 Workflow: `consumption-gap-analysis` (Consumption Gap Analysis)
-specs/system/agents.md:1831-2004  ## 6. Visual designer pipeline
-specs/system/agents.md:1835-1845  ### 6.1 Entry points
-specs/system/agents.md:1847-1849  ### 6.2 Data handed to the designer
-specs/system/agents.md:1851-1867  ### 6.3 Modes and loop
-specs/system/agents.md:1869-1904  ### 6.4 Designer prompt
-specs/system/agents.md:1906-1911  ### 6.5 Repair
-specs/system/agents.md:1913-1915  ### 6.6 Assembled files
-specs/system/agents.md:1917-1919  ### 6.7 Call options
-specs/system/agents.md:1921-1964  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1966-2004  ### 6.9 Chart runtime contract
-specs/system/agents.md:2006-2180  ## 7. Skills and workspaces
-specs/system/agents.md:2008-2017  ### 7.1 Session workspaces
-specs/system/agents.md:2019-2060  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:2062-2088  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:2090-2174  ### 7.4 Skills per agent
-specs/system/agents.md:2176-2180  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2182-2357  ## 8. Evals
-specs/system/agents.md:2186-2312  ### 8.1 Case and set format
-specs/system/agents.md:2314-2321  ### 8.2 Data preflight
-specs/system/agents.md:2323-2334  ### 8.3 Executing a case
-specs/system/agents.md:2336-2341  ### 8.4 Runs, regression and report
-specs/system/agents.md:2343-2357  ### 8.5 Other entry points
-specs/system/agents.md:2359-2363  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2365-2378  ## Open questions and gaps
-specs/system/agents.md:2380-2519  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2521-2557  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2559-2561  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2563-2646  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2648-2752  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2754-2806  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2760-2779  ### Plan
-specs/system/agents.md:2781-2806  ### Write answer
-specs/system/agents.md:2808-2824  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2826-2845  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:1776-1828  ### 5.20 Workflow: `consumption-gap-analysis` (Consumption Gap Analysis)
+specs/system/agents.md:1829-1850  ### 5.21 Ask one agent: a follow-up on the `ask-agent` engine
+specs/system/agents.md:1852-2025  ## 6. Visual designer pipeline
+specs/system/agents.md:1856-1866  ### 6.1 Entry points
+specs/system/agents.md:1868-1870  ### 6.2 Data handed to the designer
+specs/system/agents.md:1872-1888  ### 6.3 Modes and loop
+specs/system/agents.md:1890-1925  ### 6.4 Designer prompt
+specs/system/agents.md:1927-1932  ### 6.5 Repair
+specs/system/agents.md:1934-1936  ### 6.6 Assembled files
+specs/system/agents.md:1938-1940  ### 6.7 Call options
+specs/system/agents.md:1942-1985  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1987-2025  ### 6.9 Chart runtime contract
+specs/system/agents.md:2027-2201  ## 7. Skills and workspaces
+specs/system/agents.md:2029-2038  ### 7.1 Session workspaces
+specs/system/agents.md:2040-2081  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:2083-2109  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:2111-2195  ### 7.4 Skills per agent
+specs/system/agents.md:2197-2201  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:2203-2378  ## 8. Evals
+specs/system/agents.md:2207-2333  ### 8.1 Case and set format
+specs/system/agents.md:2335-2342  ### 8.2 Data preflight
+specs/system/agents.md:2344-2355  ### 8.3 Executing a case
+specs/system/agents.md:2357-2362  ### 8.4 Runs, regression and report
+specs/system/agents.md:2364-2378  ### 8.5 Other entry points
+specs/system/agents.md:2380-2384  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2386-2399  ## Open questions and gaps
+specs/system/agents.md:2401-2540  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2542-2578  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2580-2582  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2584-2667  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2669-2773  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2775-2827  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2781-2800  ### Plan
+specs/system/agents.md:2802-2827  ### Write answer
+specs/system/agents.md:2829-2845  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2847-2866  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
@@ -2090,7 +2092,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1310  ## Level 3 — Components
+specs/system/architecture.md:258-1333  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -2130,7 +2132,8 @@ specs/system/architecture.md:1220-1241  #### ADR-0048 — A workflow run runs de
 specs/system/architecture.md:1243-1264  #### ADR-0049 — Review a Website drives the computer's own browser from the backend, measures before it asks a model, and keeps site sign-ins encrypted
 specs/system/architecture.md:1266-1286  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
 specs/system/architecture.md:1288-1310  #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
-specs/system/architecture.md:1312-1367  ## Level 4 — Code
+specs/system/architecture.md:1312-1333  #### ADR-0052 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
+specs/system/architecture.md:1335-1390  ## Level 4 — Code
 
 specs/system/data-model.md:13-57  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory

@@ -397,7 +397,7 @@ export interface WorkflowInputRequired {
 /** The body of `POST /workflows/:id/runs/stream` (api.md 118, 119). */
 export interface WorkflowRunRequest {
   input: Record<string, WorkflowInputValue>;
-  context?: { fromRunId: string };
+  context?: { fromRunId: string; askStep?: string };
 }
 
 /**
@@ -410,7 +410,7 @@ export interface WorkflowRun {
   workflowId: string;
   workflowName: string;
   input: Record<string, WorkflowInputValue>;
-  context?: { fromRunId: string };
+  context?: { fromRunId: string; askStep?: string };
   status: 'running' | 'success' | 'failed' | 'stopped' | 'suspended';
   /** A suspended run (or an expired one, `expired: true`): the question it waits on. */
   waitingFor?: WorkflowWaitingFor;
