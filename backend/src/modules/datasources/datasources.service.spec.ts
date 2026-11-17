@@ -250,12 +250,12 @@ describe('DatasourcesService and the file kind (ADR-0052)', () => {
     const { service, file } = buildFile();
     const sent = { files: [], databasePath: '/etc/other.duckdb' };
 
-    await service.testConnection('file', sent);
-
-    expect(file.testConnection).toHaveBeenCalledWith({
-      files: [],
-      databasePath: '',
-    });
+    // A test imports the files into a throwaway database of its own
+    // (story 1.31.3); the client's path never reaches a connector.
+    await expect(service.testConnection('file', sent)).rejects.toThrow(
+      'Add at least one .xlsx or .csv file',
+    );
+    expect(file.testConnection).not.toHaveBeenCalled();
   });
 
   it('never stores the database path', async () => {

@@ -22,3 +22,19 @@ export class DiscoverRestEndpointsDto {
   /** Restores masked secrets from the saved datasource. */
   id?: string;
 }
+
+/**
+ * Preview one sheet (api.md 157). One of `uploadId` (an unsaved upload) or
+ * `datasourceId` with `fileId` (a saved file) names the file; omitted
+ * options come from the detection.
+ */
+export class PreviewFileDto {
+  uploadId?: string;
+  datasourceId?: string;
+  fileId?: string;
+  sheet: string;
+  headerRow?: number;
+  range?: string;
+  excludeLastRow?: boolean;
+  allText?: boolean;
+}
