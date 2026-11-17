@@ -1,0 +1,240 @@
+<div
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+>
+  <div
+    #panel
+    tabindex="-1"
+    class="menu flex max-h-[820px] w-full max-w-[1120px] flex-col overflow-hidden !p-0 outline-none"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="sheet-review-title"
+    data-testid="sheet-review-dialog"
+  >
+    <div class="flex items-center gap-2.5 border-b border-border px-[18px] py-3.5">
+      <h3
+        id="sheet-review-title"
+        class="flex-1 text-[14px] font-medium text-fg-strong"
+      >
+        Review sheets — {{ file().name }}
+      </h3>
+      <span class="text-[11px] text-fg-muted">Table key</span>
+      <code class="font-mono text-[11px] text-fg">{{ tableKey() }}</code>
+    </div>
+
+    <div class="flex min-h-0 flex-1">
+      <div
+        class="flex w-[220px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-surface-muted p-2.5"
+      >
+        @for (s of draft(); track s.sheet) {
+          <div
+            class="flex items-center gap-2 rounded-lg border p-2"
+            [class.bg-surface-selected]="s.sheet === selected()"
+            [class.border-border-selected]="s.sheet === selected()"
+            [class.border-transparent]="s.sheet !== selected()"
+          >
+            <input
+              type="checkbox"
+              class="h-3.5 w-3.5 shrink-0 accent-primary"
+              [checked]="s.include"
+              [attr.aria-label]="'Include ' + s.sheet"
+              (change)="setInclude(s.sheet, $any($event.target).checked)"
+            />
+            <button
+              type="button"
+              class="flex min-w-0 flex-1 flex-col text-left"
+              [attr.data-sheet]="s.sheet"
+              (click)="select(s.sheet)"
+            >
+              <span class="truncate text-[12.5px] text-fg">{{ s.sheet }}</span>
+              <span class="text-[11px] text-fg-muted">
+                @if (s.rowCount !== undefined && s.include) {
+                  {{ s.rowCount.toLocaleString("en-US") }} rows
+                } @else if (s.warnings?.[0]?.code === "no-table") {
+                  No table found
+                } @else {
+                  Not included
+                }
+              </span>
+            </button>
+          </div>
+        }
+      </div>
+
+      <div class="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-[18px] py-4">
+        @if (sheet(); as s) {
+          <div class="flex flex-wrap items-center gap-2">
+            @for (w of warnings(); track w.label) {
+              <span
+                class="chip gap-1"
+                [class.chip-warning]="w.problem"
+                [class.chip-neutral]="!w.problem"
+              >
+                @if (w.problem) {
+                  <lucide-angular [img]="TriangleAlert" [size]="12" />
+                }
+                {{ w.label }}
+              </span>
+            }
+            @if (loading()) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin text-fg-muted"
+                aria-label="Loading preview"
+              />
+            }
+          </div>
+
+          <div class="flex flex-wrap items-end gap-2.5">
+            <label class="flex w-[110px] flex-col gap-1">
+              <span class="field-label">Header row</span>
+              <select
+                class="field"
+                data-testid="sheet-review-header-row"
+                [value]="s.headerRow"
+                (change)="setHeaderRow(+$any($event.target).value)"
+              >
+                @for (n of headerChoices; track n) {
+                  <option [value]="n" [selected]="n === s.headerRow" class="bg-surface">
+                    {{ n }}
+                  </option>
+                }
+              </select>
+            </label>
+            <label class="flex w-[150px] flex-col gap-1">
+              <span class="field-label">Range</span>
+              <input
+                type="text"
+                class="field font-mono"
+                data-testid="sheet-review-range"
+                [value]="s.range"
+                (change)="patch({ range: $any($event.target).value.trim() })"
+              />
+            </label>
+            <label class="flex items-center gap-2 pb-2 text-[12px] text-fg">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5 accent-primary"
+                data-testid="sheet-review-exclude-last"
+                [checked]="s.excludeLastRow"
+                (change)="patch({ excludeLastRow: $any($event.target).checked })"
+              />
+              Exclude the last row (looks like a total)
+            </label>
+            <label class="flex items-center gap-2 pb-2 text-[12px] text-fg">
+              <input
+                type="checkbox"
+                class="h-3.5 w-3.5 accent-primary"
+                data-testid="sheet-review-all-text"
+                [checked]="s.allText"
+                (change)="patch({ allText: $any($event.target).checked })"
+              />
+              Read every column as text
+            </label>
+          </div>
+
+          @if (error(); as message) {
+            <p class="text-[12px] text-on-danger-soft" role="alert">{{ message }}</p>
+          }
+
+          @if (preview(); as p) {
+            <div class="overflow-x-auto rounded-md border border-border">
+              <table
+                class="w-full border-collapse bg-surface text-[12px] tabular-nums"
+                data-testid="sheet-review-grid"
+              >
+                <thead>
+                  <tr>
+                    <th class="w-11 border border-border bg-surface-muted px-2.5 py-1.5"></th>
+                    @for (c of p.columns; track c.letter) {
+                      <th
+                        class="border border-border bg-surface-muted px-2.5 py-1.5 font-medium text-fg-muted"
+                      >
+                        {{ c.letter }}
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of p.rows; track r.row) {
+                    <tr
+                      data-testid="sheet-review-row"
+                      [attr.data-row]="r.row"
+                      [attr.data-excluded]="excluded().has(r.row)"
+                      [class]="
+                        r.row === s.headerRow
+                          ? 'bg-primary-soft font-semibold text-on-primary-soft'
+                          : excluded().has(r.row)
+                            ? 'text-fg-muted line-through opacity-60'
+                            : 'text-fg'
+                      "
+                    >
+                      <td class="border border-border bg-surface-muted p-0 text-right text-fg-muted no-underline">
+                        <button
+                          type="button"
+                          class="w-full px-2.5 py-1.5 text-right hover:text-fg"
+                          [attr.aria-label]="'Use row ' + r.row + ' as the header'"
+                          [attr.aria-pressed]="r.row === s.headerRow"
+                          (click)="setHeaderRow(r.row)"
+                        >
+                          {{ r.row }}
+                        </button>
+                      </td>
+                      @for (cell of r.cells; track $index) {
+                        <td
+                          class="whitespace-nowrap border border-border px-2.5 py-1.5"
+                          [class.text-right]="
+                            r.row !== s.headerRow && isNumeric(p.columns[$index]?.type ?? '')
+                          "
+                        >
+                          {{ cellText(cell) }}
+                          @if (r.row === s.headerRow) {
+                            <div class="mt-0.5 font-normal">
+                              <span class="chip chip-info">{{ p.columns[$index]?.type }}</span>
+                            </div>
+                          }
+                        </td>
+                      }
+                    </tr>
+                    @if (gapAfter() === r.row) {
+                      <tr class="text-fg-muted" aria-hidden="true">
+                        <td class="border border-border bg-surface-muted px-2.5 py-1.5 text-right">⋮</td>
+                        <td class="border border-border px-2.5 py-1.5" [attr.colspan]="p.columns.length">…</td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+            <p class="text-[12px] text-fg-muted">
+              First 7 and last 2 rows of {{ total() }}. Click a row number to make
+              it the header; drag over the grid to change the range. Struck-through
+              rows are not imported.
+            </p>
+          } @else if (!error()) {
+            <p class="text-[12px] text-fg-muted">Loading the sheet…</p>
+          }
+        }
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 border-t border-border px-[18px] py-3">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        data-testid="sheet-review-cancel"
+        (click)="cancel()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="sheet-review-apply"
+        (click)="apply()"
+      >
+        Apply
+      </button>
+    </div>
+  </div>
+</div>

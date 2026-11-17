@@ -70,6 +70,7 @@ export type DatasetTab = 'schema' | 'ontology' | 'synthesize';
   styleUrl: './catalog-browser.scss',
 })
 export class CatalogBrowser implements OnInit, OnDestroy {
+  readonly kindLabel = kindLabel;
   readonly ChevronRight = ChevronRight;
   readonly CircleCheck = CircleCheck;
   readonly CircleMinus = CircleMinus;
