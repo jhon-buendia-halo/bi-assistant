@@ -1503,12 +1503,12 @@ specs/capabilities/workflows/spec.md:131-131  R39 **Agent personas are named wit
 specs/capabilities/workflows/spec.md:133-150  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:152-156  ## Contracts
 specs/capabilities/workflows/spec.md:158-166  ## UI
-specs/capabilities/workflows/spec.md:168-413  ## Flows
+specs/capabilities/workflows/spec.md:168-419  ## Flows
 specs/capabilities/workflows/spec.md:170-288  ### Feature: Workflows
 specs/capabilities/workflows/spec.md:290-376  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:378-384  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:386-413  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:415-433  ## Acceptance
+specs/capabilities/workflows/spec.md:378-390  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:392-419  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:421-440  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -1875,7 +1875,7 @@ specs/system/agents.md:1122-1265  ## 4. Per-turn context
 specs/system/agents.md:1124-1232  ### 4.1 System context blocks
 specs/system/agents.md:1234-1254  ### 4.2 requestContext keys
 specs/system/agents.md:1256-1265  ### 4.3 What the chat turn sends as input (memory bootstrap)
-specs/system/agents.md:1267-1857  ## 5. Turn orchestration and the SQL reliability loop
+specs/system/agents.md:1267-1858  ## 5. Turn orchestration and the SQL reliability loop
 specs/system/agents.md:1269-1299  ### 5.1 Streamed chat turn
 specs/system/agents.md:1301-1305  ### 5.2 Read-only enforcement
 specs/system/agents.md:1307-1321  ### 5.3 Execution-guided repair
@@ -1896,41 +1896,41 @@ specs/system/agents.md:1647-1690  ### 5.17 Workflow: `recreate-dashboard` (Dashb
 specs/system/agents.md:1692-1725  ### 5.18 Workflow: `map-dashboard-data` (Map a Dashboard to Data)
 specs/system/agents.md:1727-1782  ### 5.19 Workflow: `review-website` (Review a Website)
 specs/system/agents.md:1784-1836  ### 5.20 Workflow: `consumption-gap-analysis` (Consumption Gap Analysis)
-specs/system/agents.md:1837-1857  ### 5.21 Ask one agent: a follow-up on the `ask-agent` engine
-specs/system/agents.md:1859-2032  ## 6. Visual designer pipeline
-specs/system/agents.md:1863-1873  ### 6.1 Entry points
-specs/system/agents.md:1875-1877  ### 6.2 Data handed to the designer
-specs/system/agents.md:1879-1895  ### 6.3 Modes and loop
-specs/system/agents.md:1897-1932  ### 6.4 Designer prompt
-specs/system/agents.md:1934-1939  ### 6.5 Repair
-specs/system/agents.md:1941-1943  ### 6.6 Assembled files
-specs/system/agents.md:1945-1947  ### 6.7 Call options
-specs/system/agents.md:1949-1992  ### 6.8 Visual spec v1 (designer output contract)
-specs/system/agents.md:1994-2032  ### 6.9 Chart runtime contract
-specs/system/agents.md:2034-2208  ## 7. Skills and workspaces
-specs/system/agents.md:2036-2045  ### 7.1 Session workspaces
-specs/system/agents.md:2047-2088  ### 7.2 The `interactive-visuals` skill
-specs/system/agents.md:2090-2116  ### 7.3 Skills: source, layout, loading and validation
-specs/system/agents.md:2118-2202  ### 7.4 Skills per agent
-specs/system/agents.md:2204-2208  ### 7.5 The assistant's skill catalog
-specs/system/agents.md:2210-2384  ## 8. Evals
-specs/system/agents.md:2214-2339  ### 8.1 Case and set format
-specs/system/agents.md:2341-2348  ### 8.2 Data preflight
-specs/system/agents.md:2350-2361  ### 8.3 Executing a case
-specs/system/agents.md:2363-2368  ### 8.4 Runs, regression and report
-specs/system/agents.md:2370-2384  ### 8.5 Other entry points
-specs/system/agents.md:2386-2390  ## 9. Agents catalogue (introspection contract)
-specs/system/agents.md:2392-2405  ## Open questions and gaps
-specs/system/agents.md:2407-2546  ## Appendix A — `assistant` system prompt (current wording)
-specs/system/agents.md:2548-2584  ## Appendix B — `curated-knowledge` skill body (current wording)
-specs/system/agents.md:2586-2588  ## Appendix C — Retired (2026-11-12)
-specs/system/agents.md:2590-2673  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
-specs/system/agents.md:2675-2779  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
-specs/system/agents.md:2781-2833  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
-specs/system/agents.md:2787-2806  ### Plan
-specs/system/agents.md:2808-2833  ### Write answer
-specs/system/agents.md:2835-2851  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
-specs/system/agents.md:2853-2872  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
+specs/system/agents.md:1837-1858  ### 5.21 Ask one agent: a follow-up on the `ask-agent` engine
+specs/system/agents.md:1860-2033  ## 6. Visual designer pipeline
+specs/system/agents.md:1864-1874  ### 6.1 Entry points
+specs/system/agents.md:1876-1878  ### 6.2 Data handed to the designer
+specs/system/agents.md:1880-1896  ### 6.3 Modes and loop
+specs/system/agents.md:1898-1933  ### 6.4 Designer prompt
+specs/system/agents.md:1935-1940  ### 6.5 Repair
+specs/system/agents.md:1942-1944  ### 6.6 Assembled files
+specs/system/agents.md:1946-1948  ### 6.7 Call options
+specs/system/agents.md:1950-1993  ### 6.8 Visual spec v1 (designer output contract)
+specs/system/agents.md:1995-2033  ### 6.9 Chart runtime contract
+specs/system/agents.md:2035-2209  ## 7. Skills and workspaces
+specs/system/agents.md:2037-2046  ### 7.1 Session workspaces
+specs/system/agents.md:2048-2089  ### 7.2 The `interactive-visuals` skill
+specs/system/agents.md:2091-2117  ### 7.3 Skills: source, layout, loading and validation
+specs/system/agents.md:2119-2203  ### 7.4 Skills per agent
+specs/system/agents.md:2205-2209  ### 7.5 The assistant's skill catalog
+specs/system/agents.md:2211-2385  ## 8. Evals
+specs/system/agents.md:2215-2340  ### 8.1 Case and set format
+specs/system/agents.md:2342-2349  ### 8.2 Data preflight
+specs/system/agents.md:2351-2362  ### 8.3 Executing a case
+specs/system/agents.md:2364-2369  ### 8.4 Runs, regression and report
+specs/system/agents.md:2371-2385  ### 8.5 Other entry points
+specs/system/agents.md:2387-2391  ## 9. Agents catalogue (introspection contract)
+specs/system/agents.md:2393-2406  ## Open questions and gaps
+specs/system/agents.md:2408-2547  ## Appendix A — `assistant` system prompt (current wording)
+specs/system/agents.md:2549-2585  ## Appendix B — `curated-knowledge` skill body (current wording)
+specs/system/agents.md:2587-2589  ## Appendix C — Retired (2026-11-12)
+specs/system/agents.md:2591-2674  ## Appendix D — `data-readiness` (Data Readiness Agent) system prompt (shipped wording)
+specs/system/agents.md:2676-2780  ## Appendix E — `insights-analyst` (Insights Analyst) system prompt (shipped wording)
+specs/system/agents.md:2782-2834  ## Appendix F — Answer a Business Question's Plan and Write answer instructions (shipped wording)
+specs/system/agents.md:2788-2807  ### Plan
+specs/system/agents.md:2809-2834  ### Write answer
+specs/system/agents.md:2836-2852  ## Appendix G — `query-explainer` (Query Explainer) instructions (shipped wording)
+specs/system/agents.md:2854-2873  ## Appendix H — `result-explorer` (Result Explorer) instructions (shipped wording)
 
 specs/system/api.md:11-102  ## 1. Conventions
 specs/system/api.md:13-21  ### 1.1 Base URL
@@ -2137,7 +2137,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1361  ## Level 3 — Components
+specs/system/architecture.md:258-1366  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -2178,8 +2178,8 @@ specs/system/architecture.md:1243-1264  #### ADR-0049 — Review a Website drive
 specs/system/architecture.md:1266-1286  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
 specs/system/architecture.md:1288-1310  #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
 specs/system/architecture.md:1312-1338  #### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
-specs/system/architecture.md:1340-1361  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
-specs/system/architecture.md:1363-1418  ## Level 4 — Code
+specs/system/architecture.md:1340-1366  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
+specs/system/architecture.md:1368-1423  ## Level 4 — Code
 
 specs/system/data-model.md:13-58  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory
