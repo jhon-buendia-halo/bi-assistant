@@ -1393,7 +1393,7 @@ specs/capabilities/verified-queries/spec.md:111-115  ## Acceptance
 specs/capabilities/verified-queries/spec.md:117-124  ## Open questions
 
 specs/capabilities/visuals/spec.md:12-14  ## Concepts
-specs/capabilities/visuals/spec.md:16-206  ## Rules
+specs/capabilities/visuals/spec.md:16-207  ## Rules
 specs/capabilities/visuals/spec.md:18-24  ### Creating
 specs/capabilities/visuals/spec.md:20-20  R1 The system SHALL create a visual only from a completed assistant answe
 specs/capabilities/visuals/spec.md:21-22  R2 Every answer with text SHALL offer "Generate interactive visuals". Whi
@@ -1407,54 +1407,54 @@ specs/capabilities/visuals/spec.md:51-51  R8 A freeform visual's script SHALL be
 specs/capabilities/visuals/spec.md:52-52  R9 Tailoring a freeform visual SHALL stay freeform. Tailoring a spec visu
 specs/capabilities/visuals/spec.md:53-53  R10 Each designer call SHALL time out after 120 seconds with "interactive
 specs/capabilities/visuals/spec.md:54-60  R11 A spec visual SHALL be drawn by one fixed, hand-written chart runtime,
-specs/capabilities/visuals/spec.md:62-81  ### Tailoring and versions
+specs/capabilities/visuals/spec.md:62-82  ### Tailoring and versions
 specs/capabilities/visuals/spec.md:64-64  R12 Tailoring (from chat or the panel) SHALL require a non-blank instructi
 specs/capabilities/visuals/spec.md:65-65  R13 In chat, the assistant SHALL tailor the visual open in the panel by de
-specs/capabilities/visuals/spec.md:66-71  R14 The panel's Tailor form SHALL turn its fields into one plain-English i
-specs/capabilities/visuals/spec.md:72-72  R41 **Tailor and Refresh data are background tasks** (ADR-0047, [app-shell
-specs/capabilities/visuals/spec.md:73-73  R15 Each version SHALL record its number, creation time, the instruction t
-specs/capabilities/visuals/spec.md:74-77  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
-specs/capabilities/visuals/spec.md:78-78  R17 Reverting SHALL only move the current-version pointer to an existing v
-specs/capabilities/visuals/spec.md:79-79  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
-specs/capabilities/visuals/spec.md:80-80  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
-specs/capabilities/visuals/spec.md:81-81  R20 Opening a session SHALL load into the panel the latest item the agent
-specs/capabilities/visuals/spec.md:83-91  ### Refresh data in place
-specs/capabilities/visuals/spec.md:85-85  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
-specs/capabilities/visuals/spec.md:86-90  R22 During a refresh:
-specs/capabilities/visuals/spec.md:91-91  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
-specs/capabilities/visuals/spec.md:93-111  ### Runtime errors and silent auto-repair
-specs/capabilities/visuals/spec.md:95-98  R24 The sandboxed visual SHALL report to the host:
-specs/capabilities/visuals/spec.md:99-105  R25 On a reported error the panel SHALL silently request one repair, but o
-specs/capabilities/visuals/spec.md:106-110  R26 A repair SHALL regenerate the current version with the runtime error,
-specs/capabilities/visuals/spec.md:111-111  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
-specs/capabilities/visuals/spec.md:113-159  ### Readable frame
-specs/capabilities/visuals/spec.md:115-124  R28 Every visual SHALL render inside a fixed frame. The frame's content co
-specs/capabilities/visuals/spec.md:125-128  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
-specs/capabilities/visuals/spec.md:129-129  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
-specs/capabilities/visuals/spec.md:130-130  R31 The designer's styles SHALL be confined to the visual's own area so th
-specs/capabilities/visuals/spec.md:131-131  R32 The visual SHALL read its rows from the embedded data at runtime, neve
-specs/capabilities/visuals/spec.md:132-132  R33 A frame generated or refreshed at a given time SHALL show that time. O
-specs/capabilities/visuals/spec.md:134-159  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
-specs/capabilities/visuals/spec.md:161-167  ### Sandboxing
-specs/capabilities/visuals/spec.md:163-166  R34 The visual SHALL run in a sandboxed frame:
-specs/capabilities/visuals/spec.md:167-167  R35 The visual SHALL talk to the host only through messages: runtime error
-specs/capabilities/visuals/spec.md:169-176  ### Click to follow up
-specs/capabilities/visuals/spec.md:171-176  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
-specs/capabilities/visuals/spec.md:178-192  ### Export
-specs/capabilities/visuals/spec.md:180-191  R37 "Download bundle" SHALL download a zip of the visual. It always contai
-specs/capabilities/visuals/spec.md:192-192  R38 The downloaded file SHALL be named after the visual's title, slugged a
-specs/capabilities/visuals/spec.md:194-206  ### Storage
-specs/capabilities/visuals/spec.md:196-204  R39 Each version's files SHALL live in the session workspace under the vis
-specs/capabilities/visuals/spec.md:206-206  R42 **A run's visual is an artifact card, opened in a side panel** (2026-1
-specs/capabilities/visuals/spec.md:208-229  ## Edge cases and errors
-specs/capabilities/visuals/spec.md:231-244  ## Contracts
-specs/capabilities/visuals/spec.md:246-273  ## UI
-specs/capabilities/visuals/spec.md:275-433  ## Flows
-specs/capabilities/visuals/spec.md:277-279  ### Covered: Chat and visuals
-specs/capabilities/visuals/spec.md:281-291  ### Visual actions on a run
-specs/capabilities/visuals/spec.md:293-409  ### Feature: Visual tailoring
-specs/capabilities/visuals/spec.md:411-433  ### Feature: Skills the designer is given
-specs/capabilities/visuals/spec.md:435-447  ## Acceptance
+specs/capabilities/visuals/spec.md:66-72  R14 The panel's Tailor form SHALL turn its fields into one plain-English i
+specs/capabilities/visuals/spec.md:73-73  R41 **Tailor and Refresh data are background tasks** (ADR-0047, [app-shell
+specs/capabilities/visuals/spec.md:74-74  R15 Each version SHALL record its number, creation time, the instruction t
+specs/capabilities/visuals/spec.md:75-78  R16 Viewing a version SHALL be read-only and SHALL NOT change the current
+specs/capabilities/visuals/spec.md:79-79  R17 Reverting SHALL only move the current-version pointer to an existing v
+specs/capabilities/visuals/spec.md:80-80  R18 Creating (button), tailoring (panel) and reverting SHALL each add a vi
+specs/capabilities/visuals/spec.md:81-81  R19 When a chat turn creates or updates a visual, the panel SHALL switch t
+specs/capabilities/visuals/spec.md:82-82  R20 Opening a session SHALL load into the panel the latest item the agent
+specs/capabilities/visuals/spec.md:84-92  ### Refresh data in place
+specs/capabilities/visuals/spec.md:86-86  R21 "Refresh data" SHALL re-run every successful stored SQL query behind t
+specs/capabilities/visuals/spec.md:87-91  R22 During a refresh:
+specs/capabilities/visuals/spec.md:92-92  R23 The rationale of each query SHALL survive a refresh. The frame's reaso
+specs/capabilities/visuals/spec.md:94-112  ### Runtime errors and silent auto-repair
+specs/capabilities/visuals/spec.md:96-99  R24 The sandboxed visual SHALL report to the host:
+specs/capabilities/visuals/spec.md:100-106  R25 On a reported error the panel SHALL silently request one repair, but o
+specs/capabilities/visuals/spec.md:107-111  R26 A repair SHALL regenerate the current version with the runtime error,
+specs/capabilities/visuals/spec.md:112-112  R27 When a repair is not allowed or fails, the panel SHALL show the runtim
+specs/capabilities/visuals/spec.md:114-160  ### Readable frame
+specs/capabilities/visuals/spec.md:116-125  R28 Every visual SHALL render inside a fixed frame. The frame's content co
+specs/capabilities/visuals/spec.md:126-129  R29 Data provenance SHALL list each query as `Query <i> — <n> row(s)[ (tru
+specs/capabilities/visuals/spec.md:130-130  R30 Answer Markdown in the frame SHALL be sanitized to an allowlist of tex
+specs/capabilities/visuals/spec.md:131-131  R31 The designer's styles SHALL be confined to the visual's own area so th
+specs/capabilities/visuals/spec.md:132-132  R32 The visual SHALL read its rows from the embedded data at runtime, neve
+specs/capabilities/visuals/spec.md:133-133  R33 A frame generated or refreshed at a given time SHALL show that time. O
+specs/capabilities/visuals/spec.md:135-160  R40 The frame SHALL follow the app's Light or Dark theme (BA-230), numbere
+specs/capabilities/visuals/spec.md:162-168  ### Sandboxing
+specs/capabilities/visuals/spec.md:164-167  R34 The visual SHALL run in a sandboxed frame:
+specs/capabilities/visuals/spec.md:168-168  R35 The visual SHALL talk to the host only through messages: runtime error
+specs/capabilities/visuals/spec.md:170-177  ### Click to follow up
+specs/capabilities/visuals/spec.md:172-177  R36 A data mark the visual flags as selectable SHALL, on click or Enter, s
+specs/capabilities/visuals/spec.md:179-193  ### Export
+specs/capabilities/visuals/spec.md:181-192  R37 "Download bundle" SHALL download a zip of the visual. It always contai
+specs/capabilities/visuals/spec.md:193-193  R38 The downloaded file SHALL be named after the visual's title, slugged a
+specs/capabilities/visuals/spec.md:195-207  ### Storage
+specs/capabilities/visuals/spec.md:197-205  R39 Each version's files SHALL live in the session workspace under the vis
+specs/capabilities/visuals/spec.md:207-207  R42 **A run's visual is an artifact card, opened in a side panel** (2026-1
+specs/capabilities/visuals/spec.md:209-230  ## Edge cases and errors
+specs/capabilities/visuals/spec.md:232-245  ## Contracts
+specs/capabilities/visuals/spec.md:247-274  ## UI
+specs/capabilities/visuals/spec.md:276-434  ## Flows
+specs/capabilities/visuals/spec.md:278-280  ### Covered: Chat and visuals
+specs/capabilities/visuals/spec.md:282-292  ### Visual actions on a run
+specs/capabilities/visuals/spec.md:294-410  ### Feature: Visual tailoring
+specs/capabilities/visuals/spec.md:412-434  ### Feature: Skills the designer is given
+specs/capabilities/visuals/spec.md:436-448  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
 specs/capabilities/workflows/spec.md:13-131  ## Rules
