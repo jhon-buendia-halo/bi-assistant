@@ -603,11 +603,12 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       buildVisual: true,
     });
     // Careful is no field of v2's input: the turn runs without it.
+    // The turn runs on its own signal: the no-progress watchdog's.
     expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
       `run-${run.id}`,
       'Who won in 2002?',
       expect.any(Function),
-      undefined,
+      expect.any(AbortSignal),
       false,
       expect.any(Function),
     );
@@ -954,7 +955,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         story: notReached,
       },
     ]);
-    expect(ctx.sessions.streamRunTurn.mock.calls[0][3]).toBe(abort.signal);
+    // The turn's own signal aborts with the request's.
+    expect(ctx.sessions.streamRunTurn.mock.calls[0][3]?.aborted).toBe(true);
     expect(ctx.sessions.finishRunHost).toHaveBeenCalledTimes(1);
   });
 
@@ -2293,7 +2295,7 @@ describe('WorkflowRunsService: a draft run (api.md R12; agents-evals R60)', () =
       `run-${run.id}`,
       'Who won?',
       expect.any(Function),
-      undefined,
+      expect.any(AbortSignal),
       false,
       expect.any(Function),
     );
@@ -3376,5 +3378,357 @@ describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () =
     await expect(ctx.service.stream(draft, () => undefined)).resolves.toEqual(
       expect.objectContaining({ status: 'success' }),
     );
+  });
+});
+
+/** The shared set-up of the watchdog and forced-stop specs below. */
+function hangingRuns() {
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const MINUTE = 60_000;
+  const state: { ctx?: ReturnType<typeof build> } = {};
+  const ctx = () => state.ctx!;
+
+  /**
+   * The next turn reports the steps up to Analyse and "Bra", then waits for
+   * `release` or, when it honours the abort, its abort; released, it ends
+   * Analyse and returns. Its host then answers "Bra" (the partial answer).
+   */
+  function hangingTurn(honoursAbort = true) {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const handle = {
+      release: () => release(),
+      emit: (() => undefined) as (event: unknown) => void,
+      signal: undefined as AbortSignal | undefined,
+    };
+    ctx().sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, question, emit, signal, _careful, onStep) => {
+        handle.emit = emit;
+        handle.signal = signal;
+        for (const step of V2_STEPS_BEFORE) onStep(step);
+        emit({ type: 'text', content: 'Bra' });
+        await Promise.race([
+          released,
+          ...(honoursAbort
+            ? [
+                new Promise<void>((resolve) =>
+                  signal?.addEventListener('abort', () => resolve()),
+                ),
+              ]
+            : []),
+        ]);
+        if (!signal?.aborted) onStep(stepResult('analyse', ANALYSE_OUTPUT));
+        void question;
+      },
+    );
+    const view = ctx().sessions.finishRunHost.getMockImplementation()!;
+    ctx().sessions.finishRunHost.mockImplementationOnce(async () => ({
+      ...(await view()),
+      messages: [
+        { role: 'user', content: ASK.question, at: 't' },
+        { role: 'assistant', content: 'Bra', at: 't' },
+      ],
+    }));
+    return handle;
+  }
+
+  /** What a follower from seq 0 gets: `<type>[:<content>]`, and its end. */
+  function follow(id: string) {
+    const got: string[] = [];
+    const ended = { value: false };
+    ctx().service.live.subscribe(id, 0, {
+      event: ({ event }) =>
+        got.push(
+          typeof event['content'] === 'string'
+            ? `${event.type}:${event['content']}`
+            : event.type,
+        ),
+      end: () => (ended.value = true),
+    });
+    return { got, ended };
+  }
+
+  const launch = async () =>
+    ctx().service.launch(
+      await ctx().service.prepare('answer-business-question', { input: ASK }),
+    );
+
+  /** Let pending promise work (sqlite writes, the drive's awaits) land. */
+  const flush = async () => {
+    for (let i = 0; i < 10; i += 1) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+    state.ctx?.db.close();
+  });
+
+  return { ASK, MINUTE, state, ctx, hangingTurn, follow, launch, flush };
+}
+
+describe('WorkflowRunsService: a run that makes no progress is ended (workflows spec; ADR-0048 amendment)', () => {
+  const t = hangingRuns();
+  const STALLED = 'The run made no progress for 15 minutes and was stopped';
+
+  it('a launched run that reports nothing for 15 minutes is failed: its work aborted, its running step failed, its partial answer kept, its host released; a follower sees error { content } and the end', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE - 1);
+    expect(turn.signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await t.ctx().service.live.whenEnded(id);
+    expect(turn.signal?.aborted).toBe(true);
+    // Told apart from a Stop by the abort's reason.
+    expect((turn.signal?.reason as Error).message).toBe(STALLED);
+    const stored = await t.ctx().repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: STALLED });
+    expect(stored?.finishedAt).toBeDefined();
+    expect(stored?.steps.find((step) => step.id === 'analyse')).toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+    expect(stored?.answer?.content).toBe('Bra');
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.got.at(-1)).toBe(`error:${STALLED}`);
+    expect(watcher.got).not.toContain('done');
+    expect(watcher.ended.value).toBe(true);
+  });
+
+  it('an event at minute 14 resets the clock', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(14 * t.MINUTE);
+    turn.emit({ type: 'reasoning', content: 'thinking' });
+    await jest.advanceTimersByTimeAsync(14 * t.MINUTE);
+    expect((await t.ctx().repository.get(id))?.status).toBe('running');
+    expect(turn.signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(t.MINUTE);
+    await t.ctx().service.live.whenEnded(id);
+    expect((await t.ctx().repository.get(id))?.status).toBe('failed');
+  });
+
+  it('a run waiting for the user is never timed, and its resumed turn is', async () => {
+    t.state.ctx = build();
+    let resumedSignal: AbortSignal | undefined;
+    const suspension = {
+      stepId: 'clarify',
+      question: 'Which measure?',
+      options: ['Goals', 'Wins'],
+      resume: jest.fn(
+        (_answer: string, io: { abortSignal?: AbortSignal }) =>
+          new Promise<undefined>((resolve) => {
+            resumedSignal = io.abortSignal;
+            io.abortSignal?.addEventListener('abort', () => resolve(undefined));
+          }),
+      ),
+      discard: jest.fn(() => Promise.resolve()),
+    };
+    t.ctx().sessions.streamRunTurn.mockImplementationOnce(() =>
+      Promise.resolve(suspension as never),
+    );
+    Object.assign(t.ctx().sessions, {
+      runHostView: jest.fn(() =>
+        Promise.resolve({ datasets: ['World Cup Core'] }),
+      ),
+    });
+    const id = await t.launch();
+    await t.ctx().service.live.whenEnded(id);
+    // Less than the 30-minute wait, more than the no-progress limit.
+    await jest.advanceTimersByTimeAsync(20 * t.MINUTE);
+    expect((await t.ctx().repository.get(id))?.status).toBe('suspended');
+    const prepared = await t.ctx().service.prepareResume(id, {
+      stepId: 'clarify',
+      answer: 'Goals',
+    });
+    t.ctx().service.resumeDetached(prepared);
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await t.ctx().service.live.whenEnded(id);
+    expect(resumedSignal?.aborted).toBe(true);
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+  });
+
+  it('a Stop during the wait stays stopped', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(5 * t.MINUTE);
+    const run = await t.ctx().service.stop(id);
+    expect(run.status).toBe('stopped');
+    expect(run.error).toBeUndefined();
+    await jest.advanceTimersByTimeAsync(30 * t.MINUTE);
+    expect(turn.signal?.aborted).toBe(true);
+    expect((await t.ctx().repository.get(id))?.status).toBe('stopped');
+  });
+
+  it('the progress checkpoints still land before the final write', async () => {
+    t.state.ctx = build();
+    const update = jest.spyOn(t.ctx().repository, 'update');
+    t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    expect(
+      update.mock.calls.some(
+        ([, patch]) => Object.keys(patch).join() === 'steps',
+      ),
+    ).toBe(true);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await t.ctx().service.live.whenEnded(id);
+    const kinds = update.mock.calls.map(([, patch]) =>
+      Object.keys(patch).join() === 'steps' ? 'checkpoint' : patch.status,
+    );
+    expect(kinds.at(-1)).toBe('failed');
+    expect(kinds.slice(0, -1).every((kind) => kind === 'checkpoint')).toBe(
+      true,
+    );
+  });
+
+  it("Try it's streamed draft and the non-streamed 118 are watched too", async () => {
+    t.state.ctx = build();
+    t.hangingTurn();
+    const draft = await t.ctx().service.prepareDraft('sales-helper', {
+      input: { question: 'Who won?' },
+    });
+    const events: RunStreamEvent[] = [];
+    const tried = t.ctx().service.stream(draft, (event) => events.push(event));
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await expect(tried).resolves.toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+    expect(events.at(-1)).toEqual({ type: 'error', content: STALLED });
+
+    t.hangingTurn();
+    const answered = t.ctx().service.run('answer-business-question', {
+      input: t.ASK,
+    });
+    await t.flush();
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    await expect(answered).resolves.toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+  });
+
+  it('a stalled run whose work does not unwind is stored failed 10 s later, and its late unwind leaves it failed', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await jest.advanceTimersByTimeAsync(15 * t.MINUTE);
+    expect((await t.ctx().repository.get(id))?.status).toBe('running');
+    await jest.advanceTimersByTimeAsync(10_000);
+    await t.ctx().service.live.whenEnded(id);
+    expect(await t.ctx().repository.get(id)).toMatchObject({
+      status: 'failed',
+      error: STALLED,
+    });
+    expect(watcher.got.at(-1)).toBe(`error:${STALLED}`);
+    expect(watcher.ended.value).toBe(true);
+    turn.release();
+    await t.flush();
+    const stored = await t.ctx().repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: STALLED });
+    expect(stored?.answer?.content).toBe('Bra');
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WorkflowRunsService: Stop always ends the run (api.md 150; ADR-0048 amendment)', () => {
+  const t = hangingRuns();
+
+  /** Stop a run and let its 10-second wait pass. */
+  async function stopAfterWait(id: string) {
+    const answer = t.ctx().service.stop(id);
+    await jest.advanceTimersByTimeAsync(10_000);
+    return answer;
+  }
+
+  it('Stop whose work does not unwind stores the run stopped itself after 10 s: finishedAt set, its running step stopped, its log ended with done { run }; never running; a second Stop answers it as it is', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    const run = await stopAfterWait(id);
+    expect(turn.signal?.aborted).toBe(true);
+    expect(run.status).toBe('stopped');
+    expect(run.finishedAt).toBeDefined();
+    expect(run.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'interpret-follow-up:success',
+      'plan:success',
+      'analyse:stopped',
+    ]);
+    expect(watcher.got.at(-1)).toBe('done');
+    expect(watcher.ended.value).toBe(true);
+    expect(t.ctx().service.live.isRunning(id)).toBe(false);
+    expect((await t.ctx().service.stop(id)).status).toBe('stopped');
+  });
+
+  it('the late unwind keeps it stopped, adds the partial answer, releases the host and sends nothing to the ended log', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    const watcher = t.follow(id);
+    await stopAfterWait(id);
+    const before = [...watcher.got];
+    expect(t.ctx().sessions.finishRunHost).not.toHaveBeenCalled();
+    turn.release();
+    await t.flush();
+    const stored = await t.ctx().repository.get(id);
+    expect(stored?.status).toBe('stopped');
+    expect(stored?.answer?.content).toBe('Bra');
+    expect(t.ctx().sessions.finishRunHost).toHaveBeenCalledWith(`run-${id}`);
+    expect(watcher.got).toEqual(before);
+    expect(t.follow(id).got).toEqual(before);
+  });
+
+  it('a force-stopped run can be deleted; its late unwind stores nothing again and deletes its host resources', async () => {
+    t.state.ctx = build();
+    const turn = t.hangingTurn(false);
+    const id = await t.launch();
+    await t.flush();
+    await stopAfterWait(id);
+    await t.ctx().service.delete(id);
+    expect(await t.ctx().repository.get(id)).toBeNull();
+    const deletes = t.ctx().sessions.deleteRunHostResources.mock.calls.length;
+    turn.release();
+    await t.flush();
+    expect(await t.ctx().repository.get(id)).toBeNull();
+    expect(t.ctx().sessions.deleteRunHostResources).toHaveBeenCalledTimes(
+      deletes + 1,
+    );
+    expect(t.ctx().sessions.deleteRunHostResources).toHaveBeenLastCalledWith(
+      `run-${id}`,
+    );
+  });
+
+  it('Stop whose work unwinds in time is stored by the work, as before', async () => {
+    t.state.ctx = build();
+    t.hangingTurn();
+    const id = await t.launch();
+    await t.flush();
+    const run = await t.ctx().service.stop(id);
+    expect(run.status).toBe('stopped');
+    expect(run.answer?.content).toBe('Bra');
   });
 });

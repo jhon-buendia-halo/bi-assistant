@@ -34,6 +34,77 @@ export function liveRunCap(raw: string | undefined): number {
 export const MAX_LIVE_RUNS = liveRunCap(process.env.WORKFLOW_MAX_LIVE_RUNS);
 
 /**
+ * How long Stop (150) and a stalled run wait for the run's work to unwind
+ * after its abort before the run is stored ended without it: 10 seconds.
+ */
+export const RUN_UNWIND_MS = 10_000;
+
+/** How long a turn may report nothing when nothing overrides it, in minutes. */
+export const RUN_IDLE_MINUTES_DEFAULT = 15;
+
+/**
+ * The no-progress limit of a turn from `WORKFLOW_RUN_IDLE_MINUTES`, in
+ * milliseconds: a number of minutes above 0, 0 to turn the watchdog off
+ * (answers 0), else `RUN_IDLE_MINUTES_DEFAULT`.
+ */
+export function runIdleLimitMs(raw: string | undefined): number {
+  const text = raw?.trim() ?? '';
+  const minutes = text ? Number(text) : NaN;
+  if (minutes === 0) return 0;
+  return Number.isFinite(minutes) && minutes > 0
+    ? minutes * 60_000
+    : RUN_IDLE_MINUTES_DEFAULT * 60_000;
+}
+
+/** The no-progress limit, read once from the environment (workflows spec). */
+export const RUN_IDLE_LIMIT_MS = runIdleLimitMs(
+  process.env.WORKFLOW_RUN_IDLE_MINUTES,
+);
+
+/** The error a run ends `failed` with when it made no progress for `limitMs`. */
+export function runStalledMessage(limitMs: number): string {
+  const minutes = limitMs / 60_000;
+  return `The run made no progress for ${minutes} minute${minutes === 1 ? '' : 's'} and was stopped`;
+}
+
+/**
+ * A turn's no-progress clock: `onIdle` fires once when `limitMs` passes with
+ * no `touch` (every event the turn reports touches it). `stop` clears it for
+ * good, when the turn ends or waits for the user. A limit of 0 never fires.
+ * The timer is unref'd: it never keeps the process alive.
+ */
+export class IdleWatchdog {
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private done = false;
+
+  constructor(
+    private readonly limitMs: number,
+    private readonly onIdle: () => void,
+  ) {
+    this.touch();
+  }
+
+  /** The turn reported something: the clock starts again. */
+  touch(): void {
+    if (this.done || this.limitMs <= 0) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.done = true;
+      this.timer = undefined;
+      this.onIdle();
+    }, this.limitMs);
+    (this.timer as { unref?: () => void }).unref?.();
+  }
+
+  /** The turn ended or suspended: the clock never fires. */
+  stop(): void {
+    this.done = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+  }
+}
+
+/**
  * One run's place under the cap: taken as its start is checked (119), or
  * claimed by a resume (138); freed once, when the run ends or never starts.
  */

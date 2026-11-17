@@ -1500,15 +1500,15 @@ specs/capabilities/workflows/spec.md:117-117  R42 **Connector notes** (2026-11-1
 specs/capabilities/workflows/spec.md:118-125  R37 Consumption Gap Analysis SHALL run, fixed in code ([../../system/agent
 specs/capabilities/workflows/spec.md:126-129  R38 **Business and Builder views** (2026-11-17). A workflow's page SHALL o
 specs/capabilities/workflows/spec.md:131-131  R39 **Agent personas are named with their role** (2026-11-17). Wherever th
-specs/capabilities/workflows/spec.md:133-151  ## Edge cases and errors
-specs/capabilities/workflows/spec.md:153-157  ## Contracts
-specs/capabilities/workflows/spec.md:159-167  ## UI
-specs/capabilities/workflows/spec.md:169-414  ## Flows
-specs/capabilities/workflows/spec.md:171-289  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:291-377  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:379-385  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:387-414  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:416-434  ## Acceptance
+specs/capabilities/workflows/spec.md:133-153  ## Edge cases and errors
+specs/capabilities/workflows/spec.md:155-159  ## Contracts
+specs/capabilities/workflows/spec.md:161-169  ## UI
+specs/capabilities/workflows/spec.md:171-416  ## Flows
+specs/capabilities/workflows/spec.md:173-291  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:293-379  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:381-387  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:389-416  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:418-436  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
@@ -1942,7 +1942,7 @@ specs/system/api.md:71-76  ### 1.6 CORS
 specs/system/api.md:78-88  ### 1.7 Static web UI and SPA fallback
 specs/system/api.md:90-94  ### 1.8 Conventions used by the UI that clients should preserve
 specs/system/api.md:96-102  ### 1.9 Authentication
-specs/system/api.md:104-1514  ## 2. Endpoints
+specs/system/api.md:104-1515  ## 2. Endpoints
 specs/system/api.md:108-255  ### 2.1 Sessions
 specs/system/api.md:145-148  #### 1. `GET /sessions`
 specs/system/api.md:150-152  #### 2. `GET /sessions/:id`
@@ -2029,7 +2029,7 @@ specs/system/api.md:696-762  #### 116. `GET /workflows`
 specs/system/api.md:764-817  #### 117. `GET /workflows/:id`
 specs/system/api.md:819-840  #### 118. `POST /workflows/:id/runs`
 specs/system/api.md:842-846  #### 119. `POST /workflows/:id/runs/stream`
-specs/system/api.md:848-1108  ### 2.6.3 Workflow runs
+specs/system/api.md:848-1109  ### 2.6.3 Workflow runs
 specs/system/api.md:883-898  #### 120. `GET /workflow-runs`
 specs/system/api.md:900-902  #### 121. `GET /workflow-runs/:id`
 specs/system/api.md:904-907  #### 122. `DELETE /workflow-runs/:id`
@@ -2049,84 +2049,84 @@ specs/system/api.md:967-980  #### 136. `GET /workflow-runs/:id/node-chats/:stepI
 specs/system/api.md:982-988  #### 137. `POST /workflow-runs/:id/node-chats/:stepId/messages/stream`
 specs/system/api.md:990-996  #### 138. `POST /workflow-runs/:id/resume/stream`
 specs/system/api.md:998-1003  #### 149. `GET /workflow-runs/:id/events/stream`
-specs/system/api.md:1005-1010  #### 150. `POST /workflow-runs/:id/stop`
-specs/system/api.md:1012-1016  #### 151. `GET /workflow-runs/:id/input-image`
-specs/system/api.md:1018-1024  #### Query evidence (139-143, 152, 153)
-specs/system/api.md:1026-1030  #### 139. `POST /workflow-runs/:id/answer/evidence`
-specs/system/api.md:1032-1036  #### 140. `POST /workflow-runs/:id/answer/queries/:index/explanation`
-specs/system/api.md:1038-1041  #### 141. `POST /workflow-runs/:id/answer/queries/:index/stage-counts`
-specs/system/api.md:1043-1056  #### 142. `POST /workflow-runs/:id/answer/queries/:index/rerun`
-specs/system/api.md:1058-1061  #### 143. `GET /workflow-runs/:id/answer/queries/:index/csv`
-specs/system/api.md:1063-1095  #### 152. `POST /workflow-runs/:id/answer/queries/:index/page`
-specs/system/api.md:1097-1108  #### 153. `POST /workflow-runs/:id/answer/queries/:index/interpret-filter`
-specs/system/api.md:1110-1148  ### 2.6.4 Artifacts
-specs/system/api.md:1133-1134  #### 144. `GET /artifacts`
-specs/system/api.md:1136-1137  #### 145. `GET /artifacts/:id`
-specs/system/api.md:1139-1140  #### 146. `GET /artifacts/:id/image`
-specs/system/api.md:1142-1144  #### 147. `PATCH /artifacts/:id`
-specs/system/api.md:1146-1148  #### 148. `DELETE /artifacts/:id`
-specs/system/api.md:1150-1167  ### 2.7 Deep analysis (removed 2026-11-12)
-specs/system/api.md:1160-1161  #### 46. `POST /sessions/:id/deep-analysis`
-specs/system/api.md:1163-1164  #### 47. `GET /sessions/:id/deep-analysis/:jobId`
-specs/system/api.md:1166-1167  #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
-specs/system/api.md:1169-1212  ### 2.8 Ontology
-specs/system/api.md:1184-1187  #### 49. `GET /datasets/:name/ontology`
-specs/system/api.md:1189-1192  #### 50. `POST /datasets/:name/ontology`
-specs/system/api.md:1194-1197  #### 51. `PATCH /ontology/:id`
-specs/system/api.md:1199-1201  #### 52. `DELETE /ontology/:id`
-specs/system/api.md:1203-1207  #### 53. `POST /datasets/:name/ontology/bootstrap`
-specs/system/api.md:1209-1212  #### 54. `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:1214-1265  ### 2.8c Monitoring
-specs/system/api.md:1227-1232  #### 111. `GET /monitoring/llm-calls`
-specs/system/api.md:1234-1238  #### 112. `GET /monitoring/llm-calls/:id`
-specs/system/api.md:1240-1246  #### 113. `GET /monitoring/sessions`
-specs/system/api.md:1248-1252  #### 114. `GET /monitoring/sessions/:id`
-specs/system/api.md:1254-1259  #### 115. `GET /monitoring/traces/:traceId`
-specs/system/api.md:1261-1265  #### 144. `GET /monitoring/usage`
-specs/system/api.md:1267-1306  ### 2.9 Testing data
-specs/system/api.md:1277-1294  #### 55. `GET /testing-data`
-specs/system/api.md:1296-1302  #### 56. `POST /testing-data/:fixtureId/load`
-specs/system/api.md:1304-1306  #### 57. `DELETE /testing-data/:fixtureId`
-specs/system/api.md:1308-1340  ### 2.10 Shared wire shapes
-specs/system/api.md:1342-1373  ### 2.11 Developer settings
-specs/system/api.md:1361-1362  #### 53. `GET /developer-settings`
-specs/system/api.md:1364-1368  #### 54. `PUT /developer-settings`
-specs/system/api.md:1370-1373  #### 55. `POST /developer-settings/test-endpoint`
-specs/system/api.md:1376-1396  ### 2.12 UI preferences
-specs/system/api.md:1390-1391  #### 56. `GET /ui-preferences`
-specs/system/api.md:1393-1396  #### 57. `PUT /ui-preferences`
-specs/system/api.md:1398-1400  ### 2.16 Intellify RFP API (removed)
-specs/system/api.md:1402-1433  ### 2.17 Data readiness
-specs/system/api.md:1412-1424  #### 108. `POST /data-readiness/assessments`
-specs/system/api.md:1426-1429  #### 109. `GET /data-readiness/assessments`
-specs/system/api.md:1431-1433  #### 110. `GET /data-readiness/assessments/:id`
-specs/system/api.md:1435-1502  ### 2.18 Synthetic data
-specs/system/api.md:1446-1464  #### 111. `POST /synthetic-data/profiles`
-specs/system/api.md:1466-1481  #### 112. `POST /synthetic-data/scripts`
-specs/system/api.md:1483-1491  #### 113. `POST /synthetic-data/profile-exports`
-specs/system/api.md:1493-1502  #### 114. `POST /synthetic-data/sample-exports`
-specs/system/api.md:1504-1514  ### 2.19 Health
-specs/system/api.md:1512-1514  #### 135. `GET /health`
-specs/system/api.md:1516-1726  ## 3. Streaming and long-running work
-specs/system/api.md:1520-1584  ### 3.1 Chat stream (removed in 1.23.27)
-specs/system/api.md:1586-1588  ### 3.2 Deep analysis (removed 2026-11-12)
-specs/system/api.md:1590-1598  ### 3.3 Eval runs
-specs/system/api.md:1600-1612  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
-specs/system/api.md:1614-1623  ### 3.5 Other long-running calls (no progress channel)
-specs/system/api.md:1625-1726  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
-specs/system/api.md:1728-1794  ## 4. Desktop bridge (IPC)
-specs/system/api.md:1732-1749  ### 4.1 Globals exposed on `window`
-specs/system/api.md:1751-1767  ### 4.2 IPC channels
-specs/system/api.md:1769-1786  ### 4.3 Backend supervisor and readiness signal
-specs/system/api.md:1788-1794  ### 4.4 Data directory and secret (desktop)
-specs/system/api.md:1796-1839  ## 5. CLI contract
-specs/system/api.md:1841-1887  ## 6. Environment variables
-specs/system/api.md:1843-1860  ### 6.1 Backend (server process)
-specs/system/api.md:1862-1866  ### 6.2 CLI-only
-specs/system/api.md:1868-1877  ### 6.3 Electron main process
-specs/system/api.md:1879-1881  ### 6.4 Developer scripts (not part of the shipped app)
-specs/system/api.md:1883-1887  ### 6.5 Frontend build/runtime
-specs/system/api.md:1889-1905  ## 7. Gaps and open questions
+specs/system/api.md:1005-1011  #### 150. `POST /workflow-runs/:id/stop`
+specs/system/api.md:1013-1017  #### 151. `GET /workflow-runs/:id/input-image`
+specs/system/api.md:1019-1025  #### Query evidence (139-143, 152, 153)
+specs/system/api.md:1027-1031  #### 139. `POST /workflow-runs/:id/answer/evidence`
+specs/system/api.md:1033-1037  #### 140. `POST /workflow-runs/:id/answer/queries/:index/explanation`
+specs/system/api.md:1039-1042  #### 141. `POST /workflow-runs/:id/answer/queries/:index/stage-counts`
+specs/system/api.md:1044-1057  #### 142. `POST /workflow-runs/:id/answer/queries/:index/rerun`
+specs/system/api.md:1059-1062  #### 143. `GET /workflow-runs/:id/answer/queries/:index/csv`
+specs/system/api.md:1064-1096  #### 152. `POST /workflow-runs/:id/answer/queries/:index/page`
+specs/system/api.md:1098-1109  #### 153. `POST /workflow-runs/:id/answer/queries/:index/interpret-filter`
+specs/system/api.md:1111-1149  ### 2.6.4 Artifacts
+specs/system/api.md:1134-1135  #### 144. `GET /artifacts`
+specs/system/api.md:1137-1138  #### 145. `GET /artifacts/:id`
+specs/system/api.md:1140-1141  #### 146. `GET /artifacts/:id/image`
+specs/system/api.md:1143-1145  #### 147. `PATCH /artifacts/:id`
+specs/system/api.md:1147-1149  #### 148. `DELETE /artifacts/:id`
+specs/system/api.md:1151-1168  ### 2.7 Deep analysis (removed 2026-11-12)
+specs/system/api.md:1161-1162  #### 46. `POST /sessions/:id/deep-analysis`
+specs/system/api.md:1164-1165  #### 47. `GET /sessions/:id/deep-analysis/:jobId`
+specs/system/api.md:1167-1168  #### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
+specs/system/api.md:1170-1213  ### 2.8 Ontology
+specs/system/api.md:1185-1188  #### 49. `GET /datasets/:name/ontology`
+specs/system/api.md:1190-1193  #### 50. `POST /datasets/:name/ontology`
+specs/system/api.md:1195-1198  #### 51. `PATCH /ontology/:id`
+specs/system/api.md:1200-1202  #### 52. `DELETE /ontology/:id`
+specs/system/api.md:1204-1208  #### 53. `POST /datasets/:name/ontology/bootstrap`
+specs/system/api.md:1210-1213  #### 54. `POST /datasets/:name/ontology/bootstrap/stream`
+specs/system/api.md:1215-1266  ### 2.8c Monitoring
+specs/system/api.md:1228-1233  #### 111. `GET /monitoring/llm-calls`
+specs/system/api.md:1235-1239  #### 112. `GET /monitoring/llm-calls/:id`
+specs/system/api.md:1241-1247  #### 113. `GET /monitoring/sessions`
+specs/system/api.md:1249-1253  #### 114. `GET /monitoring/sessions/:id`
+specs/system/api.md:1255-1260  #### 115. `GET /monitoring/traces/:traceId`
+specs/system/api.md:1262-1266  #### 144. `GET /monitoring/usage`
+specs/system/api.md:1268-1307  ### 2.9 Testing data
+specs/system/api.md:1278-1295  #### 55. `GET /testing-data`
+specs/system/api.md:1297-1303  #### 56. `POST /testing-data/:fixtureId/load`
+specs/system/api.md:1305-1307  #### 57. `DELETE /testing-data/:fixtureId`
+specs/system/api.md:1309-1341  ### 2.10 Shared wire shapes
+specs/system/api.md:1343-1374  ### 2.11 Developer settings
+specs/system/api.md:1362-1363  #### 53. `GET /developer-settings`
+specs/system/api.md:1365-1369  #### 54. `PUT /developer-settings`
+specs/system/api.md:1371-1374  #### 55. `POST /developer-settings/test-endpoint`
+specs/system/api.md:1377-1397  ### 2.12 UI preferences
+specs/system/api.md:1391-1392  #### 56. `GET /ui-preferences`
+specs/system/api.md:1394-1397  #### 57. `PUT /ui-preferences`
+specs/system/api.md:1399-1401  ### 2.16 Intellify RFP API (removed)
+specs/system/api.md:1403-1434  ### 2.17 Data readiness
+specs/system/api.md:1413-1425  #### 108. `POST /data-readiness/assessments`
+specs/system/api.md:1427-1430  #### 109. `GET /data-readiness/assessments`
+specs/system/api.md:1432-1434  #### 110. `GET /data-readiness/assessments/:id`
+specs/system/api.md:1436-1503  ### 2.18 Synthetic data
+specs/system/api.md:1447-1465  #### 111. `POST /synthetic-data/profiles`
+specs/system/api.md:1467-1482  #### 112. `POST /synthetic-data/scripts`
+specs/system/api.md:1484-1492  #### 113. `POST /synthetic-data/profile-exports`
+specs/system/api.md:1494-1503  #### 114. `POST /synthetic-data/sample-exports`
+specs/system/api.md:1505-1515  ### 2.19 Health
+specs/system/api.md:1513-1515  #### 135. `GET /health`
+specs/system/api.md:1517-1727  ## 3. Streaming and long-running work
+specs/system/api.md:1521-1585  ### 3.1 Chat stream (removed in 1.23.27)
+specs/system/api.md:1587-1589  ### 3.2 Deep analysis (removed 2026-11-12)
+specs/system/api.md:1591-1599  ### 3.3 Eval runs
+specs/system/api.md:1601-1613  ### 3.4 Ontology bootstrap stream: `POST /datasets/:name/ontology/bootstrap/stream`
+specs/system/api.md:1615-1624  ### 3.5 Other long-running calls (no progress channel)
+specs/system/api.md:1626-1727  ### 3.6 Workflow run stream: `POST /workflows/:id/runs/stream`
+specs/system/api.md:1729-1795  ## 4. Desktop bridge (IPC)
+specs/system/api.md:1733-1750  ### 4.1 Globals exposed on `window`
+specs/system/api.md:1752-1768  ### 4.2 IPC channels
+specs/system/api.md:1770-1787  ### 4.3 Backend supervisor and readiness signal
+specs/system/api.md:1789-1795  ### 4.4 Data directory and secret (desktop)
+specs/system/api.md:1797-1840  ## 5. CLI contract
+specs/system/api.md:1842-1888  ## 6. Environment variables
+specs/system/api.md:1844-1861  ### 6.1 Backend (server process)
+specs/system/api.md:1863-1867  ### 6.2 CLI-only
+specs/system/api.md:1869-1878  ### 6.3 Electron main process
+specs/system/api.md:1880-1882  ### 6.4 Developer scripts (not part of the shipped app)
+specs/system/api.md:1884-1888  ### 6.5 Frontend build/runtime
+specs/system/api.md:1890-1906  ## 7. Gaps and open questions
 
 specs/system/architecture.md:18-63  ## Level 1 — System Context
 specs/system/architecture.md:65-256  ## Level 2 — Containers
@@ -2137,7 +2137,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1361  ## Level 3 — Components
+specs/system/architecture.md:258-1362  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -2173,13 +2173,13 @@ specs/system/architecture.md:1131-1153  #### ADR-0044 — Halo Powered rebrand: 
 specs/system/architecture.md:1155-1175  #### ADR-0045 — Brands chosen at build time (white-label): Halo Powered and Agentic Hub
 specs/system/architecture.md:1177-1197  #### ADR-0046 — The product is "Halo Workbench" in the app and the operating system
 specs/system/architecture.md:1199-1218  #### ADR-0047 — Long work the user starts runs as a background task owned by the shell, not by the screen that started it
-specs/system/architecture.md:1220-1241  #### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
-specs/system/architecture.md:1243-1264  #### ADR-0049 — Review a Website drives the computer's own browser from the backend, measures before it asks a model, and keeps site sign-ins encrypted
-specs/system/architecture.md:1266-1286  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
-specs/system/architecture.md:1288-1310  #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
-specs/system/architecture.md:1312-1338  #### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
-specs/system/architecture.md:1340-1361  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
-specs/system/architecture.md:1363-1418  ## Level 4 — Code
+specs/system/architecture.md:1220-1242  #### ADR-0048 — A workflow run runs detached from its connection: a live-run registry with a numbered event log, re-attach and a Stop endpoint
+specs/system/architecture.md:1244-1265  #### ADR-0049 — Review a Website drives the computer's own browser from the backend, measures before it asks a model, and keeps site sign-ins encrypted
+specs/system/architecture.md:1267-1287  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
+specs/system/architecture.md:1289-1311  #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
+specs/system/architecture.md:1313-1339  #### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
+specs/system/architecture.md:1341-1362  #### ADR-0053 — A follow-up can ask one agent of Answer a Business Question alone, on a second engine
+specs/system/architecture.md:1364-1419  ## Level 4 — Code
 
 specs/system/data-model.md:13-58  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory

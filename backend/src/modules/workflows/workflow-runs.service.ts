@@ -75,7 +75,15 @@ import { nodeChatHostRunId } from './node-chat-context';
 import { askHostOf, askRefusal, type AskHost } from './ask-agent-context';
 import type { AskableStepId } from '../../mastra/workflows/ask-agent.steps';
 import { HeldDraftRuns } from './held-draft-runs';
-import { LiveRuns, RunCheckpoint, type LiveRunEvent } from './live-runs';
+import {
+  IdleWatchdog,
+  LiveRuns,
+  RUN_IDLE_LIMIT_MS,
+  RUN_UNWIND_MS,
+  RunCheckpoint,
+  runStalledMessage,
+  type LiveRunEvent,
+} from './live-runs';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import { SuspendedRuns } from './suspended-runs';
 import {
@@ -83,6 +91,7 @@ import {
   RunStepTracker,
   expiredRunPatch,
   failOpenSteps,
+  forcedEndPatch,
   interruptedRunPatch,
   loopStepIds,
   noteToolFrame,
@@ -182,16 +191,44 @@ function liveEmit(
   };
 }
 
-/** Where a run's turn reports, for one request (its start or a resume). */
+/**
+ * Where a run's turn reports, for one request (its start or a resume), and
+ * the signal its work runs on: the caller's (Stop, a closed request) or the
+ * no-progress watchdog's, whichever aborts first.
+ */
 interface TurnIo {
   emit: (event: StreamEvent) => void;
   onStepEvent: (event: Parameters<RunStepTracker['apply']>[0]) => void;
+  abortSignal: AbortSignal;
+}
+
+/** How a run was stored ended without its work (api.md 150; workflows spec). */
+interface ForcedEnd {
+  status: 'stopped' | 'failed';
+  error?: string;
+  finishedAt: string;
+}
+
+/**
+ * A turn while it is driven (api.md 119, 138, 150): its progress
+ * checkpoints, the no-progress error once it stalled, and, once the run was
+ * ended without its work, that end, which the late unwind keeps.
+ */
+interface DrivenTurn {
+  checkpoint?: RunCheckpoint<Pick<WorkflowRunDoc, 'steps'>>;
+  stalled?: string;
+  forced?: ForcedEnd;
+  /** The turn's work settled: nothing forces its end any more. */
+  settled: boolean;
+  /** Ends the drive with the run stored without its work. */
+  finish: (run: WorkflowRunDoc) => void;
 }
 
 /**
  * A run between its requests (ADR-0043): what it was prepared from, its
  * stored start, its step tracker and, once created, its host; while it
- * waits for the user, the turn's suspension that resumes it.
+ * waits for the user, the turn's suspension that resumes it; while its turn
+ * is driven, that turn.
  */
 interface HeldRun {
   prepared: PreparedRun;
@@ -199,6 +236,7 @@ interface HeldRun {
   tracker: RunStepTracker;
   hostId?: string;
   suspension?: TurnSuspension;
+  driven?: DrivenTurn;
 }
 
 /** A resume request that passed every check (api.md 138). */
@@ -329,6 +367,16 @@ export class WorkflowRunsService implements OnModuleInit {
    * request and any later client (149) follow; Stop is 150.
    */
   readonly live = new LiveRuns();
+
+  /**
+   * How long a turn may report nothing before it is ended `failed` (the
+   * workflows spec's failure rules): `WORKFLOW_RUN_IDLE_MINUTES`, read once;
+   * 0 turns the watchdog off.
+   */
+  idleLimitMs = RUN_IDLE_LIMIT_MS;
+
+  /** The stored runs whose turn is being driven, so Stop can end one (150). */
+  private readonly driving = new Map<string, HeldRun>();
 
   /**
    * Start-up recovery (plan 5.1 step 5): a run still `running` was cut off
@@ -552,12 +600,18 @@ export class WorkflowRunsService implements OnModuleInit {
    * any partial answer, as a closed connection did before ADR-0048; a run
    * waiting for the user is dropped and stored `stopped` as an expired one
    * (138). Idempotent: a run that already ended answers as it is. Answers
-   * the stored run; 404 for an unknown one.
+   * the stored run; 404 for an unknown one. A live run whose work has not
+   * unwound within `RUN_UNWIND_MS` is stored `stopped` here, its running
+   * steps stopped, and its log ended with `done { run }`: the answer is
+   * never `running`. The late unwind keeps it `stopped` (`drive`).
    */
   async stop(id: string): Promise<WorkflowRun> {
     const run = await this.stored(id);
     if (this.live.stop(id)) {
       await this.settled(this.live.whenEnded(id));
+      if ((await this.repository.get(id))?.status === 'running') {
+        await this.forceStop(id);
+      }
     } else if (run.status === 'suspended') {
       const held = this.waiting.remove(id);
       await this.expire(id, held);
@@ -614,12 +668,76 @@ export class WorkflowRunsService implements OnModuleInit {
     void background().finally(() => this.live.end(id));
   }
 
-  /** Wait for a stopped run to be stored, at most 10 seconds. */
+  /**
+   * Store a stopped live run whose work did not unwind (api.md 150): its
+   * drive ends with it stored `stopped`, and Stop waits for its log to end.
+   * A run not being driven (a resume between its writes) is stored
+   * `stopped` from what is stored, and its log ended with `done { run }`.
+   */
+  private async forceStop(id: string): Promise<void> {
+    const held = this.driving.get(id);
+    if (held?.driven) {
+      await this.forceEnd(held, { status: 'stopped' });
+      await this.live.whenEnded(id);
+      return;
+    }
+    const stored = await this.repository.get(id);
+    if (!stored) return;
+    await this.end(
+      id,
+      forcedEndPatch(stored.steps, {
+        status: 'stopped',
+        finishedAt: new Date().toISOString(),
+      }),
+    );
+    this.live.publish(id, { type: 'done', run: await this.get(id) });
+    this.live.end(id);
+  }
+
+  /**
+   * End a driven run without its work (api.md 150; the workflows spec's
+   * failure rules): Stop's (`stopped`) or a stalled run's (`failed` with the
+   * no-progress error) when the work did not unwind in time. Its
+   * checkpoints are closed, the run stored with its steps as last tracked
+   * (a draft is not stored), and the drive ends with it. Once only, and
+   * never after the work settled.
+   */
+  private async forceEnd(
+    held: HeldRun,
+    end: Omit<ForcedEnd, 'finishedAt'>,
+  ): Promise<void> {
+    const driven = held.driven;
+    if (!driven || driven.settled || driven.forced) return;
+    const forced: ForcedEnd = { ...end, finishedAt: new Date().toISOString() };
+    driven.forced = forced;
+    await driven.checkpoint?.close();
+    const { base, prepared, tracker } = held;
+    const patch = forcedEndPatch(tracker.pause(), forced);
+    const doc: WorkflowRunDoc = {
+      ...base,
+      ...patch,
+      question: prepared.turn.question,
+    };
+    if (prepared.draft) {
+      driven.finish(doc);
+      return;
+    }
+    try {
+      driven.finish((await this.end(base.id, patch)) ?? doc);
+    } catch (failure) {
+      this.logger.warn(
+        `Could not store the end of run ${base.id}: ${runErrorMessage(failure)}`,
+      );
+      driven.finish(doc);
+    }
+  }
+
+  /** Wait for a stopped run to be stored, at most `RUN_UNWIND_MS`. */
   private async settled(ended: Promise<void> | undefined): Promise<void> {
     if (!ended) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const limit = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, 10_000);
+      timer = setTimeout(resolve, RUN_UNWIND_MS);
       (timer as { unref?: () => void }).unref?.();
     });
     await Promise.race([ended, limit]);
@@ -709,7 +827,7 @@ export class WorkflowRunsService implements OnModuleInit {
         host.id,
         prepared.turn.question,
         io.emit,
-        abortSignal,
+        io.abortSignal,
         prepared.turn.careful,
         io.onStepEvent,
       );
@@ -801,7 +919,7 @@ export class WorkflowRunsService implements OnModuleInit {
     return this.drive(held, live, abortSignal, (io) =>
       suspension.resume(answer, {
         emit: io.emit,
-        abortSignal,
+        abortSignal: io.abortSignal,
         onStepEvent: io.onStepEvent,
       }),
     );
@@ -818,6 +936,14 @@ export class WorkflowRunsService implements OnModuleInit {
    * the tracker's steps so far, the running step and its tool calls
    * included (data-model 3.16), so a restart keeps them (workflows R20);
    * those checkpoints are closed before the write that ends the turn.
+   *
+   * A no-progress watchdog times the turn (the workflows spec's failure
+   * rules): every event it reports resets the clock, and `idleLimitMs` of
+   * silence aborts its work with the no-progress error, the run ending
+   * `failed` (`stall`). The clock stops when the turn ends or waits for the
+   * user. A run ended without its work (`forceEnd`: Stop, or a stall that
+   * did not unwind) ends the drive at once with that run; its work's late
+   * unwind sends nothing and keeps that end (`unwound`).
    */
   private async drive(
     held: HeldRun,
@@ -836,9 +962,36 @@ export class WorkflowRunsService implements OnModuleInit {
               `Could not store the progress of run ${base.id}: ${runErrorMessage(failure)}`,
             ),
         );
+    let finish!: (run: WorkflowRunDoc) => void;
+    const forcedRun = new Promise<WorkflowRunDoc>(
+      (resolve) => (finish = resolve),
+    );
+    const driven: DrivenTurn = {
+      ...(checkpoint ? { checkpoint } : {}),
+      settled: false,
+      finish,
+    };
+    held.driven = driven;
+    if (!prepared.draft) this.driving.set(base.id, held);
+    // Nothing reaches the run's clients once it ended without its work.
+    const send = (event: RunStreamEvent) => {
+      if (!driven.forced) live(event);
+    };
+    // The turn's work stops on the caller's abort or the watchdog's.
+    const turnAbort = new AbortController();
+    const watchdog = new IdleWatchdog(this.idleLimitMs, () =>
+      this.stall(held, driven, abortSignal, turnAbort),
+    );
+    const onAbort = () => {
+      watchdog.stop();
+      turnAbort.abort(abortSignal?.reason);
+    };
+    if (abortSignal?.aborted) onAbort();
+    else abortSignal?.addEventListener('abort', onAbort, { once: true });
     const onStep = (event: Parameters<RunStepTracker['apply']>[0]) => {
+      watchdog.touch();
       const step = tracker.apply(event);
-      if (!step) return;
+      if (!step || driven.forced) return;
       live({ type: 'step', ...step });
       checkpoint?.save({ steps: tracker.pause() });
     };
@@ -846,15 +999,79 @@ export class WorkflowRunsService implements OnModuleInit {
       // The turn's `done` carries the host; the run sends its own. Its tool
       // events are the running agent step's tool calls too.
       emit: (event) => {
+        watchdog.touch();
         noteToolFrame(tracker, event);
-        if (event.type !== 'done') live(event);
+        if (event.type !== 'done') send(event);
       },
       onStepEvent: onStep,
+      abortSignal: turnAbort.signal,
     };
-    let ended: WorkflowRunDoc;
+    const work = this.runAgent(held, send, abortSignal, () =>
+      turn(io).finally(() => watchdog.stop()),
+    );
     try {
-      ended = await this.runAgent(held, live, abortSignal, () => turn(io));
-    } catch (failure) {
+      return await this.driveEnd(held, driven, live, work, forcedRun);
+    } finally {
+      watchdog.stop();
+      abortSignal?.removeEventListener('abort', onAbort);
+      if (this.driving.get(base.id) === held) this.driving.delete(base.id);
+    }
+  }
+
+  /**
+   * How a driven turn ends (`drive`): with its work's end, stored as
+   * before, or with the run `forceEnd` stored without it. In the second
+   * case the work's late end goes to `unwound`.
+   */
+  private async driveEnd(
+    held: HeldRun,
+    driven: DrivenTurn,
+    live: (event: RunStreamEvent) => void,
+    work: Promise<WorkflowRunDoc>,
+    forcedRun: Promise<WorkflowRunDoc>,
+  ): Promise<WorkflowRun> {
+    const { prepared, base, tracker } = held;
+    const checkpoint = driven.checkpoint;
+    const outcome = await Promise.race([
+      work.then(
+        (doc) => {
+          driven.settled = true;
+          return { doc } as const;
+        },
+        (failure: unknown) => {
+          driven.settled = true;
+          return { failure } as const;
+        },
+      ),
+      forcedRun.then((forced) => ({ forced }) as const),
+    ]);
+    // A forced end in progress when the work settled wins: it is stored.
+    if ('forced' in outcome || driven.forced) {
+      const forced = 'forced' in outcome ? outcome.forced : await forcedRun;
+      const end = driven.forced!;
+      void work
+        .then(
+          (doc) => this.unwound(held, end, doc),
+          () => this.unwound(held, end),
+        )
+        .catch((failure: unknown) =>
+          this.logger.warn(
+            `Could not store the late end of run ${base.id}: ${runErrorMessage(failure)}`,
+          ),
+        );
+      const run: WorkflowRun = prepared.draft
+        ? forced
+        : await this.wire(forced);
+      if (prepared.draft) this.drafts.hold(run, prepared.draft.agentId);
+      if (run.status === 'failed') {
+        live({ type: 'error', content: run.error ?? 'The run failed' });
+      } else {
+        live({ type: 'done', run });
+      }
+      return run;
+    }
+    if ('failure' in outcome) {
+      const { failure } = outcome;
       await checkpoint?.close();
       if (!prepared.draft) {
         // A checkpoint may have stored a step running or waiting: the end
@@ -869,6 +1086,7 @@ export class WorkflowRunsService implements OnModuleInit {
       }
       throw failure;
     }
+    const ended = outcome.doc;
     // The end write lands after every checkpoint, and none follows it.
     await checkpoint?.close();
     const { id, ...patch } = ended;
@@ -896,6 +1114,62 @@ export class WorkflowRunsService implements OnModuleInit {
     }
     live({ type: 'done', run });
     return run;
+  }
+
+  /**
+   * A turn that reported nothing for `idleLimitMs` (the workflows spec's
+   * failure rules; ADR-0048 amendment): its work is aborted, the abort's
+   * reason the no-progress error, so the run ends `failed` with it, not
+   * `stopped`. Work that has not unwound `RUN_UNWIND_MS` later is ended
+   * without it (`forceEnd`). A Stop that came first keeps the run stopped.
+   */
+  private stall(
+    held: HeldRun,
+    driven: DrivenTurn,
+    abortSignal: AbortSignal | undefined,
+    turnAbort: AbortController,
+  ): void {
+    if (abortSignal?.aborted || driven.settled) return;
+    const error = runStalledMessage(this.idleLimitMs);
+    this.logger.warn(`Run ${held.base.id}: ${error}`);
+    driven.stalled = error;
+    turnAbort.abort(new Error(error));
+    const timer = setTimeout(() => {
+      if (held.driven !== driven) return;
+      void this.forceEnd(held, { status: 'failed', error });
+    }, RUN_UNWIND_MS);
+    (timer as { unref?: () => void }).unref?.();
+  }
+
+  /**
+   * The late end of work whose run was ended without it (api.md 150): the
+   * work released the run's host as it ended (`runAgent`); the stored run
+   * keeps its forced status, error and end time, and takes the partial
+   * answer and the final step details. A run deleted meanwhile is not
+   * stored again: its host's resources (workspace, memory thread) are
+   * deleted now. Nothing is sent: the run's log has ended.
+   */
+  private async unwound(
+    held: HeldRun,
+    forced: ForcedEnd,
+    ended?: WorkflowRunDoc,
+  ): Promise<void> {
+    const { prepared, base } = held;
+    if (prepared.draft) return;
+    if (!(await this.repository.get(base.id))) {
+      await this.quietly(`delete the host of deleted run ${base.id}`, () =>
+        this.sessions.deleteRunHostResources(`${RUN_HOST_ID_PREFIX}${base.id}`),
+      );
+      return;
+    }
+    if (!ended) return;
+    const { id, ...patch } = ended;
+    await this.end(id, {
+      ...patch,
+      status: forced.status,
+      ...(forced.error !== undefined ? { error: forced.error } : {}),
+      finishedAt: forced.finishedAt,
+    });
   }
 
   /**
@@ -1584,7 +1858,13 @@ export class WorkflowRunsService implements OnModuleInit {
         error = runErrorMessage(failure);
       }
     }
+    // A Stop is `stopped`; a turn the watchdog aborted fails with its error.
+    const stalled = held.driven?.stalled;
     if (abortSignal?.aborted) status = 'stopped';
+    else if (stalled) {
+      status = 'failed';
+      error = stalled;
+    }
     const hostId = held.hostId;
     if (suspension && status === 'success' && hostId && !prepared.draft) {
       return this.suspend(held, hostId, suspension);

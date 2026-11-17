@@ -296,6 +296,35 @@ export function failOpenSteps(
   );
 }
 
+/**
+ * What a live run is stored as when it is ended without its work (api.md
+ * 150; workflows spec, the stop and failure rules): Stop whose work did not
+ * unwind in time (`stopped`), or a run that made no progress and did not
+ * unwind (`failed` with `error`). The steps are as last tracked; any step
+ * still running or waiting ends with the run, at `finishedAt`.
+ */
+export function forcedEndPatch(
+  steps: WorkflowRunStep[],
+  end: { status: 'stopped' | 'failed'; error?: string; finishedAt: string },
+): Partial<WorkflowRunDoc> {
+  const { status, error, finishedAt } = end;
+  return {
+    status,
+    ...(error !== undefined ? { error } : {}),
+    steps: steps.map((step) =>
+      step.status === 'running' || step.status === 'suspended'
+        ? {
+            ...step,
+            status,
+            ...(status === 'failed' && error !== undefined ? { error } : {}),
+            endedAt: finishedAt,
+          }
+        : step,
+    ),
+    finishedAt,
+  };
+}
+
 /** Why a suspended run can no longer go on (api.md 138 410). */
 export const RUN_EXPIRED_ERROR =
   'This run can no longer continue — run it again with your answer';

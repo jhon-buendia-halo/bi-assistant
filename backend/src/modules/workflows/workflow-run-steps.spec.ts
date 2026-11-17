@@ -2,6 +2,7 @@ import {
   RUN_INTERRUPTED_ERROR,
   RunStepTracker,
   expiredRunPatch,
+  forcedEndPatch,
   interruptedRunPatch,
   loopStepIds,
   noteToolFrame,
@@ -657,6 +658,61 @@ describe('expiredRunPatch (api.md 138 410, ADR-0043)', () => {
           id: 'clarify',
           title: 'Clarify',
           status: 'stopped',
+          endedAt: '2026-11-11T11:00:00.000Z',
+        },
+      ],
+      finishedAt: '2026-11-11T11:00:00.000Z',
+    });
+  });
+});
+
+describe('forcedEndPatch (api.md 150: a run ended without its work)', () => {
+  const steps = [
+    { id: 'plan', title: 'Plan', status: 'success' as const },
+    {
+      id: 'analyse',
+      title: 'Analyse',
+      status: 'running' as const,
+      startedAt: '2026-11-11T10:01:00.000Z',
+    },
+  ];
+
+  it('a forced Stop stores the run stopped with its running step stopped', () => {
+    expect(
+      forcedEndPatch(steps, {
+        status: 'stopped',
+        finishedAt: '2026-11-11T11:00:00.000Z',
+      }),
+    ).toEqual({
+      status: 'stopped',
+      steps: [
+        steps[0],
+        {
+          ...steps[1],
+          status: 'stopped',
+          endedAt: '2026-11-11T11:00:00.000Z',
+        },
+      ],
+      finishedAt: '2026-11-11T11:00:00.000Z',
+    });
+  });
+
+  it('a stalled run stores failed, its running step failed with the same error', () => {
+    expect(
+      forcedEndPatch(steps, {
+        status: 'failed',
+        error: 'stalled',
+        finishedAt: '2026-11-11T11:00:00.000Z',
+      }),
+    ).toEqual({
+      status: 'failed',
+      error: 'stalled',
+      steps: [
+        steps[0],
+        {
+          ...steps[1],
+          status: 'failed',
+          error: 'stalled',
           endedAt: '2026-11-11T11:00:00.000Z',
         },
       ],
