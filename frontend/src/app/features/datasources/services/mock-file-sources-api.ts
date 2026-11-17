@@ -14,8 +14,8 @@ const wait = () => new Promise<void>((r) => setTimeout(r, DELAY_MS));
 
 const REGION_ROWS = 12480;
 const REGION_HEADER = 3;
-/** The Region sheet's last row: a total line below the data. */
-const REGION_LAST = REGION_HEADER + REGION_ROWS;
+/** The Region sheet's last row: a total line below its REGION_ROWS data rows. */
+const REGION_LAST = REGION_HEADER + REGION_ROWS + 1;
 const CSV_LAST = 5211;
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const REGION_COLUMNS = [
@@ -39,12 +39,13 @@ function regionCells(row: number): PreviewCell[] {
     return ['Total', null, null, '214,906', '9,872,415.60', null];
   }
   const n = row - REGION_HEADER;
+  const units = 600 + ((n * 37) % 1200);
   return [
     n <= 2 ? 'North' : n <= 4 ? 'South' : 'West',
     ['Norway', 'Sweden', 'Spain', 'Italy', 'Ireland'][n % 5],
     `2026-${String((n % 12) + 1).padStart(2, '0')}`,
-    (1000 + n * 37).toLocaleString('en-US'),
-    `${(40000 + n * 811).toLocaleString('en-US')}.00`,
+    units.toLocaleString('en-US'),
+    `${(units * 46).toLocaleString('en-US')}.00`,
     ['Retail', 'Online', 'Partner'][n % 3],
   ];
 }
