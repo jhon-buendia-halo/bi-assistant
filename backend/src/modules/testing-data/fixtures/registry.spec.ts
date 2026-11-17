@@ -175,6 +175,7 @@ describe('sample fixture catalogue', () => {
       const ids = SAMPLE_FIXTURES.map((sample) => sample.id);
       expect(ids.indexOf('edge-cases')).toBe(ids.indexOf('us-health') + 1);
       expect(ids[ids.length - 1]).toBe('world-cup-rest');
+      expect(ids[ids.length - 2]).toBe('world-cup-excel');
     });
 
     it('generates the data in SQL, identically on every load', () => {

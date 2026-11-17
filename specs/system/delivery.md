@@ -139,7 +139,7 @@ node scripts/setup-local.mjs http://127.0.0.1:<port>  # configure the running in
 **Configuring a local instance for hand testing (BA-325).** `scripts/setup-local.mjs [baseUrl]` (default `http://127.0.0.1:3000`, Node only, no dependencies) configures a running instance through its own API:
 
 - **LLM:** saves `PUT /llm/settings` from `.env.llm.local`: `LLM_PROVIDER` (default `custom`), `LLM_API_STYLE` (default `anthropic`), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`. The file is read from the checkout, else from the main checkout (through `git rev-parse --git-common-dir`), so a worktree needs no copy; environment variables win over it. It is gitignored (`*.local`); [.env.llm.example](../../.env.llm.example) is the committed template. Without `LLM_BASE_URL` and `LLM_MODEL` this step is skipped.
-- **Testing Data:** loads every seedable fixture with its defaults (`POST /testing-data/:id/load`, [api.md](api.md) 56); a fixture already loaded is skipped, so a re-run is safe. Tests: `node --test scripts/setup-local.test.mjs`.
+- **Testing Data:** loads every seedable fixture with its defaults, and the World Cup Excel sample (a `file` fixture: no connection, an empty body) (`POST /testing-data/:id/load`, [api.md](api.md) 56); a fixture already loaded is skipped, so a re-run is safe. Tests: `node --test scripts/setup-local.test.mjs`.
 
 It exits non-zero when any step fails. It writes to the sample Postgres the fixtures name (127.0.0.1:55432 by default), creating their databases if missing.
 

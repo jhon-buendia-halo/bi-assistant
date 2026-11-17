@@ -37,6 +37,8 @@ export interface TestingDataFixture {
   schema: string;
   /** true = a REST API this app runs itself: no connection form, nothing to test. */
   selfRegistering?: boolean;
+  /** `file` = an Excel / CSV sample: its files are copied, no database is involved. */
+  datasourceKind?: 'postgres' | 'rest' | 'file';
   /** Self-registering fixtures: the URL of the API this app started, when running. */
   apiUrl?: string;
   defaults: PostgresConnectionConfig;

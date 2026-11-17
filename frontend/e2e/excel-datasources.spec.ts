@@ -2,6 +2,13 @@ import path from 'node:path';
 import { test, expect } from './fixtures/app.fixture';
 import { apiFetch, apiJson } from './helpers/api';
 import { openDatasourceSettings } from './helpers/app-actions';
+import { saveLenaiSettings } from './helpers/agents-api';
+import {
+  messageText,
+  startLlmStub,
+  type StubRequest,
+} from './helpers/llm-stub';
+import { runAnswer, runQuestionInTab } from './helpers/run-ui';
 import { scenarioStep } from './support/demo-captions';
 
 /**
@@ -29,9 +36,13 @@ test.describe('Feature: Excel and CSV datasources', () => {
         .filter({ hasText: name });
 
       try {
-        await scenarioStep(page, 'Given I am in "Datasource Configuration"', async () => {
-          await openDatasourceSettings(page);
-        });
+        await scenarioStep(
+          page,
+          'Given I am in "Datasource Configuration"',
+          async () => {
+            await openDatasourceSettings(page);
+          },
+        );
 
         await scenarioStep(
           page,
@@ -59,18 +70,24 @@ test.describe('Feature: Excel and CSV datasources', () => {
           },
         );
 
-        await scenarioStep(page, 'When I click "Review" on the "Region" sheet', async () => {
-          await region.getByTestId('sheet-review').click();
-          await expect(page.getByTestId('sheet-review-dialog')).toBeVisible();
-          await expect(page.getByTestId('sheet-review-grid')).toBeVisible();
-        });
+        await scenarioStep(
+          page,
+          'When I click "Review" on the "Region" sheet',
+          async () => {
+            await region.getByTestId('sheet-review').click();
+            await expect(page.getByTestId('sheet-review-dialog')).toBeVisible();
+            await expect(page.getByTestId('sheet-review-grid')).toBeVisible();
+          },
+        );
 
         await scenarioStep(
           page,
           'And I click row number 2 to make it the header row',
           async () => {
             await page.locator('[data-row="2"] button').click();
-            await expect(page.getByTestId('sheet-review-header-row')).toHaveValue('2');
+            await expect(
+              page.getByTestId('sheet-review-header-row'),
+            ).toHaveValue('2');
             await expect(page.locator('[data-row="1"]')).toHaveAttribute(
               'data-excluded',
               'true',
@@ -88,11 +105,15 @@ test.describe('Feature: Excel and CSV datasources', () => {
           await page.getByRole('button', { name: 'Import and check' }).click();
         });
 
-        await scenarioStep(page, 'Then I see "Imported 2 tables · 9 rows"', async () => {
-          await expect(page.getByTestId('file-import-status')).toContainText(
-            'Imported 2 tables · 9 rows',
-          );
-        });
+        await scenarioStep(
+          page,
+          'Then I see "Imported 2 tables · 9 rows"',
+          async () => {
+            await expect(page.getByTestId('file-import-status')).toContainText(
+              'Imported 2 tables · 9 rows',
+            );
+          },
+        );
 
         await scenarioStep(page, 'When I click "Save datasource"', async () => {
           await page.getByRole('button', { name: 'Save datasource' }).click();
@@ -127,6 +148,145 @@ test.describe('Feature: Excel and CSV datasources', () => {
         for (const ds of datasources.filter((d) => d.name === name)) {
           await apiFetch(page, 'DELETE', `/datasources/${ds.id}`);
         }
+      }
+    },
+  );
+
+  test(
+    'Asks a question of the World Cup Excel sample and opens the query behind the answer',
+    { tag: ['@demo', '@story-1.31.7'] },
+    async ({ page }) => {
+      const dataset = 'World Cup Excel';
+      const question =
+        'List the matches with every player of the players file.';
+      const answer = 'These are the matches paired with the players file.';
+      // 16 matches of the workbook against the 50 players of the CSV: 800 rows.
+      const sql =
+        'SELECT m.match_id, m.stage, p.full_name, p.position ' +
+        'FROM file.world_cup.matches m CROSS JOIN file.players.players p';
+      const inspector = page.getByTestId('query-inspector');
+      const label = page.getByTestId('query-result-page-label');
+      const stub = await startLlmStub();
+
+      try {
+        await saveLenaiSettings(page, stub.baseUrl);
+        stub.reply = (request: StubRequest) =>
+          request.messages.at(-1)?.role === 'tool'
+            ? { text: answer }
+            : {
+                toolCall: {
+                  name:
+                    request.tools.find((tool) =>
+                      tool.endsWith('run_readonly_sql'),
+                    ) ?? 'run_readonly_sql',
+                  arguments: { sql, rationale: 'Pairing matches and players.' },
+                },
+              };
+
+        await scenarioStep(
+          page,
+          'Given I loaded the "World Cup Excel" sample from Settings, Testing Data',
+          async () => {
+            await page.getByTitle('Settings').click();
+            await page
+              .getByRole('navigation', { name: 'Settings navigation' })
+              .getByRole('button', { name: 'Testing Data' })
+              .click();
+            const card = page.getByTestId(
+              'testing-data-fixture-world-cup-excel',
+            );
+            await card.getByRole('button').first().click();
+            await expect(
+              card.getByTestId('testing-data-host-world-cup-excel'),
+            ).toHaveCount(0);
+            await card.getByTestId('testing-data-load-world-cup-excel').click();
+            await expect(card).toContainText(
+              'copies the World Cup Excel files',
+            );
+            await card
+              .getByTestId('testing-data-confirm-world-cup-excel')
+              .click();
+            await expect(
+              page.getByTestId('testing-data-status-world-cup-excel'),
+            ).toHaveText('4/4 entities');
+          },
+        );
+
+        await scenarioStep(
+          page,
+          `When I ask "${question}" with the "${dataset}" dataset`,
+          async () => {
+            await runQuestionInTab(page, question, dataset);
+          },
+        );
+
+        await scenarioStep(page, 'Then I see the answer', async () => {
+          await expect(runAnswer(page)).toContainText(answer);
+          const toolResult = stub.requests
+            .flatMap((request) => request.messages)
+            .filter((message) => message.role === 'tool')
+            .map(messageText)
+            .join('\n');
+          expect(toolResult).toContain('match_id');
+          expect(toolResult).not.toMatch(/"error"/i);
+        });
+
+        await scenarioStep(
+          page,
+          'When I open the query behind the answer',
+          async () => {
+            await page.getByTestId('query-row-0').click();
+            await expect(inspector).toBeVisible();
+            await inspector.getByTestId('query-inspector-tab-sql').click();
+          },
+        );
+
+        await scenarioStep(
+          page,
+          'Then I see its SQL over "file.…"',
+          async () => {
+            await expect(inspector.getByTestId('query-sql')).toHaveText(sql);
+          },
+        );
+
+        await scenarioStep(
+          page,
+          'When I open its result and go to the next page',
+          async () => {
+            await inspector.getByTestId('query-inspector-tab-result').click();
+            await inspector.getByTestId('query-result-next-page').click();
+            await expect(label).toHaveText('Rows 51–100 of 800');
+          },
+        );
+
+        await scenarioStep(page, 'And I sort a column', async () => {
+          await inspector.getByTestId('query-result-sort').first().click();
+          await expect(
+            inspector.locator('th[aria-sort="ascending"]'),
+          ).toHaveCount(1);
+          await expect(label).toContainText('Rows 1–50 of');
+        });
+
+        await scenarioStep(
+          page,
+          'And I filter the position column to goalkeepers',
+          async () => {
+            await inspector.getByTestId('query-filter-add').click();
+            await inspector
+              .getByTestId('query-filter-column')
+              .selectOption('position');
+            await inspector.getByTestId('query-filter-op').selectOption('eq');
+            await inspector.getByTestId('query-filter-value').fill('GK');
+            await inspector.getByTestId('query-filter-apply').click();
+            await expect(
+              inspector.getByTestId('query-filter-chip'),
+            ).toContainText('GK');
+            await expect(label).toContainText('208');
+          },
+        );
+      } finally {
+        await stub.close();
+        await apiFetch(page, 'DELETE', '/testing-data/world-cup-excel');
       }
     },
   );

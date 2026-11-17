@@ -12,6 +12,14 @@
       {
         "include": "modules/testing-data/fixtures/**/*.sql*",
         "watchAssets": true
+      },
+      {
+        "include": "modules/testing-data/fixtures/**/*.xlsx",
+        "watchAssets": true
+      },
+      {
+        "include": "modules/testing-data/fixtures/**/*.csv",
+        "watchAssets": true
       }
     ]
   }
