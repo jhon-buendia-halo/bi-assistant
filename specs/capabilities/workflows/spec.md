@@ -143,7 +143,7 @@ Consumption Gap Analysis (2026-11-16, roadmap 1.30; ADR-0051)
 
 ## UI
 
-- The **User journeys** rail item, between Datasets and Agent personas (lucide `workflow` icon; [../../system/ui.md](../../system/ui.md) 1.3), and the `workflows` and `workflow-detail` views (ui.md 1.4).
+- The **User journeys** rail item, first on the rail (lucide `workflow` icon; [../../system/ui.md](../../system/ui.md) 1.3), and the `workflows` and `workflow-detail` views (ui.md 1.4).
 - The Workflows page: the note `Each user journey runs on an input. Its steps call agent personas, and agent personas use skills and tools.`, the search, the Official section and the workflow card with **Run** (ui.md 4.4a).
 - A workflow's page, an n8n-style designer (ui.md 4.4b): the header with the breadcrumb, the name, id and kind; the left-to-right canvas with Execute user journey and its zoom toolbar; the Run panel on the right (resizable from its left edge, maximizable, foldable to a strip; its header holds the run's summary and activity line, its body the Chat); the node dialog (Input, Parameters and Settings, Output), with the Agents links on Start. The app's right panel is not shown on this page.
 - A workflow page's **View** control in its header, **Business** (the default) and **Builder** (R38; ui.md 4.4b): Business is an agentic chat where every message runs the workflow, with **Open in Builder** for a run's details.

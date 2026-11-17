@@ -61,7 +61,7 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 2. The **menu button** (menu icon, 18 px, `icon` colour, a 32 px square, radius 8): `aria-label` and title "Expand navigation" while collapsed, "Collapse navigation" while expanded, with `aria-expanded`. While collapsed it sits alone above the logo; while expanded it sits at the right end of the logo row, beside the brand (the drawer has no separate menu row).
 3. The brand row (36 px tall, `data-testid="brand"`, title "Halo Workbench"): when expanded, the HALO wordmark (`app-logo`, 14 px tall, `fg-strong`, accessible name "Halo Workbench"), a 1 px `border` divider and the brand's wordmark label, "Workbench" (`wordmarkLabel`; 12.5 px medium `fg-muted`, `aria-hidden`), filling the row, then the menu button (item 2); when collapsed, only the notched "O" mark (`app-logo` with `mark`, 20 px).
 4. `nav aria-label="Workspace navigation"`: seven 36 px tall buttons (radius 8, 4 px apart), each an 18 px `accent` icon and, when expanded, a 13 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
-   - **Datasets** (flask icon), **User journeys** (workflow icon), **Agent personas** (bot icon), **Artifacts** (boxes icon), **Runs** (folder-kanban icon), **Costs** (circle-dollar-sign icon), **Monitoring** (activity icon).
+   - **User journeys** (workflow icon), **Runs** (folder-kanban icon), **Artifacts** (boxes icon), **Datasets** (flask icon), **Agent personas** (bot icon), **Monitoring** (activity icon), **Costs** (circle-dollar-sign icon), in that order (app-shell R3).
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
 5. A flexible spacer.
 6. Bottom group, 4 px apart (centred while collapsed):

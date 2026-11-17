@@ -700,9 +700,9 @@ specs/capabilities/app-shell/spec.md:104-104  R38 The application shell in its i
 specs/capabilities/app-shell/spec.md:106-116  ## Edge cases and errors
 specs/capabilities/app-shell/spec.md:118-125  ## Contracts
 specs/capabilities/app-shell/spec.md:127-134  ## UI
-specs/capabilities/app-shell/spec.md:136-423  ## Flows
-specs/capabilities/app-shell/spec.md:425-429  ## Acceptance
-specs/capabilities/app-shell/spec.md:431-438  ## Open questions
+specs/capabilities/app-shell/spec.md:136-424  ## Flows
+specs/capabilities/app-shell/spec.md:426-430  ## Acceptance
+specs/capabilities/app-shell/spec.md:432-439  ## Open questions
 
 specs/capabilities/data-readiness/spec.md:5-22  ## Concepts
 specs/capabilities/data-readiness/spec.md:24-249  ## Rules

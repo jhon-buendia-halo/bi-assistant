@@ -23,6 +23,22 @@ async function expectCurrent(page: Page, name: string): Promise<void> {
 }
 
 test('moves between areas from the rail', async ({ page }) => {
+  // The order of use (app-shell R3): journeys and their results first, operations last.
+  const items = page.getByRole('navigation', { name: 'Workspace navigation' }).getByRole('button');
+  await expect(items).toHaveCount(7);
+  const names = await items.evaluateAll((buttons) =>
+    buttons.map((button) => button.getAttribute('aria-label')),
+  );
+  expect(names).toEqual([
+    'User journeys',
+    'Runs',
+    'Artifacts',
+    'Datasets',
+    'Agent personas',
+    'Monitoring',
+    'Costs',
+  ]);
+
   await railItem(page, 'Datasets').click();
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await expectCurrent(page, 'Datasets');
