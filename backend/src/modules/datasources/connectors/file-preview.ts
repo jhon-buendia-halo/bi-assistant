@@ -40,13 +40,42 @@ export interface SheetPreviewOptions {
   allText?: boolean;
 }
 
-/** The sheet rows the grid shows: the first 7 of the range and its last 2. */
-function shownRows(range: CellRange): number[][] {
-  const headEnd = Math.min(range.firstRow + HEAD_ROWS - 1, range.lastRow);
+/**
+ * The sheet rows the grid shows: the first 7 rows of the sheet (from its
+ * first non-empty row, so rows above the header show), widened to the header
+ * row and the row under it when the header sits lower, and the range's last 2.
+ */
+function shownRows(
+  sheetFirst: number,
+  headerRow: number,
+  range: CellRange,
+): number[][] {
+  const headEnd = Math.min(
+    Math.max(sheetFirst + HEAD_ROWS - 1, headerRow + 1),
+    range.lastRow,
+  );
   const tailStart = Math.max(headEnd + 1, range.lastRow - TAIL_ROWS + 1);
-  const blocks = [[range.firstRow, headEnd]];
+  const blocks = [[sheetFirst, headEnd]];
   if (tailStart <= range.lastRow) blocks.push([tailStart, range.lastRow]);
   return blocks;
+}
+
+/** The first row DuckDB finds a cell on; 1 for a CSV or an unreadable sheet. */
+async function sheetFirstRow(
+  connection: DuckDBConnection,
+  path: string,
+  sheet: string,
+): Promise<number> {
+  try {
+    const start = (
+      await connection.runAndReadAll(
+        `SELECT * FROM ${readXlsx(path, sheet, { header: false, allText: true })} LIMIT 0`,
+      )
+    ).columnNames()[0];
+    return Number(/^[A-Z]+(\d+)$/.exec(start ?? '')?.[1] ?? 1);
+  } catch {
+    return 1;
+  }
 }
 
 function fit(cells: Cell[] | undefined, width: number): Cell[] {
@@ -162,7 +191,6 @@ export async function previewSheet(
     options.excludeLastRow ??
     (range.lastRow === detectedLast && proposal.excludeLastRow);
   const allText = options.allText ?? proposal.allText;
-  const blocks = shownRows(range);
   // Types as the import reads them: the excluded last row is not data.
   const typesTo =
     excludeLastRow && range.lastRow - 1 > headerRow
@@ -171,10 +199,12 @@ export async function previewSheet(
 
   return withDuckDb(':memory:', async (connection) => {
     const shown: SheetPreview['rows'] = [];
+    let blocks: number[][];
     let headerCells: Cell[];
     let lastCells: Cell[];
     let types: string[];
     if (csv) {
+      blocks = shownRows(1, headerRow, range);
       const byRow = await csvCells(connection, path, [
         ...blocks,
         [headerRow, headerRow],
@@ -192,6 +222,14 @@ export async function previewSheet(
       );
     } else {
       await loadExcel(connection, importOptions);
+      blocks = shownRows(
+        Math.min(
+          await sheetFirstRow(connection, path, proposal.sheet),
+          headerRow,
+        ),
+        headerRow,
+        range,
+      );
       for (const [from, to] of blocks) {
         const cells = await xlsxCells(
           connection,

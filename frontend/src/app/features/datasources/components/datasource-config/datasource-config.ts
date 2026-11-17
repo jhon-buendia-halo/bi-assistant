@@ -544,7 +544,7 @@ export class DatasourceConfig implements OnInit {
     this.testing.set(true);
     if (this.kind() === 'file') {
       this.fileApi
-        .importAndCheck({ files: this.files() })
+        .importAndCheck({ files: this.files() }, this.editingId() ?? undefined)
         .then((res) => {
           this.fileStatus.set(res);
           if (!res.ok) this.toast.error(res.message);

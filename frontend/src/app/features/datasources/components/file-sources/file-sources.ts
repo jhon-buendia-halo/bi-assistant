@@ -35,6 +35,8 @@ export class FileSources {
   readonly formatSize = formatSize;
 
   readonly files = input.required<SourceFile[]>();
+  /** The saved datasource being edited; its files preview from their saved originals. */
+  readonly datasourceId = input<string | null>(null);
   readonly filesChange = output<SourceFile[]>();
 
   private readonly api = inject(FILE_SOURCES_API);
