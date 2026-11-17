@@ -821,10 +821,15 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
     });
 
     describe('asking one agent in a follow-up', () => {
-      const agentStep = (id: string, title: string, name: string): WorkflowDetail['steps'][number] => ({
+      const agentStep = (
+        id: string,
+        title: string,
+        name: string,
+        role?: string,
+      ): WorkflowDetail['steps'][number] => ({
         ...STEP(id, title, ['question'], ['out']),
         kind: 'agent',
-        agent: { name, tools: [], maxSteps: 5 },
+        agent: { name, ...(role ? { role } : {}), tools: [], maxSteps: 5 },
       });
       const ASK: WorkflowDetail = {
         ...ASSISTANT,
@@ -832,7 +837,7 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
           STEP('receive-question', 'Receive question', ['question'], ['question']),
           agentStep('plan', 'Plan', 'Olivia'),
           agentStep('analyse', 'Analyse', 'Insights Analyst'),
-          agentStep('write-answer', 'Write answer', 'Jessica'),
+          agentStep('write-answer', 'Write answer', 'Jessica', 'Insights Writer'),
         ],
       };
       const ranSteps: WorkflowRun['steps'] = [
@@ -868,9 +873,13 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         expect(Array.from(picker.options).map((o) => [o.value, o.textContent?.trim()])).toEqual([
           ['', 'Whole workflow'],
           ['analyse', 'Insights Analyst · Analyse'],
-          ['write-answer', 'Jessica · Write answer'],
+          ['write-answer', 'Jessica · Insights Writer'],
         ]);
         expect(picker.value).toBe('');
+        expect(picker.getAttribute('aria-describedby')).toBe('workflow-follow-up-agent-hint');
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          'Runs every step again: plans, queries the data, checks and writes a new answer.',
+        );
         expect((q('workflow-follow-up-input') as HTMLTextAreaElement).placeholder).toBe(
           'Ask a follow-up about this result',
         );
@@ -884,6 +893,9 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
         fixture.detectChanges();
         const input = q('workflow-follow-up-input') as HTMLTextAreaElement;
         expect(input.placeholder).toBe('Ask Jessica about this result');
+        expect(text('workflow-follow-up-agent-hint')).toBe(
+          'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+        );
         input.value = 'Say it shorter';
         input.dispatchEvent(new Event('input'));
         fixture.detectChanges();

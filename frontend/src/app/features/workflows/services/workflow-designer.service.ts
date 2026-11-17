@@ -74,6 +74,24 @@ export type RunPanelStep = RunStepView & { attempts: number };
 /** The only workflow whose follow-up can ask one agent step (api.md 118). */
 const ASK_AGENT_WORKFLOW = 'answer-business-question';
 
+/**
+ * What a follow-up does, under the agent picker (workflows R38; ui.md
+ * 4.4b): the whole workflow, or what each agent does when asked alone.
+ */
+export const ASK_HINTS: Readonly<Record<string, string>> = {
+  '': 'Runs every step again: plans, queries the data, checks and writes a new answer.',
+  'read-images': 'Read images step: reads your reference images again with this question.',
+  'interpret-follow-up':
+    'Interpret follow-up step: pages, filters or sorts the earlier result. Runs no new analysis.',
+  plan: 'Plan step: plans how to answer your question. Reads no data.',
+  analyse:
+    'Analyse step: answers with new queries over the data, with no plan or checks around it.',
+  'check-data-quality':
+    'Check data quality step: answers about the quality of the data behind the answer.',
+  'write-answer':
+    'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+};
+
 /** How often, and how many times, a stopped run is read back until it is stored. */
 const STOPPED_POLL_MS = 300;
 const STOPPED_POLL_TRIES = 10;
@@ -208,15 +226,20 @@ export class WorkflowDesigner {
       ) {
         return [];
       }
+      // The agent's role says what it is responsible for (Olivia · Analysis
+      // Lead); its step's title when it has none.
       return [
         {
           id: step.id,
           agentName: step.agent.name,
-          label: `${step.agent.name} · ${step.title}`,
+          label: `${step.agent.name} · ${step.agent.role || step.title}`,
         },
       ];
     });
   });
+
+  /** What the picked follow-up does (`ASK_HINTS`), shown under the picker. */
+  readonly askHint = computed(() => ASK_HINTS[this.askStep()] ?? '');
 
   /** The name of the agent picked in the composer; null for the whole workflow. */
   readonly askedAgentName = computed(

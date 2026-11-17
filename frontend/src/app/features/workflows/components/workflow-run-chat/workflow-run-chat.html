@@ -436,6 +436,7 @@
                 <select
                   data-testid="workflow-follow-up-agent"
                   aria-label="Ask"
+                  aria-describedby="workflow-follow-up-agent-hint"
                   [value]="designer.askStep()"
                   (change)="onAskStepChange($event)"
                   class="field min-w-0 flex-1 truncate py-1"
@@ -458,6 +459,16 @@
                 <span>Follow up</span>
               </button>
             </div>
+            @if (designer.askableSteps().length > 0) {
+              <!-- What the picked agent is responsible for when asked alone. -->
+              <p
+                id="workflow-follow-up-agent-hint"
+                data-testid="workflow-follow-up-agent-hint"
+                class="m-0 text-[12px] text-fg-muted"
+              >
+                {{ designer.askHint() }}
+              </p>
+            }
           </div>
         </form>
       } @else {

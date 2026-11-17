@@ -10,7 +10,7 @@ import {
   WorkflowRun,
   WorkflowRunRequest,
 } from '../models/workflow.model';
-import { WorkflowDesigner } from './workflow-designer.service';
+import { ASK_HINTS, WorkflowDesigner } from './workflow-designer.service';
 import { GRAPH_RETRY_RUN, GRAPH_WORKFLOW } from './workflow-graph.testing';
 import {
   RunStreamHandlers,
@@ -831,12 +831,13 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       id: string,
       title: string,
       name: string,
+      role?: string,
     ): WorkflowDetail['steps'][number] => ({
       id,
       title,
       kind: 'agent',
       summary: title,
-      agent: { key: id, name, tools: [], maxSteps: 5 },
+      agent: { key: id, name, ...(role ? { role } : {}), tools: [], maxSteps: 5 },
       input: ['question'],
       output: ['out'],
       exits: [],
@@ -846,7 +847,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
       steps: [
         agentStep('plan', 'Plan', 'Olivia'),
         agentStep('analyse', 'Analyse', 'Insights Analyst'),
-        agentStep('write-answer', 'Write answer', 'Jessica'),
+        agentStep('write-answer', 'Write answer', 'Jessica', 'Insights Writer'),
         {
           id: 'wrap-up',
           title: 'Wrap up',
@@ -880,6 +881,7 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
         }),
       );
       expect(designer.askableSteps()).toEqual([
+        // No role: the step's title says what the agent does.
         {
           id: 'analyse',
           agentName: 'Insights Analyst',
@@ -888,9 +890,21 @@ describe('WorkflowDesigner, a streamed run (workflows R21; api.md 3.6)', () => {
         {
           id: 'write-answer',
           agentName: 'Jessica',
-          label: 'Jessica · Write answer',
+          label: 'Jessica · Insights Writer',
         },
       ]);
+    });
+
+    it('says under the picker what the picked follow-up does', () => {
+      executeQuestion();
+      runs.last.handlers.onDone!(
+        storedRun({ steps: [step('write-answer', 'success')] }),
+      );
+      expect(designer.askHint()).toBe(ASK_HINTS['']);
+      designer.askStep.set('write-answer');
+      expect(designer.askHint()).toBe(
+        'Write answer step: rewrites the earlier answer from the same results. Runs no new queries.',
+      );
     });
 
     it('the last attempt of a step wins', () => {
