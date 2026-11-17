@@ -181,7 +181,7 @@
                         r.row === s.headerRow
                           ? 'bg-primary-soft font-semibold text-on-primary-soft'
                           : excluded().has(r.row)
-                            ? 'text-fg-muted line-through opacity-60'
+                            ? 'text-fg-muted line-through'
                             : 'text-fg'
                       "
                     >
@@ -211,9 +211,13 @@
                           {{ cellText(cell) }}
                           @if (r.row === s.headerRow) {
                             <div class="mt-0.5 font-normal">
-                              <span class="chip chip-info">{{
-                                p.columns[$index]?.type
-                              }}</span>
+                              <span
+                                class="chip chip-info"
+                                [title]="p.columns[$index]?.type ?? ''"
+                                >{{
+                                  typeLabel(p.columns[$index]?.type ?? "")
+                                }}</span
+                              >
                             </div>
                           }
                         </td>

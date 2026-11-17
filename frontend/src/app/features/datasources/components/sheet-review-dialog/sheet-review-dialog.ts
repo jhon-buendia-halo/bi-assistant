@@ -205,7 +205,22 @@ export class SheetReviewDialog implements OnInit, OnDestroy {
   }
 
   isNumeric(type: string): boolean {
-    return type === 'integer' || type === 'decimal';
+    const label = this.typeLabel(type);
+    return label === 'number' || label === 'whole number';
+  }
+
+  /** DuckDB's type name in plain words for the column chip. */
+  typeLabel(type: string): string {
+    const t = (type ?? '').toUpperCase();
+    if (t === 'VARCHAR' || t === 'TEXT') return 'text';
+    if (/^(DOUBLE|FLOAT|REAL|DECIMAL|NUMERIC)/.test(t)) return 'number';
+    if (/^U?(BIGINT|INTEGER|INT|SMALLINT|TINYINT|HUGEINT)$/.test(t))
+      return 'whole number';
+    if (t === 'DATE') return 'date';
+    if (t.startsWith('TIMESTAMP')) return 'date and time';
+    if (t === 'TIME') return 'time';
+    if (t === 'BOOLEAN') return 'true / false';
+    return (type ?? '').toLowerCase();
   }
 
   total(): string {

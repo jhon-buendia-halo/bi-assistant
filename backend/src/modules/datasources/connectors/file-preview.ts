@@ -78,6 +78,21 @@ async function sheetFirstRow(
   }
 }
 
+/**
+ * An Excel serial number (days since 1899-12-30) in a DATE or TIMESTAMP
+ * column as `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`; any other cell as it is.
+ */
+export function excelSerialAsDate(cell: Cell, type: string | undefined): Cell {
+  if (cell === null || !type || !/^(DATE|TIMESTAMP)/.test(type)) return cell;
+  const serial = Number(cell);
+  if (!Number.isFinite(serial) || String(cell).trim() === '') return cell;
+  const ms = Math.round((serial - 25569) * 86_400_000);
+  const iso = new Date(ms).toISOString();
+  return type === 'DATE'
+    ? iso.slice(0, 10)
+    : iso.slice(0, 19).replace('T', ' ');
+}
+
 function fit(cells: Cell[] | undefined, width: number): Cell[] {
   return Array.from({ length: width }, (_, i) => cells?.[i] ?? null);
 }
@@ -263,6 +278,14 @@ export async function previewSheet(
       );
     }
 
+    // The grid is read as text, so an .xlsx date cell arrives as its serial
+    // number; show it as the date the import stores.
+    for (const shownRow of shown) {
+      if (shownRow.row <= headerRow) continue;
+      shownRow.cells = shownRow.cells.map((cell, i) =>
+        excelSerialAsDate(cell, types[i]),
+      );
+    }
     const { names, duplicates } = headerNames(headerCells, range.firstColumn);
     const warnings: SheetWarning[] = [];
     const guessed = proposal.warnings?.find((w) => w.code === 'header-guessed');

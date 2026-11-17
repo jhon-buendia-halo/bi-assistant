@@ -19,12 +19,12 @@ const REGION_LAST = REGION_HEADER + REGION_ROWS + 1;
 const CSV_LAST = 5211;
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const REGION_COLUMNS = [
-  ['Region', 'text'],
-  ['Country', 'text'],
-  ['Month', 'date'],
-  ['Units', 'integer'],
-  ['Revenue', 'decimal'],
-  ['Channel', 'text'],
+  ['Region', 'VARCHAR'],
+  ['Country', 'VARCHAR'],
+  ['Month', 'DATE'],
+  ['Units', 'DOUBLE'],
+  ['Revenue', 'DOUBLE'],
+  ['Channel', 'VARCHAR'],
 ] as const;
 
 /** The sheet rows a preview shows: the first 7 and the last 2 of the used range. */
@@ -225,11 +225,11 @@ export class MockFileSourcesApi implements FileSourcesApi {
         letter: LETTERS[i],
         name: csv ? csvCells(1)[i]!.toString() : name,
         type: req.allText
-          ? 'text'
+          ? 'VARCHAR'
           : csv
             ? i === 0 || i === 4
-              ? 'integer'
-              : 'text'
+              ? 'BIGINT'
+              : 'VARCHAR'
             : type,
       })),
       rows: shown.map((row) => ({
