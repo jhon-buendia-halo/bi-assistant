@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   GoneException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -27,7 +29,6 @@ import {
   type InputImageFile,
   type WorkflowInputError,
 } from '../../mastra/workflows/workflow-input';
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
 import { REVIEW_WEBSITE_WORKFLOW_ID } from '../../mastra/workflows/review-website.steps';
 import { runErrorMessage } from '../../mastra/workflows/workflow-run';
 import { ArtifactsService } from '../artifacts/artifacts.service';
@@ -74,7 +75,7 @@ import { nodeChatHostRunId } from './node-chat-context';
 import { askHostOf, askRefusal, type AskHost } from './ask-agent-context';
 import type { AskableStepId } from '../../mastra/workflows/ask-agent.steps';
 import { HeldDraftRuns } from './held-draft-runs';
-import { LiveRuns, type LiveRunEvent } from './live-runs';
+import { LiveRuns, RunCheckpoint, type LiveRunEvent } from './live-runs';
 import { WorkflowRunsRepository } from './repositories/workflow-runs.repository';
 import { SuspendedRuns } from './suspended-runs';
 import {
@@ -274,7 +275,7 @@ export interface RunAttachment {
  * one agent turn on a run host, an in-memory session `SessionsService`
  * holds, through today's turn path unchanged, and the host is projected
  * into the run. Every run but a draft's is stored in `workflow_runs` when it
- * starts and updated when it ends; its files stay in its workspace
+ * starts and updated at each step change and when it ends; its files stay in its workspace
  * `session-run-<id>` until it is deleted. A stored run of a removed workflow
  * (`agent:*`, `seq-text-demo`, `deep-analysis`) still lists and reads as a
  * plain run; a run request naming its workflow is refused as not found.
@@ -341,14 +342,12 @@ export class WorkflowRunsService implements OnModuleInit {
     }
     // A run that waited for an answer when the app stopped can't go on: its
     // turn lived in memory (ADR-0043). It is stopped, `waitingFor` expired,
-    // and the workflow's leftover snapshots are deleted.
+    // and every workflow's leftover snapshots are deleted.
     for (const run of await this.repository.listSuspended()) {
       await this.repository.update(run.id, expiredRunPatch(run, now));
     }
     await this.quietly('delete the snapshots of suspended runs', async () => {
-      await this.mastra.discardSuspendedWorkflowRuns(
-        ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
-      );
+      await this.mastra.discardSuspendedWorkflowRuns();
     });
     let hostIds: string[];
     try {
@@ -480,7 +479,8 @@ export class WorkflowRunsService implements OnModuleInit {
    * the `step` events and the agent turn's events as the chat stream sends
    * them, then `done { run }`, or `error { content }` when the agent turn
    * failed. A stopped run (`abortSignal`) sends nothing more.
-   * The run is stored before `run` is sent and updated when it ends; a run
+   * The run is stored before `run` is sent, its steps updated at each step
+   * change, and the whole run updated when it ends; a run
    * that throws while ending is stored `failed` and the error rethrown.
    * Answers the run as `GET /workflow-runs/:id` shows it.
    */
@@ -497,12 +497,32 @@ export class WorkflowRunsService implements OnModuleInit {
    * stored `running`, then run on the live runs' signal, every event logged
    * there, until it ends or Stop (150) aborts it. Answers its id; the
    * request follows it like any client (149), and closing the connection
-   * stops only the following.
+   * stops only the following. 429 when `live.cap` runs are running already:
+   * the slot is taken before anything awaits, so two starts arriving
+   * together for one free slot give one run, and a refused run stores
+   * nothing. The slot frees when the run ends, fails, stops or suspends.
    */
   async launch(prepared: PreparedRun): Promise<string> {
-    const held = await this.open(prepared);
+    const slot = this.live.reserve();
+    if (!slot) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: `Too many runs are in progress (${this.live.cap}). Wait for one to finish, or stop one.`,
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    let held: HeldRun;
+    try {
+      held = await this.open(prepared);
+    } catch (failure) {
+      slot.release();
+      throw failure;
+    }
     const id = held.base.id;
-    const signal = this.live.begin(id);
+    const signal = this.live.begin(id, slot);
     this.detach(id, signal, (emit) => this.runOpened(held, emit, signal));
     return id;
   }
@@ -510,10 +530,18 @@ export class WorkflowRunsService implements OnModuleInit {
   /**
    * Resume a prepared run detached from the request (api.md 138; ADR-0048),
    * as `launch` starts one: its events go to a fresh log of the same run.
+   * A resume is never refused for the cap, but holds a slot while it runs.
    */
   resumeDetached(prepared: PreparedResume): string {
     const id = prepared.held.base.id;
-    const signal = this.live.begin(id);
+    const slot = this.live.claim();
+    let signal: AbortSignal;
+    try {
+      signal = this.live.begin(id, slot);
+    } catch (failure) {
+      slot.release();
+      throw failure;
+    }
     this.detach(id, signal, (emit) => this.resume(prepared, emit, signal));
     return id;
   }
@@ -784,7 +812,10 @@ export class WorkflowRunsService implements OnModuleInit {
    * `suspended`, held for `SUSPENDED_RUN_TTL_MS`, and sends the waiting
    * step's `step`, `input-required` and `done { run }`; any other end is
    * stored as before. A run that throws while ending is stored `failed`
-   * and the error rethrown.
+   * and the error rethrown. While the turn runs, each step change stores
+   * the tracker's steps so far, the running step and its tool calls
+   * included (data-model 3.16), so a restart keeps them (workflows R20);
+   * those checkpoints are closed before the write that ends the turn.
    */
   private async drive(
     held: HeldRun,
@@ -793,9 +824,21 @@ export class WorkflowRunsService implements OnModuleInit {
     turn: (io: TurnIo) => Promise<TurnSuspension | undefined>,
   ): Promise<WorkflowRun> {
     const { prepared, base, tracker } = held;
+    // A draft run is never stored, so it has no progress to store.
+    const checkpoint = prepared.draft
+      ? undefined
+      : new RunCheckpoint<Pick<WorkflowRunDoc, 'steps'>>(
+          (patch) => this.repository.update(base.id, patch),
+          (failure) =>
+            this.logger.warn(
+              `Could not store the progress of run ${base.id}: ${runErrorMessage(failure)}`,
+            ),
+        );
     const onStep = (event: Parameters<RunStepTracker['apply']>[0]) => {
       const step = tracker.apply(event);
-      if (step) live({ type: 'step', ...step });
+      if (!step) return;
+      live({ type: 'step', ...step });
+      checkpoint?.save({ steps: tracker.pause() });
     };
     const io: TurnIo = {
       // The turn's `done` carries the host; the run sends its own. Its tool
@@ -810,6 +853,7 @@ export class WorkflowRunsService implements OnModuleInit {
     try {
       ended = await this.runAgent(held, live, abortSignal, () => turn(io));
     } catch (failure) {
+      await checkpoint?.close();
       if (!prepared.draft) {
         await this.end(base.id, {
           status: 'failed',
@@ -819,6 +863,8 @@ export class WorkflowRunsService implements OnModuleInit {
       }
       throw failure;
     }
+    // The end write lands after every checkpoint, and none follows it.
+    await checkpoint?.close();
     const { id, ...patch } = ended;
     // A draft run is never stored: the run is the doc it ended with, held
     // in memory for the query inspector (139-143) only.

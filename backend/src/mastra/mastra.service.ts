@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Agent } from '@mastra/core/agent';
 import {
   agentThreadId,
@@ -258,21 +258,61 @@ export class MastraService {
   }
 
   /**
-   * Delete every suspended run snapshot of a registered workflow (ADR-0043):
-   * at start-up nothing can resume them, as their runtime lived in memory.
-   * Answers how many were deleted.
+   * Delete the suspended run snapshots of a registered workflow, or with no
+   * `key` of every registered one (ADR-0043; workflows R20): at start-up
+   * nothing can resume them, as their runtime lived in memory. Walking every
+   * workflow, one that fails to list or delete is logged and the others are
+   * still cleaned; a keyed call throws as before. Answers how many were
+   * deleted. Only registered workflows are walked: a nested workflow's own
+   * snapshot (stored under its id) is not reached.
    */
-  async discardSuspendedWorkflowRuns(key: string): Promise<number> {
-    const workflow = this.mastra.getWorkflow(
-      key as Parameters<typeof mastra.getWorkflow>[0],
-    );
-    const listed = (await workflow.listWorkflowRuns({
-      status: 'suspended',
-    })) as { runs: { runId: string }[] };
-    for (const run of listed.runs) {
-      await workflow.deleteWorkflowRunById(run.runId);
+  async discardSuspendedWorkflowRuns(key?: string): Promise<number> {
+    type Discardable = {
+      listWorkflowRuns(args: { status: 'suspended' }): Promise<unknown>;
+      deleteWorkflowRunById(runId: string): Promise<unknown>;
+    };
+    const suspendedOf = async (workflow: Discardable) => {
+      const listed = (await workflow.listWorkflowRuns({
+        status: 'suspended',
+      })) as { runs: { runId: string }[] };
+      return listed.runs;
+    };
+    if (key !== undefined) {
+      const workflow = this.mastra.getWorkflow(
+        key as Parameters<typeof mastra.getWorkflow>[0],
+      ) as unknown as Discardable;
+      const runs = await suspendedOf(workflow);
+      for (const run of runs) await workflow.deleteWorkflowRunById(run.runId);
+      return runs.length;
     }
-    return listed.runs.length;
+    const logger = new Logger(MastraService.name);
+    const failed = (what: string, failure: unknown) =>
+      logger.warn(
+        `Could not ${what}: ${failure instanceof Error ? failure.message : String(failure)}`,
+      );
+    let deleted = 0;
+    const workflows = this.mastra.listWorkflows() as unknown as Record<
+      string,
+      Discardable
+    >;
+    for (const [name, workflow] of Object.entries(workflows)) {
+      let runs: { runId: string }[];
+      try {
+        runs = await suspendedOf(workflow);
+      } catch (failure) {
+        failed(`list the suspended runs of workflow ${name}`, failure);
+        continue;
+      }
+      for (const run of runs) {
+        try {
+          await workflow.deleteWorkflowRunById(run.runId);
+          deleted += 1;
+        } catch (failure) {
+          failed(`delete suspended run ${run.runId} of ${name}`, failure);
+        }
+      }
+    }
+    return deleted;
   }
 
   /** Create or restore a session-scoped workspace and register it with Mastra. */

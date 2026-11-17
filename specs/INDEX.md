@@ -1500,15 +1500,15 @@ specs/capabilities/workflows/spec.md:117-117  R42 **Connector notes** (2026-11-1
 specs/capabilities/workflows/spec.md:118-125  R37 Consumption Gap Analysis SHALL run, fixed in code ([../../system/agent
 specs/capabilities/workflows/spec.md:126-129  R38 **Business and Builder views** (2026-11-17). A workflow's page SHALL o
 specs/capabilities/workflows/spec.md:131-131  R39 **Agent personas are named with their role** (2026-11-17). Wherever th
-specs/capabilities/workflows/spec.md:133-150  ## Edge cases and errors
-specs/capabilities/workflows/spec.md:152-156  ## Contracts
-specs/capabilities/workflows/spec.md:158-166  ## UI
-specs/capabilities/workflows/spec.md:168-413  ## Flows
-specs/capabilities/workflows/spec.md:170-288  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:290-376  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:378-384  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:386-413  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:415-433  ## Acceptance
+specs/capabilities/workflows/spec.md:133-151  ## Edge cases and errors
+specs/capabilities/workflows/spec.md:153-157  ## Contracts
+specs/capabilities/workflows/spec.md:159-167  ## UI
+specs/capabilities/workflows/spec.md:169-414  ## Flows
+specs/capabilities/workflows/spec.md:171-289  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:291-377  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:379-385  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:387-414  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:416-434  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
