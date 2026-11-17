@@ -1,4 +1,4 @@
-import { askHostOf, askRefusal } from './ask-agent-context';
+import { askHostOf, askRefusal, chartedRunOf } from './ask-agent-context';
 import {
   ASK_NO_IMAGES_REPLY,
   imageNotesAnswer,
@@ -57,6 +57,8 @@ function earlierRun(overrides: Partial<WorkflowRunDoc> = {}): WorkflowRunDoc {
         },
       },
       { id: 'write-answer', title: 'Write answer', status: 'success' },
+      // The run's input did not tick Build a visual.
+      { id: 'build-visual', title: 'Build visual', status: 'skipped' },
     ],
     datasets: ['World Cup'],
     answer: {
@@ -111,6 +113,62 @@ describe('askRefusal (api.md 118; workflows R40)', () => {
       'Step "plan" did not run in run "run-1"',
     );
   });
+
+  it('lets Build visual be asked when the earlier answer has query rows, even if it skipped or charted nothing', () => {
+    expect(
+      askRefusal('answer-business-question', 'build-visual', earlierRun()),
+    ).toBeNull();
+    const nothingCharted = earlierRun({
+      steps: earlierRun().steps.map((step) =>
+        step.id === 'build-visual'
+          ? {
+              ...step,
+              status: 'success' as const,
+              output: {
+                visual: { skipped: 'No query returned rows to chart.' },
+              },
+            }
+          : step,
+      ),
+    });
+    expect(
+      askRefusal('answer-business-question', 'build-visual', nothingCharted),
+    ).toBeNull();
+  });
+
+  it('refuses Build visual when the earlier answer has no query rows to chart', () => {
+    const run = earlierRun();
+    const noRows = earlierRun({
+      answer: {
+        ...run.answer!,
+        data: [
+          { tool: 'describe_entity', input: 'wc.public.matches', rows: [{}] },
+          {
+            tool: 'run_readonly_sql',
+            input: 'SELECT 1 WHERE false',
+            rows: [],
+            rowCount: 0,
+          },
+          {
+            tool: 'run_readonly_sql',
+            input: 'SELECT broken',
+            rows: [{ x: 1 }],
+            error: 'syntax error',
+          },
+        ],
+      },
+    });
+    expect(askRefusal('answer-business-question', 'build-visual', noRows)).toBe(
+      'The earlier answer has no query rows to chart',
+    );
+    expect(
+      askRefusal(
+        'answer-business-question',
+        'build-visual',
+        earlierRun({ answer: { ...run.answer!, data: undefined } }),
+      ),
+    ).toBe('The earlier answer has no query rows to chart');
+  });
 });
 
 describe('askHostOf (agents.md 5.21)', () => {
@@ -148,6 +206,39 @@ describe('askHostOf (agents.md 5.21)', () => {
     expect(askHostOf(run, 'write-answer').ask.earlier?.plan).toBeNull();
   });
 
+  it('gives Ryan the earlier question, answer, records and evidence', () => {
+    const host = askHostOf(earlierRun(), 'build-visual');
+    expect(host).toEqual({
+      ask: {
+        step: 'build-visual',
+        earlier: {
+          question: 'How many matches per year?',
+          answer: 'There were 64 matches in 2022.',
+          records: earlierRun().answer!.data,
+          evidence: earlierRun().answer!.evidence,
+        },
+      },
+      continuesThreads: true,
+    });
+  });
+
+  it("gives Ryan the charted run's question and answer when the earlier run asked him alone", () => {
+    const asked = earlierRun({
+      id: 'run-2',
+      question: 'As a bar chart',
+      answer: {
+        ...earlierRun().answer!,
+        content: `Here's a new visual of the earlier answer: "Matches".`,
+      },
+    });
+    const host = askHostOf(asked, 'build-visual', earlierRun());
+    expect(host.ask.earlier).toMatchObject({
+      question: 'How many matches per year?',
+      answer: 'There were 64 matches in 2022.',
+      records: asked.answer!.data,
+    });
+  });
+
   it('asks Olivia, Nathan and Zoe as the step alone', () => {
     for (const step of [
       'plan',
@@ -159,6 +250,37 @@ describe('askHostOf (agents.md 5.21)', () => {
         continuesThreads: true,
       });
     }
+  });
+});
+
+describe('chartedRunOf (agents.md 5.21)', () => {
+  const askedOf = (id: string, fromRunId: string, askStep = 'build-visual') =>
+    earlierRun({
+      id,
+      question: 'As a bar chart',
+      context: { fromRunId, askStep } as WorkflowRunDoc['context'],
+    });
+
+  it('walks back over runs that asked Ryan alone, to the run whose answer he charts', async () => {
+    const runs = new Map<string, WorkflowRunDoc>([
+      ['run-1', earlierRun()],
+      ['run-2', askedOf('run-2', 'run-1')],
+    ]);
+    const get = jest.fn((id: string) => Promise.resolve(runs.get(id) ?? null));
+    const charted = await chartedRunOf(askedOf('run-3', 'run-2'), get);
+    expect(charted.id).toBe('run-1');
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a run that did not ask Ryan, and stops at the last run it can read', async () => {
+    const get = jest.fn(() => Promise.resolve(null));
+    expect((await chartedRunOf(earlierRun(), get)).id).toBe('run-1');
+    expect(get).not.toHaveBeenCalled();
+    const writer = askedOf('run-2', 'run-1', 'write-answer');
+    expect((await chartedRunOf(writer, get)).id).toBe('run-2');
+    expect((await chartedRunOf(askedOf('run-3', 'gone'), get)).id).toBe(
+      'run-3',
+    );
   });
 });
 

@@ -3,30 +3,52 @@
  * single-agent follow-up takes from the earlier run, as pure functions of
  * the stored run. No framework import.
  */
-import { ANSWER_BUSINESS_QUESTION_WORKFLOW_ID } from '../../mastra/workflows/answer-business-question.steps';
+import {
+  ANSWER_BUSINESS_QUESTION_WORKFLOW_ID,
+  chartableQueries,
+} from '../../mastra/workflows/answer-business-question.steps';
 import {
   isAskableStep,
   type AskableStepId,
 } from '../../mastra/workflows/ask-agent.steps';
-import type { AskedStep } from '../sessions/entities/session.entity';
+import type {
+  AskedStep,
+  ToolDataRecord,
+} from '../sessions/entities/session.entity';
+import { analyseQueriesOf } from '../sessions/turn/turn-workflow';
 import { nodeChatContextBlock } from './node-chat-context';
 import type { WorkflowRunDoc } from './workflow-run-steps';
 
 /**
+ * Whether an answer's records hold a query that returned rows to chart:
+ * the rule the engine's Build visual applies to the same records.
+ */
+function hasQueryRows(records: readonly ToolDataRecord[] | undefined): boolean {
+  return chartableQueries(analyseQueriesOf(records ?? []));
+}
+
+/**
  * Why a request may not ask `askStep` of the earlier run, or null when it
  * may (api.md 118): only Answer a Business Question, only an askable step,
- * only a step that ran in the earlier run.
+ * only a step that ran in the earlier run. Build visual instead needs the
+ * earlier answer's query rows: Ryan charts them whether or not the earlier
+ * run built a visual (its checkbox off, or nothing charted then).
  */
 export function askRefusal(
   workflowId: string,
   askStep: unknown,
-  earlier: Pick<WorkflowRunDoc, 'id' | 'steps'>,
+  earlier: Pick<WorkflowRunDoc, 'id' | 'steps' | 'answer'>,
 ): string | null {
   if (workflowId !== ANSWER_BUSINESS_QUESTION_WORKFLOW_ID) {
     return `Workflow "${workflowId}" can't ask one agent`;
   }
   const named = typeof askStep === 'string' ? askStep : JSON.stringify(askStep);
   if (!isAskableStep(askStep)) return `Step "${named}" has no agent to ask`;
+  if (askStep === 'build-visual') {
+    return hasQueryRows(earlier.answer?.data)
+      ? null
+      : 'The earlier answer has no query rows to chart';
+  }
   const ran = earlier.steps.findLast((step) => step.id === askStep);
   if (!ran || ran.status === 'skipped' || ran.status === 'running') {
     return `Step "${askStep}" did not run in run "${earlier.id}"`;
@@ -44,7 +66,9 @@ function outputOf(
   )?.output;
 }
 
-type Finding = NonNullable<AskedStep['earlier']>['qualityFindings'][number];
+type Finding = NonNullable<
+  NonNullable<AskedStep['earlier']>['qualityFindings']
+>[number];
 
 /** The well-formed `{ check, passed, detail }` entries of a list. */
 function findingsOf(value: unknown): Finding[] {
@@ -84,11 +108,15 @@ export interface AskHost {
  * - Write answer: the earlier answer's records and evidence, its plan, its
  *   data quality findings (a run stored before Check data quality left the
  *   workflow) and Zoe's notes;
+ * - Build visual: the earlier answer's records and evidence, with the
+ *   question and answer text of `charted` (the run whose answer they are:
+ *   the earlier run, or the one it asked Ryan of, see `chartedRunOf`);
  * - Read images, Interpret follow-up and Plan: the step alone.
  */
 export function askHostOf(
   earlier: WorkflowRunDoc,
   step: AskableStepId,
+  charted: Pick<WorkflowRunDoc, 'question' | 'answer'> = earlier,
 ): AskHost {
   if (step === 'analyse') {
     return {
@@ -118,5 +146,52 @@ export function askHostOf(
       continuesThreads: true,
     };
   }
+  if (step === 'build-visual') {
+    // Ryan charts the earlier answer's rows; they are carried into this
+    // run's answer with their evidence.
+    return {
+      ask: {
+        step,
+        earlier: {
+          question: charted.question ?? '',
+          answer: charted.answer?.content ?? '',
+          records: [...(earlier.answer?.data ?? [])],
+          evidence: [...(earlier.answer?.evidence ?? [])],
+        },
+      },
+      continuesThreads: true,
+    };
+  }
   return { ask: { step }, continuesThreads: true };
+}
+
+/** How many asks of Build visual `chartedRunOf` walks back at most. */
+const CHARTED_RUN_HOPS = 20;
+
+/**
+ * The run whose answer Ryan charts when `earlier` is asked Build visual
+ * (agents.md 5.21): a run that itself asked Ryan alone answered with a
+ * code-written line and the follow-up's words, so its question and answer
+ * are those of the run it asked of, walking back to a run that did not.
+ * A run that can no longer be read ends the walk at the last one read.
+ */
+export async function chartedRunOf(
+  earlier: WorkflowRunDoc,
+  get: (id: string) => Promise<WorkflowRunDoc | null>,
+): Promise<WorkflowRunDoc> {
+  let run = earlier;
+  for (let hop = 0; hop < CHARTED_RUN_HOPS; hop += 1) {
+    const context = run.context as
+      { fromRunId?: unknown; askStep?: unknown } | undefined;
+    if (
+      context?.askStep !== 'build-visual' ||
+      typeof context.fromRunId !== 'string'
+    ) {
+      return run;
+    }
+    const before = await get(context.fromRunId);
+    if (!before?.answer?.content) return run;
+    run = before;
+  }
+  return run;
 }
