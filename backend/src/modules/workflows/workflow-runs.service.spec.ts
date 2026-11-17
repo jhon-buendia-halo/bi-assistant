@@ -3186,6 +3186,75 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
       false,
     );
   });
+
+  it('a run that throws while suspending is stored failed with its suspended step failed, not left suspended', async () => {
+    ctx = build();
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
+        onStep(stepStart('clarify', PLAN_OUTPUT));
+        onStep({
+          type: 'workflow-step-suspended',
+          payload: {
+            id: 'clarify',
+            status: 'suspended',
+            suspendPayload: { question: 'Which measure?' },
+          },
+        });
+        await settled();
+        return {
+          stepId: 'clarify',
+          question: 'Which measure?',
+          options: ['Goals', 'Wins'],
+          resume: jest.fn(() => Promise.resolve(undefined)),
+          discard: jest.fn(() => Promise.resolve()),
+        } as never;
+      },
+    );
+    Object.assign(ctx.sessions, {
+      runHostView: jest.fn(() => Promise.reject(new Error('host lost'))),
+    });
+    const id = await launch();
+    await ctx.service.live.whenEnded(id);
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
+    expect(stored?.steps.at(-1)).toMatchObject({
+      id: 'clarify',
+      status: 'failed',
+      error: 'host lost',
+    });
+    expect(
+      stored?.steps.some(
+        (step) => step.status === 'suspended' || step.status === 'running',
+      ),
+    ).toBe(false);
+  });
+
+  it('a run that throws while ending is stored failed with no step left running', async () => {
+    ctx = build();
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE) onStep(step);
+        await settled();
+      },
+    );
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.reject(new Error('host lost')),
+    );
+    const id = await launch();
+    await ctx.service.live.whenEnded(id);
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({ status: 'failed', error: 'host lost' });
+    expect(stored?.steps.map((step) => `${step.id}:${step.status}`)).toEqual([
+      'receive-question:success',
+      'load-catalog:success',
+      'interpret-follow-up:success',
+      'plan:success',
+      // The turn ended with Analyse unfinished, so the tracker closed it;
+      // the checkpoint had stored it running.
+      'analyse:stopped',
+    ]);
+  });
 });
 
 describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () => {

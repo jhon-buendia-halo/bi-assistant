@@ -82,6 +82,7 @@ import {
   RUN_EXPIRED_ERROR,
   RunStepTracker,
   expiredRunPatch,
+  failOpenSteps,
   interruptedRunPatch,
   loopStepIds,
   noteToolFrame,
@@ -811,8 +812,9 @@ export class WorkflowRunsService implements OnModuleInit {
    * (api.md 119, 138): a turn that waits for the user leaves the run
    * `suspended`, held for `SUSPENDED_RUN_TTL_MS`, and sends the waiting
    * step's `step`, `input-required` and `done { run }`; any other end is
-   * stored as before. A run that throws while ending is stored `failed`
-   * and the error rethrown. While the turn runs, each step change stores
+   * stored as before. A run that throws while ending is stored `failed`,
+   * any step still running or waiting failed with it, and the error
+   * rethrown. While the turn runs, each step change stores
    * the tracker's steps so far, the running step and its tool calls
    * included (data-model 3.16), so a restart keeps them (workflows R20);
    * those checkpoints are closed before the write that ends the turn.
@@ -855,9 +857,13 @@ export class WorkflowRunsService implements OnModuleInit {
     } catch (failure) {
       await checkpoint?.close();
       if (!prepared.draft) {
+        // A checkpoint may have stored a step running or waiting: the end
+        // write fails it too, so the failed run keeps no open step.
+        const error = runErrorMessage(failure);
         await this.end(base.id, {
           status: 'failed',
-          error: runErrorMessage(failure),
+          error,
+          steps: failOpenSteps(tracker.pause(), error),
           finishedAt: new Date().toISOString(),
         });
       }

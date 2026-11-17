@@ -275,13 +275,25 @@ export function interruptedRunPatch(
   return {
     status: 'failed',
     error: RUN_INTERRUPTED_ERROR,
-    steps: run.steps.map((step) =>
-      step.status === 'running' || step.status === 'suspended'
-        ? { ...step, status: 'failed', error: RUN_INTERRUPTED_ERROR }
-        : step,
-    ),
+    steps: failOpenSteps(run.steps, RUN_INTERRUPTED_ERROR),
     finishedAt,
   };
+}
+
+/**
+ * The steps of a run that is being stored `failed`: any step still running
+ * or waiting fails with the run's error, as data-model 3.16 allows a running
+ * step only on a running run and a suspended one only on a suspended run.
+ */
+export function failOpenSteps(
+  steps: WorkflowRunStep[],
+  error: string,
+): WorkflowRunStep[] {
+  return steps.map((step) =>
+    step.status === 'running' || step.status === 'suspended'
+      ? { ...step, status: 'failed', error }
+      : step,
+  );
 }
 
 /** Why a suspended run can no longer go on (api.md 138 410). */
