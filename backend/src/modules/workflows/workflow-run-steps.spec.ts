@@ -181,6 +181,29 @@ describe('interruptedRunPatch (plan 5.1 step 5)', () => {
       'The app stopped before the run finished',
     );
   });
+
+  it('fails a step a checkpoint stored suspended before the run was stored suspended (data-model 3.16)', () => {
+    expect(
+      interruptedRunPatch(
+        {
+          ...base,
+          steps: [
+            { id: 'plan', title: 'Plan', status: 'success' },
+            { id: 'clarify', title: 'Clarify', status: 'suspended' },
+          ],
+        },
+        '2026-11-11T11:00:00.000Z',
+      ).steps,
+    ).toEqual([
+      { id: 'plan', title: 'Plan', status: 'success' },
+      {
+        id: 'clarify',
+        title: 'Clarify',
+        status: 'failed',
+        error: RUN_INTERRUPTED_ERROR,
+      },
+    ]);
+  });
 });
 
 /** A clock the test moves by hand, from 2026-11-12T10:00:00Z. */

@@ -3147,6 +3147,45 @@ describe('WorkflowRunsService: progress stored as it happens (data-model 3.16; w
       'The app stopped before the run finished',
     );
   });
+
+  it('after a restart a run whose checkpoint stored its step suspended, before the run was stored suspended, is failed with that step failed', async () => {
+    ctx = build();
+    ctx.sessions.streamRunTurn.mockImplementationOnce(
+      async (_hostId, _question, _emit, _signal, _careful, onStep) => {
+        for (const step of V2_STEPS_BEFORE.slice(0, -1)) onStep(step);
+        onStep(stepStart('clarify', PLAN_OUTPUT));
+        onStep({
+          type: 'workflow-step-suspended',
+          payload: {
+            id: 'clarify',
+            status: 'suspended',
+            suspendPayload: { question: 'Which measure?' },
+          },
+        });
+        // The app stops here, before the end write stores `suspended`.
+        await new Promise<void>(() => undefined);
+      },
+    );
+    const id = await launch();
+    await settled();
+    expect((await storedTrail(id)).at(-1)).toBe('clarify:suspended');
+    expect((await ctx.repository.get(id))?.status).toBe('running');
+    const fresh = ctx.restarted();
+    await fresh.onModuleInit();
+    const stored = await ctx.repository.get(id);
+    expect(stored).toMatchObject({
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+    });
+    expect(stored?.steps.at(-1)).toMatchObject({
+      id: 'clarify',
+      status: 'failed',
+      error: 'The app stopped before the run finished',
+    });
+    expect(stored?.steps.some((step) => step.status === 'suspended')).toBe(
+      false,
+    );
+  });
 });
 
 describe('WorkflowRunsService: the cap on live runs (api.md 119 429, 138)', () => {

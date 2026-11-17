@@ -264,6 +264,9 @@ export function runHostDoc(run: WorkflowRunDoc): SessionDoc {
 /**
  * What start-up recovery writes on a run the app stopped in (plan 5.1 step
  * 5): `failed` with `RUN_INTERRUPTED_ERROR`, and so is any step still running.
+ * A step stored `suspended` fails too: a checkpoint can store the waiting
+ * step before the end write stores the run `suspended` (data-model 3.16
+ * allows a suspended step only on a suspended run).
  */
 export function interruptedRunPatch(
   run: WorkflowRunDoc,
@@ -273,7 +276,7 @@ export function interruptedRunPatch(
     status: 'failed',
     error: RUN_INTERRUPTED_ERROR,
     steps: run.steps.map((step) =>
-      step.status === 'running'
+      step.status === 'running' || step.status === 'suspended'
         ? { ...step, status: 'failed', error: RUN_INTERRUPTED_ERROR }
         : step,
     ),
