@@ -113,7 +113,7 @@ Consumption Gap Analysis (2026-11-16, roadmap 1.30; ADR-0051)
   - A stop SHALL end the run at the step it reaches, `stopped`, storing no report.
 - R38. **Business and Builder views** (2026-11-17). A workflow's page SHALL offer two views, picked in its header's **View** control ([../../system/ui.md](../../system/ui.md) 4.4b), Business first, for every workflow:
   - **Builder**, for people who build and debug workflows: the page as R7, R12 and R13 describe it (the canvas, the node dialogs and the Run panel with its Chat).
-  - **Business**, for people who ask and read the outcome: an agentic chat. The Run panel's Chat alone, centred at full height, without the canvas or the Run panel: the conversation above (each question, the agents' thread (the team, R13) as they work, the status line, the answer forming, the answer view with its rating, visuals, scorecard and report, the Output of a run without an answer) and the composer at the bottom (the input form before a run, R11, R14; Follow up under a stored answer). **Every message SHALL run the workflow**: the first question starts a run on the input, and each follow-up starts a new run with the shown run as its context (R17); New question and Run again work as in the Run panel. The Business view SHALL NOT show the live Thinking and tool calls or How it ran. Its answer SHALL keep the query inspector (R31). **Open in Builder** (shown once a run is) SHALL switch to the Builder view on the same run, and an agent's See its data SHALL switch to Builder with that step's dialog open: the graph, each step's data and How it ran are read there.
+  - **Business**, for people who ask and read the outcome: an agentic chat. The Run panel's Chat alone, centred at full height, without the canvas or the Run panel: the conversation above (each question, the agents' thread (the team, R13) as they work, the status line, the answer forming, the answer view with its rating, visuals, scorecard and report, the Output of a run without an answer) and the composer at the bottom (the input form before a run, R11, R14; Follow up under a stored answer). **Every message SHALL run the workflow**: the first question starts a run on the input, and each follow-up starts a new run with the shown run as its context (R17); New question and Run again work as in the Run panel. The Business view SHALL NOT show the live Thinking and tool calls or How it ran. Its answer SHALL keep the query inspector (R31). A shown run SHALL show its **Execution ID** (R19's id to quote when reporting a run, copied on click), as Builder's Run panel does. **Open in Builder** (shown once a run is) SHALL switch to the Builder view on the same run, and an agent's See its data SHALL switch to Builder with that step's dialog open: the graph, each step's data and How it ran are read there.
   - Business SHALL be the view until one is picked, so a workflow page opens in it by default. The last view picked SHALL be kept on the device (`localStorage` `qti.workflow-view`) and every workflow page SHALL open in it. Switching views SHALL keep the shown run, its input and any run in progress.
 
 ## Edge cases and errors
@@ -257,12 +257,12 @@ Feature: Workflows
     When I open "Answer a Business Question" from User journeys on a device that never picked a view
     Then it opens in the Business view, first in the header's View control: a chat with no canvas and no Run panel, its composer at the bottom
     When I pick "World Cup Core", type "How many matches were played in each stage?" and click Execute
-    Then the workflow runs and I see my question, the agents' thread and the answer, with no tool calls and no How it ran
+    Then the user journey runs and I see my question, the agent personas' thread, the answer and the run's execution ID, with no tool calls and no How it ran
     When I send "Which stage had the most matches?"
-    Then it runs the workflow again on my earlier answer
+    Then it runs the user journey again on my earlier answer
     When I click "Open in Builder"
     Then the Builder view shows the same run on the canvas and in the Run panel
-    When I go back to Workflows and open "Answer a Business Question" again
+    When I go back to User journeys and open "Answer a Business Question" again
     Then it opens in the Builder view I last used
 ```
 

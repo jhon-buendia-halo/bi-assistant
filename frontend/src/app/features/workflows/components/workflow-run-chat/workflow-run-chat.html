@@ -66,6 +66,11 @@
         <span>New question</span>
       </button>
     }
+    @if (business() && designer.stateSummary().runId; as runId) {
+      <!-- The id to quote when reporting a run (workflows R19), as in the
+           Builder view's Run panel header -->
+      <app-execution-id data-testid="workflow-run-execution-id" [id]="runId" />
+    }
     @if (business() && designer.runResult() !== null) {
       <!-- The Business view's way into the run's details: the graph, each
            step's data and How it ran are in the Builder view (R38) -->

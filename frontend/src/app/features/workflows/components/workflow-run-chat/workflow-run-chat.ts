@@ -27,6 +27,7 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
+import { ExecutionId } from '../../../../shared/execution-id/execution-id';
 import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
 import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
@@ -96,6 +97,7 @@ const FORM_CONTROLS =
   imports: [
     AnswerView,
     DatasetPicker,
+    ExecutionId,
     LucideAngularModule,
     MarkdownPipe,
     PanelReadinessView,

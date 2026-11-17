@@ -1700,7 +1700,7 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
     );
     await scenarioStep(
       page,
-      `Then the user journey runs and I see my question, the agent personas' thread and the answer, with no tool calls and no How it ran`,
+      `Then the user journey runs and I see my question, the agent personas' thread, the answer and the run's execution ID, with no tool calls and no How it ran`,
       async () => {
         const view = businessView(page);
         await expect(view.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
@@ -1710,6 +1710,8 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
         await expect(view.getByTestId('workflow-run-story')).toHaveCount(0);
         await expect(view.getByTestId('workflow-run-tool')).toHaveCount(0);
         await expect(view.getByTestId('workflow-run-open-builder')).toHaveText('Open in Builder');
+        // The execution ID to quote when something goes wrong, as in Builder's Run panel.
+        await expect(view.getByTestId('workflow-run-execution-id')).toContainText('Execution ID');
       },
     );
     await scenarioStep(page, 'And the Business view has no detectable accessibility violations', async () => {

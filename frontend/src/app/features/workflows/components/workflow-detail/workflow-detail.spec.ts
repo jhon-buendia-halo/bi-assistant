@@ -407,6 +407,8 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       expect(view.querySelector('app-workflow-run-team')).not.toBeNull();
       expect(view.querySelector('app-workflow-run-story')).toBeNull();
       expect(text('workflow-run-open-builder')).toBe('Open in Builder');
+      // The id to quote when reporting the run, as in Builder's Run panel.
+      expect(text('workflow-run-execution-id')).toContain('Execution ID run-1');
 
       designer.openQuery(0, null);
       fixture.detectChanges();
