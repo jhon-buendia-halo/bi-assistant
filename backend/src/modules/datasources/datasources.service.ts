@@ -8,6 +8,11 @@ import { DatabricksConnector } from './connectors/databricks.connector';
 import { normalizeDatabricksHost } from './connectors/databricks-host';
 import { PostgresConnector } from './connectors/postgres.connector';
 import { RestConnector } from './connectors/rest.connector';
+import {
+  FileConnector,
+  type FileConnectorConfig,
+} from './connectors/file.connector';
+import { fileDatabasePath } from './connectors/duckdb';
 import type {
   DatasourceConnector,
   ForeignKeyEdge,
@@ -28,7 +33,15 @@ import {
   QueryResult,
   RestApiConfig,
   RestDiscovery,
+  type FileDatasourceConfig,
 } from './entities/datasource.entity';
+
+/** A `file` config as stored, never with the connector's runtime path. */
+function withoutDatabasePath(config: DatasourceConfig): FileDatasourceConfig {
+  const stored = { ...(config as Partial<FileConnectorConfig>) };
+  delete stored.databasePath;
+  return { ...stored, files: stored.files ?? [] };
+}
 
 /** Kind-agnostic entry point: resolves a datasource and dispatches to its connector. */
 @Injectable()
@@ -41,6 +54,7 @@ export class DatasourcesService {
     private readonly databricks: DatabricksConnector,
     private readonly postgres: PostgresConnector,
     private readonly rest: RestConnector,
+    private readonly file: FileConnector,
   ) {}
 
   connector(kind: DatasourceKind): DatasourceConnector {
@@ -54,9 +68,37 @@ export class DatasourcesService {
         return this.postgres;
       case 'rest':
         return this.rest;
+      case 'file':
+        return this.file;
       default:
         return this.databricks;
     }
+  }
+
+  /**
+   * The config a connector receives. A `file` config gets the path of the
+   * datasource's `data.duckdb` (`<dataDir>/files/<id>/data.duckdb`); a path
+   * the client sent is dropped, and without an id there is none. Never
+   * stored: `save` strips it.
+   */
+  private runtimeConfig(
+    kind: DatasourceKind,
+    config: DatasourceConfig,
+    id?: string,
+  ): DatasourceConfig {
+    if (kind !== 'file') return config;
+    const stored = withoutDatabasePath(config);
+    const runtime: FileConnectorConfig = {
+      ...stored,
+      databasePath: id ? fileDatabasePath(id) : '',
+    };
+    return runtime;
+  }
+
+  /** The saved datasource with the config its connector receives. */
+  private async forConnector(id: string): Promise<Datasource> {
+    const ds = await this.get(id);
+    return { ...ds, config: this.runtimeConfig(ds.kind, ds.config, ds.id) };
   }
 
   async list(): Promise<DatasourceView[]> {
@@ -86,7 +128,7 @@ export class DatasourcesService {
     id?: string,
   ): Promise<void> {
     await this.connector(kind).testConnection(
-      await this.withSecrets(kind, config, id),
+      this.runtimeConfig(kind, await this.withSecrets(kind, config, id), id),
     );
   }
 
@@ -127,7 +169,9 @@ export class DatasourcesService {
               (withSecrets as DatabricksConfig).host,
             ),
           }
-        : withSecrets;
+        : input.kind === 'file'
+          ? withoutDatabasePath(withSecrets)
+          : withSecrets;
     const saved = await this.repository.save({
       id: input.id,
       name: name.slice(0, 64),
@@ -152,7 +196,7 @@ export class DatasourcesService {
     id: string,
     refresh = false,
   ): Promise<{ catalogs: CatalogInfo[]; fetchedAt: string; cached: boolean }> {
-    const ds = await this.get(id);
+    const ds = await this.forConnector(id);
     if (!refresh) {
       const cached = await this.inventoryCache.get(id);
       if (cached) {
@@ -175,7 +219,7 @@ export class DatasourcesService {
    * missing join hint must degrade to no hint, never fail the caller.
    */
   async foreignKeys(id: string, entities: string[]): Promise<ForeignKeyEdge[]> {
-    const ds = await this.get(id);
+    const ds = await this.forConnector(id);
     const connector = this.connector(ds.kind);
     if (!connector.foreignKeys) return [];
     try {
@@ -212,7 +256,7 @@ export class DatasourcesService {
     entity: string,
     limit: number,
   ): Promise<QueryResult> {
-    const ds = await this.get(id);
+    const ds = await this.forConnector(id);
     return this.connector(ds.kind).sampleRows(ds.config, entity, limit);
   }
 
@@ -228,7 +272,7 @@ export class DatasourcesService {
     limit: number,
     concurrency: number,
   ): Promise<Map<string, QueryResult | Error>> {
-    const ds = await this.get(id);
+    const ds = await this.forConnector(id);
     const connector = this.connector(ds.kind);
     if (connector.sampleRowsMany) {
       return connector.sampleRowsMany(ds.config, entities, limit, concurrency);
@@ -257,7 +301,7 @@ export class DatasourcesService {
     /** The clamp on `rowLimit` (default 500); a CSV export passes 50,001. */
     maxRows?: number,
   ): Promise<QueryResult> {
-    const ds = await this.get(id);
+    const ds = await this.forConnector(id);
     return maxRows === undefined
       ? this.connector(ds.kind).runReadOnlySql(ds.config, sql, rowLimit)
       : this.connector(ds.kind).runReadOnlySql(
@@ -270,7 +314,7 @@ export class DatasourcesService {
 
   /** One page of a stored statement's result (datasources R52, ADR-0050). */
   async runPagedSql(id: string, stmt: PagedStatement): Promise<PagedRows> {
-    const ds = await this.get(id);
+    const ds = await this.forConnector(id);
     return this.connector(ds.kind).runPagedSql(ds.config, stmt);
   }
 
@@ -299,6 +343,8 @@ export class DatasourcesService {
     if (!id) return config;
     const saved = await this.repository.get(id);
     if (!saved || saved.kind !== kind) return config;
+    // No secret to restore; never read a file config as Postgres's.
+    if (kind === 'file') return config;
     if (kind === 'databricks') {
       const incoming = config as DatabricksConfig;
       const stored = saved.config as DatabricksConfig;

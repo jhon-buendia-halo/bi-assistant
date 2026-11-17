@@ -130,8 +130,8 @@ One document per saved connection. The `kind` selects the shape of `config`.
 |---|---|---|---|
 | `id` | uuid | yes | Generated on first save (`legacy-databricks` for the migrated legacy connection, section 6). |
 | `name` | string | yes | User-chosen display name, trimmed, non-empty, truncated to 64 characters. Not required to be unique (the testing-data feature looks a sample's datasource up by name). |
-| `kind` | enum | yes | `databricks` \| `postgres` \| `rest`. |
-| `config` | object | yes | One of the three config shapes below. |
+| `kind` | enum | yes | `databricks` \| `postgres` \| `rest` \| `file`. |
+| `config` | object | yes | One of the four config shapes below. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `DatabricksConfig` (`kind = databricks`):
@@ -175,7 +175,42 @@ One document per saved connection. The `kind` selects the shape of `config`.
 | `pagination` | object | no | `style` enum `none` \| `page` \| `offset` \| `cursor` (required in the object); `pageParam`, `sizeParam`, `offsetParam`, `cursorParam`, `cursorPointer` (string, the query param / response pointer names the style needs); `pageSize` (number). |
 | `maxRows` | number | no | Cap on rows fetched. |
 
-**Secret masking.** API views of a connection replace secrets with the literal `••••••••` (8 bullet characters U+2022) when the secret is non-empty (empty stays empty): Postgres `password`, Databricks `token`, REST `auth.token` and `auth.password`. When the client sends a masked or empty secret back on test/save for an existing `id` of the same `kind`, the stored secret is kept. The view also carries a computed `summary` string (not stored): Postgres `host:port/database` (port defaults 5432); Databricks `host · warehouse <warehouseId>`; REST `REST API · <baseUrl> · <n> endpoint(s)`. See [api.md](api.md).
+`FileDatasourceConfig` (`kind = file`, Excel / CSV, ADR-0052; datasources R53–R60). No secret. The imported tables live in the datasource's own DuckDB database, `<dataDir>/files/<id>/data.duckdb`; its path is filled in for each connector call and never stored.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `files` | `SourceFile[]` | yes | The uploaded files, each one schema of `file.<schema>.<table>`. |
+
+`SourceFile`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | Stable across Replace file. |
+| `name` | string | yes | Original file name, e.g. `sales_2026.xlsx`. |
+| `format` | enum | yes | `xlsx` \| `csv`. |
+| `sizeBytes` | number | yes | |
+| `sha256` | string | yes | Of the file's bytes. |
+| `uploadedAt` | ISO | yes | |
+| `schema` | string | yes | Entity schema segment (datasources R55), e.g. `sales_2026`. |
+| `sheets` | `SheetImport[]` | yes | A CSV has one. |
+| `uploadId` | string | no | Set only while the file is not saved yet. |
+
+`SheetImport`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `sheet` | string | yes | Workbook sheet name; for a CSV, the file name without extension. |
+| `table` | string | yes | Entity table segment (datasources R55); a CSV's equals its file's `schema`. |
+| `include` | boolean | yes | Imported as a table. |
+| `headerRow` | number | yes | 1-based row of the column names. |
+| `range` | string | yes | A1 range of header and data, e.g. `A3:H12482`. |
+| `excludeLastRow` | boolean | yes | The last row of the range is not imported (a total). |
+| `allText` | boolean | yes | Every column read as `VARCHAR`. |
+| `rowCount` | number | no | Data rows imported; set by the import. |
+| `columns` | `{name, type}[]` | no | Imported column names and DuckDB types; set by the import. |
+| `warnings` | `SheetWarning[]` | no | From the detection (datasources R56): `{code: 'total-row', row}`, `{code: 'no-table'}`, `{code: 'header-guessed', row}`, `{code: 'duplicate-columns', names}`. |
+
+**Secret masking.** API views of a connection replace secrets with the literal `••••••••` (8 bullet characters U+2022) when the secret is non-empty (empty stays empty): Postgres `password`, Databricks `token`, REST `auth.token` and `auth.password`. When the client sends a masked or empty secret back on test/save for an existing `id` of the same `kind`, the stored secret is kept. The view also carries a computed `summary` string (not stored): Postgres `host:port/database` (port defaults 5432); Databricks `host · warehouse <warehouseId>`; REST `REST API · <baseUrl> · <n> endpoint(s)`; Excel / CSV `<n> files · <m> tables` (a file config has nothing to mask). See [api.md](api.md).
 
 The **inventory shape** every connector normalises to (used by section 3.5 and the datasets browser): `catalog → schema → table → column`, as `CatalogInfo {name, schemas[], selectable?}`, `SchemaInfo {name, tables[], selectable?}`, `TableInfo {name, columns[], selectable?}`, `ColumnInfo {name: string, type: string, nullable: boolean}`. `selectable` is `boolean`, optional: `undefined` means access unknown (treated as accessible); only an explicit `false` means the credentials cannot query it (shown greyed).
 
