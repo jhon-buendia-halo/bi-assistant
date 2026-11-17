@@ -36,6 +36,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:live-llm": "jest --config ./test/jest-live-llm.json --runInBand",
     "eval": "ts-node -T -P tsconfig.json scripts/run-eval.ts",
     "check:answers": "ts-node -T -P tsconfig.json scripts/check-answers.ts",
     "worldcup:api:dump": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/dump.ts",

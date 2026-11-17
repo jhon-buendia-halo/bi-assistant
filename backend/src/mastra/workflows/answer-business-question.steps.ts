@@ -703,17 +703,23 @@ function readableColumn(name: string): string {
   return words ? words[0].toUpperCase() + words.slice(1) : name;
 }
 
-/** A cell as stored: only a pipe and a line break escaped; null is empty. */
+/**
+ * A cell as stored: only a pipe and a line break escaped; null is empty. A
+ * Date (a page read straight from the pg driver) is its ISO instant, as
+ * the stored rows hold it.
+ */
 function tableCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   const raw =
     typeof value === 'string'
       ? value
-      : typeof value === 'number' ||
-          typeof value === 'boolean' ||
-          typeof value === 'bigint'
-        ? String(value)
-        : JSON.stringify(value);
+      : value instanceof Date
+        ? value.toISOString()
+        : typeof value === 'number' ||
+            typeof value === 'boolean' ||
+            typeof value === 'bigint'
+          ? String(value)
+          : JSON.stringify(value);
   return raw.replace(/\|/g, '\\|').replace(/\r\n|\r|\n/g, '<br>');
 }
 
