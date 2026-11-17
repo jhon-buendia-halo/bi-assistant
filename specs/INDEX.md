@@ -892,9 +892,9 @@ specs/capabilities/datasets/spec.md:150-265  ### Feature: Dataset management
 specs/capabilities/datasets/spec.md:267-280  ## Acceptance
 
 specs/capabilities/datasources/spec.md:5-16  ## Concepts
-specs/capabilities/datasources/spec.md:18-119  ## Rules
+specs/capabilities/datasources/spec.md:18-137  ## Rules
 specs/capabilities/datasources/spec.md:20-31  ### Kinds and configuration
-specs/capabilities/datasources/spec.md:22-22  R1 The system SHALL support exactly three datasource kinds: Databricks SQ
+specs/capabilities/datasources/spec.md:22-22  R1 The system SHALL support exactly four datasource kinds: Databricks SQL
 specs/capabilities/datasources/spec.md:23-23  R2 A datasource SHALL have a name, a kind, a kind-specific configuration,
 specs/capabilities/datasources/spec.md:24-24  R3 The kind of a saved datasource SHALL NOT be changeable; the Kind contr
 specs/capabilities/datasources/spec.md:25-25  R4 A Databricks configuration SHALL consist of: server hostname, personal
@@ -958,12 +958,21 @@ specs/capabilities/datasources/spec.md:108-110  ### Availability
 specs/capabilities/datasources/spec.md:110-110  R51 Listing datasources, reading their inventory and creating, testing, di
 specs/capabilities/datasources/spec.md:112-119  ### Paged read of a stored query's result
 specs/capabilities/datasources/spec.md:114-119  R52 A connector SHALL read one page of a stored statement's result, filter
-specs/capabilities/datasources/spec.md:121-131  ## Edge cases and errors
-specs/capabilities/datasources/spec.md:133-138  ## Contracts
-specs/capabilities/datasources/spec.md:140-169  ## UI
-specs/capabilities/datasources/spec.md:171-228  ## Flows
-specs/capabilities/datasources/spec.md:173-228  ### Feature: Datasources, datasets, and sessions (World Cup database)
-specs/capabilities/datasources/spec.md:230-240  ## Acceptance
+specs/capabilities/datasources/spec.md:121-137  ### Excel and CSV files
+specs/capabilities/datasources/spec.md:125-125  R53 An Excel / CSV configuration SHALL consist of the list of its source f
+specs/capabilities/datasources/spec.md:126-126  R54 Each Excel / CSV datasource SHALL keep its tables in its own DuckDB da
+specs/capabilities/datasources/spec.md:127-127  R55 Entity keys SHALL be `file.<schema>.<table>`: `<schema>` is the file n
+specs/capabilities/datasources/spec.md:128-133  R56 The system SHALL propose, for every sheet of an uploaded file, a heade
+specs/capabilities/datasources/spec.md:134-134  R57 Importing SHALL build every included sheet into `data.duckdb.tmp` next
+specs/capabilities/datasources/spec.md:135-135  R58 The importer SHALL load DuckDB's `excel` extension only from a given p
+specs/capabilities/datasources/spec.md:136-136  R59 The inventory SHALL be one catalog, `file`, with a schema per file and
+specs/capabilities/datasources/spec.md:137-137  R60 Excel / CSV failures SHALL surface as `DuckDB — <message>`, with DuckD
+specs/capabilities/datasources/spec.md:139-149  ## Edge cases and errors
+specs/capabilities/datasources/spec.md:151-156  ## Contracts
+specs/capabilities/datasources/spec.md:158-187  ## UI
+specs/capabilities/datasources/spec.md:189-246  ## Flows
+specs/capabilities/datasources/spec.md:191-246  ### Feature: Datasources, datasets, and sessions (World Cup database)
+specs/capabilities/datasources/spec.md:248-258  ## Acceptance
 
 specs/capabilities/developer-settings/spec.md:5-13  ## Concepts
 specs/capabilities/developer-settings/spec.md:15-58  ## Rules
@@ -2158,48 +2167,48 @@ specs/system/data-model.md:61-73  ### 2.1 Abstract interface
 specs/system/data-model.md:75-79  ### 2.2 Filters and sorts
 specs/system/data-model.md:81-89  ### 2.3 Secret handling (`CryptoService`)
 specs/system/data-model.md:91-97  ### 2.4 Concurrency and atomicity
-specs/system/data-model.md:99-713  ## 3. Collections
-specs/system/data-model.md:125-180  ### 3.1 `connections` — datasources
-specs/system/data-model.md:182-210  ### 3.2 `settings` — LLM settings
-specs/system/data-model.md:201-210  #### 3.2.1 `settings` document `ui-preferences`
-specs/system/data-model.md:212-237  ### 3.3 `datasets`
-specs/system/data-model.md:239-366  ### 3.4 `sessions`
-specs/system/data-model.md:263-285  #### 3.4.1 `ChatMessage`
-specs/system/data-model.md:287-303  #### 3.4.2 `ToolDataRecord` and `ReasoningStep`
-specs/system/data-model.md:305-322  #### 3.4.2a `QueryEvidence`
-specs/system/data-model.md:324-341  #### 3.4.3 `SessionVisualization` (session metadata for a visual)
-specs/system/data-model.md:343-366  #### 3.4.4 `PanelItem`, `WorkflowState` and the derived workflow view
-specs/system/data-model.md:368-377  ### 3.5 `datasource_inventories`
-specs/system/data-model.md:379-396  ### 3.6 `verified_queries`
-specs/system/data-model.md:398-416  ### 3.7 `metrics`
-specs/system/data-model.md:418-443  ### 3.8 `eval_runs`
-specs/system/data-model.md:445-474  ### 3.9 `ontology_items`
-specs/system/data-model.md:476-509  ### 3.10 `agents` — user agents
-specs/system/data-model.md:512-526  ### 3.10.1 `skills` — in-app skills
-specs/system/data-model.md:528-540  ### 3.10.2 `skill_overrides` — built-in skills edited in the app
-specs/system/data-model.md:542-552  ### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
-specs/system/data-model.md:554-556  ### 3.11 Deep-analysis jobs (removed 2026-11-12)
-specs/system/data-model.md:558-563  ### 3.12 Other non-persisted data
-specs/system/data-model.md:565-591  ### 3.13 Relationships and referential rules
-specs/system/data-model.md:593-600  ### 3.14 Ownership (legacy `ownerId`)
-specs/system/data-model.md:602-623  ### 3.15 `readiness_reports` — data-readiness assessments
-specs/system/data-model.md:625-664  ### 3.16 `workflow_runs` — workflow runs
-specs/system/data-model.md:666-680  ### 3.17 `workflow_run_node_chats` — node chats
-specs/system/data-model.md:682-699  ### 3.18 `artifacts` — saved artifacts
-specs/system/data-model.md:701-713  ### 3.19 `site_signins` — saved website sign-ins
-specs/system/data-model.md:715-850  ## 4. Files on disk
-specs/system/data-model.md:719-739  ### 4.1 Workspace layout
-specs/system/data-model.md:741-759  ### 4.2 Visual version directory
-specs/system/data-model.md:761-776  ### 4.3 `manifest.json`
-specs/system/data-model.md:778-826  ### 4.4 Visual spec (`spec.json`, schema v1)
-specs/system/data-model.md:828-832  ### 4.5 Reports
-specs/system/data-model.md:834-836  ### 4.6 No skills in workspaces
-specs/system/data-model.md:838-840  ### 4.8 Old user skill folder
-specs/system/data-model.md:842-850  ### 4.7 Legacy visual layout
-specs/system/data-model.md:852-862  ## 5. Agent memory
-specs/system/data-model.md:864-900  ## 6. Migrations
-specs/system/data-model.md:902-904  ## 7. External databases
-specs/system/data-model.md:906-917  ## Open questions, gaps and discrepancies
+specs/system/data-model.md:99-748  ## 3. Collections
+specs/system/data-model.md:125-215  ### 3.1 `connections` — datasources
+specs/system/data-model.md:217-245  ### 3.2 `settings` — LLM settings
+specs/system/data-model.md:236-245  #### 3.2.1 `settings` document `ui-preferences`
+specs/system/data-model.md:247-272  ### 3.3 `datasets`
+specs/system/data-model.md:274-401  ### 3.4 `sessions`
+specs/system/data-model.md:298-320  #### 3.4.1 `ChatMessage`
+specs/system/data-model.md:322-338  #### 3.4.2 `ToolDataRecord` and `ReasoningStep`
+specs/system/data-model.md:340-357  #### 3.4.2a `QueryEvidence`
+specs/system/data-model.md:359-376  #### 3.4.3 `SessionVisualization` (session metadata for a visual)
+specs/system/data-model.md:378-401  #### 3.4.4 `PanelItem`, `WorkflowState` and the derived workflow view
+specs/system/data-model.md:403-412  ### 3.5 `datasource_inventories`
+specs/system/data-model.md:414-431  ### 3.6 `verified_queries`
+specs/system/data-model.md:433-451  ### 3.7 `metrics`
+specs/system/data-model.md:453-478  ### 3.8 `eval_runs`
+specs/system/data-model.md:480-509  ### 3.9 `ontology_items`
+specs/system/data-model.md:511-544  ### 3.10 `agents` — user agents
+specs/system/data-model.md:547-561  ### 3.10.1 `skills` — in-app skills
+specs/system/data-model.md:563-575  ### 3.10.2 `skill_overrides` — built-in skills edited in the app
+specs/system/data-model.md:577-587  ### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
+specs/system/data-model.md:589-591  ### 3.11 Deep-analysis jobs (removed 2026-11-12)
+specs/system/data-model.md:593-598  ### 3.12 Other non-persisted data
+specs/system/data-model.md:600-626  ### 3.13 Relationships and referential rules
+specs/system/data-model.md:628-635  ### 3.14 Ownership (legacy `ownerId`)
+specs/system/data-model.md:637-658  ### 3.15 `readiness_reports` — data-readiness assessments
+specs/system/data-model.md:660-699  ### 3.16 `workflow_runs` — workflow runs
+specs/system/data-model.md:701-715  ### 3.17 `workflow_run_node_chats` — node chats
+specs/system/data-model.md:717-734  ### 3.18 `artifacts` — saved artifacts
+specs/system/data-model.md:736-748  ### 3.19 `site_signins` — saved website sign-ins
+specs/system/data-model.md:750-885  ## 4. Files on disk
+specs/system/data-model.md:754-774  ### 4.1 Workspace layout
+specs/system/data-model.md:776-794  ### 4.2 Visual version directory
+specs/system/data-model.md:796-811  ### 4.3 `manifest.json`
+specs/system/data-model.md:813-861  ### 4.4 Visual spec (`spec.json`, schema v1)
+specs/system/data-model.md:863-867  ### 4.5 Reports
+specs/system/data-model.md:869-871  ### 4.6 No skills in workspaces
+specs/system/data-model.md:873-875  ### 4.8 Old user skill folder
+specs/system/data-model.md:877-885  ### 4.7 Legacy visual layout
+specs/system/data-model.md:887-897  ## 5. Agent memory
+specs/system/data-model.md:899-935  ## 6. Migrations
+specs/system/data-model.md:937-939  ## 7. External databases
+specs/system/data-model.md:941-952  ## Open questions, gaps and discrepancies
 
 specs/system/delivery.md:7-60  ## 1. Electron single-app delivery
 specs/system/delivery.md:25-27  ### Why `--base-href ./`

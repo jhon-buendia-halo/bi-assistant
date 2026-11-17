@@ -7,9 +7,17 @@ jest.mock('./connectors/postgres.connector', () => ({
 jest.mock('./connectors/rest.connector', () => ({
   RestConnector: class {},
 }));
+jest.mock('./connectors/file.connector', () => ({
+  FileConnector: class {},
+}));
 
+import { join } from 'path';
 import { DatasourcesService } from './datasources.service';
-import type { CatalogInfo, Datasource } from './entities/datasource.entity';
+import type {
+  CatalogInfo,
+  Datasource,
+  FileDatasourceConfig,
+} from './entities/datasource.entity';
 
 const datasource: Datasource = {
   id: 'ds-1',
@@ -45,6 +53,7 @@ function build(cached: { catalogs: CatalogInfo[]; fetchedAt: string } | null) {
     repository as never,
     inventoryCache as never,
     databricks as never,
+    {} as never,
     {} as never,
     {} as never,
   );
@@ -159,5 +168,106 @@ describe('DatasourcesService.save Databricks host (BA-322)', () => {
       token: 't',
       warehouseId: 'w',
     });
+  });
+});
+
+describe('DatasourcesService and the file kind (ADR-0052)', () => {
+  const fileConfig: FileDatasourceConfig = { files: [] };
+  const fileDatasource: Datasource = {
+    id: 'ds-file',
+    name: 'Sales sheets',
+    kind: 'file',
+    config: fileConfig,
+  };
+
+  function buildFile() {
+    const repository = {
+      get: jest.fn().mockResolvedValue(fileDatasource),
+      save: jest.fn((doc: Datasource) => Promise.resolve(doc)),
+    };
+    const file = {
+      sampleRows: jest.fn().mockResolvedValue({ columns: [], rows: [] }),
+      testConnection: jest.fn().mockResolvedValue(undefined),
+      summary: jest.fn().mockReturnValue('0 files · 0 tables'),
+      mask: jest.fn((c: unknown) => c),
+    };
+    const service = new DatasourcesService(
+      repository as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      file as never,
+    );
+    return { service, repository, file };
+  }
+
+  const previous = process.env.APP_DATA_DIR;
+  beforeEach(() => {
+    process.env.APP_DATA_DIR = join('/srv', 'app-data');
+  });
+  afterEach(() => {
+    if (previous === undefined) delete process.env.APP_DATA_DIR;
+    else process.env.APP_DATA_DIR = previous;
+  });
+
+  it('dispatches the file kind to its connector', () => {
+    const { service, file } = buildFile();
+
+    expect(service.connector('file')).toBe(file);
+  });
+
+  it('names file in the unknown-kind error', () => {
+    const { service } = buildFile();
+
+    expect(() => service.connector('excel' as never)).toThrow(
+      'kind must be one of: databricks, postgres, rest, file',
+    );
+  });
+
+  it('hands the connector the database path of the datasource, under the data dir', async () => {
+    const { service, file } = buildFile();
+
+    await service.sampleRows('ds-file', 'file.s.t', 5);
+
+    expect(file.sampleRows).toHaveBeenCalledWith(
+      {
+        files: [],
+        databasePath: join(
+          '/srv',
+          'app-data',
+          'files',
+          'ds-file',
+          'data.duckdb',
+        ),
+      },
+      'file.s.t',
+      5,
+    );
+  });
+
+  it('never trusts a database path the client sends', async () => {
+    const { service, file } = buildFile();
+    const sent = { files: [], databasePath: '/etc/other.duckdb' };
+
+    await service.testConnection('file', sent);
+
+    expect(file.testConnection).toHaveBeenCalledWith({
+      files: [],
+      databasePath: '',
+    });
+  });
+
+  it('never stores the database path', async () => {
+    const { service, repository } = buildFile();
+
+    await service.save({
+      id: 'ds-file',
+      name: 'Sales sheets',
+      kind: 'file',
+      config: { files: [], databasePath: '/x' } as never,
+    });
+
+    expect(repository.save.mock.calls[0][0].config).toEqual({ files: [] });
   });
 });
