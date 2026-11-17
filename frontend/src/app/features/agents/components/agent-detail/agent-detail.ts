@@ -441,7 +441,7 @@ export class AgentDetail implements OnDestroy {
     const datasets = agent.draft?.datasets ?? agent.datasets ?? [];
     return datasets.some((name) => !missing.includes(name))
       ? null
-      : 'Add a dataset to this agent to try it.';
+      : 'Add a dataset to this agent persona to try it.';
   }
 
   /** User agents only; built-in agents offer neither Publish nor Delete (R5). */

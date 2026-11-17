@@ -12,7 +12,7 @@
               (click)="back.emit()"
               class="rounded text-fg-muted underline-offset-2 hover:text-fg hover:underline focus-visible:outline-2 focus-visible:outline-focus"
             >
-              Workflows
+              User journeys
             </button>
           </li>
           <li class="text-fg-muted" aria-hidden="true">/</li>
@@ -38,7 +38,7 @@
         <span
           data-testid="workflow-detail-id"
           class="font-mono text-[12px] text-fg-muted"
-          title="Workflow id"
+          title="User journey id"
           >{{ w.id }}</span
         >
         @if (missing()) {
@@ -51,6 +51,51 @@
             <span>Missing dataset: {{ missing() }}</span>
           </span>
         }
+        <!-- The page's two views (R38): Business (the default) for people who
+             fill the input and read the result, Builder for people who build
+             and debug -->
+        <div class="ml-auto flex shrink-0 items-center gap-2">
+          <span id="workflow-view-label" class="text-[12px] text-fg-muted"
+            >View</span
+          >
+          <div
+            role="group"
+            aria-labelledby="workflow-view-label"
+            data-testid="workflow-view"
+            class="inline-flex overflow-hidden rounded-full border border-border-strong bg-surface"
+          >
+            <button
+              type="button"
+              data-testid="workflow-view-business"
+              [attr.aria-pressed]="view() === 'business'"
+              title="Fill in the input and read the result"
+              (click)="setView('business')"
+              class="inline-flex items-center gap-1.5 px-3 py-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+              [class.bg-primary-soft]="view() === 'business'"
+              [class.text-on-primary-soft]="view() === 'business'"
+              [class.text-fg-muted]="view() !== 'business'"
+              [class.hover:text-fg]="view() !== 'business'"
+            >
+              <lucide-angular [img]="FileText" [size]="14" />
+              <span>Business</span>
+            </button>
+            <button
+              type="button"
+              data-testid="workflow-view-builder"
+              [attr.aria-pressed]="view() === 'builder'"
+              title="The graph and the Run panel: build and debug the user journey"
+              (click)="setView('builder')"
+              class="inline-flex items-center gap-1.5 border-l border-border px-3 py-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+              [class.bg-primary-soft]="view() === 'builder'"
+              [class.text-on-primary-soft]="view() === 'builder'"
+              [class.text-fg-muted]="view() !== 'builder'"
+              [class.hover:text-fg]="view() !== 'builder'"
+            >
+              <lucide-angular [img]="Workflow" [size]="14" />
+              <span>Builder</span>
+            </button>
+          </div>
+        </div>
       }
     </div>
   </header>
@@ -58,7 +103,7 @@
   @if (designer.loading()) {
     <div class="flex items-center gap-2.5 px-6 py-8 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading workflow…</span>
+      <span>Loading user journey…</span>
     </div>
   } @else if (designer.error(); as err) {
     <p
@@ -67,32 +112,27 @@
       {{ err }}
     </p>
   } @else if (designer.workflow(); as w) {
-    <!-- Two zones (ui.md 4.4b): the canvas at the column's full height, and
-         the Run panel (the Chat) on the right at full height. The Run panel
-         resizes, maximizes and folds to a strip. -->
-    <div class="flex min-h-0 flex-1 flex-row overflow-hidden">
-      <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <app-workflow-canvas
-          class="min-h-[200px] flex-1"
-          [workflow]="w"
-          [selectedId]="designer.selectedStepId()"
-          [statuses]="designer.nodeStatuses()"
-          [violations]="designer.contractViolations()"
-          [attempts]="designer.nodeAttempts()"
-          [agents]="designer.agentStories()"
-          [runLines]="designer.runLines()"
-          (selectNode)="designer.select($event)"
-          (openNode)="designer.openNode($event)"
-          (execute)="execute()"
-        />
+    @if (view() === "business") {
+      <!-- Business view (R38): the Run panel's Chat alone, as a centred chat
+           at full height: each message runs the workflow, the agents work as
+           a thread, the composer stays at the bottom. No canvas; a run's
+           details open in Builder. Queries still open in the inspector sheet. -->
+      <div class="relative flex min-h-0 flex-1 overflow-hidden">
+        <div
+          data-testid="workflow-business-view"
+          class="flex min-h-0 flex-1 justify-center bg-surface"
+        >
+          <app-workflow-run-chat
+            variant="business"
+            class="w-full max-w-[860px] pt-2"
+            (openInBuilder)="openInBuilder($event)"
+          />
+        </div>
         @if (openQuery(); as open) {
-          <!-- The query inspector sheet (ui.md 4.4b): over the canvas, flush
-               with the Run panel's left edge, never over it. -->
           <div
             data-testid="query-inspector-sheet"
             class="absolute inset-y-0 right-0 z-20 w-full max-w-[720px] border-l border-border shadow-lg"
           >
-            <!-- Deferred: the inspector loads when a query is first opened, not with the page. -->
             @defer (on immediate) {
               <app-query-inspector
                 [message]="open.answer"
@@ -104,8 +144,48 @@
           </div>
         }
       </div>
-      <app-workflow-run-dock />
-    </div>
+    } @else {
+      <!-- Two zones (ui.md 4.4b): the Run panel (the Chat) on the left at full
+         height, where the conversation starts, and the canvas on the right,
+         where side panels open over it. The Run panel resizes, maximizes and
+         folds to a strip. -->
+      <div class="flex min-h-0 flex-1 flex-row overflow-hidden">
+        <app-workflow-run-dock />
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <app-workflow-canvas
+            class="min-h-[200px] flex-1"
+            [workflow]="w"
+            [selectedId]="designer.selectedStepId()"
+            [statuses]="designer.nodeStatuses()"
+            [violations]="designer.contractViolations()"
+            [attempts]="designer.nodeAttempts()"
+            [agents]="designer.agentStories()"
+            [runLines]="designer.runLines()"
+            (selectNode)="designer.select($event)"
+            (openNode)="designer.openNode($event)"
+            (execute)="execute()"
+          />
+          @if (openQuery(); as open) {
+            <!-- The query inspector sheet (ui.md 4.4b): over the canvas, flush
+               with the page's right edge, never over the Run panel. -->
+            <div
+              data-testid="query-inspector-sheet"
+              class="absolute inset-y-0 right-0 z-20 w-full max-w-[720px] border-l border-border shadow-lg"
+            >
+              <!-- Deferred: the inspector loads when a query is first opened, not with the page. -->
+              @defer (on immediate) {
+                <app-query-inspector
+                  [message]="open.answer"
+                  [index]="open.index"
+                  (close)="closeQuery()"
+                  (navigate)="designer.openQuery($event)"
+                />
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
     @if (designer.openInspection(); as node) {
       <app-workflow-node-dialog
         [node]="node"

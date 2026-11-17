@@ -1,3 +1,4 @@
+import { edgeFlow } from './workflow-contract';
 // The real engine pulls in ESM-only packages Jest cannot require; the stub
 // runs `.then()` steps in order with the engine's step events (see it).
 jest.mock('@mastra/core/workflows', () =>
@@ -163,25 +164,12 @@ const FIXTURES: Record<string, ContractFixture> = {
             text: '',
             stopped: false,
           }),
-        // The run asks for the data-quality check, so every step but
-        // Clarify runs: Sarah finds one issue on the table it read.
-        checksDataQuality: true,
-        checkDataQuality: () =>
+        // The run builds a visual, so every step but Clarify runs: Ryan
+        // designs one from the rows the query returned.
+        buildsVisual: true,
+        buildVisual: () =>
           Promise.resolve({
-            findings: [
-              {
-                check: 'Data quality: public.matches.id (uniqueness, medium)',
-                passed: false,
-                detail: 'id has 2 duplicates. Matches may be counted twice.',
-              },
-            ],
-            dataQuality: {
-              tables: ['wc.public.matches'],
-              reportIds: ['r-1'],
-              findingCount: 1,
-              issues: 1,
-              skipped: [],
-            },
+            visual: { visualId: 'v-1', title: 'Matches' },
             stopped: false,
           }),
         writeAnswer: () =>
@@ -609,7 +597,8 @@ describe('every catalogued workflow keeps its data contract at run time (agents.
           inputSchema: step.inputSchema,
           outputSchema: step.outputSchema,
         })),
-        edges: source.edges,
+        // A note is prose about the path (workflows R42), not the contract.
+        edges: source.edges.map(edgeFlow),
       }).toMatchSnapshot();
     },
   );

@@ -4,6 +4,8 @@ import {
   computed,
   effect,
   inject,
+  input,
+  output,
   signal,
   untracked,
   viewChild,
@@ -21,9 +23,20 @@ import {
   SendHorizontal,
   Square,
   SquarePen,
+  Workflow,
   Wrench,
   X,
 } from 'lucide-angular';
+import { ExecutionId } from '../../../../shared/execution-id/execution-id';
+import { RunArtifactCard } from '../../../runs/components/run-artifact-card/run-artifact-card';
+import {
+  ConversationTurn,
+  WorkflowConversation,
+} from '../../services/workflow-conversation';
+import {
+  ChatHistoryItem,
+  ChatHistoryNav,
+} from '../../../../shared/components/chat-history-nav/chat-history-nav';
 import { ArtifactSummary } from '../../../artifacts/models/artifact.model';
 import { ArtifactsApiService } from '../../../artifacts/services/artifacts-api.service';
 import { ArtifactsNavState } from '../../../artifacts/services/artifacts-nav-state';
@@ -93,6 +106,7 @@ const FORM_CONTROLS =
   imports: [
     AnswerView,
     DatasetPicker,
+    ExecutionId,
     LucideAngularModule,
     MarkdownPipe,
     PanelReadinessView,
@@ -102,7 +116,10 @@ const FORM_CONTROLS =
     WorkflowRunInputRequired,
     WorkflowRunStory,
     WorkflowRunTeam,
+    ChatHistoryNav,
+    RunArtifactCard,
   ],
+  providers: [WorkflowConversation],
   templateUrl: './workflow-run-chat.html',
   styles: `
     .composer {
@@ -122,10 +139,16 @@ const FORM_CONTROLS =
       max-height: 35vh;
       overflow-y: auto;
     }
+    /* The actions are the form's footer: the fields scroll under its
+       divider, never under the button alone. */
     .composer-actions {
       position: sticky;
       bottom: -0.5rem;
+      z-index: 1;
+      margin-top: 0.5rem;
       margin-bottom: -0.5rem;
+      border-top: 1px solid var(--qti-border);
+      padding-top: 0.5rem;
       padding-bottom: 0.5rem;
       background-color: var(--qti-surface);
     }
@@ -146,12 +169,22 @@ const FORM_CONTROLS =
     .composer-input::placeholder {
       color: var(--qti-fg-muted);
     }
+    /* The input form: one section per field, a line between them. */
+    .composer-fields > * {
+      padding-block: 0.75rem;
+    }
+    .composer-fields > :first-child {
+      padding-top: 0.25rem;
+    }
+    .composer-fields > * + * {
+      border-top: 1px solid var(--qti-border);
+    }
     .composer-input-invalid {
       box-shadow: inset 0 -1px 0 var(--qti-on-danger-soft);
     }
   `,
   host: {
-    class: 'flex min-h-0 flex-col',
+    class: 'relative flex min-h-0 flex-col',
     'data-testid': 'workflow-run-chat',
   },
 })
@@ -168,8 +201,30 @@ export class WorkflowRunChat {
   protected readonly SendHorizontal = SendHorizontal;
   protected readonly Square = Square;
   protected readonly SquarePen = SquarePen;
+  protected readonly Workflow = Workflow;
   protected readonly Wrench = Wrench;
   protected readonly X = X;
+
+  /**
+   * `panel`: the Run panel's Chat beside the canvas. `business`: the page's
+   * Business view (R38): the same chat, each message a run of the workflow,
+   * with the agents' thread but no live tool calls or How it ran; a run's
+   * details open in the Builder view.
+   */
+  readonly variant = input<'panel' | 'business'>('panel');
+  protected readonly business = computed(() => this.variant() === 'business');
+
+  /**
+   * Business view only: show the run in the Builder view, with this step's
+   * dialog open when a step id is given (an agent's See its data).
+   */
+  readonly openInBuilder = output<string | null>();
+
+  /** An agent's See its data: its dialog here, or in Builder from the Business view. */
+  protected openStep(id: string): void {
+    if (this.business()) this.openInBuilder.emit(id);
+    else this.designer.openNode(id);
+  }
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
@@ -185,6 +240,11 @@ export class WorkflowRunChat {
   private shownRunId: string | null = null;
 
   constructor() {
+    // The Business view reads the whole conversation (R38).
+    effect(() => {
+      const on = this.business();
+      untracked(() => this.conversation.active.set(on));
+    });
     // While a run streams, keep its newest text in view; once it ends, show
     // its question and the start of its answer.
     effect(() => {
@@ -249,6 +309,33 @@ export class WorkflowRunChat {
     const el = this.log()?.nativeElement;
     if (el === undefined) return;
     this.stickToEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
+  /** Business view: the earlier questions of this conversation (R38). */
+  protected readonly conversation = inject(WorkflowConversation);
+
+  /** The conversation navigation's questions; empty under two (R38). */
+  protected readonly navItems = computed<ChatHistoryItem[]>(() => {
+    if (!this.business()) return [];
+    const current = this.designer.shownQuestion();
+    const items: ChatHistoryItem[] = this.conversation
+      .earlier()
+      .map((turn) => ({ id: turn.runId, label: turn.question }));
+    if (current) items.push({ id: 'current', label: current });
+    return items.length >= 2 ? items : [];
+  });
+
+  /** A question picked in the navigation: the chat stops following the run. */
+  protected onHistoryPicked(): void {
+    this.stickToEnd = false;
+  }
+
+  /** The chat's scrolling element, for the conversation navigation. */
+  protected readonly logElement = computed(() => this.log()?.nativeElement);
+
+  /** A figure of an earlier turn: its query opens in the sheet, from that run. */
+  protected inspectEarlierQuery(turn: ConversationTurn, index: number): void {
+    this.designer.openQuery(index, window.document.activeElement, turn.run);
   }
 
   private follow(status: string | null, runId: string | null): void {
@@ -321,10 +408,18 @@ export class WorkflowRunChat {
     this.designer.openQuery(index, window.document.activeElement);
   }
 
+  /** A card's Open: the visual opens in the side panel (visuals R42). */
   protected viewVisual(event: VisualEvent): void {
     const run = this.designer.run();
     if (run !== null) this.visuals.view(run, event);
   }
+
+  /** The shown answer made a visual: its card carries Saved to Artifacts and Map to data. */
+  protected readonly hasArtifactCard = computed(
+    () =>
+      this.designer.run() !== null &&
+      this.designer.runResult()?.answer?.visual !== undefined,
+  );
 
   /**
    * The scorecard opened from the run's readiness card (data-readiness R5),

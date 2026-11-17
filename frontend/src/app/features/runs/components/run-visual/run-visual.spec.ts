@@ -9,7 +9,7 @@ import type { WorkflowRun } from '../../../workflows/models/workflow.model';
 @Component({
   selector: 'app-interactive-visual-panel',
   template:
-    '<div data-testid="panel" [attr.data-read-only]="readOnly()"></div>',
+    '<div data-testid="panel" [attr.data-read-only]="readOnly()" [attr.data-chrome]="chrome()"></div>',
 })
 class PanelStub {
   readonly runId = input<string | null>(null);
@@ -18,6 +18,7 @@ class PanelStub {
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
   readonly readOnly = input(false);
+  readonly chrome = input(true);
   readonly downloadVisual = output<unknown>();
   readonly selectVersion = output<unknown>();
   readonly revertVersion = output<unknown>();
@@ -27,7 +28,10 @@ class PanelStub {
 /** The state with one visual open on run `run-1`. */
 function stateWithVisual() {
   return {
-    shown: signal({ runId: 'run-1', visualization: { id: 'v-1' } }),
+    shown: signal({
+      runId: 'run-1',
+      visualization: { id: 'v-1', title: 'Managed Business vs Aetna' },
+    }),
     loading: signal(false),
     error: signal<string | null>(null),
     downloading: signal<string | null>(null),
@@ -40,7 +44,7 @@ function stateWithVisual() {
 }
 
 describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md 5.19)", () => {
-  function render(workflowId: string) {
+  function render(workflowId: string, sheet = false) {
     const state = stateWithVisual();
     TestBed.configureTestingModule({
       imports: [RunVisual],
@@ -55,6 +59,7 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
       id: 'run-1',
       workflowId,
     } as WorkflowRun);
+    fixture.componentRef.setInput('sheet', sheet);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     const section = () =>
@@ -92,6 +97,47 @@ describe("RunVisual, a run's visual under its answer (visuals R12-R24; agents.md
     ).click();
     fixture.detectChanges();
     expect(section().getAttribute('data-full-screen')).toBeNull();
+  });
+
+  it("opens as a side panel titled once by the visual, without the panel's own label and path; Escape closes it (R42)", () => {
+    const { fixture, state, section } = render('recreate-dashboard', true);
+    expect(section().getAttribute('data-sheet')).toBe('true');
+    expect(section().getAttribute('role')).toBe('dialog');
+    expect(section().getAttribute('aria-label')).toBe(
+      'Managed Business vs Aetna',
+    );
+    expect(section().classList).toContain('run-visual-sheet');
+    expect(
+      section()
+        .querySelector('[data-testid="run-visual-title"]')
+        ?.textContent?.trim(),
+    ).toBe('Managed Business vs Aetna');
+    expect(
+      section()
+        .querySelector('[data-testid="run-visual-kind"]')
+        ?.textContent?.trim(),
+    ).toBe('Dashboard');
+    expect(section().textContent).toContain('Mock data');
+    expect(
+      section()
+        .querySelector('[data-testid="panel"]')
+        ?.getAttribute('data-chrome'),
+    ).toBe('false');
+
+    section().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    expect(state.close).toHaveBeenCalled();
+  });
+
+  it("stays under the answer, with the panel's own label, when not a side panel", () => {
+    const { section } = render('answer-business-question');
+    expect(section().getAttribute('data-sheet')).toBeNull();
+    expect(section().getAttribute('role')).toBeNull();
+    expect(
+      section()
+        .querySelector('[data-testid="panel"]')
+        ?.getAttribute('data-chrome'),
+    ).toBe('true');
   });
 
   it('is read-only (no Tailor, no Refresh) for a visual drawn by code: Review a Website', () => {

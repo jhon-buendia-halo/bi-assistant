@@ -1,5 +1,5 @@
 import { Component, ElementRef, input, output, viewChild } from '@angular/core';
-import { LucideAngularModule, Paperclip, X } from 'lucide-angular';
+import { ImagePlus, LucideAngularModule, Paperclip, X } from 'lucide-angular';
 import { IMAGE_ACCEPT } from '../../services/workflow-input-validation';
 
 /**
@@ -15,6 +15,34 @@ import { IMAGE_ACCEPT } from '../../services/workflow-input-validation';
   imports: [LucideAngularModule],
   templateUrl: './workflow-run-attachments.html',
   styles: `
+    /* The input form's drop zone (ui.md 4.4b): dashed, the whole width. */
+    .images-drop {
+      display: flex;
+      flex: 1 1 100%;
+      align-items: center;
+      gap: 0.625rem;
+      border: 1.5px dashed var(--qti-border-strong);
+      border-radius: 0.5rem;
+      background-color: var(--qti-surface-muted);
+      padding: 0.625rem 0.875rem;
+      font-size: 13px;
+      line-height: 1.25rem;
+      color: var(--qti-fg-muted);
+      text-align: left;
+      cursor: pointer;
+    }
+    .images-drop:hover:not(:disabled) {
+      border-color: var(--qti-border-selected);
+      color: var(--qti-fg);
+    }
+    .images-drop:focus-visible {
+      outline: 2px solid var(--qti-focus);
+      outline-offset: 2px;
+    }
+    .images-drop:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
     .thumb {
       position: relative;
       display: block;
@@ -56,6 +84,7 @@ import { IMAGE_ACCEPT } from '../../services/workflow-input-validation';
 })
 export class WorkflowRunAttachments {
   protected readonly Paperclip = Paperclip;
+  protected readonly ImagePlus = ImagePlus;
   protected readonly X = X;
 
   /** What each thumbnail shows: a `data:` URL, or the run's input-image URL. */

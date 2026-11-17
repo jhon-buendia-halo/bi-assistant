@@ -74,7 +74,7 @@ function storedRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
 })
 class DockHost {}
 
-describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)', () => {
+describe('WorkflowRunDock, the Run panel on the left of the canvas (ui.md 4.4b)', () => {
   let fixture: ComponentFixture<DockHost>;
   let designer: WorkflowDesigner;
   let http: HttpTestingController;
@@ -166,7 +166,7 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
     expect(q('workflow-state-status')).toBeNull();
     expect(text('workflow-state-progress')).toBe('0 of 3 nodes ran');
     expect(text('workflow-state-run-id')).toBe(
-      "No run yet. Execute the workflow to see each node's data.",
+      "No run yet. Execute the user journey to see each node's data.",
     );
     expect(text('workflow-run-activity')).toBe('');
   });
@@ -241,7 +241,7 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
     expect(now()).toBe(ROOM - DOCK_MIN_CANVAS);
   });
 
-  describe('the resize handle on its left edge', () => {
+  describe('the resize handle on its right edge', () => {
     it('is a vertical separator with its bounds and current width', () => {
       open();
       const separator = handle();
@@ -258,12 +258,12 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
       expect(q('workflow-run-dock')!.style.width).toBe(`${DEFAULT_WIDTH}px`);
     });
 
-    it('Arrow Left grows and Arrow Right shrinks it by a step, and keeps the share', () => {
+    it('Arrow Right grows and Arrow Left shrinks it by a step, and keeps the share', () => {
       open();
-      press('ArrowLeft');
+      press('ArrowRight');
       expect(now()).toBe(DEFAULT_WIDTH + DOCK_KEY_STEP);
-      press('ArrowRight');
-      press('ArrowRight');
+      press('ArrowLeft');
+      press('ArrowLeft');
       expect(now()).toBe(DEFAULT_WIDTH - DOCK_KEY_STEP);
       expect(Number(localStorage.getItem(RATIO_KEY))).toBeCloseTo(
         (DEFAULT_WIDTH - DOCK_KEY_STEP) / ROOM,
@@ -278,7 +278,7 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
       press('End');
       expect(now()).toBe(DOCK_MIN_WIDTH);
       // Never below the minimum.
-      press('ArrowRight');
+      press('ArrowLeft');
       expect(now()).toBe(DOCK_MIN_WIDTH);
     });
 
@@ -291,8 +291,8 @@ describe('WorkflowRunDock, the Run panel on the right of the canvas (ui.md 4.4b)
 
     it('a double click resets it to the default share', () => {
       open();
-      press('ArrowLeft');
-      press('ArrowLeft');
+      press('ArrowRight');
+      press('ArrowRight');
       handle().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
       fixture.detectChanges();
       expect(now()).toBe(DEFAULT_WIDTH);

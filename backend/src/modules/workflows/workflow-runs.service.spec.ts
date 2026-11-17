@@ -130,6 +130,8 @@ interface TurnScript {
   answer?: string;
   /** The answer's data records. */
   data?: unknown[];
+  /** The visual Build visual stored (its step runs after Write answer). */
+  visual?: { visualId: string; title: string };
 }
 
 function build(
@@ -217,6 +219,15 @@ function build(
           onStep(stepResult('validate', VALIDATE_OUTPUT));
           onStep(stepStart('write-answer', VALIDATE_OUTPUT));
           onStep(stepResult('write-answer', ANSWER_OUTPUT));
+          if (script.visual) {
+            onStep(stepStart('build-visual', ANSWER_OUTPUT));
+            onStep(
+              stepResult('build-visual', {
+                ...ANSWER_OUTPUT,
+                visual: script.visual,
+              }),
+            );
+          }
           onStep(stepStart('wrap-up', ANSWER_OUTPUT));
           onStep(stepResult('wrap-up', WRAP_UP_OUTPUT));
         }
@@ -588,6 +599,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
+      // Build visual is on unless the run turns it off (workflows R41).
+      buildVisual: true,
     });
     // Careful is no field of v2's input: the turn runs without it.
     expect(ctx.sessions.streamRunTurn).toHaveBeenCalledWith(
@@ -629,7 +642,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       // attached) and the Clarify branch.
       'read-images:skipped',
       'clarify:skipped',
-      'check-data-quality:skipped',
+      'build-visual:skipped',
       'page-result:skipped',
       'page-answer:skipped',
       'done',
@@ -693,8 +706,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
           output: ANALYSE_OUTPUT,
         },
         { id: 'validate', status: 'success', attempt: 1 },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'success', output: ANSWER_OUTPUT },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success', output: WRAP_UP_OUTPUT },
         { id: 'page-result', status: 'skipped' },
         { id: 'page-answer', status: 'skipped' },
@@ -828,8 +841,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
           error: 'The endpoint rejected the API key (401)',
         },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
         { id: 'page-result', status: 'skipped' },
         { id: 'page-answer', status: 'skipped' },
@@ -839,8 +852,8 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       'clarify:skipped',
       'analyse:failed',
       'validate:skipped',
-      'check-data-quality:skipped',
       'write-answer:skipped',
+      'build-visual:skipped',
       'wrap-up:skipped',
       'page-result:skipped',
       'page-answer:skipped',
@@ -915,19 +928,16 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
         story: notReached,
       },
       {
-        id: 'check-data-quality',
-        title: 'Check data quality',
-        status: 'skipped',
-        story: {
-          headline: 'Skipped: the data quality check was off for this run.',
-          brief: 'Off for this run',
-          source: 'step',
-        },
-      },
-      {
         id: 'write-answer',
         title: 'Write answer',
         status: 'skipped',
+        story: notReached,
+      },
+      {
+        id: 'build-visual',
+        title: 'Build visual',
+        status: 'skipped',
+        // On by default: a stopped run did not get there.
         story: notReached,
       },
       { id: 'wrap-up', title: 'Wrap up', status: 'skipped', story: notReached },
@@ -962,6 +972,7 @@ describe('WorkflowRunsService: an Answer a Business Question run (agents.md 5.14
       workflowId: 'answer-business-question',
       name: 'Answer a Business Question',
       datasets: ['World Cup Core'],
+      buildVisual: true,
       context: {
         question: 'Who won in 2002?',
         answer: 'Brazil won in 2002.',
@@ -1223,6 +1234,70 @@ describe('WorkflowsController POST /workflows/:id/runs/stream (api.md 119)', () 
   });
 });
 
+describe('WorkflowRunsService: Build visual (agents.md 5.11, workflows R41)', () => {
+  let ctx: ReturnType<typeof build>;
+  afterEach(() => ctx.db.close());
+  const ASK = { question: 'Who won in 2002?', datasets: ['World Cup Core'] };
+  const METADATA = {
+    id: 'v-1',
+    title: 'Wins per team',
+    description: '',
+    path: 'visuals/v-1',
+    sourceMessageAt: 't',
+    createdAt: 't',
+    currentVersion: 1,
+    versions: [],
+  };
+
+  it('logs the creation of the visual the step stored beside the answer', async () => {
+    ctx = build(DATASETS, {
+      visual: { visualId: 'v-1', title: 'Wins per team' },
+    });
+    ctx.sessions.finishRunHost.mockImplementationOnce(() =>
+      Promise.resolve({
+        id: 'host',
+        name: 'Insights Analyst',
+        datasets: ['World Cup Core'],
+        messages: [],
+        visualizations: [METADATA],
+        panelItems: [],
+      } as never),
+    );
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    expect(run.visualizations?.map((v) => v.id)).toEqual(['v-1']);
+    expect(run.events).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Created interactive visual "Wins per team" (v1).',
+        visual: {
+          visualId: 'v-1',
+          version: 1,
+          title: 'Wins per team',
+          action: 'created',
+        },
+      }),
+    ]);
+  });
+
+  it('logs nothing when the step names a visual the host does not hold', async () => {
+    ctx = build(DATASETS, { visual: { visualId: 'gone', title: 'Gone' } });
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    expect(run.events ?? []).toEqual([]);
+  });
+
+  it('logs nothing when the run built no visual', async () => {
+    ctx = build();
+    const { run } = await streamed(ctx, 'answer-business-question', {
+      input: ASK,
+    });
+    expect(run.events ?? []).toEqual([]);
+  });
+});
+
 describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
@@ -1302,8 +1377,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: message },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
         { id: 'page-result', status: 'skipped' },
         { id: 'page-answer', status: 'skipped' },
@@ -1366,8 +1441,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'success' },
         { id: 'validate', status: 'success' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'success' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'success' },
         { id: 'page-result', status: 'skipped' },
         { id: 'page-answer', status: 'skipped' },
@@ -1417,8 +1492,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'failed', error: 'Model error' },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
         { id: 'page-result', status: 'skipped' },
         { id: 'page-answer', status: 'skipped' },
@@ -1444,8 +1519,8 @@ describe('WorkflowRunsService: stored runs (data-model 3.16; plan 5.1, 5.3)', ()
         { id: 'clarify', status: 'skipped' },
         { id: 'analyse', status: 'stopped' },
         { id: 'validate', status: 'skipped' },
-        { id: 'check-data-quality', status: 'skipped' },
         { id: 'write-answer', status: 'skipped' },
+        { id: 'build-visual', status: 'skipped' },
         { id: 'wrap-up', status: 'skipped' },
         { id: 'page-result', status: 'skipped' },
         { id: 'page-answer', status: 'skipped' },
@@ -2795,7 +2870,7 @@ describe('WorkflowRunsService: reference images (workflows R35; api.md 151)', ()
   });
 });
 
-describe('WorkflowRunsService: a follow-up that asks one agent (workflows R38; api.md 118; agents.md 5.21)', () => {
+describe('WorkflowRunsService: a follow-up that asks one agent (workflows R40; api.md 118; agents.md 5.21)', () => {
   let ctx: ReturnType<typeof build>;
   afterEach(() => ctx.db.close());
 
@@ -2849,18 +2924,6 @@ describe('WorkflowRunsService: a follow-up that asks one agent (workflows R38; a
     });
   });
 
-  it('refuses Sarah when the earlier run did not check data quality', async () => {
-    const first = await earlier();
-    await expect(
-      ctx.service.prepare('answer-business-question', {
-        input: ASK,
-        context: { fromRunId: first.id, askStep: 'check-data-quality' },
-      }),
-    ).rejects.toThrow(
-      `Step "check-data-quality" did not run in run "${first.id}"`,
-    );
-  });
-
   it('asks the Analyst from copies of the run threads, with its step context block', async () => {
     const first = await earlier();
     const second = await streamed(ctx, 'answer-business-question', {
@@ -2878,12 +2941,17 @@ describe('WorkflowRunsService: a follow-up that asks one agent (workflows R38; a
     });
     expect(spec['contextBlock']).toContain('step "Analyse" (analyse)');
     expect(spec['agentKey']).toBeUndefined();
-    expect(second.run.context?.askStep).toBe('analyse');
+    expect(
+      (second.run.context as { askStep?: string } | undefined)?.askStep,
+    ).toBe('analyse');
   });
 
   it.each([
     [{ askStep: 'validate' }, 'Step "validate" has no agent to ask'],
     [{ askStep: 'read-images' }, 'did not run in run'],
+    // Check data quality left the workflow; Build visual has no chat.
+    [{ askStep: 'check-data-quality' }, 'has no agent to ask'],
+    [{ askStep: 'build-visual' }, 'has no agent to ask'],
   ])('refuses %j before anything runs', async (extra, message) => {
     const first = await earlier();
     ctx.sessions.createRunHost.mockClear();

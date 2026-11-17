@@ -1,7 +1,7 @@
 @if (rows().length > 0) {
   <ol
     class="m-0 flex list-none flex-col gap-2 p-0"
-    aria-label="Agents on this run"
+    aria-label="Agent personas on this run"
     data-testid="workflow-run-team"
   >
     @for (row of rows(); track row.story.stepId) {
@@ -30,6 +30,12 @@
         <div class="flex min-w-0 flex-1 flex-col gap-1">
           <p class="m-0 flex flex-wrap items-baseline gap-x-1.5 text-[12px]">
             <span class="font-medium text-fg-strong">{{ s.agent.name }}</span>
+            @if (s.agent.role) {
+              <!-- Who the persona is, wherever the app names one (R39) -->
+              <span class="text-fg-muted" data-testid="workflow-run-team-role"
+                >· {{ s.agent.role }}</span
+              >
+            }
             <span class="text-fg-muted">· {{ s.title }}</span>
             @if (s.state === "waiting") {
               <span class="text-fg-muted">· {{ s.line }}</span>

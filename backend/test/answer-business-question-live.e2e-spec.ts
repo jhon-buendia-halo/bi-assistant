@@ -1,6 +1,6 @@
 /**
  * Border cases of Answer a Business Question that need real rows (agents.md
- * 5.11 Validate, Check data quality, Interpret follow-up; api.md 119), end
+ * 5.11 Validate, Build visual, Interpret follow-up; api.md 119), end
  * to end on the real Mastra engine and the World Cup Postgres on 55432: the
  * built backend in its own process and data dir, the stub model scripted
  * per step, and Analyse's queries run for real, so Validate judges real
@@ -22,12 +22,7 @@ import {
   type StubRequest,
 } from '../../frontend/e2e/helpers/llm-stub';
 import { type Backend, boot, stop } from './backend-process';
-import {
-  isAnalyseRequest,
-  isPlanRequest,
-  isWriteAnswerRequest,
-  useV2Steps,
-} from './v2-stub';
+import { isAnalyseRequest, isPlanRequest, useV2Steps } from './v2-stub';
 import { runClient, type StoredRun } from './workflow-run-client';
 import {
   WORLD_CUP_CONNECTION,
@@ -123,7 +118,7 @@ describeLive(
       context?: { fromRunId: string },
     ) =>
       client.run(WORKFLOW, {
-        input: { question, datasets: [DATASET], ...extra },
+        input: { question, datasets: [DATASET], buildVisual: false, ...extra },
         ...(context ? { context } : {}),
       });
 
@@ -355,33 +350,27 @@ describeLive(
       });
     });
 
-    it('Check data quality reviews the table the analysis read, and Write answer gets its findings', async () => {
+    it('Build visual runs after Write answer when the input asks, with the real rows; a design that fails never fails the run', async () => {
       useV2Steps(stub, analyse([[{ sql: COUNT_SQL }]]));
-      const { result: res, requests } = await recorded(() =>
-        ask('How many matches? (quality checked)', { checkDataQuality: true }),
-      );
+      const res = await ask('How many matches? (with a visual)', {
+        buildVisual: true,
+      });
       const run = res.run!;
       expect(run.status).toBe('success');
       expect(res.steps).toEqual(
         expect.arrayContaining([
-          'check-data-quality:running',
-          'check-data-quality:success',
+          'write-answer:success',
+          'build-visual:running',
+          'build-visual:success',
+          'wrap-up:success',
         ]),
       );
-      const checked = stepOf(run, 'check-data-quality')!;
-      expect(checked.output).toHaveProperty('dataQuality');
-      expect(JSON.stringify(checked.output)).toContain('matches');
-      // Write answer runs after the check.
-      const order = requests
-        .map((req) =>
-          isWriteAnswerRequest(req)
-            ? 'answer'
-            : req.step === 'quality'
-              ? 'quality'
-              : '',
-        )
-        .filter(Boolean);
-      expect(order.at(-1)).toBe('answer');
+      expect(res.steps).not.toContain('build-visual:skipped');
+      const built = stepOf(run, 'build-visual')!;
+      expect(built.status).toBe('success');
+      // Either the visual Ryan designed, or the error that left the answer
+      // without one.
+      expect(built.output).toHaveProperty('visual');
     });
 
     describe('a follow-up over an earlier result (Interpret follow-up, roadmap 1.28.8)', () => {

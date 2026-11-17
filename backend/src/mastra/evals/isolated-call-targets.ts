@@ -4,7 +4,6 @@ import type * as ReadImagesAgents from '../workflows/read-images.agents';
 import type * as PlannerAgent from '../agents/analysis-planner.agent';
 import type * as WriterAgent from '../agents/answer-writer.agent';
 import type * as ImageReaderAgent from '../agents/image-reader.agent';
-import type * as ReadinessAgent from '../agents/data-readiness.agent';
 import type {
   AnalysisPlan,
   AnsweredClarification,
@@ -21,8 +20,8 @@ import {
 
 /**
  * The isolated-call targets of the agents whose step is one model call
- * (agents.md 8.1): Olivia's Plan, Jessica's Write answer, Zoe's Read images
- * and Sarah's Check data quality. Each case carries the call's input in its
+ * (agents.md 8.1): Olivia's Plan, Jessica's Write answer and Zoe's Read
+ * images. Each case carries the call's input in its
  * `input` field, typed below. The model functions and the agents are
  * required on first use, so the eval catalogue loads without Mastra.
  */
@@ -31,8 +30,6 @@ import {
 export const ANALYSIS_PLANNER_EVAL_TARGET = 'analysis-planner';
 export const ANSWER_WRITER_EVAL_TARGET = 'answer-writer';
 export const IMAGE_READER_EVAL_TARGET = 'image-reader';
-export const DATA_QUALITY_CHECK_EVAL_TARGET =
-  'data-readiness:check-data-quality';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const stepAgents = () =>
@@ -58,11 +55,6 @@ export interface PlannerEvalInput {
 /** Jessica's input (`writeAnswerWithModel`): question, plan, queries, findings. */
 export type WriterEvalInput = Parameters<
   typeof StepAgents.writeAnswerWithModel
->[0];
-
-/** Sarah's Check data quality input (`checkDataQualityWithModel`). */
-export type DataQualityEvalInput = Parameters<
-  typeof StepAgents.checkDataQualityWithModel
 >[0];
 
 /**
@@ -151,32 +143,5 @@ export function imageReaderEvalTarget(
       imageNotes: output.imageNotes,
       imageCount: output.imageCount,
     }),
-  });
-}
-
-/**
- * Sarah's Check data quality call (her step agent, no tools): the answer is
- * `{ issues }` as JSON, each issue `{ finding, impact }` with `finding`
- * the 1-based number of an input finding. On Sarah's page, next to her
- * chat set.
- */
-export function dataQualityCheckEvalTarget(
-  sets: AssistantEvalSet[],
-  call: Call<
-    DataQualityEvalInput,
-    { issues: { finding: number; impact: string }[]; stopped: boolean }
-  > = (input, options) =>
-    stepAgents().checkDataQualityWithModel(input, options),
-  loadAgent: () => Agent = () =>
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    (require('../agents/data-readiness.agent') as typeof ReadinessAgent)
-      .dataReadinessStepAgent,
-): EvalTarget {
-  return isolatedCallTarget({
-    agentKey: 'data-readiness',
-    sets,
-    loadAgent,
-    call,
-    answerOf: (output) => ({ issues: output.issues }),
   });
 }

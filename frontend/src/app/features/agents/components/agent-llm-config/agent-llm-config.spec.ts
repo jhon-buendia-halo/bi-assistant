@@ -59,7 +59,9 @@ describe('AgentLlmConfig', () => {
   });
 
   it('marks a model the agent sets itself', () => {
-    expect(value(render(LLM, true), 'Model')).toBe('gpt-4.1 (agent override)');
+    expect(value(render(LLM, true), 'Model')).toBe(
+      'gpt-4.1 (agent persona override)',
+    );
   });
 
   it('says Not set without a key and never renders a key value', () => {

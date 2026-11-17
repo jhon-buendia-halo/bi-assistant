@@ -6,7 +6,7 @@
     <!-- The agent's details, as a CV's side column. -->
     <aside
       data-testid="agent-cv-facts"
-      aria-label="Agent details"
+      aria-label="Agent persona details"
       class="flex flex-col gap-5 border-b border-border bg-surface-muted p-5 @3xl:border-r @3xl:border-b-0"
     >
       <div class="flex items-center gap-3 @3xl:flex-col @3xl:items-start">
@@ -36,7 +36,7 @@
             @for (workflow of a.usedInWorkflows; track workflow.id) {
               <span class="chip chip-info">{{ workflow.name }}</span>
             } @empty {
-              <span class="text-fg-muted">No workflow</span>
+              <span class="text-fg-muted">No user journey</span>
             }
           </dd>
         </div>

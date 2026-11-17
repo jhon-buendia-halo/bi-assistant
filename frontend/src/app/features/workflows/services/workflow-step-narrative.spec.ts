@@ -3,8 +3,10 @@ import {
   NARRATIVE_MAX_ROWS,
   NarrativeSource,
   buildStepNarrative,
+  callActions,
   narrativeMarkdown,
   previewValue,
+  readSummary,
 } from './workflow-step-narrative';
 
 const LIST_SQL = 'SELECT winner, COUNT(*) FROM matches GROUP BY winner';
@@ -241,6 +243,40 @@ describe('buildStepNarrative', () => {
     const [action] = buildStepNarrative(source({ run })).actions;
     expect(action.running).toBeTrue();
     expect(action.text).toBe('Looked at sample rows');
+  });
+});
+
+describe('callActions', () => {
+  it("gives each call its query's rows when the output kept them", () => {
+    const run = analyseRun();
+    const actions = callActions(run.toolCalls, run.output);
+    expect(actions.map((a) => a.rows?.length ?? null)).toEqual([null, 0, 3]);
+    expect(actions[2].rows?.[0]).toEqual({ team: 'Brazil', wins: 76 });
+  });
+
+  it('falls back to a phrase for the tool without an output', () => {
+    const run = analyseRun();
+    const actions = callActions(run.toolCalls, undefined);
+    expect(actions.map((a) => a.text)).toEqual([
+      'Listed the entities of the datasets',
+      'Ran a query',
+      'Ran a query',
+    ]);
+    expect(actions.every((a) => a.rows === null)).toBeTrue();
+  });
+});
+
+describe('readSummary', () => {
+  it('counts the rows of the queries a step was handed, failed ones aside', () => {
+    const queries = analyseRun().output!['queries'];
+    expect(readSummary({ question: 'Q', queries })).toBe(
+      'Based on 3 rows from 1 query',
+    );
+  });
+
+  it('is null for an input without queries', () => {
+    expect(readSummary({ question: 'Q' })).toBeNull();
+    expect(readSummary(undefined)).toBeNull();
   });
 });
 

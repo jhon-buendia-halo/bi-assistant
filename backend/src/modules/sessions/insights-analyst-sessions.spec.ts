@@ -341,8 +341,8 @@ const STEPS = [
   { number: 6, title: 'Clarify' },
   { number: 7, title: 'Analyse' },
   { number: 8, title: 'Validate' },
-  { number: 9, title: 'Check data quality' },
-  { number: 10, title: 'Write answer' },
+  { number: 9, title: 'Write answer' },
+  { number: 10, title: 'Build visual' },
   { number: 11, title: 'Wrap up' },
   { number: 12, title: 'Page result' },
   { number: 13, title: 'Page answer' },
@@ -592,7 +592,7 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       expect(moves).toContainEqual({ current: 7, done: [2, 3, 4, 5, 7, 8] });
       expect(moves.at(-1)).toEqual({
         current: 11,
-        done: [2, 3, 4, 5, 7, 8, 10, 11],
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
       expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
     });
@@ -668,7 +668,7 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       });
       expect(workflowMoves(events).at(-1)).toEqual({
         current: 11,
-        done: [2, 3, 4, 5, 7, 8, 10, 11],
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
     });
   });
@@ -728,11 +728,11 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
         { current: 7, done: [2, 3, 4, 5, 7] },
         { current: 8, done: [2, 3, 4, 5, 7] },
         { current: 8, done: [2, 3, 4, 5, 7, 8] },
-        // Check data quality (9) is not asked for in a chat.
-        { current: 10, done: [2, 3, 4, 5, 7, 8] },
-        { current: 10, done: [2, 3, 4, 5, 7, 8, 10] },
-        { current: 11, done: [2, 3, 4, 5, 7, 8, 10] },
-        { current: 11, done: [2, 3, 4, 5, 7, 8, 10, 11] },
+        { current: 9, done: [2, 3, 4, 5, 7, 8] },
+        { current: 9, done: [2, 3, 4, 5, 7, 8, 9] },
+        // Build visual (10) is not asked for in a chat.
+        { current: 11, done: [2, 3, 4, 5, 7, 8, 9] },
+        { current: 11, done: [2, 3, 4, 5, 7, 8, 9, 11] },
       ]);
       // The answer streams inside Write answer, between its start and end.
       const types = events.map((event) => event.type);
@@ -747,11 +747,11 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
       expect(done?.workflow).toMatchObject({
         source: 'workflow',
         current: 11,
-        done: [2, 3, 4, 5, 7, 8, 10, 11],
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
       expect(ctx.session.workflowState).toMatchObject({
         current: 11,
-        done: [2, 3, 4, 5, 7, 8, 10, 11],
+        done: [2, 3, 4, 5, 7, 8, 9, 11],
       });
       expect(ctx.session.messages.at(-1)?.content).toBe(WRITTEN);
     });
@@ -801,8 +801,8 @@ describe('SessionsService sessions bound to Insights Analyst (BA-320)', () => {
         turn(ctx, 'How many?', false, undefined, events),
       ).rejects.toThrow('answer down');
       expect(workflowMoves(events).at(-1)).toMatchObject({
-        current: 10,
-        failed: 10,
+        current: 9,
+        failed: 9,
       });
     });
 

@@ -235,56 +235,6 @@ export function writeAnswerRequest(input: {
 }
 
 /**
- * The first line of Check data quality's request to Sarah: her model runs
- * with her own instructions, so a stub model routes this call by it.
- */
-export const DATA_QUALITY_REQUEST_FIRST_LINE =
-  'Check the data quality behind an answer from Questions to Insights.';
-
-/** Engine findings Sarah reads at most, most severe first. */
-export const DATA_QUALITY_FINDINGS_CAP = 30;
-
-/**
- * Check data quality's request to Sarah (agents.md 5.11): the question,
- * the SQL the analysis ran (no rows) and the engine's findings on the
- * tables it read, numbered from 1. She answers with the numbers of the
- * findings that could change or limit this answer, and how; the numbers
- * come from the deterministic engine and she never changes one.
- */
-export function dataQualityRequest(input: {
-  question: string;
-  sql: readonly string[];
-  tables: readonly string[];
-  findings: readonly {
-    severity: string;
-    dimension: string;
-    entity: string;
-    field?: string;
-    description: string;
-  }[];
-}): string {
-  return [
-    DATA_QUALITY_REQUEST_FIRST_LINE,
-    'The deterministic readiness engine has just assessed the tables the analysis read. Decide which of its findings could change or limit the answer to the question, given the SQL below: a finding on a column the SQL filters, groups, joins or aggregates on can; a finding on a column the SQL never touches usually cannot. Do not change, round or recompute any number. Answer with an empty list when none applies.',
-    '',
-    `Question: ${input.question}`,
-    '',
-    `Tables assessed: ${input.tables.join(', ') || 'none'}`,
-    '',
-    'SQL the analysis ran:',
-    ...(input.sql.length ? input.sql.map((sql) => `- ${sql}`) : ['- none']),
-    '',
-    'Engine findings:',
-    ...(input.findings.length
-      ? input.findings.map(
-          (f, index) =>
-            `${index + 1}. [${f.severity}] ${f.dimension} · ${f.field ? `${f.entity}.${f.field}` : f.entity}: ${f.description}`,
-        )
-      : ['- none']),
-  ].join('\n');
-}
-
-/**
  * The Analyse step's plan block (agents.md 5.11): the plan as the last
  * system message, and on a retry what the previous attempt's validation
  * found.

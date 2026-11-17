@@ -89,7 +89,7 @@ export class AgentEditorService {
     }),
   );
   readonly title = computed(() =>
-    this.agentId() === null ? 'New agent' : `Edit ${this.saved().name}`,
+    this.agentId() === null ? 'New agent persona' : `Edit ${this.saved().name}`,
   );
 
   /** Set when the editor added links for a legacy draft's tools and skills. */
@@ -157,7 +157,9 @@ export class AgentEditorService {
               if (generation !== this.generation) return;
               const draft = detail.draft ?? detail.live;
               if (detail.kind !== 'user' || !draft) {
-                this.loadError.set(`Agent "${agentId}" cannot be edited`);
+                this.loadError.set(
+                  `Agent persona "${agentId}" cannot be edited`,
+                );
                 return;
               }
               draftConfig = draft;
@@ -235,7 +237,7 @@ export class AgentEditorService {
     if (this.saving()) return false;
     const form = this.form();
     if (!form.name.trim()) {
-      this.toast.error('Agent name is required');
+      this.toast.error('Agent persona name is required');
       return false;
     }
     const generation = this.generation;

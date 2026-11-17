@@ -84,10 +84,10 @@ test.beforeEach(async ({ page }) => {
 async function openHub(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Agent personas', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
 }
 
@@ -118,12 +118,12 @@ async function sectionIds(page: Page): Promise<string[]> {
 
 function filter(page: Page, name: string): Locator {
   return page
-    .getByRole('group', { name: 'Filter agents' })
+    .getByRole('group', { name: 'Filter agent personas' })
     .getByRole('button', { name, exact: true });
 }
 
 function search(page: Page): Locator {
-  return page.getByLabel('Search agents by name or description', {
+  return page.getByLabel('Search agent personas by name or description', {
     exact: true,
   });
 }
@@ -145,7 +145,7 @@ test('shows the built-in agents and mine in sections by domain', async ({
   await expect(section(page, 'general')).toBeVisible();
   expect(await sectionIds(page)).toEqual(DOMAIN_SECTIONS);
   await expect(section(page, 'pinned')).toHaveCount(0);
-  await expect(button(page, 'New agent')).toBeEnabled();
+  await expect(button(page, 'New agent persona')).toBeEnabled();
   // Every card shows: no section hides a row behind Show more (R3).
   await expect(page.getByText(/^Show more/)).toHaveCount(0);
   await expect(cards(page)).toHaveCount(ALL_CARDS);
@@ -270,7 +270,7 @@ test('search narrows the agents by name or description', async ({ page }) => {
   await expect(page.getByTestId(`agent-card-${claimsId}`)).toHaveCount(0);
 
   await search(page).fill('nothing here');
-  await expect(page.getByText('No agents match "nothing here"')).toBeVisible();
+  await expect(page.getByText('No agent personas match "nothing here"')).toBeVisible();
   await expect(cards(page)).toHaveCount(0);
 });
 
@@ -279,7 +279,7 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
 
   // All, Pinned, then the domains that have agents, in domain order (R2).
   await expect(
-    page.getByRole('group', { name: 'Filter agents' }).getByRole('button'),
+    page.getByRole('group', { name: 'Filter agent personas' }).getByRole('button'),
   ).toHaveText([
     'All',
     'Pinned',
@@ -313,11 +313,11 @@ test('pills and the owner menu limit the hub', async ({ page }) => {
   expect(await cardKeys(page)).toEqual(['assistant', V2_KEY]);
 
   await filter(page, 'SQL Engineering').click();
-  await expect(page.getByText('No agents match these filters.')).toBeVisible();
+  await expect(page.getByText('No agent personas match these filters.')).toBeVisible();
   await expect(cards(page)).toHaveCount(0);
 
   await filter(page, 'Pinned').click();
-  await expect(page.getByText('No pinned agents yet.')).toBeVisible();
+  await expect(page.getByText('No pinned agent personas yet.')).toBeVisible();
   await expect(cards(page)).toHaveCount(0);
 
   await owner.selectOption({ label: 'Any owner' });
@@ -415,14 +415,14 @@ test("a card opens the agent's detail view with its actions", async ({
   await expect(button(page, 'Delete')).toBeVisible();
   await expect(button(page, 'Start chat')).toHaveCount(0);
 
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await openAgent(page, healthId, HEALTH);
   await expect(page.getByTestId('agent-edit')).toBeVisible();
   await expect(button(page, 'Delete')).toBeVisible();
   await expect(button(page, 'Publish')).toHaveCount(0);
   await expect(button(page, 'Start chat')).toHaveCount(0);
 
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await openAgent(page, 'assistant', ASSISTANT);
   await expect(page.getByTestId('agent-used-in')).toBeVisible();
   await expect(button(page, 'Start chat')).toHaveCount(0);
@@ -445,13 +445,13 @@ test('publishing a draft makes it Live', async ({ page }) => {
     description: CLAIMS_DESCRIPTION,
     datasets: [WORLD_CUP_DATASET],
   });
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await openAgent(page, claimsId, CLAIMS);
   await button(page, 'Publish').click();
   await expect(page.getByText(`Agent "${CLAIMS}" is Live`)).toBeVisible();
   await expect(button(page, 'Publish')).toHaveCount(0);
 
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await expect(
     section(page, 'general').getByTestId(`agent-status-${claimsId}`),
   ).toHaveText('Live');
@@ -479,7 +479,7 @@ test('deleting an agent asks first', async ({ page }) => {
   await button(page, 'Delete').click();
   await expect(page.getByText(`Agent "${CLAIMS}" deleted`)).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
   await expect(page.getByTestId(`agent-card-${healthId}`)).toBeVisible();
   await expect(page.getByTestId(`agent-card-${claimsId}`)).toHaveCount(0);
@@ -502,14 +502,14 @@ test('skills opens the skills library and Back returns to the hub', async ({
   await expect(page.getByTestId('skill-new')).toBeVisible();
   await expect(
     page.getByRole('heading', {
-      name: 'Built-in · included in every agent',
+      name: 'Built-in · included in every agent persona',
       exact: true,
     }),
   ).toBeVisible();
 
   await button(page, 'Back').click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
   await expect(page.getByTestId(`agent-card-${healthId}`)).toBeVisible();
 });
@@ -538,7 +538,7 @@ test(
   'The Official owner holds only agents that can chat',
   { tag: ['@demo', '@story-1.23.8'] },
   async ({ page }) => {
-    await scenarioStep(page, 'When I open "Agents"', async () => {
+    await scenarioStep(page, 'When I open "Agent personas"', async () => {
       await openHub(page);
     });
     await scenarioStep(
@@ -552,7 +552,7 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see "Emily", "Michael" and "Sarah", and no other agent',
+      'Then I see "Emily", "Michael" and "Sarah", and no other agent persona',
       async () => {
         await expect(page.getByTestId('agent-card-assistant')).toBeVisible();
         expect(await cardKeys(page)).toEqual(OFFICIAL_KEYS);
@@ -634,7 +634,7 @@ test("Insights Analyst's page shows its prompt, six tools and three skills", asy
       'On demand',
     );
   }
-  await expect(page.getByText('This agent has no skills.')).toHaveCount(0);
+  await expect(page.getByText('This agent persona has no skills.')).toHaveCount(0);
 
   await page.getByTestId('agent-tab-memory').click();
   await expect(page.getByText('Recent messages replayed')).toBeVisible();
@@ -681,15 +681,15 @@ function railItem(page: Page, name: string): Locator {
 }
 
 /** The Used in text of a user agent, or an Official agent no workflow uses. */
-const NOT_USED = 'Not used in any workflow.';
+const NOT_USED = 'Not used in any user journey.';
 const SYSTEM_EMPTY =
-  'Not used in any workflow. The app calls this agent itself.';
+  'Not used in any user journey. The app calls this agent persona itself.';
 
 test(
   'An agent shows the workflows that use it',
   { tag: ['@demo', '@story-1.23.7'] },
   async ({ page }) => {
-    await scenarioStep(page, 'When I open "Agents"', async () => {
+    await scenarioStep(page, 'When I open "Agent personas"', async () => {
       await openHub(page);
     });
     await scenarioStep(page, 'Then no card has "Start chat"', async () => {
@@ -715,24 +715,24 @@ test(
     });
     await scenarioStep(
       page,
-      `Then I see the "${V2}" workflow page and "Workflows" is the current rail item`,
+      `Then I see the "${V2}" user journey page and "User journeys" is the current rail item`,
       async () => {
         await expect(page.getByTestId('workflow-detail-name')).toHaveText(V2);
         await expect(page.getByTestId('workflow-detail-id')).toHaveText(
           'answer-business-question',
         );
-        await expect(railItem(page, 'Workflows')).toHaveAttribute(
+        await expect(railItem(page, 'User journeys')).toHaveAttribute(
           'aria-current',
           'page',
         );
-        await expect(railItem(page, 'Agents')).not.toHaveAttribute(
+        await expect(railItem(page, 'Agent personas')).not.toHaveAttribute(
           'aria-current',
         );
       },
     );
     await scenarioStep(
       page,
-      `When I open the "${READINESS}" agent`,
+      `When I open the "${READINESS}" agent persona`,
       async () => {
         await openHub(page);
         await openAgent(page, 'data-readiness', READINESS);
@@ -740,7 +740,7 @@ test(
     );
     await scenarioStep(
       page,
-      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in both workflows',
+      'Then I see no "Chat Box" tab, "Job Description" is open, and it is used in Assess Data Readiness only',
       async () => {
         await expect(page.getByTestId('agent-tab-prompt')).toBeVisible();
         await expect(page.getByTestId('agent-tab-chat')).toHaveCount(0);
@@ -750,14 +750,14 @@ test(
         await expect(page.getByTestId('agent-prompt-view')).toContainText(
           'You are the Data Readiness Agent',
         );
-        // Her steps: Check data quality in Answer a Business Question, and
-        // Explain report in Assess Data Readiness.
+        // Her step: Explain report in Assess Data Readiness only (Answer a
+        // Business Question no longer runs her).
         const usedIn = page.getByTestId('agent-used-in');
         await expect(usedIn).toContainText('Used in');
         await expect(usedIn).not.toContainText(NOT_USED);
         await expect(
           usedIn.getByTestId('agent-used-in-answer-business-question'),
-        ).toHaveText(V2);
+        ).toHaveCount(0);
         await expect(
           usedIn.getByTestId('agent-used-in-data-readiness-assessment'),
         ).toHaveText('Assess Data Readiness');
@@ -787,7 +787,7 @@ test('a user agent is used in no workflow, even once published', async ({
     description: CLAIMS_DESCRIPTION,
     datasets: [WORLD_CUP_DATASET],
   });
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await openAgent(page, claimsId, CLAIMS);
   await button(page, 'Publish').click();
   await expect(page.getByText(`Agent "${CLAIMS}" is Live`)).toBeVisible();
@@ -836,7 +836,7 @@ test('the agent detail has no detectable accessibility violations in either them
   await expect(page.getByTestId('agent-prompt-view')).toBeVisible();
   await scan('Official agent');
 
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await openAgent(page, claimsId, CLAIMS);
   await expect(page.getByTestId('agent-used-in')).toContainText(NOT_USED);
   await scan('draft user agent');

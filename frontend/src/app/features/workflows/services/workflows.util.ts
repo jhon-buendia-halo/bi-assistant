@@ -50,7 +50,7 @@ export function workflowsEmptyMessage(
 ): string | null {
   if (sections.length > 0) return null;
   const trimmed = query.trim();
-  return trimmed ? `No workflows match "${trimmed}"` : null;
+  return trimmed ? `No user journeys match "${trimmed}"` : null;
 }
 
 /** The kind chip: `<n> steps` (workflows R5). */
@@ -66,7 +66,28 @@ export function workflowKindLabel(
  */
 export function workflowUsesLabel(workflow: WorkflowSummary): string {
   if (workflow.agents.length === 0) return '';
-  return `Uses ${workflow.agents.map((agent) => agent.name).join(', ')}`;
+  return `Uses ${workflow.agents.map((agent) => personaInList(agent)).join(', ')}`;
+}
+
+/**
+ * An agent persona with its role, wherever the app names one (workflows
+ * R39): `Michael, Insights Analyst`; the name alone without a role.
+ */
+export function personaLabel(agent: {
+  name: string;
+  role?: string | null;
+}): string {
+  const role = agent.role?.trim();
+  return role ? `${agent.name}, ${role}` : agent.name;
+}
+
+/** The same inside a comma-separated list: `Michael (Insights Analyst)`. */
+export function personaInList(agent: {
+  name: string;
+  role?: string | null;
+}): string {
+  const role = agent.role?.trim();
+  return role ? `${agent.name} (${role})` : agent.name;
 }
 
 /**
@@ -152,13 +173,18 @@ export type RunFormValues = Record<string, WorkflowInputValue>;
  * The form's first values: a boolean is its default (unchecked without one);
  * any other field with a default shows it as text.
  */
-export function initialInputValues(fields: WorkflowInputField[]): RunFormValues {
+export function initialInputValues(
+  fields: WorkflowInputField[],
+): RunFormValues {
   const values: RunFormValues = {};
   for (const field of fields) {
     if (field.hidden) continue;
     if (field.type === 'boolean') {
       values[field.name] = field.default === true;
-    } else if (field.default !== undefined && typeof field.default !== 'boolean') {
+    } else if (
+      field.default !== undefined &&
+      typeof field.default !== 'boolean'
+    ) {
       values[field.name] = String(field.default);
     }
   }
@@ -178,7 +204,9 @@ export function runInput(
   const input: Record<string, WorkflowInputValue> = {};
   for (const field of fields) {
     if (field.hidden) continue;
-    const value = Object.hasOwn(values, field.name) ? values[field.name] : undefined;
+    const value = Object.hasOwn(values, field.name)
+      ? values[field.name]
+      : undefined;
     if (field.type === 'boolean') {
       input[field.name] = value === true;
     } else if (field.type === 'datasets') {

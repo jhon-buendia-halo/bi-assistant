@@ -18,7 +18,7 @@ import {
   type AskableStepId,
 } from './ask-agent.steps';
 
-// Ask one agent (workflows R38; agents.md 5.21): a follow-up run of Answer
+// Ask one agent (workflows R40; agents.md 5.21): a follow-up run of Answer
 // a Business Question that runs the agent of one of its steps alone. The
 // branch takes exactly one step, the asked one, whose id is that step's id
 // in Answer a Business Question, so the run shows it and skips the rest.
@@ -46,7 +46,6 @@ const TITLES: Record<AskableStepId, string> = {
   'interpret-follow-up': 'Interpret follow-up',
   plan: 'Plan',
   analyse: 'Analyse',
-  'check-data-quality': 'Check data quality',
   'write-answer': 'Write answer',
 };
 
@@ -147,18 +146,10 @@ const WORK: Record<
     if (stopped) return { step: 'plan', answerLength: 0, stopped: true };
     return delivered(runtime, 'plan', planAnswer(plan));
   },
-  // The Analyst or Sarah answers alone, with their own tools.
+  // The Analyst answers alone, with their own tools.
   analyse: async (runtime) => {
     const outcome = await runtime.answer();
     return { step: 'analyse', answerLength: 0, stopped: outcome.stopped };
-  },
-  'check-data-quality': async (runtime) => {
-    const outcome = await runtime.answer();
-    return {
-      step: 'check-data-quality',
-      answerLength: 0,
-      stopped: outcome.stopped,
-    };
   },
   // Jessica writes again from the earlier answer's queries and rows.
   'write-answer': async (runtime, input) => {

@@ -116,7 +116,7 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
     open({ state: 'no-run' });
     expect(text(byId('workflow-node-chat-unavailable'))).toBe(NODE_CHAT_NO_RUN);
     expect(NODE_CHAT_NO_RUN).toBe(
-      "Execute the workflow, then chat with this agent about this step's data.",
+      "Execute the user journey, then chat with this agent persona about this step's data.",
     );
     expect(byId('workflow-node-chat')).toBeNull();
     expect(api.getNodeChat).not.toHaveBeenCalled();
@@ -162,12 +162,68 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
   it('has a labelled box; Send is disabled while it is blank', () => {
     open();
     const label = el().querySelector(`label[for="${input().id}"]`);
-    expect(text(label)).toBe("Ask this step's agent");
+    expect(text(label)).toBe("Ask this step's agent persona");
+    expect(byId('workflow-node-chat-composer')).toBeTruthy();
     expect(send().disabled).toBe(true);
     type('   ');
     expect(send().disabled).toBe(true);
     type('How many rows?');
     expect(send().disabled).toBe(false);
+  });
+
+  it('labels the composer with the persona, and the reply card with "Name · Role"', () => {
+    api.getNodeChat.and.returnValue(of({ messages: [QUESTION, REPLY] }));
+    open();
+    fixture.componentRef.setInput('agentName', 'Ryan');
+    fixture.componentRef.setInput('agentRole', 'Data analyst');
+    fixture.detectChanges();
+    expect(text(byId('workflow-node-chat-composer-label'))).toBe(
+      'Ask Ryan about this step',
+    );
+    expect(text(byId('workflow-node-chat-persona-label'))).toBe('Ryan · Data analyst');
+    fixture.componentRef.setInput('agentRole', '');
+    fixture.detectChanges();
+    expect(text(byId('workflow-node-chat-persona-label'))).toBe('Ryan');
+  });
+
+  describe('suggested questions', () => {
+    const QS = ['What is the top row?', 'How many rows?'];
+    const chips = () => all('workflow-ndv-suggestion');
+
+    it('show only when ready and empty, in a labelled group', () => {
+      open();
+      fixture.componentRef.setInput('suggestions', QS);
+      fixture.detectChanges();
+      expect(chips().map((c) => text(c))).toEqual(QS);
+      expect(
+        el().querySelector('[role="group"]')?.getAttribute('aria-label'),
+      ).toBe('Suggested questions');
+    });
+
+    it('are hidden once there are messages, and while no run can be chatted about', () => {
+      api.getNodeChat.and.returnValue(of({ messages: [QUESTION] }));
+      open();
+      fixture.componentRef.setInput('suggestions', QS);
+      fixture.detectChanges();
+      expect(chips().length).toBe(0);
+      fixture.destroy();
+      open({ state: 'running' } as NodeChatAvailability);
+      fixture.componentRef.setInput('suggestions', QS);
+      fixture.detectChanges();
+      expect(chips().length).toBe(0);
+    });
+
+    it('a click puts the question in the box, ready to send', () => {
+      open();
+      fixture.componentRef.setInput('suggestions', QS);
+      fixture.detectChanges();
+      chips()[1].click();
+      fixture.detectChanges();
+      expect(input().value).toBe(QS[1]);
+      send().click();
+      fixture.detectChanges();
+      expect(api.last.content).toBe(QS[1]);
+    });
   });
 
   it('Enter sends; Shift+Enter keeps typing', () => {
@@ -231,7 +287,7 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
     expect(turn.signal?.aborted).toBe(true);
     const messages = all('workflow-node-chat-message');
     expect(messages.length).toBe(2);
-    expect(text(messages[1])).toBe('There are Stopped');
+    expect(text(messages[1])).toBe('AgentThere are Stopped');
     // Late events of the stopped turn are ignored.
     turn.handlers.onDone!(REPLY);
     fixture.detectChanges();
@@ -301,5 +357,41 @@ describe('WorkflowNodeChat (ui.md 4.4b; api.md 136, 137)', () => {
     const turn = api.last;
     fixture.destroy();
     expect(turn.signal?.aborted).toBe(true);
+  });
+
+  describe('chat-history navigation (ui.md)', () => {
+    const nav = () => byId('node-chat-history-nav');
+
+    it('appears with two user messages, not with one', () => {
+      api.getNodeChat.and.callFake(() =>
+        of({ messages: [QUESTION, REPLY] as NodeChatMessage[] }),
+      );
+      open();
+      expect(nav()).toBeNull();
+
+      api.getNodeChat.and.callFake(() =>
+        of({
+          messages: [
+            QUESTION,
+            REPLY,
+            { ...QUESTION, id: 'm-3', content: 'And the second?' },
+          ] as NodeChatMessage[],
+        }),
+      );
+      fixture.destroy();
+      open();
+      expect(nav()).not.toBeNull();
+      expect(all('node-chat-history-tick').length).toBe(2);
+      const items = Array.from(
+        el().querySelectorAll('[data-testid^="node-chat-history-item-"]'),
+      );
+      expect(items.map((i) => text(i))).toEqual([
+        'Which SQL did you run?',
+        'And the second?',
+      ]);
+      expect(
+        el().querySelectorAll('[data-history-id]').length,
+      ).toBe(2);
+    });
   });
 });

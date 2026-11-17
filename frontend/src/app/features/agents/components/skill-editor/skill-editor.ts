@@ -39,9 +39,9 @@ export class SkillEditor implements OnInit, OnDestroy {
 
   readonly limits = SKILL_FIELD_LIMITS;
   readonly bodyHint =
-    'Type / to link a tool. A skill can link tools only; the agent gets a linked tool when it links this skill.';
+    'Type / to link a tool. A skill can link tools only; the agent persona gets a linked tool when it links this skill.';
   readonly descriptionHint =
-    'Start with "Use when…". The agent reads the skill only when a question matches it.';
+    'Start with "Use when…". The agent persona reads the skill only when a question matches it.';
 
   readonly editor = inject(SkillEditorService);
   /** The skill to edit; null opens an empty editor for a new one. */

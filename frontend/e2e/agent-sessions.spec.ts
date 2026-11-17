@@ -62,20 +62,20 @@ test.afterEach(async () => {
 async function openHub(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Agent personas', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
 }
 
 async function openWorkflows(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Workflows', exact: true })
+    .getByRole('button', { name: 'User journeys', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
   ).toBeVisible();
 }
 

@@ -106,8 +106,13 @@
     }
   </div>
 } @else if (msg.visual; as visual) {
-  <!-- Visual event card -->
+  <!-- Visual event card: the host's artifact card, else the compact strip -->
   <div class="group">
+    @if (visualCard(); as card) {
+      <ng-container
+        *ngTemplateOutlet="card; context: { $implicit: visual }"
+      />
+    } @else {
     <div
       class="flex items-center gap-3 rounded-xl border border-border bg-surface-muted px-3 py-2.5"
     >
@@ -139,6 +144,7 @@
         View
       </button>
     </div>
+    }
     @if (
       msg.content &&
       !msg.content.startsWith("Created interactive visual") &&

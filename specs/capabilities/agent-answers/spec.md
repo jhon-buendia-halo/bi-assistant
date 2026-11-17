@@ -110,7 +110,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 The query inspector (M1-25) shows, for each figure of an answer, which query produced it, and lists the answer's queries with their coverage. Screens and test ids: [ui.md](../../system/ui.md) 4.12.2. Plan: `docs/plans/m1-25-query-inspector.md`.
 
-- R67. A host turns the inspector on with the answer view's `queryInspector` input; the hosts are the Run panel and the run detail page of any workflow run whose answer holds queries ([workflows](../workflows/spec.md) R31). Past chats of any agent are a host too ([past-chats](../past-chats/spec.md) R70); the other hosts (a user agent's Try it) keep R32 and R33 until a later story connects them. With the input off, an answer SHALL render exactly as before.
+- R67. A host turns the inspector on with the answer view's `queryInspector` input; the hosts are the Run panel (in a workflow page's Builder and Business views alike, [workflows](../workflows/spec.md) R38) and the run detail page of any workflow run whose answer holds queries ([workflows](../workflows/spec.md) R31). Past chats of any agent are a host too ([past-chats](../past-chats/spec.md) R70); the other hosts (a user agent's Try it) keep R32 and R33 until a later story connects them. With the input off, an answer SHALL render exactly as before.
 - R68. Each persisted answer MAY carry `evidence`: one entry per `run_readonly_sql` or `sample_rows` record, failed ones included, in `data` order (`index` = the record's index in `data`). An entry holds the coverage, the statement's own top-level LIMIT, the datasource, the row total before the tool's cap and the cap, and, filled later, the size of each table read and the explanation. Coverage is the first rule that applies, read from the SQL with literals masked, at bracket depth 0: `sample_rows` is `sample`; rows cut by the tool's cap is `partial`; a top-level LIMIT (or `FETCH FIRST n`) that the result reached is `top-n` with an ORDER BY before it and `sample` without; anything else is `whole-table` (a LIMIT that returned fewer rows than it allowed cut nothing). A failed record has no coverage. The facts never reach a model: no agent's request changes.
 - R69. In inspector mode each figure of the answer text SHALL carry a numbered source chip (`n` = the record's index + 1, shown as the number alone, `1`, `2`; the word is `Source n` everywhere else) after it, linked in code at render time from the stored rows (at most 200 per record) and never by a model, so it works for every agent and every past answer:
   - the index holds the cells of every record that did not fail: numbers and bigints as they are, strings that read as a number (`1204`, `1,204.5`, `1e3`) once trimmed, and ISO dates (`YYYY-MM-DD…`) as date keys; booleans and other text are skipped, and so is a column that identifies or ranks a row (`id`, `*_id`, `rnk`, `rank`, `rn`, `row_number`);
@@ -389,10 +389,10 @@ Feature: Sessions started from an agent
 
   Scenario: only Answer a Business Question can be run, and no agent page offers a chat
     Given a draft user agent "Claims triage" over "World Cup Core"
-    When I click "Workflows"
+    When I click "User journeys"
     Then I see only the workflow "Answer a Business Question"
     And I see no "Cup historian" and no "Claims triage"
-    When I click "Agents" and show every System agent
+    When I click "Agent personas" and show every System agent
     Then no agent card offers Start chat
 
   Scenario: a Answer a Business Question run can't write: the read-only guard rejects a DELETE

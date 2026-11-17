@@ -16,9 +16,7 @@ jest.mock('../agents/analysis-planner.agent', () => ({
   analysisPlannerAgent: {},
 }));
 jest.mock('../agents/answer-writer.agent', () => ({ answerWriterAgent: {} }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessStepAgent: {},
-}));
+jest.mock('../agents/data-readiness.agent', () => ({}));
 
 import type { AgentExchange } from '../agent-threads';
 import { reviewTemplateWithModel } from './review-website.agents';

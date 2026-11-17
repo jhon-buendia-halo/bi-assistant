@@ -352,9 +352,9 @@ test('the Data Readiness Agent is an Official library agent used by Assess Data 
   page,
 }) => {
   // Given I open Agents.
-  await railItem(page, 'Agents').click();
+  await railItem(page, 'Agent personas').click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
 
   // Then the Data Readiness Agent is listed under Data Foundations, Official.
@@ -375,9 +375,9 @@ test('the Data Readiness Agent is an Official library agent used by Assess Data 
   await expect(card.getByRole('button', { name: /Start chat/ })).toHaveCount(0);
 
   // When I open Workflows, then no one-step agent workflow exists for it.
-  await railItem(page, 'Workflows').click();
+  await railItem(page, 'User journeys').click();
   await expect(
-    page.getByRole('heading', { name: 'Workflows', exact: true }),
+    page.getByRole('heading', { name: 'User journeys', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByTestId('workflow-answer-business-question'),
@@ -425,7 +425,7 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
   );
   await scenarioStep(
     page,
-    'When I open "Assess Data Readiness" from Workflows and click Execute',
+    'When I open "Assess Data Readiness" from User journeys and click Execute',
     async () => {
       await openWorkflowPage(
         page,
@@ -487,7 +487,7 @@ test('Assess Data Readiness profiles, scores and explains one dataset @demo', as
   );
   await scenarioStep(
     page,
-    'And the answer shows the agent explanation and a readiness card',
+    'And the answer shows the agent persona explanation and a readiness card',
     async () => {
       await expect(runAnswer(page)).toContainText(ASSESS_ANSWER);
       const card = runAnswer(page).getByTestId('readiness-card');

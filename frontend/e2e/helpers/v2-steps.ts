@@ -21,9 +21,9 @@ export const V2_ANSWER_LINE =
 export type V2Step = 'plan' | 'answer' | 'quality';
 
 /**
- * The first line of Check data quality's request to Sarah (the Data
- * Readiness Agent): her system prompt is the agent's own, so the call is
- * recognised by its last user message, before any system-prompt routing.
+ * The first line of the former Check data quality step's request to Sarah
+ * (the Data Readiness Agent; the step was replaced by Build visual): kept
+ * for the stubs that still route a call by it.
  */
 export const V2_QUALITY_LINE =
   'Check the data quality behind an answer from Questions to Insights.';
@@ -135,7 +135,7 @@ export function answerFrom(text: string): V2Answer {
 }
 
 /**
- * Sarah's reply to Check data quality: the first listed engine finding
+ * Sarah's reply to the former Check data quality step: the first listed engine finding
  * (`1. [severity] ...` under `Engine findings:`) when there is one, else none.
  */
 export function dataQualityReply(request: string): {

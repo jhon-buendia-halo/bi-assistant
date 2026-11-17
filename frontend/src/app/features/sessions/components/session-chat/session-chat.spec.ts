@@ -72,9 +72,29 @@ describe('SessionChat past chat (past-chats R66)', () => {
     expect(el.querySelector('[data-testid="session-welcome"]')).toBeNull();
   });
 
-  it('lists the questions in the history navigator and copies one', async () => {
+  it('shows the chat-history navigation only from two user questions', async () => {
     const el = await render(answer);
-    expect(el.querySelectorAll('.h-0\\.5').length).toBe(1);
+    expect(
+      el.querySelector('[data-testid="session-chat-history-nav"]'),
+    ).toBeNull();
+    fixture.componentRef.setInput('session', {
+      ...sessionWith(answer),
+      messages: [
+        { role: 'user', content: 'First', at: '2026-01-01T00:00:00.000Z' },
+        answer,
+        { role: 'user', content: 'Second', at: '2026-01-01T00:00:02.000Z' },
+        answer,
+      ],
+    });
+    fixture.detectChanges();
+    const items = Array.from(
+      el.querySelectorAll('[data-testid^="session-chat-history-item-"]'),
+    );
+    expect(items.map((i) => i.textContent?.trim())).toEqual(['First', 'Second']);
+  });
+
+  it('copies a user question', async () => {
+    const el = await render(answer);
     const clipboard = spyOn(navigator.clipboard, 'writeText').and.resolveTo();
     el.querySelector<HTMLButtonElement>('[title="Copy message"]')!.click();
     expect(clipboard).toHaveBeenCalledWith('Ask');

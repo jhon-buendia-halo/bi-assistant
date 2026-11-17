@@ -130,7 +130,7 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
     expect(generate).toHaveBeenCalledWith(RUN, jasmine.any(Function));
   });
 
-  it('shows the visual cards stored on the run, and View opens that visual', () => {
+  it('shows the visual cards stored on the run as artifact cards, and Open opens that visual (visuals R42)', () => {
     const el = mount({
       ...RUN,
       events: [
@@ -148,10 +148,9 @@ describe('RunDetail (workflows R18-R20; plan 1.24.11)', () => {
       ],
     });
     const view = spyOn(TestBed.inject(RunVisualsState), 'view');
-    const card = Array.from(el.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'View',
-    )!;
-    card.click();
+    const card = el.querySelector('[data-testid="run-artifact-card"]')!;
+    expect(card.textContent).toContain('Goals');
+    (card.querySelector('[data-testid="run-artifact-open"]') as HTMLElement).click();
     expect(view).toHaveBeenCalledWith(
       jasmine.objectContaining({ id: 'r1' }),
       jasmine.objectContaining({ visualId: 'vis-1', version: 1 }),

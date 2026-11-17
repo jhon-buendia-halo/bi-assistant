@@ -99,7 +99,11 @@ export const V2_WORKFLOW_NAME = 'Answer a Business Question';
 export async function runQuestion(
   page: Page,
   question: string,
-  options: { datasets?: string[]; fromRunId?: string } = {},
+  options: {
+    datasets?: string[];
+    fromRunId?: string;
+    buildVisual?: boolean;
+  } = {},
 ): Promise<RunResult> {
   return runWorkflow(
     page,
@@ -107,6 +111,8 @@ export async function runQuestion(
     {
       question,
       datasets: options.datasets ?? [WORLD_CUP_DATASET],
+      // Off unless asked: Build visual (workflows R41) makes one more model call.
+      buildVisual: options.buildVisual ?? false,
     },
     options.fromRunId ? { fromRunId: options.fromRunId } : undefined,
   );
@@ -116,7 +122,11 @@ export async function runQuestion(
 export async function runQuestionOk(
   page: Page,
   question: string,
-  options: { datasets?: string[]; fromRunId?: string } = {},
+  options: {
+    datasets?: string[];
+    fromRunId?: string;
+    buildVisual?: boolean;
+  } = {},
 ): Promise<RunResult> {
   const result = await runQuestion(page, question, options);
   expect(result.status, result.body).toBe(200);

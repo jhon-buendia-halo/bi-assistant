@@ -207,19 +207,19 @@ describe('buildHubSections', () => {
 describe('hubEmptyMessage', () => {
   it('prefers the no-match message whenever a query is typed', () => {
     expect(hubEmptyMessage('pinned', 'mine', '  zzz ', [])).toBe(
-      'No agents match "zzz"',
+      'No agent personas match "zzz"',
     );
   });
 
   it('explains an empty Pinned filter, no agents of yours, or a combination with nothing', () => {
     expect(hubEmptyMessage('pinned', 'any', '', [])).toBe(
-      'No pinned agents yet.',
+      'No pinned agent personas yet.',
     );
     expect(hubEmptyMessage('all', 'mine', '', [])).toBe(
-      'No agents of yours yet.',
+      'No agent personas of yours yet.',
     );
     expect(hubEmptyMessage('sql', 'official', '', [])).toBe(
-      'No agents match these filters.',
+      'No agent personas match these filters.',
     );
   });
 

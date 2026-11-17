@@ -78,7 +78,7 @@ describe('AgentSkills', () => {
 
   it('shows no intro line, levels or Skipped section for a built-in agent', async () => {
     const el = await render();
-    expect(text(el)).not.toContain('This agent runs on the assistant');
+    expect(text(el)).not.toContain('This agent persona runs on the assistant');
     expect(text(el)).not.toContain('Restart the app');
     expect(text(el)).not.toContain('Where skills come from');
     expect(text(el)).not.toContain('Skipped');
@@ -89,7 +89,7 @@ describe('AgentSkills', () => {
   it("says a user agent uses the assistant's skills", async () => {
     const el = await render(view, true);
     expect(text(el)).toContain(
-      "This agent runs on the assistant, so it uses the assistant's skills.",
+      "This agent persona runs on the assistant, so it uses the assistant's skills.",
     );
   });
 
@@ -132,7 +132,7 @@ describe('AgentSkills', () => {
 
   it('says so when the agent has no skills', async () => {
     const el = await render({ ...view, skills: [] });
-    expect(text(el)).toContain('This agent has no skills.');
+    expect(text(el)).toContain('This agent persona has no skills.');
     expect(el.querySelector('[data-testid^="agent-skill-"]')).toBeNull();
   });
 

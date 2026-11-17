@@ -2,8 +2,9 @@
   <!-- Period and the price-table note -->
   <div class="flex flex-wrap items-end justify-between gap-3">
     <p class="max-w-[640px] text-[13px] text-fg-muted">
-      Estimated LLM cost of the app's agents, in USD, from the same price table
-      as Monitoring. Days and months follow this computer's time zone.
+      Estimated LLM cost of the app's agent personas, in USD, from the same
+      price table as Monitoring. Days and months follow this computer's time
+      zone.
     </p>
     <label class="flex w-44 flex-col gap-1">
       <span class="field-label">Period</span>
@@ -80,7 +81,9 @@
           class="card flex flex-col gap-1 px-4 py-3"
           data-testid="kpi-per-run"
         >
-          <span class="text-[12px] text-fg-muted">Avg per workflow run</span>
+          <span class="text-[12px] text-fg-muted"
+            >Avg per user journey run</span
+          >
           <span
             class="text-[22px] leading-7 font-light text-fg-strong tabular-nums"
             >{{
@@ -219,7 +222,7 @@
           data-testid="costs-per-workflow"
         >
           <h3 class="text-[14px] font-medium text-fg-strong">
-            Cost per workflow run
+            Cost per user journey run
             <span class="font-normal text-fg-muted">· {{ periodLabel() }}</span>
           </h3>
           <div class="overflow-x-auto">
@@ -228,7 +231,9 @@
                 <tr
                   class="border-b border-border bg-surface-muted text-fg-muted"
                 >
-                  <th scope="col" class="px-3 py-2 font-medium">Workflow</th>
+                  <th scope="col" class="px-3 py-2 font-medium">
+                    User journey
+                  </th>
                   <th scope="col" class="px-3 py-2 text-right font-medium">
                     Runs
                   </th>
@@ -260,7 +265,7 @@
                       {{ w.name }}
                       @if (w.kind === "none") {
                         <span class="text-[11px] text-fg-muted"
-                          >· chats, the agent panel, previews</span
+                          >· chats, the agent persona panel, previews</span
                         >
                       }
                     </td>
@@ -310,7 +315,7 @@
             </h3>
             @if (topRuns().length === 0) {
               <p class="px-2 py-1.5 text-[12px] text-fg-muted">
-                No workflow runs in this period.
+                No user journey runs in this period.
               </p>
             } @else {
               <ol class="flex flex-col">
@@ -426,7 +431,11 @@
           <ng-container
             *ngTemplateOutlet="
               rankCard;
-              context: { $implicit: byAgent(), title: 'By agent', id: 'agent' }
+              context: {
+                $implicit: byAgent(),
+                title: 'By agent persona',
+                id: 'agent',
+              }
             "
           />
         </div>

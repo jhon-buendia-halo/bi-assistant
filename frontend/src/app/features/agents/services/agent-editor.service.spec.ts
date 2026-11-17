@@ -94,7 +94,7 @@ describe('AgentEditorService', () => {
 
   it('opens a new agent empty, with Save disabled and Publish shown', async () => {
     await open(null);
-    expect(editor.title()).toBe('New agent');
+    expect(editor.title()).toBe('New agent persona');
     expect(editor.changed()).toBeFalse();
     expect(editor.canSave()).toBeFalse();
     expect(editor.showPublish()).toBeTrue();

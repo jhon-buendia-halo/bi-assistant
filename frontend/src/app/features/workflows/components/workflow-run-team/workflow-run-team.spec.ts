@@ -37,6 +37,38 @@ describe('WorkflowRunTeam (ui.md 4.4b, Agents at work)', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  it('names each agent persona with its role, and none when it has no role (R39)', () => {
+    const el = render([
+      story('write', 'Jessica', 'done', {
+        agent: {
+          key: 'answer-writer',
+          name: 'Jessica',
+          role: 'Insights Writer',
+        },
+        line: 'Done · 5.8 s',
+        durationMs: 5800,
+      }),
+      story('plan', 'Olivia', 'done', {
+        line: 'Done · 1.2 s',
+        durationMs: 1200,
+      }),
+    ]);
+    const write = el.querySelector('[data-testid="workflow-run-team-write"]')!;
+    expect(
+      write
+        .querySelector('[data-testid="workflow-run-team-role"]')
+        ?.textContent?.trim(),
+    ).toBe('· Insights Writer');
+    // Name, role, step and duration, in that order.
+    expect(write.textContent).toMatch(
+      /Jessica\s*·\s*Insights Writer\s*·\s*write\s*·\s*5\.8 s/,
+    );
+    const plan = el.querySelector('[data-testid="workflow-run-team-plan"]')!;
+    expect(
+      plan.querySelector('[data-testid="workflow-run-team-role"]'),
+    ).toBeNull();
+  });
+
   it('shows nothing before a run', () => {
     const el = render([story('plan', 'Olivia', 'idle')]);
     expect(el.querySelector('[data-testid="workflow-run-team"]')).toBeNull();

@@ -39,6 +39,7 @@ function earlierRun(overrides: Partial<WorkflowRunDoc> = {}): WorkflowRunDoc {
         output: { plan: PLAN },
       },
       { id: 'analyse', title: 'Analyse', status: 'success', attempt: 1 },
+      // A run stored before Check data quality left the workflow.
       {
         id: 'check-data-quality',
         title: 'Check data quality',
@@ -77,7 +78,7 @@ function earlierRun(overrides: Partial<WorkflowRunDoc> = {}): WorkflowRunDoc {
   } as WorkflowRunDoc;
 }
 
-describe('askRefusal (api.md 118; workflows R38)', () => {
+describe('askRefusal (api.md 118; workflows R40)', () => {
   it('lets a step that ran in a run of Answer a Business Question be asked', () => {
     expect(
       askRefusal('answer-business-question', 'write-answer', earlierRun()),
@@ -121,14 +122,7 @@ describe('askHostOf (agents.md 5.21)', () => {
     expect(host.contextBlock).toContain('step "Analyse" (analyse)');
   });
 
-  it("binds Sarah to the host, without the Analyst's thread", () => {
-    const host = askHostOf(earlierRun(), 'check-data-quality');
-    expect(host.agentKey).toBe('data-readiness');
-    expect(host.continuesThreads).toBe(false);
-    expect(host.contextBlock).toContain('Check data quality');
-  });
-
-  it("gives Jessica the earlier answer's records, plan, quality findings and notes", () => {
+  it("gives Jessica the earlier answer's records, plan, the quality findings of a run stored before that check left and notes", () => {
     const host = askHostOf(earlierRun(), 'write-answer');
     expect(host.ask.earlier).toEqual({
       plan: PLAN,

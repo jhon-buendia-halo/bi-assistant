@@ -260,6 +260,38 @@ export class VisualizationService {
   }
 
   /**
+   * New visual (v1) from an answer that is not stored yet (agents.md 5.11:
+   * Answer a Business Question's Build visual step): the question, the
+   * answer and its records are laid on the transcript as they will be
+   * stored, the answer at `at`, so the visual reads the same context as one
+   * built from the stored answer, and its later actions find that answer.
+   */
+  async createFromAnswer(
+    session: SessionDoc,
+    source: {
+      question: string;
+      answer: string;
+      at: string;
+      data: ToolDataRecord[];
+    },
+  ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
+    const asked = session.messages.at(-1);
+    const messages: ChatMessage[] = [
+      ...session.messages,
+      ...(asked?.role === 'user'
+        ? []
+        : [{ role: 'user' as const, content: source.question, at: source.at }]),
+      {
+        role: 'assistant',
+        content: source.answer,
+        at: source.at,
+        ...(source.data.length ? { data: source.data } : {}),
+      },
+    ];
+    return this.create({ ...session, messages }, source.at);
+  }
+
+  /**
    * New visual (v1) from a bundle that is already written (agents.md 5.17:
    * the mock a Dashboard Image to Artifact run built). No designer call and no
    * source answer: the frame shows the visual and its description only.

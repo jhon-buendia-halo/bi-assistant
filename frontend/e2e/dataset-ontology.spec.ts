@@ -50,7 +50,7 @@ function rail(page: Page, name: string): Locator {
 async function openDatasets(page: Page): Promise<void> {
   // The rail keeps an area's current view when it is already shown (the
   // dataset editor included), so leave the area first to land on the list.
-  await rail(page, 'Agents').click();
+  await rail(page, 'Agent personas').click();
   await rail(page, 'Datasets').click();
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
 }

@@ -87,6 +87,9 @@ export const GAP_ADVISOR_AGENT_KEY = 'gap-advisor';
 /** Its name: the Recommend fixes step's agent. */
 export const GAP_ADVISOR_AGENT_NAME = 'Gap Advisor';
 
+/** Ryan, the visual designer: Generate interactive visuals and Build visual (agents.md 5.11). */
+export const VISUALIZATION_AGENT_KEY = 'visualization';
+
 /** The registry keys of the System agents: the app calls them itself. */
 export const SYSTEM_AGENT_KEYS: readonly string[] = [
   ANALYSIS_PLANNER_AGENT_KEY,
@@ -100,7 +103,7 @@ export const SYSTEM_AGENT_KEYS: readonly string[] = [
   REQUIREMENTS_ANALYST_AGENT_KEY,
   LAYER_MAPPER_AGENT_KEY,
   GAP_ADVISOR_AGENT_KEY,
-  'visualization',
+  VISUALIZATION_AGENT_KEY,
   'sql-fixer',
   'sql-verifier',
   'assistant-eval-judge',

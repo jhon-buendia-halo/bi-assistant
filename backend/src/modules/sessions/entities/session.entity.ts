@@ -12,7 +12,7 @@ export interface ClarificationOption {
 
 /**
  * A follow-up that asks one agent of Answer a Business Question alone
- * (workflows R38; agents.md 5.21): the asked step and, for Write answer,
+ * (workflows R40; agents.md 5.21): the asked step and, for Write answer,
  * what the earlier run gives it.
  */
 export interface AskedStep {
@@ -380,11 +380,11 @@ export interface SessionDoc {
    */
   continuesThreads?: boolean;
   /**
-   * A run host of Answer a Business Question whose input ticked Check data
-   * quality (agents.md 5.11): its turn takes the branch to that step. In
+   * A run host of Answer a Business Question whose input ticked Build a
+   * visual (agents.md 5.11): its turn takes the branch to Build visual. In
    * memory only, like the host.
    */
-  checkDataQuality?: true;
+  buildVisual?: true;
   /**
    * A run host of Dashboard Image to Artifact (agents.md 5.17): the path of the
    * run's input image in the host's workspace. In memory only, like the
@@ -410,7 +410,7 @@ export interface SessionDoc {
   inputValues?: Record<string, string | number | boolean | string[]>;
   /**
    * A follow-up run's host that asks one agent of Answer a Business
-   * Question alone (workflows R38; agents.md 5.21): the asked step, and for
+   * Question alone (workflows R40; agents.md 5.21): the asked step, and for
    * Write answer what the earlier run gives it. Its turn runs on the
    * `ask-agent` engine. In memory only, like the host.
    */

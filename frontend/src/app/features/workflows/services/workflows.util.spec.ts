@@ -12,6 +12,8 @@ import {
   runOutputEntries,
   runStatusLine,
   runStepStatusLabel,
+  personaInList,
+  personaLabel,
   workflowKindLabel,
   workflowUsesLabel,
   workflowsEmptyMessage,
@@ -97,7 +99,7 @@ describe('workflows.util', () => {
   describe('workflowsEmptyMessage', () => {
     it('names the query when nothing matches', () => {
       expect(workflowsEmptyMessage(' zzz ', [])).toBe(
-        'No workflows match "zzz"',
+        'No user journeys match "zzz"',
       );
     });
 
@@ -133,6 +135,31 @@ describe('workflows.util', () => {
           }),
         ),
       ).toBe('Uses A, B');
+    });
+
+    it('names each agent persona with its role (R39)', () => {
+      expect(
+        workflowUsesLabel(
+          workflow('x', 'X', {
+            agents: [
+              {
+                key: 'insights-analyst',
+                name: 'Michael',
+                role: 'Insights Analyst',
+              },
+              { key: 'answer-writer', name: 'Jessica', role: '' },
+            ],
+          }),
+        ),
+      ).toBe('Uses Michael (Insights Analyst), Jessica');
+      expect(personaLabel({ name: 'Michael', role: 'Insights Analyst' })).toBe(
+        'Michael, Insights Analyst',
+      );
+      expect(personaLabel({ name: 'Michael', role: '  ' })).toBe('Michael');
+      expect(personaLabel({ name: 'Michael' })).toBe('Michael');
+      expect(personaInList({ name: 'Zoe', role: 'Image Analyst' })).toBe(
+        'Zoe (Image Analyst)',
+      );
     });
   });
 

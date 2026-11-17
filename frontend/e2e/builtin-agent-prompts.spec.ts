@@ -27,7 +27,7 @@ const V2 = 'Michael';
 const QUESTION = 'Who won in 2022?';
 const DONE_LINE = 'Always end an answer with the word Done.';
 const BANNER =
-  'Changes apply to every session and agent as soon as you save. Run the evals to check them.';
+  'Changes apply to every session and agent persona as soon as you save. Run the evals to check them.';
 const EVIDENCE = path.resolve(__dirname, '../../evidence/1.14.11');
 
 let stub: LlmStub;
@@ -43,14 +43,14 @@ test.afterEach(async () => {
 /** Opens a built-in agent's page from the hub (System agents sit behind "Show more"). */
 async function openAgent(page: Page, key: string, name: string) {
   // A run sent through the API leaves the page where it was: go back to the hub first.
-  const back = page.getByRole('button', { name: 'All agents' });
+  const back = page.getByRole('button', { name: 'All agent personas' });
   if (await back.isVisible()) await back.click();
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Agent personas', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
   await page.getByTestId(`agent-${key}`).click();
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -63,7 +63,7 @@ async function openPromptTab(page: Page): Promise<void> {
       .getByTestId('agent-prompt-view')
       .or(
         page.getByText(
-          'This agent builds its prompt at request time, so there is no static template to show.',
+          'This agent persona builds its prompt at request time, so there is no static template to show.',
         ),
       ),
   ).toBeVisible();
@@ -164,7 +164,7 @@ test("I edit the assistant's prompt, and Reset restores it", async ({
   ).toBeVisible();
   await expect(modifiedChip(page)).toBeVisible();
   await page
-    .getByRole('button', { name: 'All agents' })
+    .getByRole('button', { name: 'All agent personas' })
     .scrollIntoViewIfNeeded();
   await page.screenshot({
     path: path.join(EVIDENCE, 'assistant-system-prompt-modified.png'),

@@ -23,6 +23,7 @@ import {
   REQUIREMENTS_ANALYST_AGENT_KEY,
   RESULT_EXPLORER_AGENT_KEY,
   SITE_REVIEWER_AGENT_KEY,
+  VISUALIZATION_AGENT_KEY,
   SYSTEM_AGENT_KEYS,
 } from '../agent-constants';
 import {
@@ -156,16 +157,16 @@ const CAREFUL_FIELD: WorkflowInputField = {
 };
 
 /**
- * Answer a Business Question's optional data-quality check (agents.md
- * 5.11): the branch to Check data quality, where Sarah reviews the tables
- * the analysis read. Off unless ticked.
+ * Answer a Business Question's visual (agents.md 5.11, workflows R41): the
+ * branch to Build visual, where Ryan designs an interactive visual from the
+ * answer's query results. On unless unticked.
  */
-const CHECK_DATA_QUALITY_FIELD: WorkflowInputField = {
-  name: 'checkDataQuality',
-  label: 'Check data quality: Sarah reviews the tables the analysis used',
+const BUILD_VISUAL_FIELD: WorkflowInputField = {
+  name: 'buildVisual',
+  label: 'Build a visual: Ryan charts the results of the answer',
   type: 'boolean',
   required: false,
-  default: false,
+  default: true,
 };
 
 /**
@@ -223,19 +224,19 @@ export const CODE_WORKFLOWS: readonly CodeWorkflowSource[] =
         { ...QUESTION_FIELD, maxLength: QUESTION_MAX_LENGTH },
         IMAGES_FIELD,
         DATASETS_FIELD,
-        CHECK_DATA_QUALITY_FIELD,
+        BUILD_VISUAL_FIELD,
       ],
       steps: ANSWER_BUSINESS_QUESTION_STEPS,
       // Zoe reads the reference images when there are some; Nathan reads a
       // follow-up over an earlier result; Olivia plans and Jessica writes
-      // the answer; Michael analyses; Sarah checks the data quality when the
-      // run asks for it.
+      // the answer; Michael analyses; Ryan builds the visual unless the run
+      // turns it off.
       stepAgents: {
         [READ_IMAGES_STEP_ID]: IMAGE_READER_AGENT_KEY,
         'interpret-follow-up': RESULT_EXPLORER_AGENT_KEY,
         plan: ANALYSIS_PLANNER_AGENT_KEY,
-        'check-data-quality': DATA_READINESS_AGENT_KEY,
         'write-answer': ANSWER_WRITER_AGENT_KEY,
+        'build-visual': VISUALIZATION_AGENT_KEY,
       },
       edges: ANSWER_BUSINESS_QUESTION_EDGES,
       bar: 'steps',
@@ -497,8 +498,8 @@ export interface AgentRunTurn {
   datasets?: string[];
   /** Careful mode (the Assistant and user agents). */
   careful: boolean;
-  /** Answer a Business Question's `checkDataQuality`: Check data quality runs. */
-  checkDataQuality?: true;
+  /** Answer a Business Question's `buildVisual`: Build visual runs. */
+  buildVisual?: true;
   /** Map a Dashboard to Data's `artifact`: the saved dashboard it maps. */
   artifact?: string;
 }
@@ -517,9 +518,7 @@ export function agentRunTurn(values: WorkflowInputValues): AgentRunTurn {
     question: text(values['question']) || text(values['url']),
     ...(datasets ? { datasets } : {}),
     careful: values['careful'] === true,
-    ...(values['checkDataQuality'] === true
-      ? { checkDataQuality: true as const }
-      : {}),
+    ...(values['buildVisual'] === true ? { buildVisual: true as const } : {}),
     ...(text(values['artifact']) ? { artifact: text(values['artifact']) } : {}),
   };
 }

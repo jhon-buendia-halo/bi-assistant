@@ -246,7 +246,16 @@ const SESSIONS: Record<Workflow, Partial<SessionDoc>> = {
 };
 
 /** The v2 run input that asks what the chat message asks. */
-const V2_INPUT = { question: 'Who won?', datasets: ['World Cup'] };
+// Build visual is on unless the run turns it off (workflows R41): the runs
+// below turn it off; the Build visual runs set it.
+const V2_INPUT = {
+  question: 'Who won?',
+  datasets: ['World Cup'],
+  buildVisual: false,
+};
+// What the engine is given: the flag only picks the branch (the runtime's
+// `buildsVisual`), it is not an input of the workflow's steps.
+const V2_ENGINE_INPUT = { question: 'Who won?', datasets: ['World Cup'] };
 
 interface StreamCall {
   input: unknown;
@@ -268,6 +277,8 @@ interface BuildOptions {
   session?: Partial<SessionDoc>;
   /** The data-readiness service, for Assess Data Readiness runs. */
   readiness?: object;
+  /** The visualization service's designer (`createFromAnswer`), for Build visual. */
+  visuals?: object;
   /** The datasources service's guarded read-only SQL (roadmap 1.28.11). */
   runReadOnlySql?: jest.Mock;
 }
@@ -483,7 +494,7 @@ function build(options: BuildOptions = {}) {
     {
       getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
     } as never,
-    {} as never,
+    (options.visuals ?? {}) as never,
     {
       referenceBlock: jest.fn().mockResolvedValue(undefined),
       isVerifiedSql: jest.fn().mockResolvedValue(false),
@@ -1051,7 +1062,7 @@ describe('the run host (agents.md 5.14)', () => {
       'read-images:skipped',
       'clarify:skipped',
       // Not asked for (agents.md 5.11).
-      'check-data-quality:skipped',
+      'build-visual:skipped',
       'page-result:skipped',
       'page-answer:skipped',
     ]);
@@ -1064,8 +1075,8 @@ describe('the run host (agents.md 5.14)', () => {
       'clarify:skipped',
       'analyse:success',
       'validate:success',
-      'check-data-quality:skipped',
       'write-answer:success',
+      'build-visual:skipped',
       'wrap-up:success',
       'page-result:skipped',
       'page-answer:skipped',
@@ -1152,114 +1163,79 @@ function readinessService() {
   };
 }
 
-describe('a v2 run that checks data quality (agents.md 5.11)', () => {
-  /** v2's Analyse turn: one query on a fully named table. */
-  const QUALIFIED_ANALYSE_CHUNKS = [
-    {
-      type: 'tool-call',
-      payload: {
-        toolCallId: 'q0',
-        toolName: 'run_readonly_sql',
-        args: {
-          sql: 'SELECT winner, count(*) FROM wc.public.matches GROUP BY winner',
-          rationale: 'Wins per team.',
-        },
-      },
-    },
-    {
-      type: 'tool-result',
-      payload: {
-        toolCallId: 'q0',
-        toolName: 'run_readonly_sql',
-        result: { columns: ['winner'], rows: [{ winner: 'Brazil' }] },
-      },
-    },
-    { type: 'text-delta', payload: { text: 'A note.' } },
-  ];
+describe('a v2 run that builds a visual (agents.md 5.11, workflows R41)', () => {
+  const BUILT = {
+    id: 'v-1',
+    title: 'Wins per team',
+    description: 'Wins',
+    path: 'visuals/v-1',
+    sourceMessageAt: '2026-01-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    currentVersion: 1,
+    versions: [],
+  };
 
-  it('assesses the tables the queries read, lets Sarah pick what affects the answer, and hands it to Write answer with the report card', async () => {
-    const readiness = readinessService();
-    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+  it('designs the visual from the written answer and the rows, stores it with the session and logs its creation beside the answer', async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockResolvedValue({ metadata: BUILT, bundle: {} });
+    const ctx = build({ visuals: { createFromAnswer } });
     await ctx.sessions.onModuleInit();
-    const checkDataQuality = jest.fn().mockResolvedValue({
-      issues: [{ finding: 1, impact: 'Some wins may be missing.' }],
-      stopped: false,
-    });
-    (ctx.mastra as Record<string, unknown>)['checkDataQuality'] =
-      checkDataQuality;
-    const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
+    const { run } = await runOf(ctx, { ...V2_INPUT, buildVisual: true });
 
     expect(run.status).toBe('success');
-    expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
-      'check-data-quality:success',
+    const stepLines = run.steps.map((s) => `${s.id}:${s.status}`);
+    expect(stepLines.indexOf('build-visual:success')).toBe(
+      stepLines.indexOf('write-answer:success') + 1,
     );
-    // Only the table the SQL read, recorded with the run.
-    expect(readiness.prepare).toHaveBeenCalledWith({
-      datasourceId: 'ds-pg',
-      entities: ['wc.public.matches'],
-      runId: run.id,
-    });
-    expect(readiness.saveReport).toHaveBeenCalledTimes(1);
-    // Sarah reads the SQL and the engine's findings, numbered.
-    expect(checkDataQuality).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sql: ['SELECT winner, count(*) FROM wc.public.matches GROUP BY winner'],
-        tables: ['wc.public.matches'],
-        findings: [
-          expect.objectContaining({
-            entity: 'public.matches',
-            field: 'winner',
-            severity: 'low',
-          }),
-        ],
-      }),
-      expect.anything(),
+    expect(createFromAnswer).toHaveBeenCalledTimes(1);
+    const [, source] = createFromAnswer.mock.calls[0] as [
+      unknown,
+      { question: string; answer: string; at: string; data: unknown[] },
+    ];
+    expect(source.question).toBe('Who won?');
+    expect(source.answer).toBe(run.answer?.content);
+    expect(source.data.length).toBeGreaterThan(0);
+    // The answer is stored at the time the visual names as its source.
+    expect(run.answer?.at).toBe(source.at);
+    expect((run.visualizations ?? []).map((v) => v.id)).toEqual(['v-1']);
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({ visual: { visualId: 'v-1', title: 'Wins per team' } });
+    expect(run.events?.at(-1)?.content).toContain(
+      'Created interactive visual "Wins per team" (v1).',
     );
-    // Jessica gets the issue as a finding, after Validate's.
-    const written = ctx.mastra.writeAnswer.mock.calls[0][0] as {
-      findings: { check: string; passed: boolean; detail: string }[];
-    };
-    expect(written.findings.at(-1)).toEqual({
-      check: 'Data quality: public.matches.winner (completeness, low)',
-      passed: false,
-      detail: '2% of winner is null Some wins may be missing.',
-    });
-    // The answer carries the scoped report's card.
-    expect(run.answer).toMatchObject({
-      readinessReport: { reportId: 'r-wc' },
+  });
+
+  it('keeps the answer when the design fails, saying why in the step', async () => {
+    const createFromAnswer = jest
+      .fn()
+      .mockRejectedValue(new Error('The designer is down'));
+    const ctx = build({ visuals: { createFromAnswer } });
+    await ctx.sessions.onModuleInit();
+    const { run } = await runOf(ctx, { ...V2_INPUT, buildVisual: true });
+    expect(run.status).toBe('success');
+    expect(run.answer?.content).toBe('Brazil won.');
+    expect(run.visualizations ?? []).toEqual([]);
+    expect(
+      run.steps.find((s) => s.id === 'build-visual')?.output,
+    ).toMatchObject({
+      visual: {
+        error: expect.stringContaining('The designer is down') as unknown,
+      },
     });
   });
 
-  it('skips Check data quality when the run does not ask for it', async () => {
-    const readiness = readinessService();
-    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
+  it('skips Build visual when the run turns it off', async () => {
+    const createFromAnswer = jest.fn();
+    const ctx = build({ visuals: { createFromAnswer } });
     await ctx.sessions.onModuleInit();
     const { run } = await runOf(ctx, V2_INPUT);
     expect(run.steps.map((s) => `${s.id}:${s.status}`)).toContain(
-      'check-data-quality:skipped',
+      'build-visual:skipped',
     );
-    expect(readiness.prepare).not.toHaveBeenCalled();
-    expect(run.answer?.readinessReport).toBeUndefined();
-  });
-
-  it('writes the answer anyway when the check cannot run, saying so in a finding', async () => {
-    const readiness = readinessService();
-    readiness.profileSource.mockRejectedValue(
-      new BadGatewayException('connect ECONNREFUSED'),
-    );
-    const ctx = build({ chunks: QUALIFIED_ANALYSE_CHUNKS, readiness });
-    await ctx.sessions.onModuleInit();
-    const { run } = await runOf(ctx, { ...V2_INPUT, checkDataQuality: true });
-    expect(run.status).toBe('success');
-    const written = ctx.mastra.writeAnswer.mock.calls[0][0] as {
-      findings: { check: string; passed: boolean; detail: string }[];
-    };
-    expect(written.findings.at(-1)).toEqual({
-      check: 'Data quality',
-      passed: false,
-      detail:
-        'The data quality of the tables used could not be checked: Could not reach "World Cup DB": connect ECONNREFUSED',
-    });
+    expect(createFromAnswer).not.toHaveBeenCalled();
+    expect(run.visualizations ?? []).toEqual([]);
   });
 });
 
@@ -1636,6 +1612,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
     const started = await runOf(ctx, {
       question: 'Which team was the most dominant?',
       datasets: ['World Cup'],
+      buildVisual: false,
     });
     const { events, run } = await resumeOf(ctx, started.run.id, {
       stepId: 'clarify',
@@ -1663,7 +1640,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:running',
       'wrap-up:success',
       'read-images:skipped',
-      'check-data-quality:skipped',
+      'build-visual:skipped',
       'page-result:skipped',
       'page-answer:skipped',
     ]);
@@ -1683,8 +1660,8 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'clarify:success#1',
       'analyse:success#1',
       'validate:success#1',
-      'check-data-quality:skipped',
       'write-answer:success',
+      'build-visual:skipped',
       'wrap-up:success',
       'page-result:skipped',
       'page-answer:skipped',
@@ -1762,7 +1739,7 @@ describe('a v2 run that waits for the user (api.md 119, 138; ADR-0043)', () => {
       'wrap-up:success',
       'read-images:skipped',
       'clarify:skipped',
-      'check-data-quality:skipped',
+      'build-visual:skipped',
       'page-result:skipped',
       'page-answer:skipped',
     ]);
@@ -2152,7 +2129,7 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
     const paths = ['inputs/images/1.png', 'inputs/images/2.png'];
     expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
       'answer-business-question',
-      { ...V2_INPUT, images: paths },
+      { ...V2_ENGINE_INPUT, images: paths },
       expect.anything(),
     );
     // Each stored image is loaded from the run's workspace, in order, and
@@ -2200,7 +2177,7 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
     // The engine's input has no images field at all.
     expect(ctx.mastra.streamWorkflow).toHaveBeenCalledWith(
       'answer-business-question',
-      V2_INPUT,
+      V2_ENGINE_INPUT,
       expect.anything(),
     );
     expect(ctx.mastra.readImages).not.toHaveBeenCalled();

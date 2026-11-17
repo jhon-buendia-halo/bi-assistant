@@ -6,7 +6,7 @@
     {{ availability().state === "running" ? runningText : noRunText }}
   </p>
 } @else {
-  <div data-testid="workflow-node-chat" class="flex min-h-0 flex-1 flex-col gap-2">
+  <div data-testid="workflow-node-chat" class="flex flex-col gap-3">
     <p
       data-testid="workflow-node-chat-note"
       class="m-0 flex flex-wrap items-center gap-x-1 text-[12px] text-fg-muted"
@@ -17,14 +17,15 @@
       }
     </p>
 
+    <div class="relative flex flex-col">
     <div
       #list
       role="log"
       aria-live="polite"
-      aria-label="Chat with this step's agent"
+      aria-label="Chat with this step's agent persona"
       data-testid="workflow-node-chat-messages"
       tabindex="0"
-      class="flex min-h-[120px] flex-1 flex-col gap-3 overflow-y-auto rounded-lg border border-border p-3"
+      class="flex max-h-[60vh] min-h-[120px] flex-col gap-3 overflow-y-auto rounded-lg border border-border p-3"
     >
       @if (loading()) {
         <p class="m-0 flex items-center gap-2 text-[13px] text-fg-muted">
@@ -38,13 +39,19 @@
             [attr.data-role]="message.role"
             [attr.aria-label]="message.role === 'user' ? 'You' : 'Agent'"
             class="flex flex-col gap-1.5"
+            [attr.data-history-id]="message.role === 'user' ? message.id : null"
             [class.items-end]="message.role === 'user'"
           >
             @if (message.role === "user") {
               <p
-                class="m-0 max-w-[90%] rounded-lg bg-surface-muted px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg"
+                class="m-0 max-w-[85%] self-end rounded-[12px_12px_2px_12px] bg-primary-soft px-3 py-2 text-[13px] break-words whitespace-pre-wrap text-fg-strong"
               >{{ message.content }}</p>
             } @else {
+              <div
+                data-testid="workflow-node-chat-reply"
+                class="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-surface p-3"
+              >
+              <ng-container *ngTemplateOutlet="persona" />
               @if (toolCalls(message).length) {
                 <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
                   @for (call of toolCalls(message); track $index) {
@@ -66,6 +73,7 @@
               @if (message.error; as error) {
                 <p class="m-0 text-[12px] text-on-danger-soft">{{ error }}</p>
               }
+              </div>
             }
           </article>
         } @empty {
@@ -76,8 +84,9 @@
         @if (streaming()) {
           <div
             data-testid="workflow-node-chat-streaming"
-            class="flex flex-col gap-1.5"
+            class="flex w-full flex-col gap-1.5 rounded-lg border border-border bg-surface p-3"
           >
+            <ng-container *ngTemplateOutlet="persona" />
             @if (liveToolCalls().length) {
               <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
                 @for (call of liveToolCalls(); track $index) {
@@ -102,6 +111,14 @@
         }
       }
     </div>
+    <app-chat-history-nav
+      class="absolute top-2 right-4 z-20"
+      [container]="listElement()"
+      [items]="historyItems()"
+      label="Chat history"
+      testIdPrefix="node-chat-history"
+    />
+    </div>
 
     @if (error(); as message) {
       <p
@@ -113,12 +130,36 @@
       </p>
     }
 
+    @if (showSuggestions()) {
+      <div
+        class="flex flex-wrap gap-1.5"
+        role="group"
+        aria-label="Suggested questions"
+      >
+        @for (q of suggestions(); track q) {
+          <button
+            type="button"
+            class="btn btn-outline px-2.5 py-0.5 text-left text-[12px] whitespace-normal"
+            data-testid="workflow-ndv-suggestion"
+            (click)="suggest(q)"
+          >
+            {{ q }}
+          </button>
+        }
+      </div>
+    }
+
     <form
-      class="flex shrink-0 flex-col gap-2"
+      data-testid="workflow-node-chat-composer"
+      class="flex shrink-0 flex-col gap-2 rounded-lg border border-border bg-surface p-3"
       (submit)="$event.preventDefault(); send()"
     >
-      <label for="workflow-node-chat-input" class="sr-only">
-        Ask this step's agent
+      <label
+        for="workflow-node-chat-input"
+        data-testid="workflow-node-chat-composer-label"
+        class="text-[12px] font-medium text-fg-strong"
+      >
+        {{ composerLabel() }}
       </label>
       <textarea
         #composer
@@ -156,6 +197,26 @@
     </form>
   </div>
 }
+
+<ng-template #persona>
+  <div
+    data-testid="workflow-node-chat-persona"
+    class="flex items-center gap-2 text-[12px] text-fg-muted"
+  >
+    @if (agentName()) {
+      <app-agent-avatar
+        [agentKey]="agentKey() || agentName()"
+        [name]="agentName()"
+        [size]="24"
+      />
+    }
+    <span
+      data-testid="workflow-node-chat-persona-label"
+      class="font-medium text-fg-strong"
+      >{{ personaLabel() }}</span
+    >
+  </div>
+</ng-template>
 
 <ng-template #toolCall let-call>
   <li

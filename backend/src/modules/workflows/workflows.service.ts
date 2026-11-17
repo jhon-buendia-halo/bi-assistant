@@ -39,8 +39,8 @@ export interface WorkflowSummary {
   kind: 'code' | 'agent';
   /** `You` only for a draft run's definition. */
   owner: 'Official' | 'You';
-  /** The agents its steps call, in step order, each once. */
-  agents: { key: string; name: string }[];
+  /** The agents its steps call, in step order, each once, with their role (job title; `''` without one). */
+  agents: { key: string; name: string; role: string }[];
   stepCount: number;
   bar: WorkflowBar;
   /** Every workflow runs once on a typed input (`POST /workflows/:id/runs`). */
@@ -66,6 +66,8 @@ export const SYSTEM_PROMPT_CAP = 20_000;
 export interface WorkflowAgentDetail {
   key: string;
   name: string;
+  /** The persona's role (job title), as the agents list gives it; `''` without one. */
+  role: string;
   /** `<provider>/<model>` of the agent's LLM; null when no LLM is set. */
   model: string | null;
   /** The agent's base prompt, at most `SYSTEM_PROMPT_CAP` characters. */
@@ -189,6 +191,7 @@ export class WorkflowsService {
     agent: {
       key: string;
       name: string;
+      role: string;
     },
     toolless = false,
   ): Promise<WorkflowAgentDetail> {
@@ -198,6 +201,7 @@ export class WorkflowsService {
     return {
       key: agent.key,
       name: agent.name,
+      role: agent.role,
       model: llm?.provider && llm.model ? `${llm.provider}/${llm.model}` : null,
       systemPrompt: prompt.slice(0, SYSTEM_PROMPT_CAP),
       ...(prompt.length > SYSTEM_PROMPT_CAP
@@ -251,7 +255,7 @@ function codeEntry(
       // Every agent its steps run, by persona name: Michael, Olivia, Jessica.
       agents: workflowAgentKeys(source).flatMap((key) => {
         const used = builtins.get(key);
-        return used ? [{ key, name: used.name }] : [];
+        return used ? [{ key, name: used.name, role: used.role }] : [];
       }),
       stepCount: source.steps.length,
       bar: source.bar,

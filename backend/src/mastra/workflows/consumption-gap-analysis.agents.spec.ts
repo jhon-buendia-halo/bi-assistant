@@ -26,9 +26,7 @@ jest.mock('../agents/analysis-planner.agent', () => ({
   analysisPlannerAgent: {},
 }));
 jest.mock('../agents/answer-writer.agent', () => ({ answerWriterAgent: {} }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessStepAgent: {},
-}));
+jest.mock('../agents/data-readiness.agent', () => ({}));
 const checkedMappings = jest.fn<unknown, unknown[]>();
 const checkedFixes = jest.fn<unknown, unknown[]>();
 jest.mock('./consumption-gap.gaps', () => ({

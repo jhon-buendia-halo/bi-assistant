@@ -171,8 +171,8 @@ export interface RunHostSpec {
    * run's and earlier turns'.
    */
   contextQueries?: ExplorableQuery[];
-  /** Answer a Business Question's `checkDataQuality` (agents.md 5.11). */
-  checkDataQuality?: true;
+  /** Answer a Business Question's `buildVisual` (agents.md 5.11). */
+  buildVisual?: true;
   /**
    * Dashboard Image to Artifact's input image (agents.md 5.17): written to the
    * host's workspace at `path` before the turn.
@@ -317,6 +317,15 @@ export class SessionsService implements OnModuleInit {
       },
       writeFile: (sessionId, path, data) =>
         writeWorkspaceFile(sessionId, path, data),
+      buildVisual: async (sessionId, source) => {
+        const session = await this.get(sessionId);
+        const { metadata } = await this.visuals.createFromAnswer(
+          session,
+          source,
+        );
+        await this.saveVisualMetadata(session, metadata);
+        return metadata;
+      },
       saveMock: async (sessionId, bundle, instruction) => {
         const session = await this.get(sessionId);
         const { metadata } = await this.visuals.createFromBundle(
@@ -576,7 +585,7 @@ export class SessionsService implements OnModuleInit {
       ...(spec.contextQueries?.length
         ? { contextQueries: spec.contextQueries }
         : {}),
-      ...(spec.checkDataQuality ? { checkDataQuality: true as const } : {}),
+      ...(spec.buildVisual ? { buildVisual: true as const } : {}),
       ...(spec.image ? { inputImage: spec.image.path } : {}),
       ...(spec.inputImages?.length ? { inputImages: spec.inputImages } : {}),
       ...(spec.artifact ? { inputArtifact: spec.artifact } : {}),
@@ -616,14 +625,14 @@ export class SessionsService implements OnModuleInit {
    */
   async draftRunTarget(
     agentId: string,
-  ): Promise<{ name: string; datasets: string[] }> {
+  ): Promise<{ name: string; role: string; datasets: string[] }> {
     const agent = await this.userAgents.get(agentId);
     if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
     const datasets = await this.existingDatasets(agent.draft.datasets);
     if (!datasets.length) {
       throw new BadRequestException('Select at least one dataset to preview');
     }
-    return { name: agent.draft.name, datasets };
+    return { name: agent.draft.name, role: agent.draft.role ?? '', datasets };
   }
 
   /**

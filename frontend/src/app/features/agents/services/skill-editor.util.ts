@@ -70,7 +70,7 @@ export function skillSaveInput(form: SkillForm): SaveSkillInput {
 export function skillDeleteConfirm(name: string, usedBy: string[]): string {
   const question = `Delete "${name}"?`;
   return usedBy.length > 0
-    ? `${question}\n\nAgents using it keep it in their Live version until republished.`
+    ? `${question}\n\nAgent personas using it keep it in their Live version until republished.`
     : question;
 }
 
@@ -78,5 +78,5 @@ export function skillDeleteConfirm(name: string, usedBy: string[]): string {
 export function usedByLabel(agents: string[]): string {
   return agents.length > 0
     ? `Used by ${agents.join(', ')}`
-    : 'Not used by any agent';
+    : 'Not used by any agent persona';
 }

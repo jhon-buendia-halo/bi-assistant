@@ -184,7 +184,7 @@ function ran(events: string[]): string[] {
   return events.filter((event) => !event.startsWith('ask-agent-outcome'));
 }
 
-describe('ask-agent workflow (workflows R38; agents.md 5.21)', () => {
+describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
   it('is registered under its id and never persists a snapshot', () => {
     expect(workflow.id).toBe(ASK_AGENT_WORKFLOW_ID);
     expect(workflow.options?.shouldPersistSnapshot?.()).toBe(false);
@@ -206,12 +206,6 @@ describe('ask-agent workflow (workflows R38; agents.md 5.21)', () => {
     expect(turn.plan).not.toHaveBeenCalled();
     expect(turn.writeAnswer).not.toHaveBeenCalled();
     expect(turn.deliverAnswer).not.toHaveBeenCalled();
-  });
-
-  it('asks Sarah alone through the same agent turn', async () => {
-    const turn = runtime();
-    await ask('check-data-quality', turn);
-    expect(turn.answer).toHaveBeenCalledTimes(1);
   });
 
   it("asks Jessica to write again from the earlier answer's queries", async () => {

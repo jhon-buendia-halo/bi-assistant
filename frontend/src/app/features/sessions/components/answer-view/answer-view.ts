@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
+  TemplateRef,
   computed,
   inject,
   input,
@@ -151,6 +152,14 @@ export class AnswerView {
    * answer repeats from it ("the top 100") gets no figure chip.
    */
   readonly question = input<string | null>(null);
+  /**
+   * How the host shows a visual this message created (visuals R42): a run's
+   * host gives its artifact card, with a live preview and Open; without one,
+   * the compact Created / View strip.
+   */
+  readonly visualCard = input<TemplateRef<{ $implicit: VisualEvent }> | null>(
+    null,
+  );
 
   /** The answer body with a chip after each figure (inspector mode only). */
   readonly inspectorBody = computed<SafeHtml>(() => {

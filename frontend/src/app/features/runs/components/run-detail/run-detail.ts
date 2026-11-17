@@ -33,6 +33,7 @@ import { RunDetailQueryEvidenceApi } from '../../services/run-detail-query-evide
 import { RunVisualsState } from '../../services/run-visuals-state';
 import { RunsState } from '../../services/runs-state';
 import { RunVisual } from '../run-visual/run-visual';
+import { RunArtifactCard } from '../run-artifact-card/run-artifact-card';
 import { WorkflowRun } from '../../../workflows/models/workflow.model';
 
 /** One field of a run's input as `run-detail` shows it. */
@@ -67,7 +68,13 @@ export function runInputEntries(
  */
 @Component({
   selector: 'app-run-detail',
-  imports: [LucideAngularModule, AnswerView, QueryInspector, RunVisual],
+  imports: [
+    LucideAngularModule,
+    AnswerView,
+    QueryInspector,
+    RunVisual,
+    RunArtifactCard,
+  ],
   templateUrl: './run-detail.html',
   providers: [
     { provide: QUERY_EVIDENCE_API, useClass: RunDetailQueryEvidenceApi },

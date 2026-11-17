@@ -54,18 +54,18 @@ function button(page: Page | Locator, name: string): Locator {
 async function openHub(page: Page): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Navigation rail' })
-    .getByRole('button', { name: 'Agents', exact: true })
+    .getByRole('button', { name: 'Agent personas', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
 }
 
 async function openNewAgent(page: Page): Promise<void> {
   await openHub(page);
-  await button(page, 'New agent').click();
+  await button(page, 'New agent persona').click();
   await expect(
-    page.getByRole('heading', { name: 'New agent', exact: true }),
+    page.getByRole('heading', { name: 'New agent persona', exact: true }),
   ).toBeVisible();
 }
 
@@ -175,7 +175,7 @@ test('creates an agent, tries it, publishes it and deletes it', async ({
   await page.getByTestId('agent-delete').click();
   await expect(page.getByText(`Agent "${HISTORIAN}" deleted`)).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
   await expect(page.getByText(HISTORIAN, { exact: true })).toHaveCount(0);
 });
@@ -251,7 +251,7 @@ test('Try it stores nothing: the run leaves no workspace, and Reset clears the r
   await expect(
     page.getByRole('heading', { name: HISTORIAN, exact: true }),
   ).toBeVisible();
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await expect.poll(() => draftRunWorkspaces(appDataDir)).toEqual([]);
   expect(await storedRuns(page)).toEqual([]);
 });
@@ -290,13 +290,13 @@ test('leaving with unsaved changes asks first', async ({ page }) => {
   await button(page, 'Back').click();
   expect(message).toBe('Discard unsaved changes?');
   await expect(
-    page.getByRole('heading', { name: 'New agent', exact: true }),
+    page.getByRole('heading', { name: 'New agent persona', exact: true }),
   ).toBeVisible();
 
   page.once('dialog', (dialog) => void dialog.accept());
   await button(page, 'Back').click();
   await expect(
-    page.getByRole('heading', { name: 'Agents', exact: true }),
+    page.getByRole('heading', { name: 'Agent personas', exact: true }),
   ).toBeVisible();
   await expect(page.getByText(HISTORIAN, { exact: true })).toHaveCount(0);
 });
@@ -637,7 +637,7 @@ test('an agent saved before links gets a links line', async ({
     'create_visual',
   ]);
   await expect(page.getByTestId('agent-legacy-notice')).toHaveText(
-    'Links were added for what this agent had. Save to keep them.',
+    'Links were added for what this agent persona had. Save to keep them.',
   );
   await expect(page.getByTestId('agent-save')).toBeEnabled();
 });
@@ -697,7 +697,7 @@ test('editing the Job Description in place saves a draft with the link', async (
   await page.getByTestId('prompt-edit').click();
   await expect(
     page.getByText(
-      'Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.',
+      'Type / to link a skill or tool. The agent persona only gets the skills and tools its instructions link.',
     ),
   ).toBeVisible();
   await expect(page.getByTestId('prompt-save')).toBeDisabled();
@@ -762,7 +762,7 @@ test('leaving an unsaved Job Description edit asks first', async ({ page }) => {
     message = dialog.message();
     void dialog.dismiss();
   });
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await expect.poll(() => message).toBe('Discard unsaved changes?');
   await expect(
     page.getByRole('heading', { name: HISTORIAN, exact: true }),
@@ -781,7 +781,7 @@ test('@demo @story-1.23.23 Try it runs the draft, not the Live version', async (
   });
   await publishAgent(page, id);
 
-  await test.step('Given the Live agent "Cup historian" answers in one sentence', async () => {
+  await test.step('Given the Live agent persona "Cup historian" answers in one sentence', async () => {
     const agent = await apiJson<{ live: { instructions: string } }>(
       page,
       'GET',
@@ -789,7 +789,7 @@ test('@demo @story-1.23.23 Try it runs the draft, not the Live version', async (
     );
     expect(agent.live.instructions).toBe('Answer in one sentence.');
   });
-  await test.step("When I edit the draft's instructions in the agent editor", async () => {
+  await test.step("When I edit the draft's instructions in the agent persona editor", async () => {
     await openEditor(page, id, HISTORIAN);
     await instructionsField(page).fill('Talk like a pirate.');
   });
@@ -843,7 +843,7 @@ test('the Try it tab runs the draft, and Reset starts over', async ({
   await expect(tab.getByTestId('agent-tryit-question')).toHaveValue('');
   await expect(tab.getByText(STUB_ANSWER)).toHaveCount(0);
 
-  await button(page, 'All agents').click();
+  await button(page, 'All agent personas').click();
   await openAgentPage(page, id, HISTORIAN);
   await expect(tab.getByTestId('agent-tryit-question')).toHaveValue('');
   await expect(tab.getByText(STUB_ANSWER)).toHaveCount(0);
@@ -853,7 +853,7 @@ test('Try it needs a dataset', async ({ page }) => {
   const id = await createUserAgent(page, { name: 'Empty historian' });
   await openAgentPage(page, id, 'Empty historian');
   await expect(page.getByTestId('agent-tryit-no-dataset')).toContainText(
-    'Add a dataset to this agent to try it.',
+    'Add a dataset to this agent persona to try it.',
   );
   await expect(page.getByTestId('agent-tryit-edit')).toHaveText('Edit');
 });
@@ -900,7 +900,7 @@ test('the Skills tab shows what is linked and creates a skill inline', async ({
     page.getByTestId(`agent-skill-row-${CHART_STYLE}`),
   ).toContainText('create_visual');
   await expect(
-    page.getByText('Built-in · included in every agent'),
+    page.getByText('Built-in · included in every agent persona'),
   ).toBeVisible();
   await evidence(page, '1.14.9', 'agent-skills-tab-linked.png');
 
@@ -952,7 +952,7 @@ test('@demo @story-1.25.11 Try it shows the evidence of its answer in the query 
   const answer = detailsPanel(page).getByTestId('agent-tryit-answer');
   const sheet = page.getByTestId('query-inspector-sheet');
 
-  await test.step('Given a draft user agent "Cup historian" over "World Cup Core" in its editor', async () => {
+  await test.step('Given a draft user agent persona "Cup historian" over "World Cup Core" in its editor', async () => {
     await openEditor(page, id, HISTORIAN);
     await page.getByTestId('agent-try-it').click();
   });

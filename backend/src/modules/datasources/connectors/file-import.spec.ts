@@ -422,6 +422,80 @@ describe('a total row under a numeric first column (story 1.31.7 finding)', () =
   });
 });
 
+describe("a cell that does not fit its column's guessed type (census finding F1)", () => {
+  it('types each column from all of its rows: N/A is empty, text under an empty first cell is text, dates and booleans keep their type', async () => {
+    const path = join(dir, 'census.xlsx');
+    const wb = new Workbook();
+    const ws = wb.addWorksheet('Demographics Data');
+    ws.addRow(['Name', 'Salary', 'Hired', 'Tier', 'Active', 'Bonus']);
+    ws.addRow(['Ann', 50000, new Date('2020-01-15'), null, true, 100]);
+    ws.addRow([
+      'Bob',
+      'N/A',
+      new Date('2021-03-01'),
+      'Employee Only',
+      false,
+      'Pending',
+    ]);
+    ws.addRow(['Cy', 61000.5, null, 'Family', true, 300]);
+    await wb.xlsx.writeFile(path);
+    const sheets = await detectSheets(path, 'census.xlsx', options);
+    const [file] = assignEntityKeys([
+      sourceFile('census.xlsx', 'xlsx', sheets),
+    ]);
+    const databasePath = join(dir, 'import-census', 'data.duckdb');
+
+    const [imported] = await importFiles(
+      databasePath,
+      [{ file, path }],
+      options,
+    );
+
+    expect(imported.sheets[0].rowCount).toBe(3);
+    expect(imported.sheets[0].columns).toEqual([
+      { name: 'Name', type: 'VARCHAR' },
+      { name: 'Salary', type: 'DOUBLE' },
+      { name: 'Hired', type: 'DATE' },
+      { name: 'Tier', type: 'VARCHAR' },
+      { name: 'Active', type: 'BOOLEAN' },
+      // A real word under numbers: the column becomes text, no cell lost.
+      { name: 'Bonus', type: 'VARCHAR' },
+    ]);
+    const table = `db.census.${imported.sheets[0].table}`;
+    expect(
+      await query(
+        databasePath,
+        `SELECT Name, Salary, strftime(Hired, '%Y-%m-%d') AS Hired, Tier, Active, Bonus FROM ${table} ORDER BY Name`,
+      ),
+    ).toEqual([
+      {
+        Name: 'Ann',
+        Salary: 50000,
+        Hired: '2020-01-15',
+        Tier: null,
+        Active: true,
+        Bonus: '100',
+      },
+      {
+        Name: 'Bob',
+        Salary: null,
+        Hired: '2021-03-01',
+        Tier: 'Employee Only',
+        Active: false,
+        Bonus: 'Pending',
+      },
+      {
+        Name: 'Cy',
+        Salary: 61000.5,
+        Hired: null,
+        Tier: 'Family',
+        Active: true,
+        Bonus: '300',
+      },
+    ]);
+  });
+});
+
 describe('withoutLastLine', () => {
   it('drops the last non-empty line and the blank lines after it', async () => {
     const from = join(dir, 'tail.csv');

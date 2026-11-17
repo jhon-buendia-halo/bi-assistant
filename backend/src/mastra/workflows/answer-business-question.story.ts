@@ -335,56 +335,36 @@ function validate(step: StoryStep): Told | undefined {
   };
 }
 
-function checkDataQuality(
-  step: StoryStep,
-  context: StoryContext,
-): Told | undefined {
+function buildVisual(step: StoryStep, context: StoryContext): Told | undefined {
   if (step.status === 'skipped') {
-    return context.runInput['checkDataQuality'] === true
+    return context.runInput['buildVisual'] === true
       ? undefined
       : {
-          headline: 'Skipped: the data quality check was off for this run.',
+          headline: 'Skipped: building a visual was off for this run.',
           brief: 'Off for this run',
         };
   }
-  const summary = record(step.output?.['dataQuality']);
-  if (!summary) return undefined;
-  const error = summary['error'];
+  const visual = record(step.output?.['visual']);
+  if (!visual) return undefined;
+  const error = visual['error'];
   if (typeof error === 'string' && error) {
     return {
-      headline: `Could not check the data quality: ${clip(error)}`,
-      brief: 'Could not check',
+      headline: `Could not build a visual: ${clip(error)}`,
+      brief: 'Could not build',
       concern: true,
     };
   }
-  const tables = strings(summary['tables']);
-  const issues = typeof summary['issues'] === 'number' ? summary['issues'] : 0;
-  const skipped = strings(summary['skipped']);
-  const facts: StoryFact[] = [];
-  if (tables.length) {
-    facts.push({
-      label: 'Tables checked',
-      values: capList(tables),
-      code: true,
-    });
+  const skipped = visual['skipped'];
+  if (typeof skipped === 'string' && skipped) {
+    return {
+      headline: `No visual: ${clip(skipped)}`,
+      brief: 'Nothing to chart',
+    };
   }
-  if (skipped.length) {
-    facts.push({
-      label: 'Not assessed',
-      values: capList(skipped),
-      code: true,
-    });
-  }
-  return {
-    headline: `Checked the quality of ${plural(tables.length, 'table')}: ${
-      issues
-        ? `${plural(issues, 'issue')} could affect this answer`
-        : 'nothing found that affects this answer'
-    }.`,
-    ...(facts.length ? { facts } : {}),
-    brief: issues ? plural(issues, 'issue') : 'No issues',
-    ...(issues ? { concern: true as const } : {}),
-  };
+  const title = visual['title'];
+  return typeof title === 'string' && title
+    ? { headline: `Built the visual ${quoted(title)}.`, brief: 'Visual built' }
+    : undefined;
 }
 
 function writeAnswer(step: StoryStep): Told | undefined {
@@ -435,8 +415,8 @@ const TELLERS: Record<
   clarify,
   analyse,
   validate,
-  'check-data-quality': checkDataQuality,
   'write-answer': writeAnswer,
+  'build-visual': buildVisual,
   'wrap-up': wrapUp,
 };
 

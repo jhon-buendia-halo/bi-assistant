@@ -1,13 +1,13 @@
 <div class="flex flex-col">
   <button (click)="back.emit()" class="btn btn-ghost w-fit">
     <lucide-angular [img]="ArrowLeft" [size]="15" />
-    <span>All agents</span>
+    <span>All agent personas</span>
   </button>
 
   @if (loading()) {
     <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading agent…</span>
+      <span>Loading agent persona…</span>
     </div>
   } @else if (error(); as err) {
     <p
@@ -252,7 +252,7 @@
             />
           } @else if (agent.toolDetails.length === 0) {
             <p class="text-[13px] text-fg-muted">
-              This agent runs in a single step with no tools.
+              This agent persona runs in a single step with no tools.
             </p>
           } @else {
             <div class="flex flex-col gap-2">
@@ -342,7 +342,7 @@
             </div>
           } @else {
             <p class="text-[13px] text-fg-muted">
-              This agent is stateless — no memory is configured.
+              This agent persona is stateless — no memory is configured.
             </p>
           }
         }
@@ -524,7 +524,7 @@
             </p>
           } @else if (evalSets().length === 0) {
             <p class="text-[13px] text-fg-muted">
-              No evals configured for this agent yet.
+              No evals configured for this agent persona yet.
             </p>
           } @else {
             <!-- Question sets: each one is a fixture with its own questions -->

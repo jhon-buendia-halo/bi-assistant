@@ -251,6 +251,37 @@
     }
   }
 
+  /* ---------- A run's input form: one labelled section per field (ui.md 4.4b) ---------- */
+
+  .composer-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .composer-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25rem;
+    color: var(--qti-fg-strong);
+  }
+
+  .composer-tag {
+    border-radius: 9999px;
+    padding: 0 0.4375rem;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.125rem;
+    background-color: var(--qti-info-soft);
+    color: var(--qti-on-info-soft);
+  }
+
+  .composer-tag-optional {
+    background-color: var(--qti-neutral-soft);
+    color: var(--qti-on-neutral-soft);
+  }
+
   .field-label {
     font-size: 12px;
     font-weight: 500;

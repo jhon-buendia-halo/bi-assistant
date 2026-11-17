@@ -5,21 +5,17 @@ jest.mock('../tool-services', () => ({
 
 import { checkWorkflowContract } from './workflow-contract';
 import {
-  DATA_QUALITY_CHECK,
   ANSWER_BUSINESS_QUESTION_EDGES,
   ANSWER_BUSINESS_QUESTION_STEPS,
   analysisLoopDone,
   answerDeltas,
   answerOf,
   answerWithRowTables,
-  assessable,
   expandRowTables,
   interpretFollowUp,
   pageAnswer,
   ROW_TABLE_CAP,
-  dataQualityFailure,
-  dataQualityFindings,
-  queriedTables,
+  chartableQueries,
   catalogBlock,
   clarifyingQuestionOf,
   loadCatalog,
@@ -71,7 +67,7 @@ const query = (partial: Partial<AnalyseQuery> = {}): AnalyseQuery => ({
 });
 
 describe('answer-business-question steps (agents.md 5.11)', () => {
-  it('lists the thirteen steps with their ids, titles and kinds, Read images first, Interpret follow-up before Plan, Clarify after Plan, Check data quality after Validate and the follow-up branch last', () => {
+  it('lists the thirteen steps with their ids, titles and kinds, Read images first, Interpret follow-up before Plan, Clarify after Plan, Build visual after Write answer and the follow-up branch last', () => {
     expect(
       ANSWER_BUSINESS_QUESTION_STEPS.map(({ id, title, kind }) => ({
         id,
@@ -91,8 +87,8 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       { id: 'clarify', title: 'Clarify', kind: 'code' },
       { id: 'analyse', title: 'Analyse', kind: 'agent' },
       { id: 'validate', title: 'Validate', kind: 'code' },
-      { id: 'check-data-quality', title: 'Check data quality', kind: 'agent' },
       { id: 'write-answer', title: 'Write answer', kind: 'agent' },
+      { id: 'build-visual', title: 'Build visual', kind: 'agent' },
       { id: 'wrap-up', title: 'Wrap up', kind: 'code' },
       { id: 'page-result', title: 'Page result', kind: 'code' },
       { id: 'page-answer', title: 'Page answer', kind: 'code' },
@@ -105,8 +101,8 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       'read-images',
       'interpret-follow-up',
       'plan',
-      'check-data-quality',
       'write-answer',
+      'build-visual',
     ]);
   });
 
@@ -129,140 +125,29 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       'analyse->validate next',
       'validate->analyse loop "Retry once"',
       'validate->write-answer next "Valid or retried"',
-      'validate->check-data-quality branch "Check data quality"',
-      'check-data-quality->write-answer next',
       'write-answer->wrap-up next',
+      'write-answer->build-visual branch "Build a visual"',
+      'build-visual->wrap-up next',
       'wrap-up->end next',
       'page-result->page-answer next',
       'page-answer->end next',
     ]);
   });
 
-  describe('the optional data-quality check (agents.md 5.11)', () => {
-    const CATALOG = [
-      {
-        entity: 'wc.public.matches',
-        dataset: 'World Cup',
-        datasourceId: 'ds-pg',
-        datasourceKind: 'postgres',
-        columnCount: 5,
-      },
-      {
-        entity: 'wc.public.teams',
-        dataset: 'World Cup',
-        datasourceId: 'ds-pg',
-        datasourceKind: 'postgres',
-        columnCount: 3,
-      },
-      {
-        entity: 'api.orders.items',
-        dataset: 'Orders API',
-        datasourceId: 'ds-rest',
-        datasourceKind: 'rest',
-        columnCount: 4,
-      },
-    ];
-    const query = (sql: string) => ({
-      sql,
+  describe('the optional Build visual (workflows R41)', () => {
+    const query = (rowCount: number, error?: string) => ({
+      sql: 'SELECT 1',
       rows: [],
-      rowCount: 0,
+      rowCount,
       truncated: false,
+      ...(error ? { error } : {}),
     });
 
-    it('finds the catalog tables the SQL names, ignoring case, in catalog order, once each', () => {
-      const tables = queriedTables(
-        [
-          query(
-            'SELECT * FROM WC.Public.Teams t JOIN wc.public.matches m ON 1=1',
-          ),
-          query('SELECT count(*) FROM wc.public.matches'),
-          query('SELECT * FROM api.orders.items'),
-          query('SELECT * FROM other.schema.unknown'),
-        ],
-        CATALOG,
-      );
-      expect(tables.map((t) => t.entity)).toEqual([
-        'wc.public.matches',
-        'wc.public.teams',
-        'api.orders.items',
-      ]);
-      // Only PostgreSQL and Databricks tables can be assessed.
-      expect(tables.filter(assessable).map((t) => t.entity)).toEqual([
-        'wc.public.matches',
-        'wc.public.teams',
-      ]);
-    });
-
-    it('turns each finding Sarah picked into a failed finding with the engine’s words and her impact', () => {
-      const findings = dataQualityFindings({
-        tables: ['wc.public.matches'],
-        findings: [
-          {
-            severity: 'high',
-            dimension: 'completeness',
-            entity: 'public.matches',
-            field: 'winner',
-            description: '62% of winner is null.',
-          },
-          {
-            severity: 'low',
-            dimension: 'consistency',
-            entity: 'public.matches',
-            field: 'stage',
-            description: 'stage differs by case.',
-          },
-        ],
-        // A repeated and an unknown number are dropped.
-        issues: [
-          { finding: 1, impact: 'The count of wins may be low.' },
-          { finding: 1, impact: 'Again.' },
-          { finding: 9, impact: 'Unknown.' },
-        ],
-      });
-      expect(findings).toEqual([
-        {
-          check: `${DATA_QUALITY_CHECK}: public.matches.winner (completeness, high)`,
-          passed: false,
-          detail: '62% of winner is null. The count of wins may be low.',
-        },
-      ]);
-    });
-
-    it('says what was checked when no finding affects the answer, or none exists', () => {
-      expect(
-        dataQualityFindings({
-          tables: ['wc.public.matches'],
-          findings: [
-            {
-              severity: 'low',
-              dimension: 'consistency',
-              entity: 'public.matches',
-              description: 'x',
-            },
-          ],
-          issues: [],
-        }),
-      ).toEqual([
-        {
-          check: DATA_QUALITY_CHECK,
-          passed: true,
-          detail:
-            '1 data-quality findings on wc.public.matches; none affects this answer.',
-        },
-      ]);
-      expect(
-        dataQualityFindings({
-          tables: ['wc.public.matches'],
-          findings: [],
-          issues: [],
-        })[0].detail,
-      ).toBe('No data-quality findings on wc.public.matches.');
-      expect(dataQualityFailure('connect ECONNREFUSED')).toEqual({
-        check: DATA_QUALITY_CHECK,
-        passed: false,
-        detail:
-          'The data quality of the tables used could not be checked: connect ECONNREFUSED',
-      });
+    it('has something to chart only when a query ran without error and returned rows', () => {
+      expect(chartableQueries([])).toBe(false);
+      expect(chartableQueries([query(0)])).toBe(false);
+      expect(chartableQueries([query(3, 'syntax error')])).toBe(false);
+      expect(chartableQueries([query(0), query(2)])).toBe(true);
     });
   });
 
@@ -342,7 +227,6 @@ describe('answer-business-question steps (agents.md 5.11)', () => {
       'clarify',
       'analyse',
       'validate',
-      'check-data-quality',
       'write-answer',
     ]) {
       // The steps a waiting run is resumed at default the notes to '': a

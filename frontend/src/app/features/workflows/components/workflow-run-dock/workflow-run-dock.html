@@ -19,7 +19,7 @@
   }
 
   <!-- Header: the run's summary and what it is doing now. Folded, it is a
-       narrow strip on the page's right edge: the toggle, the pill and
+       narrow strip on the canvas's left: the toggle, the pill and
        Maximize, stacked. -->
   <div
     class="flex shrink-0 gap-x-3 gap-y-2"
@@ -46,7 +46,7 @@
         (click)="toggle()"
       >
         <lucide-angular
-          [img]="designer.stateOpen() ? ChevronRight : ChevronLeft"
+          [img]="designer.stateOpen() ? ChevronLeft : ChevronRight"
           [size]="14"
         />
         <span [class.run-dock-vertical]="!designer.stateOpen()">Run</span>
@@ -86,7 +86,7 @@
           <span
             class="text-[12px] text-fg-muted"
             data-testid="workflow-state-run-id"
-            >No run yet. Execute the workflow to see each node's data.</span
+            >No run yet. Execute the user journey to see each node's data.</span
           >
         }
         <app-workflow-run-activity

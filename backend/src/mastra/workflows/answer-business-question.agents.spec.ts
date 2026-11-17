@@ -14,9 +14,7 @@ jest.mock('../agents/analysis-planner.agent', () => ({
     generate: (...args: unknown[]) => generate(...args),
   },
 }));
-jest.mock('../agents/data-readiness.agent', () => ({
-  dataReadinessStepAgent: {},
-}));
+jest.mock('../agents/data-readiness.agent', () => ({}));
 
 import {
   planWithModel,

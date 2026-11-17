@@ -68,6 +68,8 @@ const BRANCH_LABEL_DROP = 3;
 /** A branch label's line height, and its border top and bottom. */
 const BRANCH_LINE = 14;
 const BRANCH_BORDER = 2;
+/** The room kept above and below a label in the band over the side row. */
+const LABEL_GAP_Y = 8;
 /** The room kept right of the last label (a square's), when it runs past the padding. */
 const EDGE_MARGIN = 4;
 /** How high the loop's curve rises above the row, and the room kept above it. */
@@ -203,6 +205,12 @@ export interface CanvasEdge {
    * step's declared input); names only when none is declared.
    */
   passesOn: string;
+  /**
+   * What the path is about, for the label's title and screen readers
+   * (workflows R42): the edge's note, else the step it leads to and that
+   * step's summary, else that the run ends.
+   */
+  about: string;
   /** `1 field` | `<n> fields` | `` when nothing is passed. */
   label: string;
   /** The label's centre. */
@@ -212,6 +220,8 @@ export interface CanvasEdge {
   branchLabel: string | null;
   /** That label as drawn: one line (its gap widens to fit it); empty without one. */
   branchLabelLines: string[];
+  /** The edge's note under the label (workflows R42), wrapped; empty without one. */
+  branchNoteLines: string[];
   /**
    * That label's centre: below the line (right of the drop when a side edge
    * drops from the same gap), beside the drop to a side node, or on the
@@ -302,6 +312,34 @@ function exitBoxWidth(exit: CanvasExit): number {
 
 function fieldsLabelWidth(label: string): number {
   return label ? label.length * FIELDS_CHAR + FIELDS_PAD : 0;
+}
+
+/** A note under a branch label wraps at this many characters a line. */
+const NOTE_CHARS = 30;
+
+/** A note's lines, word by word, each at most NOTE_CHARS long when it can be. */
+function noteLines(note: string): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of note.trim().split(/\s+/)) {
+    if (line && line.length + 1 + word.length > NOTE_CHARS) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/**
+ * What a labelled edge draws: its label, then its note's lines (workflows
+ * R42). An edge with no label draws nothing, its note included.
+ */
+function edgeLines(edge: WorkflowEdge | undefined): string[] {
+  if (!edge?.label) return [];
+  return [edge.label, ...(edge.note ? noteLines(edge.note) : [])];
 }
 
 function branchLabelHeight(lines: string[]): number {
@@ -454,8 +492,30 @@ export function workflowCanvasLayout(
   const half = mainSteps.some((s) => s.kind === 'agent')
     ? CANVAS.nodeHeight / 2
     : CANVAS.square / 2;
-  const centerY =
-    CANVAS.padding + Math.max(exitRoom, hasLoop ? LOOP_ROOM : 0) + half;
+  // A main-row loop's label sits on its curve: a taller one (a note) needs more room.
+  const loopLabelH = Math.max(
+    0,
+    ...graph
+      .filter(
+        (e) => e.kind === 'loop' && onPath.has(e.from) && onPath.has(e.to),
+      )
+      .map((e) => {
+        const lines = edgeLines(e);
+        return lines.length ? branchLabelHeight(lines) : 0;
+      }),
+  );
+  // A loop label with a note sits above the exit notes, its curve rising to it.
+  const tallLoop = loopLabelH > branchLabelHeight(['x']);
+  const loopRoom = !hasLoop
+    ? 0
+    : tallLoop
+      ? exitRoom + EXIT_GAP + loopLabelH
+      : LOOP_ROOM;
+  const centerY = CANVAS.padding + Math.max(exitRoom, loopRoom) + half;
+  /** Where a tall loop label's bottom sits: just above the exit notes. */
+  const loopLabelBottom = tallLoop
+    ? centerY - half - exitRoom - EXIT_GAP / 2
+    : undefined;
 
   const nodes: CanvasNode[] = [];
   /** The next column's x; a labelled edge into it widens the gap to fit. */
@@ -471,7 +531,20 @@ export function workflowCanvasLayout(
       prev.width +
       columnGap(
         fieldsLabel(fields),
-        edge?.label ? [edge.label] : [],
+        widest(
+          edgeLines(edge),
+          // An edge that skips the columns before (Start past Read images)
+          // shows its label in this gap, the last before its target.
+          ...graph
+            .filter(
+              (e) =>
+                e.to === id &&
+                e.kind !== 'loop' &&
+                e.from !== prev.id &&
+                onPath.has(e.from),
+            )
+            .map(edgeLines),
+        ),
         dropsFrom.has(prev.id),
       )
     );
@@ -547,7 +620,21 @@ export function workflowCanvasLayout(
   // Side steps (a branch off the main path): one row below everything on
   // the main row, each under the gap after its source.
   const mainBottom = rowBottom(nodes);
-  const sideTop = mainBottom + CANVAS.sideGap;
+  // The labels in the band above the side row (a drop's, a loop's back up)
+  // keep their room: the band grows with the tallest.
+  const sideLabelH = Math.max(
+    0,
+    ...graph
+      .filter((e) =>
+        e.kind === 'loop' ? sideIds.has(e.from) : sideIds.has(e.to),
+      )
+      .map((e) => {
+        const lines = edgeLines(e);
+        return lines.length ? branchLabelHeight(lines) : 0;
+      }),
+  );
+  const sideTop =
+    mainBottom + Math.max(CANVAS.sideGap, sideLabelH + 2 * LABEL_GAP_Y);
   const byId = new Map(nodes.map((n) => [n.id, n]));
   let sideX = CANVAS.padding;
   /** Where a side edge drops from a main node's gap: the x of its line. */
@@ -594,7 +681,11 @@ export function workflowCanvasLayout(
     const schema = from.step ? from.step.outputSchema : to.step?.inputSchema;
     const typed = contractFields(schema, fields);
     const byName = new Map(typed.map((field) => [field.name, field]));
-    const lines = g.label ? [g.label] : [];
+    const lines = edgeLines(g);
+    // A main edge that skips columns: its label goes in the gap before its target.
+    const before = main ? byId.get(path[path.indexOf(g.to) - 1]) : undefined;
+    const gapLeft =
+      before && before.id !== from.id ? before.x + before.width : undefined;
     const shape = edgeShape(
       g,
       from,
@@ -602,6 +693,8 @@ export function workflowCanvasLayout(
       end,
       lines,
       main ? dropAt.get(from.id) : undefined,
+      loopLabelBottom,
+      gapLeft,
     );
     return [
       {
@@ -616,11 +709,19 @@ export function workflowCanvasLayout(
             (name) => byName.get(name) ?? contractFields(null, [name])[0],
           ),
         ),
+        about:
+          g.note ??
+          (to.step
+            ? `Next: ${to.step.title}. ${to.step.summary}`
+            : to.id === END_NODE_ID
+              ? 'Then the run ends.'
+              : ''),
         label: main ? fieldsLabel(fields.length) : '',
         labelX: shape.labelX,
         labelY: shape.labelY,
         branchLabel: g.label ?? null,
-        branchLabelLines: lines,
+        branchLabelLines: lines.slice(0, 1),
+        branchNoteLines: lines.slice(1),
         branchLabelX: shape.branchLabelX,
         branchLabelY: shape.branchLabelY,
       },
@@ -822,6 +923,18 @@ function rowBottom(nodes: CanvasNode[]): number {
  * side edge drops down its middle, the branch label sits right of the drop,
  * so the right half holds it.
  */
+/** The widest of some label boxes' lines. */
+function widest(...boxes: string[][]): string[] {
+  return boxes.reduce(
+    (best, lines) =>
+      lines.length &&
+      (!best.length || branchLabelWidth(lines) > branchLabelWidth(best))
+        ? lines
+        : best,
+    [] as string[],
+  );
+}
+
 function columnGap(fields: string, branch: string[], drop: boolean): number {
   const branchW = branch.length ? branchLabelWidth(branch) : 0;
   return Math.ceil(
@@ -830,6 +943,11 @@ function columnGap(fields: string, branch: string[], drop: boolean): number {
       fields ? fieldsLabelWidth(fields) + 2 * LABEL_MARGIN : 0,
       branchW ? branchW + 2 * LABEL_MARGIN : 0,
       drop && branchW ? 2 * (SIDE_LABEL_OFFSET + branchW + LABEL_MARGIN) : 0,
+      // A label with a note reaches down beside the squares' own labels,
+      // which overhang their squares: the gap clears both overhangs.
+      branch.length > 1
+        ? branchW + 2 * LABEL_MARGIN + (CANVAS.labelWidth - CANVAS.square)
+        : 0,
     ),
   );
 }
@@ -918,8 +1036,9 @@ export function canvasBoxes(
       });
     }
     if (e.branchLabelLines.length) {
-      const w = branchLabelWidth(e.branchLabelLines);
-      const h = branchLabelHeight(e.branchLabelLines);
+      const all = [...e.branchLabelLines, ...e.branchNoteLines];
+      const w = branchLabelWidth(all);
+      const h = branchLabelHeight(all);
       boxes.push({
         owner: e.id,
         part: 'branch-label',
@@ -957,6 +1076,10 @@ function edgeShape(
   lines: string[],
   /** The x of a side edge dropping down the same gap, when one does. */
   dropX?: number,
+  /** Where a main-row loop's tall label must end: above the exit notes. */
+  loopLabelBottom?: number,
+  /** For an edge that skips columns: the left side of the gap before its target. */
+  gapLeft?: number,
 ): EdgeShape {
   const x1 = from.x + from.width;
   const labelW = lines.length ? branchLabelWidth(lines) : 0;
@@ -973,14 +1096,24 @@ function edgeShape(
       labelY: (from.y + yIn) / 2,
       // Left of the line, in the gap above the side row.
       branchLabelX: ux - SIDE_LABEL_OFFSET - labelW / 2,
-      branchLabelY: from.y - CANVAS.sideGap / 2,
+      branchLabelY:
+        from.y - Math.max(CANVAS.sideGap / 2, LABEL_GAP_Y + labelH / 2),
     };
   }
   if (g.kind === 'loop') {
     const vx = from.x + from.width / 2;
     const ar = to.x + to.width;
     const ax = ar + LOOP_ENTRY_X;
-    const apex = from.y - LOOP_RISE;
+    // A tall label (a note) sits above the exit notes, the curve rising to it.
+    const labelY =
+      loopLabelBottom !== undefined && lines.length > 1
+        ? loopLabelBottom - labelH / 2
+        : from.y - (LOOP_RISE * 3) / 4 - EDGE_LABEL_RISE;
+    const rise = Math.max(
+      LOOP_RISE,
+      ((from.y - labelY - EDGE_LABEL_RISE) * 4) / 3,
+    );
+    const apex = from.y - rise;
     const entry = to.y + LOOP_ENTRY_Y;
     return {
       path: `M ${vx} ${from.y} C ${vx} ${apex}, ${ax} ${apex}, ${ax} ${entry} L ${ar} ${entry}`,
@@ -988,7 +1121,7 @@ function edgeShape(
       labelY: apex,
       branchLabelX: (vx + ax) / 2,
       // The curve peaks at three quarters of the rise; the label sits on it.
-      branchLabelY: from.y - (LOOP_RISE * 3) / 4 - EDGE_LABEL_RISE,
+      branchLabelY: labelY,
     };
   }
   if (to.centerY > from.centerY) {
@@ -1001,7 +1134,8 @@ function edgeShape(
       labelY: (from.centerY + to.y) / 2,
       // Right of the drop, in the gap above the side row.
       branchLabelX: gx + SIDE_LABEL_OFFSET + labelW / 2,
-      branchLabelY: to.y - CANVAS.sideGap / 2,
+      branchLabelY:
+        to.y - Math.max(CANVAS.sideGap / 2, LABEL_GAP_Y + labelH / 2),
     };
   }
   if (from.centerY > to.centerY && to.id === end.id) {
@@ -1022,10 +1156,12 @@ function edgeShape(
     labelX: (x1 + x2) / 2,
     labelY: from.centerY - EDGE_LABEL_RISE,
     // Right of a drop down the same gap, never on it.
+    // Right of the drop when the drop is in this gap; a side node pushed
+    // further right drops elsewhere, so the label stays in its own gap.
     branchLabelX:
-      dropX === undefined
-        ? (x1 + x2) / 2
-        : dropX + SIDE_LABEL_OFFSET + labelW / 2,
+      dropX !== undefined && dropX + SIDE_LABEL_OFFSET + labelW <= x2
+        ? dropX + SIDE_LABEL_OFFSET + labelW / 2
+        : ((gapLeft ?? x1) + x2) / 2,
     branchLabelY: from.centerY + BRANCH_LABEL_DROP + labelH / 2,
   };
 }

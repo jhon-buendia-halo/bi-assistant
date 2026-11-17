@@ -164,7 +164,7 @@ const FAILED_ATTEMPT: AnalyseAttempt = {
 
 /** The runtime's step calls (its flags left out). */
 type TurnCalls = Required<
-  Omit<AnswerBusinessQuestionRuntime, 'checksDataQuality' | 'followUp'>
+  Omit<AnswerBusinessQuestionRuntime, 'buildsVisual' | 'followUp'>
 >;
 
 /** A runtime whose model steps are mocks, each answering as scripted. */
@@ -174,7 +174,7 @@ type ScriptedTurn = {
     Parameters<TurnCalls[K]>
   >;
 } & {
-  checksDataQuality?: boolean;
+  buildsVisual?: boolean;
   followUp?: AnswerBusinessQuestionRuntime['followUp'];
 };
 
@@ -185,17 +185,10 @@ function runtime(
   return {
     plan: jest.fn(() => Promise.resolve({ plan: PLAN, stopped: false })),
     analyse: jest.fn(() => Promise.resolve(GOOD_ATTEMPT)),
-    // Called only when the run asks for it (`checksDataQuality`).
-    checkDataQuality: jest.fn(() =>
+    // Called only when the run builds a visual (`buildsVisual`).
+    buildVisual: jest.fn(() =>
       Promise.resolve({
-        findings: [],
-        dataQuality: {
-          tables: [],
-          reportIds: [],
-          findingCount: 0,
-          issues: 0,
-          skipped: [],
-        },
+        visual: { visualId: 'v-1', title: 'Matches' },
         stopped: false,
       }),
     ),
@@ -308,8 +301,8 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       ['clarify', 'Clarify'],
       ['analyse', 'Analyse'],
       ['validate', 'Validate'],
-      ['check-data-quality', 'Check data quality'],
       ['write-answer', 'Write answer'],
+      ['build-visual', 'Build visual'],
       ['wrap-up', 'Wrap up'],
       ['page-result', 'Page result'],
       ['page-answer', 'Page answer'],
@@ -468,29 +461,13 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
           'imageNotes',
         ],
       ],
-      'check-data-quality': [
-        [
-          'question',
-          'plan',
-          'queries',
-          'findings',
-          'calls',
-          'imageNotes',
-          'catalog',
-        ],
-        [
-          'question',
-          'plan',
-          'queries',
-          'findings',
-          'calls',
-          'imageNotes',
-          'dataQuality',
-        ],
-      ],
       'write-answer': [
         ['question', 'plan', 'queries', 'findings', 'calls', 'imageNotes'],
         ['headline', 'answer', 'calls'],
+      ],
+      'build-visual': [
+        ['headline', 'answer', 'calls', 'question', 'queries'],
+        ['headline', 'answer', 'calls', 'visual'],
       ],
       'wrap-up': [
         ['answer', 'calls'],
@@ -564,18 +541,20 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
       'question-path.analysis-path.analysis-attempt.validate:success',
       'question-path.analysis-path.analysis-attempt:success',
       'question-path.analysis-path.answer-path:running',
-      // No data-quality check asked: its branch is not taken.
-      'question-path.analysis-path.answer-path.quality-outcome:running',
-      'question-path.analysis-path.answer-path.quality-outcome:success',
       'question-path.analysis-path.answer-path.write-answer:running',
       'question-path.analysis-path.answer-path.write-answer:success',
+      'question-path.analysis-path.answer-path.visual-input:running',
+      'question-path.analysis-path.answer-path.visual-input:success',
+      // The run does not build a visual: its branch is not taken.
+      'question-path.analysis-path.answer-path.visual-outcome:running',
+      'question-path.analysis-path.answer-path.visual-outcome:success',
       'question-path.analysis-path.answer-path.wrap-up:running',
       'question-path.analysis-path.answer-path.wrap-up:success',
       'question-path.analysis-path.answer-path:success',
       'question-path.analysis-path:success',
       'question-path:success',
     ]);
-    expect(turn.checkDataQuality).not.toHaveBeenCalled();
+    expect(turn.buildVisual).not.toHaveBeenCalled();
     const catalogBlock = [
       'Catalog loaded for this turn: 2 entities.',
       '- wc.public.matches (dataset: World Cup; 2 columns)',
@@ -794,95 +773,109 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
     });
   });
 
-  describe('the optional data-quality check (agents.md 5.11)', () => {
-    const QUALITY_FINDING = {
-      check: 'Data quality: public.matches.winner (completeness, high)',
-      passed: false,
-      detail: '62% of winner is null. The count of wins may be low.',
-    };
-    const MEASURED = {
-      tables: ['wc.public.matches'],
-      reportIds: ['r-1'],
-      findingCount: 3,
-      issues: 1,
-      skipped: [],
-    };
+  describe('the optional Build visual (agents.md 5.11, workflows R41)', () => {
+    const BUILT = { visualId: 'v-1', title: 'Matches' };
+    const STEP_ID = 'question-path.analysis-path.answer-path.build-visual';
 
-    it('runs Check data quality when the run asks for it, on the tables the queries read, and hands its findings to Write answer', async () => {
+    it('runs Build visual after Write answer when the run builds a visual, and its output reaches Wrap up', async () => {
       const turn = runtime({
-        checksDataQuality: true,
-        checkDataQuality: jest.fn(() =>
+        buildsVisual: true,
+        buildVisual: jest.fn(() =>
+          Promise.resolve({ visual: BUILT, stopped: false }),
+        ),
+      });
+      const { events, outputs, result } = await run('How many matches?', turn);
+      expect(events).toEqual(
+        expect.arrayContaining([`${STEP_ID}:running`, `${STEP_ID}:success`]),
+      );
+      const at = (event: string) => events.indexOf(event);
+      expect(at(`${STEP_ID}:running`)).toBeGreaterThan(
+        at('question-path.analysis-path.answer-path.write-answer:success'),
+      );
+      expect(at(`${STEP_ID}:success`)).toBeLessThan(
+        at('question-path.analysis-path.answer-path.wrap-up:running'),
+      );
+      expect(turn.buildVisual).toHaveBeenCalledWith({
+        question: 'How many matches?',
+        answer: 'The data holds 16 matches.\n\nHow I got this: …',
+        queries: GOOD_ATTEMPT.queries,
+      });
+      expect(outputs.get(STEP_ID)).toMatchObject({
+        headline: 'The data holds 16 matches.',
+        answer: 'The data holds 16 matches.\n\nHow I got this: …',
+        visual: BUILT,
+      });
+      expect(result.status).toBe('success');
+      expect(
+        outputs.get('question-path.analysis-path.answer-path.wrap-up'),
+      ).toMatchObject({
+        answer: 'The data holds 16 matches.\n\nHow I got this: …',
+      });
+    });
+
+    it('does not run it when the run turns the visual off', async () => {
+      const turn = runtime({ buildsVisual: false });
+      const { events } = await run('How many matches?', turn);
+      expect(turn.buildVisual).not.toHaveBeenCalled();
+      expect(events).not.toContain(`${STEP_ID}:running`);
+    });
+
+    it('skips the design without calling the runtime when no query returned rows', async () => {
+      const turn = runtime({
+        buildsVisual: true,
+        analyse: jest.fn(() =>
           Promise.resolve({
-            findings: [QUALITY_FINDING],
-            dataQuality: MEASURED,
+            ...GOOD_ATTEMPT,
+            queries: [{ ...GOOD_ATTEMPT.queries[0], rows: [], rowCount: 0 }],
+          }),
+        ),
+      });
+      const { outputs, result } = await run('How many matches?', turn);
+      expect(turn.buildVisual).not.toHaveBeenCalled();
+      expect(outputs.get(STEP_ID)).toMatchObject({
+        visual: { skipped: 'No query returned rows to chart.' },
+      });
+      expect(result.status).toBe('success');
+    });
+
+    it('keeps the answer and carries a design error in the visual: never a failed run', async () => {
+      const turn = runtime({
+        buildsVisual: true,
+        buildVisual: jest.fn(() =>
+          Promise.resolve({
+            visual: { error: 'The design was refused.' },
             stopped: false,
           }),
         ),
       });
+      const { outputs, result } = await run('How many matches?', turn);
+      expect(outputs.get(STEP_ID)).toMatchObject({
+        visual: { error: 'The design was refused.' },
+      });
+      expect(result.status).toBe('success');
+    });
+
+    it('bails Build visual when the turn is stopped during the design, keeping the written answer', async () => {
+      const turn = runtime({
+        buildsVisual: true,
+        buildVisual: jest.fn(() =>
+          Promise.resolve({ visual: {}, stopped: true }),
+        ),
+      });
       const { events, outputs } = await run('How many matches?', turn);
-      expect(events).toEqual(
-        expect.arrayContaining([
-          'question-path.analysis-path.answer-path.check-data-quality:running',
-          'question-path.analysis-path.answer-path.check-data-quality:success',
-        ]),
-      );
-      expect(
-        events.indexOf(
-          'question-path.analysis-path.answer-path.check-data-quality:success',
-        ),
-      ).toBeLessThan(
-        events.indexOf(
-          'question-path.analysis-path.answer-path.write-answer:running',
-        ),
-      );
-      // Only the catalog's tables the SQL names (wc.public.teams is not).
-      expect(turn.checkDataQuality).toHaveBeenCalledWith({
-        question: 'How many matches?',
-        queries: GOOD_ATTEMPT.queries,
-        tables: [
-          {
-            entity: 'wc.public.matches',
-            dataset: 'World Cup',
-            datasourceKind: 'postgres',
-          },
-        ],
+      expect(events).toContain(`${STEP_ID}:bailed`);
+      expect(outputs.get(STEP_ID)).toMatchObject({
+        answer: 'The data holds 16 matches.\n\nHow I got this: …',
+        visual: {},
       });
-      expect(
-        outputs.get(
-          'question-path.analysis-path.answer-path.check-data-quality',
-        ),
-      ).toMatchObject({ dataQuality: MEASURED });
-      const written = turn.writeAnswer.mock.calls[0][0];
-      // Validate's findings first, then the data-quality one.
-      expect(written.findings.at(-1)).toEqual(QUALITY_FINDING);
-      expect(written.findings[0]).toMatchObject({ check: 'Ran a query' });
     });
 
-    it('leaves the findings as they were when the turn is stopped during the check', async () => {
-      const turn = runtime({
-        checksDataQuality: true,
-        checkDataQuality: jest.fn(() =>
-          Promise.resolve({
-            findings: [QUALITY_FINDING],
-            dataQuality: MEASURED,
-            stopped: true,
-          }),
-        ),
-      });
-      await run('How many matches?', turn);
-      const written = turn.writeAnswer.mock.calls[0][0];
-      expect(written.findings).not.toContainEqual(QUALITY_FINDING);
-    });
-
-    it('fails Check data quality when the run asks for it but its runtime has no check', async () => {
-      const turn = runtime({
-        checksDataQuality: true,
-        checkDataQuality: undefined,
-      });
+    it('fails Build visual when the run builds a visual but its runtime has no designer', async () => {
+      const turn = runtime({ buildsVisual: true, buildVisual: undefined });
       const { result } = await run('How many matches?', turn);
       expect(result.status).toBe('failed');
       expect(String(result.error)).toContain(
-        'The Check data quality step has no check to run',
+        'The Build visual step has no designer to run',
       );
     });
   });
@@ -1168,7 +1161,7 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
   // Reference images (agents.md 2.15, 5.11; workflows R35; plan D1-D3).
   describe('reference images', () => {
     it("reads the images first, then hands Zoe's notes to Plan, Analyse and Write answer", async () => {
-      const turn = runtime({ checksDataQuality: true });
+      const turn = runtime({ buildsVisual: true });
       const images = ONE_IMAGE();
       const { events, outputs, result } = await run(
         'How many matches?',
@@ -1202,16 +1195,14 @@ describe('answer-business-question workflow (agents.md 5.11, ADR-0034)', () => {
         expect.objectContaining({ imageNotes: NOTES }),
       );
       // Interpret follow-up passes them on to the question path (roadmap
-      // 1.28.8), and Check data quality on to Write answer.
+      // 1.28.8), and Write answer on to Build visual.
       expect(outputs.get('interpret-follow-up')).toMatchObject({
         imageNotes: NOTES,
         followUp: null,
       });
       expect(
-        outputs.get(
-          'question-path.analysis-path.answer-path.check-data-quality',
-        ),
-      ).toMatchObject({ imageNotes: NOTES });
+        outputs.get('question-path.analysis-path.answer-path.write-answer'),
+      ).toMatchObject({ headline: expect.any(String) as unknown });
       expect(turn.writeAnswer).toHaveBeenCalledWith(
         expect.objectContaining({ imageNotes: NOTES }),
       );

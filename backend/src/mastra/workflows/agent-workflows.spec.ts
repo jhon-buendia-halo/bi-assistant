@@ -22,8 +22,8 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
       ['Clarify', 'code'],
       ['Analyse', 'agent'],
       ['Validate', 'code'],
-      ['Check data quality', 'agent'],
       ['Write answer', 'agent'],
+      ['Build visual', 'agent'],
       ['Wrap up', 'code'],
       ['Page result', 'code'],
       ['Page answer', 'code'],
@@ -46,14 +46,12 @@ describe('agentWorkflow (api.md 34, agents-evals R108)', () => {
     },
   );
 
-  it('gives Check data quality to Sarah, in one model call without tools', () => {
+  it('gives Build visual to Ryan, in one model call without tools', () => {
     const steps = agentWorkflow('insights-analyst')!.steps;
-    expect(
-      steps.find((step) => step.id === 'check-data-quality')?.agent,
-    ).toEqual({
-      key: 'data-readiness',
-      name: 'Sarah',
-      role: 'Data Quality Analyst',
+    expect(steps.find((step) => step.id === 'build-visual')?.agent).toEqual({
+      key: 'visualization',
+      name: 'Ryan',
+      role: expect.any(String) as unknown,
       tools: [],
       maxSteps: 1,
     });

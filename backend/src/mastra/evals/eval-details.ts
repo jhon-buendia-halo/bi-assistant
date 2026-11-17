@@ -28,7 +28,7 @@ export interface EvalRunDetails {
    * Whole-workflow targets: each step's output by step id, as the engine
    * handed it on (`workflow-step-result` with `success` or `bailed`). The
    * key is the step's own id without its nested workflow's prefix
-   * (`plan`, `validate`, `check-data-quality`, `write-answer`,
+   * (`plan`, `validate`, `write-answer`, `build-visual`,
    * `save-report`, `explain-report`); a step that ran several times
    * (Analyse and Validate on a retry) holds its last output. A step that
    * did not run has no key.

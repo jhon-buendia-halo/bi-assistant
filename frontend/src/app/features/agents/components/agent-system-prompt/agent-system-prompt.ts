@@ -82,10 +82,10 @@ export class AgentSystemPrompt implements OnDestroy {
 
   readonly limit = AGENT_FIELD_LIMITS.instructions;
   readonly toolbarHint =
-    'Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.';
+    'Type / to link a skill or tool. The agent persona only gets the skills and tools its instructions link.';
 
   readonly builtInBanner =
-    'Changes apply to every session and agent as soon as you save. Run the evals to check them.';
+    'Changes apply to every session and agent persona as soon as you save. Run the evals to check them.';
   readonly builtInToolbarHint =
     'Type / to link a tool or a built-in skill. Links here are mentions; the assistant keeps all its tools.';
   readonly builtInToolsNote =
