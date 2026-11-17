@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
   untracked,
   viewChild,
@@ -22,6 +23,7 @@ import {
   SendHorizontal,
   Square,
   SquarePen,
+  Workflow,
   Wrench,
   X,
 } from 'lucide-angular';
@@ -169,16 +171,30 @@ export class WorkflowRunChat {
   protected readonly SendHorizontal = SendHorizontal;
   protected readonly Square = Square;
   protected readonly SquarePen = SquarePen;
+  protected readonly Workflow = Workflow;
   protected readonly Wrench = Wrench;
   protected readonly X = X;
 
   /**
    * `panel`: the Run panel's Chat beside the canvas. `business`: the page's
-   * Business view (R38): the input form above the result, no Chat heading,
-   * no agent team, live tool calls or How it ran; the page scrolls, not the log.
+   * Business view (R38): the same chat, each message a run of the workflow,
+   * with the agents' thread but no live tool calls or How it ran; a run's
+   * details open in the Builder view.
    */
   readonly variant = input<'panel' | 'business'>('panel');
   protected readonly business = computed(() => this.variant() === 'business');
+
+  /**
+   * Business view only: show the run in the Builder view, with this step's
+   * dialog open when a step id is given (an agent's See its data).
+   */
+  readonly openInBuilder = output<string | null>();
+
+  /** An agent's See its data: its dialog here, or in Builder from the Business view. */
+  protected openStep(id: string): void {
+    if (this.business()) this.openInBuilder.emit(id);
+    else this.designer.openNode(id);
+  }
 
   protected readonly designer = inject(WorkflowDesigner);
   protected readonly visuals = inject(RunVisualsState);
@@ -532,13 +548,8 @@ export class WorkflowRunChat {
     this.workflowsNav.openWorkflow(MAP_WORKFLOW_ID);
   }
 
-  /** The line under the workflow's name before a run; the form is above it in the Business view. */
+  /** The line under the workflow's name before a run. */
   protected readonly emptyHint = computed(() => {
-    const hint = this.composerHint();
-    return this.business() ? hint.replace('below', 'above') : hint;
-  });
-
-  private readonly composerHint = computed(() => {
     const workflow = this.designer.workflow();
     const datasets = workflow?.input.some(
       (field) =>

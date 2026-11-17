@@ -3,15 +3,15 @@
  * **Builder**, the canvas and the Run panel, for people who build and debug
  * workflows; **Business**, the input form and the result in one column, for
  * people who only run a workflow and read its outcome. The last view picked
- * is kept on this device for every workflow; Builder until one is picked.
+ * is kept on this device for every workflow; Business until one is picked.
  */
 export type WorkflowView = 'builder' | 'business';
 
 export const WORKFLOW_VIEW_STORAGE_KEY = 'qti.workflow-view';
 
-export const DEFAULT_WORKFLOW_VIEW: WorkflowView = 'builder';
+export const DEFAULT_WORKFLOW_VIEW: WorkflowView = 'business';
 
-/** The kept view, else Builder; an unknown value is ignored. */
+/** The kept view, else Business; an unknown value is ignored. */
 export function readWorkflowView(): WorkflowView {
   try {
     const value = localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY);

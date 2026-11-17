@@ -51,8 +51,9 @@
             <span>Missing dataset: {{ missing() }}</span>
           </span>
         }
-        <!-- The page's two views (R38): Builder for people who build and
-             debug, Business for people who fill the input and read the result -->
+        <!-- The page's two views (R38): Business (the default) for people who
+             fill the input and read the result, Builder for people who build
+             and debug -->
         <div class="ml-auto flex shrink-0 items-center gap-2">
           <span id="workflow-view-label" class="text-[12px] text-fg-muted"
             >View</span
@@ -65,26 +66,11 @@
           >
             <button
               type="button"
-              data-testid="workflow-view-builder"
-              [attr.aria-pressed]="view() === 'builder'"
-              title="The graph and the Run panel: build and debug the workflow"
-              (click)="setView('builder')"
-              class="inline-flex items-center gap-1.5 px-3 py-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
-              [class.bg-primary-soft]="view() === 'builder'"
-              [class.text-on-primary-soft]="view() === 'builder'"
-              [class.text-fg-muted]="view() !== 'builder'"
-              [class.hover:text-fg]="view() !== 'builder'"
-            >
-              <lucide-angular [img]="Workflow" [size]="14" />
-              <span>Builder</span>
-            </button>
-            <button
-              type="button"
               data-testid="workflow-view-business"
               [attr.aria-pressed]="view() === 'business'"
               title="Fill in the input and read the result"
               (click)="setView('business')"
-              class="inline-flex items-center gap-1.5 border-l border-border px-3 py-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+              class="inline-flex items-center gap-1.5 px-3 py-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
               [class.bg-primary-soft]="view() === 'business'"
               [class.text-on-primary-soft]="view() === 'business'"
               [class.text-fg-muted]="view() !== 'business'"
@@ -92,6 +78,21 @@
             >
               <lucide-angular [img]="FileText" [size]="14" />
               <span>Business</span>
+            </button>
+            <button
+              type="button"
+              data-testid="workflow-view-builder"
+              [attr.aria-pressed]="view() === 'builder'"
+              title="The graph and the Run panel: build and debug the workflow"
+              (click)="setView('builder')"
+              class="inline-flex items-center gap-1.5 border-l border-border px-3 py-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+              [class.bg-primary-soft]="view() === 'builder'"
+              [class.text-on-primary-soft]="view() === 'builder'"
+              [class.text-fg-muted]="view() !== 'builder'"
+              [class.hover:text-fg]="view() !== 'builder'"
+            >
+              <lucide-angular [img]="Workflow" [size]="14" />
+              <span>Builder</span>
             </button>
           </div>
         </div>
@@ -112,17 +113,19 @@
     </p>
   } @else if (designer.workflow(); as w) {
     @if (view() === "business") {
-      <!-- Business view (R38): the Run panel's Chat alone in one column, the
-           input form on top and the result under it; no canvas, no agent
-           trace. Queries still open in the inspector sheet. -->
+      <!-- Business view (R38): the Run panel's Chat alone, as a centred chat
+           at full height: each message runs the workflow, the agents work as
+           a thread, the composer stays at the bottom. No canvas; a run's
+           details open in Builder. Queries still open in the inspector sheet. -->
       <div class="relative flex min-h-0 flex-1 overflow-hidden">
         <div
           data-testid="workflow-business-view"
-          class="min-h-0 flex-1 overflow-y-auto"
+          class="flex min-h-0 flex-1 justify-center bg-surface"
         >
           <app-workflow-run-chat
             variant="business"
-            class="mx-auto w-full max-w-[800px] px-6 pt-6 pb-4"
+            class="w-full max-w-[860px] pt-2"
+            (openInBuilder)="openInBuilder($event)"
           />
         </div>
         @if (openQuery(); as open) {

@@ -66,8 +66,9 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
     http = TestBed.inject(HttpTestingController);
     designer = TestBed.inject(WorkflowDesigner);
     events = [];
-    // The kept view is shared browser state: every test starts in Builder.
-    localStorage.removeItem(WORKFLOW_VIEW_STORAGE_KEY);
+    // The kept view is shared browser state. Business is the default (R38);
+    // the designer tests start from a kept Builder, as a builder's device would.
+    localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'builder');
   });
 
   afterEach(() => http.verify());
@@ -345,59 +346,67 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
         },
       });
 
-    it('opens in Builder: the View control in the header, the canvas and the Run panel', () => {
+    it('opens in Business when no view is kept: the View control lists Business first', () => {
+      localStorage.removeItem(WORKFLOW_VIEW_STORAGE_KEY);
       open(THREE_STEPS);
       const group = el.querySelector('header [data-testid="workflow-view"]')!;
       expect(group.getAttribute('role')).toBe('group');
       expect(
         el.querySelector(`#${group.getAttribute('aria-labelledby')}`)?.textContent?.trim(),
       ).toBe('View');
-      expect(text('workflow-view-builder')).toBe('Builder');
-      expect(text('workflow-view-business')).toBe('Business');
-      expect(pressed('workflow-view-builder')).toBe('true');
-      expect(pressed('workflow-view-business')).toBe('false');
-      expect(q('workflow-canvas')).not.toBeNull();
-      expect(q('workflow-run-dock')).not.toBeNull();
-      expect(q('workflow-business-view')).toBeNull();
-    });
-
-    it('Business shows the input form alone in one column, without the canvas or the Run panel, and is kept', () => {
-      open(THREE_STEPS);
-      q('workflow-view-business')!.click();
-      fixture.detectChanges();
+      expect(
+        Array.from(group.querySelectorAll('button')).map((b) => b.textContent?.trim()),
+      ).toEqual(['Business', 'Builder']);
       expect(pressed('workflow-view-business')).toBe('true');
       expect(pressed('workflow-view-builder')).toBe('false');
       expect(q('workflow-canvas')).toBeNull();
       expect(q('workflow-run-dock')).toBeNull();
       const view = q('workflow-business-view')!;
       const chat = view.querySelector('[data-testid="workflow-run-chat"]')!;
+      const log = chat.querySelector('[data-testid="workflow-run-chat-log"]')!;
       const composer = chat.querySelector('[data-testid="workflow-run-composer"]')!;
-      // The form comes first, above the result.
-      expect(composer.parentElement!.classList).toContain('order-first');
+      // A chat: the conversation, then the composer at the bottom.
+      expect(log.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(chat.querySelector('[data-testid="workflow-input-text"]')).not.toBeNull();
-      expect(text('workflow-run-empty')).toContain('Type a question above.');
-      expect(chat.textContent).not.toContain('Chat');
-      expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('business');
-
-      // Another workflow page opens in the kept view; Builder brings the designer back.
-      fixture.destroy();
-      open(THREE_STEPS);
-      expect(pressed('workflow-view-business')).toBe('true');
-      q('workflow-view-builder')!.click();
-      fixture.detectChanges();
-      expect(q('workflow-canvas')).not.toBeNull();
-      expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('builder');
+      expect(text('workflow-run-empty')).toContain('Type a question below.');
+      // No run yet: nothing to open in Builder.
+      expect(q('workflow-run-open-builder')).toBeNull();
     });
 
-    it('Business shows the answer without the agent team or How it ran; a query still opens in the sheet', fakeAsync(() => {
+    it('Builder shows the canvas and the Run panel, and the view picked is kept', () => {
+      localStorage.removeItem(WORKFLOW_VIEW_STORAGE_KEY);
+      open(THREE_STEPS);
+      q('workflow-view-builder')!.click();
+      fixture.detectChanges();
+      expect(pressed('workflow-view-builder')).toBe('true');
+      expect(pressed('workflow-view-business')).toBe('false');
+      expect(q('workflow-canvas')).not.toBeNull();
+      expect(q('workflow-run-dock')).not.toBeNull();
+      expect(q('workflow-business-view')).toBeNull();
+      expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('builder');
+
+      // Another workflow page opens in the kept view; Business brings the form back.
+      fixture.destroy();
+      open(THREE_STEPS);
+      expect(pressed('workflow-view-builder')).toBe('true');
+      q('workflow-view-business')!.click();
+      fixture.detectChanges();
+      expect(q('workflow-business-view')).not.toBeNull();
+      expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('business');
+    });
+
+    it('Business shows the answer and the agents\' thread but not How it ran; a query still opens in the sheet', fakeAsync(() => {
       localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
       open(THREE_STEPS);
       answeredRun();
       fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
       const view = q('workflow-business-view')!;
       expect(view.querySelector('[data-testid="run-answer"]')?.textContent).toContain('Two words');
-      expect(view.querySelector('app-workflow-run-team')).toBeNull();
+      expect(view.querySelector('app-workflow-run-team')).not.toBeNull();
       expect(view.querySelector('app-workflow-run-story')).toBeNull();
+      expect(text('workflow-run-open-builder')).toBe('Open in Builder');
 
       designer.openQuery(0, null);
       fixture.detectChanges();
@@ -410,11 +419,34 @@ describe('WorkflowDetailPage, the designer page (workflows R6, R7, R12; ui.md 4.
       fixture.detectChanges();
     }));
 
-    it('an unknown kept value opens in Builder', () => {
-      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'reports');
+    it('Open in Builder shows the same run in Builder and keeps Builder; a step opens its dialog there', () => {
+      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'business');
       open(THREE_STEPS);
+      answeredRun();
+      fixture.detectChanges();
+      q('workflow-run-open-builder')!.click();
+      fixture.detectChanges();
       expect(pressed('workflow-view-builder')).toBe('true');
       expect(q('workflow-canvas')).not.toBeNull();
+      expect(q('workflow-run-dock')!.querySelector('[data-testid="run-answer"]')?.textContent).toContain(
+        'Two words',
+      );
+      expect(localStorage.getItem(WORKFLOW_VIEW_STORAGE_KEY)).toBe('builder');
+
+      // An agent's See its data in the Business view: Builder, with that step's dialog.
+      fixture.componentInstance.setView('business');
+      fixture.detectChanges();
+      fixture.componentInstance.openInBuilder('count-words');
+      expect(fixture.componentInstance.view()).toBe('builder');
+      expect(designer.openNodeId()).toBe('count-words');
+      designer.closeNode();
+    });
+
+    it('an unknown kept value opens in Business', () => {
+      localStorage.setItem(WORKFLOW_VIEW_STORAGE_KEY, 'reports');
+      open(THREE_STEPS);
+      expect(pressed('workflow-view-business')).toBe('true');
+      expect(q('workflow-canvas')).toBeNull();
     });
   });
 });

@@ -87,7 +87,7 @@ export class WorkflowDetailPage {
     return workflow === null ? '' : workflow.missingDatasets.join(', ');
   });
 
-  /** Builder (canvas + Run panel) or Business (form + result), kept on this device (R38). */
+  /** Business (form + result, the default) or Builder (canvas + Run panel), kept on this device (R38). */
   readonly view = signal<WorkflowView>(readWorkflowView());
 
   /** The header's View control: switch, and keep the choice for every workflow. */
@@ -96,6 +96,16 @@ export class WorkflowDetailPage {
     this.designer.closeNode();
     this.view.set(view);
     writeWorkflowView(view);
+  }
+
+  /**
+   * The Business view's Open in Builder, or an agent's See its data there:
+   * the page switches to Builder (and keeps it) on the same run, with that
+   * step's dialog open when one is given.
+   */
+  openInBuilder(stepId: string | null): void {
+    this.setView('builder');
+    if (stepId !== null) this.designer.openNode(stepId);
   }
 
   constructor() {

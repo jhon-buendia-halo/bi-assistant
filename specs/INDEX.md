@@ -1434,7 +1434,7 @@ specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in cod
 specs/capabilities/workflows/spec.md:21-23  R4 Every session SHALL run one workflow. A session created from this vers
 specs/capabilities/workflows/spec.md:24-24  R5 The **Workflows** area of the navigation rail ([../app-shell/spec.md](
 specs/capabilities/workflows/spec.md:25-25  R6 Retired (1.23.22). **Start chat** is gone from every workflow card and
-specs/capabilities/workflows/spec.md:26-26  R7 Opening a workflow SHALL show its page as an n8n-style **designer** (s
+specs/capabilities/workflows/spec.md:26-26  R7 A workflow's page SHALL show, in its Builder view (R38; the page opens
 specs/capabilities/workflows/spec.md:27-27  R8 A workflow's Start node dialog SHALL list, under **Agents**, each agen
 specs/capabilities/workflows/spec.md:28-28  R9 The Workflows page SHALL read the catalogue each time it opens. Openin
 specs/capabilities/workflows/spec.md:29-31  R10 Retired (1.23.22). The Workflow tab no longer carries the workflow bar
@@ -1465,16 +1465,16 @@ specs/capabilities/workflows/spec.md:84-89  R34 Map a Dashboard to Data SHALL ru
 specs/capabilities/workflows/spec.md:90-98  R35 **Reference images** (2026-11-15). Answer a Business Question, Assess
 specs/capabilities/workflows/spec.md:99-105  R36 A run of Answer a Business Question whose question asks for another pa
 specs/capabilities/workflows/spec.md:106-113  R37 Consumption Gap Analysis SHALL run, fixed in code ([../../system/agent
-specs/capabilities/workflows/spec.md:114-117  R38 **Builder and Business views** (2026-11-17). A workflow's page SHALL o
+specs/capabilities/workflows/spec.md:114-117  R38 **Business and Builder views** (2026-11-17). A workflow's page SHALL o
 specs/capabilities/workflows/spec.md:119-136  ## Edge cases and errors
 specs/capabilities/workflows/spec.md:138-142  ## Contracts
 specs/capabilities/workflows/spec.md:144-152  ## UI
-specs/capabilities/workflows/spec.md:154-391  ## Flows
-specs/capabilities/workflows/spec.md:156-266  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:268-354  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:356-362  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:364-391  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:393-411  ## Acceptance
+specs/capabilities/workflows/spec.md:154-394  ## Flows
+specs/capabilities/workflows/spec.md:156-269  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:271-357  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:359-365  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:367-394  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:396-414  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
