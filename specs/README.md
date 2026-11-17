@@ -88,6 +88,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | M1-28 Explore a query's full result: page, filter, sort | [epics/M1-28](epics/M1-28/spec.md) |
 | M1-29 Border-case evals for every agent of the two workflows | [epics/M1-29](epics/M1-29/spec.md) |
 | M1-30 Consumption Gap Analysis | [epics/M1-30](epics/M1-30/spec.md) |
+| M1-31 Excel and CSV files as datasources | [epics/M1-31](epics/M1-31/spec.md) |
 | M0-5 Faster workflow, repo-only planning | [epics/M0-5](epics/M0-5/spec.md) |
 | M0-6 Workflow modes: Strict and Free style | [epics/M0-6](epics/M0-6/spec.md) |
 

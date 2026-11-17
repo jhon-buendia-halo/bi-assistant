@@ -216,7 +216,7 @@ roadmap.md:49-54  #### 0.6.2 — Strict workflow skill  `✅ Done`
 roadmap.md:56-61  #### 0.6.3 — Free style workflow skill  `✅ Done`
 roadmap.md:63-68  #### 0.6.4 — QA checks without a story (`qa.mjs --free`)  `✅ Done`
 roadmap.md:70-74  #### 0.6.5 — Workflow pane reads the strict skill  `✅ Done`
-roadmap.md:76-797  ## Release 1 — 1.0 Beta  (target 2026-10-31)
+roadmap.md:76-843  ## Release 1 — 1.0 Beta  (target 2026-10-31)
 roadmap.md:96-96  ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9)) — archived, see roadmap-archive.md
 roadmap.md:98-98  ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2)) — archived, see roadmap-archive.md
 roadmap.md:100-100  ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4)) — archived, see roadmap-archive.md
@@ -350,20 +350,28 @@ roadmap.md:778-781  #### 1.30.2 — Lineage inference and gap tracing  `✅ Done
 roadmap.md:783-786  #### 1.30.3 — Requirements Analyst, Layer Mapper and Gap Advisor  `✅ Done`
 roadmap.md:788-791  #### 1.30.4 — The gap report  `✅ Done`
 roadmap.md:793-797  #### 1.30.5 — The Consumption Gap Analysis workflow  `✅ Done`
-roadmap.md:799-803  ## Release 2 — Multi-user  (no target date yet)
-roadmap.md:803-803  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
-roadmap.md:805-807  ## Backlog
+roadmap.md:799-843  ### Milestone 1.31 — Excel and CSV files as datasources (M1-31)
+roadmap.md:803-807  #### 1.31.1 — DuckDB connector and importer for the `file` kind  `📋 Planned`
+roadmap.md:809-813  #### 1.31.2 — The `excel` extension ships with the app  `📋 Planned`
+roadmap.md:815-819  #### 1.31.3 — Upload, preview and storage of files  `📋 Planned`
+roadmap.md:821-825  #### 1.31.4 — The Excel / CSV form and the review dialog  `📋 Planned`
+roadmap.md:827-831  #### 1.31.5 — The `duckdb` dialect in the agents  `📋 Planned`
+roadmap.md:833-837  #### 1.31.6 — Allow-list refusals and no silent fallbacks  `📋 Planned`
+roadmap.md:839-843  #### 1.31.7 — World Cup Excel sample and E2E  `📋 Planned`
+roadmap.md:845-849  ## Release 2 — Multi-user  (no target date yet)
+roadmap.md:849-849  ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) — archived, see roadmap-archive.md
+roadmap.md:851-853  ## Backlog
 
-specs/README.md:7-92  ## Layout
+specs/README.md:7-93  ## Layout
 specs/README.md:28-52  ### Capabilities
-specs/README.md:54-92  ### Epics
-specs/README.md:94-98  ## Stack neutrality
-specs/README.md:100-109  ## Data assets
-specs/README.md:111-172  ## Formats
-specs/README.md:113-147  ### Capability spec — `capabilities/<capability>/spec.md`
-specs/README.md:149-172  ### Epic spec — `epics/<EPIC-ID>/spec.md`
-specs/README.md:174-178  ## Lifecycle
-specs/README.md:180-186  ## Rebuild prompt
+specs/README.md:54-93  ### Epics
+specs/README.md:95-99  ## Stack neutrality
+specs/README.md:101-110  ## Data assets
+specs/README.md:112-173  ## Formats
+specs/README.md:114-148  ### Capability spec — `capabilities/<capability>/spec.md`
+specs/README.md:150-173  ### Epic spec — `epics/<EPIC-ID>/spec.md`
+specs/README.md:175-179  ## Lifecycle
+specs/README.md:181-187  ## Rebuild prompt
 
 specs/capabilities/agent-answers/spec.md:7-9  ## Concepts
 specs/capabilities/agent-answers/spec.md:11-217  ## Rules
@@ -1756,6 +1764,14 @@ specs/epics/M1-30/spec.md:27-29  ## Specs touched
 specs/epics/M1-30/spec.md:31-33  ## Acceptance
 specs/epics/M1-30/spec.md:35-38  ## Dependencies, risks and open questions
 
+specs/epics/M1-31/spec.md:5-7  ## Goal
+specs/epics/M1-31/spec.md:9-11  ## Scope
+specs/epics/M1-31/spec.md:13-16  ## Out of scope
+specs/epics/M1-31/spec.md:18-28  ## Stories
+specs/epics/M1-31/spec.md:30-32  ## Specs touched
+specs/epics/M1-31/spec.md:34-40  ## Acceptance
+specs/epics/M1-31/spec.md:42-47  ## Dependencies, risks and open questions
+
 specs/product/non-functional.md:5-19  ## 1. Platforms and delivery
 specs/product/non-functional.md:21-33  ## 2. Local-first data
 specs/product/non-functional.md:35-86  ## 3. Security
@@ -2090,7 +2106,7 @@ specs/system/architecture.md:158-196  #### ADR-0010 — Multi-user org server mo
 specs/system/architecture.md:198-218  #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 specs/system/architecture.md:220-238  #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
 specs/system/architecture.md:240-256  #### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
-specs/system/architecture.md:258-1310  ## Level 3 — Components
+specs/system/architecture.md:258-1338  ## Level 3 — Components
 specs/system/architecture.md:407-412  #### ADR-0003 — SQLite document store behind a `DocStore<T>` interface *(retroactive)*
 specs/system/architecture.md:414-419  #### ADR-0004 — Mastra as the agentic harness *(retroactive)*
 specs/system/architecture.md:421-426  #### ADR-0005 — Visuals as versioned conversation participants *(retroactive)*
@@ -2130,7 +2146,8 @@ specs/system/architecture.md:1220-1241  #### ADR-0048 — A workflow run runs de
 specs/system/architecture.md:1243-1264  #### ADR-0049 — Review a Website drives the computer's own browser from the backend, measures before it asks a model, and keeps site sign-ins encrypted
 specs/system/architecture.md:1266-1286  #### ADR-0050 — Paged, filtered reads of a stored query push LIMIT/OFFSET and structured filters into an outer query
 specs/system/architecture.md:1288-1310  #### ADR-0051 — Inferred column lineage for the Consumption Gap Analysis
-specs/system/architecture.md:1312-1367  ## Level 4 — Code
+specs/system/architecture.md:1312-1338  #### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
+specs/system/architecture.md:1340-1395  ## Level 4 — Code
 
 specs/system/data-model.md:13-57  ## 1. Storage overview
 specs/system/data-model.md:15-27  ### 1.1 The application data directory
