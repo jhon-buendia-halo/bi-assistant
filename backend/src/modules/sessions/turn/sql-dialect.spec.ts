@@ -1,5 +1,8 @@
 import { sqlDialectOf } from './sql-dialect';
-import { SQL_FIXER_PROMPT, SQL_VERIFIER_PROMPT } from '../../../mastra/agents/system-prompts';
+import {
+  SQL_FIXER_PROMPT,
+  SQL_VERIFIER_PROMPT,
+} from '../../../mastra/agents/system-prompts';
 import { runReadOnlySqlTool } from '../../../mastra/tools/dataset.tools';
 import type { DatasetSnapshot } from '../../../mastra/tool-services';
 
@@ -26,7 +29,7 @@ describe('the dialect in the SQL agents', () => {
     expect(SQL_FIXER_PROMPT).toMatch(/duckdb/i);
     expect(SQL_VERIFIER_PROMPT).toMatch(/duckdb/i);
   });
-  it('run_readonly_sql names DuckDB', () => {
-    expect(runReadOnlySqlTool.description).toMatch(/DuckDB/);
+  it('run_readonly_sql keeps its wording: the DuckDB hint is in Block 1', () => {
+    expect(runReadOnlySqlTool.description).not.toMatch(/DuckDB/);
   });
 });

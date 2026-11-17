@@ -938,7 +938,7 @@ All tools belong to the `assistant` (3.1-3.9), or to the Data Readiness Agent (3
 
 ### 3.4 `run_readonly_sql`
 
-- **Description:** `Run a single read-only SELECT/WITH statement (live) against one datasource. Use the SQL dialect of that datasource: Databricks SQL for databricks, PostgreSQL for postgres, SQLite for rest, DuckDB for Excel / CSV files. Reference entities with fully-qualified catalog.schema.table names (on Postgres, the catalog is the database name; you may write schema.table). Only query entities from this session's datasets. Write/DDL statements are rejected. datasourceId is optional when the session uses a single datasource.`
+- **Description:** `Run a single read-only SELECT/WITH statement (live) against one datasource. Use the SQL dialect of that datasource: Databricks SQL for databricks, PostgreSQL for postgres, SQLite for rest. Reference entities with fully-qualified catalog.schema.table names (on Postgres, the catalog is the database name; you may write schema.table). Only query entities from this session's datasets. Write/DDL statements are rejected. datasourceId is optional when the session uses a single datasource.`
 - **Input:** `{ sql: string ("A single SELECT or WITH statement"), datasourceId?: string ("Datasource to run on"), limit?: int 1..500 ("Max rows returned (default 100)"), rationale: string }`.
 - **Output:** `{ columns, rows, correctedSql?, truncated?, note?, warnings? }` — see 5.3 for `correctedSql`/`truncated`/`note` and 5.4 for `warnings` (an array of sentences, present only when non-empty). Guards inspect the statement that actually ran (the corrected one when repaired).
 - **Errors:** resolution errors; the final engine/guard error message as `{ error }` after repair attempts are exhausted.
@@ -1158,6 +1158,12 @@ When the same data exists in several layers, prefer the Consumption schema for a
 ```
 
 `<Label>` is Landing, Normalized or Consumption.
+
+Excel / CSV line (the last line of Block 1, ADR-0052): present only when at least one of the session's datasets is on a `file` datasource; otherwise Block 1 is unchanged, byte for byte. It reads:
+
+```
+Entities on a `file` datasource are Excel / CSV sheets: query them in DuckDB SQL (PostgreSQL-like; strftime, not to_char; TRY_CAST text columns before arithmetic).
+```
 
 **Block 2 — governed metrics** (when any metric is defined on an entity in scope, matched case-insensitively):
 
