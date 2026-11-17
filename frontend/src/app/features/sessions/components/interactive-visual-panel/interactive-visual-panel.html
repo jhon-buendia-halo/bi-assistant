@@ -2,8 +2,10 @@
   <div
     class="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3 whitespace-nowrap"
   >
-    <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-fg-muted" />
-    <span class="shrink-0 text-[13px] font-medium text-fg">Visuals</span>
+    @if (chrome()) {
+      <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-fg-muted" />
+      <span class="shrink-0 text-[13px] font-medium text-fg">Visuals</span>
+    }
 
     <div class="ml-auto flex shrink-0 items-center gap-1.5">
       <!-- The session panel's "Shown in this session" menu, when hosted there. -->
@@ -280,10 +282,12 @@
       ></iframe>
     </div>
     <!-- Title, takeaway and analysis now live inside the document itself. -->
+    @if (chrome()) {
     <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-2.5">
       <p class="truncate text-[12px] text-fg-muted">{{ visual.title }}</p>
       <p class="shrink-0 font-mono text-[10px] text-fg-muted">{{ visual.path }}/v{{ visual.version }}</p>
     </div>
+    }
   } @else {
     <div
       class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"

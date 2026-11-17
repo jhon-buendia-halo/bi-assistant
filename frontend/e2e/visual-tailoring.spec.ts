@@ -360,27 +360,33 @@ test(
           .first()
           .click();
         await expect(page.getByTestId('run-answer')).toContainText(ANSWER);
-        // A reopened run shows its visual's card; View opens it (visuals R19).
+        // A reopened run shows its visual's artifact card; Open opens it
+        // in the side panel (visuals R19, R41).
         await page
           .getByTestId('workflow-run-chat-log')
-          .getByRole('button', { name: 'View', exact: true })
+          .getByTestId('run-artifact-open')
           .first()
           .click();
       },
     );
     await scenarioStep(
       page,
-      'Then the visual opens under the answer at version 1',
+      'Then the visual opens in the side panel at version 1',
       async () => {
         await expect(
           runVisual.locator('iframe[title="Interactive visualization"]'),
         ).toBeVisible();
-        // View scrolls the chat to the visual, under however long an answer.
+        // The side panel on the window's right edge (visuals R42).
+        await expect(runVisual).toHaveAttribute('data-sheet', 'true');
         await expect(runVisual).toBeInViewport();
         await expect(versionButton).toHaveText(/v1/);
-        await expect(page.getByTestId('workflow-run-chat-log')).toContainText(
-          `Created ${VISUAL_TITLE}`,
-        );
+        // Its artifact card in the thread (visuals R42).
+        await expect(
+          page
+            .getByTestId('workflow-run-chat-log')
+            .getByTestId('run-artifact-card')
+            .filter({ hasText: 'Created · Version' }),
+        ).toContainText(VISUAL_TITLE);
       },
     );
     await scenarioStep(
@@ -394,9 +400,13 @@ test(
     );
     await scenarioStep(page, 'Then it is version 2', async () => {
       await expect(versionButton).toHaveText(/v2/);
-      await expect(page.getByTestId('workflow-run-chat-log')).toContainText(
-        `Updated ${VISUAL_TITLE}`,
-      );
+      // Its artifact card in the thread (visuals R42).
+        await expect(
+          page
+            .getByTestId('workflow-run-chat-log')
+            .getByTestId('run-artifact-card')
+            .filter({ hasText: 'Updated · Version' }),
+        ).toContainText(VISUAL_TITLE);
     });
     await scenarioStep(
       page,
@@ -412,9 +422,13 @@ test(
     );
     await scenarioStep(page, 'Then version 1 is current again', async () => {
       await expect(versionButton).toHaveText(/v1/);
-      await expect(page.getByTestId('workflow-run-chat-log')).toContainText(
-        `Reverted ${VISUAL_TITLE}`,
-      );
+      // Its artifact card in the thread (visuals R42).
+        await expect(
+          page
+            .getByTestId('workflow-run-chat-log')
+            .getByTestId('run-artifact-card')
+            .filter({ hasText: 'Reverted · Version' }),
+        ).toContainText(VISUAL_TITLE);
     });
     await scenarioStep(page, 'When I refresh its data', async () => {
       const refreshed = page.waitForResponse(
@@ -449,8 +463,9 @@ test(
           .getByRole('button')
           .first()
           .click();
-        await expect(page.getByRole('button', { name: 'View' })).toHaveCount(3);
-        await page.getByRole('button', { name: 'View' }).first().click();
+        // Each visual event is an artifact card with Open (visuals R41).
+        await expect(page.getByTestId('run-artifact-card')).toHaveCount(3);
+        await page.getByTestId('run-artifact-open').first().click();
         await expect(
           runVisual.locator('iframe[title="Interactive visualization"]'),
         ).toBeVisible();

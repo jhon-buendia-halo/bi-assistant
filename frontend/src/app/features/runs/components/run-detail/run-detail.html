@@ -130,7 +130,16 @@
 
       @if (run.answer; as answer) {
         <section aria-label="Answer" data-testid="run-detail-answer">
+          <!-- A visual the run made: its artifact card (visuals R42) -->
+          <ng-template #artifactCard let-visual>
+            <app-run-artifact-card
+              [run]="run"
+              [visual]="visual"
+              (open)="visuals.view(run, $event)"
+            />
+          </ng-template>
           <app-answer-view
+            [visualCard]="artifactCard"
             [message]="answer"
             [latest]="false"
             [busy]="false"
@@ -148,12 +157,17 @@
               [message]="event"
               [latest]="false"
               [busy]="false"
+              [visualCard]="artifactCard"
               (viewVisual)="visuals.view(run, $event)"
             />
           }
           <!-- Deferred: the interactive panel stays out of the initial bundle -->
           @defer (when visuals.shown() !== null || visuals.loading() || visuals.error() !== null) {
-            <app-run-visual [run]="run" (runChange)="applyRun($event)" />
+            <app-run-visual
+              [run]="run"
+              [sheet]="true"
+              (runChange)="applyRun($event)"
+            />
           }
         </section>
       }

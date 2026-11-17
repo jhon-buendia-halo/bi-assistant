@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-angular';
 import { ExecutionId } from '../../../../shared/execution-id/execution-id';
+import { RunArtifactCard } from '../../../runs/components/run-artifact-card/run-artifact-card';
 import {
   ConversationTurn,
   WorkflowConversation,
@@ -116,6 +117,7 @@ const FORM_CONTROLS =
     WorkflowRunStory,
     WorkflowRunTeam,
     WorkflowConversationNav,
+    RunArtifactCard,
   ],
   providers: [WorkflowConversation],
   templateUrl: './workflow-run-chat.html',
@@ -419,33 +421,18 @@ export class WorkflowRunChat {
     this.designer.openQuery(index, window.document.activeElement);
   }
 
+  /** A card's Open: the visual opens in the side panel (visuals R42). */
   protected viewVisual(event: VisualEvent): void {
     const run = this.designer.run();
-    if (run === null) return;
-    this.visuals.view(run, event);
-    this.revealVisual();
+    if (run !== null) this.visuals.view(run, event);
   }
 
-  /**
-   * View opens the visual in a section under the whole answer, below the
-   * fold of a long answer: scroll the chat to it once it is drawn (it loads
-   * on its own, `@defer`), so View visibly shows it (ui.md 4.4b).
-   */
-  private revealVisual(tries = 30): void {
-    setTimeout(() => {
-      const log = this.log()?.nativeElement;
-      const visual = log?.querySelector<HTMLElement>('app-run-visual');
-      if (log === undefined || visual === null || visual === undefined) {
-        if (tries > 0) this.revealVisual(tries - 1);
-        return;
-      }
-      this.stickToEnd = false;
-      log.scrollTop +=
-        visual.getBoundingClientRect().top -
-        log.getBoundingClientRect().top -
-        8;
-    }, 100);
-  }
+  /** The shown answer made a visual: its card carries Saved to Artifacts and Map to data. */
+  protected readonly hasArtifactCard = computed(
+    () =>
+      this.designer.run() !== null &&
+      this.designer.runResult()?.answer?.visual !== undefined,
+  );
 
   /**
    * The scorecard opened from the run's readiness card (data-readiness R5),

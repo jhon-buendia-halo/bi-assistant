@@ -182,6 +182,11 @@ export class InteractiveVisualPanel {
   readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
+  /**
+   * The panel's own label (`Visuals`) and its title and path line. A host that
+   * titles the visual itself (a run's side panel, visuals R42) turns it off.
+   */
+  readonly chrome = input(true);
   readonly downloadVisual = output<InteractiveVisualization>();
   readonly selectVersion = output<number>();
   readonly revertVersion = output<number>();

@@ -27,8 +27,9 @@
           <span>Run again</span>
         </button>
       }
-      @if (savedArtifactId(); as artifactId) {
-        <!-- Dashboard Image to Artifact saved the dashboard it read (ui.md 4.8i) -->
+      @if (!hasArtifactCard() && savedArtifactId(); as artifactId) {
+        <!-- Dashboard Image to Artifact saved the dashboard it read (ui.md 4.8i);
+             with an artifact card the card carries this (visuals R42) -->
         <span
           data-testid="workflow-run-artifact-saved"
           class="flex items-center gap-1.5 text-[12px] text-fg-muted"
@@ -285,6 +286,19 @@
 
       @if (result.answer; as answer) {
         <div data-testid="run-answer">
+          <!-- A visual the run made: its artifact card, where it was made (visuals R42) -->
+          <ng-template #artifactCard let-visual>
+            @if (designer.run(); as stored) {
+              <app-run-artifact-card
+                [run]="stored"
+                [visual]="visual"
+                [savedArtifactId]="savedArtifactId()"
+                (open)="viewVisual($event)"
+                (mapToData)="mapSavedArtifact($event)"
+                (openArtifact)="openSavedArtifact($event)"
+              />
+            }
+          </ng-template>
           <app-answer-view
             [message]="answer"
             [latest]="true"
@@ -293,6 +307,7 @@
             [ratingPending]="designer.ratingPending()"
             [queryInspector]="hasQueries(answer)"
             [question]="designer.shownQuestion()"
+            [visualCard]="designer.run() ? artifactCard : null"
             (inspectQuery)="inspectQuery($event)"
             (rate)="designer.rateAnswer($event)"
             (optionPicked)="designer.followUp($event)"
@@ -305,14 +320,20 @@
                 class="mt-2 block"
                 [message]="event"
                 [busy]="designer.running()"
+                [visualCard]="artifactCard"
                 (viewVisual)="viewVisual($event)"
               />
             }
-            <!-- Deferred: the interactive panel stays out of the initial bundle -->
+            <!-- Deferred: the interactive panel stays out of the initial bundle.
+                 It opens as a side panel on the window's right edge (R42). -->
             @defer (
               when visuals.shown() !== null || visuals.loading() || visuals.error() !== null
             ) {
-              <app-run-visual [run]="stored" (runChange)="applyRun($event)" />
+              <app-run-visual
+                [run]="stored"
+                [sheet]="true"
+                (runChange)="applyRun($event)"
+              />
             }
           }
         </div>

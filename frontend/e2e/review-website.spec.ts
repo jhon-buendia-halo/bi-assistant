@@ -133,7 +133,7 @@ test.describe('Feature: Review a Website', () => {
         page,
         'When I open the report in full screen',
         async () => {
-          await page.getByRole('button', { name: /^View/ }).first().click();
+          await page.getByTestId('run-artifact-open').first().click();
           await page.getByTestId('run-visual-full-screen').click();
           await expect(page.getByTestId('run-visual')).toHaveAttribute(
             'data-full-screen',
@@ -145,7 +145,7 @@ test.describe('Feature: Review a Website', () => {
         page,
         'Then the problems come first, worst first; "Tap target too small" groups its elements, each framed in its page, with Previous and Next',
         async () => {
-          const report = page.frameLocator('iframe').first();
+          const report = page.frameLocator('iframe[title="Interactive visualization"]');
           const problems = report.getByRole('list', { name: 'Problems' });
           await expect(problems.getByRole('button').first()).toContainText(
             'Button covered by a fixed element',
@@ -237,9 +237,9 @@ test.describe('Feature: Review a Website', () => {
           page,
           'And the report tags her finding "Iris", with what she observed and her suggestion',
           async () => {
-            await page.getByRole('button', { name: /^View/ }).first().click();
+            await page.getByTestId('run-artifact-open').first().click();
             await page.getByTestId('run-visual-full-screen').click();
-            const report = page.frameLocator('iframe').first();
+            const report = page.frameLocator('iframe[title="Interactive visualization"]');
             await report
               .getByRole('list', { name: 'Problems' })
               .getByRole('button', {
