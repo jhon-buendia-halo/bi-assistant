@@ -58,9 +58,17 @@ export function llmSettings(env) {
   };
 }
 
-/** The load body for one fixture: a seedable fixture loads with its own defaults. */
+/**
+ * The load body for one fixture: a seedable PostgreSQL fixture loads with its
+ * own defaults; a file sample (Excel / CSV) takes no connection.
+ */
 export function fixtureBody(fixture) {
-  return fixture.seedable ? fixture.defaults : {};
+  return fixture.seedable && fixture.datasourceKind !== 'file' ? fixture.defaults : {};
+}
+
+/** Whether `setup-local` loads the fixture: it can be loaded without a script. */
+export function isLoadable(fixture) {
+  return Boolean(fixture.seedable) || fixture.datasourceKind === 'file';
 }
 
 async function main() {
@@ -89,8 +97,9 @@ async function main() {
 
   const { fixtures } = await call('GET', '/testing-data');
   for (const f of fixtures) {
-    // Seedable Postgres fixtures load with their own defaults. Other fixtures are script-only.
-    if (!f.seedable) continue;
+    // Seedable Postgres fixtures load with their own defaults and the file
+    // sample copies its files. Other fixtures are script-only.
+    if (!isLoadable(f)) continue;
     if (f.status?.loaded) {
       console.log(`${f.id}: already loaded`);
       continue;

@@ -1,7 +1,7 @@
 // node --test scripts/setup-local.test.mjs (roadmap 0.5.5)
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fixtureBody, llmSettings, parseEnv } from './setup-local.mjs';
+import { fixtureBody, isLoadable, llmSettings, parseEnv } from './setup-local.mjs';
 
 const pg = { host: '127.0.0.1', port: 55432, user: 'world_cup', password: 'world_cup_dev', ssl: false };
 
@@ -17,6 +17,13 @@ test('the Intellify sample loads with its own defaults', () => {
 
 test('a fixture that cannot be seeded loads with an empty body', () => {
   assert.deepEqual(fixtureBody({ id: 'rest-sample', seedable: false }), {});
+});
+
+test('the Excel sample is loaded, with an empty body', () => {
+  const f = { id: 'world-cup-excel', seedable: true, datasourceKind: 'file', defaults: { ...pg, database: '' } };
+  assert.equal(isLoadable(f), true);
+  assert.deepEqual(fixtureBody(f), {});
+  assert.equal(isLoadable({ id: 'rest-sample', seedable: false }), false);
 });
 
 test('LLM settings need a base URL and a model', () => {

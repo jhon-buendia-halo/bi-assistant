@@ -83,7 +83,7 @@ export function imageOfDataUrl(
 }
 
 /** The datasource kinds a `dataset` or `datasets` field can be limited to. */
-export type InputDatasourceKind = 'postgres' | 'databricks' | 'rest';
+export type InputDatasourceKind = 'postgres' | 'databricks' | 'rest' | 'file';
 
 /** One field of a workflow's input, defined in code (api.md 116). */
 export interface WorkflowInputField {
@@ -208,6 +208,7 @@ const KIND_LABELS: Record<InputDatasourceKind, string> = {
   postgres: 'PostgreSQL',
   databricks: 'Databricks',
   rest: 'REST',
+  file: 'Excel / CSV',
 };
 
 /** `A`, `A or B`, `A, B or C`. */

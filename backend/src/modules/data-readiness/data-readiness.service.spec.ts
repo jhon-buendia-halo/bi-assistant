@@ -101,6 +101,12 @@ const datasources: Record<string, Datasource> = {
     kind: 'rest',
     config: {},
   } as unknown as Datasource,
+  'ds-file': {
+    id: 'ds-file',
+    name: 'Sheets',
+    kind: 'file',
+    config: { files: [] },
+  } as unknown as Datasource,
 };
 
 function build() {
@@ -232,7 +238,20 @@ describe('DataReadinessService', () => {
         service.assess({ datasourceId: 'ds-rest' }, NOW),
       ).rejects.toThrow(
         new BadRequestException(
-          'Data readiness supports PostgreSQL and Databricks datasources only',
+          'Data Readiness supports PostgreSQL and Databricks datasources; "API" is a REST API datasource.',
+        ),
+      );
+      expect(mockPostgres).not.toHaveBeenCalled();
+      expect(mockDatabricks).not.toHaveBeenCalled();
+    });
+
+    it('rejects an Excel / CSV datasource', async () => {
+      const { service } = build();
+      await expect(
+        service.assess({ datasourceId: 'ds-file' }, NOW),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Data Readiness supports PostgreSQL and Databricks datasources; "Sheets" is an Excel / CSV datasource.',
         ),
       );
       expect(mockPostgres).not.toHaveBeenCalled();

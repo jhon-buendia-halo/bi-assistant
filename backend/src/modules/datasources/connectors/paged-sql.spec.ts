@@ -43,7 +43,7 @@ function orderBy(built: PagedSql): string {
 
 function filtered(
   filter: FilterSpec,
-  dialect: 'postgres' | 'databricks' | 'sqlite' = 'postgres',
+  dialect: 'postgres' | 'databricks' | 'sqlite' | 'duckdb' = 'postgres',
 ): PagedSql {
   return buildPagedSql(
     dialect,
@@ -227,6 +227,24 @@ describe('buildPagedSql: identifiers and placeholders per dialect', () => {
       'LOWER(CAST("Last ""Big"" Update" AS TEXT)) = LOWER(?) AND "we`ird" > ?',
     );
     expect(built.params).toEqual(['Brazil', 3]);
+  });
+
+  it('DuckDB: double quotes doubled, $n parameters, VARCHAR casts', () => {
+    const built = buildPagedSql('duckdb', quoted);
+
+    expect(built.text).toContain('COUNT(*) OVER () AS "__qti_total"');
+    expect(where(built)).toBe(
+      'LOWER(CAST("Last ""Big"" Update" AS VARCHAR)) = LOWER(CAST($1 AS VARCHAR)) AND "we`ird" > $2',
+    );
+    expect(orderBy(built)).toBe('"we`ird" ASC NULLS LAST, 1');
+    expect(built.params).toEqual(['Brazil', 3]);
+  });
+
+  it('DuckDB keeps booleans as booleans', () => {
+    const built = filtered({ column: 'vip', op: 'eq', value: true }, 'duckdb');
+
+    expect(where(built)).toBe('"vip" = $1');
+    expect(built.params).toEqual([true]);
   });
 
   it('the count statement keeps the same predicates and parameters', () => {
@@ -455,6 +473,7 @@ describe('buildPagedSql: predicates per operator', () => {
     const pg = filtered(filter);
     const lite = filtered(filter, 'sqlite');
     const dbx = filtered(filter, 'databricks');
+    const duck = filtered(filter, 'duckdb');
 
     expect(pg.params).toEqual(['%50\\%\\_off\\\\%']);
     expect(where(pg)).not.toContain('ESCAPE');
@@ -463,6 +482,11 @@ describe('buildPagedSql: predicates per operator', () => {
       'LOWER(CAST("country" AS TEXT)) LIKE LOWER(?) ESCAPE \'\\\'',
     );
     expect(lite.params).toEqual(['%50\\%\\_off\\\\%']);
+    // DuckDB's LIKE has no default escape character either.
+    expect(where(duck)).toBe(
+      'LOWER(CAST("country" AS VARCHAR)) LIKE LOWER(CAST($1 AS VARCHAR)) ESCAPE \'\\\'',
+    );
+    expect(duck.params).toEqual(['%50\\%\\_off\\\\%']);
   });
 });
 

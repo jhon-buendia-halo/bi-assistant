@@ -1309,6 +1309,34 @@ flowchart LR
   - **Check every column pair by query:** rejected; thousands of queries per run.
   - **Parse the views' and jobs' SQL:** rejected; Landing and Normalized are often loaded by tools outside the database.
 
+#### ADR-0052 — Excel and CSV files are a datasource kind, imported once into a DuckDB database per datasource
+- **Status:** Accepted
+- **Date:** 2026-11-17
+- **Context:**
+  - Users keep much of their data in Excel workbooks and CSV exports and want to ask questions of them as they do of a database (roadmap 1.31). Datasets draw every entity from one datasource and address it as `catalog.schema.table` (datasources R30, datasets R2); the agents, the query inspector and the paged result reader (ADR-0050) all work through a connector's read-only SQL.
+  - The REST connector loads its rows into a throwaway SQLite database on every query (datasources R36). For a workbook that means parsing the file again on every agent query and every inspector page; parsing an 8 MB, 200,000-row sheet takes about 1 s with exceljs (measured 2026-11-17).
+  - DuckDB already ships in the backend (`@duckdb/node-api` 1.5.2 through `@mastra/duckdb`, kept unbundled as a native addon, delivery.md 1). Its built-in `read_csv` reads CSV with type detection; its `excel` extension reads `.xlsx` with a sheet, a range and a header flag (0.44 s for the same sheet, measured). The extension is not built in: by default DuckDB downloads it from `extensions.duckdb.org` on first use, which fails on an offline or proxied Windows machine.
+  - Model-authored SQL that reaches DuckDB could call its file functions (`read_csv('<any path>')`, `read_text`) on the user's disk; the syntactic guard (datasources R33) does not refuse them.
+- **Decision:**
+  - **A fourth datasource kind, `file`** ("Excel / CSV"), whose configuration is a list of files and, per file, its sheets with the import options the user confirmed (include, header row, range, exclude the last row, read every column as text). `.xlsx` and `.csv` only, at most 200 MB per file.
+  - **Import once, query many times.** Uploaded files are copied into the data dir (`files/<datasourceId>/`) and every included sheet becomes a table of that datasource's own DuckDB database (`files/<datasourceId>/data.duckdb`), one schema per file. Replacing a file re-imports it. The originals on the user's disk are never read again or changed.
+  - **Entity keys come from the attach name:** each query opens an in-memory DuckDB, `ATTACH`es the datasource's database `AS file (READ_ONLY)`, so `file.<file>.<sheet>` resolves as written, with no rewriting of the statement.
+  - **A sandboxed, read-only engine:** after the attach the connection sets `enable_external_access = false` (DuckDB refuses to turn it back on while running) and `lock_configuration = true`, and extension autoinstall and autoload are off. A statement can read only the attached tables; a write is refused by the read-only attach. The R33 guard still runs first.
+  - **The `excel` extension ships with the app:** the build fetches the extension for the exact DuckDB version in the lockfile and platform (`windows_amd64` for the installer, the host's for development and the CLI), places it under the backend's resources, and the importer `LOAD`s it from that path. A build check fails when the two versions differ. No request to `extensions.duckdb.org` at runtime.
+  - **A new SQL dialect, `duckdb`,** for the paged reader, the dialect named to the agents, the SQL fixer and verifier, and the `sql-analysis` skill.
+  - **Out of the first version:** Data Readiness, synthetic data and the Consumption Gap Analysis refuse the kind with a clear message, as they refuse REST today; `.xls`, password-protected workbooks, live links to the original file and writing back to a workbook.
+- **Consequences:**
+  - Queries read a columnar database instead of parsing a file: an aggregate over 200,000 rows answers in milliseconds, and the query inspector's pages (ADR-0050) cost one query each.
+  - The data dir grows by the files and their DuckDB copy; deleting the datasource deletes both. A change to the original file reaches the app only through Replace file.
+  - Upgrading `@mastra/duckdb` (and so DuckDB) requires fetching the matching extension; the build check makes a mismatch fail the build instead of breaking Excel import silently.
+  - Type detection is DuckDB's: whole numbers in an `.xlsx` read as `DOUBLE`, and a column's type follows its first data row; the review dialog shows the detected types and offers "Read every column as text".
+  - **Stack-neutral:** a rebuild needs a per-datasource store of the imported tables, queried read-only, with no access to other files; the engine is replaceable.
+- **Alternatives considered:**
+  - **Parse into in-memory SQLite on every query, as REST does:** rejected; a re-parse per query and per page, weak types (dates as text) and slow on large sheets.
+  - **Import into a PostgreSQL database:** rejected; the desktop user has no PostgreSQL of their own.
+  - **Read `.xlsx` with exceljs and append the rows into DuckDB:** kept as the fallback if the extension cannot ship; slower (about 2.5×) and needs our own type detection.
+  - **Query the original file in place (`read_xlsx` on each query):** rejected; the file can move or change under a saved dataset, and the browser build has no file path.
+
 ## Level 4 — Code
 
 ```mermaid
