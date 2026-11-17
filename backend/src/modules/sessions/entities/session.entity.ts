@@ -10,6 +10,29 @@ export interface ClarificationOption {
   description?: string;
 }
 
+/**
+ * A follow-up that asks one agent of Answer a Business Question alone
+ * (workflows R38; agents.md 5.21): the asked step and, for Write answer,
+ * what the earlier run gives it.
+ */
+export interface AskedStep {
+  /** The step whose agent answers alone (`ASKABLE_STEP_IDS`). */
+  step: string;
+  /** Write answer only: the earlier run's answer and what led to it. */
+  earlier?: {
+    /** The earlier run's plan as its Plan step stored it; null when not kept. */
+    plan: unknown;
+    /** The earlier run's failed and passed data quality findings, if it checked. */
+    qualityFindings: { check: string; passed: boolean; detail: string }[];
+    /** Zoe's notes of the earlier run, `''` without images. */
+    imageNotes: string;
+    /** The earlier answer's records, carried into this run's answer. */
+    records: ToolDataRecord[];
+    /** Their evidence, so the carried sources keep their coverage and view. */
+    evidence: QueryEvidence[];
+  };
+}
+
 /** One tool invocation's captured result, kept for visuals and transparency. */
 export interface ToolDataRecord {
   tool: string;
@@ -385,6 +408,13 @@ export interface SessionDoc {
    * In memory only, like the host.
    */
   inputValues?: Record<string, string | number | boolean | string[]>;
+  /**
+   * A follow-up run's host that asks one agent of Answer a Business
+   * Question alone (workflows R38; agents.md 5.21): the asked step, and for
+   * Write answer what the earlier run gives it. Its turn runs on the
+   * `ask-agent` engine. In memory only, like the host.
+   */
+  ask?: AskedStep;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */
