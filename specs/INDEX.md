@@ -2215,33 +2215,34 @@ specs/system/delivery.md:25-27  ### Why `--base-href ./`
 specs/system/delivery.md:29-36  ### Data directory and secret
 specs/system/delivery.md:38-42  ### Dev and branding helpers
 specs/system/delivery.md:44-60  ### Brands (ADR-0045)
-specs/system/delivery.md:62-154  ## 2. npm scripts
+specs/system/delivery.md:62-163  ## 2. npm scripts
 specs/system/delivery.md:64-85  ### `frontend/package.json`
 specs/system/delivery.md:87-109  ### `backend/package.json`
-specs/system/delivery.md:111-121  ### Repo scripts (`scripts/`, no root `package.json`)
-specs/system/delivery.md:123-143  ### Local run recipes
-specs/system/delivery.md:145-154  ### Verification gate (what must be green before a change ships)
-specs/system/delivery.md:156-189  ## 3. Desktop packaging (electron-builder)
-specs/system/delivery.md:191-231  ## 4. The web app as an npm package
-specs/system/delivery.md:233-338  ## 5. Versioning and releases
-specs/system/delivery.md:239-253  ### `version-on-merge.yml` — Version on merge
-specs/system/delivery.md:255-275  ### `build-desktop.yml` — Build desktop installers
-specs/system/delivery.md:277-286  ### `publish-npm.yml` — Publish npm package
-specs/system/delivery.md:288-303  ### `spec-checks.yml` — Spec checks
-specs/system/delivery.md:305-338  ### Branch rulesets on `main`
-specs/system/delivery.md:309-314  #### "main: specs match the code"
-specs/system/delivery.md:316-334  #### "main: PR approval, admin may merge without"
-specs/system/delivery.md:336-338  #### Both rulesets
-specs/system/delivery.md:340-368  ## 6. Docker Compose: the World Cup sample database and the observability profile
-specs/system/delivery.md:356-368  ### Observability profile (opt-in)
-specs/system/delivery.md:370-387  ## 7. Running a second instance (worktrees and parallel runs)
-specs/system/delivery.md:389-404  ## 8. The product page (`site/`)
-specs/system/delivery.md:406-467  ## 9. Claude Code mods (`.claude/mods/`)
-specs/system/delivery.md:419-467  ### `workflow-steps`
-specs/system/delivery.md:469-505  ## 10. Claude Code project skills (`.claude/skills/`)
-specs/system/delivery.md:507-516  ## 11. Claude Code tools (`.claude/tools/`)
-specs/system/delivery.md:518-537  ## 12. Claude Code agents (`.claude/agents/`)
-specs/system/delivery.md:539-595  ## 13. Deterministic QA (`scripts/qa.mjs`)
+specs/system/delivery.md:111-122  ### Repo scripts (`scripts/`, no root `package.json`)
+specs/system/delivery.md:124-144  ### Local run recipes
+specs/system/delivery.md:146-152  ### DuckDB's `excel` extension (ADR-0052, roadmap 1.31.2)
+specs/system/delivery.md:154-163  ### Verification gate (what must be green before a change ships)
+specs/system/delivery.md:165-198  ## 3. Desktop packaging (electron-builder)
+specs/system/delivery.md:200-240  ## 4. The web app as an npm package
+specs/system/delivery.md:242-347  ## 5. Versioning and releases
+specs/system/delivery.md:248-262  ### `version-on-merge.yml` — Version on merge
+specs/system/delivery.md:264-284  ### `build-desktop.yml` — Build desktop installers
+specs/system/delivery.md:286-295  ### `publish-npm.yml` — Publish npm package
+specs/system/delivery.md:297-312  ### `spec-checks.yml` — Spec checks
+specs/system/delivery.md:314-347  ### Branch rulesets on `main`
+specs/system/delivery.md:318-323  #### "main: specs match the code"
+specs/system/delivery.md:325-343  #### "main: PR approval, admin may merge without"
+specs/system/delivery.md:345-347  #### Both rulesets
+specs/system/delivery.md:349-377  ## 6. Docker Compose: the World Cup sample database and the observability profile
+specs/system/delivery.md:365-377  ### Observability profile (opt-in)
+specs/system/delivery.md:379-396  ## 7. Running a second instance (worktrees and parallel runs)
+specs/system/delivery.md:398-413  ## 8. The product page (`site/`)
+specs/system/delivery.md:415-476  ## 9. Claude Code mods (`.claude/mods/`)
+specs/system/delivery.md:428-476  ### `workflow-steps`
+specs/system/delivery.md:478-514  ## 10. Claude Code project skills (`.claude/skills/`)
+specs/system/delivery.md:516-525  ## 11. Claude Code tools (`.claude/tools/`)
+specs/system/delivery.md:527-546  ## 12. Claude Code agents (`.claude/agents/`)
+specs/system/delivery.md:548-604  ## 13. Deterministic QA (`scripts/qa.mjs`)
 
 specs/system/tech-stack.md:7-15  ## Languages and runtime
 specs/system/tech-stack.md:17-42  ## Frontend (`frontend/`)

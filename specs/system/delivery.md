@@ -119,6 +119,7 @@ The repo keeps no root `package.json`; its developer scripts are plain Node file
 | `node scripts/qa.mjs …` | Deterministic QA, see 13. |
 | `node scripts/demo-page.mjs <roadmap-id>` | Shareable demo page, see 13. |
 | `node scripts/bootstrap.mjs` | Workspace bootstrap, see above. |
+| `node scripts/fetch-duckdb-extensions.mjs <platform…> --out <dir>` | Downloads DuckDB's `excel` extension, see "DuckDB's `excel` extension" below. Roadmap 1.31.2. |
 
 ### Local run recipes
 
@@ -141,6 +142,14 @@ node scripts/setup-local.mjs http://127.0.0.1:<port>  # configure the running in
 - **Testing Data:** loads every seedable fixture with its defaults (`POST /testing-data/:id/load`, [api.md](api.md) 56); a fixture already loaded is skipped, so a re-run is safe. Tests: `node --test scripts/setup-local.test.mjs`.
 
 It exits non-zero when any step fails. It writes to the sample Postgres the fixtures name (127.0.0.1:55432 by default), creating their databases if missing.
+
+### DuckDB's `excel` extension (ADR-0052, roadmap 1.31.2)
+
+Importing `.xlsx` files needs DuckDB's `excel` extension, and DuckDB would install it from the internet on first use. The app never does: it ships the file and loads it by path (datasources R58).
+
+- **Where it lives.** `<backend root>/vendor/duckdb-extensions/v<version>/<platform>/excel.duckdb_extension`, `<platform>` being DuckDB's name (`windows_amd64`, `osx_arm64`, `osx_amd64`, `linux_amd64`). `excelExtension()` (`backend/src/modules/datasources/connectors/excel-extension.ts`) builds the path from the loaded DuckDB library's own `version()` and `process.platform`/`process.arch`, four levels above its own directory (the backend root from `src/`, `dist/` and the bundle alike, since the bundle keeps `__dirname` meaning the module's place in `dist/`). A missing file throws `Excel support is missing from this installation (DuckDB <version>, <platform>)`.
+- **Where it comes from.** `node scripts/fetch-duckdb-extensions.mjs <platform…> --out <dir>` (Node built-ins only) reads the DuckDB version from `backend/package-lock.json` (`node_modules/@duckdb/node-bindings`, the `-r.N` suffix stripped), downloads `https://extensions.duckdb.org/v<version>/<platform>/excel.duckdb_extension.gz`, gunzips it into `<dir>/v<version>/<platform>/`, keeps a file already there with the same size and fails on any status but 200. Development: `scripts/bootstrap.mjs` fetches the host platform into `backend/vendor/duckdb-extensions/` (git-ignored). Installer: `frontend/scripts/stage-backend.sh` fetches `windows_amd64` (plus the host platform when staging elsewhere) into the staged backend's `vendor/duckdb-extensions/`, after bundling and pruning, which touch only `dist/` and `node_modules/`. npm package: `prepack` and `publish-npm.yml` (which publishes with `--ignore-scripts`) fetch all four platforms into `backend/vendor/duckdb-extensions/`, which `files` publishes.
+- **Version check.** A DuckDB upgrade must be followed by a new fetch, because the path carries the version. `excel-extension.spec.ts` fails when the lockfile's DuckDB version differs from the loaded library's `version()`, and with the extension present reads a workbook with no `INSTALL`.
 
 ### Verification gate (what must be green before a change ships)
 
@@ -196,7 +205,7 @@ The second, explicit `node_modules` mapping is required: electron-builder silent
 | Registry | GitHub Packages, `https://npm.pkg.github.com` (`publishConfig.registry`). The scope must equal the repository owner (lowercase), which is why the name is scoped; the installed binary is still `questions-to-insights` (`bin` → `dist/cli.js`). |
 | License | `UNLICENSED` (private repository, no LICENSE file) |
 | Node | `engines.node >= 22.13.0` |
-| Tarball contents | `files`: `dist`, `!dist/**/*.tsbuildinfo`, `public`. No `src/`, `test/`. |
+| Tarball contents | `files`: `dist`, `!dist/**/*.tsbuildinfo`, `public`, `vendor/duckdb-extensions` (DuckDB's `excel` extension for all four platforms, section 2). No `src/`, `test/`. |
 | Run | `npx @jhon-buendia-halo/questions-to-insights`, or `npm i -g …` then `questions-to-insights` |
 
 **Consumer auth.** GitHub Packages requires a token for every install, `npx` included. `~/.npmrc` needs:

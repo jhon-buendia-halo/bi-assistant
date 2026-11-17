@@ -14,7 +14,8 @@
   "files": [
     "dist",
     "!dist/**/*.tsbuildinfo",
-    "public"
+    "public",
+    "vendor/duckdb-extensions"
   ],
   "engines": {
     "node": ">=22.13.0"
@@ -44,7 +45,7 @@
     "evals:assistant": "nest build && node dist/mastra/evals/run-assistant-evals.js",
     "build:web": "npm --prefix ../frontend run build:web && node scripts/copy-web.js",
     "build:all": "npm run build && npm run build:web",
-    "prepack": "npm run build:all && node scripts/assert-publishable-brand.js",
+    "prepack": "npm run build:all && node ../scripts/fetch-duckdb-extensions.mjs windows_amd64 osx_arm64 osx_amd64 linux_amd64 --out vendor/duckdb-extensions && node scripts/assert-publishable-brand.js",
     "start:web": "node dist/cli.js"
   },
   "dependencies": {
