@@ -119,12 +119,12 @@ describe('The workflow catalogue (API)', () => {
         // follow-up over an earlier result, Olivia plans, Sarah checks data
         // quality when asked and Jessica writes (agents.md 5.11).
         agents: [
-          { key: 'insights-analyst', name: 'Michael' },
-          { key: 'image-reader', name: 'Zoe' },
-          { key: 'result-explorer', name: 'Nathan' },
-          { key: 'analysis-planner', name: 'Olivia' },
-          { key: 'data-readiness', name: 'Sarah' },
-          { key: 'answer-writer', name: 'Jessica' },
+          { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
+          { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
+          { key: 'result-explorer', name: 'Nathan', role: 'Result Explorer' },
+          { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
+          { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
+          { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
         ],
         stepCount: 13,
         bar: 'steps',
@@ -177,8 +177,8 @@ describe('The workflow catalogue (API)', () => {
         kind: 'code',
         owner: 'Official',
         agents: [
-          { key: 'data-readiness', name: 'Sarah' },
-          { key: 'image-reader', name: 'Zoe' },
+          { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
+          { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
         ],
         stepCount: 8,
         bar: 'steps',
@@ -413,6 +413,7 @@ describe('The workflow catalogue (API)', () => {
         {
           key: 'insights-analyst',
           name: 'Michael',
+          role: 'Insights Analyst',
           model: null,
           systemPrompt: expect.any(String) as string,
           toolDetails: expect.any(Array) as unknown[],
@@ -421,6 +422,7 @@ describe('The workflow catalogue (API)', () => {
         {
           key: 'image-reader',
           name: 'Zoe',
+          role: 'Image Analyst',
           model: null,
           systemPrompt: expect.any(String) as string,
           toolDetails: [],
@@ -428,6 +430,7 @@ describe('The workflow catalogue (API)', () => {
         {
           key: 'result-explorer',
           name: 'Nathan',
+          role: 'Result Explorer',
           model: null,
           systemPrompt: expect.stringMatching(
             /^You turn a user's words about a query's result into a view/,
@@ -437,6 +440,7 @@ describe('The workflow catalogue (API)', () => {
         {
           key: 'analysis-planner',
           name: 'Olivia',
+          role: 'Analysis Lead',
           model: null,
           systemPrompt: expect.stringMatching(
             /^You plan a data analysis for Questions to Insights\./,
@@ -448,6 +452,7 @@ describe('The workflow catalogue (API)', () => {
         {
           key: 'data-readiness',
           name: 'Sarah',
+          role: 'Data Quality Analyst',
           model: null,
           systemPrompt: expect.stringMatching(
             /^You are the Data Readiness Agent/,
@@ -457,6 +462,7 @@ describe('The workflow catalogue (API)', () => {
         {
           key: 'answer-writer',
           name: 'Jessica',
+          role: 'Insights Writer',
           model: null,
           systemPrompt: expect.stringMatching(
             /^You write the final answer for Questions to Insights\./,

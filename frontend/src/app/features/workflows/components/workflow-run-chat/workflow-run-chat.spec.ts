@@ -962,14 +962,23 @@ describe('WorkflowRunChat, the Chat column of the Run panel (workflows R7–R13;
       expect(el.querySelector('[aria-label="Example questions"]')).toBeNull();
     });
 
-    it('the question field comes first, its label is screen-reader only and it has two rows', () => {
+    it('the question field comes first, in its own labelled section marked Required, with three rows (ui.md 4.4b)', () => {
       openForm();
       const form = q('workflow-run-composer')!;
       expect(form.getAttribute('aria-label')).toBe('Input');
       expect(form.querySelector('textarea')).toBe(q('workflow-input-question') as HTMLTextAreaElement);
-      expect((q('workflow-input-question') as HTMLTextAreaElement).rows).toBe(2);
+      expect((q('workflow-input-question') as HTMLTextAreaElement).rows).toBe(3);
       const label = el.querySelector('label[for="workflow-input-question"]')!;
-      expect(label.classList).toContain('sr-only');
+      expect(label.classList).toContain('composer-label');
+      expect(label.classList).not.toContain('sr-only');
+      // The tag sits beside the label, outside it: the field's name stays "Question".
+      const tag = label.parentElement!.querySelector('.composer-tag')!;
+      expect(tag.textContent?.trim()).toBe('Required');
+      expect(tag.getAttribute('aria-hidden')).toBe('true');
+      expect(label.contains(tag)).toBeFalse();
+      // One section per field, divided.
+      const sections = form.querySelector('.composer-fields')!;
+      expect(sections.children.length).toBeGreaterThan(1);
       expect(q('workflow-follow-up-input')).toBeNull();
     });
 

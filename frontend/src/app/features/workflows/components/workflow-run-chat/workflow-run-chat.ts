@@ -163,6 +163,16 @@ const FORM_CONTROLS =
     .composer-input::placeholder {
       color: var(--qti-fg-muted);
     }
+    /* The input form: one section per field, a line between them. */
+    .composer-fields > * {
+      padding-block: 0.75rem;
+    }
+    .composer-fields > :first-child {
+      padding-top: 0.25rem;
+    }
+    .composer-fields > * + * {
+      border-top: 1px solid var(--qti-border);
+    }
     .composer-input-invalid {
       box-shadow: inset 0 -1px 0 var(--qti-on-danger-soft);
     }
