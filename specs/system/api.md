@@ -42,7 +42,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the whole ontology and personas controllers, and the data-readiness and synthetic-data controllers.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the whole ontology and personas controllers, and the data-readiness and synthetic-data controllers, and the Excel / CSV file routes of datasources (156 to 158).
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56). GET/PUT/DELETE return **200**; `DELETE /ontology/:id`, `DELETE /personas/:id` and `DELETE /visuals/:id` return **204 No Content**. The file downloads write the response themselves and return **200**; so do `POST /synthetic-data/scripts`, `/profile-exports` and `/sample-exports` (112 to 114), which stream an attachment (only 111 returns **201**). Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56), `POST /datasources/files/preview` (157). GET/PUT/DELETE return **200**; `DELETE /ontology/:id`, `DELETE /personas/:id` `DELETE /visuals/:id` and `DELETE /datasources/files/uploads/:uploadId` (158) return **204 No Content**. The file downloads write the response themselves and return **200**; so do `POST /synthetic-data/scripts`, `/profile-exports` and `/sample-exports` (112 to 114), which stream an attachment (only 111 returns **201**). Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
@@ -256,7 +256,7 @@ The query inspector over a session's assistant message (1.25.9; plan `docs/plans
 
 ### 2.2 Datasources
 
-Controller prefix `/datasources`. Capability: datasources. Shapes: `DatasourceView`, `DatasourceConfig` (databricks / postgres / rest) in data-model.
+Controller prefix `/datasources`. Capability: datasources. Shapes: `DatasourceView`, `DatasourceConfig` (databricks / postgres / rest / file), `SourceFile`, `SheetImport` and `SheetPreview` in data-model. 15 to 20 answer Style A; the file routes 156 to 158 Style B (real statuses).
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -266,6 +266,9 @@ Controller prefix `/datasources`. Capability: datasources. Shapes: `DatasourceVi
 | 18 | `POST /datasources` | Create or update a datasource | yes |
 | 19 | `DELETE /datasources/:id` | Delete a datasource | yes |
 | 20 | `GET /datasources/:id/inventory` | Catalog inventory (cached or live) | yes |
+| 156 | `POST /datasources/files/uploads` | Upload one `.xlsx` or `.csv` file (raw body) and detect its sheets | no (story 1.31.4) |
+| 157 | `POST /datasources/files/preview` | Preview one sheet of a file under import options | no (story 1.31.4) |
+| 158 | `DELETE /datasources/files/uploads/:uploadId` | Drop an unsaved upload | no (story 1.31.4) |
 
 Route order matters: `test-connection` and `rest/discover` are declared before the parameterised routes.
 
@@ -278,6 +281,7 @@ Route order matters: `test-connection` and `rest/discover` are declared before t
 - Body: `{ kind: "databricks"|"postgres"|"rest"; config: DatasourceConfig; id?: string }`.
 - Success: `{ ok:true, message:"Connection successful" }`. Failure (Style A): `{ ok:false, message }` with the connector's error (e.g. `kind must be one of: databricks, postgres, rest`, `baseUrl is required`, `At least one endpoint is required`, driver errors).
 - Side effects: none (opens and closes a connection).
+- `kind: "file"`: imports every included sheet of `config.files` (each from its upload, `uploadId`, else from the saved original of `id`) into a throwaway database under `<dataDir>/files/uploads/`, removed after (datasources R63). Success: `{ ok:true, message:"Imported <n> tables · <rows> rows" }` (`1 table`, `1 row` in the singular; numbers with `en-US` separators). Failure: the first one, `{ ok:false, message:"<file> · <sheet>: <cause>" }`, or `Add at least one .xlsx or .csv file`, `Include at least one sheet`, `Upload <uploadId> not found — upload the file again`, `<file> is not uploaded — add it again`.
 
 #### 17. `POST /datasources/rest/discover`
 - Body: `{ config: RestApiConfig; specUrl?: string; id?: string }`. `specUrl` may be absolute or relative to `config.baseUrl`; empty means try the usual spec locations.
@@ -290,10 +294,11 @@ Route order matters: `test-connection` and `rest/discover` are declared before t
 - Validation: `name` required (trimmed, **truncated to 64**); `kind` must be one of the three kinds.
 - Success: `{ ok:true, message:"Datasource \"<name>\" saved", datasource: DatasourceView }`. Failure (Style A): `"name is required"`, `"kind must be one of: ..."`.
 - Side effects: persists the datasource (secrets stored as given/restored). It does not test the connection.
+- `kind: "file"` (datasources R64, R65): a new datasource gets its id first. The files are imported into `<dataDir>/files/<id>/data.duckdb` (built as `data.duckdb.tmp`, then renamed); then each file carrying `uploadId` moves to `<dataDir>/files/<id>/originals/<fileId>.<ext>`, originals no file names any more are removed, and the document is stored without `uploadId`, with each imported sheet's `rowCount` and `columns`; the inventory snapshot is refreshed. A file with a saved `id` and a new `uploadId` replaces that file and keeps its schema and the table of every sheet whose name is unchanged. A failed import answers `{ ok:false, message:"<file> · <sheet>: <cause>" }` (or a message of 16), keeps the previous database and stores nothing.
 
 #### 19. `DELETE /datasources/:id`
 - Success: `{ ok:true, message:"Datasource \"<name>\" deleted" }`. Failure (Style A): `"Datasource <id> not found"`.
-- Side effects: deletes the datasource and its cached inventory. **Does not cascade** to datasets that reference it (G6).
+- Side effects: deletes the datasource and its cached inventory, and for `kind: "file"` the folder `<dataDir>/files/<id>/` (its originals and `data.duckdb`). **Does not cascade** to datasets that reference it (G6).
 
 #### 20. `GET /datasources/:id/inventory`
 - Query: `refresh=true` (force a live walk and replace the snapshot); `cachedOnly=true` (never contact the datasource). `cachedOnly` takes precedence over `refresh` when both are present.
@@ -303,6 +308,19 @@ Route order matters: `test-connection` and `rest/discover` are declared before t
   - failure: `{ ok:false, message }` (`"Datasource <id> not found"`, connector error).
 - `CatalogInfo` = `{ name, selectable?, schemas: { name, selectable?, tables: { name, selectable?, columns: { name, type, nullable }[] }[] }[] }` normalised to catalog → schema → table for every kind. `selectable === false` means browse-only (no query access); absent means unknown and is treated as accessible.
 - A live walk can take minutes on a cold warehouse; there is no progress channel and no server timeout beyond the connector's.
+
+#### 156. `POST /datasources/files/uploads`
+- Body: the file's bytes, raw (`Content-Type: application/octet-stream`); header `X-File-Name` the original file name, URI-encoded (`encodeURIComponent`); a folder part is dropped. Streamed to `<dataDir>/files/uploads/<uploadId>/<name>`, counted and hashed on the way; never read by the JSON body parser or held in memory. A body the JSON parser already read answers `400 "Send the file as the raw body (application/octet-stream)"`.
+- Response `201`: `{ uploadId: string, file: SourceFile }`: a new `id` (uuid) and `uploadId`, `name`, `format`, `sizeBytes`, `sha256` (hex), `uploadedAt`, `schema` and, for each sheet, the detection's proposal (datasources R56) with its table key (R55); datasources R61.
+- Errors (Style B): `413 "File is larger than 200 MB"` (by `Content-Length`, or counted while streaming; the partial file is deleted); `400 ".xls files are not supported — save the workbook as .xlsx"`; `400 "Only .xlsx and .csv files can be imported"` for any other extension; `400 "X-File-Name header is required"`; `400 "X-File-Name must be URI-encoded"`; `400 "<name> could not be read: <cause>"` when DuckDB cannot read the file (the upload is deleted).
+
+#### 157. `POST /datasources/files/preview`
+- Body: `{ uploadId?, datasourceId?, fileId?, sheet: string, headerRow?: number, range?: string, excludeLastRow?: boolean, allText?: boolean }`. `uploadId` names an unsaved upload; otherwise `datasourceId` with `fileId` a saved file. Omitted options come from the detection; a `headerRow` without `range` moves the detected range's first row to it; a `range` without `headerRow` puts the header on its first row. A CSV is read whole from its header row (its `range` is checked, not applied).
+- Response `200`: `SheetPreview` `{ sheet, headerRow, range, totalRows, columns: { letter, name, type }[], rows: { row, cells }[], warnings }` (datasources R62): `totalRows` the rows in range below the header; `columns` named as the import names them, typed as DuckDB reads them under `allText` (the excluded last row left out); `rows` the first 7 and last 2 sheet rows of the range with their sheet row numbers, cells as text or `null`. A sheet with `no-table` and no option answers no columns and no rows.
+- Errors (Style B): `400 "Range must look like A1:H200"`; `400 "The header row must be in the range, above its last row"`; `400 "Sheet \"<name>\" not found"`; `400 "sheet is required"`; `400 "uploadId or datasourceId is required"`; `400 "uploadId must be an upload id"`; `404 "Upload <uploadId> not found — upload the file again"`; `404 "File <fileId> not found"`.
+
+#### 158. `DELETE /datasources/files/uploads/:uploadId`
+- Response `204` (also for an upload already gone). Removes `<dataDir>/files/uploads/<uploadId>/`. Errors (Style B): `400 "uploadId must be an upload id"` when `:uploadId` is not a uuid.
 
 ### 2.3 Datasets
 
@@ -1398,7 +1416,7 @@ Controller prefix `/data-readiness`. Capability: [data-readiness](../capabilitie
 - Response `201`: `ReadinessReport` ([data-model.md](data-model.md)). It carries `notProfiled?: { entity, reason: "too-large"|"timed-out", rowCount? }[]` for entities whose column checks were skipped (ADR-0033); absent when none.
 - Errors:
   - 400 `"datasourceId is required"`;
-  - 400 `"Data readiness supports PostgreSQL and Databricks datasources only"` (a `rest` datasource);
+  - 400 `Data Readiness supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`);
   - 400 `"entities must be an array of entity keys"` when `entities` is present (and not null) but is not an array of strings;
   - 400 `"None of the entities to assess exist"`, also for a whole-datasource assessment of a datasource with no entity;
   - 404 `"Datasource \"<id>\" not found"`;
@@ -1435,7 +1453,7 @@ Controller prefix `/synthetic-data`. Capability: [synthetic-data](../capabilitie
   - 400 `datasetName is required`
   - 404 `Dataset "<name>" not found`
   - 400 `Dataset "<name>" has no datasource`
-  - 400 `Profiling a sample supports PostgreSQL and Databricks datasets only`
+  - 400 `Synthetic data supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`)
   - 400 `tables must be an array of entity keys`
   - 400 `"<key>" is not a table of dataset "<name>"`
   - 400 `Choose at most 50 tables`

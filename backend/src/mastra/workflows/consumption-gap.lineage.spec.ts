@@ -2,6 +2,7 @@ import type { LayerTable } from './consumption-gap-analysis.schemas';
 import type { GapQueryResult } from './consumption-gap-analysis.steps';
 import {
   LINEAGE_MAX_CHECKS,
+  gapDialectOf,
   lineageCandidates,
   lineageFromChecks,
   lineageQueries,
@@ -190,6 +191,15 @@ describe('lineageQueries', () => {
       'SELECT COUNT(t.v) AS target_values, COUNT(s.v) AS matched_values FROM (SELECT DISTINCT TRIM(CAST("stage" AS TEXT)) AS v FROM "wc_consumption"."fct_match_results" WHERE "stage" IS NOT NULL LIMIT 1000) t LEFT JOIN (SELECT DISTINCT TRIM(CAST("stage" AS TEXT)) AS v FROM "wc_normalized"."matches" WHERE "stage" IS NOT NULL LIMIT 10000) s ON s.v = t.v',
     );
     expect(query.candidate).toBe(candidate);
+  });
+
+  it('writes no query for a file (Excel / CSV) dataset and does not throw', () => {
+    const tables = GAP_SAMPLE_TABLES.map((t) => ({
+      ...t,
+      datasourceKind: 'file',
+    }));
+    expect(gapDialectOf('file')).toBeUndefined();
+    expect(lineageQueries([candidate], tables)).toEqual([]);
   });
 
   it('writes Databricks SQL with backticks and the catalog', () => {

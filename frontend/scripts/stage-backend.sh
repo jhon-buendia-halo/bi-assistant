@@ -23,4 +23,14 @@ npm ci --omit=dev --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 node "$SCRIPT_DIR/bundle-backend.mjs" "$STAGING_DIR"
 node "$SCRIPT_DIR/prune-node-modules.mjs" "$STAGING_DIR/node_modules"
 
+# DuckDB's excel extension ships with the app (ADR-0052): the installer is a
+# Windows build, and the host platform too when staging elsewhere.
+PLATFORMS="windows_amd64"
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) PLATFORMS="$PLATFORMS osx_arm64" ;;
+  Darwin-x86_64) PLATFORMS="$PLATFORMS osx_amd64" ;;
+  Linux-x86_64) PLATFORMS="$PLATFORMS linux_amd64" ;;
+esac
+node "$SCRIPT_DIR/../../scripts/fetch-duckdb-extensions.mjs" $PLATFORMS --out "$STAGING_DIR/vendor/duckdb-extensions"
+
 echo "Backend staged at $STAGING_DIR"

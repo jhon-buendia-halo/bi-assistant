@@ -250,7 +250,7 @@ These rules refine R6 to R11 without changing any statistic, check or score form
 
 ## Edge cases and errors
 
-- A datasource that is neither PostgreSQL nor Databricks: the API answers 400 `Data readiness supports PostgreSQL and Databricks datasources only`, and the tool returns the same text as `{ error }`.
+- A datasource that is neither PostgreSQL nor Databricks: the gate is an allow-list (never a deny-list, so a new kind is refused until opted in); the API answers 400 `Data Readiness supports PostgreSQL and Databricks datasources; "<name>" is an Excel / CSV datasource.` (or `… is a REST API datasource.`), and the tool returns the same text as `{ error }`.
 - An unknown datasource: 404 `Datasource "<id>" not found`. An unknown report: 404 `Readiness report "<id>" not found`.
 - An entity in scope that no longer exists: it is left out, and the report's entity count says how many were assessed. When no entity in scope exists, including a whole-datasource assessment of a datasource with no entity, the assessment is refused with 400 `None of the entities to assess exist`.
 - A table the connection cannot read: it is counted by accessibility (R17). Its rows are not profiled, so it adds no completeness, validity or consistency checks.

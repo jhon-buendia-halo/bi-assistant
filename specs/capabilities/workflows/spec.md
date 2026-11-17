@@ -102,7 +102,7 @@ A follow-up over an earlier result (2026-11-16, roadmap 1.28.8)
   - **Page result** SHALL read the page through the query inspector's page path ([../agent-answers/spec.md](../agent-answers/spec.md) R79-R84), recorded as an `explore_result` call of the run with its view, so the answer's query row SHALL open the inspector on that page. A page that cannot be read SHALL fail the step with its reason.
   - **Page answer** SHALL write the answer in code, with no model call: a headline in the inspector's words (`Rows 51–100 of 1,264`, `… matching` when filtered, `50,000+` when capped, `No rows match these filters.`), the query, `Understood as: <the request in words>`, a Markdown table of the page's rows and where the page sits. The run's stored answer SHALL keep the shape of any other run's.
 
-Ask one agent in a follow-up (2026-11-17; ADR-0052)
+Ask one agent in a follow-up (2026-11-17; ADR-0053)
 - R38. A follow-up of Answer a Business Question MAY ask the agent of one step that ran in the earlier run, instead of the whole workflow ([../../system/agents.md](../../system/agents.md) 5.21; [../../system/api.md](../../system/api.md) 118 `context.askStep`). The run SHALL be a follow-up run like any other (R17): stored, listed, reopened and followed up again, its `context` naming the asked step.
   - The askable steps SHALL be Read images (Zoe), Interpret follow-up (Nathan), Plan (Olivia), Analyse (the Insights Analyst), Check data quality (Sarah) and Write answer (Jessica). Another workflow, a code step and a step the earlier run skipped or never reached SHALL be refused before anything runs.
   - Only the asked step SHALL run: it shows `Done`, every other step `Skipped`. No Plan, Validate, retry or Write answer runs around it.

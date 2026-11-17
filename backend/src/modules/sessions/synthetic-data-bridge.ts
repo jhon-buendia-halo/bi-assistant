@@ -3,6 +3,7 @@
 // limits, the script saved in the session workspace and its `file` panel
 // item. Kept out of sessions.service.ts so the orchestrator only wires it in.
 
+import { unsupportedKindMessage } from '../datasources/kind-refusal';
 import type {
   SyntheticDataToolServices,
   SyntheticScriptResult,
@@ -25,8 +26,12 @@ import {
 /** The workspace folder the scripts are saved in (data-model 3.4.4). */
 export const SYNTHETIC_DATA_FOLDER = 'synthetic-data';
 
-export const ERR_UNSUPPORTED =
-  'Synthetic data supports PostgreSQL and Databricks datasets only';
+export const errUnsupported = (dataset: ReadinessDataset): string =>
+  unsupportedKindMessage(
+    'Synthetic data',
+    dataset.name,
+    dataset.datasourceKind,
+  );
 export const ERR_CHAT_TABLES =
   'Choose at most 20 tables in chat; use Profile & synthesize on the dataset for more';
 export const ERR_CHAT_ROWS =
@@ -257,7 +262,7 @@ export class SyntheticDataBridge implements SyntheticDataToolServices {
       this.deps,
       sessionId,
       datasetName,
-      ERR_UNSUPPORTED,
+      errUnsupported,
     );
   }
 }

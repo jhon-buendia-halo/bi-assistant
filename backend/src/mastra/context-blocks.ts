@@ -108,6 +108,14 @@ export function entityOrientationLines(
       : 'Use describe_entity / run_readonly_sql to inspect and query them.',
     ...(joinHints ? ['', joinHints] : []),
     ...(schemaNotes ? ['', schemaNotes] : []),
+    // Last, and only when a file dataset is in scope: other turns see the
+    // same lines as before (ADR-0052; plan m1-31 section 10).
+    ...(datasets.some((s) => s.datasourceKind === 'file')
+      ? [
+          '',
+          'Entities on a `file` datasource are Excel / CSV sheets: query them in DuckDB SQL (PostgreSQL-like; strftime, not to_char; TRY_CAST text columns before arithmetic).',
+        ]
+      : []),
   ];
 }
 

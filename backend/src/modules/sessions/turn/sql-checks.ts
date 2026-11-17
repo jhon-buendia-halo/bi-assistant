@@ -20,6 +20,7 @@ import type {
   SessionDoc,
   ToolDataRecord,
 } from '../entities/session.entity';
+import { sqlDialectOf } from './sql-dialect';
 import { lastSuccessfulSql, successfulSqlRuns } from './turn-records';
 import { SessionDatasets, turnProviderOptions } from './session-datasets';
 
@@ -421,13 +422,6 @@ export class SqlChecks {
       return false;
     }
   }
-}
-
-/** SQL dialect for prompts: REST datasources are queried as SQLite. */
-function sqlDialectOf(datasets: DatasetSnapshot[]): string {
-  const kind = datasets.find((s) => s.datasourceKind)?.datasourceKind;
-  if (kind === 'rest') return 'sqlite';
-  return kind ?? 'databricks';
 }
 
 /**
