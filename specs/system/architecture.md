@@ -1329,7 +1329,7 @@ flowchart LR
   - Queries read a columnar database instead of parsing a file: an aggregate over 200,000 rows answers in milliseconds, and the query inspector's pages (ADR-0050) cost one query each.
   - The data dir grows by the files and their DuckDB copy; deleting the datasource deletes both. A change to the original file reaches the app only through Replace file.
   - Upgrading `@mastra/duckdb` (and so DuckDB) requires fetching the matching extension; the build check makes a mismatch fail the build instead of breaking Excel import silently.
-  - Type detection is DuckDB's: whole numbers in an `.xlsx` read as `DOUBLE`, and a column's type follows its first data row; the review dialog shows the detected types and offers "Read every column as text".
+  - Type detection is DuckDB's: whole numbers in an `.xlsx` read as `DOUBLE`, and a column's type follows its first data row; the review dialog shows the detected types and offers "Read every column as text". Since 2026-11-17 a cell that does not fit that type no longer fails the import: the sheet is read again as text and each column typed from all its rows (datasources R57).
   - **Stack-neutral:** a rebuild needs a per-datasource store of the imported tables, queried read-only, with no access to other files; the engine is replaceable.
 - **Alternatives considered:**
   - **Parse into in-memory SQLite on every query, as REST does:** rejected; a re-parse per query and per page, weak types (dates as text) and slow on large sheets.

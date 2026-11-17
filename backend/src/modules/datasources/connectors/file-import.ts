@@ -465,6 +465,8 @@ async function importSheet(
   let firstColumn = 1;
   const cleanup: string[] = [];
   let deleteLast = false;
+  /** The same cells as `source`, every one read as text (the typed read's fallback). */
+  let textSource: string | undefined;
   if (file.format === 'xlsx') {
     const range = parseRange(sheet.range);
     const headerRow = sheet.headerRow || range.firstRow;
@@ -495,6 +497,11 @@ async function importSheet(
       allText: sheet.allText,
       range: `${columns}${lastRow}`,
     });
+    textSource = readXlsx(path, sheet.sheet, {
+      header: true,
+      allText: true,
+      range: `${columns}${lastRow}`,
+    });
   } else {
     const skip = Math.max(0, (sheet.headerRow || 1) - 1);
     [headerCells] = await rows(
@@ -521,9 +528,19 @@ async function importSheet(
     .join(', ');
   const table = `${quoteIdent(file.schema)}.${quoteIdent(sheet.table)}`;
   try {
-    await connection.run(
-      `CREATE TABLE ${table} AS SELECT ${select} FROM ${source}`,
-    );
+    try {
+      await connection.run(
+        `CREATE TABLE ${table} AS SELECT ${select} FROM ${source}`,
+      );
+    } catch (err) {
+      // The typed read guesses each column's type from its first rows; a
+      // later cell that is not of that type (`N/A` under numbers, text under
+      // an empty first cell) fails the whole read. Read the cells as text
+      // and type each column from all of its rows instead.
+      if (!textSource || sheet.allText || !isConversionError(err)) throw err;
+      const typed = await guessedTypes(connection, source);
+      await createFromText(connection, table, textSource, typed, names);
+    }
   } finally {
     await Promise.all(cleanup.map((p) => rm(p, { force: true })));
   }
@@ -539,6 +556,136 @@ async function importSheet(
     type: asText(c.column_type),
   }));
   return { ...sheet, rowCount: Number(count), columns };
+}
+
+/** A cell the typed read could not convert to its column's guessed type. */
+function isConversionError(err: unknown): boolean {
+  return /Could not convert|Failed to parse cell|Conversion Error/i.test(
+    duckDbMessage(err, true),
+  );
+}
+
+/** The type the typed read guessed for each column, from its first rows. */
+async function guessedTypes(
+  connection: DuckDBConnection,
+  source: string,
+): Promise<string[]> {
+  const described = await connection.runAndReadAll(
+    `DESCRIBE SELECT * FROM ${source}`,
+  );
+  return described
+    .getRowObjectsJS()
+    .map((c) => asText(c.column_type).toUpperCase());
+}
+
+/**
+ * Placeholders for "no value" in a typed column: read as empty, so a
+ * numeric column with `N/A` stays numeric (compared trimmed, lower case).
+ */
+export const EMPTY_TOKENS = [
+  '',
+  'n/a',
+  'na',
+  '#n/a',
+  'null',
+  'none',
+  'nan',
+  '-',
+  '--',
+  '—',
+  '–',
+];
+
+const NUMERIC =
+  /^(DOUBLE|FLOAT|REAL|DECIMAL.*|BIGINT|INTEGER|SMALLINT|TINYINT|HUGEINT)$/;
+
+/**
+ * Create the table from the text cells (plan m1-31 8, the typed read's
+ * fallback). With every cell as text, Excel gives a number as its digits, a
+ * date as its serial (days since 1899-12-30) and a boolean as 1 or 0. Each
+ * column the typed read guessed as a number, a date, a timestamp or a
+ * boolean keeps that type when every one of its cells is a number or a
+ * placeholder for no value (`EMPTY_TOKENS`, then empty); otherwise it
+ * becomes text, its dates written as `YYYY-MM-DD` and its booleans as
+ * `true`/`false`, so no cell is lost. A column guessed as text stays text.
+ */
+async function createFromText(
+  connection: DuckDBConnection,
+  table: string,
+  textSource: string,
+  types: string[],
+  names: string[],
+): Promise<void> {
+  const engineNames = (
+    await connection.runAndReadAll(`SELECT * FROM ${textSource} LIMIT 0`)
+  ).columnNames();
+  const tokens = EMPTY_TOKENS.map(sqlString).join(', ');
+  const cell = (i: number) => `trim(${quoteIdent(engineNames[i])})`;
+  const empty = (i: number) =>
+    `(${quoteIdent(engineNames[i])} IS NULL OR lower(${cell(i)}) IN (${tokens}))`;
+  const number = (i: number) => `TRY_CAST(${cell(i)} AS DOUBLE)`;
+  const typedKind = (t: string | undefined) =>
+    t === undefined
+      ? undefined
+      : NUMERIC.test(t)
+        ? 'number'
+        : t === 'DATE'
+          ? 'date'
+          : t.startsWith('TIMESTAMP')
+            ? 'timestamp'
+            : t === 'BOOLEAN'
+              ? 'boolean'
+              : undefined;
+  const kinds = engineNames.map((_, i) => typedKind(types[i]));
+  const checked = kinds.map((kind, i) => (kind ? i : -1)).filter((i) => i >= 0);
+  // How many cells of each typed column are neither empty nor a number.
+  const misfits = new Map<number, number>();
+  if (checked.length) {
+    const [counts] = await rows(
+      connection,
+      `SELECT ${checked
+        .map(
+          (i) =>
+            `count(*) FILTER (WHERE NOT ${empty(i)} AND ${number(i)} IS NULL)`,
+        )
+        .join(', ')} FROM ${textSource}`,
+    );
+    checked.forEach((i, k) => misfits.set(i, Number(counts[k])));
+  }
+  const date = (i: number) =>
+    `(DATE '1899-12-30' + CAST(floor(${number(i)}) AS INTEGER))`;
+  const timestamp = (i: number) =>
+    `(TIMESTAMP '1899-12-30' + to_microseconds(CAST(round(${number(i)} * 86400000000) AS BIGINT)))`;
+  const column = (i: number): string => {
+    const raw = quoteIdent(engineNames[i]);
+    const kind = kinds[i];
+    const clean = misfits.get(i) === 0;
+    const orEmpty = (value: string) =>
+      `CASE WHEN ${empty(i)} THEN NULL ELSE ${value} END`;
+    if (kind === 'number') return clean ? orEmpty(number(i)) : raw;
+    if (kind === 'date') {
+      return clean
+        ? orEmpty(date(i))
+        : `CASE WHEN ${number(i)} IS NOT NULL THEN strftime(${date(i)}, '%Y-%m-%d') ELSE ${raw} END`;
+    }
+    if (kind === 'timestamp') {
+      return clean
+        ? orEmpty(timestamp(i))
+        : `CASE WHEN ${number(i)} IS NOT NULL THEN strftime(${timestamp(i)}, '%Y-%m-%d %H:%M:%S') ELSE ${raw} END`;
+    }
+    if (kind === 'boolean') {
+      return clean
+        ? orEmpty(`(${number(i)} <> 0)`)
+        : `CASE ${cell(i)} WHEN '1' THEN 'true' WHEN '0' THEN 'false' ELSE ${raw} END`;
+    }
+    return raw;
+  };
+  const select = engineNames
+    .map((_, i) => `${column(i)} AS ${quoteIdent(names[i])}`)
+    .join(', ');
+  await connection.run(
+    `CREATE TABLE ${table} AS SELECT ${select} FROM ${textSource}`,
+  );
 }
 
 /**
