@@ -13,6 +13,7 @@ import type { ExplorerSpec } from '../agents/result-explorer.prompts';
 import type {
   AnalyseQuery,
   AnalysisPlan,
+  BuiltVisual,
   BusinessAnswer,
   CatalogEntity,
   FollowUpRequest,
@@ -38,6 +39,7 @@ export const ASKABLE_STEP_IDS = [
   'plan',
   'analyse',
   'write-answer',
+  'build-visual',
 ] as const;
 
 export type AskableStepId = (typeof ASKABLE_STEP_IDS)[number];
@@ -69,6 +71,8 @@ export interface AskAgentOutcome {
   /** The answer's length, 0 when the turn was stopped before one. */
   answerLength: number;
   stopped: boolean;
+  /** Build visual only: the visual Ryan built, or why there is none. */
+  visual?: BuiltVisual;
 }
 
 /**
@@ -82,6 +86,18 @@ export interface EarlierAnswerInput {
   queries: AnalyseQuery[];
   findings: ValidationFinding[];
   imageNotes: string;
+}
+
+/**
+ * Build visual's inputs taken from the earlier run (agents.md 5.21): its
+ * question, its answer and that answer's queries with their rows. Read
+ * once; the earlier answer's records are carried into this run's answer,
+ * so its sources open in the query inspector and Ryan charts their rows.
+ */
+export interface EarlierVisualInput {
+  question: string;
+  answer: string;
+  queries: AnalyseQuery[];
 }
 
 /**
@@ -126,6 +142,18 @@ export interface AskAgentRuntime {
     findings: ValidationFinding[];
     imageNotes?: string;
   }): Promise<{ answer: BusinessAnswer; stopped: boolean }>;
+  /** Build visual's inputs from the earlier run (carries its records). */
+  earlierVisual(): EarlierVisualInput;
+  /**
+   * Build visual's designer call: Ryan designs a new visual (v1) of the
+   * earlier answer, following `instruction`; it is stored with the run. A
+   * design that fails comes back as `error`, never as a throw.
+   */
+  buildVisual(input: {
+    question: string;
+    answer: string;
+    instruction: string;
+  }): Promise<{ visual: BuiltVisual; stopped: boolean }>;
   /** A code-written answer: the run's answer text. */
   deliverAnswer(answer: string): Promise<void>;
 }
@@ -141,6 +169,20 @@ export const ASK_NO_RESULT_REPLY =
 /** What Zoe answers when the run has no reference image. */
 export const ASK_NO_IMAGES_REPLY =
   'This run has no reference images to read. Attach one, or ask another agent.';
+
+/** What Ryan answers when the earlier answer has no query rows to chart. */
+export const ASK_NO_ROWS_REPLY =
+  'The earlier answer has no query rows to chart. Ask the Analyst or the whole workflow.';
+
+/** Ryan's answer once his new visual is stored (agents.md 5.21). */
+export function visualAnswer(title: string): string {
+  return `Here's a new visual of the earlier answer: "${title}".`;
+}
+
+/** Ryan's answer when the design failed: the run still ends done. */
+export function visualFailedAnswer(reason: string): string {
+  return `I couldn't build a new visual: ${reason}`;
+}
 
 function bulletList(items: readonly string[]): string[] {
   return items.map((item) => `- ${item}`);

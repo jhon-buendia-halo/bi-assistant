@@ -18,14 +18,22 @@ export interface ClarificationOption {
 export interface AskedStep {
   /** The step whose agent answers alone (`ASKABLE_STEP_IDS`). */
   step: string;
-  /** Write answer only: the earlier run's answer and what led to it. */
+  /**
+   * Write answer and Build visual only: the earlier run's answer and what
+   * led to it (Write answer: plan, findings and notes; Build visual: the
+   * question and the answer text).
+   */
   earlier?: {
-    /** The earlier run's plan as its Plan step stored it; null when not kept. */
-    plan: unknown;
-    /** The earlier run's failed and passed data quality findings, if it checked. */
-    qualityFindings: { check: string; passed: boolean; detail: string }[];
-    /** Zoe's notes of the earlier run, `''` without images. */
-    imageNotes: string;
+    /** Write answer: the earlier plan as its Plan step stored it; null when not kept. */
+    plan?: unknown;
+    /** Write answer: the earlier failed and passed data quality findings, if it checked. */
+    qualityFindings?: { check: string; passed: boolean; detail: string }[];
+    /** Write answer: Zoe's notes of the earlier run, `''` without images. */
+    imageNotes?: string;
+    /** Build visual: the earlier run's question, Ryan's `<question>`. */
+    question?: string;
+    /** Build visual: the earlier answer's text, Ryan's `<answer>`. */
+    answer?: string;
     /** The earlier answer's records, carried into this run's answer. */
     records: ToolDataRecord[];
     /** Their evidence, so the carried sources keep their coverage and view. */
