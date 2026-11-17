@@ -19,7 +19,8 @@
 //
 // Safe to retry purely on status: this only ever reads `res.status` /
 // `res.headers`, never the body, so retrying before any byte of a streaming
-// response has been consumed can never duplicate partial output.
+// response has been consumed can never duplicate partial output. The body of
+// a response that is retried is cancelled unread, to free its connection.
 
 // An aborted wait rejects with the signal's own reason, exactly as `fetch`
 // does for an aborted request, so callers see one error either way.
