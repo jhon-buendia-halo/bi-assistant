@@ -34,6 +34,7 @@ import {
 import type {
   DatasourceConnector,
   ForeignKeyEdge,
+  RunSqlOptions,
 } from './connectors/connector';
 import { mapWithConcurrency, MASKED } from './connectors/connector';
 import type { PagedRows, PagedStatement } from './connectors/paged-sql.types';
@@ -458,16 +459,23 @@ export class DatasourcesService implements OnApplicationBootstrap {
     rowLimit: number,
     /** The clamp on `rowLimit` (default 500); a CSV export passes 50,001. */
     maxRows?: number,
+    /** The caller's stop signal: cancels the running statement (R38). */
+    options?: RunSqlOptions,
   ): Promise<QueryResult> {
     const ds = await this.forConnector(id);
+    const connector = this.connector(ds.kind);
+    if (options) {
+      return connector.runReadOnlySql(
+        ds.config,
+        sql,
+        rowLimit,
+        maxRows,
+        options,
+      );
+    }
     return maxRows === undefined
-      ? this.connector(ds.kind).runReadOnlySql(ds.config, sql, rowLimit)
-      : this.connector(ds.kind).runReadOnlySql(
-          ds.config,
-          sql,
-          rowLimit,
-          maxRows,
-        );
+      ? connector.runReadOnlySql(ds.config, sql, rowLimit)
+      : connector.runReadOnlySql(ds.config, sql, rowLimit, maxRows);
   }
 
   /** One page of a stored statement's result (datasources R52, ADR-0050). */

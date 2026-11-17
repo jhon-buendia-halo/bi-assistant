@@ -14,6 +14,35 @@ export interface ForeignKeyEdge {
 }
 
 /**
+ * How a caller stops `runReadOnlySql` (datasources R38): when `signal`
+ * aborts, the running statement is cancelled at the source, the connection
+ * is released as on a normal end and the call rejects with `signal.reason`.
+ * A signal already aborted rejects before connecting.
+ */
+export interface RunSqlOptions {
+  signal?: AbortSignal;
+}
+
+/**
+ * Settle with `work`, or reject with `signal.reason` as soon as it aborts.
+ * `work` is not stopped by this: the caller cancels it at the source.
+ */
+export function raceAbort<T>(
+  work: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  let onAbort: () => void = () => undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason as Error);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  return Promise.race([work, aborted]).finally(() =>
+    signal.removeEventListener('abort', onAbort),
+  );
+}
+
+/**
  * One implementation per datasource kind. Stateless: every call receives the
  * saved config, so a single connector serves any number of datasources.
  */
@@ -45,13 +74,15 @@ export interface DatasourceConnector<
   /**
    * Guarded read-only SQL in the datasource's dialect. `rowLimit` is clamped
    * to `maxRows` (default `SQL_ROWS_MAX`, 500); a CSV export passes 50,001.
-   * The result's `totalRows` is the row count before that slice.
+   * The result's `totalRows` is the row count before that slice. `options`
+   * carries the caller's stop signal (`RunSqlOptions`).
    */
   runReadOnlySql(
     config: TConfig,
     sql: string,
     rowLimit: number,
     maxRows?: number,
+    options?: RunSqlOptions,
   ): Promise<QueryResult>;
   /**
    * One page of a stored statement's result, filtered and sorted in an outer

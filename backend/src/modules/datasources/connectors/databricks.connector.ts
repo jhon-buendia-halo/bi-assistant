@@ -17,6 +17,8 @@ import {
   ForeignKeyEdge,
   mapWithConcurrency,
   MASKED,
+  raceAbort,
+  RunSqlOptions,
   splitEntity,
   SQL_ROWS_MAX,
 } from './connector';
@@ -537,34 +539,41 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     }
   }
 
+  /**
+   * Rows are fetched result batch by result batch (`readCapped`): the first
+   * `rowLimit` kept, the rest only counted for `totalRows`. An abort of
+   * `options.signal` cancels the operation on the warehouse and closes the
+   * session (datasources R38).
+   */
   async runReadOnlySql(
     raw: DatabricksConfig,
     sql: string,
     rowLimit: number,
     maxRows = SQL_ROWS_MAX,
+    options: RunSqlOptions = {},
   ): Promise<QueryResult> {
+    const { signal } = options;
     const safeSql = assertReadOnlySql(sql);
     const config = this.validate(raw);
+    signal?.throwIfAborted();
     const { client, session } = await this.openSession(
       config,
       QUERY_TIMEOUT_MS,
     );
+    let op: IOperation | undefined;
+    const onAbort = () => void op?.cancel().catch(() => undefined);
+    signal?.addEventListener('abort', onAbort, { once: true });
     try {
-      const op = await session.executeStatement(safeSql);
-      const res = await this.fetchWithTimeout(op, QUERY_TIMEOUT_MS);
+      signal?.throwIfAborted();
+      op = await session.executeStatement(safeSql);
+      // Aborted while the statement was being submitted: cancel it now.
+      if (signal?.aborted) onAbort();
+      signal?.throwIfAborted();
       const lim = clampRows(rowLimit, 100, maxRows);
-      const all = res ?? [];
-      const rows: Record<string, unknown>[] = all
-        .slice(0, lim)
-        .map((r: unknown) => ({
-          ...(typeof r === 'object' && r !== null ? r : {}),
-        }));
-      return {
-        columns: Object.keys(rows[0] ?? {}),
-        rows,
-        totalRows: all.length,
-      };
+      const read = raceTimeout(readCapped(op, lim), QUERY_TIMEOUT_MS, 'query');
+      return await (signal ? raceAbort(read, signal) : read);
     } finally {
+      signal?.removeEventListener('abort', onAbort);
       await session.close();
       await client.close();
     }
@@ -759,6 +768,32 @@ function refusesParameters(err: unknown): boolean {
   return /UNBOUND_SQL_PARAMETER|parameter marker|parameterized (query|statement)s? (is|are) not supported|named parameters? (is|are) not supported|PARSE_SYNTAX_ERROR[^\n]*near ':'/i.test(
     message,
   );
+}
+
+/** The rows asked of the driver per fetch of `readCapped`. */
+const FETCH_CHUNK_ROWS = 10_000;
+
+/**
+ * Fetch `op`'s result batch by batch, as the driver's `fetchAll` does, but
+ * keep only the first `limit` rows: the rest are counted for `totalRows` and
+ * dropped, so a result larger than the cap is never held whole. Non-object
+ * rows are skipped and not counted; the columns are the first kept row's.
+ */
+async function readCapped(op: IOperation, limit: number): Promise<QueryResult> {
+  const rows: Record<string, unknown>[] = [];
+  let totalRows = 0;
+  do {
+    const chunk: unknown = await op.fetchChunk({
+      maxRows: FETCH_CHUNK_ROWS,
+      disableBuffering: true,
+    });
+    for (const row of Array.isArray(chunk) ? (chunk as unknown[]) : []) {
+      if (!isRecord(row)) continue;
+      totalRows += 1;
+      if (rows.length < limit) rows.push({ ...row });
+    }
+  } while (await op.hasMoreRows());
+  return { columns: Object.keys(rows[0] ?? {}), rows, totalRows };
 }
 
 function asError(err: unknown): Error {
