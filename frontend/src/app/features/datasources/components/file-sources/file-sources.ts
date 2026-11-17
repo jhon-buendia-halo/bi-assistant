@@ -114,7 +114,8 @@ export class FileSources {
         const before = old.sheets.find((o) => o.sheet === s.sheet);
         return before ? { ...s, table: before.table } : s;
       });
-      if (old.uploadId) void this.api.discard(old.uploadId).catch(() => undefined);
+      if (old.uploadId)
+        void this.api.discard(old.uploadId).catch(() => undefined);
       this.filesChange.emit(
         this.files().map((f) =>
           f.id === id ? { ...file, id, schema: old.schema, sheets } : f,
@@ -130,7 +131,8 @@ export class FileSources {
   }
 
   remove(file: SourceFile): void {
-    if (file.uploadId) void this.api.discard(file.uploadId).catch(() => undefined);
+    if (file.uploadId)
+      void this.api.discard(file.uploadId).catch(() => undefined);
     this.filesChange.emit(this.files().filter((f) => f.id !== file.id));
   }
 

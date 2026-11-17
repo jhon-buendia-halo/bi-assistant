@@ -60,7 +60,9 @@ export class SheetReviewDialog implements OnInit, OnDestroy {
   readonly tableKey = computed(
     () => `file.${this.file().schema}.${this.sheet()?.table ?? ''}`,
   );
-  readonly shownRows = computed(() => this.preview()?.rows.map((r) => r.row) ?? []);
+  readonly shownRows = computed(
+    () => this.preview()?.rows.map((r) => r.row) ?? [],
+  );
   readonly excluded = computed(() => {
     const p = this.preview();
     const s = this.sheet();
@@ -155,7 +157,9 @@ export class SheetReviewDialog implements OnInit, OnDestroy {
       this.preview.set(preview);
     } catch (e) {
       if (seq !== this.previewSeq) return;
-      this.error.set(e instanceof Error ? e.message : 'Could not read the sheet');
+      this.error.set(
+        e instanceof Error ? e.message : 'Could not read the sheet',
+      );
     } finally {
       if (seq === this.previewSeq) this.loading.set(false);
     }

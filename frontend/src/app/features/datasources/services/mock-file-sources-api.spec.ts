@@ -37,7 +37,11 @@ describe('MockFileSourcesApi', () => {
   it('proposes the Region, Targets and Notes sheets for an .xlsx', async () => {
     const { file: f } = await api.upload(file('sales_2026.xlsx'));
     expect(f.schema).toBe('sales_2026');
-    expect(f.sheets.map((s) => s.sheet)).toEqual(['Region', 'Targets', 'Notes']);
+    expect(f.sheets.map((s) => s.sheet)).toEqual([
+      'Region',
+      'Targets',
+      'Notes',
+    ]);
     expect(f.sheets[0].headerRow).toBe(3);
     expect(f.sheets[2].warnings).toEqual([{ code: 'no-table' }]);
   });
@@ -60,8 +64,16 @@ describe('MockFileSourcesApi', () => {
   it('recomputes the preview from the header row and the last-row switch', async () => {
     const { file: f } = await api.upload(file('sales_2026.xlsx'));
     const base = { fileId: f.id, sheet: 'Region' };
-    const a = await api.preview({ ...base, headerRow: 3, excludeLastRow: true });
-    const b = await api.preview({ ...base, headerRow: 3, excludeLastRow: false });
+    const a = await api.preview({
+      ...base,
+      headerRow: 3,
+      excludeLastRow: true,
+    });
+    const b = await api.preview({
+      ...base,
+      headerRow: 3,
+      excludeLastRow: false,
+    });
     expect(a.warnings.some((w) => w.code === 'total-row')).toBeTrue();
     expect(b.warnings.some((w) => w.code === 'total-row')).toBeFalse();
     expect(b.totalRows).toBe(a.totalRows + 1);

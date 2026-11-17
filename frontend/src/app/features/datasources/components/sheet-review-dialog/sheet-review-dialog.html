@@ -10,7 +10,9 @@
     aria-labelledby="sheet-review-title"
     data-testid="sheet-review-dialog"
   >
-    <div class="flex items-center gap-2.5 border-b border-border px-[18px] py-3.5">
+    <div
+      class="flex items-center gap-2.5 border-b border-border px-[18px] py-3.5"
+    >
       <h3
         id="sheet-review-title"
         class="flex-1 text-[14px] font-medium text-fg-strong"
@@ -60,7 +62,9 @@
         }
       </div>
 
-      <div class="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-[18px] py-4">
+      <div
+        class="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto px-[18px] py-4"
+      >
         @if (sheet(); as s) {
           <div class="flex flex-wrap items-center gap-2">
             @for (w of warnings(); track w.label) {
@@ -95,7 +99,11 @@
                 (change)="setHeaderRow(+$any($event.target).value)"
               >
                 @for (n of headerChoices; track n) {
-                  <option [value]="n" [selected]="n === s.headerRow" class="bg-surface">
+                  <option
+                    [value]="n"
+                    [selected]="n === s.headerRow"
+                    class="bg-surface"
+                  >
                     {{ n }}
                   </option>
                 }
@@ -117,7 +125,9 @@
                 class="h-3.5 w-3.5 accent-primary"
                 data-testid="sheet-review-exclude-last"
                 [checked]="s.excludeLastRow"
-                (change)="patch({ excludeLastRow: $any($event.target).checked })"
+                (change)="
+                  patch({ excludeLastRow: $any($event.target).checked })
+                "
               />
               Exclude the last row (looks like a total)
             </label>
@@ -134,7 +144,9 @@
           </div>
 
           @if (error(); as message) {
-            <p class="text-[12px] text-on-danger-soft" role="alert">{{ message }}</p>
+            <p class="text-[12px] text-on-danger-soft" role="alert">
+              {{ message }}
+            </p>
           }
 
           @if (preview(); as p) {
@@ -145,7 +157,9 @@
               >
                 <thead>
                   <tr>
-                    <th class="w-11 border border-border bg-surface-muted px-2.5 py-1.5"></th>
+                    <th
+                      class="w-11 border border-border bg-surface-muted px-2.5 py-1.5"
+                    ></th>
                     @for (c of p.columns; track c.letter) {
                       <th
                         class="border border-border bg-surface-muted px-2.5 py-1.5 font-medium text-fg-muted"
@@ -169,11 +183,15 @@
                             : 'text-fg'
                       "
                     >
-                      <td class="border border-border bg-surface-muted p-0 text-right text-fg-muted no-underline">
+                      <td
+                        class="border border-border bg-surface-muted p-0 text-right text-fg-muted no-underline"
+                      >
                         <button
                           type="button"
                           class="w-full px-2.5 py-1.5 text-right hover:text-fg"
-                          [attr.aria-label]="'Use row ' + r.row + ' as the header'"
+                          [attr.aria-label]="
+                            'Use row ' + r.row + ' as the header'
+                          "
                           [attr.aria-pressed]="r.row === s.headerRow"
                           (click)="setHeaderRow(r.row)"
                         >
@@ -184,13 +202,16 @@
                         <td
                           class="whitespace-nowrap border border-border px-2.5 py-1.5"
                           [class.text-right]="
-                            r.row !== s.headerRow && isNumeric(p.columns[$index]?.type ?? '')
+                            r.row !== s.headerRow &&
+                            isNumeric(p.columns[$index]?.type ?? '')
                           "
                         >
                           {{ cellText(cell) }}
                           @if (r.row === s.headerRow) {
                             <div class="mt-0.5 font-normal">
-                              <span class="chip chip-info">{{ p.columns[$index]?.type }}</span>
+                              <span class="chip chip-info">{{
+                                p.columns[$index]?.type
+                              }}</span>
                             </div>
                           }
                         </td>
@@ -198,8 +219,17 @@
                     </tr>
                     @if (gapAfter() === r.row) {
                       <tr class="text-fg-muted" aria-hidden="true">
-                        <td class="border border-border bg-surface-muted px-2.5 py-1.5 text-right">⋮</td>
-                        <td class="border border-border px-2.5 py-1.5" [attr.colspan]="p.columns.length">…</td>
+                        <td
+                          class="border border-border bg-surface-muted px-2.5 py-1.5 text-right"
+                        >
+                          ⋮
+                        </td>
+                        <td
+                          class="border border-border px-2.5 py-1.5"
+                          [attr.colspan]="p.columns.length"
+                        >
+                          …
+                        </td>
                       </tr>
                     }
                   }
@@ -207,9 +237,9 @@
               </table>
             </div>
             <p class="text-[12px] text-fg-muted">
-              First 7 and last 2 rows of {{ total() }}. Click a row number to make
-              it the header; edit Range to change the rows and columns read.
-              Struck-through rows are not imported.
+              First 7 and last 2 rows of {{ total() }}. Click a row number to
+              make it the header; edit Range to change the rows and columns
+              read. Struck-through rows are not imported.
             </p>
           } @else if (!error()) {
             <p class="text-[12px] text-fg-muted">Loading the sheet…</p>

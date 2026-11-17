@@ -130,10 +130,7 @@ export interface SheetPreview {
 }
 
 export type DatasourceConfig =
-  | DatabricksConfig
-  | PostgresConfig
-  | RestApiConfig
-  | FileDatasourceConfig;
+  DatabricksConfig | PostgresConfig | RestApiConfig | FileDatasourceConfig;
 
 export interface Datasource {
   id: string;

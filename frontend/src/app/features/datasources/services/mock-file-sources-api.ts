@@ -52,7 +52,14 @@ function regionCells(row: number): PreviewCell[] {
 
 function csvCells(row: number): PreviewCell[] {
   if (row === 1) return ['id', 'name', 'country', 'segment', 'orders', 'spend'];
-  return [row - 1, `Customer ${row - 1}`, 'Norway', 'Retail', 12 + row, `${row * 10}.00`];
+  return [
+    row - 1,
+    `Customer ${row - 1}`,
+    'Norway',
+    'Retail',
+    12 + row,
+    `${row * 10}.00`,
+  ];
 }
 
 /** Parses `A3:H12482` into 1-based first and last rows, or null. */
@@ -210,11 +217,20 @@ export class MockFileSourcesApi implements FileSourcesApi {
       sheet: req.sheet,
       headerRow,
       range,
-      totalRows: Math.max(0, last - Math.max(first, headerRow) - (excludeLast ? 1 : 0)),
+      totalRows: Math.max(
+        0,
+        last - Math.max(first, headerRow) - (excludeLast ? 1 : 0),
+      ),
       columns: REGION_COLUMNS.map(([name, type], i) => ({
         letter: LETTERS[i],
         name: csv ? csvCells(1)[i]!.toString() : name,
-        type: req.allText ? 'text' : csv ? (i === 0 || i === 4 ? 'integer' : 'text') : type,
+        type: req.allText
+          ? 'text'
+          : csv
+            ? i === 0 || i === 4
+              ? 'integer'
+              : 'text'
+            : type,
       })),
       rows: shown.map((row) => ({
         row,

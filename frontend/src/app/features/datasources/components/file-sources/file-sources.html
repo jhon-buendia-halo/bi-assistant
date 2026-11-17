@@ -32,13 +32,19 @@
   (drop)="onDrop($event)"
 >
   @if (uploading() > 0) {
-    <lucide-angular [img]="Loader2" [size]="20" class="animate-spin text-fg-muted" />
+    <lucide-angular
+      [img]="Loader2"
+      [size]="20"
+      class="animate-spin text-fg-muted"
+    />
   } @else {
     <lucide-angular [img]="Upload" [size]="20" class="text-fg-muted" />
   }
   <div class="flex min-w-0 flex-1 flex-col">
     <span class="text-[13px] text-fg">
-      {{ uploading() > 0 ? "Reading the file…" : "Drop .xlsx or .csv files here" }}
+      {{
+        uploading() > 0 ? "Reading the file…" : "Drop .xlsx or .csv files here"
+      }}
     </span>
     <span class="text-[12px] text-fg-muted">
       Up to 200 MB each. The files are copied into the app; the originals are
@@ -105,7 +111,11 @@
           [attr.aria-label]="'Include ' + sheet.sheet"
           (change)="toggleInclude(file, sheet, $any($event.target).checked)"
         />
-        <lucide-angular [img]="Table2" [size]="16" class="shrink-0 text-fg-muted" />
+        <lucide-angular
+          [img]="Table2"
+          [size]="16"
+          class="shrink-0 text-fg-muted"
+        />
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
           <span class="flex flex-wrap items-center gap-2 text-[13px] text-fg">
             {{ sheet.sheet }}

@@ -13,7 +13,8 @@ describe('SheetReviewDialog', () => {
 
   beforeEach(async () => {
     const api = new MockFileSourcesApi();
-    file = (await api.upload(new File([new Uint8Array(10)], 'sales_2026.xlsx'))).file;
+    file = (await api.upload(new File([new Uint8Array(10)], 'sales_2026.xlsx')))
+      .file;
     TestBed.configureTestingModule({
       imports: [SheetReviewDialog],
       providers: [{ provide: FILE_SOURCES_API, useValue: api }],
@@ -33,23 +34,27 @@ describe('SheetReviewDialog', () => {
     expect(el().querySelector('#sheet-review-title')?.textContent).toContain(
       'Review sheets — sales_2026.xlsx',
     );
-    expect(el().querySelector('code')?.textContent).toBe('file.sales_2026.region');
-    expect(el().querySelector('[data-testid="sheet-review-grid"]')).not.toBeNull();
+    expect(el().querySelector('code')?.textContent).toBe(
+      'file.sales_2026.region',
+    );
+    expect(
+      el().querySelector('[data-testid="sheet-review-grid"]'),
+    ).not.toBeNull();
   });
 
   it('sets the header row on a row-number click and Apply emits the change', async () => {
     const applied: SourceFile[] = [];
     fixture.componentInstance.applied.subscribe((f) => applied.push(f));
-    el()
-      .querySelector<HTMLButtonElement>('[data-row="5"] button')!
-      .click();
+    el().querySelector<HTMLButtonElement>('[data-row="5"] button')!.click();
     fixture.detectChanges();
     await settle();
     fixture.detectChanges();
     expect(
       el().querySelector('[data-row="4"]')?.getAttribute('data-excluded'),
     ).toBe('true');
-    el().querySelector<HTMLButtonElement>('[data-testid="sheet-review-apply"]')!.click();
+    el()
+      .querySelector<HTMLButtonElement>('[data-testid="sheet-review-apply"]')!
+      .click();
     expect(applied.length).toBe(1);
     const region = applied[0].sheets.find((s) => s.sheet === 'Region')!;
     expect(region.headerRow).toBe(5);
@@ -64,7 +69,9 @@ describe('SheetReviewDialog', () => {
     fixture.componentInstance.applied.subscribe(() => applied++);
     fixture.componentInstance.closed.subscribe(() => closed++);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    el().querySelector<HTMLButtonElement>('[data-testid="sheet-review-cancel"]')!.click();
+    el()
+      .querySelector<HTMLButtonElement>('[data-testid="sheet-review-cancel"]')!
+      .click();
     expect(closed).toBe(2);
     expect(applied).toBe(0);
   });

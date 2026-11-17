@@ -40,27 +40,35 @@ describe('FileSources', () => {
   const el = () => fixture.nativeElement as HTMLElement;
 
   beforeEach(async () => {
-    await TestBed.configureTestingModule({ imports: [FileSources] }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [FileSources],
+    }).compileComponents();
     fixture = TestBed.createComponent(FileSources);
     fixture.componentRef.setInput('files', [sales]);
     fixture.detectChanges();
   });
 
   it('shows the warning chip on a sheet row and Skipped on a no-table sheet', () => {
-    const region = el().querySelector('[data-testid="sheet-row"][data-sheet="Region"]')!;
+    const region = el().querySelector(
+      '[data-testid="sheet-row"][data-sheet="Region"]',
+    )!;
     expect(
       region.querySelector('[data-testid="sheet-warning"]')?.textContent,
     ).toContain('Last row looks like a total');
     expect(region.textContent).toContain('12,480 rows');
     expect(region.querySelector('[data-testid="sheet-review"]')).not.toBeNull();
 
-    const notes = el().querySelector('[data-testid="sheet-row"][data-sheet="Notes"]')!;
+    const notes = el().querySelector(
+      '[data-testid="sheet-row"][data-sheet="Notes"]',
+    )!;
     expect(notes.textContent).toContain('Skipped');
     expect(notes.querySelector('[data-testid="sheet-review"]')).toBeNull();
   });
 
   it('offers Browse over a hidden file input for .xlsx and .csv', () => {
-    const input = el().querySelector<HTMLInputElement>('[data-testid="file-input"]')!;
+    const input = el().querySelector<HTMLInputElement>(
+      '[data-testid="file-input"]',
+    )!;
     expect(input.accept).toBe('.xlsx,.csv');
     expect(input.multiple).toBeTrue();
     expect(el().querySelector('[data-testid="file-browse"]')).not.toBeNull();
