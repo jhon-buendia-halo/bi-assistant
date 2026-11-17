@@ -281,6 +281,12 @@ describe('every streamed turn runs the session workflow (agents.md 5.1, ADR-0040
         expect.arrayContaining(['tool', 'text', 'done']),
       );
       expect(events.at(-1)?.type).toBe('done');
+      // A lookup with no rows still ends its call, so no spinner stays on.
+      expect(
+        events
+          .filter((event) => event.type === 'tool-result')
+          .map((event) => JSON.parse(event.content ?? '{}') as unknown),
+      ).toEqual([{ tool: 'list_entities' }]);
       expect(ctx.session.messages.at(-1)).toMatchObject({
         role: 'assistant',
         content: 'Hello.',

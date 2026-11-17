@@ -61,6 +61,8 @@ export interface WorkflowRunToolCall {
   error?: string;
   /** From the `tool` event to its `tool-result`; absent when no result came. */
   durationMs?: number;
+  /** Why the agent made the call, in its words (the `tool` event's `rationale`). */
+  rationale?: string;
 }
 
 /**
@@ -384,6 +386,9 @@ function startedFields(
 }
 
 /** A tool call input, clipped to `TOOL_CALL_INPUT_CAP`. */
+/** A call's stored rationale, at most this many characters (as the stream's). */
+const RATIONALE_CAP = 400;
+
 function callInput(input: unknown): Pick<WorkflowRunToolCall, 'input'> {
   return typeof input === 'string' && input
     ? { input: input.slice(0, TOOL_CALL_INPUT_CAP) }
@@ -553,13 +558,17 @@ export class RunStepTracker {
    * agent step that is running (its current attempt); none running, or the
    * step holding `STEP_TOOL_CALL_CAP` calls already, drops it.
    */
-  noteTool(name: string, input?: string): void {
+  noteTool(name: string, input?: string, rationale?: string): void {
     const key = this.runningAgentStep();
     if (!key) return;
     const calls = this.calls.get(key) ?? [];
     if (calls.length >= STEP_TOOL_CALL_CAP) return;
     calls.push({
-      call: { tool: name, ...callInput(input) },
+      call: {
+        tool: name,
+        ...callInput(input),
+        ...(rationale ? { rationale: rationale.slice(0, RATIONALE_CAP) } : {}),
+      },
       startedAt: this.now().getTime(),
       done: false,
     });
@@ -798,7 +807,9 @@ export function noteToolFrame(
     typeof value === 'string' ? value : undefined;
   if (event.type === 'tool') {
     const name = text(frame['name']);
-    if (name) tracker.noteTool(name, text(frame['input']));
+    if (name) {
+      tracker.noteTool(name, text(frame['input']), text(frame['rationale']));
+    }
     return;
   }
   const tool = text(frame['tool']);
