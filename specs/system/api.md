@@ -684,7 +684,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
     description: string;
     kind: 'code' | 'agent';           // always 'code' since 2026-11-12 (the one-step 'agent' kind is no longer produced)
     owner: 'Official' | 'You';        // always 'Official' since 2026-11-12 ('You' was a user agent's workflow)
-    agents: { key: string; name: string }[];   // every agent its steps run, in step order, each once; `answer-business-question`: insights-analyst (Michael), image-reader (Zoe), analysis-planner (Olivia), data-readiness (Sarah), answer-writer (Jessica); `data-readiness-assessment`: data-readiness (Sarah), image-reader (Zoe); `map-dashboard-data`: data-mapper, image-reader (Zoe); `consumption-gap-analysis`: gap-advisor, dashboard-reader (Grace), requirements-analyst, layer-mapper
+    agents: { key: string; name: string; role: string }[];   // every agent its steps run, in step order, each once, with its persona's role (job title, `''` without one; since 2026-11-17); `answer-business-question`: insights-analyst (Michael), image-reader (Zoe), analysis-planner (Olivia), data-readiness (Sarah), answer-writer (Jessica); `data-readiness-assessment`: data-readiness (Sarah), image-reader (Zoe); `map-dashboard-data`: data-mapper, image-reader (Zoe); `consumption-gap-analysis`: gap-advisor, dashboard-reader (Grace), requirements-analyst, layer-mapper
     stepCount: number;
     bar: 'steps' | 'agent';           // what drove a chat's workflow bar (kept for the stored chats): these steps, or the agent's own phases
     trigger: 'run';                   // every workflow runs once on a typed input (118, 119); since 1.23.22 there is no 'chat' trigger
@@ -747,7 +747,7 @@ Controller prefix `/workflows`. Capability: [workflows](../capabilities/workflow
 - Response `200`: `WorkflowDetail = Omit<WorkflowSummary, 'agents'> & { agents: WorkflowAgentDetail[]; steps: WorkflowDetailStep[]; edges: WorkflowEdge[]; contractHash: string }`, with `AgentWorkflow` exactly as 34 defines it. A `WorkflowDetail` is structurally an `AgentWorkflow` (it has `id` and `steps`).
   ```ts
   type WorkflowAgentDetail = {
-    key: string; name: string;        // as 116's agents entry, same order (step order, each once)
+    key: string; name: string; role: string;  // as 116's agents entry, same order (step order, each once)
     model: string | null;             // `${llm.provider}/${llm.model}` of 34's AgentDetail.llm; null when no LLM is set (never the environment's fallback)
     systemPrompt: string;             // 34's AgentDetail.instructions, at most 20 000 characters; each run adds its own context
     systemPromptTruncated?: true;     // the prompt was longer than 20 000 characters and was shortened

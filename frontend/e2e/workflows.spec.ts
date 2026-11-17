@@ -337,8 +337,9 @@ test.describe('Feature: Workflows', () => {
           await expect(drawnSteps(page)).toHaveText(V2_STEPS);
           await expect(page.getByTestId('workflow-bar-note')).toHaveCount(0);
           const start = await openNode(page, 'start', 'Start');
-          await expect(start.getByTestId('workflow-agent-insights-analyst')).toContainText('Michael');
-          await expect(start.getByTestId('workflow-agent-image-reader')).toContainText('Zoe');
+          // Each agent persona with its role (R39).
+          await expect(start.getByTestId('workflow-agent-insights-analyst')).toContainText('Michael, Insights Analyst');
+          await expect(start.getByTestId('workflow-agent-image-reader')).toContainText('Zoe, Image Analyst');
           await expect(start.getByTestId('workflow-agent-result-explorer')).toContainText('Nathan');
           await closeNode(page);
           await expect(railItem(page, 'User journeys')).toHaveAttribute(
@@ -1311,7 +1312,7 @@ test.describe('Feature: Workflows (the designer)', () => {
       async () => {
         const dialog = nodeDialog(page);
         await expect(dialog.getByText('TOOL', { exact: true })).toBeVisible();
-        await expect(dialog.getByText('Tool of Michael · Analyse')).toBeVisible();
+        await expect(dialog.getByText('Tool of Michael, Insights Analyst · Analyse')).toBeVisible();
         await expect(dialog.getByTestId('workflow-tool-field-name')).toHaveText('run_readonly_sql');
         await expect(dialog.getByTestId('workflow-tool-field-description')).toBeVisible();
         await expect(dialog.getByTestId('workflow-tool-field-description')).not.toHaveText('None');
@@ -1706,6 +1707,10 @@ test.describe('Feature: Workflows (Builder and Business views)', () => {
         await expect(view.getByTestId('workflow-run-status')).toHaveText('Run succeeded');
         await expect(view.getByTestId('workflow-run-question')).toHaveText(QUESTION);
         await expect(view.getByTestId('workflow-run-team')).toBeVisible();
+        // Each agent persona with its role (R39).
+        await expect(
+          view.getByTestId('workflow-run-team-write-answer').getByTestId('workflow-run-team-role'),
+        ).toHaveText('· Insights Writer');
         await expect(view.getByTestId('run-answer')).toContainText(ANSWER);
         await expect(view.getByTestId('workflow-run-story')).toHaveCount(0);
         await expect(view.getByTestId('workflow-run-tool')).toHaveCount(0);

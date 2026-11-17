@@ -426,7 +426,7 @@ export class WorkflowRunsService implements OnModuleInit {
         description: '',
         kind: 'agent',
         owner: 'You',
-        agents: [{ key: agentId, name: target.name }],
+        agents: [{ key: agentId, name: target.name, role: target.role }],
         stepCount: 1,
         bar: 'agent',
         trigger: 'run',

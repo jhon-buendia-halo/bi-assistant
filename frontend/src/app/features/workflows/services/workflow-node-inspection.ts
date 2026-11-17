@@ -281,6 +281,7 @@ export function buildToolInspection(
         stepTitle: step.title,
         agentKey: node.agent?.key ?? stepAgent.key ?? null,
         agentName: node.agent?.name ?? stepAgent.name,
+        agentRole: node.agent?.role ?? stepAgent.role ?? '',
         ran: node.run !== null,
         calls,
         totalDurationMs: durations.length

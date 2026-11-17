@@ -609,14 +609,14 @@ export class SessionsService implements OnModuleInit {
    */
   async draftRunTarget(
     agentId: string,
-  ): Promise<{ name: string; datasets: string[] }> {
+  ): Promise<{ name: string; role: string; datasets: string[] }> {
     const agent = await this.userAgents.get(agentId);
     if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
     const datasets = await this.existingDatasets(agent.draft.datasets);
     if (!datasets.length) {
       throw new BadRequestException('Select at least one dataset to preview');
     }
-    return { name: agent.draft.name, datasets };
+    return { name: agent.draft.name, role: agent.draft.role ?? '', datasets };
   }
 
   /**

@@ -34,6 +34,7 @@ import {
 import {
   NodeToolCallView,
   NodeInspection,
+  NodeToolView,
   WorkflowNodeKind,
 } from '../../models/workflow-node.model';
 import {
@@ -47,6 +48,7 @@ import {
 } from '../../services/workflow-input-validation';
 import {
   nodeStatusLabel,
+  personaLabel,
   runStatusLine,
   runStepStatusLabel,
 } from '../../services/workflows.util';
@@ -349,13 +351,19 @@ export class WorkflowNodeDialog {
   });
   readonly agentLine = computed(() => {
     const tool = this.tool();
-    if (tool !== null) return `Tool of ${tool.agentName} · ${tool.stepTitle}`;
+    if (tool !== null) {
+      const persona = personaLabel({
+        name: tool.agentName,
+        role: tool.agentRole,
+      });
+      return `Tool of ${persona} · ${tool.stepTitle}`;
+    }
     const agent = this.node().step?.agent;
     if (!agent) return null;
-    // A one-call step (Plan, Write answer) names its agent alone.
+    // A one-call step (Plan, Write answer) names its agent alone, with its role (R39).
     return agent.maxSteps > 1
-      ? `${agent.name} · ≤ ${agent.maxSteps} steps`
-      : agent.name;
+      ? `${personaLabel(agent)} · ≤ ${agent.maxSteps} steps`
+      : personaLabel(agent);
   });
 
   /** A tool opened from its sub-node; null for any other node. */
@@ -417,6 +425,16 @@ export class WorkflowNodeDialog {
       this.node().step?.agent?.name ??
       'the agent persona',
   );
+  /** The same with its role, where the dialog introduces the persona (R39). */
+  readonly agentLabel = computed(() => {
+    const agent = this.node().agent ?? this.node().step?.agent;
+    return agent ? personaLabel(agent) : 'the agent persona';
+  });
+  protected readonly personaLabel = personaLabel;
+  /** A tool's agent persona with its role. */
+  protected toolPersona(tool: NodeToolView): string {
+    return personaLabel({ name: tool.agentName, role: tool.agentRole });
+  }
   /** The Preview of an agent step's artifact: built from the attempt shown. */
   readonly narrative = computed(() => {
     const attempts = this.attemptNumbers();

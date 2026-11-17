@@ -112,8 +112,8 @@ export interface WorkflowSummary {
   /** Defined in code. */
   kind: 'code';
   owner: 'Official';
-  /** The agents its steps call, in step order, each once. */
-  agents: { key: string; name: string }[];
+  /** The agents its steps call, in step order, each once, with their role (api.md 116). */
+  agents: { key: string; name: string; role?: string }[];
   stepCount: number;
   /** Every workflow runs once on a typed input (api.md 118). */
   trigger: 'run';
@@ -141,6 +141,8 @@ export const TRIGGER_LABELS: Record<WorkflowSummary['trigger'], string> = {
 export interface WorkflowAgentDetail {
   key: string;
   name: string;
+  /** The persona's role (job title); '' or absent without one. */
+  role?: string;
   /** `<provider>/<model>` of the agent's LLM; null when no LLM is set. */
   model?: string | null;
   /** The agent's base prompt (api.md 34 `instructions`); each run adds its own context. */

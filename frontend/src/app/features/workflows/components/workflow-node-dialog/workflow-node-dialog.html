@@ -71,7 +71,7 @@
           class="relative flex shrink-0 flex-col border-r border-border bg-surface-muted/40"
           data-testid="workflow-ndv-chat-pane"
           [style.width.px]="chatWidth()"
-          [attr.aria-label]="'Chat with ' + agentName()"
+          [attr.aria-label]="'Chat with ' + agentLabel()"
         >
           <!-- The right edge: drag (or the arrow keys) to resize; double-click resets. -->
           <div
@@ -93,7 +93,7 @@
           <p
             class="m-0 shrink-0 border-b border-border px-4 py-2.5 text-[12px] text-fg-muted"
           >
-            Chat with {{ agentName() }}
+            Chat with {{ agentLabel() }}
           </p>
           <div class="flex min-h-0 flex-1 flex-col gap-3 p-4">
             @if (run()) {
@@ -664,7 +664,7 @@
                 class="inline-flex items-center gap-1 text-[13px] text-primary hover:underline"
                 (click)="openAgent.emit(agent.key)"
               >
-                {{ agent.name }}
+                {{ personaLabel(agent) }}
                 <lucide-angular [img]="ChevronRight" [size]="12" />
               </button>
             </li>
@@ -721,11 +721,11 @@
                 class="inline-flex items-center gap-1 text-primary hover:underline"
                 (click)="openAgent.emit(key)"
               >
-                {{ tool.agentName }}
+                {{ toolPersona(tool) }}
                 <lucide-angular [img]="ChevronRight" [size]="12" />
               </button>
             } @else {
-              {{ tool.agentName }}
+              {{ toolPersona(tool) }}
             }
           </dd>
           <dt class="text-fg-muted">Step</dt>
@@ -778,11 +778,11 @@
                   class="inline-flex items-center gap-1 text-primary hover:underline"
                   (click)="openAgent.emit(key)"
                 >
-                  {{ agent.name }}
+                  {{ personaLabel(agent) }}
                   <lucide-angular [img]="ChevronRight" [size]="12" />
                 </button>
               } @else {
-                {{ agent.name }}
+                {{ personaLabel(agent) }}
               }
             </dd>
             <dt class="text-fg-muted">Model</dt>

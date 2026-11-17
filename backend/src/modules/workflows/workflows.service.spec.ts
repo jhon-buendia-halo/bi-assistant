@@ -185,11 +185,11 @@ const ANSWER_BUSINESS_QUESTION_SUMMARY = {
   // Every agent its steps run: Michael, then Zoe (Read images), Olivia
   // (Plan), Sarah (Check data quality) and Jessica (Write answer).
   agents: [
-    { key: 'insights-analyst', name: 'Michael' },
-    { key: 'image-reader', name: 'Zoe' },
-    { key: 'analysis-planner', name: 'Olivia' },
-    { key: 'data-readiness', name: 'Sarah' },
-    { key: 'answer-writer', name: 'Jessica' },
+    { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
+    { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
+    { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
+    { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
+    { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
   ],
   stepCount: 13,
   bar: 'steps',
@@ -359,6 +359,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
           key: 'insights-analyst',
           // The agent's persona name, as the catalogue shows it.
           name: 'Michael',
+          role: 'Insights Analyst',
           model: null,
           systemPrompt: 'You answer with the core data tools.',
           toolDetails: [
@@ -384,6 +385,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         {
           key: 'image-reader',
           name: 'Zoe',
+          role: 'Image Analyst',
           model: null,
           systemPrompt: 'You describe the reference images.',
           toolDetails: [],
@@ -391,6 +393,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         {
           key: 'analysis-planner',
           name: 'Olivia',
+          role: 'Analysis Lead',
           model: null,
           systemPrompt: 'You plan a data analysis.',
           toolDetails: [],
@@ -400,6 +403,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         {
           key: 'data-readiness',
           name: 'Sarah',
+          role: 'Data Quality Analyst',
           model: null,
           systemPrompt: 'You assess readiness.',
           toolDetails: [],
@@ -407,6 +411,7 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
         {
           key: 'answer-writer',
           name: 'Jessica',
+          role: 'Insights Writer',
           model: null,
           systemPrompt: 'You write the final answer.',
           toolDetails: [],
@@ -436,11 +441,11 @@ describe('WorkflowsService (api.md 116, 117; workflows R1, R2)', () => {
       ctx = build(undefined, { llmView: ANTHROPIC_VIEW });
       const [v2] = await ctx.service.list();
       expect(v2.agents).toEqual([
-        { key: 'insights-analyst', name: 'Michael' },
-        { key: 'image-reader', name: 'Zoe' },
-        { key: 'analysis-planner', name: 'Olivia' },
-        { key: 'data-readiness', name: 'Sarah' },
-        { key: 'answer-writer', name: 'Jessica' },
+        { key: 'insights-analyst', name: 'Michael', role: 'Insights Analyst' },
+        { key: 'image-reader', name: 'Zoe', role: 'Image Analyst' },
+        { key: 'analysis-planner', name: 'Olivia', role: 'Analysis Lead' },
+        { key: 'data-readiness', name: 'Sarah', role: 'Data Quality Analyst' },
+        { key: 'answer-writer', name: 'Jessica', role: 'Insights Writer' },
       ]);
     });
 

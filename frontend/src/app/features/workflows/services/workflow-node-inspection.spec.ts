@@ -335,6 +335,7 @@ describe('buildToolInspection (a tool sub-node opens that tool)', () => {
       stepTitle: 'Answer',
       agentKey: 'assistant',
       agentName: 'Assistant',
+      agentRole: '',
       ran: false,
       calls: [],
       totalDurationMs: null,

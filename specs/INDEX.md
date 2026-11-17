@@ -1427,7 +1427,7 @@ specs/capabilities/visuals/spec.md:409-431  ### Feature: Skills the designer is 
 specs/capabilities/visuals/spec.md:433-445  ## Acceptance
 
 specs/capabilities/workflows/spec.md:7-11  ## Concepts
-specs/capabilities/workflows/spec.md:13-117  ## Rules
+specs/capabilities/workflows/spec.md:13-119  ## Rules
 specs/capabilities/workflows/spec.md:16-16  R1 The workflow catalogue SHALL list exactly six workflows, in this order
 specs/capabilities/workflows/spec.md:17-17  R2 The workflows' ids SHALL be `answer-business-question`, `data-readines
 specs/capabilities/workflows/spec.md:18-20  R3 Workflows SHALL be defined in code. The app SHALL NOT offer any contro
@@ -1466,15 +1466,16 @@ specs/capabilities/workflows/spec.md:90-98  R35 **Reference images** (2026-11-15
 specs/capabilities/workflows/spec.md:99-105  R36 A run of Answer a Business Question whose question asks for another pa
 specs/capabilities/workflows/spec.md:106-113  R37 Consumption Gap Analysis SHALL run, fixed in code ([../../system/agent
 specs/capabilities/workflows/spec.md:114-117  R38 **Business and Builder views** (2026-11-17). A workflow's page SHALL o
-specs/capabilities/workflows/spec.md:119-136  ## Edge cases and errors
-specs/capabilities/workflows/spec.md:138-142  ## Contracts
-specs/capabilities/workflows/spec.md:144-152  ## UI
-specs/capabilities/workflows/spec.md:154-398  ## Flows
-specs/capabilities/workflows/spec.md:156-273  ### Feature: Workflows
-specs/capabilities/workflows/spec.md:275-361  ### Feature: Workflow runs
-specs/capabilities/workflows/spec.md:363-369  ### Feature: A follow-up over an earlier result
-specs/capabilities/workflows/spec.md:371-398  ### Feature: Review a Website
-specs/capabilities/workflows/spec.md:400-418  ## Acceptance
+specs/capabilities/workflows/spec.md:119-119  R39 **Agent personas are named with their role** (2026-11-17). Wherever th
+specs/capabilities/workflows/spec.md:121-138  ## Edge cases and errors
+specs/capabilities/workflows/spec.md:140-144  ## Contracts
+specs/capabilities/workflows/spec.md:146-154  ## UI
+specs/capabilities/workflows/spec.md:156-400  ## Flows
+specs/capabilities/workflows/spec.md:158-275  ### Feature: Workflows
+specs/capabilities/workflows/spec.md:277-363  ### Feature: Workflow runs
+specs/capabilities/workflows/spec.md:365-371  ### Feature: A follow-up over an earlier result
+specs/capabilities/workflows/spec.md:373-400  ### Feature: Review a Website
+specs/capabilities/workflows/spec.md:402-420  ## Acceptance
 
 specs/epics/BA-10/spec.md:5-6  ## Goal
 specs/epics/BA-10/spec.md:8-10  ## Scope
