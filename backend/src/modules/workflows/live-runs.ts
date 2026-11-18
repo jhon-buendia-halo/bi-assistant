@@ -43,16 +43,24 @@ export const RUN_UNWIND_MS = 10_000;
 export const RUN_IDLE_MINUTES_DEFAULT = 15;
 
 /**
+ * The longest no-progress limit, in whole minutes: a timer cannot hold more
+ * than 2^31-1 ms (Node turns a longer delay into 1 ms, so the watchdog would
+ * fire at once). 35,791 minutes is just under that.
+ */
+export const RUN_IDLE_MINUTES_MAX = Math.floor((2 ** 31 - 1) / 60_000);
+
+/**
  * The no-progress limit of a turn from `WORKFLOW_RUN_IDLE_MINUTES`, in
- * milliseconds: a number of minutes above 0, 0 to turn the watchdog off
- * (answers 0), else `RUN_IDLE_MINUTES_DEFAULT`.
+ * milliseconds: a number of minutes above 0 (capped at
+ * `RUN_IDLE_MINUTES_MAX`), 0 to turn the watchdog off (answers 0), else
+ * `RUN_IDLE_MINUTES_DEFAULT`.
  */
 export function runIdleLimitMs(raw: string | undefined): number {
   const text = raw?.trim() ?? '';
   const minutes = text ? Number(text) : NaN;
   if (minutes === 0) return 0;
   return Number.isFinite(minutes) && minutes > 0
-    ? minutes * 60_000
+    ? Math.min(minutes, RUN_IDLE_MINUTES_MAX) * 60_000
     : RUN_IDLE_MINUTES_DEFAULT * 60_000;
 }
 
@@ -71,16 +79,19 @@ export function runStalledMessage(limitMs: number): string {
  * A turn's no-progress clock: `onIdle` fires once when `limitMs` passes with
  * no `touch` (every event the turn reports touches it). `stop` clears it for
  * good, when the turn ends or waits for the user. A limit of 0 never fires.
- * The timer is unref'd: it never keeps the process alive.
+ * The timer is unref'd: it never keeps the process alive. A limit above
+ * `RUN_IDLE_MINUTES_MAX` minutes is held at that cap, never overflowed.
  */
 export class IdleWatchdog {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private done = false;
+  private readonly limitMs: number;
 
   constructor(
-    private readonly limitMs: number,
+    limitMs: number,
     private readonly onIdle: () => void,
   ) {
+    this.limitMs = Math.min(limitMs, RUN_IDLE_MINUTES_MAX * 60_000);
     this.touch();
   }
 

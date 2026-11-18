@@ -5,6 +5,7 @@ import {
   LiveRuns,
   MAX_LIVE_RUNS_DEFAULT,
   RUN_IDLE_MINUTES_DEFAULT,
+  RUN_IDLE_MINUTES_MAX,
   RunCheckpoint,
   liveRunCap,
   runIdleLimitMs,
@@ -235,6 +236,17 @@ describe('runIdleLimitMs (WORKFLOW_RUN_IDLE_MINUTES)', () => {
     }
   });
 
+  it('caps a limit above what a timer can hold (2^31-1 ms) at RUN_IDLE_MINUTES_MAX whole minutes', () => {
+    expect(RUN_IDLE_MINUTES_MAX).toBe(35_791);
+    expect(RUN_IDLE_MINUTES_MAX * 60_000).toBeLessThanOrEqual(2 ** 31 - 1);
+    expect(runIdleLimitMs('40000')).toBe(RUN_IDLE_MINUTES_MAX * 60_000);
+    expect(runIdleLimitMs('1e12')).toBe(RUN_IDLE_MINUTES_MAX * 60_000);
+    expect(runIdleLimitMs('35791')).toBe(35_791 * 60_000);
+    expect(runStalledMessage(runIdleLimitMs('40000'))).toBe(
+      'The run made no progress for 35791 minutes and was stopped',
+    );
+  });
+
   it('names the limit in minutes in the stalled run error', () => {
     expect(runStalledMessage(15 * 60_000)).toBe(
       'The run made no progress for 15 minutes and was stopped',
@@ -268,6 +280,13 @@ describe('IdleWatchdog (a run that makes no progress is ended)', () => {
     stopped.touch();
     jest.advanceTimersByTime(5_000);
     expect(quiet).not.toHaveBeenCalled();
+  });
+
+  it('a limit above what a timer can hold does not fire at once', () => {
+    const fired = jest.fn();
+    new IdleWatchdog(40_000 * 60_000, fired);
+    jest.advanceTimersByTime(60 * 60_000);
+    expect(fired).not.toHaveBeenCalled();
   });
 
   it('a limit of 0 never fires', () => {
