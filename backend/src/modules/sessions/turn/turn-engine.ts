@@ -685,6 +685,9 @@ export class TurnEngine {
     // Where the rows behind findings go: the answer's records and the
     // explorable queries as Save report left them, ahead of the agent's.
     let findingSlot: { data: number; explorable: number } | undefined;
+    // How many lineage checks Load layer catalogs started (Infer lineage's
+    // progress lines).
+    let lineageCount = 0;
     // Assess Data Readiness's assessment, once Resolve dataset started it.
     let assessment: ReadinessAssessment | undefined;
     // Its stored report, once Save report stored it (roadmap 1.28.11).
@@ -1342,13 +1345,20 @@ export class TurnEngine {
           // The rows Save report started: replayed, then placed first
           // among the answer's records and explorable queries (where Save
           // report left them, ahead of the agent's), refs numbered again.
+          // While the step waits, each query done is a reasoning line of
+          // the step (agents.md 5.13), so the run is never silent.
           findingRows: async () => {
             const slot = findingSlot;
             const before = { data: data.length, explorable: explorable.length };
             try {
               return await early.take<
                 Awaited<ReturnType<typeof recordFindingSources>>
-              >('finding-rows');
+              >('finding-rows', (done) =>
+                emit({
+                  type: 'reasoning',
+                  content: `Read the rows behind ${done} finding${done === 1 ? '' : 's'}\n`,
+                }),
+              );
             } finally {
               if (slot) {
                 data.splice(slot.data, 0, ...data.splice(before.data));
@@ -1593,13 +1603,24 @@ export class TurnEngine {
             runQueries: ({ queries }) =>
               gapQueriesOn(queries, turn.signal, (replay) => replay()),
             // Infer lineage: started at Load layer catalogs, on its own
-            // stop, its sources held until Infer lineage takes them.
-            startLineage: ({ queries }) =>
+            // stop, its sources held until Infer lineage takes them; while
+            // it waits, each statement done is a reasoning line of the step
+            // (agents.md 5.20), so a slow warehouse is never a silent run.
+            startLineage: ({ queries }) => {
+              lineageCount = queries.length;
               early.start('lineage', (signal, hold) =>
                 gapQueriesOn(queries, signal, hold),
-              ),
+              );
+            },
             takeLineage: () =>
-              early.take<Awaited<ReturnType<typeof gapQueriesOn>>>('lineage'),
+              early.take<Awaited<ReturnType<typeof gapQueriesOn>>>(
+                'lineage',
+                (done) =>
+                  emit({
+                    type: 'reasoning',
+                    content: `Checked ${done} of ${lineageCount} lineage queries\n`,
+                  }),
+              ),
             deriveRequirements: async (input) => {
               try {
                 const derived = await this.deps.mastra.deriveRequirements(
@@ -2000,6 +2021,30 @@ export class TurnEngine {
           captured(() => runtime.saveMappedDashboard(input)),
       } satisfies MapDashboardDataRuntime);
     } else if (review) {
+      // Review templates handles each template's failure itself and fails,
+      // with the first, only when no template was reviewed (workflows R43;
+      // agents.md 5.19): the turn keeps that first one, and lets it go once
+      // a template is reviewed, so a handled failure is never the turn's.
+      let templateError: unknown;
+      let templateReviewed = false;
+      const reviewTemplate: ReviewWebsiteRuntime['reviewTemplate'] = async (
+        input,
+      ) => {
+        try {
+          const reviewed = await runtime.reviewTemplate(input);
+          templateReviewed = true;
+          if (templateError !== undefined && stepError === templateError) {
+            stepError = undefined;
+          }
+          return reviewed;
+        } catch (error) {
+          if (!templateReviewed && templateError === undefined) {
+            templateError = error;
+            stepError = error;
+          }
+          throw error;
+        }
+      };
       requestContext.set(REVIEW_WEBSITE_RUNTIME_KEY, {
         checkSignIn: (input) => captured(() => runtime.checkSignIn(input)),
         openSignIn: (input) => captured(() => runtime.openSignIn(input)),
@@ -2011,8 +2056,7 @@ export class TurnEngine {
           captured(() => runtime.loadReportImages(paths)),
         saveReport: (input) => captured(() => runtime.saveReport(input)),
         showAnswer: (text) => captured(() => runtime.showAnswer(text)),
-        reviewTemplate: (input) =>
-          captured(() => runtime.reviewTemplate(input)),
+        reviewTemplate,
         // Synchronous and never throws: a progress line only.
         progress: (line) => runtime.progress(line),
       } satisfies ReviewWebsiteRuntime);

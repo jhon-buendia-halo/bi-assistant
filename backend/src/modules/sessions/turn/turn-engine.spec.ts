@@ -94,6 +94,13 @@ jest.mock('../visualization.service', () => ({
   VisualizationService: class {},
 }));
 jest.mock('../../../common/markdown-pdf', () => ({ renderPdf: jest.fn() }));
+// Review a Website's Save report writes its findings file: kept off disk.
+jest.mock('../workspace-files', () => ({
+  ...jest.requireActual<typeof import('../workspace-files')>(
+    '../workspace-files',
+  ),
+  writeWorkspaceFile: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
@@ -104,6 +111,8 @@ import type { SessionDoc } from '../entities/session.entity';
 import { answerBusinessQuestionWorkflow } from '../../../mastra/workflows/answer-business-question.workflow';
 import { planOf } from '../../../mastra/workflows/answer-business-question.steps';
 import { dataReadinessAssessmentWorkflow } from '../../../mastra/workflows/data-readiness-assessment.workflow';
+import { reviewWebsiteWorkflow } from '../../../mastra/workflows/review-website.workflow';
+import type { GroupedSite } from '../../../mastra/workflows/review-website.schemas';
 import { ModelTimeoutError } from '../../../mastra/workflows/model-call';
 import { streamTurnWorkflow } from '../../../mastra/testing/turn-workflow.stub';
 
@@ -635,6 +644,181 @@ describe('the retry of Analyse carries attempt 1 forward (agents.md 5.11; workfl
     expect(await startTurn(ctx, [], controller.signal)).toBe('done');
     expect(ctx.agent.stream).toHaveBeenCalledTimes(2);
     expect(ctx.mastra.writeAnswer).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A Review a Website turn over `count` page templates, each reviewed by
+ * Iris (`mastra.reviewTemplate`); the visual service hands Save report
+ * `visualId`.
+ */
+function buildReview(count: number, visualId: unknown = 'v-1') {
+  const session: SessionDoc = {
+    id: 's-1',
+    name: 'Shop',
+    datasets: [],
+    messages: [],
+    visualizations: [],
+    workflowId: 'review-website',
+    inputValues: {
+      url: 'https://shop.example.com/',
+      laptop: false,
+      visualReview: true,
+    },
+  };
+  const repository = {
+    get: jest.fn().mockResolvedValue(session),
+    update: jest.fn().mockImplementation((_id: string, patch: object) => {
+      Object.assign(session, patch);
+      return Promise.resolve(session);
+    }),
+    listAll: jest.fn().mockResolvedValue([]),
+  };
+  const pages = Array.from({ length: count }, (_, at) => ({
+    url: `https://shop.example.com/section-${at}`,
+    finalUrl: `https://shop.example.com/section-${at}`,
+    status: 200,
+    title: `Section ${at}`,
+    depth: at === 0 ? 0 : 1,
+    parent: at === 0 ? null : 'https://shop.example.com/section-0',
+    group: `/section-${at}`,
+    fingerprint: `fp-${at}`,
+    error: null,
+  }));
+  const work = {
+    checkSignIn: jest.fn(),
+    openSignIn: jest.fn(),
+    finishSignIn: jest.fn(),
+    discoverPages: jest.fn().mockResolvedValue({
+      pages,
+      skippedLinks: [],
+      capped: false,
+      sessionLost: null,
+    }),
+    captureAndCheck: jest.fn((site: GroupedSite) =>
+      Promise.resolve({
+        captures: [],
+        findings: [],
+        reviewShots: site.reviewTemplates.map((template) => ({
+          template,
+          url: site.templates.find((t) => t.id === template)!.representative,
+          screen: 'mobile',
+          clean: `site-review/review/mobile/${template.slice(1)}.clean.jpg`,
+          marked: `site-review/review/mobile/${template.slice(1)}.marked.jpg`,
+          clip: { x: 0, y: 0, width: 390, height: 1688 },
+          marks: [],
+        })),
+      }),
+    ),
+    shotImages: jest.fn().mockResolvedValue([]),
+    loadReportImages: jest.fn().mockResolvedValue({}),
+  };
+  // The session's agent: its memory only; no step streams it.
+  const agent = {
+    id: 'assistant',
+    name: 'assistant',
+    getDescription: () => 'assistant',
+    getMemory: jest.fn().mockResolvedValue({
+      getThreadById: jest.fn().mockResolvedValue({ id: session.id }),
+    }),
+  };
+  const mastra = {
+    getAgent: jest.fn(() => agent),
+    listAgents: () => ({ assistant: agent }),
+    streamWorkflow: jest.fn(
+      async (_key: string, inputData: unknown, requestContext: unknown) =>
+        (
+          await (
+            reviewWebsiteWorkflow as unknown as {
+              createRun(): Promise<StubRun>;
+            }
+          ).createRun()
+        ).stream({ inputData, requestContext }),
+    ),
+    reviewTemplate: jest.fn(),
+    recordAgentExchange: jest.fn().mockResolvedValue(undefined),
+    ensureSessionWorkspace: jest
+      .fn()
+      .mockImplementation((id: string) =>
+        Promise.resolve({ id: `session-${id}` }),
+      ),
+  };
+  const visuals = {
+    createFromBundle: jest.fn().mockResolvedValue({
+      metadata: { id: visualId, title: 'Shop review', version: 1 },
+    }),
+  };
+  const service = new SessionsService(
+    repository as never,
+    mastra as never,
+    { getByNames: jest.fn().mockResolvedValue([]) } as never,
+    { get: jest.fn() } as never,
+    {
+      getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+    } as never,
+    visuals as never,
+    {
+      referenceBlock: jest.fn().mockResolvedValue(undefined),
+      isVerifiedSql: jest.fn().mockResolvedValue(false),
+    } as never,
+    { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+    {
+      contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
+    } as never,
+    {
+      get: jest.fn().mockResolvedValue(null),
+      list: jest.fn().mockResolvedValue([]),
+      skillsFor: jest.fn().mockResolvedValue([]),
+      datasetNames: jest.fn().mockResolvedValue(new Set()),
+    } as never,
+    undefined,
+    undefined,
+    undefined,
+    { forRun: () => work } as never,
+  );
+  return { service, session, mastra };
+}
+
+describe('Review templates fails the turn with its first error (workflows R43; agents.md 5.19)', () => {
+  it('when every template fails, the turn fails with the first template’s error, the one the step throws', async () => {
+    const ctx = buildReview(3);
+    let calls = 0;
+    ctx.mastra.reviewTemplate.mockImplementation(() =>
+      Promise.reject(new Error(`Iris failed ${++calls}`)),
+    );
+    const events: StreamEvent[] = [];
+    const error = await startTurn(ctx as never, events);
+    expect(ctx.mastra.reviewTemplate).toHaveBeenCalledTimes(3);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('Iris failed 1');
+    expect((error as Error).message).not.toContain('Iris failed 3');
+  });
+
+  it('a template failure the step handled neither fails the run nor hides a later failure of another kind', async () => {
+    // Handled: the first template fails, the others are reviewed.
+    const reviewOf = (ctx: ReturnType<typeof buildReview>) => {
+      let calls = 0;
+      ctx.mastra.reviewTemplate.mockImplementation(() =>
+        ++calls === 1
+          ? Promise.reject(new Error('Iris failed 1'))
+          : Promise.resolve({
+              review: { findings: [], summary: 'Looks right.' },
+              stopped: false,
+            }),
+      );
+    };
+    const handled = buildReview(3);
+    reviewOf(handled);
+    expect(await startTurn(handled as never, [])).toBe('done');
+
+    // Save report then fails on its own (its output breaks its
+    // contract): the turn fails with that, not the handled template's.
+    const later = buildReview(3, 42);
+    reviewOf(later);
+    const error = await startTurn(later as never, []);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('Save report');
+    expect((error as Error).message).not.toContain('Iris failed 1');
   });
 });
 
