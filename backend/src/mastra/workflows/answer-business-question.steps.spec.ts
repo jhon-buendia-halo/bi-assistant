@@ -11,6 +11,7 @@ import {
   VALIDATION_CHECKS,
   analysisLoopDone,
   flaggedQueries,
+  keptQueryOrigins,
   mergeAttempts,
   answerDeltas,
   answerOf,
@@ -1949,6 +1950,87 @@ describe('the carry-forward retry of the analysis (agents.md 5.11; workflows R27
       expect(request).toContain('1. I count the goals of each player.');
       expect(request).toContain('SQL: SELECT second_attempt');
       expect(request).not.toContain('SQL: SELECT first_attempt');
+    });
+  });
+
+  describe('keptQueryOrigins (workflows R41)', () => {
+    const first = () => ({
+      calls: FIRST_CALLS,
+      queries: FIRST_QUERIES,
+      findings: firstFindings(),
+    });
+    /** The kept set as Build visual receives it: through the workflow's state. */
+    const carried = (queries: readonly AnalyseQuery[]) =>
+      JSON.parse(JSON.stringify(queries)) as AnalyseQuery[];
+
+    it("finds the merged set's queries in their attempts: attempt 2's, then attempt 1's unflagged ones", () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [sql()], queries: [ranked()] },
+      });
+      expect(merged.kept).toBe('merged');
+      expect(
+        keptQueryOrigins([FIRST_QUERIES, [ranked()]], carried(merged.queries)),
+      ).toEqual([
+        { attempt: 2, index: 0 },
+        { attempt: 1, index: 0 },
+      ]);
+    });
+
+    it('finds attempt 1 alone when the merge kept it', () => {
+      const merged = mergeAttempts({
+        plan: PLAN,
+        first: first(),
+        second: { calls: [sql()], queries: [ranked()], retryError: 'down' },
+      });
+      expect(merged.kept).toBe('first');
+      expect(
+        keptQueryOrigins([FIRST_QUERIES, [ranked()]], carried(merged.queries)),
+      ).toEqual([
+        { attempt: 1, index: 0 },
+        { attempt: 1, index: 1 },
+      ]);
+    });
+
+    it('tells two queries with the same SQL apart by what they returned', () => {
+      const SQL = 'SELECT player FROM world_cup.goals';
+      const cut = query({
+        sql: SQL,
+        rows: [{ player: 'Kane' }],
+        rowCount: 1,
+        truncated: true,
+      });
+      const whole = query({
+        sql: SQL,
+        rows: [{ player: 'Kane' }, { player: 'Mbappe' }],
+        rowCount: 2,
+      });
+      // The retry ran it again whole; the cut one was flagged and dropped.
+      expect(keptQueryOrigins([[cut], [whole]], carried([whole]))).toEqual([
+        { attempt: 2, index: 0 },
+      ]);
+      // Attempt 1 alone kept: its own run, not the retry's same SQL.
+      expect(keptQueryOrigins([[cut], [whole]], carried([cut]))).toEqual([
+        { attempt: 1, index: 0 },
+      ]);
+      // Within one attempt: the second run of the SQL, not the first.
+      expect(
+        keptQueryOrigins(
+          [[cut, whole], [ranked()]],
+          carried([ranked(), whole]),
+        ),
+      ).toEqual([
+        { attempt: 2, index: 0 },
+        { attempt: 1, index: 1 },
+      ]);
+    });
+
+    it('is undefined without a retry or when the set is not one the merge keeps', () => {
+      expect(keptQueryOrigins([FIRST_QUERIES], FIRST_QUERIES)).toBeUndefined();
+      expect(
+        keptQueryOrigins([FIRST_QUERIES, [ranked()]], [query({ sql: 'x' })]),
+      ).toBeUndefined();
     });
   });
 

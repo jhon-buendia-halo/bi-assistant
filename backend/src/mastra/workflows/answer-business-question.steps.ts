@@ -1212,6 +1212,68 @@ export function mergeAttempts(input: {
   return { ...checked, calls, queries, kept: 'merged' };
 }
 
+/** Where one kept query ran: its attempt (1 or 2) and its place among that attempt's queries. */
+export interface KeptQueryOrigin {
+  attempt: 1 | 2;
+  index: number;
+}
+
+/**
+ * Where each query of the set Validate kept after a retry ran (agents.md
+ * 5.11; workflows R41), so Build visual is given the records the answer
+ * rests on: `attempts` are attempt 1's and attempt 2's queries, each in the
+ * order it ran. The kept set is one `mergeAttempts` makes: attempt 2's
+ * queries, then some of attempt 1's in order (`merged`), or attempt 1's
+ * alone (`first`). A query is matched on everything it carries (its SQL,
+ * rationale, rows, row count, cut and error), so two runs of the same SQL
+ * that returned different rows are told apart; runs equal in all of that
+ * are interchangeable. Undefined without a retry, or when the set is
+ * neither shape.
+ */
+export function keptQueryOrigins(
+  attempts: readonly (readonly AnalyseQuery[])[],
+  kept: readonly AnalyseQuery[],
+): KeptQueryOrigin[] | undefined {
+  if (attempts.length !== 2) return undefined;
+  const [first, second] = attempts.map((queries) => queries.map(queryKey));
+  const keys = kept.map(queryKey);
+  // Attempt 2's queries, all of them first, then attempt 1's in order.
+  if (second.every((key, index) => keys[index] === key)) {
+    const origins: KeptQueryOrigin[] = second.map((_key, index) => ({
+      attempt: 2,
+      index,
+    }));
+    let from = 0;
+    for (const key of keys.slice(second.length)) {
+      const index = first.indexOf(key, from);
+      if (index < 0) break;
+      origins.push({ attempt: 1, index });
+      from = index + 1;
+    }
+    if (origins.length === keys.length) return origins;
+  }
+  // Attempt 1's alone.
+  if (
+    keys.length === first.length &&
+    first.every((key, index) => keys[index] === key)
+  ) {
+    return first.map((_key, index) => ({ attempt: 1, index }));
+  }
+  return undefined;
+}
+
+/** A query as one string of everything it carries (`keptQueryOrigins`). */
+function queryKey(query: AnalyseQuery): string {
+  return JSON.stringify([
+    query.sql,
+    query.rationale ?? '',
+    query.rowCount,
+    query.truncated,
+    query.error ?? '',
+    query.rows,
+  ]);
+}
+
 /**
  * The plan after the user answered Clarify (agents.md 5.11): Plan never
  * asks twice, so a plan made with an answer needs no clarification, whatever
