@@ -12,30 +12,30 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
     expect(
       DATA_READINESS_ASSESSMENT_STEPS.map((step) => [step.id, step.kind]),
     ).toEqual([
-      ['read-images', 'agent'],
       ['resolve-dataset', 'code'],
       ['profile-source', 'code'],
       ['score-readiness', 'code'],
+      ['read-images', 'agent'],
       ['save-report', 'code'],
-      ['finding-rows', 'code'],
       ['explain-report', 'agent'],
+      ['finding-rows', 'code'],
       ['wrap-up', 'code'],
     ]);
   });
 
-  it('connects them from Start to End, with Read images as an optional detour first', () => {
+  it('connects them from Start to End, with Read images as an optional detour before Save report', () => {
     expect(
       DATA_READINESS_ASSESSMENT_EDGES.map((e) => [e.from, e.to, e.kind]),
     ).toEqual([
       ['start', 'resolve-dataset', 'next'],
-      ['start', 'read-images', 'branch'],
-      ['read-images', 'resolve-dataset', 'next'],
       ['resolve-dataset', 'profile-source', 'next'],
       ['profile-source', 'score-readiness', 'next'],
       ['score-readiness', 'save-report', 'next'],
-      ['save-report', 'finding-rows', 'next'],
-      ['finding-rows', 'explain-report', 'next'],
-      ['explain-report', 'wrap-up', 'next'],
+      ['score-readiness', 'read-images', 'branch'],
+      ['read-images', 'save-report', 'next'],
+      ['save-report', 'explain-report', 'next'],
+      ['explain-report', 'finding-rows', 'next'],
+      ['finding-rows', 'wrap-up', 'next'],
       ['wrap-up', 'end', 'next'],
     ]);
   });
@@ -48,16 +48,22 @@ describe('Assess Data Readiness steps (agents.md 5.13)', () => {
       ]),
     );
     expect(fields['resolve-dataset']).toEqual({
-      input: ['question', 'dataset', 'imageNotes'],
+      input: ['question', 'dataset', 'images'],
       output: [
         'question',
         'dataset',
         'datasourceName',
         'datasourceKind',
         'tableCount',
-        'imageNotes',
       ],
     });
+    expect(fields['read-images']).toEqual({
+      input: [],
+      output: ['imageNotes', 'imageCount', 'stopped'],
+    });
+    expect(fields['save-report'].input).toEqual(
+      expect.arrayContaining(['imageNotes', 'stopped']),
+    );
     expect(fields['save-report'].output).toContain('reportId');
     expect(fields['wrap-up'].output).toEqual([
       'reportId',

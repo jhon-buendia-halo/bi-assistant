@@ -50,16 +50,20 @@ import { engineInputSchema, withContract } from './workflow-contract';
 // (https://mastra.ai/docs/workflows/control-flow) and suspend/resume
 // (https://mastra.ai/docs/workflows/suspend-and-resume, ADR-0043):
 //
-//   read-dashboards → resolve-layers → load-layer-catalogs → infer-lineage
-//   → derive-requirements → confirm-requirements (waits) → map-requirements
-//   → trace-gaps → probe-evidence → recommend-fixes → render-report
+//   resolve-layers → load-layer-catalogs → read-dashboards
+//   → derive-requirements → infer-lineage → confirm-requirements (waits)
+//   → map-requirements → trace-gaps → probe-evidence → recommend-fixes
+//   → render-report
 //
-// Read dashboards reads each reference image with Grace and loads the saved
-// dashboard. Resolve layers and Load layer catalogs read the datasets'
-// schema notes and entities. Infer lineage checks candidate column pairs
-// with read-only queries (ADR-0051). Derive requirements runs the
+// Resolve layers and Load layer catalogs read the datasets' schema notes and
+// entities (fetched once per run): a dataset with no Consumption schema is
+// refused before any model call. Load layer catalogs starts the lineage
+// checks (read-only queries over candidate column pairs, ADR-0051), which run
+// while Read dashboards reads every reference image with Grace at the same
+// time and loads the saved dashboard, and Derive requirements runs the
 // Requirements Analyst over the questions and adds each dashboard widget and
-// filter in code. Confirm requirements waits for the user's confirmation or
+// filter in code; Infer lineage then takes the checks. The graph stays
+// linear and one step runs at a time; no held work crosses the wait. Confirm requirements waits for the user's confirmation or
 // edits (one revision, never a second wait). Map requirements runs the Layer
 // Mapper; Trace gaps and Probe evidence give each requirement its status;
 // Recommend fixes runs the Gap Advisor; Render report draws the report with
@@ -118,75 +122,41 @@ function runtimeOf(
   return runtime;
 }
 
-/** Run the queries (none: no call), each result found by its id. */
-async function runQueries(
-  runtime: ConsumptionGapRuntime,
-  queries: readonly GapQuery[],
-): Promise<{ results: Map<string, GapQueryResult>; stopped: boolean }> {
-  if (!queries.length) return { results: new Map(), stopped: false };
-  const ran = await runtime.runQueries({
-    // The query alone: what a step keeps beside it stays in the step.
-    queries: queries.map(({ id, datasourceId, sql, rationale }) => ({
-      id,
-      datasourceId,
-      sql,
-      rationale,
-    })),
-  });
+/** The query alone: what a step keeps beside it stays in the step. */
+function bareQueries(queries: readonly GapQuery[]): GapQuery[] {
+  return queries.map(({ id, datasourceId, sql, rationale }) => ({
+    id,
+    datasourceId,
+    sql,
+    rationale,
+  }));
+}
+
+/** Each result found by its id. */
+function byId(ran: { results: GapQueryResult[]; stopped: boolean }): {
+  results: Map<string, GapQueryResult>;
+  stopped: boolean;
+} {
   return {
     results: new Map(ran.results.map((result) => [result.id, result])),
     stopped: ran.stopped,
   };
 }
 
-const readDashboardsStep = createStep({
-  id: STEP['read-dashboards'].id,
-  description: STEP['read-dashboards'].title,
-  inputSchema: engineInputSchema(SCHEMAS['read-dashboards'].input),
-  outputSchema: SCHEMAS['read-dashboards'].output,
-  execute: withContract(
-    STEP['read-dashboards'].title,
-    SCHEMAS['read-dashboards'],
-    async (params: StepParams<(typeof SCHEMAS)['read-dashboards']>) => {
-      const runtime = runtimeOf(params, STEP['read-dashboards'].title);
-      const { question, datasets, artifact, images } = params.inputData;
-      const questions = parseQuestions(question);
-      const dashboards: ReferenceDashboard[] = [];
-      // Each reference image, in order, read by Grace (agents.md 2.13).
-      for (const image of images ?? []) {
-        const read = await runtime.readDashboard({ image });
-        if (read.stopped) {
-          return params.bail({
-            questions,
-            datasets,
-            dashboards,
-            stopped: true,
-          });
-        }
-        const id = `D${dashboards.length + 1}`;
-        dashboards.push({
-          id,
-          source: 'image',
-          name: read.blueprint.title.trim() || `Dashboard ${id}`,
-          blueprint: read.blueprint,
-        });
-      }
-      // The saved dashboard, from Artifacts, without a model call.
-      if (artifact.trim()) {
-        const loaded = await runtime.loadDashboard({
-          artifact: artifact.trim(),
-        });
-        dashboards.push({
-          id: `D${dashboards.length + 1}`,
-          source: 'artifact',
-          name: loaded.name,
-          blueprint: loaded.blueprint,
-        });
-      }
-      return { questions, datasets, dashboards, stopped: false };
-    },
-  ),
-});
+/** Run the queries (none: no call), each result found by its id. */
+async function runQueries(
+  runtime: ConsumptionGapRuntime,
+  queries: readonly GapQuery[],
+): Promise<{ results: Map<string, GapQueryResult>; stopped: boolean }> {
+  if (!queries.length) return { results: new Map(), stopped: false };
+  return byId(await runtime.runQueries({ queries: bareQueries(queries) }));
+}
+
+/** The lineage checks of these tables: the candidate pairs and their queries. */
+function lineageChecksOf(tables: Parameters<typeof lineageCandidates>[0]) {
+  const candidates = lineageCandidates(tables);
+  return { candidates, queries: lineageQueries(candidates, tables) };
+}
 
 const resolveLayersStep = createStep({
   id: STEP['resolve-layers'].id,
@@ -198,9 +168,11 @@ const resolveLayersStep = createStep({
     SCHEMAS['resolve-layers'],
     async (params: StepParams<(typeof SCHEMAS)['resolve-layers']>) => {
       const runtime = runtimeOf(params, STEP['resolve-layers'].title);
-      const { questions, datasets, dashboards } = params.inputData;
-      const layers = resolveLayers(await runtime.datasetLayers({ datasets }));
-      return { questions, datasets, dashboards, layers };
+      // The free refusal first: no Consumption schema, no model call.
+      const layers = resolveLayers(
+        await runtime.datasetLayers({ datasets: params.inputData.datasets }),
+      );
+      return { ...params.inputData, layers };
     },
   ),
 });
@@ -219,10 +191,78 @@ const loadLayerCatalogsStep = createStep({
       const datasets = await runtime.datasetLayers({
         datasets: params.inputData.datasets,
       });
-      return {
-        ...params.inputData,
-        tables: layerTables(datasets, params.inputData.layers),
-      };
+      const tables = layerTables(datasets, params.inputData.layers);
+      // The lineage checks start now and run while the dashboards are read
+      // and the requirements derived; Infer lineage takes them (ADR-0051).
+      const { queries } = lineageChecksOf(tables);
+      if (queries.length) {
+        runtime.startLineage({ queries: bareQueries(queries) });
+      }
+      return { ...params.inputData, tables };
+    },
+  ),
+});
+
+const readDashboardsStep = createStep({
+  id: STEP['read-dashboards'].id,
+  description: STEP['read-dashboards'].title,
+  inputSchema: engineInputSchema(SCHEMAS['read-dashboards'].input),
+  outputSchema: SCHEMAS['read-dashboards'].output,
+  execute: withContract(
+    STEP['read-dashboards'].title,
+    SCHEMAS['read-dashboards'],
+    async (params: StepParams<(typeof SCHEMAS)['read-dashboards']>) => {
+      const runtime = runtimeOf(params, STEP['read-dashboards'].title);
+      const { question, datasets, artifact, images, layers, tables } =
+        params.inputData;
+      const questions = parseQuestions(question);
+      const paths = images ?? [];
+      // Every reference image read by Grace at the same time (agents.md
+      // 2.13). The first failure aborts the other reads, which are awaited,
+      // and is the step's error: no read is left running or paid for.
+      const batch = new AbortController();
+      let failure: { error: unknown } | undefined;
+      const reads = await Promise.all(
+        paths.map((image) =>
+          runtime
+            .readDashboard({ image, signal: batch.signal })
+            .catch((error: unknown) => {
+              failure ??= { error };
+              batch.abort();
+              return undefined;
+            }),
+        ),
+      );
+      if (failure) throw failure.error;
+      // A dashboard's id is its image's place, whatever order they ended in.
+      const dashboards: ReferenceDashboard[] = [];
+      reads.forEach((read, index) => {
+        if (!read || read.stopped) return;
+        const id = `D${index + 1}`;
+        dashboards.push({
+          id,
+          source: 'image',
+          name: read.blueprint.title.trim() || `Dashboard ${id}`,
+          blueprint: read.blueprint,
+        });
+      });
+      const base = { questions, datasets, layers, tables };
+      if (reads.some((read) => read?.stopped)) {
+        return params.bail({ ...base, dashboards, stopped: true });
+      }
+      // The saved dashboard, last, from Artifacts, without a model call.
+      if (artifact.trim()) {
+        const loaded = await runtime.loadDashboard({
+          artifact: artifact.trim(),
+        });
+        dashboards.push({
+          id: `D${paths.length + 1}`,
+          source: 'artifact',
+          name: loaded.name,
+          blueprint: loaded.blueprint,
+        });
+      }
+      return { ...base, dashboards, stopped: false };
     },
   ),
 });
@@ -237,11 +277,12 @@ const inferLineageStep = createStep({
     SCHEMAS['infer-lineage'],
     async (params: StepParams<(typeof SCHEMAS)['infer-lineage']>) => {
       const runtime = runtimeOf(params, STEP['infer-lineage'].title);
-      const { tables } = params.inputData;
-      const candidates = lineageCandidates(tables);
-      const queries = lineageQueries(candidates, tables);
-      // Each check is a source of the answer (ADR-0051).
-      const ran = await runQueries(runtime, queries);
+      const { candidates, queries } = lineageChecksOf(params.inputData.tables);
+      // The checks Load layer catalogs started; each is a source of the
+      // answer, in query order (ADR-0051).
+      const ran = queries.length
+        ? byId(await runtime.takeLineage())
+        : { results: new Map<string, GapQueryResult>(), stopped: false };
       const lineage = lineageFromChecks(
         candidates,
         queries.map((query) => ({
@@ -481,11 +522,11 @@ export const consumptionGapAnalysisWorkflow = createWorkflow({
     shouldPersistSnapshot: persistWhileWaiting,
   },
 })
-  .then(readDashboardsStep)
   .then(resolveLayersStep)
   .then(loadLayerCatalogsStep)
-  .then(inferLineageStep)
+  .then(readDashboardsStep)
   .then(deriveRequirementsStep)
+  .then(inferLineageStep)
   .then(confirmRequirementsStep)
   .then(mapRequirementsStep)
   .then(traceGapsStep)

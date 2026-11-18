@@ -13,6 +13,7 @@ jest.mock('./consumption-gap.lineage');
 jest.mock('./consumption-gap.report');
 
 import { RequestContext } from '@mastra/core/request-context';
+import { earlyWork, memoisedBy } from '../../modules/sessions/turn/early-work';
 import type {
   FieldMapping,
   GapFix,
@@ -286,30 +287,84 @@ beforeEach(() => {
 /** Each call of the runtime as a Jest mock, so a test reads its calls. */
 type MockedRuntime = { [K in keyof ConsumptionGapRuntime]: jest.Mock };
 
-/** A runtime whose every call succeeds. */
-function runtime(overrides: Partial<MockedRuntime> = {}): MockedRuntime {
+/** Every query answers one row. */
+const answered = (queries: GapQuery[]) => ({
+  results: queries.map((query) => ({
+    id: query.id,
+    columns: ['n'],
+    rows: [{ n: 12 }],
+    error: null,
+  })),
+  stopped: false,
+});
+
+/**
+ * A runtime whose every call succeeds. The lineage checks are held as the
+ * turn holds them (`earlyWork`), each recorded into `recorded`; the dataset
+ * layers are fetched once per run as the turn memoises them.
+ */
+function runtime(
+  overrides: Partial<MockedRuntime> = {},
+  given: {
+    runLineage?: (
+      queries: GapQuery[],
+      signal: AbortSignal,
+    ) => Promise<ReturnType<typeof answered>>;
+    calls?: string[];
+  } = {},
+): MockedRuntime & {
+  fetchLayers: jest.Mock;
+  recorded: string[];
+  calls: string[];
+} {
+  const work = earlyWork(new AbortController().signal);
+  const recorded: string[] = [];
+  const calls = given.calls ?? [];
+  const fetchLayers = jest.fn(() => {
+    calls.push('datasetLayers');
+    return Promise.resolve([]);
+  });
   return {
-    readDashboard: jest.fn(() =>
-      Promise.resolve({ blueprint: BLUEPRINT, stopped: false }),
-    ),
+    fetchLayers,
+    recorded,
+    calls,
+    readDashboard: jest.fn(({ image }: { image: string }) => {
+      calls.push(`readDashboard:${image}`);
+      return Promise.resolve({ blueprint: BLUEPRINT, stopped: false });
+    }),
     loadDashboard: jest.fn(() =>
       Promise.resolve({ name: 'Sales board', blueprint: BLUEPRINT }),
     ),
-    datasetLayers: jest.fn(() => Promise.resolve([])),
+    datasetLayers: jest.fn(
+      memoisedBy(fetchLayers, ({ datasets }: { datasets: string[] }) =>
+        datasets.join('\n'),
+      ),
+    ),
+    startLineage: jest.fn(({ queries }: { queries: GapQuery[] }) => {
+      calls.push('startLineage');
+      work.start('lineage', async (signal, record) => {
+        const ran = await (given.runLineage?.(queries, signal) ??
+          Promise.resolve(answered(queries)));
+        for (const result of ran.results) {
+          record(() => recorded.push(result.id));
+        }
+        return ran;
+      });
+    }),
+    takeLineage: jest.fn(() => {
+      calls.push('takeLineage');
+      return work.take('lineage');
+    }),
     runQueries: jest.fn(({ queries }: { queries: GapQuery[] }) =>
-      Promise.resolve({
-        results: queries.map((query) => ({
-          id: query.id,
-          columns: ['n'],
-          rows: [{ n: 12 }],
-          error: null,
-        })),
+      Promise.resolve(answered(queries)),
+    ),
+    deriveRequirements: jest.fn(() => {
+      calls.push('deriveRequirements');
+      return Promise.resolve({
+        requirements: [QUESTION_REQUIREMENT],
         stopped: false,
-      }),
-    ),
-    deriveRequirements: jest.fn(() =>
-      Promise.resolve({ requirements: [QUESTION_REQUIREMENT], stopped: false }),
-    ),
+      });
+    }),
     reviseRequirements: jest.fn(() =>
       Promise.resolve({ requirements: [REVISED], stopped: false }),
     ),
@@ -397,14 +452,19 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
     expect(
       started.events.filter((event) => event.endsWith(':success')),
     ).toEqual([
-      'read-dashboards:success',
       'resolve-layers:success',
       'load-layer-catalogs:success',
-      'infer-lineage:success',
+      'read-dashboards:success',
       'derive-requirements:success',
+      'infer-lineage:success',
     ]);
-    // The lineage checks ran as queries, without what the step keeps beside.
-    expect(given.runQueries).toHaveBeenCalledWith({ queries: [LINEAGE_QUERY] });
+    // The lineage checks started at Load layer catalogs as queries, without
+    // what the step keeps beside; Infer lineage took them.
+    expect(given.startLineage).toHaveBeenCalledWith({
+      queries: [LINEAGE_QUERY],
+    });
+    expect(given.takeLineage).toHaveBeenCalledTimes(1);
+    expect(given.runQueries).not.toHaveBeenCalled();
     expect(lineage.lineageFromChecks).toHaveBeenCalledWith(
       [CANDIDATE],
       [
@@ -516,8 +576,18 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
       artifact: 'a-1',
     });
     expect(given.readDashboard.mock.calls).toEqual([
-      [{ image: 'inputs/images/1.png' }],
-      [{ image: 'inputs/images/2.png' }],
+      [
+        {
+          image: 'inputs/images/1.png',
+          signal: expect.any(AbortSignal) as unknown,
+        },
+      ],
+      [
+        {
+          image: 'inputs/images/2.png',
+          signal: expect.any(AbortSignal) as unknown,
+        },
+      ],
     ]);
     expect(given.loadDashboard).toHaveBeenCalledWith({ artifact: 'a-1' });
     const dashboards = (
@@ -554,22 +624,203 @@ describe('consumption-gap-analysis workflow (agents.md 5.20)', () => {
   });
 
   it('ends at Infer lineage when the run is stopped during its checks', async () => {
-    const given = runtime({
-      runQueries: jest.fn(() =>
-        Promise.resolve({ results: [], stopped: true }),
-      ),
-    });
-    const { result } = await start(given);
+    const given = runtime(
+      {},
+      { runLineage: () => Promise.resolve({ results: [], stopped: true }) },
+    );
+    const { result, events } = await start(given);
     expect(result.status).toBe('success');
     expect(result.result).toMatchObject({ stopped: true });
-    expect(given.deriveRequirements).not.toHaveBeenCalled();
+    expect(events).toContain('infer-lineage:bailed');
+    expect(gaps.confirmQuestion).not.toHaveBeenCalled();
   });
 
   it('fails naming the step when the runtime is missing', async () => {
     const { result } = await start(undefined);
     expect(result.status).toBe('failed');
     expect(String((result.error as Error).message)).toContain(
-      'The Read dashboards step has no consumption model to analyse',
+      'The Resolve layers step has no consumption model to analyse',
     );
+  });
+
+  // Independent work at the same time, on a linear graph (agents.md 5.20).
+  describe('concurrent work', () => {
+    const IMAGES = ['inputs/images/1.png', 'inputs/images/2.png'];
+
+    /** Wait (a bounded number of turns) until `ready` holds; throws if never. */
+    async function until(ready: () => boolean) {
+      for (let turn = 0; turn < 200 && !ready(); turn++) {
+        await new Promise((r) => setImmediate(r));
+      }
+      if (!ready()) throw new Error('The run never got there');
+    }
+
+    it('refuses a dataset with no Consumption schema before any dashboard is read', async () => {
+      jest.mocked(gaps.resolveLayers).mockImplementation(() => {
+        throw new Error(
+          'No schema of the datasets World Cup is tagged Consumption.',
+        );
+      });
+      const given = runtime();
+      const { result } = await start(given, {
+        images: IMAGES,
+        artifact: 'a-1',
+      });
+      expect(result.status).toBe('failed');
+      expect(String((result.error as Error).message)).toContain(
+        'is tagged Consumption',
+      );
+      expect(given.readDashboard).not.toHaveBeenCalled();
+      expect(given.loadDashboard).not.toHaveBeenCalled();
+      expect(given.startLineage).not.toHaveBeenCalled();
+    });
+
+    it('starts both image reads before either ends, and numbers the dashboards in image order when they finish out of order', async () => {
+      const pending = new Map<string, (title: string) => void>();
+      const ended: string[] = [];
+      const readDashboard = jest.fn(
+        ({ image }: { image: string }) =>
+          new Promise<{ blueprint: DashboardBlueprint; stopped: boolean }>(
+            (done) =>
+              pending.set(image, (title) => {
+                ended.push(image);
+                done({ blueprint: { ...BLUEPRINT, title }, stopped: false });
+              }),
+          ),
+      );
+      const given = runtime({ readDashboard });
+      const started = start(given, { images: IMAGES, artifact: 'a-1' });
+      await until(() => pending.size >= 2);
+      // Both reads started, none ended.
+      expect(readDashboard).toHaveBeenCalledTimes(2);
+      expect(ended).toEqual([]);
+      pending.get(IMAGES[1])!('Second');
+      await new Promise((r) => setImmediate(r));
+      pending.get(IMAGES[0])!('First');
+      await started;
+      expect(ended).toEqual([IMAGES[1], IMAGES[0]]);
+      const dashboards = (
+        given.deriveRequirements.mock.calls[0] as [
+          { dashboards: { id: string; source: string; name: string }[] },
+        ]
+      )[0].dashboards.map(({ id, source, name }) => ({ id, source, name }));
+      expect(dashboards).toEqual([
+        { id: 'D1', source: 'image', name: 'First' },
+        { id: 'D2', source: 'image', name: 'Second' },
+        { id: 'D3', source: 'artifact', name: 'Sales board' },
+      ]);
+    });
+
+    it("aborts the other reads' signal at the first failure and fails with that failure", async () => {
+      const signals: AbortSignal[] = [];
+      const readDashboard = jest.fn(
+        ({ image, signal }: { image: string; signal: AbortSignal }) => {
+          signals.push(signal);
+          if (image === IMAGES[0]) {
+            return Promise.reject(new Error('The image shows no dashboard'));
+          }
+          return new Promise((_done, fail) =>
+            signal.addEventListener('abort', () =>
+              fail(new Error('This operation was aborted')),
+            ),
+          );
+        },
+      );
+      const given = runtime({ readDashboard });
+      const { result } = await start(given, { images: IMAGES });
+      expect(result.status).toBe('failed');
+      expect(String((result.error as Error).message)).toContain(
+        'The image shows no dashboard',
+      );
+      expect(signals).toHaveLength(2);
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+      expect(given.deriveRequirements).not.toHaveBeenCalled();
+    });
+
+    it('bails at Read dashboards with the dashboards already read when the run is stopped', async () => {
+      const readDashboard = jest.fn(({ image }: { image: string }) =>
+        Promise.resolve({
+          blueprint: BLUEPRINT,
+          stopped: image === IMAGES[1],
+        }),
+      );
+      const given = runtime({ readDashboard });
+      const { result, events } = await start(given, {
+        images: IMAGES,
+        artifact: 'a-1',
+      });
+      expect(result.status).toBe('success');
+      expect(events).toContain('read-dashboards:bailed');
+      expect(result.result).toMatchObject({
+        stopped: true,
+        dashboards: [{ id: 'D1', source: 'image', name: BLUEPRINT.title }],
+      });
+      expect(given.loadDashboard).not.toHaveBeenCalled();
+      expect(given.deriveRequirements).not.toHaveBeenCalled();
+    });
+
+    it('takes at Infer lineage the lineage started at Load layer catalogs, its records in their order', async () => {
+      const second: GapQuery = { ...LINEAGE_QUERY, id: 'lineage-2' };
+      jest.mocked(lineage.lineageQueries).mockReturnValue([
+        { ...LINEAGE_QUERY, candidate: CANDIDATE },
+        { ...second, candidate: CANDIDATE },
+      ]);
+      let finish!: () => void;
+      const gate = new Promise<void>((done) => (finish = done));
+      const given = runtime(
+        {},
+        {
+          runLineage: async (queries) => {
+            await gate;
+            return answered(queries);
+          },
+        },
+      );
+      const started = start(given, { images: IMAGES });
+      // The lineage checks run while the dashboards are read and derived.
+      await until(() => given.deriveRequirements.mock.calls.length > 0);
+      expect(given.recorded).toEqual([]);
+      finish();
+      await started;
+      expect(given.calls).toEqual([
+        'datasetLayers',
+        'startLineage',
+        `readDashboard:${IMAGES[0]}`,
+        `readDashboard:${IMAGES[1]}`,
+        'deriveRequirements',
+        'takeLineage',
+      ]);
+      expect(given.recorded).toEqual(['lineage-1', 'lineage-2']);
+      expect(lineage.lineageFromChecks).toHaveBeenCalledWith(
+        [CANDIDATE],
+        [
+          expect.objectContaining({
+            result: expect.objectContaining({ id: 'lineage-1' }) as unknown,
+          }),
+          expect.objectContaining({
+            result: expect.objectContaining({ id: 'lineage-2' }) as unknown,
+          }),
+        ],
+      );
+    });
+
+    it('starts no lineage when there is no candidate pair', async () => {
+      jest.mocked(lineage.lineageQueries).mockReturnValue([]);
+      const given = runtime();
+      const { result } = await start(given);
+      expect(result.status).toBe('suspended');
+      expect(given.startLineage).not.toHaveBeenCalled();
+      expect(given.takeLineage).not.toHaveBeenCalled();
+    });
+
+    it('fetches the dataset layers once per run, for Resolve layers and Load layer catalogs', async () => {
+      const given = runtime();
+      await start(given);
+      expect(given.datasetLayers.mock.calls).toEqual([
+        [{ datasets: ['World Cup'] }],
+        [{ datasets: ['World Cup'] }],
+      ]);
+      expect(given.fetchLayers).toHaveBeenCalledTimes(1);
+    });
   });
 });

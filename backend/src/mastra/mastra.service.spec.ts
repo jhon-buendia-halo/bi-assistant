@@ -14,7 +14,10 @@ jest.mock('./workflows/read-images.agents', () => ({}));
 jest.mock('./workflows/consumption-gap-analysis.agents', () => ({}));
 jest.mock('./workflows/review-website.agents', () => ({}));
 jest.mock('./session-workspaces', () => ({}));
-jest.mock('./agent-threads', () => ({}));
+// Framework-free: the real thread ids and messages.
+jest.mock('./agent-threads', () =>
+  jest.requireActual<typeof import('./agent-threads')>('./agent-threads'),
+);
 
 import { Logger } from '@nestjs/common';
 import { MastraService } from './mastra.service';
@@ -233,5 +236,87 @@ describe('MastraService.discardSuspendedWorkflowRuns (ADR-0043; workflows R20)',
     );
     expect(fakeMastra.listWorkflows).not.toHaveBeenCalled();
     expect(abq.deleteWorkflowRunById).toHaveBeenCalledWith('r1');
+  });
+});
+
+describe('MastraService.recordAgentExchange (agents.md 5.14)', () => {
+  /** A memory whose thread lookup and creation take a turn each, as storage does. */
+  function fakeMemory(failSave?: string) {
+    const threads = new Set<string>();
+    const tick = () => new Promise((done) => setImmediate(done));
+    const memory = {
+      threads,
+      getThreadById: jest.fn(async ({ threadId }: { threadId: string }) => {
+        await tick();
+        return threads.has(threadId) ? { id: threadId } : null;
+      }),
+      createThread: jest.fn(async ({ threadId }: { threadId: string }) => {
+        await tick();
+        if (threads.has(threadId)) throw new Error('thread exists');
+        threads.add(threadId);
+      }),
+      saveMessages: jest.fn(
+        async ({ messages }: { messages: { content: unknown }[] }) => {
+          await tick();
+          const text = JSON.stringify(messages[0].content);
+          if (failSave && text.includes(failSave)) throw new Error('disk full');
+        },
+      ),
+    };
+    return memory;
+  }
+
+  function serviceWith(memory: ReturnType<typeof fakeMemory>) {
+    const service = new MastraService();
+    jest.spyOn(service, 'getAgent').mockReturnValue({
+      getMemory: () => Promise.resolve(memory),
+    } as never);
+    return service;
+  }
+
+  it('creates the thread once and saves both when two first exchanges of one thread arrive together', async () => {
+    const memory = fakeMemory();
+    const service = serviceWith(memory);
+    await Promise.all([
+      service.recordAgentExchange('run-1', 'image-reader', {
+        request: 'first',
+        reply: 'one',
+      }),
+      service.recordAgentExchange('run-1', 'image-reader', {
+        request: 'second',
+        reply: 'two',
+      }),
+    ]);
+    expect(memory.createThread).toHaveBeenCalledTimes(1);
+    expect(memory.saveMessages).toHaveBeenCalledTimes(2);
+    expect([...memory.threads]).toEqual(['run-1:image-reader']);
+  });
+
+  it('rejects only the failed write (the caller logs it); the next one on the thread still goes', async () => {
+    const memory = fakeMemory('first');
+    const service = serviceWith(memory);
+    const [first, second] = await Promise.allSettled([
+      service.recordAgentExchange('run-1', 'dashboard-reader', {
+        request: 'first',
+        reply: 'one',
+      }),
+      service.recordAgentExchange('run-1', 'dashboard-reader', {
+        request: 'second',
+        reply: 'two',
+      }),
+    ]);
+    expect(first.status).toBe('rejected');
+    expect(second.status).toBe('fulfilled');
+    expect(memory.saveMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it('records two threads independently', async () => {
+    const memory = fakeMemory();
+    const service = serviceWith(memory);
+    await Promise.all([
+      service.recordAgentExchange('run-1', 'a', { request: 'x', reply: 'y' }),
+      service.recordAgentExchange('run-1', 'b', { request: 'x', reply: 'y' }),
+    ]);
+    expect(memory.createThread).toHaveBeenCalledTimes(2);
   });
 });

@@ -38,6 +38,7 @@ import {
   CONSUMPTION_GAP_RUNTIME_KEY,
   CONSUMPTION_GAP_WORKFLOW_ID,
   type ConsumptionGapRuntime,
+  type GapQuery,
 } from '../../../mastra/workflows/consumption-gap-analysis.steps';
 import {
   MAP_DASHBOARD_DATA_RUNTIME_KEY,
@@ -137,8 +138,10 @@ import {
   EXPLORABLE_QUERIES_CONTEXT_KEY,
   explorableQueryOf,
   sessionExplorableQueries,
+  withRefs,
   type ExplorableQuery,
 } from '../query-evidence/explorable-queries';
+import { earlyWork, memoisedBy } from './early-work';
 import {
   QUERY_FACTS_CONTEXT_KEY,
   queryFactsKey,
@@ -666,6 +669,16 @@ export class TurnEngine {
         if (!turn.signal.aborted && !attemptStop?.signal.aborted) throw error;
       }
     };
+    // Work a step starts and a later step takes (agents.md 5.13, 5.20):
+    // Zoe's notes and the rows behind findings in Assess Data Readiness,
+    // the lineage checks in Consumption Gap Analysis. Settled when the run
+    // ends, fails or is stopped, before the answer is persisted.
+    const early = earlyWork(turn.signal);
+    // Whether Resolve dataset started Zoe's notes (Read images' condition).
+    let readingImages = false;
+    // Where the rows behind findings go: the answer's records and the
+    // explorable queries as Save report left them, ahead of the agent's.
+    let findingSlot: { data: number; explorable: number } | undefined;
     // Assess Data Readiness's assessment, once Resolve dataset started it.
     let assessment: ReadinessAssessment | undefined;
     // Its stored report, once Save report stored it (roadmap 1.28.11).
@@ -738,6 +751,90 @@ export class TurnEngine {
       const planInput = session.continuesThreads
         ? this.deps.options.transcriptInput(session)
         : input;
+      // Read images (agents.md 2.15): the run's stored images, loaded from
+      // its workspace in order, described by Zoe in one model call recorded
+      // in her thread, stopped with `signal` (the turn's, or an early job's
+      // own). A model error fails the step with its own message.
+      const readImagesOn = async (
+        { question, images }: { question: string; images: string[] },
+        signal: AbortSignal,
+      ) => {
+        const loaded: StepImage[] = [];
+        for (const path of images) {
+          const { data, mediaType } = await this.deps.readImage(id, path);
+          loaded.push({ data, mediaType });
+        }
+        try {
+          const read = await this.deps.mastra.readImages(
+            { question, images: loaded },
+            { ...stepModelOf(IMAGE_READER_AGENT_KEY), abortSignal: signal },
+          );
+          return { ...read, stopped: read.stopped || signal.aborted };
+        } catch (error) {
+          throw await stepError(error);
+        }
+      };
+      // Resolve layers and Load layer catalogs both read the datasets'
+      // layers: fetched once per run (agents.md 5.20).
+      const datasetLayers = memoisedBy(
+        async ({ datasets }: { datasets: string[] }) =>
+          (await getDatasetToolServices().getDatasets(datasets)).map(
+            (dataset) => ({
+              dataset: dataset.name,
+              datasourceId: dataset.datasourceId ?? null,
+              datasourceKind: dataset.datasourceKind ?? null,
+              schemas: (dataset.schemas ?? []).map((note) => ({
+                ...note,
+              })),
+              entities: dataset.tables.map((key) => {
+                const known = dataset.entities?.find(
+                  (entity) => entity.key === key,
+                )?.columns;
+                return {
+                  key,
+                  columns: known
+                    ? known.map((column) => ({
+                        name: column.name,
+                        type: column.type ?? '',
+                      }))
+                    : null,
+                };
+              }),
+            }),
+          ),
+        ({ datasets }) => JSON.stringify(datasets),
+      );
+      // Infer lineage and Probe evidence (ADR-0051): each statement on the
+      // guarded read-only path with `signal`, four at a time, recorded in
+      // query order through `hold` (at once, or held for the step that
+      // takes them) as a `run_readonly_sql` source, as Rows behind findings
+      // does (agent-answers R67-R78). A failed one is a result.
+      const gapQueriesOn = (
+        queries: GapQuery[],
+        signal: AbortSignal,
+        hold: (replay: () => void) => void,
+      ) =>
+        runGapQueries({
+          queries,
+          run: (datasourceId, sql, limit, sqlOptions) =>
+            this.deps.sql.runBuiltSql(datasourceId, sql, limit, sqlOptions),
+          signal,
+          record: (args, result, facts) =>
+            hold(() => {
+              emit({
+                type: 'tool',
+                content: JSON.stringify({
+                  name: 'run_readonly_sql',
+                  rationale: args.rationale,
+                  input: toolCallInput('run_readonly_sql', args),
+                }),
+              });
+              const callId = `gap-query-${randomUUID()}`;
+              queryFacts.set(callId, facts);
+              const record = toolDataRecord('run_readonly_sql', args, result);
+              if (record) captureRecord(record, callId);
+            }),
+        });
       ran = await this.runTurnWorkflow(
         session,
         workflow,
@@ -1129,41 +1226,85 @@ export class TurnEngine {
           // rows behind each top finding become the answer's first sources,
           // each shown as a SQL call and its result. Nothing reaches the
           // agent's prompt: the records only add sources to the answer.
-          findingRows: async () => {
+          // Save report starts the queries, which run while the agent
+          // explains the report; their records are held until Rows behind
+          // findings takes them (agents.md 5.13).
+          startFindingRows: () => {
             if (!savedReport) throw new Error('The report has not been saved');
-            return recordFindingSources({
-              report: savedReport,
-              // Each statement gets the turn's stop (datasources R38).
-              run: (datasourceId, sql, limit, sqlOptions) =>
-                this.deps.sql.runBuiltSql(datasourceId, sql, limit, sqlOptions),
-              signal: turn.signal,
-              record: (args, result, facts) => {
-                emit({
-                  type: 'tool',
-                  content: JSON.stringify({
-                    name: 'run_readonly_sql',
-                    rationale: args.rationale,
-                    input: toolCallInput('run_readonly_sql', args),
+            const report = savedReport;
+            findingSlot = { data: data.length, explorable: explorable.length };
+            early.start('finding-rows', (signal, hold) =>
+              recordFindingSources({
+                report,
+                // Each statement gets the turn's stop (datasources R38).
+                run: (datasourceId, sql, limit, sqlOptions) =>
+                  this.deps.sql.runBuiltSql(
+                    datasourceId,
+                    sql,
+                    limit,
+                    sqlOptions,
+                  ),
+                signal,
+                record: (args, result, facts) =>
+                  hold(() => {
+                    emit({
+                      type: 'tool',
+                      content: JSON.stringify({
+                        name: 'run_readonly_sql',
+                        rationale: args.rationale,
+                        input: toolCallInput('run_readonly_sql', args),
+                      }),
+                    });
+                    const callId = `finding-rows-${randomUUID()}`;
+                    queryFacts.set(callId, facts);
+                    const record = toolDataRecord(
+                      'run_readonly_sql',
+                      args,
+                      result,
+                    );
+                    if (record) {
+                      // Only its count links a figure (agent-answers R69):
+                      // the raw cells would match the report's numbers by
+                      // chance.
+                      const counts = (record.columns ?? []).filter((c) =>
+                        FINDING_COUNT_COLUMNS.has(c),
+                      );
+                      captureRecord(
+                        record.error
+                          ? record
+                          : { ...record, figureColumns: counts },
+                        callId,
+                      );
+                    }
                   }),
-                });
-                const callId = `finding-rows-${randomUUID()}`;
-                queryFacts.set(callId, facts);
-                const record = toolDataRecord('run_readonly_sql', args, result);
-                if (record) {
-                  // Only its count links a figure (agent-answers R69): the
-                  // raw cells would match the report's numbers by chance.
-                  const counts = (record.columns ?? []).filter((c) =>
-                    FINDING_COUNT_COLUMNS.has(c),
-                  );
-                  captureRecord(
-                    record.error
-                      ? record
-                      : { ...record, figureColumns: counts },
-                    callId,
-                  );
-                }
-              },
-            });
+              }),
+            );
+          },
+          // The rows Save report started: replayed, then placed first
+          // among the answer's records and explorable queries (where Save
+          // report left them, ahead of the agent's), refs numbered again.
+          findingRows: async () => {
+            const slot = findingSlot;
+            const before = { data: data.length, explorable: explorable.length };
+            try {
+              return await early.take<
+                Awaited<ReturnType<typeof recordFindingSources>>
+              >('finding-rows');
+            } finally {
+              if (slot) {
+                data.splice(slot.data, 0, ...data.splice(before.data));
+                explorable.splice(
+                  slot.explorable,
+                  0,
+                  ...explorable.splice(before.explorable),
+                );
+                explorable.splice(
+                  0,
+                  explorable.length,
+                  ...withRefs(explorable),
+                );
+              }
+            }
           },
           explain: async ({ dataset, reportId, imageNotes }) => {
             // The run has assessed: the agent reads the stored report and
@@ -1275,25 +1416,16 @@ export class TurnEngine {
           // to Data: the run's stored images, loaded from its workspace in
           // order, described by Zoe in one model call recorded in her
           // thread. A model error fails the step with its own message.
-          readImages: async ({ question, images }) => {
-            const loaded: StepImage[] = [];
-            for (const path of images) {
-              const { data, mediaType } = await this.deps.readImage(id, path);
-              loaded.push({ data, mediaType });
-            }
-            try {
-              const read = await this.deps.mastra.readImages(
-                { question, images: loaded },
-                stepModelOf(IMAGE_READER_AGENT_KEY),
-              );
-              return {
-                ...read,
-                stopped: read.stopped || turn.signal.aborted,
-              };
-            } catch (error) {
-              throw await stepError(error);
-            }
+          readImages: (input) => readImagesOn(input, turn.signal),
+          // Assess Data Readiness: Zoe reads the images from Resolve
+          // dataset on, on her own stop; Read images takes her notes.
+          startImageNotes: (input) => {
+            readingImages = true;
+            early.start('image-notes', (signal) => readImagesOn(input, signal));
           },
+          readsImages: () => readingImages,
+          imageNotes: () =>
+            early.take<Awaited<ReturnType<typeof readImagesOn>>>('image-notes'),
           saveMappedDashboard: async ({ bundle, answer }) => {
             const metadata = await this.deps.saveMock(id, bundle, trimmed);
             showVisual(metadata);
@@ -1362,15 +1494,21 @@ export class TurnEngine {
           // Consumption Gap Analysis (agents.md 5.20): its model steps on
           // their own agents, its read-only queries recorded as sources.
           consumptionGap: {
-            // Read dashboards: Grace over each stored image, one call each.
-            readDashboard: async ({ image }) => {
+            // Read dashboards: Grace over each stored image, one call each,
+            // all at the same time; `signal` ends one when another failed.
+            readDashboard: async ({ image, signal }) => {
               try {
                 const read = await this.deps.mastra.readDashboard(
                   {
                     question: 'Read this reference dashboard',
                     image: await this.deps.readImage(id, image),
                   },
-                  stepModelOf(DASHBOARD_READER_AGENT_KEY),
+                  {
+                    ...stepModelOf(DASHBOARD_READER_AGENT_KEY),
+                    abortSignal: signal
+                      ? AbortSignal.any([turn.signal, signal])
+                      : turn.signal,
+                  },
                 );
                 return {
                   blueprint: read.blueprint,
@@ -1383,66 +1521,18 @@ export class TurnEngine {
             loadDashboard: ({ artifact }) => this.deps.artifact(artifact),
             // Resolve layers and Load layer catalogs: the dataset tools'
             // own services (names, types and schema notes; no rows).
-            datasetLayers: async ({ datasets }) =>
-              (await getDatasetToolServices().getDatasets(datasets)).map(
-                (dataset) => ({
-                  dataset: dataset.name,
-                  datasourceId: dataset.datasourceId ?? null,
-                  datasourceKind: dataset.datasourceKind ?? null,
-                  schemas: (dataset.schemas ?? []).map((note) => ({
-                    ...note,
-                  })),
-                  entities: dataset.tables.map((key) => {
-                    const known = dataset.entities?.find(
-                      (entity) => entity.key === key,
-                    )?.columns;
-                    return {
-                      key,
-                      columns: known
-                        ? known.map((column) => ({
-                            name: column.name,
-                            type: column.type ?? '',
-                          }))
-                        : null,
-                    };
-                  }),
-                }),
-              ),
-            // Infer lineage and Probe evidence (ADR-0051): each statement
-            // on the guarded read-only path with the turn's stop, four at a
-            // time, recorded in query order as a `run_readonly_sql` source
-            // as Rows behind findings does (agent-answers R67-R78). A failed
-            // one is a result.
+            datasetLayers,
+            // Probe evidence: recorded at once.
             runQueries: ({ queries }) =>
-              runGapQueries({
-                queries,
-                run: (datasourceId, sql, limit, sqlOptions) =>
-                  this.deps.sql.runBuiltSql(
-                    datasourceId,
-                    sql,
-                    limit,
-                    sqlOptions,
-                  ),
-                signal: turn.signal,
-                record: (args, result, facts) => {
-                  emit({
-                    type: 'tool',
-                    content: JSON.stringify({
-                      name: 'run_readonly_sql',
-                      rationale: args.rationale,
-                      input: toolCallInput('run_readonly_sql', args),
-                    }),
-                  });
-                  const callId = `gap-query-${randomUUID()}`;
-                  queryFacts.set(callId, facts);
-                  const record = toolDataRecord(
-                    'run_readonly_sql',
-                    args,
-                    result,
-                  );
-                  if (record) captureRecord(record, callId);
-                },
-              }),
+              gapQueriesOn(queries, turn.signal, (replay) => replay()),
+            // Infer lineage: started at Load layer catalogs, on its own
+            // stop, its sources held until Infer lineage takes them.
+            startLineage: ({ queries }) =>
+              early.start('lineage', (signal, hold) =>
+                gapQueriesOn(queries, signal, hold),
+              ),
+            takeLineage: () =>
+              early.take<Awaited<ReturnType<typeof gapQueriesOn>>>('lineage'),
             deriveRequirements: async (input) => {
               try {
                 const derived = await this.deps.mastra.deriveRequirements(
@@ -1518,6 +1608,9 @@ export class TurnEngine {
         (event) => onStepEvent?.(event),
       );
     } finally {
+      // The run ended, failed, was stopped or waits: work no step took is
+      // aborted and awaited, its records dropped, before anything persists.
+      await early.settle();
       abortSignal?.removeEventListener('abort', forwardAbort);
     }
     // The workflow run waits for the user (ADR-0043). A run host's turn
@@ -1545,6 +1638,7 @@ export class TurnEngine {
               try {
                 next = await resumeRun(answer);
               } finally {
+                await early.settle();
                 abortSignal?.removeEventListener('abort', forwardAbort);
               }
               return settle(next);
@@ -1815,7 +1909,13 @@ export class TurnEngine {
             throw error;
           }
         },
+        // Early work (agents.md 5.13): a start is no step's failure; the
+        // step that takes the work reports its error.
+        startImageNotes: (input) => runtime.startImageNotes(input),
+        readsImages: () => runtime.readsImages(),
+        imageNotes: () => captured(() => runtime.imageNotes()),
         save: () => captured(() => runtime.save()),
+        startFindingRows: () => runtime.startFindingRows(),
         findingRows: () => captured(() => runtime.findingRows()),
         explain: (input) => captured(() => runtime.explain(input)),
       } satisfies DataReadinessAssessmentRuntime);
@@ -1852,10 +1952,22 @@ export class TurnEngine {
     } else if (gap) {
       const parts = runtime.consumptionGap;
       requestContext.set(CONSUMPTION_GAP_RUNTIME_KEY, {
-        readDashboard: (input) => captured(() => parts.readDashboard(input)),
+        // The reads run together: the first failure is the step's, not a
+        // read its abort then ended (its signal is aborted by then).
+        readDashboard: async (input) => {
+          try {
+            return await parts.readDashboard(input);
+          } catch (error) {
+            if (!input.signal?.aborted) stepError = error;
+            throw error;
+          }
+        },
         loadDashboard: (input) => captured(() => parts.loadDashboard(input)),
         datasetLayers: (input) => captured(() => parts.datasetLayers(input)),
         runQueries: (input) => captured(() => parts.runQueries(input)),
+        // Early work (agents.md 5.20): Infer lineage reports its error.
+        startLineage: (input) => parts.startLineage(input),
+        takeLineage: () => captured(() => parts.takeLineage()),
         deriveRequirements: (input) =>
           captured(() => parts.deriveRequirements(input)),
         reviseRequirements: (input) =>
