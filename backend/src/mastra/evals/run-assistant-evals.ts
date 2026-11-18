@@ -13,6 +13,11 @@ import { resolveUserPath } from './loop/cli-args';
 import { repeatsFromEnv } from './repeats-option';
 import type { EvalRepeats } from './repeats-option';
 import { memoryArmFromEnv } from './memory-arm-option';
+import {
+  TARGET_MEMORY_ERROR,
+  targetOverrideFromEnv,
+} from './eval-target-option';
+import type { EvalTargetOverride } from './eval-target-option';
 import type { EvalArm } from './memory-case';
 import { costLineSuffix, recallLine } from './eval-memory';
 import {
@@ -74,6 +79,7 @@ interface CliRun {
   judge: EvalJudgeSetting;
   repeats: EvalRepeats;
   arm: EvalArm;
+  target?: EvalTargetOverride;
 }
 
 /**
@@ -135,6 +141,21 @@ export async function main(
     out.error(narrowed.error);
     return 1;
   }
+  // Another target than the set's own (R252), e.g. World Cup questions on
+  // the whole workflow; a memory arm still runs only on the assistant.
+  const override = targetOverrideFromEnv(env);
+  if ('error' in override) {
+    out.error(override.error);
+    return 1;
+  }
+  if (
+    override.target &&
+    override.target !== 'assistant' &&
+    memory.memory !== 'none'
+  ) {
+    out.error(TARGET_MEMORY_ERROR);
+    return 1;
+  }
 
   // The model: the saved settings, or a custom endpoint from EVAL_LLM_*
   // (agents.md 8.5). Validated before booting, so a bad value makes no call.
@@ -162,6 +183,7 @@ export async function main(
       judge: judge.setting,
       repeats: repeats.repeats,
       arm: { memory: memory.memory },
+      ...(override.target ? { target: override.target } : {}),
     });
   } finally {
     await app.close();
@@ -181,7 +203,9 @@ export async function runEvals(
   const evalRuns = app.get(EvalRunsService);
   out.log(`Judge: ${judgeLabel(cli.judge)}`);
   out.log(`Repeats: ${cli.repeats}`);
-  out.log(`Memory: ${cli.arm.memory}\n`);
+  out.log(`Memory: ${cli.arm.memory}`);
+  if (cli.target) out.log(`Target: ${cli.target}`);
+  out.log('');
   const outcome = await evalRuns.runFromCommandLine(
     {
       agentKey: cli.agentKey,
@@ -190,6 +214,7 @@ export async function runEvals(
       judge: cli.judge,
       repeats: cli.repeats,
       arm: cli.arm,
+      ...(cli.target ? { target: cli.target } : {}),
     },
     (result) => printResult(result, cli.repeats, out),
   );

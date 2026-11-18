@@ -475,6 +475,7 @@ Persisted record of an eval run (the assistant's regression suite), started in t
 | `summary` | `EvalRunSummary` | no | The counts of the finished results (R148), rewritten with the run after every question. Written since BA-184; recomputed from `results` whenever a run is read, so older records get one too. |
 | `repeats` | `1` \| `3` \| `5` | no | Attempts per question (agents-evals R209). Written since BA-242; absent on older records, which read as `1`. |
 | `arm` | `{ memory: 'none' \| 'mastra' \| 'hindsight-mastra' }` | no | The arm the run measured: its cross-session memory ([agents-evals](../capabilities/agents-evals/spec.md) R231). Since BA-190; absent on older records, which read as `{ memory: 'none' }`. A run is compared only with an earlier run of the same arm (R246). |
+| `target` | `'assistant' \| 'insights-analyst'` | no | The target the questions ran on when the command line's `EVAL_TARGET` named another than their set's own ([agents-evals](../capabilities/agents-evals/spec.md) R252); absent for a run on the set's own target. A run is compared only with an earlier run on the same target. |
 | `model` | string | no | The router id of the model the evaluated agent ran on, resolved when the run starts (`openai/gpt-4o-mini`; R219). Since BA-242. |
 | `usage` | `ModelUsageEntry[]` | no | The sum of the results' `usage`, by agent and model (R219). Written from the start of every run since BA-242, empty until a question finishes; absent on older records, whose tokens are not recorded. |
 | `costUsd` | number \| null | no | The sum of the results' cost in US dollars, to six decimals, `0` at the start; `null` when not priced (R221). Since BA-242; absent on older records. |
@@ -1019,6 +1020,13 @@ Added 2026-10-20 (BA-242). The prices an eval run's cost is computed with ([agen
 {
   "_comment": "…",
   "models": {
+    "claude-sonnet-5-5": {
+      "inputPerMillionUsd": 2,
+      "cachedInputPerMillionUsd": 0.1,
+      "outputPerMillionUsd": 10,
+      "source": "Anthropic Claude API model table (claude-api reference, cached 2026-11-03)",
+      "readOn": "2026-11-17"
+    },
     "gpt-4o-mini": {
       "inputPerMillionUsd": 0.15,
       "cachedInputPerMillionUsd": 0.075,

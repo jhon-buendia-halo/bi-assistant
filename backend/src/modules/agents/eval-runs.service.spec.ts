@@ -23,12 +23,14 @@ jest.mock('../../mastra/evals/eval-sets', () => {
       agentKey: 'data-readiness',
       finish: jest.fn().mockResolvedValue(undefined),
     },
+    'insights-analyst': { agentKey: 'insights-analyst' },
   };
   return {
     evalSetsFor: (key: string) =>
       sets.filter((set) => (set.agentKey ?? 'assistant') === key),
     evalTargetIdFor: (key: string) => ({ targetId: key }),
     evalTargetFor: (key: string) => targets[key],
+    evalTargetOf: (id: string) => targets[id],
   };
 });
 // The command line's preflight reads the named datasets as a chat turn does.
@@ -165,6 +167,7 @@ describe('EvalRunsService dataset validation', () => {
         ['Sample'],
         ['champion-2022'],
         'none',
+        undefined,
       );
     }),
   );
@@ -796,6 +799,34 @@ describe('EvalRunsService repeats, attempts and usage (R209 to R211, R219 to R22
         ['Sample'],
         ['champion-2022', 'shot-conversion-2022'],
         'none',
+        undefined,
+      );
+    });
+
+    it('runs the questions on the target the command line named, keeps it on the run and compares on it (R252)', async () => {
+      mockGetDatasets.mockResolvedValue(sample);
+      jest
+        .mocked(runAssistantEvalCase)
+        .mockResolvedValue(attempt('champion-2022', true) as never);
+
+      const outcome = await service().runFromCommandLine({
+        ...request,
+        target: 'insights-analyst',
+      });
+
+      if (!('run' in outcome)) throw new Error(outcome.error);
+      expect(outcome.run.target).toBe('insights-analyst');
+      expect(inserted[0]).toMatchObject({ target: 'insights-analyst' });
+      const targetArg = jest.mocked(runAssistantEvalCase).mock.calls[0][4];
+      expect(targetArg).toEqual({ agentKey: 'insights-analyst' });
+      expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+        'assistant',
+        outcome.run.jobId,
+        'wc',
+        ['Sample'],
+        ['champion-2022', 'shot-conversion-2022'],
+        'none',
+        'insights-analyst',
       );
     });
 
@@ -988,6 +1019,7 @@ describe('EvalRunsService memory arm (R19 step 10, R231, R232, R238, R246)', () 
       ['Sample'],
       ['champion-2022'],
       'mastra',
+      undefined,
     );
   });
 

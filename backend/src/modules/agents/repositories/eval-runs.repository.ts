@@ -108,6 +108,8 @@ export class EvalRunsRepository {
     datasets: string[],
     questionIds: string[],
     memoryArm: MemoryArm = LEGACY_ARM.memory,
+    /** Only a run on the same target is comparable (R252). */
+    target?: string,
   ): Promise<EvalRunView | null> {
     const completed: StoredEvalRun[] = await this.store.find(
       { agentKey, status: 'completed', datasourceId },
@@ -119,6 +121,7 @@ export class EvalRunsRepository {
       (run) =>
         run.jobId !== excludeJobId &&
         memoryArmOf(run) === memoryArm &&
+        (run.target ?? '') === (target ?? '') &&
         new Set(run.datasets).size === scope.size &&
         run.datasets.every((dataset) => scope.has(dataset)) &&
         [

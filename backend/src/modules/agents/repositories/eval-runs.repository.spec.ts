@@ -395,3 +395,38 @@ describe('the memory arm of a stored run (R231, R246)', () => {
     expect(baseline?.jobId).toBe('legacy');
   });
 });
+
+describe('the target of a stored run (R252)', () => {
+  const run = (jobId: string, target?: string) => ({
+    jobId,
+    datasets: ['World Cup'],
+    caseIds: ['shot-conversion-2022'],
+    results: [{ id: 'shot-conversion-2022', passed: true }],
+    ...(target ? { target } : {}),
+  });
+
+  it('compares a run only with an earlier run on the same target, a run without one being on its set’s own', async () => {
+    const repository = new EvalRunsRepository(
+      storeOf([
+        run('workflow-2', 'insights-analyst'),
+        run('own-1'),
+        run('workflow-1', 'insights-analyst'),
+      ]),
+    );
+    const baseline = (exclude: string, target?: string) =>
+      repository.mostRecentCompleted(
+        'assistant',
+        exclude,
+        'wc',
+        ['World Cup'],
+        ['shot-conversion-2022'],
+        'none',
+        target,
+      );
+    expect((await baseline('workflow-2', 'insights-analyst'))?.jobId).toBe(
+      'workflow-1',
+    );
+    expect((await baseline('current'))?.jobId).toBe('own-1');
+    expect(await baseline('current', 'assistant')).toBeNull();
+  });
+});

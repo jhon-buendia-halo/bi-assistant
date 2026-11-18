@@ -26,7 +26,9 @@ import {
   evalSetsFor,
   evalTargetFor,
   evalTargetIdFor,
+  evalTargetOf,
 } from '../../mastra/evals/eval-sets';
+import type { EvalTargetOverride } from '../../mastra/evals/eval-target-option';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 import { parseJudgeSetting } from '../../mastra/evals/judge-option';
 import type { EvalJudgeSetting } from '../../mastra/evals/judge-option';
@@ -94,6 +96,11 @@ export interface EvalRunView {
    * before it read as `{ memory: 'none' }`.
    */
   arm: EvalArm;
+  /**
+   * The target the questions ran on when the command line's `EVAL_TARGET`
+   * overrode the set's own (R252); absent for a run on the set's own target.
+   */
+  target?: EvalTargetOverride;
   /** Router id of the model the agent runs on, resolved at start (R219). */
   model?: string;
   /**
@@ -130,6 +137,8 @@ export interface CommandLineEvalRun {
   repeats: EvalRepeats;
   /** From `EVAL_MEMORY`, its value already known (R232). */
   arm: EvalArm;
+  /** From `EVAL_TARGET`: another target than the set's own (R252). */
+  target?: EvalTargetOverride;
 }
 
 /** The refusal of an arm whose memory this build does not have (R232). */
@@ -330,6 +339,7 @@ export class EvalRunsService {
       judge: request.judge,
       repeats: request.repeats,
       arm: request.arm,
+      ...(request.target ? { target: request.target } : {}),
       source: 'cli',
     });
     await this.run(view, cases, onResult, memory.store);
@@ -405,6 +415,7 @@ export class EvalRunsService {
     judge: EvalJudgeSetting;
     repeats: EvalRepeats;
     arm: EvalArm;
+    target?: EvalTargetOverride;
     source: EvalRunSource;
   }): Promise<EvalRunView> {
     const model = await evalRunModel();
@@ -423,6 +434,7 @@ export class EvalRunsService {
       judge: fields.judge,
       repeats: fields.repeats,
       arm: { ...fields.arm },
+      ...(fields.target ? { target: fields.target } : {}),
       ...(model ? { model } : {}),
       usage: [],
       costUsd: 0,
@@ -443,8 +455,10 @@ export class EvalRunsService {
     store?: LearningStore,
   ): Promise<void> {
     // The agent the cases run on, with its context and clean-up (agents.md
-    // 8.1).
-    const target = evalTargetFor(view.agentKey, view.caseIds);
+    // 8.1): the set's own, or the one `EVAL_TARGET` named (R252).
+    const target = view.target
+      ? evalTargetOf(view.target, view.target)
+      : evalTargetFor(view.agentKey, view.caseIds);
     // A throwaway run host so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
     // still measures the agent without one, just with visual-tool support
@@ -559,6 +573,7 @@ export class EvalRunsService {
           ]),
         ),
         view.arm.memory,
+        view.target,
       );
       if (!previous) return;
       const diff = computeRegressionDiff(previous.results, view.results);

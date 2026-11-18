@@ -103,6 +103,14 @@ describe('npm run evals:assistant refusals (agents.md 8.5, R222)', () => {
       { EVAL_REPEATS: '2', EVAL_MEMORY: 'sometimes' },
       'Repeats must be 1, 3 or 5 (got "2")',
     ],
+    [
+      { EVAL_TARGET: 'workflow' },
+      'Unknown EVAL_TARGET "workflow"; use assistant or insights-analyst',
+    ],
+    [
+      { EVAL_TARGET: 'insights-analyst', EVAL_MEMORY: 'mastra' },
+      'Memory arms run only on the assistant',
+    ],
   ])('refuses %j with "%s" before the backend boots', async (env, message) => {
     const output = capture();
     await expect(main({ ...WORLD_CUP, ...env }, output)).resolves.toBe(1);
@@ -283,6 +291,22 @@ describe('npm run evals:assistant run (R154, R222, R223)', () => {
     expect(app.close).toHaveBeenCalled();
     // No memory arm: no recall line.
     expect(printed).not.toContain('Recall:');
+  });
+
+  it('runs a set on the target EVAL_TARGET names, printing it under the memory arm (R252)', async () => {
+    const { service } = fakeApp(savedRun([result('shot-conversion-2022')]));
+    const output = capture();
+    await main({ ...WORLD_CUP, EVAL_TARGET: ' insights-analyst ' }, output);
+    expect(service.runFromCommandLine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentKey: 'assistant',
+        target: 'insights-analyst',
+      }),
+      expect.any(Function),
+    );
+    expect(output.out.join('\n')).toContain(
+      'Memory: none\nTarget: insights-analyst\n',
+    );
   });
 
   it('runs a memory arm, printing it under the repeats and the recall times after the cost (R245, R246)', async () => {
