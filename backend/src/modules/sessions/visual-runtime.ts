@@ -21,7 +21,28 @@
  * `visualization-document.ts`), so it can rely on `window.qti.data` and
  * `window.qti.onRefresh`. It never registers click handlers for selection —
  * the frame bridge owns that; marks only carry `data-qti-*` attributes.
+ *
+ * Two chart forms live in files of their own and are embedded the same way:
+ * `pivot` (`visual-runtime-pivot.ts`) and `us-map` (`visual-runtime-map.ts`).
+ * Their functions are only listed here (`RUNTIME_MEMBERS`) and called through
+ * the ambient declarations below, never through the import: an imported call
+ * compiles to a module-qualified name the browser script does not have.
  */
+import { US_MAP_RUNTIME_MEMBERS } from './visual-runtime-map';
+import { PIVOT_RUNTIME_MEMBERS } from './visual-runtime-pivot';
+
+declare function qtiPivot(
+  root: HTMLElement,
+  wrap: HTMLElement,
+  data: VisualDataRecord[],
+  chart: VisualChartSpec,
+): void;
+declare function qtiUsMap(
+  root: HTMLElement,
+  wrap: HTMLElement,
+  data: VisualDataRecord[],
+  chart: VisualChartSpec,
+): void;
 
 /* ------------------------------------------------------------------ *
  * Spec schema v1
@@ -34,9 +55,21 @@ export type VisualAggregation =
 /** Display formatting for a measure. `percent` treats the value as already in percent units. */
 export type VisualFormat = 'number' | 'compact' | 'percent' | 'currency';
 
-/** The chart forms the product supports (mirrors `chart-heuristic.ts`). */
+/**
+ * The chart forms the product supports (mirrors `chart-heuristic.ts`).
+ * `pivot` is drawn by `visual-runtime-pivot.ts`, `us-map` by
+ * `visual-runtime-map.ts`.
+ */
 export type VisualChartForm =
-  'bar' | 'line' | 'scatter' | 'heatmap' | 'metric-cards' | 'table' | 'donut';
+  | 'bar'
+  | 'line'
+  | 'scatter'
+  | 'heatmap'
+  | 'metric-cards'
+  | 'table'
+  | 'donut'
+  | 'pivot'
+  | 'us-map';
 
 /** One result set as handed to the runtime (same shape as `ChartDataRecord`). */
 export interface VisualDataRecord {
@@ -56,6 +89,11 @@ export interface VisualKpiSpec {
   agg?: VisualAggregation;
   format?: VisualFormat;
   unit?: string;
+  /**
+   * With `agg` `max`, `min` or `value`: the column that names the row the
+   * figure comes from, shown before it ("FL · 262").
+   */
+  category?: string;
 }
 
 /** Sort applied to the chart's categories. */
@@ -80,6 +118,16 @@ export interface VisualChartSpec {
   format?: { y?: VisualFormat };
   xLabel?: string;
   yLabel?: string;
+  /** `pivot` only: the Total row (and Total column in the long shape). Default true. */
+  totals?: boolean;
+}
+
+/** One chart of a dashboard: a titled card in the 12-column grid. */
+export interface VisualPanelSpec {
+  title: string;
+  /** Width in grid columns, 3 to 12. Default 6. */
+  span?: number;
+  chart: VisualChartSpec;
 }
 
 /** The collapsible detail table under the chart. */
@@ -89,11 +137,16 @@ export interface VisualTableSpec {
   collapsed?: boolean;
 }
 
-/** The document the designer agent emits. Unknown extra fields are ignored. */
+/**
+ * The document the designer agent emits. Unknown extra fields are ignored.
+ * It draws either one `chart` (a single visual) or `panels` (a dashboard);
+ * a spec with both draws the panels.
+ */
 export interface VisualSpec {
   spec?: number;
   kpis?: VisualKpiSpec[];
-  chart: VisualChartSpec;
+  chart?: VisualChartSpec;
+  panels?: VisualPanelSpec[];
   table?: VisualTableSpec;
 }
 
@@ -404,6 +457,91 @@ export function groupRows(
   return { categories: categories, series: seriesNames, values: values };
 }
 
+/** A panel's column span out of 12: 3 to 12, 6 when absent or not a number. */
+export function panelSpan(span: unknown): number {
+  if (typeof span !== 'number' || !Number.isFinite(span)) return 6;
+  return Math.max(3, Math.min(12, Math.round(span)));
+}
+
+/**
+ * Key for per-panel state (hidden series, table sort). Outside a panel the
+ * scope is empty and the key is the name itself; inside one it is prefixed so
+ * two panels never share a toggle.
+ */
+export function scopedKey(scope: string | undefined, name: string): string {
+  return scope ? scope + '\u0001' + name : name;
+}
+
+/**
+ * The SVG width a chart is laid out in. Charts keep their design width unless
+ * the panel column is known to be narrower, so labels stay at a readable size
+ * instead of being scaled down with the drawing. Never below 300.
+ */
+export function panelChartWidth(
+  base: number,
+  available: number | undefined,
+): number {
+  if (!available || !Number.isFinite(available) || available <= 0) return base;
+  return Math.max(300, Math.min(base, Math.round(available)));
+}
+
+/**
+ * The left margin of horizontal bars: room for the longest category label
+ * (about 7 units a character, truncated past 22), never under 48 and never
+ * over 160 or 36% of the chart, so short labels such as state codes do not
+ * leave a third of the chart empty.
+ */
+export function barLabelMargin(categories: string[], width: number): number {
+  let longest = 0;
+  for (const category of categories || []) {
+    const length = String(category).length;
+    if (length > longest) longest = length;
+  }
+  const wanted = 16 + Math.min(longest, 22) * 7;
+  const cap = Math.min(160, Math.round(width * 0.36));
+  return Math.max(48, Math.min(cap, wanted));
+}
+
+/**
+ * Text of a KPI tile. With a category column and `max`, `min` or `value`, the
+ * figure is prefixed by the category of the row it comes from ("FL · 262").
+ */
+export function kpiText(
+  rows: Record<string, unknown>[] | undefined,
+  column: string,
+  agg: VisualAggregation | undefined,
+  category?: string | null,
+  format?: VisualFormat,
+  unit?: string,
+): string {
+  const list = rows || [];
+  const value = list.length ? aggregate(list, column, agg) : null;
+  const text = formatValue(value, format, unit);
+  if (!category || value === null) return text;
+  if (agg !== 'max' && agg !== 'min' && agg !== 'value') return text;
+  for (const row of list) {
+    const number = toNumber(row[column]);
+    if (!Number.isFinite(number)) continue;
+    if (agg === 'value' || number === value) {
+      const name = row[category];
+      if (typeof name !== 'string' && typeof name !== 'number') return text;
+      if (name === '') return text;
+      return String(name) + ' · ' + text;
+    }
+  }
+  return text;
+}
+
+/** The categories with the folded "Other" bucket moved to the end. */
+export function otherLast(categories: string[]): string[] {
+  const kept = categories.filter(function (name) {
+    return name !== 'Other';
+  });
+  return kept.length === categories.length
+    ? categories
+    : kept.concat(['Other']);
+}
+
 /* ------------------------------------------------------------------ *
  * Browser renderer
  *
@@ -419,6 +557,16 @@ interface QtiRuntimeState {
   hidden: Record<string, boolean>;
   /** Per-table sort, keyed by table ("chart" or "detail"). */
   sort: Record<string, { column: string; dir: 'asc' | 'desc' }>;
+  /** Panel being drawn ("" outside a panel); prefixes hidden/sort keys. */
+  scope: string;
+  /** Width in pixels of the panel column being drawn; 0 outside a panel. */
+  width: number;
+  /**
+   * Whether the reader left the detail table open; absent until they toggle
+   * it. A redraw (a sort, a legend toggle, a data refresh) keeps their choice
+   * instead of falling back to the spec's `collapsed`.
+   */
+  detailOpen?: boolean;
 }
 
 /** The frame bridge installed by `FRAME_SELECT_SCRIPT`. */
@@ -587,6 +735,21 @@ function qtiBindTooltip(
   node.addEventListener('blur', hide);
 }
 
+/** The muted frame colour for the folded "Other" mark, else the given colour. */
+function qtiOtherFill(name: string, folded: boolean, color: string): string {
+  return folded && name === 'Other' ? 'var(--qti-fg-muted)' : color;
+}
+
+/** Tag the folded "Other" mark so it can be told apart and styled. */
+function qtiTagOther(node: SVGElement, name: string, folded: boolean): void {
+  if (folded && name === 'Other') node.setAttribute('class', 'qti-other');
+}
+
+/** Whether the reader switched this series or slice off in the current panel. */
+function qtiIsHidden(name: string): boolean {
+  return !!qtiState.hidden[scopedKey(qtiState.scope, name)];
+}
+
 /**
  * Series switches. Not data marks: they carry no `data-qti-value`, so the
  * frame bridge ignores them and a click only toggles visibility here.
@@ -597,7 +760,8 @@ function qtiLegend(entries: { name: string; label: string }[]): HTMLElement {
   legend.setAttribute('aria-label', 'Series');
   for (let index = 0; index < entries.length; index++) {
     const entry = entries[index];
-    const visible = !qtiState.hidden[entry.name];
+    const key = scopedKey(qtiState.scope, entry.name);
+    const visible = !qtiState.hidden[key];
     const button = qtiCreate('button', 'qti-legend-item');
     button.setAttribute('type', 'button');
     button.setAttribute('aria-pressed', visible ? 'true' : 'false');
@@ -606,8 +770,8 @@ function qtiLegend(entries: { name: string; label: string }[]): HTMLElement {
     button.appendChild(swatch);
     button.appendChild(qtiCreate('span', undefined, entry.label));
     button.addEventListener('click', function () {
-      if (qtiState.hidden[entry.name]) delete qtiState.hidden[entry.name];
-      else qtiState.hidden[entry.name] = true;
+      if (qtiState.hidden[key]) delete qtiState.hidden[key];
+      else qtiState.hidden[key] = true;
       qtiRender();
     });
     legend.appendChild(button);
@@ -817,17 +981,21 @@ function qtiRenderKpis(
   kpis: VisualKpiSpec[],
 ): HTMLElement {
   const wrap = qtiCreate('div', 'qti-kpis');
-  for (const kpi of kpis.slice(0, 4)) {
+  for (const kpi of kpis.slice(0, 6)) {
     const record = selectRecord(data, kpi.select);
     const rows = record && record.rows ? record.rows : [];
     const value = rows.length ? aggregate(rows, kpi.column, kpi.agg) : null;
+    const text = kpiText(
+      rows,
+      kpi.column,
+      kpi.agg,
+      kpi.category,
+      kpi.format,
+      kpi.unit,
+    );
     // Deliberately no `data-qti-column`: a KPI is an aggregate, so its label is
     // not a value of that column and a cross-filter on it would empty the tile.
-    const tile = qtiTile(
-      kpi.label,
-      formatValue(value, kpi.format, kpi.unit),
-      kpi.label,
-    );
+    const tile = qtiTile(kpi.label, text, kpi.label);
     qtiBindTooltip(root, tile, [
       kpi.label,
       (kpi.agg || 'sum') +
@@ -859,10 +1027,8 @@ function qtiBar(
   }
   const grouped = groupRows(rows, x, chart.series, y);
   qtiApplyTopN(grouped, x, y, chart.topN);
-  const categories = qtiSortCategories(
-    grouped.categories,
-    grouped.values,
-    chart.sort,
+  const categories = otherLast(
+    qtiSortCategories(grouped.categories, grouped.values, chart.sort),
   );
   const split = !!chart.series && grouped.series.length > 1;
   const format = chart.format ? chart.format.y : undefined;
@@ -877,7 +1043,7 @@ function qtiBar(
     );
   }
   const visible = grouped.series.filter(function (name) {
-    return !split || !qtiState.hidden[name];
+    return !split || !qtiIsHidden(name);
   });
   if (!categories.length || !visible.length) {
     wrap.appendChild(qtiNoData());
@@ -914,13 +1080,13 @@ function qtiBar(
   const label = qtiAriaLabel(chart);
 
   if (horizontal) {
-    const width = 760;
+    const width = panelChartWidth(760, qtiState.width);
     const rowHeight = 30;
     const margin = {
       top: 16,
       right: 64,
       bottom: chart.xLabel ? 56 : 36,
-      left: 160,
+      left: barLabelMargin(categories, width),
     };
     const plotHeight = categories.length * rowHeight;
     const height = plotHeight + margin.top + margin.bottom;
@@ -956,8 +1122,9 @@ function qtiBar(
         width: Math.max(1, Math.abs(end - zero)),
         height: barHeight,
         rx: 2,
-        fill: qtiSeriesColor(0),
+        fill: qtiOtherFill(category, !!chart.topN, qtiSeriesColor(0)),
       });
+      qtiTagOther(rect, category, !!chart.topN);
       qtiMark(rect, category, x);
       qtiBindTooltip(root, rect, [
         x + ': ' + category,
@@ -965,9 +1132,14 @@ function qtiBar(
       ]);
       svg.appendChild(rect);
       svg.appendChild(
-        qtiText(margin.left - 8, center + 4, qtiTruncate(category, 22), {
-          'text-anchor': 'end',
-        }),
+        qtiText(
+          margin.left - 8,
+          center + 4,
+          qtiTruncate(category, Math.max(8, Math.floor((margin.left - 8) / 7))),
+          {
+            'text-anchor': 'end',
+          },
+        ),
       );
       if (chart.labels !== false) {
         svg.appendChild(
@@ -987,7 +1159,7 @@ function qtiBar(
     return;
   }
 
-  const width = 760;
+  const width = panelChartWidth(760, qtiState.width);
   const height = 340;
   const margin = {
     top: 20,
@@ -1051,8 +1223,15 @@ function qtiBar(
         width: Math.max(1, barWidth - 1),
         height: Math.max(1, barHeight),
         rx: 2,
-        fill: qtiSeriesColor(grouped.series.indexOf(name)),
+        fill: split
+          ? qtiSeriesColor(grouped.series.indexOf(name))
+          : qtiOtherFill(
+              category,
+              !!chart.topN,
+              qtiSeriesColor(grouped.series.indexOf(name)),
+            ),
       });
+      qtiTagOther(rect, category, !!chart.topN);
       qtiMark(rect, category, x);
       qtiBindTooltip(
         root,
@@ -1161,7 +1340,7 @@ function qtiLine(
     );
   }
   const visible = names.filter(function (name) {
-    return names.length < 2 || !qtiState.hidden[name];
+    return names.length < 2 || !qtiIsHidden(name);
   });
   if (!categories.length || !visible.length) {
     wrap.appendChild(qtiNoData());
@@ -1183,7 +1362,7 @@ function qtiLine(
   const domainMin = scale[0];
   const domainMax = scale[scale.length - 1];
   const span = domainMax - domainMin || 1;
-  const width = 760;
+  const width = panelChartWidth(760, qtiState.width);
   const height = 340;
   const margin = {
     top: 20,
@@ -1354,7 +1533,7 @@ function qtiScatter(
   }
   const plotted = rows.filter(function (row) {
     const name = chart.series ? String(row[chart.series]) : '';
-    return names.length < 2 || !qtiState.hidden[name];
+    return names.length < 2 || !qtiIsHidden(name);
   });
   if (!plotted.length) {
     wrap.appendChild(qtiNoData());
@@ -1378,7 +1557,7 @@ function qtiScatter(
   const xSpan = xScaleTicks[xScaleTicks.length - 1] - xDomainMin || 1;
   const yDomainMin = yScaleTicks[0];
   const ySpan = yScaleTicks[yScaleTicks.length - 1] - yDomainMin || 1;
-  const width = 760;
+  const width = panelChartWidth(760, qtiState.width);
   const height = 340;
   const margin = {
     top: 20,
@@ -1480,13 +1659,15 @@ function qtiHeatmap(
       }
     }
   }
-  const width = 760;
+  const width = panelChartWidth(760, qtiState.width);
   const cellHeight = 34;
   const margin = {
     top: 16,
     right: 20,
     bottom: chart.xLabel ? 62 : 44,
-    left: 150,
+    // Room for the longest lane label, so short ones leave the width to the
+    // cells (a heatmap in a narrow panel would otherwise be mostly margin).
+    left: barLabelMargin(lanes, width),
   };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = lanes.length * cellHeight;
@@ -1635,7 +1816,8 @@ function qtiDataTable(
   const table = qtiCreate('table', 'qti-table qti-sortable');
   const head = qtiCreate('thead');
   const headRow = qtiCreate('tr');
-  const sort = qtiState.sort[sortKey];
+  const stateKey = scopedKey(qtiState.scope, sortKey);
+  const sort = qtiState.sort[stateKey];
   for (const column of columns) {
     const cell = qtiCreate('th');
     const active = sort && sort.column === column;
@@ -1651,10 +1833,10 @@ function qtiDataTable(
     );
     cell.style.cursor = 'pointer';
     const toggle = function (): void {
-      const current = qtiState.sort[sortKey];
+      const current = qtiState.sort[stateKey];
       const descending =
         current && current.column === column && current.dir === 'desc';
-      qtiState.sort[sortKey] = {
+      qtiState.sort[stateKey] = {
         column: column,
         dir: descending ? 'asc' : 'desc',
       };
@@ -1755,10 +1937,8 @@ function qtiDonut(
   const format = chart.format ? chart.format.y : undefined;
   const grouped = groupRows(rows, x, undefined, y);
   qtiApplyTopN(grouped, x, y, chart.topN && chart.topN > 0 ? chart.topN : 8);
-  const categories = qtiSortCategories(
-    grouped.categories,
-    grouped.values,
-    chart.sort,
+  const categories = otherLast(
+    qtiSortCategories(grouped.categories, grouped.values, chart.sort),
   );
   wrap.appendChild(
     qtiLegend(
@@ -1771,18 +1951,22 @@ function qtiDonut(
   let total = 0;
   for (let index = 0; index < categories.length; index++) {
     const category = categories[index];
-    if (qtiState.hidden[category]) continue;
+    if (qtiIsHidden(category)) continue;
     const bucket = grouped.values[category] || {};
     const value = bucket[''];
     if (!Number.isFinite(value) || value <= 0) continue;
-    slices.push({ name: category, value: value, color: qtiSeriesColor(index) });
+    slices.push({
+      name: category,
+      value: value,
+      color: qtiOtherFill(category, true, qtiSeriesColor(index)),
+    });
     total += value;
   }
   if (!slices.length || total <= 0) {
     wrap.appendChild(qtiNoData());
     return;
   }
-  const width = 460;
+  const width = panelChartWidth(460, qtiState.width);
   const height = 300;
   const cx = width / 2;
   const cy = height / 2;
@@ -1846,6 +2030,7 @@ function qtiDonut(
         fill: slice.color,
       });
     }
+    qtiTagOther(shape, slice.name, true);
     qtiMark(shape, slice.name, x);
     qtiBindTooltip(root, shape, [
       x + ': ' + slice.name,
@@ -1902,6 +2087,8 @@ function qtiRenderChart(
     qtiMetricCards(root, wrap, data, chart);
   else if (chart.form === 'table') qtiTableChart(root, wrap, data, chart);
   else if (chart.form === 'donut') qtiDonut(root, wrap, data, chart);
+  else if (chart.form === 'pivot') qtiPivot(root, wrap, data, chart);
+  else if (chart.form === 'us-map') qtiUsMap(root, wrap, data, chart);
   else wrap.appendChild(qtiNoData());
   return wrap;
 }
@@ -1929,7 +2116,14 @@ function qtiRenderTable(
       : 'Detail',
   );
   details.appendChild(summary);
-  if (spec.collapsed === false) details.setAttribute('open', 'open');
+  const open =
+    qtiState.detailOpen === undefined
+      ? spec.collapsed === false
+      : qtiState.detailOpen;
+  if (open) details.setAttribute('open', 'open');
+  details.addEventListener('toggle', function () {
+    qtiState.detailOpen = (details as HTMLDetailsElement).open;
+  });
   if (!rows.length || !columns.length) details.appendChild(qtiNoData());
   else {
     details.appendChild(
@@ -1937,6 +2131,38 @@ function qtiRenderTable(
     );
   }
   return details;
+}
+
+/** A spec can be drawn when it has panels or a chart; panels win. */
+function qtiHasContent(spec: VisualSpec): boolean {
+  return !!((spec.panels && spec.panels.length) || spec.chart);
+}
+
+/**
+ * The dashboard grid: one labelled section per panel. Each section is attached
+ * before its chart is drawn so the chart can size itself to the column, and
+ * each gets its own state scope so legends and sorts never cross panels.
+ */
+function qtiRenderPanels(
+  root: HTMLElement,
+  data: VisualDataRecord[],
+  panels: VisualPanelSpec[],
+): void {
+  const grid = qtiCreate('div', 'qti-panels');
+  root.appendChild(grid);
+  for (let index = 0; index < panels.length; index++) {
+    const panel = panels[index];
+    const section = qtiCreate('section', 'qti-panel');
+    section.setAttribute('data-qti-span', String(panelSpan(panel.span)));
+    const heading = qtiCreate('h2', 'qti-panel-title', panel.title || '');
+    heading.id = 'qti-panel-title-' + index;
+    section.setAttribute('aria-labelledby', heading.id);
+    section.appendChild(heading);
+    grid.appendChild(section);
+    qtiState.scope = 'panel' + index;
+    qtiState.width = Math.max(0, section.clientWidth - 32);
+    section.appendChild(qtiRenderChart(root, data, panel.chart));
+  }
 }
 
 /** Runtime-owned styles, injected once. */
@@ -1960,6 +2186,24 @@ function qtiEnsureStyle(): void {
     '.qti-detail summary { cursor: pointer; font-size: 12px; color: var(--qti-fg-muted); }',
     '.qti-sortable th { cursor: pointer; user-select: none; white-space: nowrap; }',
     '.qti-tooltip { display: none; white-space: nowrap; }',
+    '.qti-other { opacity: .85; }',
+    '.qti-panels { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; margin: 16px 0 0; }',
+    '.qti-panel { grid-column: span 6; min-width: 0; box-sizing: border-box; padding: 14px 16px;',
+    '  background: var(--qti-surface); border: 1px solid var(--qti-border); border-radius: 12px; overflow: hidden; }',
+    '.qti-panel-title { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--qti-fg-strong); }',
+    '.qti-panel .qti-chart { overflow: hidden; }',
+    '.qti-panel[data-qti-span="3"] { grid-column: span 3; }',
+    '.qti-panel[data-qti-span="4"] { grid-column: span 4; }',
+    '.qti-panel[data-qti-span="5"] { grid-column: span 5; }',
+    '.qti-panel[data-qti-span="6"] { grid-column: span 6; }',
+    '.qti-panel[data-qti-span="7"] { grid-column: span 7; }',
+    '.qti-panel[data-qti-span="8"] { grid-column: span 8; }',
+    '.qti-panel[data-qti-span="9"] { grid-column: span 9; }',
+    '.qti-panel[data-qti-span="10"] { grid-column: span 10; }',
+    '.qti-panel[data-qti-span="11"] { grid-column: span 11; }',
+    '.qti-panel[data-qti-span="12"] { grid-column: span 12; }',
+    '@media (max-width: 720px) {',
+    '  .qti-panel, .qti-panel[data-qti-span] { grid-column: 1 / -1; } }',
     '@media (prefers-reduced-motion: reduce) {',
     '  .qti-chart *, .qti-kpi { animation: none !important; transition: none !important; } }',
   ].join('\n');
@@ -1972,7 +2216,7 @@ function qtiRender(): void {
   if (!root) return;
   const spec = qtiState.spec;
   while (root.firstChild) root.removeChild(root.firstChild);
-  if (!spec || !spec.chart) {
+  if (!spec || !qtiHasContent(spec)) {
     root.appendChild(
       qtiCreate(
         'p',
@@ -1990,7 +2234,15 @@ function qtiRender(): void {
   if (spec.kpis && spec.kpis.length) {
     root.appendChild(qtiRenderKpis(root, data, spec.kpis));
   }
-  root.appendChild(qtiRenderChart(root, data, spec.chart));
+  qtiState.scope = '';
+  qtiState.width = 0;
+  if (spec.panels && spec.panels.length) {
+    qtiRenderPanels(root, data, spec.panels);
+  } else if (spec.chart) {
+    root.appendChild(qtiRenderChart(root, data, spec.chart));
+  }
+  qtiState.scope = '';
+  qtiState.width = 0;
   if (spec.table) root.appendChild(qtiRenderTable(root, data, spec.table));
   root.appendChild(qtiCreate('div', 'qti-tooltip'));
 }
@@ -2010,9 +2262,10 @@ function qtiMount(): void {
   }
   const spec =
     parsed && typeof parsed === 'object' ? (parsed as VisualSpec) : null;
-  qtiState.spec = spec && spec.chart ? spec : null;
+  qtiState.spec = spec && qtiHasContent(spec) ? spec : null;
   qtiState.hidden = {};
   qtiState.sort = {};
+  qtiState.detailOpen = undefined;
   qtiRender();
   const bridge = window.qti;
   if (bridge && typeof bridge.onRefresh === 'function') {
@@ -2045,6 +2298,12 @@ const RUNTIME_MEMBERS: { toString(): string }[] = [
   chartMeasures,
   chartSelect,
   groupRows,
+  panelSpan,
+  scopedKey,
+  panelChartWidth,
+  barLabelMargin,
+  kpiText,
+  otherLast,
   spreadOverlaps,
   qtiCreate,
   qtiSvg,
@@ -2055,6 +2314,9 @@ const RUNTIME_MEMBERS: { toString(): string }[] = [
   qtiString,
   qtiMark,
   qtiBindTooltip,
+  qtiIsHidden,
+  qtiOtherFill,
+  qtiTagOther,
   qtiLegend,
   qtiAxes,
   qtiCanvas,
@@ -2071,8 +2333,12 @@ const RUNTIME_MEMBERS: { toString(): string }[] = [
   qtiDataTable,
   qtiTableChart,
   qtiDonut,
+  ...PIVOT_RUNTIME_MEMBERS,
+  ...US_MAP_RUNTIME_MEMBERS,
   qtiRenderChart,
   qtiRenderTable,
+  qtiHasContent,
+  qtiRenderPanels,
   qtiEnsureStyle,
   qtiRender,
   qtiMount,
@@ -2089,7 +2355,7 @@ export const VISUAL_RUNTIME_FILENAME = 'qti-chart.js';
 export const VISUAL_RUNTIME_SCRIPT: string = [
   '(function () {',
   '  "use strict";',
-  '  var qtiState = { spec: null, hidden: {}, sort: {} };',
+  '  var qtiState = { spec: null, hidden: {}, sort: {}, scope: "", width: 0 };',
   RUNTIME_MEMBERS.map((member) => member.toString()).join('\n\n'),
   '  window.qtiChart = { mount: qtiMount };',
   '})();',

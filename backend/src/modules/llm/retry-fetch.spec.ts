@@ -88,6 +88,20 @@ describe('createRetryFetch', () => {
     }
   });
 
+  it("retries a proxy's 520 to 524 (the origin failed or timed out behind it) as well", async () => {
+    for (const status of [520, 521, 522, 523, 524]) {
+      const base = jest
+        .fn()
+        .mockResolvedValueOnce(response(status))
+        .mockResolvedValueOnce(response(200));
+      const fetch = createRetryFetch(base, {
+        sleep: jest.fn().mockResolvedValue(undefined),
+      });
+      expect((await fetch('https://example.test/x')).status).toBe(200);
+      expect(base).toHaveBeenCalledTimes(2);
+    }
+  });
+
   it('caps a Retry-After in seconds or as an HTTP date at 30 s', async () => {
     const future = new Date(Date.now() + 600_000).toUTCString();
     for (const value of ['600', future]) {

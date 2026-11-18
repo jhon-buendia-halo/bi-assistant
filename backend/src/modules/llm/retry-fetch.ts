@@ -1,4 +1,4 @@
-// Retries a 429/500/502/503/504/529 from an LLM provider (backoff, honoring
+// Retries a 429/500/502/503/504/520-524/529 from an LLM provider (backoff, honoring
 // Retry-After) instead of failing an agent turn outright — the Windows
 // diagnostics report that motivated this saw a rate-limited Azure/LenAI
 // deployment (gpt-5.4, eastus) fail every turn with no retry at all.
@@ -30,7 +30,11 @@ export type Fetch = typeof fetch;
 
 const MAX_RETRIES = 3;
 const BACKOFF_MS = [1000, 2000, 4000];
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504, 529]);
+// 520 to 524 are what a proxy in front of the provider (Cloudflare) answers
+// when the origin failed, was unreachable or timed out behind it.
+const RETRYABLE_STATUSES = new Set([
+  429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529,
+]);
 /** No wait before a retry is longer than this, whatever Retry-After says. */
 export const RETRY_AFTER_CAP_MS = 30_000;
 const WRAPPED = Symbol('llm.retryFetch.wrapped');

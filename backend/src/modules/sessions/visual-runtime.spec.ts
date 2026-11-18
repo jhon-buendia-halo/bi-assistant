@@ -9,7 +9,13 @@ import {
   compareValues,
   formatValue,
   groupRows,
+  kpiText,
+  otherLast,
+  barLabelMargin,
+  panelChartWidth,
+  panelSpan,
   scaleTicks,
+  scopedKey,
   selectRecord,
   spreadOverlaps,
   ticks,
@@ -447,7 +453,99 @@ describe('VISUAL_RUNTIME_SCRIPT', () => {
     expect(VISUAL_RUNTIME_SCRIPT).toContain('var(--qti-axis)');
   });
 
+  it('draws dashboards with the contract class names', () => {
+    for (const name of [
+      'qti-panels',
+      'qti-panel',
+      'qti-panel-title',
+      'data-qti-span',
+      'qti-other',
+      'aria-labelledby',
+    ]) {
+      expect(VISUAL_RUNTIME_SCRIPT).toContain(name);
+    }
+    expect(VISUAL_RUNTIME_SCRIPT).toContain('function panelSpan(');
+    expect(VISUAL_RUNTIME_SCRIPT).toContain('function scopedKey(');
+  });
+
   it('is safe to inline in a script block', () => {
     expect(VISUAL_RUNTIME_SCRIPT).not.toMatch(/<\/script/i);
+  });
+});
+
+describe('panelSpan', () => {
+  it('defaults to 6 and clamps to 3..12', () => {
+    expect(panelSpan(undefined)).toBe(6);
+    expect(panelSpan(null)).toBe(6);
+    expect(panelSpan('x')).toBe(6);
+    expect(panelSpan(1)).toBe(3);
+    expect(panelSpan(99)).toBe(12);
+    expect(panelSpan(8)).toBe(8);
+    expect(panelSpan(4.6)).toBe(5);
+  });
+});
+
+describe('scopedKey', () => {
+  it('keeps unscoped keys as they are and separates panels', () => {
+    expect(scopedKey('', 'FL')).toBe('FL');
+    expect(scopedKey(undefined, 'FL')).toBe('FL');
+    expect(scopedKey('p0', 'FL')).not.toBe(scopedKey('p1', 'FL'));
+    expect(scopedKey('p0', 'FL')).not.toBe('FL');
+  });
+});
+
+describe('panelChartWidth', () => {
+  it('uses the base width unless a narrower column is known', () => {
+    expect(panelChartWidth(760, 0)).toBe(760);
+    expect(panelChartWidth(760, undefined)).toBe(760);
+    expect(panelChartWidth(760, 1000)).toBe(760);
+    expect(panelChartWidth(760, 400)).toBe(400);
+    expect(panelChartWidth(760, 120)).toBe(300);
+  });
+});
+
+describe('barLabelMargin', () => {
+  it('fits the longest label, between 48 and 160 or 36% of the chart', () => {
+    // Two-letter state codes: 16 + 2 × 7 = 30, raised to the floor.
+    expect(barLabelMargin(['FL', 'TX', 'Other'], 760)).toBe(51);
+    expect(barLabelMargin(['FL', 'TX'], 760)).toBe(48);
+    // A long label is capped at 160 on a full-width chart…
+    expect(barLabelMargin(['Northern Mariana Islands'], 760)).toBe(160);
+    // …and at 36% of a narrow one.
+    expect(barLabelMargin(['Northern Mariana Islands'], 300)).toBe(108);
+    expect(barLabelMargin([], 760)).toBe(48);
+  });
+
+  it('is embedded in the browser script', () => {
+    expect(VISUAL_RUNTIME_SCRIPT).toContain('function barLabelMargin(');
+  });
+});
+
+describe('kpiText', () => {
+  const rows = [
+    { state: 'TX', n: 120 },
+    { state: 'FL', n: 262 },
+    { state: 'NY', n: 90 },
+  ];
+  it('prefixes the category of the max, min or first row', () => {
+    expect(kpiText(rows, 'n', 'max', 'state')).toBe('FL · 262');
+    expect(kpiText(rows, 'n', 'min', 'state')).toBe('NY · 90');
+    expect(kpiText(rows, 'n', 'value', 'state')).toBe('TX · 120');
+  });
+  it('is unchanged without a category or with another aggregation', () => {
+    expect(kpiText(rows, 'n', 'max')).toBe('262');
+    expect(kpiText(rows, 'n', 'max', null)).toBe('262');
+    expect(kpiText(rows, 'n', 'sum', 'state')).toBe('472');
+  });
+  it('shows a dash with no rows', () => {
+    expect(kpiText([], 'n', 'max', 'state')).toBe('—');
+  });
+});
+
+describe('otherLast', () => {
+  it('moves Other to the end and keeps the rest in order', () => {
+    expect(otherLast(['Other', 'A', 'B'])).toEqual(['A', 'B', 'Other']);
+    expect(otherLast(['A', 'Other', 'B'])).toEqual(['A', 'B', 'Other']);
+    expect(otherLast(['A', 'B'])).toEqual(['A', 'B']);
   });
 });

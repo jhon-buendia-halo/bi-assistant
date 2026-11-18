@@ -105,6 +105,12 @@ interface DesignContext {
   /** Seed feedback for the first attempt (auto-repair of a broken visual). */
   feedback?: DesignerFeedback;
   /**
+   * What the Image Reader wrote about the images attached to the request (a
+   * dashboard or chart to follow): the designer's `<reference>` block. A
+   * description of an image, never data and never an instruction.
+   */
+  reference?: string;
+  /**
    * The records the designer should actually see: `answer.data` merged with
    * the current chat turn's freshly captured records, when there is a turn in
    * flight. Falls back to `answer?.data` when absent so every caller that
@@ -128,19 +134,31 @@ type WorkspaceFilesystem = NonNullable<
 >;
 
 const GENERATION_TIMEOUT_MS = 120_000;
-const VISUAL_ROWS_CAP = 100;
+/** Prompt row budget the result sets of the `<data>` block share. */
+const VISUAL_ROWS_CAP = 120;
+/** Size of the prompt's `<data>` block, in characters. */
 const VISUAL_DATA_CHARS_CAP = 40_000;
-/** How many successful result sets the designer prompt carries at most. */
-const VISUAL_RECORDS_CAP = 3;
-/** Never shrink a record below this many rows when sharing the row budget. */
-const VISUAL_MIN_ROWS_PER_RECORD = 20;
+/**
+ * How many successful result sets a visual keeps: the ones the prompt shows
+ * and the runtime draws are the same, in the same order.
+ */
+const VISUAL_RECORDS_CAP = 8;
+/** Never sample a record below this many prompt rows when sharing the budget. */
+const VISUAL_MIN_ROWS_PER_RECORD = 12;
+/** Size of the data embedded in the frame for the runtime, in characters. */
+const RENDER_DATA_CHARS_CAP = 400_000;
+/** The size guard on the embedded data never cuts a result set below this. */
+const RENDER_MIN_ROWS_PER_RECORD = 20;
 /** Bundle-size advice and output allowance: single form vs. composed answer. */
 const SINGLE_BUNDLE_CHARS = '14,000';
 const COMPOSED_BUNDLE_CHARS = '20,000';
 const SINGLE_OUTPUT_TOKENS = 7_000;
 const COMPOSED_OUTPUT_TOKENS = 11_000;
-/** A spec is a few hundred tokens of JSON; no code means no code budget. */
-const SPEC_OUTPUT_TOKENS = 2_500;
+/**
+ * A single-chart spec is a few hundred tokens of JSON; a dashboard of up to 8
+ * panels with 6 KPI tiles is several times that. No code, no code budget.
+ */
+const SPEC_OUTPUT_TOKENS = 6_000;
 /** Spec attempts before the freeform HTML/CSS/JS pipeline takes over. */
 const SPEC_ATTEMPTS = 2;
 /** Marks a version produced by the automatic runtime-repair loop. */
@@ -216,6 +234,7 @@ export class VisualizationService {
     instruction?: string,
     turnRecords?: ToolDataRecord[],
     question?: string,
+    reference?: string,
     abortSignal?: AbortSignal,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const answer = this.findSourceAnswer(session, sourceMessageAt);
@@ -235,6 +254,7 @@ export class VisualizationService {
       answer,
       instruction,
       mergedData,
+      ...(reference?.trim() ? { reference: reference.trim() } : {}),
       abortSignal,
     });
 
@@ -291,6 +311,8 @@ export class VisualizationService {
       at: string;
       data: ToolDataRecord[];
       instruction?: string;
+      /** The run's image notes: the designer's `<reference>` block. */
+      reference?: string;
     },
     abortSignal?: AbortSignal,
   ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
@@ -316,6 +338,7 @@ export class VisualizationService {
       source.instruction?.trim() || undefined,
       undefined,
       instructed ? source.question : undefined,
+      source.reference,
       abortSignal,
     );
   }
@@ -670,7 +693,9 @@ export class VisualizationService {
     requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
 
     const toolData = effectiveData(context);
-    const records = toolData?.length ? visualizationData(toolData).records : [];
+    // A spec is validated against the rows the runtime will draw, not the
+    // prompt's sample: a set or a row the prompt only samples still counts.
+    const records = toolData?.length ? chartRecords(toolData) : [];
     context.abortSignal?.throwIfAborted();
     // No rows means nothing for a spec to select from; the freeform designer
     // can still build something from the answer text alone.
@@ -768,8 +793,9 @@ export class VisualizationService {
 
   /**
    * The designer prompt. Both modes carry the same `<question>`, `<answer>`,
-   * `<data>`, `<recommended-form>` and `<instruction>` blocks — only what the
-   * model is asked to return (a spec vs. a code bundle) differs.
+   * `<reference>` (when the run has image notes), `<data>`,
+   * `<recommended-form>` and `<instruction>` blocks — only what the model is
+   * asked to return (a spec vs. a code bundle) differs.
    */
   private designerPrompt(
     mode: DesignerMode,
@@ -784,7 +810,7 @@ export class VisualizationService {
       spec
         ? context.current
           ? 'Tailor the existing visual spec below according to the instruction.'
-          : 'Describe one compact interactive visual for the analysis below as a JSON spec.'
+          : 'Describe an interactive visual for the analysis below as a JSON spec: one chart, or a dashboard of panels.'
         : context.current
           ? 'Tailor the existing interactive visual below according to the instruction.'
           : 'Create one compact interactive visual for the analysis below.',
@@ -825,20 +851,28 @@ export class VisualizationService {
       '<answer>',
       context.answer?.content ?? '(answer unavailable)',
       '</answer>',
+      ...(context.reference?.trim()
+        ? ['', '<reference>', context.reference.trim(), '</reference>']
+        : []),
       ...(block
         ? [
             '',
             '<data>',
+            ...(block.shown < block.drawn
+              ? [
+                  `(this sample shows the first ${block.shown} of ${block.drawn} rows; the visual draws all ${block.drawn})`,
+                ]
+              : []),
             ...(block.truncatedFrom
               ? [
-                  `(showing first ${block.shown} of ${block.truncatedFrom} rows — say so if the visual implies a total)`,
+                  `(the visual draws ${block.drawn} of the ${block.truncatedFrom} rows the queries counted — say so if the visual implies a total)`,
                 ]
               : []),
             block.json,
             '</data>',
             spec
-              ? 'The exact rows above are what the runtime renders — name only columns that appear in them.'
-              : 'The exact rows above will also be available at runtime as window.qti.data (same shape) — read values from there, never hardcode them.',
+              ? 'The runtime draws every stored row of these result sets, not only the rows shown here — name only columns that appear in them.'
+              : 'These result sets, with every stored row, will also be available at runtime as window.qti.data (same shape) — read values from there, never hardcode them.',
           ]
         : []),
       ...(recommendedForm ? ['', recommendedForm.block] : []),
@@ -1032,10 +1066,9 @@ export class VisualizationService {
       overrideData ??
       (await this.readVersionData(filesystem, meta, version)) ??
       answer?.data;
-    // Recomputed from the same function the designer prompt uses, so the frame
-    // (and the injected window.qti.data) report exactly the rows the visual
-    // could have been built from.
-    const block = data?.length ? visualizationData(data) : undefined;
+    // The same result sets the spec was validated against, with every stored
+    // row: the injected window.qti.data is what the visual draws.
+    const drawn = frameData(data);
     // Older transcripts predate the persisted `reasoning` field: fall back to
     // deriving it from the rationale each tool call already carried. Always
     // from the source answer's records — the trail explains how the answer
@@ -1047,21 +1080,14 @@ export class VisualizationService {
       question: question?.content,
       answer: answer?.content,
       data,
-      chartData: block?.records,
+      chartData: drawn.chartData,
       entities: answer?.entities,
       ...(reasoning.length ? { reasoning } : {}),
       sessionName: session.name,
       version,
       generatedAt:
         generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
-      ...(block?.truncatedFrom
-        ? {
-            chartRows: {
-              shown: block.shown,
-              truncatedFrom: block.truncatedFrom,
-            },
-          }
-        : {}),
+      ...(drawn.chartRows ? { chartRows: drawn.chartRows } : {}),
     };
   }
 
@@ -1181,7 +1207,7 @@ export class VisualizationService {
     const bundle = await this.readBundle(filesystem, meta, version);
     const question = answer ? this.findQuestion(session, answer) : undefined;
     const generatedAt = new Date().toISOString();
-    const block = refreshed.length ? visualizationData(refreshed) : undefined;
+    const drawn = frameData(refreshed);
     // Same fallback as contextFor: the reasoning trail explains how the answer
     // was reached, so the regenerated document keeps it after a refresh.
     const reasoning = answer?.reasoning?.length
@@ -1191,20 +1217,13 @@ export class VisualizationService {
       question: question?.content,
       answer: answer?.content,
       data: refreshed,
-      chartData: block?.records,
+      chartData: drawn.chartData,
       entities: answer?.entities,
       ...(reasoning.length ? { reasoning } : {}),
       sessionName: session.name,
       version,
       generatedAt,
-      ...(block?.truncatedFrom
-        ? {
-            chartRows: {
-              shown: block.shown,
-              truncatedFrom: block.truncatedFrom,
-            },
-          }
-        : {}),
+      ...(drawn.chartRows ? { chartRows: drawn.chartRows } : {}),
     };
 
     await Promise.all([
@@ -1447,11 +1466,12 @@ function relevance(record: ToolDataRecord, wanted: Set<string>): number {
 }
 
 /**
- * With more successful result sets than the designer is shown, keep the
- * `VISUAL_RECORDS_CAP` that best match the instruction (size breaks ties,
- * then run order), and drop the other successful ones. Without an
- * instruction, or within the cap, the records pass unchanged. Records with
- * no rows or an error stay: `visualizationData` skips them anyway.
+ * With more successful result sets than a visual keeps (`VISUAL_RECORDS_CAP`,
+ * the same 8 the designer is shown and the runtime draws), keep the ones that
+ * best match the instruction (size breaks ties, then run order), and drop the
+ * other successful ones; `chartRecords` would otherwise keep the largest.
+ * Without an instruction, or within the cap, the records pass unchanged.
+ * Records with no rows or an error stay: `chartRecords` skips them anyway.
  */
 export function focusRecords(
   records: ToolDataRecord[] | undefined,
@@ -1518,65 +1538,140 @@ export function validateJavascript(javascript: string): string | null {
   }
 }
 
-/**
- * JSON block of the answer's query results, bounded for the prompt, plus how
- * many rows survived the caps. Up to three successful result sets are carried
- * (the largest ones, in the order they ran) so a composed answer can draw on
- * several angles; they share the row budget rather than each taking it in full.
- * `truncatedFrom` is the original row total when the designer saw fewer rows
- * than the analysis ran on — both the prompt and the readable frame say so
- * rather than implying the chart covers everything.
- */
-export function visualizationData(records: ToolDataRecord[]): {
-  json: string;
-  /** Same rows as `json`, already parsed — for embedding without re-parsing. */
-  records: ChartDataRecord[];
-  shown: number;
-  truncatedFrom?: number;
-} {
-  const successful = records.filter(
-    (r) => !r.error && (r.rows?.length ?? 0) > 0,
-  );
-  const total = successful.reduce(
+/** The successful result sets of a run: no error and at least one row. */
+function successfulRecords(records: ToolDataRecord[]): ToolDataRecord[] {
+  return records.filter((r) => !r.error && (r.rows?.length ?? 0) > 0);
+}
+
+/** Total rows the queries counted, for every successful result set. */
+function countedRows(records: ToolDataRecord[]): number {
+  return successfulRecords(records).reduce(
     (sum, r) => sum + (r.rowCount ?? r.rows?.length ?? 0),
     0,
   );
-  // Rank by size to choose which result sets survive, then restore run order.
-  const kept = [...successful]
-    .sort((a, b) => (b.rows?.length ?? 0) - (a.rows?.length ?? 0))
-    .slice(0, VISUAL_RECORDS_CAP)
-    .sort((a, b) => successful.indexOf(a) - successful.indexOf(b));
-  const rowsPerRecord = Math.max(
-    VISUAL_MIN_ROWS_PER_RECORD,
-    Math.floor(VISUAL_ROWS_CAP / Math.max(kept.length, 1)),
-  );
-  const trimmed = kept.map((r) => ({
-    tool: r.tool,
-    input: r.input,
-    columns: r.columns,
-    rowCount: r.rowCount,
-    rows: (r.rows ?? []).slice(0, rowsPerRecord),
-  }));
-  let json = JSON.stringify(trimmed, null, 1);
-  while (
-    json.length > VISUAL_DATA_CHARS_CAP &&
-    trimmed.some((r) => r.rows.length > 5)
-  ) {
-    const largest = trimmed.reduce((a, b) =>
+}
+
+/** Rows a list of result sets holds. */
+function rowsIn(records: ChartDataRecord[]): number {
+  return records.reduce((sum, r) => sum + r.rows.length, 0);
+}
+
+/**
+ * Halves the largest result set's rows (never below `floor`) until `size`
+ * of the list fits `cap`, or no set can be cut further. Keeps the first rows,
+ * so a cut set is always a prefix of the stored one.
+ */
+function shrinkToFit(
+  records: ChartDataRecord[],
+  cap: number,
+  floor: number,
+  size: (records: ChartDataRecord[]) => number,
+): void {
+  while (size(records) > cap && records.some((r) => r.rows.length > floor)) {
+    const largest = records.reduce((a, b) =>
       a.rows.length >= b.rows.length ? a : b,
     );
     largest.rows = largest.rows.slice(
       0,
-      Math.max(5, Math.floor(largest.rows.length / 2)),
+      Math.max(floor, Math.floor(largest.rows.length / 2)),
     );
-    json = JSON.stringify(trimmed, null, 1);
   }
-  const shown = trimmed.reduce((sum, r) => sum + r.rows.length, 0);
+}
+
+/**
+ * What a spec visual is validated against and drawn from: every successful
+ * result set with rows, in run order, each with all its stored rows. With
+ * more than `VISUAL_RECORDS_CAP`, the ones with the most rows are kept (run
+ * order breaks ties, then is restored). Embedded data over
+ * `RENDER_DATA_CHARS_CAP` has its largest set halved, never under
+ * `RENDER_MIN_ROWS_PER_RECORD` rows, until it fits.
+ */
+export function chartRecords(records: ToolDataRecord[]): ChartDataRecord[] {
+  const successful = successfulRecords(records);
+  const kept = successful
+    .map((record, index) => ({ record, index }))
+    .sort(
+      (a, b) =>
+        (b.record.rows?.length ?? 0) - (a.record.rows?.length ?? 0) ||
+        a.index - b.index,
+    )
+    .slice(0, VISUAL_RECORDS_CAP)
+    .sort((a, b) => a.index - b.index)
+    .map(({ record: r }) => ({
+      tool: r.tool,
+      input: r.input,
+      columns: r.columns,
+      rowCount: r.rowCount,
+      rows: r.rows ?? [],
+    }));
+  shrinkToFit(
+    kept,
+    RENDER_DATA_CHARS_CAP,
+    RENDER_MIN_ROWS_PER_RECORD,
+    (list) => JSON.stringify(list).length,
+  );
+  return kept;
+}
+
+/**
+ * The frame's data for the runtime: every row `chartRecords` keeps, and the
+ * "Chart built from the first X of Y rows" counts only when the rows drawn
+ * are fewer than the queries counted (a capped result, a set left out over
+ * the cap, or the size guard).
+ */
+function frameData(
+  records: ToolDataRecord[] | undefined,
+): Pick<VisualContext, 'chartData' | 'chartRows'> {
+  if (!records?.length) return { chartData: undefined };
+  const chartData = chartRecords(records);
+  const drawn = rowsIn(chartData);
+  const counted = countedRows(records);
   return {
-    json,
-    records: trimmed,
-    shown,
-    ...(total > shown ? { truncatedFrom: total } : {}),
+    chartData,
+    ...(counted > drawn
+      ? { chartRows: { shown: drawn, truncatedFrom: counted } }
+      : {}),
+  };
+}
+
+/**
+ * JSON block of the answer's query results for the prompt: the same result
+ * sets, in the same order, as `chartRecords` (so `select` resolves to the
+ * same set in the prompt and in the runtime), each cut to its first rows.
+ * The sets share the `VISUAL_ROWS_CAP` row budget, at least
+ * `VISUAL_MIN_ROWS_PER_RECORD` each, and the block is halved further to fit
+ * `VISUAL_DATA_CHARS_CAP`. `shown` is the rows the prompt carries, `drawn`
+ * the rows the visual draws; `truncatedFrom` is the queries' row count when
+ * the visual draws fewer rows than that, which the prompt and the readable
+ * frame state rather than implying the chart covers everything.
+ */
+export function visualizationData(records: ToolDataRecord[]): {
+  json: string;
+  /** Same rows as `json`, already parsed. */
+  records: ChartDataRecord[];
+  shown: number;
+  drawn: number;
+  truncatedFrom?: number;
+} {
+  const drawnRecords = chartRecords(records);
+  const drawn = rowsIn(drawnRecords);
+  const counted = countedRows(records);
+  const rowsPerRecord = Math.max(
+    VISUAL_MIN_ROWS_PER_RECORD,
+    Math.floor(VISUAL_ROWS_CAP / Math.max(drawnRecords.length, 1)),
+  );
+  const sampled = drawnRecords.map((r) => ({
+    ...r,
+    rows: r.rows.slice(0, rowsPerRecord),
+  }));
+  const toJson = (list: ChartDataRecord[]) => JSON.stringify(list, null, 1);
+  shrinkToFit(sampled, VISUAL_DATA_CHARS_CAP, 5, (list) => toJson(list).length);
+  return {
+    json: toJson(sampled),
+    records: sampled,
+    shown: rowsIn(sampled),
+    drawn,
+    ...(counted > drawn ? { truncatedFrom: counted } : {}),
   };
 }
 

@@ -21,6 +21,7 @@ import {
   sandboxedVisualizationDocument,
   storedVisualizationDocument,
   VisualContext,
+  InteractiveVisualBundle,
 } from './visualization-document';
 import type { VisualSpec } from './visual-spec';
 import type { ReasoningStep } from './entities/session.entity';
@@ -239,7 +240,13 @@ describe('spec-rendered documents', () => {
       ...specBundle,
       spec: {
         ...spec,
-        chart: { ...spec.chart, xLabel: '</script><script>alert(1)</script>' },
+        chart: {
+          form: 'bar',
+          select: ['payer', 'claims'],
+          x: 'payer',
+          y: 'claims',
+          xLabel: '</script><script>alert(1)</script>',
+        },
       },
     });
 
@@ -568,5 +575,60 @@ describe('frame theme (visuals R40)', () => {
     expect(setAttribute).toHaveBeenCalledWith('data-theme', 'dark');
     listeners.message({ data: { type: 'qti-theme', theme: 'purple' } });
     expect(setAttribute).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('wide frame for dashboards', () => {
+  const chart = {
+    form: 'bar' as const,
+    select: ['payer', 'claims'],
+    x: 'payer',
+    y: 'claims',
+  };
+  const mainClass = (document: string) =>
+    /<main class="([^"]*)">/.exec(document)?.[1];
+  const frameCss = (document: string) =>
+    document.slice(document.indexOf('<style>'), document.indexOf('</style>'));
+
+  it('adds qti-frame--wide when the spec has panels', () => {
+    const document = storedVisualizationDocument({
+      ...specBundle,
+      spec: { spec: 1, panels: [{ title: 'A', span: 6, chart }] },
+    });
+
+    expect(mainClass(document)).toBe('qti-frame qti-frame--wide');
+  });
+
+  it.each<[string, InteractiveVisualBundle]>([
+    ['a single chart', specBundle],
+    [
+      'null panels',
+      {
+        ...specBundle,
+        spec: { spec: 1, chart, panels: null as unknown as undefined },
+      },
+    ],
+    ['empty panels', { ...specBundle, spec: { spec: 1, chart, panels: [] } }],
+    ['a freeform visual', bundle],
+    ['no spec', { ...specBundle, spec: undefined }],
+  ])('keeps the narrow frame for %s', (_name, input) => {
+    expect(mainClass(storedVisualizationDocument(input))).toBe('qti-frame');
+  });
+
+  it('caps the wide frame at 1280px and keeps text at the narrow measure', () => {
+    const css = frameCss(storedVisualizationDocument(specBundle));
+
+    expect(css).toMatch(/\.qti-frame--wide \{[^}]*max-width: 1280px/);
+    expect(css).toMatch(
+      /\.qti-frame--wide > \.qti-header,[\s\S]*?max-width: 920px/,
+    );
+    expect(css).toContain('max-width: 920px; margin: 0 auto;');
+  });
+
+  it('wraps six KPI tiles evenly at the narrow width', () => {
+    const css = frameCss(storedVisualizationDocument(specBundle));
+
+    expect(css).toMatch(/@media \(max-width: 640px\)[^{]*\{[^@]*\.qti-kpi \{/);
+    expect(css).toContain('overflow-wrap: anywhere');
   });
 });

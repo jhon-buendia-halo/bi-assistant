@@ -326,7 +326,11 @@ function renderFrame(
     .filter(Boolean)
     .join(' · ');
 
-  return `<main class="qti-frame">
+  const frameClass = bundle.spec?.panels?.length
+    ? 'qti-frame qti-frame--wide'
+    : 'qti-frame';
+
+  return `<main class="${frameClass}">
   <header class="qti-header">
     <h1 class="qti-title">${escapeHtml(bundle.title)}</h1>
     ${context.question ? `<p class="qti-question"><span class="qti-label">Question</span>${escapeHtml(context.question)}</p>` : ''}
@@ -536,7 +540,7 @@ html, body { margin: 0; background: var(--qti-bg); }
 .qti-kpi { flex: 1 1 140px; padding: 12px 14px; border: 1px solid var(--qti-border);
   border-radius: 12px; background: var(--qti-surface); }
 .qti-kpi-value { display: block; font-size: 26px; line-height: 1.2; font-weight: 600;
-  color: var(--qti-fg-strong); font-variant-numeric: tabular-nums; }
+  color: var(--qti-fg-strong); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .qti-kpi-label { display: block; margin-top: 4px; font-size: 11px; font-weight: 600;
   letter-spacing: .04em; text-transform: uppercase; color: var(--qti-fg-muted); }
 .qti-kpi-delta { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; }
@@ -548,7 +552,18 @@ html, body { margin: 0; background: var(--qti-bg); }
   background: var(--qti-tooltip-bg); border: 1px solid var(--qti-border);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
   font-size: 12px; line-height: 1.4; color: var(--qti-fg); pointer-events: none; z-index: 10; }
-@media (max-width: 640px) { .qti-frame { padding: 16px 14px 32px; } .qti-title { font-size: 19px; } }
+/* A dashboard gets a wider frame; the text blocks keep the narrow measure so
+   they stay comfortable to read, and only the visual uses the full width. */
+.qti-frame--wide { max-width: 1280px; }
+.qti-frame--wide > .qti-header, .qti-frame--wide > .qti-section,
+.qti-frame--wide > .qti-footer { max-width: 920px; }
+/* Six tiles wrap three by three, then two by two, never leaving one alone. */
+@media (max-width: 900px) { .qti-frame--wide .qti-kpi { flex-basis: calc(33.333% - 10px); } }
+@media (max-width: 640px) {
+  .qti-frame { padding: 16px 14px 32px; } .qti-title { font-size: 19px; }
+  .qti-kpi { flex-basis: calc(50% - 10px); min-width: 0; }
+  .qti-kpi-value { font-size: 22px; }
+}
 @media (prefers-reduced-motion: reduce) { .qti-frame * { animation: none !important; transition: none !important; } }
 `;
 

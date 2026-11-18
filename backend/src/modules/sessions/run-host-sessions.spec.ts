@@ -116,6 +116,7 @@ import {
   ANSWER_BUSINESS_QUESTION_STEPS,
   planOf,
 } from '../../mastra/workflows/answer-business-question.steps';
+import { ANALYSE_VISUAL_LINE } from '../../mastra/workflows/answer-business-question.prompts';
 import { answerBusinessQuestionWorkflow } from '../../mastra/workflows/answer-business-question.workflow';
 import { askAgentWorkflow } from '../../mastra/workflows/ask-agent.workflow';
 import { DATA_READINESS_ASSESSMENT_STEPS } from '../../mastra/workflows/data-readiness-assessment.steps';
@@ -2421,9 +2422,50 @@ describe('a v2 run with reference images (workflows R35; agents.md 2.15, 5.11)',
       answered: expect.objectContaining({ answer: 'Matches won' }) as unknown,
       imageNotes: IMAGE_NOTES,
     });
-    expect(systemOf(ctx.calls['insights-analyst'][0]).at(-1)).toBe(IMAGE_NOTES);
+    // The run builds a visual and has reference images, so Analyse's blocks
+    // end with the notes and then the line that says a visual follows.
+    const system = systemOf(ctx.calls['insights-analyst'][0]);
+    expect(system.at(-2)).toBe(IMAGE_NOTES);
+    expect(system.at(-1)).toBe(ANALYSE_VISUAL_LINE);
     expect(ctx.mastra.writeAnswer.mock.calls[0][0]).toMatchObject({
       imageNotes: IMAGE_NOTES,
+      visualFollows: true,
     });
+  });
+
+  it("hands the notes to Build visual as the designer's reference", async () => {
+    const createFromAnswer = jest.fn().mockResolvedValue({
+      metadata: {
+        id: 'v-1',
+        title: 'Goals per team',
+        description: '',
+        path: 'visuals/v-1',
+        sourceMessageAt: '2026-01-01T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        currentVersion: 1,
+        versions: [],
+      },
+      bundle: {},
+    });
+    const local = build({ visuals: { createFromAnswer } });
+    local.mastra.readImages.mockResolvedValue({
+      imageNotes: IMAGE_NOTES,
+      imageCount: 1,
+      stopped: false,
+    });
+    await local.sessions.onModuleInit();
+    const { run } = await runOf(local, {
+      ...V2_INPUT,
+      buildVisual: true,
+      images: [PNG_URL],
+    });
+
+    expect(run.status).toBe('success');
+    expect(createFromAnswer).toHaveBeenCalledTimes(1);
+    const [, source] = createFromAnswer.mock.calls[0] as [
+      unknown,
+      { reference?: string },
+    ];
+    expect(source.reference).toBe(IMAGE_NOTES);
   });
 });

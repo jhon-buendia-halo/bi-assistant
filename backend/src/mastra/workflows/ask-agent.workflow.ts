@@ -193,10 +193,12 @@ const WORK: Record<
         skipped: 'No query returned rows to chart.',
       });
     }
+    // The earlier run's image notes are Ryan's reference, when it had some.
     const { visual, stopped } = await runtime.buildVisual({
       question: earlier.question,
       answer: earlier.answer,
       instruction: input.question,
+      ...(earlier.imageNotes.trim() ? { imageNotes: earlier.imageNotes } : {}),
     });
     if (stopped) {
       return { step: 'build-visual', answerLength: 0, stopped: true, visual };

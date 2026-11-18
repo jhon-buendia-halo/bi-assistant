@@ -163,6 +163,7 @@ function runtime(overrides: Partial<Turn> = {}): Turn {
           truncated: false,
         },
       ],
+      imageNotes: '',
     })),
     buildVisual: mockOf('buildVisual', () =>
       Promise.resolve({
@@ -347,6 +348,31 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
     });
   });
 
+  it("hands Ryan the earlier run's image notes, so the new visual follows the reference", async () => {
+    const turn = runtime({
+      earlierVisual: mockOf('earlierVisual', () => ({
+        question: 'How many matches were played per year?',
+        answer: 'There were 64 matches in 2022.',
+        queries: [
+          {
+            sql: EARLIER.sql,
+            rows: [{ year: 2022, matches: 64 }],
+            rowCount: 1,
+            truncated: false,
+          },
+        ],
+        imageNotes: 'Image 1: a dashboard with a US map.',
+      })),
+    });
+    await ask('build-visual', turn);
+    expect(turn.buildVisual).toHaveBeenCalledWith({
+      question: 'How many matches were played per year?',
+      answer: 'There were 64 matches in 2022.',
+      instruction: 'Next page',
+      imageNotes: 'Image 1: a dashboard with a US map.',
+    });
+  });
+
   it("answers why when Ryan's design fails, and the step still ends done", async () => {
     const turn = runtime({
       buildVisual: mockOf('buildVisual', () =>
@@ -375,6 +401,7 @@ describe('ask-agent workflow (workflows R40; agents.md 5.21)', () => {
         queries: [
           { sql: EARLIER.sql, rows: [], rowCount: 0, truncated: false },
         ],
+        imageNotes: '',
       })),
     });
     const { result } = await ask('build-visual', turn);
