@@ -2,7 +2,7 @@
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) answer-business-question's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "3cc719f9ac79",
+  "contractHash": "3967f63e19e7",
   "edges": [
     {
       "from": "start",
@@ -270,6 +270,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                     "null",
                   ],
                 },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
                 "dataset": {
                   "description": "The dataset it belongs to.",
                   "type": "string",
@@ -382,6 +389,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                     "null",
                   ],
                 },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
                 "dataset": {
                   "description": "The dataset it belongs to.",
                   "type": "string",
@@ -488,6 +502,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "description": "Its column count, when known.",
                   "type": [
                     "number",
+                    "null",
+                  ],
+                },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
                     "null",
                   ],
                 },
@@ -752,6 +773,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                     "null",
                   ],
                 },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
                 "dataset": {
                   "description": "The dataset it belongs to.",
                   "type": "string",
@@ -884,6 +912,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "description": "Its column count, when known.",
                   "type": [
                     "number",
+                    "null",
+                  ],
+                },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
                     "null",
                   ],
                 },
@@ -1085,6 +1120,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                     "null",
                   ],
                 },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
                 "dataset": {
                   "description": "The dataset it belongs to.",
                   "type": "string",
@@ -1277,6 +1319,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                     "null",
                   ],
                 },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
                 "dataset": {
                   "description": "The dataset it belongs to.",
                   "type": "string",
@@ -1443,6 +1492,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "description": "Its column count, when known.",
                   "type": [
                     "number",
+                    "null",
+                  ],
+                },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
                     "null",
                   ],
                 },
@@ -1733,6 +1789,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "description": "Its column count, when known.",
                   "type": [
                     "number",
+                    "null",
+                  ],
+                },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
                     "null",
                   ],
                 },
@@ -2135,6 +2198,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                     "null",
                   ],
                 },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
                 "dataset": {
                   "description": "The dataset it belongs to.",
                   "type": "string",
@@ -2521,6 +2591,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "description": "Its column count, when known.",
                   "type": [
                     "number",
+                    "null",
+                  ],
+                },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
                     "null",
                   ],
                 },
@@ -3291,6 +3368,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "description": "Its column count, when known.",
                   "type": [
                     "number",
+                    "null",
+                  ],
+                },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
                     "null",
                   ],
                 },
@@ -16795,7 +16879,7 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
 
 exports[`every catalogued workflow keeps its data contract at run time (agents.md 5.12) map-dashboard-data's contract (JSON Schemas and hash) is the reviewed one 1`] = `
 {
-  "contractHash": "4008b7e95ee4",
+  "contractHash": "52a652754c12",
   "edges": [
     {
       "from": "start",
@@ -17895,6 +17979,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                     "null",
                   ],
                 },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
+                    "null",
+                  ],
+                },
                 "dataset": {
                   "description": "The dataset it belongs to.",
                   "type": "string",
@@ -18307,6 +18398,13 @@ exports[`every catalogued workflow keeps its data contract at run time (agents.m
                   "description": "Its column count, when known.",
                   "type": [
                     "number",
+                    "null",
+                  ],
+                },
+                "dataEndsAt": {
+                  "description": "Where its dataset's data ends: the latest date of the dataset's date columns (YYYY-MM-DD), from its save; null when none has a range.",
+                  "type": [
+                    "string",
                     "null",
                   ],
                 },

@@ -269,6 +269,7 @@ A named, saved selection of entities from one datasource, with a point-in-time s
 | `type` | string | yes | Platform type name. |
 | `nullable` | boolean | yes | |
 | `sampleValues` | string[] | no | Up to 5 distinct non-blank values from a save-time sample of up to 50 rows per table; each stringified (objects as JSON, dates ISO) and truncated to 40 characters followed by `…`. Absent when nothing was sampled or the column was blank. Existing datasets are not backfilled; they enrich on re-save. |
+| `range` | `{ min, max }` | no | A date column's first and last date (`YYYY-MM-DD`), read over the whole table at save time by one read-only `MIN`/`MAX` statement per table (`date-ranges.ts`; at most 12 date columns, a column whose type names a date, datetime or timestamp; best effort: a failure leaves the table as it was and never fails the save). PostgreSQL, Databricks and file datasources only. Its latest `max` over the dataset's tables is where the dataset's data ends, read by Load catalog's `dataEndsAt` and Validate's data-date check ([agents.md](agents.md) 5.11); `describe_entity` returns it. Absent on datasets saved before 2026-11-18 until they are saved again. |
 | `description` | string | no | Catalog comment for the column when the platform exposes one. |
 | `references` | object | no | `{entity: string (catalog.schema.table), column: string, source: "declared" \| "inferred"}` — where this column joins. `declared` from the platform's foreign-key constraints, `inferred` from naming; declared wins. Computed at save. |
 

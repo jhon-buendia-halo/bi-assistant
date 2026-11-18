@@ -102,3 +102,11 @@ Earlier work in the request:
   the failed checks need, or on a first attempt the ones the plan needs.
   An entity marked "none listed" or "more not listed" has columns the
   request leaves out: describe it when the analysis needs one of them.
+
+Data dates:
+- When the request says a table's data ends on a date ("data ends …")
+  and a figure depends on the current date (tenure, age, time since,
+  recency), measure it from that date, or from the date the data's own
+  columns imply (an age computed as of a date), never from CURRENT_DATE,
+  and say under "Assumptions" which date you used. Use today only when
+  the question asks about today.

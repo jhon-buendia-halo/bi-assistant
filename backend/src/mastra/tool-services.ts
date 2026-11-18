@@ -29,6 +29,8 @@ export interface DatasetColumnSnapshot {
   nullable: boolean;
   /** Real values observed at save time — schema linking / value matching. */
   sampleValues?: string[];
+  /** A date column's first and last date, captured at save time (`YYYY-MM-DD`). */
+  range?: { min: string; max: string };
   description?: string;
   /** Join target for a key column — see DatasetColumnSnapshot in the repository. */
   references?: {

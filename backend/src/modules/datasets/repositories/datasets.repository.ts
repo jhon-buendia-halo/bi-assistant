@@ -13,6 +13,13 @@ export interface DatasetColumnSnapshot {
    * without a live round-trip. Absent on datasets saved before enrichment.
    */
   sampleValues?: string[];
+  /**
+   * A date column's first and last date (`YYYY-MM-DD`), read over the whole
+   * table at save time, so the agents know when the data ends (agents.md 5.11
+   * *Data dates*). Absent on other columns, on a REST datasource and on
+   * datasets saved before it.
+   */
+  range?: { min: string; max: string };
   /** Catalog comment for the column, when the datasource exposes one. */
   description?: string;
   /**
